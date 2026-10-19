@@ -128,7 +128,7 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "A project session's files",
-    description: "Folders come first in natural order, with .git and the system files .DS_Store and ._server.ts left out. src is expanded and main.ts is selected, its rounded highlight keeping space on all four sides, as Git rows do. Expand or collapse a folder to watch its children slide and fade in or out with the same timing as the session menu, while following rows slide into place. Press a file for the viewer, then Left/Right to visit visible files. Switch between the Website and Search API sessions to inspect the short file-pane entrance and Search API's own tree. Switching between the two Website sessions keeps the tree steady. A project's actions offer Browse files when its pane is hidden or belongs to another project.",
+    description: "The Files panel docked in a wide window is one rounded card with a hairline edge and the shadow of the sidebar's floating card, 16px from the terminal (the width handle's gap) and 8px from the window's end, the bottom and the top bar, the gaps showing the terminal's own background rather than a sidebar-coloured column. Its 40px header runs the project name, the Files and Changes tabs, the filter and refresh buttons, then Close panel, with no icon before the name; there is no maximize while Files is the only panel. The top bar has only the Files toggle, pressed, and no toggle for the pane itself. Folders come first in natural order, with .git and the system files .DS_Store and ._server.ts left out. src is expanded and main.ts is selected, its rounded highlight keeping space on all four sides, as Git rows do. Expand or collapse a folder to watch its children slide and fade in or out with the same timing as the session menu, while following rows slide into place. Press a file for the viewer, then Left/Right to visit visible files. Switch between the Website and Search API sessions to inspect the short file-pane entrance and Search API's own tree. Switching between the two Website sessions keeps the tree steady. A project's actions offer Browse files when its pane is hidden or belongs to another project.",
     state,
     filesByProject: {
       [api.id]: {
@@ -143,11 +143,20 @@ export const projectFilesScenarios: Scenario[] = [
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600), (ui) => ui.key("Escape")],
   },
   {
+    id: "files-pane-handle",
+    group: GROUP,
+    category: "normal",
+    title: "Files pane's width handle in focus and under the pointer",
+    description: "The handle in the gap on the pane's inner edge shows its grip, a short rounded pill centred in the gap, and a Resize tooltip opening beside it, on its end side and centred on it, while the pointer is on it. The grip is drawn here through keyboard focus (with its focus ring), as the gallery cannot hold a CSS hover; with the pointer alone it shows on hover and during a drag, and is hidden otherwise. Arrow keys resize the pane from the focused handle, and double-clicking resets its width.",
+    state,
+    steps: [...openFiles, (ui) => ui.focusControl(ui.t("pane.resizeAside")), (ui) => ui.hoverAnchored(ui.t("pane.resizeAside"), ui.t("pane.resize"))],
+  },
+  {
     id: "files-filter",
     group: GROUP,
     category: "normal",
     title: "Matching files throughout the project",
-    description: "The filter sits above the matching files, which stay in the folder tree: both server.ts files match the trimmed, case-insensitive filename query without opening any folders first, each under its folders, which start open and can be folded. The header reads the project title, then the Files and Changes tabs, then the filter and Refresh buttons at the end; Files has no layout choice. Each tab keeps its own query and folded folders.",
+    description: "The filter sits above the matching files, which stay in the folder tree: both server.ts files match the trimmed, case-insensitive filename query without opening any folders first, each under its folders, which start open and can be folded. The header reads the project title, then the Files and Changes tabs, then the filter and Refresh buttons and Close panel at the end; Files has no layout choice. Each tab keeps its own query and folded folders.",
     state,
     files: filterFiles,
     steps: [
@@ -240,7 +249,7 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "A project folder that cannot be read",
-    description: "A required error alert opens over the failed folder. After OK, the failure keeps a heading and a separate Try again control. Narrow shows the same failure after opening the project pane drawer.",
+    description: "A required error alert opens over the failed folder. After OK, the failure keeps a heading and a separate Try again control. Narrow shows the same failure in the docked Files card.",
     state,
     files: {
       "": {

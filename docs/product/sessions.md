@@ -61,9 +61,9 @@ weigh (see `docs/product/information-between-sessions.md`). Every session can al
 to start a session that is nobody's, in any project or a console session, which reports to the user (see
 `docs/product/session-requests.md`).
 
-Selecting a session also fills the window's right pane, beside the terminal: with a console session's own **report
-panel** (see `docs/product/report-panel.md`), or with a project session's project's **project pane**, its files (see
-`docs/product/project-pane.md`). When the right pane shows something else is in "What the right pane shows" in
+Selecting a session also gives the window's right pane, beside the terminal, to the session's own owner: a console
+session, whose **report panel** it holds (see `docs/product/report-panel.md`), or a project session's project, whose
+**Files panel** it holds (see `docs/product/project-pane.md`). When the right pane shows something else is in "What the right pane shows" in
 `docs/product/window-layout.md`.
 
 ## Where sessions are listed

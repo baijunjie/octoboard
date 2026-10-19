@@ -302,7 +302,8 @@ their normal behavior. The standalone preview keeps native scrolling within the 
 
 When the embedded preview's container is 800 pixels wide or narrower, the application uses that width in a
 640-pixel-high viewport. Both the embedded and standalone previews support the application's responsive layout;
-on narrow screens the sidebar and report/project panes are drawers. The report scene opens its report pane, and the
+on narrow screens the sidebar is a drawer, while the report and Files panels dock beside the terminal. The overview
+scene shows the terminal with no panel open, the report scene opens its report panel, and the
 code-review scene opens the sample change in the diff viewer automatically, including on phones. The preview does
 not connect to a daemon, run real agents, read or change real project files, or retain its preferences after a reload.
 It does not replace the website's stored language preference. The application controls follow the selected supported

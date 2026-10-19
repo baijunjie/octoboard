@@ -5,7 +5,7 @@
 > screen; switching project shows that project's tabs while the others keep running; reloading the window or reopening
 > the panel restores the tabs and their scrollback; the Terminal panel stacks under Files and the handle between them
 > resizes both by pointer and keyboard; maximize works with both open; the Terminal panel is its own F6 stop and F6 /
-> Shift+F6 leave a focused shell terminal; Escape inside a floating or drawer pane reaches
+> Shift+F6 leave a focused shell terminal; Escape inside a floating pane reaches
 > the shell; the agent terminal in the centre is unaffected. Verified in the real app with several tabs and projects,
 > and by gallery scenarios using the fake terminal socket.
 
@@ -26,7 +26,7 @@
 
 - [ ] Add the Terminal panel and its tab strip, outside the tab component's panel so hidden tabs stay mounted.
 - [ ] Wire tabs to the daemon's shell terminal records and requests, and attach each controller to its terminal socket.
-- [ ] Change the floating and drawer pane's Escape handling for shell terminals, with the case covered in that
+- [ ] Change the floating pane's Escape handling for shell terminals, with the case covered in that
       handler's own test.
 - [ ] Scope the document-wide terminal lookups in the styles, the gallery, the gallery sweep script and the WebKit
       benchmark harness, and give the new terminals the terminal style rule now scoped to the centre region.
@@ -52,3 +52,17 @@
   `docs/memory/focus-and-key-handling-in-the-ui.md`, `docs/memory/building-on-heroui-and-react-aria.md`,
   `docs/memory/ui-text-and-reading-direction.md`, `docs/product/moving-focus-between-regions.md`,
   `docs/product/project-pane.md`.
+
+## Handoff
+
+- Closing the last panel when it is not Files (only Terminal open) empties the stack, and an empty stack falls back to
+  showing Files, so the Files card would mount and load inside the pane while the pane eases closed. Make the fallback
+  apply only when the pane is next shown, or keep the closed card until the pane has finished hiding, and check it.
+- Stacking two real panels is first possible here: verify the panel separator between Files and Terminal (pointer,
+  keyboard, double-click reset), the top-bar toggle closing a focused panel while another stays open, maximize and
+  restore with both open, and the per-pair separator names.
+- Once an owner has changed under the panel stack, a kind closed and re-opened while the pane stays shown is told it
+  is switching, so re-opening Files beside a Terminal would play the project-switch slide. Limit the slide to an owner
+  change for the panel itself, and check it.
+- A maximize hides the other cards after handing focus to the kept card; verify in the real app (WebKit) that focus
+  never drops to the page body when maximizing with focus in another card.

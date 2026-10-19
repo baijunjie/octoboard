@@ -1,14 +1,15 @@
 # Project pane
 
-The **project pane** shows a project's files and its repository's changes, in two **modes**: **Files**, a tree of the
-project's directory, read live from disk with whatever an agent has written and not committed, and **Git**, the
-changes of one local branch of the project's repository, uncommitted and committed since it forked (see
-`docs/product/project-pane-git-mode.md`). Either one opens what it lists in a read-only **file viewer** (see
-`docs/product/file-viewer.md`). It is shown in
-the window's right pane, in the place a console session's report panel takes (see "What the right pane shows" in
-`docs/product/window-layout.md`, which also says what puts it there and what takes it away), and it needs no session:
-the project is all it reads from. How wide the right pane is, how it is hidden, floats in and becomes a drawer is in
-`docs/product/window-layout.md`, and where `F6` lands in it in `docs/product/moving-focus-between-regions.md`.
+The **project pane** is the window's right pane while a project owns it; its one kind of panel is the **Files
+panel** (see `docs/product/right-pane-panels.md`), which shows a project's files and its repository's changes, in
+two **modes**: **Files**, a tree of the project's directory, read live from disk with whatever an agent has written and
+not committed, and **Git**, the changes of one local branch of the project's repository, uncommitted and committed
+since it forked (see `docs/product/project-pane-git-mode.md`). Either one opens what it lists in a read-only **file
+viewer** (see `docs/product/file-viewer.md`). The pane is shown in the window's right pane, in the place a console session's report panel takes (see
+"What the right pane shows" in `docs/product/window-layout.md`, which also says what puts it there and what takes it
+away), and it needs no session: the project is all it reads from. How wide the right pane is and how it floats in is
+in `docs/product/window-layout.md`, how the Files panel is opened, closed and drawn in `docs/product/right-pane-panels.md`,
+and where `F6` lands in it in `docs/product/moving-focus-between-regions.md`.
 
 The project pane itself is read-only: there is no editing, saving, creating, renaming or deleting of files, and
 nothing is staged, committed or checked out. A row can open its live file or folder in an external application
@@ -22,10 +23,12 @@ explanation and retry controls remain in the pane afterwards (see "Error alerts"
 - **Browse files**, in a project's action menu — on its row and by right-clicking it (see "Project
   rows" in `docs/product/sidebar.md`), in its focus mode's header, and on its heading in a console session's focus mode
   (see `docs/product/focus-mode.md`) — shows that project's project pane in Files mode, selecting, starting and
-  resuming no session. It is offered when the right pane is hidden or belongs to another owner, and omitted while
-  that project's browser is visible, whether docked, floating in or in an open drawer. This applies in Git mode too;
-  choose the Files tab to return to the tree while the pane is already visible.
-- **Selecting a project session** shows its project's project pane.
+  resuming no session; it opens the Files panel (see "Opening and closing panels" in
+  `docs/product/right-pane-panels.md`). It is omitted while that project's Files panel is on screen, docked or
+  floating in, and offered otherwise: while the right pane belongs to another owner, while the Files panel is closed,
+  or while another panel's maximizing hides it. This applies in Git mode too; choose the Files tab to return to the
+  tree while the panel is already on screen.
+- **Selecting a project session** gives the right pane to its project, whose Files panel shows while it is open.
 
 Moving between sessions of one project leaves its pane as it was: its mode, its expanded folders and selected file, and
 in Git its selected change — except that the Git mode's branch is set from the session moved to, which clears the
@@ -33,18 +36,20 @@ selected change when the branch moves (see "Following the selected session" in
 `docs/product/project-pane-git-mode.md`). Another project's session, or
 another project's Browse files, shows that project's own pane.
 
-When a project's pane first appears or replaces another project's pane, its header and content fade in with a
-small slide from the right, or from the left in a right-to-left language. The pane keeps its width and position
-throughout. Moving between sessions of the same project, changing views or refreshing does not replay this entry.
-The system's Reduce motion setting disables it.
+When the right pane passes to a project from another owner — another project, or a console session — the Files
+panel's header and content fade in with a small slide from the right, or from the left in a right-to-left language.
+The card keeps its width and position throughout. A Files panel shown for the first owner the right pane has had
+since it last had none — as the window starts, say — plays none, docking or floating in; nor do moving between
+sessions of the same project, changing views or refreshing. The system's Reduce motion setting disables it.
 
-The pane has **one header row**. At its leading side are a folder icon, the visible project name and, right after the
-name, two peer tabs — **Files** and **Changes**; at its trailing side are icon buttons alone: the controls for the
-chosen tab, then **Refresh**. Spare width stays between the tabs and those buttons. The tabs are compact, with a pill
-behind the selected tab and muted labels on the others, and no filled track behind them. **The tabs never shrink,
-scroll or clip**: when space is tight the project name gives way instead, fading out and shrinking as far as it has
-to, with the full name as its tooltip while it is cut (see "Names too long for their space" in
-`docs/product/labels-and-tooltips.md`). Files offers one control, the file-name filter toggle (see "Filtering by file
+The Files panel has **one header row**, its panel header (see "A panel's header" in
+`docs/product/right-pane-panels.md`). At its leading side are the visible project name as the panel's title and, right after the name, two peer tabs — **Files** and **Changes**; at its trailing side are icon
+buttons alone: the controls for the chosen tab, then **Refresh**, then the panel's own **Close panel**. Spare width
+stays between the tabs and those buttons. The tabs are compact, with a pill behind the selected tab and muted labels
+on the others, and no filled track behind them. When space is tight the project name gives way, fading out and
+shrinking to a stub, with the full name as its tooltip while it is cut (see "Names too long for their space" in
+`docs/product/labels-and-tooltips.md`), and the tabs scroll under a fade at their cut edge; the buttons at the
+trailing side always stay whole. Files offers one control, the file-name filter toggle (see "Filtering by file
 name" below); Changes offers its filter toggle, Group by folder and Group by commit (see "The Changes view" in
 `docs/product/project-pane-git-mode.md`). The buttons keep that place in loading, empty and error states too. Pressing
 Refresh with the mouse leaves keyboard focus where it was.
@@ -189,8 +194,8 @@ restores the unfiltered tree.
   neither the window coming back to the front nor its becoming visible again repeats it. While a filter is active,
   the tree's folder listings pause except for the folder containing an open file and its ancestors through the project root: these continue to be listed to keep the viewer's content current, without repeating the search.
 
-The field's clear button and **Escape** clear its text while leaving focus in the field. In a floating pane or a
-drawer, Escape with text clears it; Escape once empty can close the pane. Input-method composition owns its keys,
+The field's clear button and **Escape** clear its text while leaving focus in the field. In a floating pane,
+Escape with text clears it; Escape once empty can close the pane. Input-method composition owns its keys,
 including Escape, so those keys do not clear the field. Typing in the field does not trigger the list's name navigation.
 
 Each of **Files and Changes has its own keyword and filter-field open state**. Switching tabs restores
@@ -219,10 +224,10 @@ while no nonempty file-name filter is active (see "Filtering by file name" above
 - the first time the Files mode is shown after the project pane is put in the right pane, which lists it afresh;
 - when a folder is expanded, if it had been listed before;
 - on the header's **Refresh**;
-- **every 10 seconds** while the Files mode is on screen — the project pane docked, in an open drawer, or floating in
-  — and the window is visible, skipping a turn while a listing of the pane is still out;
+- **every 10 seconds** while the Files mode is on screen — the Files panel docked or floating in — and the window is
+  visible, skipping a turn while a listing of the pane is still out;
 - when the window comes back to the front or becomes visible again, with the Files mode on screen, or when it comes
-  back on screen — a hidden pane docked by its toggle, its drawer opened, or floating in, or the Files tab chosen —
+  back on screen — the Files panel opened or floating in, or the Files tab chosen —
   either one more than 5 seconds after the last refresh, and unless a listing of the pane is still out;
 - after the connection to the daemon comes back.
 
@@ -326,8 +331,8 @@ A file or folder that cannot be shown says why, in the current language (see "Wh
 
 ## Loading the project pane
 
-The project pane's own code loads the first time a project pane is shown in the window. Meanwhile the right pane is in
-place, empty. A load that fails shows, in the right pane only, that the project pane could not be loaded, with **Try
-again**; the rest of the window is unaffected. Try again pressed from the keyboard hands keyboard focus to the terminal
+The Files panel's own code loads the first time a Files panel is shown in the window. Meanwhile its card is in place,
+empty. A load that fails shows, in the Files panel only, under its header — the project's name as its title, and the
+panel's own controls — that the project pane could not be loaded, with **Try again**; the rest of the window is unaffected. Try again pressed from the keyboard hands keyboard focus to the terminal
 while the next load runs. A project pane that fails while it is shown, with keyboard focus inside it, shows the same
 failure and puts keyboard focus on its Try again.

@@ -1,7 +1,6 @@
-import { ArrowLeft, ArrowRight, ChevronRight, PanelLeft, PanelLeftDashed, PanelRight, PanelRightDashed } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronRight, PanelLeft, PanelLeftDashed } from "lucide-react";
 import React, { useSyncExternalStore } from "react";
 
-import { ASIDE_LABELS, type AsideOwner } from "../layout/asideOwner";
 import { PANE_ID } from "../layout/paneOverlay";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
@@ -119,21 +118,23 @@ interface TitleBarProps {
    * showing the current console. */
   onSidebarToggleEnter: () => void;
   onSidebarToggleLeave: () => void;
-  /** The docked aside column's target width in px (0 while hidden), which the end segment follows
-   * above the `docked` breakpoint, so the breadcrumb ends where the aside begins. */
+  /** The docked aside's width in px (0 while hidden), which the end segment follows, so the
+   * breadcrumb ends where the aside begins. */
   asideSpan: number;
-  /** The aside column is easing to `asideSpan`, so the segment eases with it. */
-  asideEasing: boolean;
-  /** What owns the aside, which its toggle names: a console session's report or a project's files.
-   * With no owner there is no aside, and no toggle. */
-  aside?: AsideOwner["kind"];
-  /** Whether the aside is shown, docked or as an open drawer; hidden but floating in on hover does
-   * not count, as with the sidebar. */
-  asideShown: boolean;
-  onToggleAside: () => void;
-  /** The pointer is on the aside's toggle: with the docked aside hidden, that floats it in. */
-  onAsideToggleEnter: () => void;
-  onAsideToggleLeave: () => void;
+  /** One toggle per kind of panel the pane's owner has, at the window's end: the only way to show
+   * and hide the right pane. `label` says what pressing it does, `open` is whether the kind's panel
+   * is on screen (the button then keeps the fills of a pressed one, and `Icon` shows which), and
+   * `regionId` is the panel's id while it is in the document. The pointer resting on one while no
+   * panel is open floats the pane in (`onHoverChange`). */
+  panelToggles?: ReadonlyArray<{
+    kind: string;
+    label: string;
+    Icon: React.ComponentType<{ "aria-hidden": "true"; className: string }>;
+    open: boolean;
+    regionId?: string;
+    onPress: () => void;
+    onHoverChange: (hovered: boolean) => void;
+  }>;
   canGoBack: boolean;
   canGoForward: boolean;
   onBack: () => void;
@@ -147,13 +148,13 @@ interface TitleBarProps {
 /**
  * The bar across the top of the window, on the window chrome like the rail below it: Back and
  * Forward, the sidebar toggle, the selected session's breadcrumb with its status icon, and at the
- * end the aside's toggle while something owns the aside. The rest of the end is the window's drag
+ * end one toggle per panel kind the aside's owner has. The rest of the end is the window's drag
  * area: the other window controls are on the rail (`Rail.tsx`). The end is the reading direction's,
  * so under right-to-left it is at the window's left, where the bar's own padding keeps the macOS
  * window buttons clear (`BarFrame`). Above the `docked` breakpoint, the start segment tracks the
- * docked sidebar's clip (`.title-bar-start`) and the end segment the docked aside's
+ * docked sidebar's clip (`.title-bar-start`); the end segment tracks the aside's at every width
  * (`.title-bar-end`), so the breadcrumb stays over the main area while either column eases open or
- * closed.
+ * closed (the aside's does not ease).
  */
 export function TitleBar({
   sidebarShown,
@@ -164,12 +165,7 @@ export function TitleBar({
   onSidebarToggleEnter,
   onSidebarToggleLeave,
   asideSpan,
-  asideEasing,
-  aside,
-  asideShown,
-  onToggleAside,
-  onAsideToggleEnter,
-  onAsideToggleLeave,
+  panelToggles,
   canGoBack,
   canGoForward,
   onBack,
@@ -215,28 +211,28 @@ export function TitleBar({
       <div className="flex min-w-0 flex-1 items-center px-3">
         {viewTrail ? <Trail names={viewTrail} /> : selectedSession && <Breadcrumb session={selectedSession} />}
       </div>
-      {/* Above the `docked` breakpoint, as wide as the docked aside's clip and never narrower than
-          its toggle, so the breadcrumb stops over the main area instead of running on above the
-          aside; below the breakpoint the class does not apply. */}
+      {/* At every width, as wide as the docked aside and never narrower than its toggles, so the
+          breadcrumb stops over the main area instead of running on above the aside. */}
       <div
-        className={`title-bar-end flex shrink-0 items-center justify-end ${asideEasing ? "title-bar-end-easing" : ""}`}
+        className="title-bar-end flex shrink-0 items-center justify-end"
         style={{ "--aside-span": `${asideSpan}px` } as React.CSSProperties}
       >
-        {aside && (
-          <div className="flex items-center px-2">
-            <ChromeButton
-              label={t(asideShown ? ASIDE_LABELS[aside].hide : ASIDE_LABELS[aside].show)}
-              onPress={onToggleAside}
-              expanded={asideShown}
-              controls={PANE_ID.aside}
-              onMouseHoverChange={(hovered) => (hovered ? onAsideToggleEnter() : onAsideToggleLeave())}
-            >
-              {asideShown ? (
-                <PanelRight aria-hidden="true" className="size-4 rtl:-scale-x-100" />
-              ) : (
-                <PanelRightDashed aria-hidden="true" className="size-4 rtl:-scale-x-100" />
-              )}
-            </ChromeButton>
+        {panelToggles && panelToggles.length > 0 && (
+          <div className="flex items-center gap-1 px-2">
+            {panelToggles.map(({ kind, label, Icon, open, regionId, onPress, onHoverChange }) => (
+              <ChromeButton
+                key={kind}
+                label={label}
+                onPress={onPress}
+                expanded={open}
+                selected={open}
+                regionId={regionId}
+                paneToggle={PANE_ID.aside}
+                onMouseHoverChange={onHoverChange}
+              >
+                <Icon aria-hidden="true" className="size-4" />
+              </ChromeButton>
+            ))}
           </div>
         )}
       </div>

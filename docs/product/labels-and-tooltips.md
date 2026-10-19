@@ -38,9 +38,10 @@ keyboard focus. The tooltip's text is the same name assistive technology announc
 buttons, the pin buttons, the session Delete or Archive shortcuts and the file viewer's File manager and Default
 application buttons below. These are:
 
-- the top bar's controls — Back, Forward, the sidebar toggle at its start and the right pane's toggle at its end;
-  each pane toggle's tooltip follows its "Show …" / "Hide …" label, and the right pane's also names what the pane
-  shows (see "The two pane toggles" in `docs/product/window-layout.md`);
+- the top bar's controls — Back, Forward, the sidebar toggle at its start and the panel toggles at its end; each
+  toggle's tooltip follows its "Show …" / "Hide …" label (see "The sidebar toggle and the panel toggles" in
+  `docs/product/window-layout.md`), and each panel toggle's also names its panel (see "The panel toggles in the top
+  bar" in `docs/product/right-pane-panels.md`);
 - the rail's buttons — each console's avatar, whose tooltip is the console's name with what is going on in it folded
   in, the same text as the name announced for it (see "The console switcher" in `docs/product/sidebar.md`), New
   console, the waiting count, whose tooltip says how many sessions are waiting and that pressing it goes to the next
@@ -67,6 +68,8 @@ application buttons below. These are:
 - the three options of Settings' Appearance row — Light, Dark and System (see "Appearance" in
   `docs/product/settings.md`);
 - the report panel's previous-page and next-page buttons;
+- a right pane panel's Maximize panel / Restore panel size and Close panel buttons (see "A panel's header" in
+  `docs/product/right-pane-panels.md`);
 - the project pane's Refresh button, a folder's arrow button in its file tree and in the Git mode's change list, and a
   commit row's arrow button there ("Expand" / "Collapse") (see `docs/product/project-pane.md`), and the file viewer's
   Previous file and Next file buttons (see `docs/product/file-viewer.md`);
@@ -93,6 +96,11 @@ application buttons below. These are:
   stays shut until focus or the pointer leaves the "?", so it does not reopen at once; closed by an outside press with
   the pointer elsewhere, nothing is held back, and the next rest on the "?" shows the tooltip;
 - the close button of every dismissable dialog, of Settings and of each toast ("Close").
+
+The right pane's resize grips — its width handle and the handles between its panels — have a tooltip too, a short
+"Resize" shown beside the grip only while a mouse pointer rests on the handle, not on keyboard focus; the name
+announced for each says what it resizes (see "Resizing the sidebar and the right pane" in
+`docs/product/window-layout.md` and "Resizing panels" in `docs/product/right-pane-panels.md`).
 
 While the docked sidebar is hidden at 1168 px and wider, a console's avatar opens its tooltip on keyboard focus only:
 resting the mouse on it floats the sidebar in instead (see "Previewing a console from the rail" in
@@ -131,7 +139,7 @@ Help tips are used in three places:
 ## Two-state icon toggles
 
 A control that switches a view between two states is **one icon button**, not a set of choices side by side. These are
-the two pane toggles (see "The two pane toggles" in `docs/product/window-layout.md`), the file viewer's three view
+the sidebar toggle (see "The sidebar toggle and the panel toggles" in `docs/product/window-layout.md`), the file viewer's three view
 controls (see "The header" in `docs/product/file-viewer.md`), the Files mode's file-name filter toggle
 (see "Filtering by file name" in that doc), and the Git mode's three — the toggle of its change
 filter field (see "Filtering by file name" in `docs/product/project-pane-git-change-list.md`), Group by folder (see "Flat
@@ -140,15 +148,17 @@ or grouped by folder" in the same doc) and Group by commit (see "Grouped by comm
 - Pressing the button switches the state, and its icon becomes the other state's.
 - **The icon shows the state the view is in; the name says what pressing will do**, so the name alternates with the
   state. That name is both the tooltip and what assistive technology announces, as "Tooltips on icon-only controls"
-  above says. Assistive technology is also told which state the control is in: whether the button is pressed; a pane
-  toggle says instead whether its pane is expanded, and each file-name filter toggle says both, pressed while its
-  field is on screen.
+  above says. Assistive technology is also told which state the control is in: whether the button is pressed; the
+  sidebar toggle says instead whether the sidebar is expanded, and each file-name filter toggle says both, pressed
+  while its field is on screen.
 - **Nothing about the state is said in colour**: the button in its pressed state is drawn exactly as in its
   unpressed one.
 
 Settings' Appearance choice is not one of these: being a choice among three, it stays a three-way segmented control,
 where the chosen option is marked by a fill of its own rather than by its icon (see "Appearance" in
-`docs/product/settings.md`).
+`docs/product/settings.md`). Nor are the panel toggles in the top bar: each keeps one icon whatever the state, and an
+open panel is marked by the toggle's pressed fill, besides its name and its expanded state (see "The panel toggles in
+the top bar" in `docs/product/right-pane-panels.md`).
 
 ## Copy buttons
 

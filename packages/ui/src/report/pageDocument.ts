@@ -10,7 +10,7 @@ export const SUBMIT_MESSAGE_SOURCE = "octoboard-page-submit";
 
 /** The `source` tag on the message the bridge posts when Escape is pressed inside the page. It
  * carries nothing else: a keydown inside the sandboxed frame never reaches this window, so
- * without the relay Escape could not close a floating or drawer report panel while the page holds
+ * without the relay Escape could not dismiss a floating report panel while the page holds
  * focus. */
 export const ESCAPE_MESSAGE_SOURCE = "octoboard-page-escape";
 

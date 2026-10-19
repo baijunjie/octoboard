@@ -18,8 +18,8 @@ const SPAN_END_SLACK_MS = 50;
 export const PANE_INSET_MS = 240;
 
 /** Where the docked pane is in its show/hide ease. `open` and `closed` are settled; the other
- * two are the ease itself. Below the docked breakpoint none of this is on screen: the drawer owns
- * that layout, and every class these phases add is `docked:`. */
+ * two are the ease itself. Its classes are `docked:` ones, as the sidebar is a drawer below the
+ * breakpoint. */
 export type DockPhase = "open" | "closing" | "closed" | "opening";
 
 export interface DockMotion {

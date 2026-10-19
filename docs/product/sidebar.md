@@ -68,8 +68,8 @@ switches the whole window to that console, not only the sidebar:
   the remembered one no longer existing, nothing is selected, and the terminal's area shows its empty state for that
   console (see "With no session selected" in `docs/product/session-terminal.md`); a console just created always
   shows that.
-- **The right pane shows that session's own pane** — a console session's report panel, a project session's project
-  pane — and with nothing selected there is no right pane (see "What the right pane shows" in
+- **The right pane goes to that session's own owner** — a console session with its report panel, a project
+  session's project with its Files panel — and with nothing selected there is no right pane (see "What the right pane shows" in
   `docs/product/window-layout.md`).
 - **Focus mode is left**, and an **open archive view closes**.
 
@@ -107,7 +107,7 @@ is a **preview**:
   with the remembered session shown at its end, counts as one visit (see "What counts as a place" in
   `docs/product/navigation-history.md`).
 - Showing the sidebar for good with its toggle while it previews a console shows the current console, not the one the
-  card was previewing. The card goes away and the column eases open; see "Hiding the sidebar and the right pane"
+  card was previewing. The card goes away and the column eases open; see "Hiding the sidebar"
   and "A hidden pane floats in on hover" in `docs/product/window-layout.md`.
 
 ## The console header
@@ -619,8 +619,8 @@ strip" in `docs/product/focus-mode.md`). Selecting an archived one does not reop
 with its saved terminal preview read-only, and typing into its terminal or pressing Reopen reopens it
 (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md` and "Interrupted, archived and dormant
 sessions" in `docs/product/session-terminal.md`). Selecting a session also
-puts its own pane in the window's right pane: a console session's report panel, a project session's project pane (see
-"What the right pane shows" in `docs/product/window-layout.md`). Whatever it is selected from — a sidebar row, a "View
+gives the window's right pane to its own owner: a console session's report panel, a project session's project's Files
+panel (see "What the right pane shows" in `docs/product/window-layout.md`). Whatever it is selected from — a sidebar row, a "View
 archive" or "Archived console sessions" submenu, focus mode and its switch strip, the archive view, the rail's waiting
 count, or the menu bar icon's menu (see "Choosing a session" in `docs/product/menu-bar-icon.md`) — **the sidebar
 follows it**: it switches to the session's console, showing the session selected rather than the one remembered for

@@ -188,7 +188,10 @@ export function createPreviewScenario(
       sidebarConsole: workspace.id,
       sidebarWidth: scene === "overview" ? 360 : 310,
       asideWidth: 430,
-      asideVisible: scene !== "overview",
+      // The overview shows the terminal alone: no panel of either owner is open.
+      ...(scene === "overview"
+        ? { panelStacks: { project: { open: [], shares: {} }, report: { open: [], shares: {} } } }
+        : {}),
       changeLayout: "tree",
     },
     configuration: { unavailable: true },
@@ -196,7 +199,8 @@ export function createPreviewScenario(
     steps: [
       async (ui) => {
         // Match the application's CSS breakpoint: the standalone demo also runs on phones, where
-        // selecting a session and revealing its report/browser require the real drawer controls.
+        // the sessions list is a drawer that has to be opened to select a session and closed to see
+        // the report or browser, which dock beside the terminal at every width.
         const breakpoint = parseFloat(
           getComputedStyle(document.documentElement).getPropertyValue(
             "--breakpoint-docked",
@@ -208,16 +212,7 @@ export function createPreviewScenario(
         await ui.press(
           ui.session(scene === "changes" ? copy.review : coordinator.title),
         );
-        if (narrow)
-          await ui.press(
-            ui.t(
-              scene === "overview"
-                ? "titleBar.sidebar.hide"
-                : scene === "changes"
-                  ? "titleBar.projectPane.show"
-                  : "titleBar.report.show",
-            ),
-          );
+        if (narrow) await ui.press(ui.t("titleBar.sidebar.hide"));
       },
     ],
   };

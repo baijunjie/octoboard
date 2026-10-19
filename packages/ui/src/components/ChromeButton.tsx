@@ -9,8 +9,9 @@ import { TitledControl } from "./TitledControl";
  * takes its fills from these custom properties. */
 export const CHROME_BUTTON_FILLS = "[--button-bg-hover:var(--chrome-hover)] [--button-bg-pressed:var(--chrome-active)]";
 
-/** The fills of the current console's tile on the rail: its resting fill is also what it keeps under
- * the pointer and while pressed, so pointing at the current console never makes it paler. */
+/** The fills of the current console's tile on the rail, and of a toggle whose panel is open: its
+ * resting fill is also what it keeps under the pointer and while pressed, so pointing at it never
+ * makes it paler. */
 export const CHROME_CURRENT_FILLS =
   "[--button-bg:var(--chrome-current)] [--button-bg-hover:var(--chrome-current)] [--button-bg-pressed:var(--chrome-current)]";
 
@@ -27,6 +28,9 @@ export function ChromeButton({
   expanded,
   controls,
   popupId,
+  regionId,
+  paneToggle,
+  selected,
   onBlur,
   buttonRef,
   tooltipDisabled,
@@ -48,6 +52,15 @@ export function ChromeButton({
   /** For a button that opens a floating panel: the panel's id, as `aria-controls`. Unlike `controls`
    * it does not mark the button as a pane toggle. */
   popupId?: string;
+  /** For a button that shows or hides one part of a pane: the part's id, as `aria-controls`, given
+   * only while the part is in the document. Unlike `controls` it does not mark a pane toggle. */
+  regionId?: string;
+  /** For a button that floats a pane in while the pointer is on it: the pane's id (`PANE_ID`), as
+   * `data-pane-toggle`, so the pane's pointer watch counts the button as part of it. */
+  paneToggle?: string;
+  /** The button shows something that is on, such as a panel that is open: it keeps the fills of a
+   * pressed button. */
+  selected?: boolean;
   onBlur?: () => void;
   buttonRef?: React.Ref<HTMLButtonElement>;
   /** Holds the tooltip back while the button shows what it says some other way (its panel is open). */
@@ -69,11 +82,11 @@ export function ChromeButton({
         variant="ghost"
         aria-label={label}
         aria-expanded={expanded}
-        aria-controls={controls ?? popupId}
-        data-pane-toggle={controls}
+        aria-controls={controls ?? regionId ?? popupId}
+        data-pane-toggle={paneToggle ?? controls}
         preventFocusOnPress
         onBlur={onBlur}
-        className={`${CHROME_BUTTON_FILLS} ${className}`}
+        className={`${selected ? CHROME_CURRENT_FILLS : CHROME_BUTTON_FILLS} ${className}`}
         onPress={onPress}
         onHoverStart={(event) => event.pointerType === "mouse" && onMouseHoverChange?.(true)}
         onHoverEnd={(event) => event.pointerType === "mouse" && onMouseHoverChange?.(false)}

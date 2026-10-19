@@ -249,6 +249,12 @@ html {
   --pane-header-height: 48px;
   --pane-header-height-floating: calc(var(--pane-header-height) - var(--peek-gap));
 
+  /* The gap that holds a resize grip in the right pane (`layout/AsidePane.tsx`: its terminal side;
+     `panels/PanelStack.tsx`: between cards): wide enough that the 4px grip, centred in it, has 6px
+     clear on either side. The other sides of the cards keep `--peek-gap`. `PaneResizeHandle`
+     centres the width grip in this gap by calculation, so a change here moves it. */
+  --panel-grip-gap: 16px;
+
   /* The left rail under the top bar (`Rail.tsx`): the window chrome's second half, at the reading
      direction's start. The content panel starts where it ends, so that is also where the
      sidebar starts, which is what the docked arithmetic above counts. Pane drawers are inset from
@@ -350,27 +356,27 @@ html {
     min-width: min-content;
   }
 
-  /* The end segment likewise spans the docked aside's clip (`--aside-span`), so the breadcrumb ends
-     where the aside begins. Under right-to-left the aside is at the window's left, where the bar's
-     own padding already covers `--window-controls-inset` of it. */
-  .title-bar-end {
-    width: var(--aside-span, 0px);
-    min-width: min-content;
-  }
-
-  .title-bar-end:dir(rtl) {
-    width: calc(var(--aside-span, 0px) - var(--window-controls-inset, 0px));
-  }
-
-  .title-bar-start-easing,
-  .title-bar-end-easing {
+  .title-bar-start-easing {
     transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1);
   }
 }
 
+/* The end segment likewise spans the docked aside (`--aside-span`), so the breadcrumb ends where the
+   aside begins, at every width as the aside docks in a narrow window too. It does not ease: the aside
+   docks and goes at once. Under right-to-left the
+   aside is at the window's left, where the bar's own padding already covers
+   `--window-controls-inset` of it. */
+.title-bar-end {
+  width: var(--aside-span, 0px);
+  min-width: min-content;
+}
+
+.title-bar-end:dir(rtl) {
+  width: calc(var(--aside-span, 0px) - var(--window-controls-inset, 0px));
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .title-bar-start-easing,
-  .title-bar-end-easing {
+  .title-bar-start-easing {
     transition: none;
   }
 }
@@ -421,6 +427,12 @@ html {
      lighter and the groove reads as a single 0.5px dark line there. Decorative, so not held to
      3:1. */
   --panel-hairline: oklch(0 0 0 / 0.12);
+  /* A resize grip (`ResizeSeparator`) is light grey while the pointer or focus is on its handle, and
+     strong while it is pressed or dragged. The light one is a hover cue for a handle whose cursor
+     already says what it is, like a hover tint, so it is not held to 3:1; keyboard focus also has
+     the focus ring, and the strong one is `--app-muted`, which clears 3:1. */
+  --grip-hover: oklch(0.82 0.004 286);
+  --grip-active: var(--app-muted);
   --groove-dark: oklch(0 0 0 / 0.12);
   --groove-light: oklch(1 0 0 / 0.9);
   --sidebar-fill: oklch(0 0 0 / 0.08);
@@ -445,6 +457,7 @@ html {
   --panel-selected: oklch(1 0 0 / 0.075);
   --panel-shadow: 0 0 1px oklch(0 0 0 / 0.8), 0 1px 4px oklch(0 0 0 / 0.55);
   --panel-hairline: oklch(1 0 0 / 0.12);
+  --grip-hover: oklch(0.45 0.006 286);
   --groove-dark: oklch(0 0 0 / 0.45);
   --groove-light: oklch(1 0 0 / 0.08);
   --sidebar-fill: oklch(1 0 0 / 0.07);
@@ -851,11 +864,12 @@ body {
   color: var(--foreground);
 }
 
-/* While a pane's resize handle is dragged, every element shows the resize cursor and none
+/* While a pane's or a panel's resize handle is dragged (`ResizeSeparator` sets the cursor,
+   `col-resize` or `row-resize`, in `--pane-resize-cursor`), every element shows the resize cursor and none
    starts a text selection, whatever the pointer happens to be over. */
 html.pane-resizing,
 html.pane-resizing * {
-  cursor: col-resize !important;
+  cursor: var(--pane-resize-cursor) !important;
   user-select: none !important;
 }
 
@@ -926,9 +940,11 @@ html.pane-resizing * {
   --view-shift: -24px;
 }
 
-/* A project's incoming browser keeps the pane's geometry fixed. A surface-coloured veil fades
-   instead of the content: ancestor opacity can blank composited controls in WKWebView. The viewer
-   stays outside this transformed content so its fixed overlays keep the window as their frame. */
+/* A project's incoming browser, when the user switches projects in a right pane that is already on
+   screen (`project-browser-switch`; a pane that docks or floats in plays none), keeps the pane's
+   geometry fixed. A surface-coloured veil fades instead of the content: ancestor opacity can blank
+   composited controls in WKWebView. The viewer stays outside this transformed content so its fixed
+   overlays keep the window as their frame. */
 @keyframes project-browser-enter {
   from { transform: translateX(var(--project-browser-shift, 10px)); }
   to { transform: translateX(0); }
@@ -944,16 +960,16 @@ html.pane-resizing * {
   mask-image: none;
 }
 
-.project-browser-entry:dir(rtl) {
+.project-browser-switch:dir(rtl) {
   --project-browser-shift: -10px;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .project-browser-entry > .project-browser-view {
+  .project-browser-switch > .project-browser-view {
     animation: project-browser-enter 240ms cubic-bezier(0.2, 0, 0, 1);
   }
 
-  .project-browser-entry::after {
+  .project-browser-switch::after {
     content: "";
     position: absolute;
     inset: 0;

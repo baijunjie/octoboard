@@ -4,7 +4,6 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { AsidePane } from "./AsidePane";
-import type { DockPhase } from "./paneDockMotion";
 import type { PanePeek } from "./usePaneToggles";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -17,14 +16,6 @@ function mount(reduce = false) {
   document.documentElement.style.setProperty("--peek-gap", "8px");
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  let measure: (() => void) | undefined;
-  const disconnect = vi.fn();
-  vi.stubGlobal("ResizeObserver", class {
-    constructor(callback: () => void) { measure = callback; }
-    observe() {}
-    disconnect = disconnect;
-  });
-  const phase = vi.fn<(phase: DockPhase) => void>();
   const mounted = vi.fn();
   const unmounted = vi.fn();
   function Content() {
@@ -32,11 +23,13 @@ function mount(reduce = false) {
     return <input defaultValue="retained" />;
   }
   const peek = { active: false, reveal: vi.fn(), keep: vi.fn(), leave: vi.fn() } satisfies PanePeek;
-  const render = (shown: boolean, active = false) => act(() => root.render(
-    <AsidePane layout={{ open: false, width: 300, peek: shown ? undefined : { ...peek, active }, onColumnPhase: phase }}>
-      <Content />
-    </AsidePane>,
-  ));
+  /** `docked` is the pane with a panel open; otherwise it floats while `active`. */
+  const render = (docked: boolean, active = false) =>
+    act(() => root.render(
+      <AsidePane layout={{ width: 300, peek: docked ? undefined : { ...peek, active } }}>
+        <Content />
+      </AsidePane>,
+    ));
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
@@ -46,72 +39,89 @@ function mount(reduce = false) {
   });
   render(true);
   return {
-    render, mounted, unmounted, phase, disconnect,
-    measure: () => measure?.(),
-    pane: () => container.querySelector<HTMLElement>("[data-pane=aside]")!,
-    clip: () => container.firstElementChild as HTMLElement,
+    render,
+    mounted,
+    unmounted,
+    peek,
+    pane: () => container.querySelector<HTMLElement>("[data-pane=aside]"),
     advance: (ms: number) => act(() => vi.advanceTimersByTime(ms)),
+    /** Floats in, and lets the card get its first frame. */
+    floatIn: () => {
+      act(() => root.render(<AsidePane layout={{ width: 300, peek: { ...peek, active: true } }}><Content /></AsidePane>));
+    },
   };
 }
 
-it("closes as a full-height column before preparing the hover card, preserving its contents", () => {
+it("docks as a row sibling that takes its room from the terminal, at any width", () => {
   const test = mount();
-  const content = test.pane().firstElementChild;
-  expect(test.clip().classList.contains("docked:flex-[0_1_var(--aside-span)]")).toBe(true);
-  expect(test.pane().classList.contains("docked:w-full")).toBe(true);
-  test.render(false, true);
-  expect(test.phase).toHaveBeenLastCalledWith("closing");
-  expect(test.clip().style.getPropertyValue("--aside-span")).toBe("0px");
-  expect(test.clip().className).toContain("docked:transition-[width]");
-  expect(test.clip().classList.contains("docked:shrink-0")).toBe(true);
-  expect(test.pane().classList.contains("docked:w-[var(--aside-close-width,var(--aside-width))]")).toBe(true);
-  expect(test.pane().className).toContain("docked:h-full");
-  expect(test.pane().classList.contains("docked:rounded-xl")).toBe(false);
-  test.advance(250);
-  expect(test.phase).toHaveBeenLastCalledWith("closed");
-  expect(test.pane().className).toContain("docked:rounded-xl");
-  expect(test.pane().className).toContain("docked:transition-none");
-  test.advance(16);
-  test.advance(16);
-  expect(test.pane().className).not.toContain("docked:transition-none");
-  expect(test.pane().firstElementChild).toBe(content);
-  expect(test.mounted).toHaveBeenCalledOnce();
-  expect(test.unmounted).not.toHaveBeenCalled();
+  const pane = test.pane()!;
+  expect(pane.className).toContain("w-(--aside-width)");
+  expect(pane.className).toContain("min-w-[320px]");
+  expect(pane.className).not.toMatch(/fixed|docked:|drawer/);
+  expect(pane.style.getPropertyValue("--aside-width")).toBe("300px");
 });
 
-it("eases a docked reopen and leaves the drawer geometry below the breakpoint", () => {
+it("pads the cards by the panel gap on all four sides and paints nothing in it, in every form", () => {
   const test = mount();
-  test.render(false);
-  test.advance(250);
-  test.render(true);
-  expect(test.phase).toHaveBeenLastCalledWith("opening");
-  expect(test.clip().style.getPropertyValue("--aside-span")).toBe("300px");
-  expect(test.clip().className).toContain("contents docked:flex");
-  expect(test.pane().className).toContain("max-docked:rounded-xl");
-  test.advance(250);
-  expect(test.phase).toHaveBeenLastCalledWith("open");
+  const painted = /(^|\s)(bg-|shadow|rounded|panel-edge|border|ring)/;
+  expect(test.pane()!.className).toContain("ps-(--panel-grip-gap) pe-(--peek-gap) py-(--peek-gap)");
+  expect(test.pane()!.className).not.toMatch(painted);
+  test.floatIn();
+  test.advance(32);
+  expect(test.pane()!.className).toContain("ps-(--panel-grip-gap) pe-(--peek-gap) py-(--peek-gap)");
+  expect(test.pane()!.className).not.toMatch(painted);
 });
 
-it("settles docked toggles and hover reveals immediately under reduced motion", () => {
+it("floats in fading up like the sidebar's card, over the terminal without taking its pointer events", () => {
+  const test = mount();
+  test.floatIn();
+  const pane = test.pane()!;
+  expect(pane.className).toContain("fixed");
+  expect(pane.className).toContain("pointer-events-none");
+  // It starts below its place and clear, without a transition, and is then let to rise.
+  expect(pane.className).toContain("translate-y-1.5 opacity-0 invisible");
+  expect(pane.classList.contains("transition-none")).toBe(true);
+  test.advance(32);
+  expect(pane.className).toContain("translate-y-0 opacity-100");
+  expect(pane.className).toContain("duration-240");
+  expect(pane.classList.contains("transition-none")).toBe(false);
+});
+
+it("fades away as it came, and is not rendered once it has gone", () => {
+  const test = mount();
+  test.floatIn();
+  test.advance(32);
+  test.render(false, false);
+  expect(test.pane()!.className).toContain("translate-y-1.5 opacity-0 invisible");
+  test.advance(300);
+  expect(test.pane()).toBeNull();
+});
+
+it("floats in and goes at once under reduced motion", () => {
   const test = mount(true);
   test.render(false, true);
-  expect(test.phase).toHaveBeenLastCalledWith("closed");
-  expect(test.pane().className).toContain("docked:rounded-xl");
-  expect(test.pane().className).not.toContain("docked:transition-none");
-  test.render(true);
-  expect(test.phase).toHaveBeenLastCalledWith("open");
+  expect(test.pane()!.className).toContain("opacity-100");
+  expect(test.pane()!.className).toContain("motion-reduce:transition-none");
+  test.render(false, false);
+  test.advance(0);
+  expect(test.pane()).toBeNull();
 });
 
-
-it("preserves the rendered content width when closing during a sibling's ease", () => {
+it("docks at once on a press, with no transition", () => {
   const test = mount();
-  test.clip().getBoundingClientRect = () => ({ width: 330 }) as DOMRect;
-  test.measure();
-  expect(test.pane().style.getPropertyValue("--aside-close-width")).toBe("330px");
-  expect(test.clip().style.getPropertyValue("--aside-rendered-width")).toBe("330px");
-  expect(test.clip().classList.contains("docked:w-[var(--aside-rendered-width,var(--aside-span))]")).toBe(true);
-  test.render(false);
-  expect(test.disconnect).toHaveBeenCalledOnce();
-  expect(test.pane().style.getPropertyValue("--aside-close-width")).toBe("330px");
-  expect(test.pane().classList.contains("docked:w-[var(--aside-close-width,var(--aside-width))]")).toBe(true);
+  test.floatIn();
+  test.advance(32);
+  test.render(true);
+  expect(test.pane()!.className).not.toMatch(/transition|duration|translate|opacity|invisible|fixed/);
+});
+
+it("keeps a floating pane up while the pointer is on it", () => {
+  const test = mount();
+  test.floatIn();
+  test.advance(32);
+  const pane = test.pane()!;
+  act(() => void pane.dispatchEvent(new MouseEvent("pointerover", { bubbles: true })));
+  expect(test.peek.keep).toHaveBeenCalled();
+  act(() => void pane.dispatchEvent(new MouseEvent("pointerout", { bubbles: true })));
+  expect(test.peek.leave).toHaveBeenCalled();
 });

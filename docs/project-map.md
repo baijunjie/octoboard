@@ -76,7 +76,7 @@ Per-package commands are in that package's doc.
   switcher and the plan quota entry), the content panel with the sidebar (projects and sessions, the project and console session focus modes) or, while there is no console, the welcome screen,
   the archive view, the xterm.js terminal pane, the pane-layout state, Back/Forward navigation history, the settings
   dialog (agent accounts with their plan quota among its sections), the other dialogs, the read-only file viewer (code, rendered Markdown, image and diff rendering behind an application-owned
-  interface), the aside at the end side of the content panel (a console session's report panel or a project's
-  browser, its files and a local branch's uncommitted and committed changes) and the internationalization (language choice and message catalogs), and a dev-only gallery of UI states
+  interface), the right pane at the end side of the content panel (a stack of panel cards: a project's Files, the browser of its
+  files and a local branch's uncommitted and committed changes, or a console session's Report) and the internationalization (language choice and message catalogs), and a dev-only gallery of UI states
   over a fixture daemon (`src/gallery/`, served by the dev server), plus the separate website-preview build. Loaded by
   the `apps/desktop/` shell and also runs in a plain browser.

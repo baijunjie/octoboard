@@ -91,7 +91,7 @@ it.each([false, true])("reopens a hidden project's Files pane when narrow=%s", a
   await openProjectMenu(project.name);
   await press("Browse files");
   expect(container.querySelector(`[data-browser="${project.id}"]`)?.getAttribute("data-mode")).toBe("files");
-  expect(container.querySelector('[data-region="topbar"] [aria-label="Hide project pane"]')).not.toBeNull();
+  expect(container.querySelector('[data-region="topbar"] [aria-label="Hide files panel"]')).not.toBeNull();
   if (!narrow) {
     await openProjectMenu(project.name);
     expect(menuHas("Browse files")).toBe(false);
@@ -102,14 +102,71 @@ it.each([false, true])("reopens a hidden project's Files pane when narrow=%s", a
     await press("Open in");
     await press("File manager");
   }
-  await press("Hide project pane");
+  await press("Hide files panel");
   if (narrow) await press("Show sessions");
   await act(async () => setProjectBrowserMode(project.id, "git"));
   await openProjectMenu(project.name);
   expect(menuHas("Browse files")).toBe(true);
   await press("Browse files");
   expect(container.querySelector(`[data-browser="${project.id}"]`)?.getAttribute("data-mode")).toBe("files");
-  expect(container.querySelector('[data-region="topbar"] [aria-label="Hide project pane"]')).not.toBeNull();
+  expect(container.querySelector('[data-region="topbar"] [aria-label="Hide files panel"]')).not.toBeNull();
+});
+
+const toggle = (label: string) => document.querySelector<HTMLElement>(`[data-region="topbar"] [aria-label="${label}"]`);
+const asidePane = () => document.querySelector<HTMLElement>("[data-pane=aside]")!;
+
+it.each([false, true])("has no toggle for the pane itself, only a panel's, which hides and shows it; narrow=%s", async (narrow) => {
+  const { project } = mountApp(narrow);
+  if (narrow) await press("Show sessions");
+  await openProjectMenu(project.name);
+  await press("Browse files");
+  expect(document.querySelector('[data-region="topbar"] [aria-label$="project pane"]')).toBeNull();
+  expect(toggle("Hide files panel")!.getAttribute("aria-expanded")).toBe("true");
+  // Docked at every width: a row sibling, not the fixed drawer or float.
+  expect(asidePane().classList.contains("fixed")).toBe(false);
+  await press("Hide files panel");
+  expect(toggle("Show files panel")!.getAttribute("aria-expanded")).toBe("false");
+  await press("Show files panel");
+  expect(toggle("Hide files panel")).not.toBeNull();
+});
+
+it("floats the hidden pane in while the pointer rests on a toggle, and docks it when the toggle is pressed", async () => {
+  vi.useFakeTimers();
+  document.documentElement.style.setProperty("--peek-gap", "8px");
+  onTestFinished(() => {
+    vi.useRealTimers();
+    document.documentElement.style.removeProperty("--peek-gap");
+  });
+  const { container, project } = mountApp();
+  await openProjectMenu(project.name);
+  await press("Browse files");
+  await press("Hide files panel");
+  // It goes at once, with no ease out.
+  expect(container.querySelector("[data-browser]")).toBeNull();
+  const button = toggle("Show files panel")!;
+  const pointer = (type: string) => new PointerEvent(type, { pointerType: "mouse", bubbles: type !== "pointerenter" });
+  await act(async () => {
+    button.dispatchEvent(pointer("pointerover"));
+    button.dispatchEvent(pointer("pointerenter"));
+    await vi.advanceTimersByTimeAsync(300);
+  });
+  expect(container.querySelector(`[data-browser="${project.id}"]`)).not.toBeNull();
+  expect(asidePane().classList.contains("fixed")).toBe(true);
+  await press("Show files panel");
+  expect(asidePane().classList.contains("fixed")).toBe(false);
+  expect(toggle("Hide files panel")).not.toBeNull();
+});
+
+it("hands focus on the pane's width handle to the terminal when the pane goes", async () => {
+  const { project } = mountApp();
+  await openProjectMenu(project.name);
+  await press("Browse files");
+  const handle = document.querySelector<HTMLElement>("[role=separator][data-pane=aside]")!;
+  handle.focus();
+  expect(document.activeElement).toBe(handle);
+  await press("Hide files panel");
+  expect(document.querySelector("[role=separator][data-pane=aside]")).toBeNull();
+  expect(document.activeElement).not.toBe(document.body);
 });
 
 it("sends the project directory request and reports a failure through the shared error channel", async () => {

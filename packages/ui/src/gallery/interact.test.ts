@@ -137,3 +137,43 @@ it("a matcher from the helpers says what it looks for when a step fails", () => 
   expect(String(ui.changeRow("new-name.ts", "renamed"))).toBe("changeRow(new-name.ts, renamed)");
   expect(String(ui.session("Hub"))).toBe("session(Hub)");
 });
+
+it("floatPane moves the pointer from the toggle onto the pane that floats in, so the pane stays up", async () => {
+  document.body.innerHTML = "<button aria-label=\"Show files panel\"></button><div data-pane=\"aside\"><p>card</p></div>";
+  const pane = document.querySelector<HTMLElement>("[data-pane]")!;
+  // jsdom loads no styles, so the pane is as shown as the app's classes would make it.
+  pane.style.position = "fixed";
+  pane.style.visibility = "visible";
+  pane.style.opacity = "1";
+  const seen: string[] = [];
+  document.addEventListener("pointerover", (event) => seen.push(`over:${(event.target as HTMLElement).tagName}`));
+  document.addEventListener("pointerout", (event) => seen.push(`out:${(event.target as HTMLElement).tagName}`));
+  const done = createUi(document, "en").floatPane("Show files panel");
+  await vi.advanceTimersByTimeAsync(2000);
+  await done;
+  expect(seen).toEqual(["over:BUTTON", "out:BUTTON", "over:DIV"]);
+});
+
+it("floatPane fails where the toggle floats in no pane, as one whose pane is docked", async () => {
+  document.body.innerHTML = "<button aria-label=\"Hide files panel\"></button><div data-pane=\"aside\"></div>";
+  const done = expect(createUi(document, "en").floatPane("Hide files panel")).rejects.toThrow(/floated in no pane/);
+  await vi.advanceTimersByTimeAsync(10_000);
+  await done;
+});
+
+it("hoverAnchored fails unless the anchored tooltip that opens reads what the step expects", async () => {
+  document.body.innerHTML = "<div role=\"separator\" tabindex=\"0\" aria-label=\"Resize panel area\"></div>";
+  const separator = document.querySelector("[role=separator]")!;
+  separator.addEventListener("pointerover", () => {
+    const tooltip = document.createElement("div");
+    tooltip.dataset.anchoredTooltip = "";
+    tooltip.textContent = "Resize";
+    document.body.append(tooltip);
+  });
+  const done = createUi(document, "en").hoverAnchored("Resize panel area", "Resize");
+  await vi.advanceTimersByTimeAsync(3000);
+  await done;
+  const wrong = expect(createUi(document, "en").hoverAnchored("Resize panel area", "Move")).rejects.toThrow(/has no tooltip "Move"/);
+  await vi.advanceTimersByTimeAsync(3000);
+  await wrong;
+});

@@ -32,14 +32,14 @@ function dockedQuery(): string {
 
 /**
  * Whether the window is currently narrower than the `docked` breakpoint. Every other narrow-mode
- * behaviour (swapping the sidebar's and the aside's layout) uses the `docked:` Tailwind
- * variant directly, so it tracks the breakpoint with no JavaScript at all and no hydration/resize
- * flicker. This hook exists only for the behaviour that genuinely needs the current mode in JS:
- * closing an open drawer when the window widens past the breakpoint, since an overlay left open
- * there would otherwise cover the row it no longer needs to; the sidebar and aside toggles, which
- * drive a drawer below the breakpoint and show or hide the docked pane above it; and the settings
- * dialog's tabs, whose orientation sets react-aria's arrow keys and `aria-orientation`, not only
- * their layout.
+ * behaviour (swapping the sidebar's layout) uses the `docked:` Tailwind variant directly, so it
+ * tracks the breakpoint with no JavaScript at all and no hydration/resize flicker. This hook exists
+ * only for the behaviour that genuinely needs the current mode in JS: closing the sidebar's drawer
+ * when the window widens past the breakpoint, since an overlay left open there would otherwise
+ * cover the row it no longer needs to; the sidebar's toggle, which drives a drawer below the
+ * breakpoint and shows or hides the docked pane above it; the width clamps, which count the
+ * sidebar as a column in the row only above it; and the settings dialog's tabs, whose orientation
+ * sets react-aria's arrow keys and `aria-orientation`, not only their layout.
  */
 export function useIsNarrow(): boolean {
   const [isNarrow, setIsNarrow] = useState(() => !window.matchMedia(dockedQuery()).matches);

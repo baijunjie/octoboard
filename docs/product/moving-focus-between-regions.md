@@ -16,7 +16,8 @@ order:
 4. the sidebar;
 5. the archive view, only while it is open (see "The archive view" in `docs/product/sidebar.md`);
 6. the terminal;
-7. the right pane;
+7. the right pane's panels, each a region of its own, in stacking order (see "Panels and keyboard focus" in
+   `docs/product/right-pane-panels.md`);
 8. the connection banner, only while it is shown;
 9. the toasts, only while at least one toast is shown.
 
@@ -29,17 +30,20 @@ The rail's account quota panel is not a region and does not change the cycle: bo
 open, and from focus inside it they go as from focus in none of the regions, closing the panel as focus leaves it
 (see "Closing the panel" in `docs/product/account-quotas.md`).
 
-**A region not on screen is skipped**: a docked pane the user has hidden, a drawer that is closed, a hidden pane that
-is only floating in, the right pane when nothing owns it or it has nothing to take focus (a report panel before its
-pages have arrived or with no pages yet, a project pane while it is still loading, see "Loading the project pane" in
-`docs/product/project-pane.md`), and the terminal when no session is selected — unless its area is then offering a creation
+**A region not on screen is skipped**: a docked sidebar the user has hidden, the sidebar's drawer while it is closed,
+a pane that is only floating in, the right pane's panels when nothing owns the pane or none of its panels is open, a
+panel with nothing to take focus (a Files panel while it is still loading, see "Loading the project pane" in
+`docs/product/project-pane.md`), a panel hidden by another panel's maximizing (see "Maximizing a panel" in
+`docs/product/right-pane-panels.md`), and the terminal when no session is selected — unless its area is then offering a creation
 action, which makes it a stop (see "A console with nothing in it" in `docs/product/session-terminal.md`) — or while the
 archive view covers it.
 With no console the sidebar, the archive view, the terminal and the right pane are all skipped together, none of them
 being on screen, and the welcome screen is the only stop between the rail and the connection banner; with a console
-the welcome screen is the one skipped. A pane counts as shown when it is docked in the row at 1168 px and wider, or
-its drawer is open below that. A docked sidebar column that is still easing closed already counts as hidden, and one
-that is still easing open already counts as shown (see "The two pane toggles" in `docs/product/window-layout.md`).
+the welcome screen is the one skipped. The sidebar counts as shown when it is docked in the row at 1168 px and wider,
+or its drawer is open below that. A docked sidebar column that is still easing closed already counts as hidden, and
+one that is still easing open already counts as shown (see "The sidebar toggle and the panel toggles" in
+`docs/product/window-layout.md`). A right pane panel counts as shown while it is open in the docked pane, at every
+width.
 
 Where focus lands in each region:
 
@@ -51,8 +55,8 @@ Where focus lands in each region:
 | Sidebar | the selected session's row, or the sidebar's first control when that row is not on screen |
 | Archive view | its first control |
 | Terminal | the terminal, so typing reaches the agent; instead the button its area offers in the terminal's place while there is one — its cover's Reconnect, or its empty state's Add project, New session or New console session (see "Reconnecting" and "A console with nothing in it" in `docs/product/session-terminal.md`) |
-| Right pane, showing a report panel | the pager's first enabled button, else the report page itself |
-| Right pane, showing a project pane | its header's first tab (Files); the arrow keys move between Files and Changes, and Tab goes through the tab's controls (the filter toggle, and in Changes Group by folder and Group by commit), then Refresh and the content below; Try again while the pane failed to load |
+| Report panel | the pager's first enabled button in its header, else its Close panel; Tab goes on to the report page |
+| Files panel | its header's first tab (Files); the arrow keys move between Files and Changes, and Tab goes through the tab's controls (the filter toggle, and in Changes Group by folder and Group by commit), then Refresh, the panel's own buttons (see "A panel's header" in `docs/product/right-pane-panels.md`) and the content below; Try again while the panel failed to load (see "Loading the project pane" in `docs/product/project-pane.md`) |
 | Connection banner | its Retry button; it has none while the banner only says it is reconnecting, and F6 then skips it |
 | Toasts | the newest toast |
 

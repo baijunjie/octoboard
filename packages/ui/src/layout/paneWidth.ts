@@ -15,8 +15,16 @@ const PANES = {
 } satisfies Record<PaneSide, { key: string; min: number; default: number; max: number }>;
 
 /** The terminal pane's floor (the terminal's wrapper in `App.tsx`); the window's 1168px minimum is
- * this plus the rail, the sidebar's default and the aside's minimum. */
+ * this plus the rail, the sidebar's default and the aside's minimum. Below the `docked` breakpoint
+ * the sidebar is a drawer and the floor drops to `NARROW_TERMINAL_FLOOR`, which the aside, docked
+ * at every width, shares the row with. */
 const TERMINAL_FLOOR = 520;
+const NARROW_TERMINAL_FLOOR = 398;
+
+/** The terminal's floor in a window narrower than the `docked` breakpoint or not. */
+function terminalFloor(narrow: boolean): number {
+  return narrow ? NARROW_TERMINAL_FLOOR : TERMINAL_FLOOR;
+}
 
 /** Memoised once resolved: the rail's width cannot change at runtime. */
 let railWidthPxCache: number | undefined;
@@ -76,24 +84,24 @@ export interface DockedPanes {
 
 /**
  * The one rule for sharing the row between the panes, so both clamps agree at every viewport width:
- * the terminal always keeps `TERMINAL_FLOOR`, and when space is short the aside gives up
+ * the terminal always keeps its floor, and when space is short the aside gives up
  * width first, down to its minimum. The sidebar therefore only ever assumes the aside's
  * minimum (not its chosen width), and the aside gets what is left after the sidebar's
  * rendered width. A pane that is not docked is not limited by the viewport (it overlays the
  * terminal). At 1168px with both docked: rail 48, sidebar 280, terminal 520, aside 320.
  */
-function maxWidthFor(side: PaneSide, docked: DockedPanes, chosenSidebar: number | undefined, railWidth: number): number {
+function maxWidthFor(side: PaneSide, docked: DockedPanes, narrow: boolean, chosenSidebar: number | undefined, railWidth: number): number {
   const { min, max } = PANES[side];
   if (!docked[side]) return max;
   if (side === "sidebar") {
     const asideReserve = docked.aside ? PANES.aside.min : 0;
-    return clamp(viewportWidth - railWidth - TERMINAL_FLOOR - asideReserve, min, max);
+    return clamp(viewportWidth - railWidth - terminalFloor(narrow) - asideReserve, min, max);
   }
   const sidebar = PANES.sidebar;
   const sidebarWidth = docked.sidebar
-    ? clamp(chosenSidebar ?? sidebar.default, sidebar.min, maxWidthFor("sidebar", docked, chosenSidebar, railWidth))
+    ? clamp(chosenSidebar ?? sidebar.default, sidebar.min, maxWidthFor("sidebar", docked, narrow, chosenSidebar, railWidth))
     : 0;
-  return clamp(viewportWidth - railWidth - TERMINAL_FLOOR - sidebarWidth, min, max);
+  return clamp(viewportWidth - railWidth - terminalFloor(narrow) - sidebarWidth, min, max);
 }
 
 export interface PaneWidth {
@@ -117,15 +125,16 @@ export interface PaneWidth {
 /**
  * One pane's docked-mode width: the user's persisted choice (a separate `localStorage` entry per
  * side, every access guarded) clamped at render time by the rule at `maxWidthFor`, never below the
- * pane's minimum. State is shared module-wide, so every caller sees the same value.
+ * pane's minimum. `narrow` is whether the window is below the `docked` breakpoint (`useIsNarrow`).
+ * State is shared module-wide, so every caller sees the same value.
  */
-export function usePaneWidth(side: PaneSide, docked: DockedPanes): PaneWidth {
+export function usePaneWidth(side: PaneSide, docked: DockedPanes, narrow: boolean): PaneWidth {
   const chosen = chosenWidths[side].useValue();
   const chosenSidebar = chosenWidths.sidebar.useValue();
   // Subscribing to the answer rather than to the viewport itself is what keeps a window resize
   // from re-rendering the caller while the answer is unchanged.
   const [railWidth] = useState(railWidthPx);
-  const max = useSyncExternalStore(subscribeToViewport, () => maxWidthFor(side, docked, chosenSidebar, railWidth));
+  const max = useSyncExternalStore(subscribeToViewport, () => maxWidthFor(side, docked, narrow, chosenSidebar, railWidth));
   const { min, default: defaultWidth } = PANES[side];
   const preference = chosenWidths[side];
   return {

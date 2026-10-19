@@ -83,7 +83,7 @@ What follows the current language:
   words it in the current language; a console, project or session it mentions is shown by that record's current name
   (by its id when the UI does not know the record). A report the UI has no wording for — one from a daemon newer than
   the UI — is shown in the daemon's own English;
-- numbers and dates the UI formats, such as a report page's creation time in the report panel's bar;
+- numbers and dates the UI formats, such as a report page's creation time in the report panel;
 - the UI components' own built-in text and formatting;
 - in the macOS application, the application menu: every item Octoboard defines in it — the Octoboard menu's About,
   Settings…, Services, Hide, Hide Others, Show All and Quit, and the Edit, View and Window menus with their items.

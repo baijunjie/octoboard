@@ -14,7 +14,6 @@ import { flushSync } from "react-dom";
 import { ArchiveLayer } from "./archive/ArchiveLayer";
 import type { ArchiveViewState } from "./archive/ArchiveView";
 import { forgetProjectsOtherThan, noteSessionSwitch, setProjectBrowserMode } from "./browser/browserState";
-import { LazyProjectBrowser } from "./browser/LazyProjectBrowser";
 import { LazyTerminalFileViewer } from "./browser/LazyTerminalFileViewer";
 import { ConnectionBanner } from "./components/ConnectionBanner";
 import { ContentPanel } from "./components/ContentPanel";
@@ -36,7 +35,8 @@ import { useQuickCreateSession } from "./dialogs/useQuickCreateSession";
 import { forcibleBranches, inspectSessionBranches, lockedWorktrees } from "./dialogs/useSessionBranches";
 import { useT } from "./i18n/react";
 import type { AsideLayout } from "./layout/AsidePane";
-import { ASIDE_LABELS, liveOwner, ownerAfterMove, ownerForSession, ownerKey, sameOwner, type AsideOwner } from "./layout/asideOwner";
+import { liveOwner, ownerAfterMove, ownerForSession, ownerKey, sameOwner, type AsideOwner } from "./layout/asideOwner";
+import { useIsNarrow } from "./layout/breakpoint";
 import { usePaneWidth } from "./layout/paneWidth";
 import { columnSpan, isDockEasing, type DockPhase } from "./layout/paneDockMotion";
 import { type HeldChoices, useConsoleSwitchFollowUp } from "./layout/useConsoleSwitchFollowUp";
@@ -51,7 +51,10 @@ import { useNavigationHistory } from "./navigation/useNavigationHistory";
 import { usePlatform } from "./platform/react";
 import { ALREADY_RUNNING_CODES, type Console, type ConsoleSessionColour, type Project, type Session } from "./protocol";
 import { sessionDisplayTitle } from "./sessionLabel";
-import { ReportPanel } from "./report/ReportPanel";
+import { PANEL_ENTRIES } from "./panels/panelRegistry";
+import { RightPane } from "./panels/RightPane";
+import { openPanel, OWNER_KINDS, panelId, panelRegion, shownKinds, shownPanelRegions, toggleKind, visibleKinds, type PanelKind } from "./panels/stackState";
+import { usePanelStacks } from "./panels/usePanelStacks";
 import { SettingsDialog } from "./settings/SettingsDialog";
 import { useSettingsDialog } from "./settings/useSettingsDialog";
 import { belongsToFocus, focusAfterSelect, focusFor, focusKey, KEY_SWITCH_SELECTION, resolveFocus, shortcutOutcome } from "./sidebar/focus";
@@ -157,7 +160,33 @@ export function App(): React.ReactElement {
   // shows the welcome screen instead. The panes' saved visibility and widths are left as they are:
   // this is an absence of content, not a choice, and they come back as the user left them.
   const noConsoles = sidebarView.currentConsole === undefined;
-  const panes = usePaneToggles({ hasSidebar: !noConsoles, hasAside, focusTerminal });
+  // The right pane is a stack of its owner's panels (`panels/stackState.ts`) and shows while one is
+  // open: the top bar's toggles, the F6 cycle and the pane itself all read the owner's stack. With
+  // none open the pane floats in while the pointer is on a kind's toggle, showing that panel.
+  const { stacks: panelStacks, setStack: setPanelStack } = usePanelStacks();
+  const ownerKind = asideOwner?.kind;
+  const ownerOrder = ownerKind ? OWNER_KINDS[ownerKind] : [];
+  const ownerStack = ownerKind ? panelStacks[ownerKind] : undefined;
+  const openPanels = ownerStack ? shownKinds(ownerStack, ownerOrder) : [];
+  const visiblePanels = ownerStack ? visibleKinds(ownerStack, ownerOrder) : [];
+  const paneShown = openPanels.length > 0;
+  const panes = usePaneToggles({ hasSidebar: !noConsoles, asidePeekable: hasAside && !paneShown, focusTerminal });
+  const isNarrow = useIsNarrow();
+  const [peekKind, setPeekKind] = useState<PanelKind>();
+  const filesOnScreen =
+    ownerKind === "project" && (paneShown ? visiblePanels.includes("files") : panes.asidePeek.active && peekKind === "files");
+  // A panel kind's toggle shows or hides its panel; pressing it while the pane floats in docks it.
+  const togglePanel = (kind: PanelKind) => {
+    if (!ownerKind || !ownerStack) return;
+    panes.asidePeek.hide(false);
+    setPanelStack(ownerKind, toggleKind(ownerStack, kind, ownerOrder));
+  };
+  const hoverPanelToggle = (kind: PanelKind, hovered: boolean) => {
+    if (!hovered) return panes.asidePeek.leave();
+    if (paneShown) return;
+    setPeekKind(kind);
+    panes.asidePeek.reveal();
+  };
   // The hidden sidebar floats in showing the console whose avatar the pointer is on, which is not
   // the current one until something is pressed in it. That is a plain console view: a focus mode
   // belongs to the current console.
@@ -192,32 +221,31 @@ export function App(): React.ReactElement {
       sidebar: !noConsoles && panes.sidebarShown,
       archive: archiveOpen,
       terminal: (selectedSession !== undefined || emptyHasAction) && !archiveOpen,
-      aside: hasAside && panes.asideShown,
       banner: connectionState === "reconnecting" || connectionState === "closed",
     },
+    panels: shownPanelRegions(ownerStack, ownerKind),
     focusTerminal,
   });
 
-  // The handle sits at the column's settled edge. During the ease that edge is still moving, and
-  // the handle's own position is the settled width, so it stays off until the ease has finished.
+  // The sidebar's handle sits at its column's settled edge. During the ease that edge is still
+  // moving, and the handle's own position is the settled width, so it stays off until the ease has
+  // finished. The aside does not ease.
   const [sidebarColumnPhase, setSidebarColumnPhase] = useState<DockPhase>(panes.sidebarDocked ? "open" : "closed");
-  const [asideColumnPhase, setAsideColumnPhase] = useState<DockPhase>(panes.asideDocked ? "open" : "closed");
-  // A closing column keeps its width clamp until it leaves the row, so its content cannot widen
-  // and reflow on the first frame. The sidebar also keeps reserving the aside's floor while the
-  // aside closes; otherwise a constrained sidebar would widen into the closing column.
+  // A closing sidebar column keeps its width clamp until it leaves the row, so its content cannot
+  // widen and reflow on the first frame. The sidebar is a column in the row only at and above the
+  // breakpoint, where it is docked; below it, a drawer, which takes no room from the aside that docks
+  // at every width.
   const sidebarWidth = usePaneWidth("sidebar", {
-    sidebar: !noConsoles && (panes.sidebarDocked || sidebarColumnPhase !== "closed"),
-    aside: hasAside && (panes.asideDocked || asideColumnPhase !== "closed"),
-  });
+    sidebar: !noConsoles && !isNarrow && (panes.sidebarDocked || sidebarColumnPhase !== "closed"),
+    aside: hasAside && paneShown,
+  }, isNarrow);
   const asideWidth = usePaneWidth("aside", {
-    sidebar: !noConsoles && panes.sidebarDocked,
-    aside: hasAside && (panes.asideDocked || asideColumnPhase !== "closed"),
-  });
+    sidebar: !noConsoles && !isNarrow && panes.sidebarDocked,
+    aside: hasAside && paneShown,
+  }, isNarrow);
   const asideLayout: AsideLayout = {
-    open: panes.asideOpen,
     width: asideWidth.width,
-    peek: panes.asideDocked ? undefined : panes.asidePeek,
-    onColumnPhase: setAsideColumnPhase,
+    peek: paneShown ? undefined : panes.asidePeek,
   };
 
   // An owner that is gone leaves no aside, and is not brought back by anything that appears later.
@@ -390,12 +418,15 @@ export function App(): React.ReactElement {
     if (session.status === "archived") void resumeSession(session.id);
   };
 
-  /** Opens a project's browser in the aside, putting the aside on screen, without selecting or
-   * starting any session: the terminal beside it stays as it is. */
+  /** Opens a project's browser in the aside, putting the aside on screen (its Files panel open,
+   * restored if another's maximizing hid it), without selecting or starting any session: the
+   * terminal beside it stays as it is. */
   const browseProject = (project: Project) => {
     setProjectBrowserMode(project.id, "files");
     setOwnerByUser({ kind: "project", project: project.id });
-    panes.showAside();
+    setPanelStack("project", openPanel(panelStacks.project, "files", OWNER_KINDS.project));
+    // The sidebar's drawer in a narrow window covers what was asked for.
+    if (panes.sidebarOpen) panes.closeSidebar();
   };
 
   const pullProjectBranch = (project: Project) => {
@@ -661,7 +692,8 @@ export function App(): React.ReactElement {
   const stableCommitPreview = useStableHandler(commitPreview);
   const stableNextWaiting = useStableHandler(selectNextWaiting);
   const stableToggleSidebar = useStableHandler(panes.toggleSidebar);
-  const stableToggleAside = useStableHandler(panes.toggleAside);
+  const stableTogglePanel = useStableHandler(togglePanel);
+  const stableHoverPanelToggle = useStableHandler(hoverPanelToggle);
   const stableFocus = useStableHandler(sidebarView.setFocus);
   const stableOpenProjectDirectory = useStableHandler(openProjectDirectory);
   const stableOpenRepository = useStableHandler(openRepository);
@@ -711,13 +743,20 @@ export function App(): React.ReactElement {
         onToggleSidebar={stableToggleSidebar}
         onSidebarToggleEnter={panes.sidebarPeek.reveal}
         onSidebarToggleLeave={panes.sidebarPeek.leave}
-        asideSpan={hasAside ? columnSpan(asideColumnPhase, asideWidth.width) : 0}
-        asideEasing={isDockEasing(asideColumnPhase)}
-        aside={asideOwner?.kind}
-        asideShown={panes.asideShown}
-        onToggleAside={stableToggleAside}
-        onAsideToggleEnter={() => panes.asidePeek.reveal()}
-        onAsideToggleLeave={panes.asidePeek.leave}
+        asideSpan={paneShown ? asideWidth.width : 0}
+        panelToggles={ownerKind ? ownerOrder.map((kind) => {
+          const entry = PANEL_ENTRIES[kind];
+          const open = paneShown && visiblePanels.includes(kind);
+          return {
+            kind,
+            label: t(open ? entry.toggle.hide : entry.toggle.show),
+            Icon: entry.icon,
+            open,
+            regionId: open ? panelId(kind) : undefined,
+            onPress: () => stableTogglePanel(kind),
+            onHoverChange: (hovered: boolean) => stableHoverPanelToggle(kind, hovered),
+          };
+        }) : undefined}
         canGoBack={navigation.canGoBack}
         canGoForward={navigation.canGoForward}
         onBack={stableBack}
@@ -761,7 +800,7 @@ export function App(): React.ReactElement {
                   terminal and the aside it may be in are still in the document: the last console
                   going (here or in another window) removes all of them at once. */}
               <HandOffOnUnmount
-                from="[data-region=sidebar], [data-region=archive], [data-region=terminal], [data-region=aside]"
+                from="[data-region=sidebar], [data-region=archive], [data-region=terminal], [data-region=aside], [data-region^=panel-]"
                 to={focusNewConsole}
               />
               {panes.sidebarOpen && <Scrim label={t("app.closeSessions")} onClose={panes.closeSidebar} />}
@@ -777,7 +816,7 @@ export function App(): React.ReactElement {
                 onQuickCreateSession={stableQuickCreateSession}
                 onFocus={stableFocus}
                 onOpenArchive={stableOpenArchive}
-                visibleBrowserProjectId={panes.asideShown || panes.asidePeek.active ? asideProject?.id : undefined}
+                visibleBrowserProjectId={filesOnScreen ? asideProject?.id : undefined}
                 onBrowseProject={stableBrowseProject}
                 onOpenProjectDirectory={stableOpenProjectDirectory}
                 onOpenProjectTerminal={stableOpenProjectTerminal}
@@ -824,8 +863,10 @@ export function App(): React.ReactElement {
                     content (sticky headings, scroll fades) included, which comes later in the row and
                     would otherwise cover the shadow; it stays under the resize handles and the floating
                     cards. The content panel clips the shadow on the other sides and wherever a pane is
-                    closed. */}
-                <div className="relative flex min-h-0 min-w-[398px] flex-[1_1_398px] docked:z-1 docked:min-w-[520px] docked:flex-[1_1_520px] docked:shadow-(--panel-shadow)">
+                    closed. The clip-path cuts it on the aside's side: the aside's cards sit apart from the
+                    terminal across a gap of the terminal's own background, which a shadow would draw a
+                    line in. */}
+                <div className="relative flex min-h-0 min-w-[398px] flex-[1_1_398px] docked:z-1 docked:min-w-[520px] docked:flex-[1_1_520px] docked:shadow-(--panel-shadow) docked:[clip-path:inset(-12px_0_-12px_-12px)] docked:rtl:[clip-path:inset(-12px_-12px_-12px_0)]">
                   <ArchiveLayer
                     focusTerminal={focusTerminal}
                     view={archiveOpen && archiveConsole ? {
@@ -848,7 +889,7 @@ export function App(): React.ReactElement {
                   />
                   <TerminalPane
                     ref={terminalRef}
-                    resizing={isDockEasing(sidebarColumnPhase) || isDockEasing(asideColumnPhase)}
+                    resizing={isDockEasing(sidebarColumnPhase)}
                     onViewFile={setLinkedFile}
                     session={selectedSession}
                     onResume={resumeSession}
@@ -868,35 +909,32 @@ export function App(): React.ReactElement {
                       : undefined}
                   />
                 </div>
-                {/* Keyed on what owns the aside, so a new owner mounts a fresh instance: a report does not
-                    carry one console session's position over to another, and a browser drops whatever
-                    it read for the project before. */}
-                {asideOwner?.kind === "report" && (
-                  <ReportPanel
-                    key={asideOwner.consoleSession}
-                    consoleSessionId={asideOwner.consoleSession}
-                    layout={asideLayout}
-                    onEscape={panes.dismissOverlays}
-                    onCycleRegion={regionCycle.cycle}
-                    onMoveHistory={navigation.moveByShortcut}
-                    onMoveConsoleSession={moveConsoleSession}
-                  />
-                )}
-                {asideProject && (
-                  <LazyProjectBrowser
-                    key={asideProject.id}
+                {asideOwner && (
+                  <RightPane
+                    owner={asideOwner}
                     project={asideProject}
                     layout={asideLayout}
-                    active={panes.asideShown || panes.asidePeek.active}
+                    active={paneShown || panes.asidePeek.active}
                     selectedSessionId={selectedSessionId}
                     focusTerminal={focusTerminal}
+                    frameKeys={{
+                      onEscape: panes.dismissOverlays,
+                      onCycleRegion: regionCycle.cycle,
+                      onMoveHistory: navigation.moveByShortcut,
+                      onMoveConsoleSession: moveConsoleSession,
+                    }}
+                    peekKind={peekKind}
+                    onDismiss={() => panes.asidePeek.hide()}
                   />
                 )}
               </main>
-              {asideOwner && panes.asideDocked && asideColumnPhase === "open" && (
-                <PaneResizeHandle side="aside" paneWidth={asideWidth} label={t(ASIDE_LABELS[asideOwner.kind].resize)} />
+              {asideOwner && paneShown && (
+                <>
+                  {/* First among what goes away with the pane, so focus on its handle is still found. */}
+                  <HandOffOnUnmount from="[role=separator][data-pane=aside]" to={focusTerminal} />
+                  <PaneResizeHandle side="aside" paneWidth={asideWidth} region={panelRegion(visiblePanels[0] as PanelKind)} />
+                </>
               )}
-              {asideOwner && panes.asideOpen && <Scrim label={t(ASIDE_LABELS[asideOwner.kind].close)} onClose={panes.closeAside} />}
             </>
           )}
         </ContentPanel>

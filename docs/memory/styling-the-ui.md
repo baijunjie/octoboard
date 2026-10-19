@@ -108,11 +108,15 @@ left to HeroUI's own components and to the few lines the "The window chrome and 
 `docs/product/window-layout.md` lists as not grooves. A card takes no decorative outline border, and its shadow
 depends on whether it floats:
 
-- A card lying in the layout takes the short two-layer `shadow-(--panel-shadow)`, as the "Hand-built rows and cards" section of
-  `docs/ui-accessibility.md` sets out.
-- Whatever floats over the content — the floating cards and drawers of both panes, the notice floating over the
-  terminal — keeps its elevation shadow (`shadow-xl`, `shadow-lg`) and drops only its outline border; it never takes
-  the short shadow in its place.
-- A panel card (the floating pane, a drawer) adds `panel-edge` for its hairline alongside its shadow.
+- A card lying in the layout takes the short two-layer `shadow-(--panel-shadow)`, as the "Hand-built rows and cards"
+  section of `docs/ui-accessibility.md` sets out — unless it is a panel card, below.
+- Whatever floats over the content — the floating cards of both panes, the sidebar's drawer, the notice floating over
+  the terminal — keeps its elevation shadow (`shadow-xl`, `shadow-lg`) and drops only its outline border; it never
+  takes the short shadow in its place.
+- A panel card — the sidebar's floating card or drawer, and every card of the right pane, docked or floating — looks
+  exactly like the sidebar's floating card: `panel-edge` for its hairline plus `shadow-xl`, even where it lies in the
+  layout. A new one takes `PANEL_CARD_CLASS` (`packages/ui/src/layout/paneOverlay.tsx`) rather than values chosen to
+  match it. The same holds for any surface meant to look like an existing one: reuse that surface's own class or
+  tokens, never a re-derived near-match — next to the original the difference shows, and the user rejects it.
 
 Borders that identify a control or show a selected state are not decorative and stay, at their 3:1 colour.

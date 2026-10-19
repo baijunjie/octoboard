@@ -146,7 +146,7 @@ export const connectionScenarios: Scenario[] = [
     title: "Links in a full-screen terminal response",
     description: "The localhost address and the labelled \"layout notes\" hyperlink are blue without hovering, even inside muted output, while the prose around them stays muted. Clicking opens their addresses.",
     terminal: "fullscreen",
-    preferences: { asideVisible: false },
+    preferences: { panelStacks: { project: { open: [], shares: {} }, report: { open: [], shares: {} } } },
     state: connected("open"),
     steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(400)],
   },

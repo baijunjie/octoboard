@@ -55,20 +55,21 @@ allows, shows an error alert.
 - A reattach always redraws from the replay rather than appending to what is on screen, so scrollback older than the
   replay window is lost on every reconnect.
 - Whatever changes the terminal pane's size resizes the agent's terminal: resizing the window, resizing
-  the sidebar or the right pane, and hiding or showing either of them all do; a pane floating in or a drawer
-  opening over the terminal does not (see `docs/product/window-layout.md`). The screen follows at once (except
+  the sidebar or the right pane, hiding or showing the sidebar, and the right pane coming or going as its panels open
+  and close all do; a pane floating in or the sidebar's drawer opening over the terminal does not (see
+  `docs/product/window-layout.md`). The screen follows at once (except
   while a docked column eases, below), but the agent is told the new size only once it has held still for about
   120 ms, and only when it differs from the size the agent already has, so a drag sends the agent one
   size change rather than one for every step of the drag. The window has a minimum size, sized so that
   the sidebar, the terminal and the right pane all stay usable side by side — see "The window's
   minimum size" in `docs/product/window-layout.md`.
-- While either docked pane's column is easing open or closed (see "Hiding the sidebar and the right pane" in
+- While the docked sidebar's column is easing open or closed (see "Hiding the sidebar" in
   `docs/product/window-layout.md`), the terminal's grid keeps the size it had when the ease began, and is fitted
   to its area once, when the column comes to rest — at most about a quarter of a second after the toggle was last
   pressed. Any other change to the terminal pane's size during the ease, a window resize included, is held until
   then too. Until that fit, a closing column leaves blank space along the terminal's right edge and an opening
   one covers its rightmost columns. The agent is then told the new size as above. Where the system asks for
-  reduced motion the columns do not ease, and the terminal follows at once.
+  reduced motion the column does not ease, and the terminal follows at once. The right pane does not ease at all.
 - The terminal's colours follow the window's light or dark appearance, and its text is held to a minimum contrast
   against its cell's background whatever colours the agent prints — see "What follows the choice" in
   `docs/product/appearance.md`.

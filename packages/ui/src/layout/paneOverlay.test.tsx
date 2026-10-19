@@ -27,7 +27,7 @@ beforeEach(() => {
 });
 
 /** Stubs the geometry of the rendered card: it will end up spanning x 1152..1432 and y 48..792 in a
- * 1440x800 window, an 8px gap in from the right edge, the 40px top bar and the bottom edge (no
+ * 1440x800 window, the right edge's gap in, the 40px top bar and the bottom edge (no
  * connection banner), wherever it is on its way. */
 function placePane(): HTMLElement {
   const pane = container!.querySelector<HTMLElement>("[data-pane=aside]")!;
@@ -59,7 +59,7 @@ function mount(active = false) {
     act(() => mounted.unmount());
     mine.remove();
   });
-  const render = (next: PanePeek) => act(() => root!.render(<AsidePane layout={{ open: false, width: 280, peek: next }} />));
+  const render = (next: PanePeek) => act(() => root!.render(<AsidePane layout={{ width: 280, peek: next }} />));
   render(peek);
   return { peek, render, hide };
 }
@@ -75,7 +75,7 @@ function mountToggle() {
   });
   act(() =>
     barRoot.render(
-      <ChromeButton label="Toggle" onPress={() => {}} controls={PANE_ID.aside}>
+      <ChromeButton label="Toggle" onPress={() => {}} paneToggle={PANE_ID.aside}>
         <svg />
       </ChromeButton>,
     ),
@@ -83,13 +83,11 @@ function mountToggle() {
   return { ...mounted, toggle: bar.querySelector("button")! };
 }
 
-const zone = () => container!.querySelector("[data-peek-zone=aside]")!;
 const pointer = (type: string, init: MouseEventInit = {}) => {
   const event = new MouseEvent(type, { bubbles: true, ...init });
   Object.defineProperty(event, "pointerType", { value: "mouse" });
   return event;
 };
-const enter = () => act(() => void zone().dispatchEvent(pointer("pointerover")));
 // From an element, as a browser does: the target is an `Element` the toggle rule has to look at.
 const move = (clientX: number, clientY = 400) =>
   act(() => void document.body.dispatchEvent(pointer("pointermove", { clientX, clientY })));
@@ -98,30 +96,12 @@ const leavePane = (pane: HTMLElement) => act(() => void pane.dispatchEvent(point
 const enterPane = (pane: HTMLElement) => act(() => void pane.dispatchEvent(pointer("pointerover")));
 const wait = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 
-it("floats the pane in only after the pointer has stayed for the dwell", () => {
-  const { peek } = mount();
-  enter();
-  wait(199);
-  expect(peek.reveal).not.toHaveBeenCalled();
-  wait(1);
-  expect(peek.reveal).toHaveBeenCalledTimes(1);
-});
-
-it("does not float the pane in when the pointer leaves the strip before the dwell is over", () => {
-  const { peek } = mount();
-  enter();
-  wait(100);
-  act(() => void zone().dispatchEvent(pointer("pointerout")));
-  wait(300);
-  expect(peek.reveal).not.toHaveBeenCalled();
-});
-
 it.each<[string, [x: number, y?: number][], number]>([
   ["counts a move outside the pane's final extent as leaving it, once", [[600], [700]], 1],
   ["counts a move above or below the pane as leaving it", [[1200, 20], [1200, 820]], 1],
   ["reports leaving again after a move back inside", [[1200], [700], [1200], [700]], 2],
-  ["does not count a move in the gap around the card as leaving", [[1437]], 0],
-  ["counts leaving through the gap around the card, never touching the card, as leaving", [[1437], [1436], [1436, 20]], 1],
+  ["does not count a move in the pane's own padding, which holds the gaps around its cards, as leaving", [[1430]], 0],
+  ["counts a move just outside the pane's box as leaving: there is no halo past the gaps", [[1437]], 1],
 ])("%s", (_name, moves, expectedLeaves) => {
   const { peek } = mount(true);
   placePane();
@@ -129,11 +109,11 @@ it.each<[string, [x: number, y?: number][], number]>([
   expect(peek.leave).toHaveBeenCalledTimes(expectedLeaves);
 });
 
-it("keeps the card when the pointer goes from it into the gap around it, whose pointerleave armed a slide-away", () => {
+it("keeps the pane when the pointer goes from a card into the pane's padding, whose pointerleave armed a slide-away", () => {
   const { hide } = mount(true);
   const pane = placePane();
   leavePane(pane);
-  move(1435);
+  move(1430);
   wait(1000);
   expect(hide).not.toHaveBeenCalled();
 });
@@ -156,7 +136,7 @@ it("does not count a move on the aside's toggle as leaving, though the top bar i
   expect(peek.leave).toHaveBeenCalledTimes(1);
 });
 
-it("keeps watching after the pointer went outside and came back onto the card, and keeps it when it then goes into the gap", () => {
+it("keeps watching after the pointer went outside and came back onto the card, and keeps it when it then goes into the padding", () => {
   const { hide } = mount(true);
   const pane = placePane();
   move(1200);
@@ -166,17 +146,17 @@ it("keeps watching after the pointer went outside and came back onto the card, a
   enterPane(pane);
   move(1200);
   leavePane(pane);
-  move(1435);
+  move(1430);
   wait(1000);
   expect(hide).not.toHaveBeenCalled();
 });
 
-it("dismisses the card once the pointer moves from the gap to outside the card's extent", () => {
+it("dismisses the card once the pointer moves from the padding to outside the pane's box", () => {
   const { hide } = mount(true);
   const pane = placePane();
   leavePane(pane);
-  move(1435);
-  move(1439, 20);
+  move(1430);
+  move(1437, 20);
   wait(SLIDE_AWAY_MS);
   expect(hide).toHaveBeenCalledTimes(1);
 });

@@ -1,5 +1,5 @@
 import { Button, Spinner, Tabs } from "@heroui/react";
-import { FolderOpen, FolderX, RefreshCw, SearchX } from "lucide-react";
+import { FolderX, RefreshCw, SearchX } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Key } from "react-aria-components";
 
@@ -7,19 +7,17 @@ import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
-import { FadeOverflow } from "../components/FadeOverflow";
 import { handFocusOff } from "../components/handFocusOff";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { FADE_SIZE } from "../components/scrollFade";
 import { useTabScrollLabels } from "../components/tabScrollLabels";
 import { TitledControl } from "../components/TitledControl";
-import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../components/RowControls";
+import { ROW_ICON_BUTTON_CLASS } from "../components/RowControls";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useStableHandler } from "../components/useLatest";
 import type { ErrorPresentation } from "../errorPresentation";
-import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
-import { AsidePane, type AsideLayout } from "../layout/AsidePane";
+import { PanelHeader } from "../components/PanelHeader";
 import type { Project } from "../protocol";
 import { useDaemonStore } from "../store";
 import { FileViewer } from "../viewer/FileViewer";
@@ -48,7 +46,8 @@ const TREE_PADDING = 4;
 const MIN_SPIN_MS = 1000;
 
 /**
- * A project's browser, the aside's content while the project owns it (`asideOwner.ts`), in two
+ * A project's browser, the content of the Files panel (`panels/panelRegistry.tsx`) in the right pane
+ * while the project owns it (`layout/asideOwner.ts`), in two
  * modes: Files, the project's files live from its directory, and Git, the changes of one of its
  * repository's branches, uncommitted and committed (`useGitReview`); the read-only viewer opens
  * over any of them. It reads only the project, bar the selected session,
@@ -65,21 +64,24 @@ const MIN_SPIN_MS = 1000;
  */
 export function ProjectBrowser({
   project,
-  layout,
   active,
   selectedSessionId,
+  switching = false,
 }: {
   project: Project;
-  layout: AsideLayout;
-  /** Whether the browser is on screen, docked, as an open drawer or floating in; only then is it
-   * refreshed on its own. */
+  /** Whether the browser is on screen, docked or floating in; only then is it refreshed on its own. */
   active: boolean;
   /** The session selected in the sidebar: the Git mode's branch lists mark the branches it
    * created, and its newest one fills the Git mode's selector. Nothing else here reads a
    * session. */
   selectedSessionId: string | undefined;
+  /** The browser appears in a right pane that is already on screen, because the user switched
+   * projects: it slides in. Read once, as it mounts, so a pane that docks or floats in with it, or
+   * one it stays in, plays nothing. */
+  switching?: boolean;
 }): React.ReactElement {
   const t = useT();
+  const [slides] = useState(switching);
   const tabScrollLabels = useTabScrollLabels();
   const browser = useProjectBrowserState(project.id);
   const mode = browser.mode;
@@ -233,38 +235,38 @@ export function ProjectBrowser({
   const rootLoading = searching ? search.result.state === "loading" : root === undefined || root.state === "loading";
   const loadingLabel = t(searching ? "browser.filter.searching" : "browser.loading");
   return (
-    <AsidePane layout={layout} label={t("browser.label", { project: isolate(project.name) })} className="control-fills">
-      <div className="project-browser-entry relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+    <>
+      <div className={`${slides ? "project-browser-switch " : ""}relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden`}>
         <Tabs
           selectedKey={tab}
           onSelectionChange={(key) => browser.setMode(key === "changes" ? "git" : "files")}
           className="project-browser-view flex min-h-0 flex-1 flex-col gap-0"
         >
-          <div className="flex h-(--pane-header-height) shrink-0 items-center gap-1 groove-b px-(--pane-inset) text-sm">
-            <FolderOpen aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
-            <h2 className="flex min-w-0 max-w-40 font-medium">
-              <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={project.name}>{project.name}</FadeOverflow>
-            </h2>
-            <Tabs.ListContainer className="shrink-0 rounded-none bg-transparent" render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
+          <PanelHeader
+            title={project.name}
+            actions={
+              <>
+                <BrowserViewControls
+                  filter={activeFilter}
+                  layout={mode === "git" ? { value: browser.layout, onChange: browser.setLayout } : undefined}
+                  byCommit={mode === "git" ? { value: browser.byCommit, onChange: browser.setByCommit } : undefined}
+                />
+                <TitledControl title={t("browser.refresh")}>
+                  <Button ref={refreshRef} isIconOnly size="sm" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t("browser.refresh")} preventFocusOnPress onPress={pressRefresh}>
+                    <RefreshCw aria-hidden="true" className={spinning > 0 ? "size-4 motion-safe:animate-spin-slow" : "size-4"} />
+                  </Button>
+                </TitledControl>
+              </>
+            }
+          >
+            <Tabs.ListContainer className="min-w-0 rounded-none bg-transparent" render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
               {/* The scroller clips outside this padding; leave room for the focus ring and its offset. */}
               <Tabs.List aria-label={t("browser.modes")} className="w-max min-w-0 p-1.5">
                 <Tabs.Tab id="files" className="h-6 scroll-mx-1.5 px-1.5 whitespace-nowrap hover:text-foreground hover:opacity-100">{t("browser.mode.files")}<Tabs.Indicator /></Tabs.Tab>
                 <Tabs.Tab id="changes" className="h-6 scroll-mx-1.5 px-1.5 whitespace-nowrap hover:text-foreground hover:opacity-100">{t("git.view.changes")}<Tabs.Indicator /></Tabs.Tab>
               </Tabs.List>
             </Tabs.ListContainer>
-            <RowIconGroup className="ms-auto">
-              <BrowserViewControls
-                filter={activeFilter}
-                layout={mode === "git" ? { value: browser.layout, onChange: browser.setLayout } : undefined}
-                byCommit={mode === "git" ? { value: browser.byCommit, onChange: browser.setByCommit } : undefined}
-              />
-              <TitledControl title={t("browser.refresh")}>
-                <Button ref={refreshRef} isIconOnly size="sm" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t("browser.refresh")} preventFocusOnPress onPress={pressRefresh}>
-                  <RefreshCw aria-hidden="true" className={spinning > 0 ? "size-4 motion-safe:animate-spin-slow" : "size-4"} />
-                </Button>
-              </TitledControl>
-            </RowIconGroup>
-          </div>
+          </PanelHeader>
           <FileFilterField contextKey={tab} state={activeFilter} label={t("browser.filter.label")} placeholder={t(mode === "files" ? "browser.filter.placeholder" : "git.filter.placeholder")} />
           {mode === "files" ? <Tabs.Panel id="files" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
             <div className="flex min-h-0 flex-1 flex-col" onFocus={filesFocus.onFocus} onBlur={filesFocus.onBlur}>
@@ -347,7 +349,7 @@ export function ProjectBrowser({
           }}
         />
       )}
-    </AsidePane>
+    </>
   );
 }
 

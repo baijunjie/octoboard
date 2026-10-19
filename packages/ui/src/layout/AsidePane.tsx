@@ -1,121 +1,67 @@
-import React, { useLayoutEffect, useRef } from "react";
+import React from "react";
 
-import { AsidePeekHotZone, drawerClass, PANE_ID, usePanePeekPointer } from "./paneOverlay";
-import { COLUMN_EASE_CLASS, columnSpan, isDockEasing, usePaneDockMotion, type DockPhase } from "./paneDockMotion";
+import { usePaneDockMotion } from "./paneDockMotion";
+import { PANE_ID, usePanePeekPointer } from "./paneOverlay";
 import type { PanePeek } from "./usePaneToggles";
 
 /** Where and how the aside is on screen right now; `App.tsx` builds it from `usePaneToggles` and
- * `usePaneWidth` and hands it to whichever owner is rendering the aside. */
+ * `usePaneWidth` and hands it to the pane. */
 export interface AsideLayout {
-  /** Whether the drawer is open below the `docked` breakpoint. */
-  open: boolean;
-  /** The user's chosen width (`usePaneWidth`) for the docked and the floating forms; the drawer
-   * below the breakpoint ignores it. */
+  /** The user's chosen width (`usePaneWidth`), for the docked column and the floating cards alike. */
   width: number;
-  /** The hover reveal of the aside while the user has hidden the docked one from the top bar (which
-   * has no effect below the breakpoint, where `open` decides): the same pane, kept as a fixed
-   * overlay that floats in over the terminal, as a card with its shadow and rounded corners.
-   * `undefined` while the docked aside is shown. */
+  /** The hover reveal of the aside while it has no panel open: the cards float over the terminal,
+   * showing the panel whose toggle the pointer is on. `undefined` while the pane is docked. */
   peek?: PanePeek;
-  /** Reports the column ease so its width clamp and resize handle follow the visible column. */
-  onColumnPhase?: (phase: DockPhase) => void;
 }
 
 /**
- * The frame of the aside, the pane at the end side, whichever owner fills it (a console session's
- * report panel, a project's browser). It is never unmounted by closing its drawer or hiding the
- * docked pane — only by its owner changing — so what it shows is not lost and requested again on
- * every reopen.
+ * The aside, the pane at the end side: a column of panel cards (`panels/PanelStack.tsx`), each
+ * rounded, edged and shadowed by itself. The pane has no surface of its own: it pads the cards by
+ * `--peek-gap`, the gap the sidebar's floating card keeps from its surroundings, on the top, end
+ * and bottom, and by `--panel-grip-gap` on the terminal side, which holds the width grip. It shows
+ * nothing in that gap but what is behind it, the agent terminal's background, so the cards read as
+ * lying on the content.
  *
- * `drawerClass` fits the drawer between `--top-chrome-height` and `--bottom-chrome-height`, leaving
- * the window chrome (the top bar, with the aside's toggle, and the rail) and the connection banner
- * visible while it is open, inset as a card, and puts it back as a plain row sibling at or above
- * the breakpoint — see that function's own comment for the geometry. The drawer below the
- * breakpoint is a fixed 420px, capped at 92vw and the space past the rail, with an 8px gap at
- * either edge. The open docked pane shrinks to the row's available room, with a 320px floor.
- * During its own toggle the pane keeps its rendered width inside a clip that eases to zero,
- * so its content never reflows during the close. With the docked pane hidden,
- * `drawerClass` keeps it an overlay, fading in while
- * `peek` is active at `--aside-width` (still capped at 92vw), as a rounded, edged card like the
- * floating sidebar; `overflow-hidden` clips what it holds to the rounded edge. In every form the
- * pane is painted `--panel-sidebar`, the sidebar's colour, so a drawer or a floating pane keeps
- * an empty state from showing the terminal through.
+ * While it has a panel open it is docked, a row sibling of the terminal that takes its room from it
+ * and shrinks to the row's available room down to a 320px floor; it does so at every width, there is
+ * no drawer form, and docking (and going, when its last panel closes) is at once. With no panel open
+ * it is nothing, except while `peek` is active (the pointer is on a panel kind's toggle): then it is
+ * a fixed overlay at `--aside-width` (capped at 92vw), so only its cards are on the terminal, whose
+ * pointer events the gap does not take. The cards look the same docked and floating
+ * (`PANEL_CARD_CLASS`, the sidebar's floating card). It floats in and out as the sidebar's
+ * floating card does: fading in as it rises 6px, and the other way out, in `PANE_INSET_MS` with the
+ * sidebar's easing and reduced-motion handling (`usePaneDockMotion` holds both), and is not
+ * rendered once it has gone.
  *
  * `data-escape-scope`: one of the origins `usePaneToggles`'s capture-phase Escape listener closes a
- * drawer for. The pointer handlers, with `usePanePeekPointer` (called here) for the gap around the
- * card, keep a floating pane up while the pointer is on it; an owner whose content sends this
- * document no pointer events of its own (a report page's sandboxed frame) wires
- * the same `peek` callbacks onto that element too.
+ * floating pane for. The pointer handlers, with `usePanePeekPointer` (called here) for the gap
+ * around the pane, keep a floating pane up while the pointer is on it; a panel whose content sends
+ * this document no pointer events of its own (a report page's sandboxed frame) wires the same
+ * `peek` callbacks onto that element too.
  */
-export function AsidePane({
-  layout,
-  label,
-  className = "",
-  children,
-}: {
-  layout: AsideLayout;
-  /** The pane's accessible name, when it is a landmark of its own. */
-  label?: string;
-  /** Classes for the pane's content layout, on top of its frame's. */
-  className?: string;
-  children?: React.ReactNode;
-}): React.ReactElement {
-  const { open, width, peek, onColumnPhase } = layout;
-  const dock = usePaneDockMotion(peek === undefined, peek?.active ?? false, onColumnPhase);
+export function AsidePane({ layout, children }: { layout: AsideLayout; children?: React.ReactNode }): React.ReactElement | null {
+  const { width, peek } = layout;
+  // Only its floating half is used, as if the pane were never docked: it docks and goes at once, so
+  // there is no column to ease out before the card floats in.
+  const dock = usePaneDockMotion(false, peek?.active ?? false);
   usePanePeekPointer("aside", peek);
-  const clipRef = useRef<HTMLDivElement>(null);
-  const paneRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    if (dock.phase !== "open") return;
-    const clip = clipRef.current;
-    const pane = paneRef.current;
-    if (!clip || !pane || typeof ResizeObserver === "undefined") return;
-    // A sibling's ease can temporarily constrain this column below its chosen width. Preserve
-    // that rendered width if this pane starts closing before the sibling has settled.
-    const measure = () => {
-      const renderedWidth = `${clip.getBoundingClientRect().width}px`;
-      // Flex basis keeps negotiating space while the width property tracks the actual size;
-      // a closing width transition must start from this size rather than the chosen basis.
-      clip.style.setProperty("--aside-rendered-width", renderedWidth);
-      pane.style.setProperty("--aside-close-width", renderedWidth);
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(clip);
-    return () => observer.disconnect();
-  }, [dock.phase]);
-  // TODO: removed by the split-panel-terminal topic's "Split right pane" milestone (03): once the
-  // project view's right pane is a stack of panel cards that carry their own edge, this owner stops
-  // rounding the card and stops taking the `panel-edge` that `drawerClass` applies.
-  const overlay = dock.inset
-    ? `docked:w-(--aside-width) docked:rounded-xl docked:overflow-hidden ${drawerClass("end", "floating", open, dock.insetShown)}${dock.preparingInset ? " docked:transition-none" : ""}`
-    : `${dock.phase === "open" ? "docked:w-full" : dock.phase === "closing" ? "docked:w-[var(--aside-close-width,var(--aside-width))]" : "docked:w-(--aside-width)"} docked:max-w-none docked:shrink-0 docked:h-full ${drawerClass("end", "drawer", open)}${dock.phase === "closed" ? " docked:invisible" : ""}`;
+  if (peek && !dock.inset) return null;
   return (
-    <>
-      <div
-        ref={clipRef}
-        className={dock.inset ? "contents" : `contents docked:flex docked:justify-end docked:h-full docked:min-h-0 docked:overflow-hidden ${dock.phase === "open" ? "docked:w-[var(--aside-rendered-width,var(--aside-span))] docked:min-w-[320px] docked:flex-[0_1_var(--aside-span)]" : "docked:w-(--aside-span) docked:min-w-0 docked:shrink-0"} ${isDockEasing(dock.phase) ? COLUMN_EASE_CLASS : ""}`}
-        style={{ "--aside-span": `${columnSpan(dock.phase, width)}px` } as React.CSSProperties}
-        onTransitionEnd={dock.onColumnTransitionEnd}
-      >
-        <div
-          ref={paneRef}
-          id={PANE_ID.aside}
-          data-pane="aside"
-          data-region="aside"
-          data-escape-scope
-          role={label ? "region" : undefined}
-          aria-label={label}
-          style={{ "--aside-width": `${width}px` } as React.CSSProperties}
-          onTransitionEnd={dock.onInsetTransitionEnd}
-          onPointerEnter={peek?.keep}
-          onPointerLeave={peek?.leave}
-          className={`flex min-h-0 flex-col bg-panel-sidebar w-[420px] max-w-[92vw] max-docked:max-w-[calc(100vw-var(--rail-width)-2*var(--peek-gap))] ${overlay} ${className}`}
-        >
-          {children}
-        </div>
-      </div>
-      {peek && <AsidePeekHotZone peek={peek} />}
-    </>
+    <div
+      id={PANE_ID.aside}
+      data-pane="aside"
+      data-escape-scope
+      style={{ "--aside-width": `${width}px` } as React.CSSProperties}
+      onTransitionEnd={dock.onInsetTransitionEnd}
+      onPointerEnter={peek?.keep}
+      onPointerLeave={peek?.leave}
+      className={`flex min-h-0 flex-col ps-(--panel-grip-gap) pe-(--peek-gap) py-(--peek-gap) ${
+        peek
+          ? `pointer-events-none fixed bottom-(--bottom-chrome-height) top-(--top-chrome-height) end-0 z-40 w-(--aside-width) max-w-[92vw] transition-[translate,opacity,visibility] duration-240 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none ${dock.insetShown ? "translate-y-0 opacity-100" : "translate-y-1.5 opacity-0 invisible"}${dock.preparingInset ? " transition-none" : ""}`
+          : "h-full w-(--aside-width) min-w-[320px] shrink"
+      }`}
+    >
+      {children}
+    </div>
   );
 }

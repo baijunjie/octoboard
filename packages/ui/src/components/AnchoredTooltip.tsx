@@ -36,18 +36,27 @@ export function AnchoredTooltip({
   tooltip,
   anchor,
   hovered,
+  placement,
 }: {
   tooltip: React.ReactNode;
   /** The element the tooltip is placed against. */
   anchor: React.RefObject<Element | null>;
   /** Whether the pointer is on what the tooltip belongs to. */
   hovered: boolean;
+  /** Where it opens relative to the anchor; HeroUI's default is above it. `end` is the reading
+   * direction's, so it is mirrored under right-to-left. */
+  placement?: "end";
 }): React.ReactElement | null {
   if (!hovered) return null;
   return (
     <Tooltip>
       <OpenWhileMounted />
-      <Tooltip.Content triggerRef={anchor} className="control-fills pointer-events-none" data-anchored-tooltip="">
+      <Tooltip.Content
+        triggerRef={anchor}
+        placement={placement}
+        className="control-fills pointer-events-none"
+        data-anchored-tooltip=""
+      >
         {tooltip}
       </Tooltip.Content>
     </Tooltip>

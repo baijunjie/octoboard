@@ -350,7 +350,7 @@ field is hidden, "Hide the filter" while it is shown (see "Two-state icon toggle
 - **When nothing matches**, the list's place says there are no matching changes (announced to assistive technology
   as it appears), and the field stays, so the text can be changed or cleared. Clearing it brings the whole list back.
 - The field has a **clear** button, and **Escape** in it clears it; the field itself stays, keyboard focus not having
-  left it. In a drawer or a floating pane, Escape in a field with text only clears it and leaves the pane; Escape in
+  left it. In a floating pane, Escape in a field with text only clears it and leaves the pane; Escape in
   the then empty field closes the pane, as it does from anywhere else in it.
 - The field is apart from the list: typing in it never moves through the list's rows, as typing a name's first
   letters in the list does. While an input method is composing text in it, its keys, Escape included, belong to the
@@ -397,7 +397,7 @@ the pane as it does from any pane with nothing to hold it.
 Nothing tells Octoboard when a repository changes, so the uncommitted changes are listed again:
 
 - once the Git mode is shown and the repository and the worktree the branch is checked out in are known;
-- **every 10 seconds** while the Git mode is on screen — the project pane docked, in an open drawer, or floating in —
+- **every 10 seconds** while the Git mode is on screen — the Files panel docked or floating in —
   and the window is visible, skipping a turn while a listing is still out;
 - when the window comes back to the front or becomes visible again, with the Git mode on screen, or when it comes back
   on screen — a hidden pane shown, the Changes tab chosen — either one more than 5 seconds after the last listing;

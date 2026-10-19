@@ -132,11 +132,14 @@ is made by hand from the code frame (`focusFirstSeparatorControl`, `moveAlongCon
 
 The terminal keeps Tab and Shift+Tab for the agent, so F6 / Shift+F6 region cycling
 (`packages/ui/src/layout/useRegionCycle.ts`) is the only keyboard way out of it. Every new region of the window that
-holds controls — a pane, a panel, an overlay — is marked `data-region` and added to that hook's `REGIONS` and `shown`,
-or F6 skips it and a keyboard user in the terminal has no way to reach it. `shown` follows whether a region holds a
-control, not whether its element is in the document: the terminal counts while a session is selected, and also while
-its empty state offers a creation action for the current context, since that button is then the one thing to do
-there; with only its empty line it is skipped. A region whose focus goes through a method
+holds controls — a pane, a panel, an overlay — is marked `data-region` and added to that hook's region order and `shown`,
+or F6 skips it and a keyboard user in the terminal has no way to reach it. A right pane panel is the exception: it
+reaches the hook through its `panels` argument (region `panel-<kind>`, in stacking order), and a panel hidden by
+another's maximize is passed as not shown. A region lands F6 on its first control unless a control in it carries
+`data-region-landing` (a Files panel that failed to load lands on Try again, not on its header's Close panel). `shown`
+follows whether a region holds a control, not whether its element is in the document: the terminal counts while a
+session is selected, and also while its empty state offers a creation action for the current context, since that
+button is then the one thing to do there; with only its empty line it is skipped. A region whose focus goes through a method
 of its own rather than its first control (the terminal's) is only a stop when that method actually leaves focus inside
 it, which is how the cycle tells the two apart.
 
@@ -205,7 +208,8 @@ into that root (`[data-expand-button][data-focus-visible]` and `[data-separator-
 
 ### Focus moved by a change the user did not make
 
-A hand-off that runs because what held focus went away — a pane hidden, a region unmounted by a daemon event — also
+A hand-off that runs because what held focus went away — a pane hidden, a panel closed, a region unmounted by a daemon
+event — also
 calls `setInteractionModality("keyboard")` before it focuses the destination. The user did not ask for the move, so
 they have to be able to see where focus went, and the previous input was often a pointer press, which leaves the
 destination without a ring. `handFocusOff` takes a `showRing` flag for the hand-off whose trigger is a press, where the
@@ -457,6 +461,12 @@ the surface around it does not forbid selection. It is accepted there because th
 
 - A control that shows or hides a region carries `aria-expanded`. One that opens a floating panel also carries
   `aria-controls` pointing at the panel's element, but not the pane toggles' `data-pane-toggle` marker.
+- A control that shows or hides one panel of the right pane (a panel kind's toggle in the top bar) carries
+  `aria-expanded` and, only while that panel is in the document, `aria-controls` pointing at it. It carries the right
+  pane's `data-pane-toggle` marker, since it is what floats the pane in, so the pane's pointer watch counts it as part
+  of the pane.
+- A button whose name and icon swap with its state (a panel's Maximize / Restore) names the action and carries no
+  `aria-pressed` or `aria-expanded`, or assistive technology would announce the state twice.
 - The selected row of a hand-built list or tree carries `aria-current` (as the sidebar rows do).
 - HeroUI's `Tabs` and `ListBox` mark their selection themselves with `aria-selected` and get no `aria-current` on top.
 
@@ -877,7 +887,7 @@ in and whose accessible name and tooltip say what pressing will do, so the name 
 "Two-state icon toggles" in `docs/product/labels-and-tooltips.md`). Nothing distinguishes the pressed button from the
 unpressed one by fill: `.icon-toggle` in `packages/ui/src/style.css` resets HeroUI's selected tokens back to the
 resting ones, and `aria-pressed` carries the state for assistive technology. The window chrome's two pane toggles were
-already built this way; the Git mode's two view toggles — the one that shows and hides the change filter field, and
+built this way, and the sidebar's still is; the Git mode's two view toggles — the one that shows and hides the change filter field, and
 group by folder — and the viewer's three view controls now are too.
 
 A two-state control that is also what shows and hides a region carries `aria-expanded` beside its `aria-pressed`, the
@@ -886,6 +896,13 @@ screen, and expanded for the same reason (`expanded` on `IconToggle`). The regio
 no `aria-controls`; "Expanded and selected" above asks only for `aria-expanded`. A region taken away this way hands
 keyboard focus back to the toggle when it was holding it, the toggle being pressed without taking focus itself; the
 hand-off's ring follows how the press came, as "Focus moved by a change the user did not make" above has it.
+
+The right pane's panel kind toggles are the exception, after Claude's desktop app: each keeps one icon, and its open
+state is a filled chip behind the icon (the rail's current-console fill), a shape rather than a tint, with
+`aria-expanded` for assistive technology. A grip on a resize handle is a hover cue like a hover tint: light while
+hovered or focused, below 3:1, with the focus ring carrying keyboard focus, and the strong colour, at 3:1, only while
+pressed. Its "Resize" tooltip opens on pointer hover only and is not tied to the separator, whose own
+accessible name already says what it does; a focused grip shows itself and its ring instead.
 
 **A notice carries its severity in a glyph, never in its fill alone.** The file viewer's notices — what is said above
 content that is still shown — are one block in three tones (`Notice` in `packages/ui/src/viewer/viewerStates.tsx`):

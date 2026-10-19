@@ -1,8 +1,10 @@
+import { useFocusVisible } from "react-aria";
 import { useEffect, useRef, useState } from "react";
 
+import { useLatest } from "../components/useLatest";
 import { isImeKey } from "../imeKey";
 import { useIsNarrow } from "./breakpoint";
-import { useDockedPanelVisible, type DockedPanel } from "./panelVisibility";
+import { useDockedPanelVisible } from "./panelVisibility";
 import { type ConsolePeek, useConsolePeek } from "./useConsolePeek";
 import { MODAL_OPEN } from "./useRegionCycle";
 
@@ -31,15 +33,18 @@ export function holdsText(target: Element | null): boolean {
   return field.textContent !== "";
 }
 
+/** The two panes that float in on hover. */
+type Pane = "sidebar" | "aside";
+
 /** Whether the pane holds keyboard focus: a tree row reached by Tab, or a control or frame in the aside. */
-function holdsFocus(panel: DockedPanel): boolean {
+function holdsFocus(panel: Pane): boolean {
   const panes = document.querySelectorAll(`[data-pane=${panel}]`);
   return Array.from(panes).some((pane) => pane.contains(document.activeElement));
 }
 
 /** Hands focus to the terminal if the pane holds it, before the pane is hidden: hiding a focused
  * element leaves focus on `<body>`, where the terminal no longer receives keystrokes. */
-function releaseFocus(panel: DockedPanel, focusTerminal: () => void): void {
+function releaseFocus(panel: Pane, focusTerminal: () => void): void {
   if (holdsFocus(panel)) focusTerminal();
 }
 
@@ -47,13 +52,13 @@ function releaseFocus(panel: DockedPanel, focusTerminal: () => void): void {
  * that briefly overshoots does not close it. */
 const PEEK_HIDE_DELAY_MS = 200;
 
-/** One side's hover reveal: a hidden docked pane floating in over the terminal on request. */
+/** One side's hover reveal: a hidden pane floating in over the terminal on request. */
 export interface PanePeek {
-  /** Whether the pane is currently floating. Never true below the breakpoint or while it is docked. */
+  /** Whether the pane is currently floating. Never true while it is docked. */
   active: boolean;
-  /** Floats the pane in, as the pointer rests on whatever brings it up (the aside's edge strip or
-   * toggle; the sidebar's is its toggle and the rail's avatars, through `useConsolePeek`); does nothing where the
-   * pane cannot float, and closes the other side's floating pane. It arms no slide-away timer: that
+  /** Floats the pane in, as the pointer rests on whatever brings it up (a panel kind's toggle for
+   * the aside; the sidebar's is its toggle and the rail's avatars, through `useConsolePeek`); does
+   * nothing where the pane cannot float, and closes the other side's floating pane. It arms no slide-away timer: that
    * starts when the pointer leaves the pane or whatever brought it up (`leave`). */
   reveal: () => void;
   /** The pointer is on the floating pane again: cancels a pending slide-away. */
@@ -75,8 +80,9 @@ interface PeekControl extends PanePeek {
 }
 
 /** The state, timer and focus hand-off of one pane's hover reveal; `peekable` is whether the pane
- * may float right now (wide window, docked pane hidden, and the pane exists at all). */
-function usePanePeek(panel: DockedPanel, peekable: boolean, focusTerminal: () => void): PeekControl {
+ * may float right now (the pane is not docked, and exists at all; the sidebar's also only in a wide
+ * window). */
+function usePanePeek(panel: Pane, peekable: boolean, focusTerminal: () => void, keyboardInput?: () => boolean): PeekControl {
   const [active, setActive] = useState(false);
   const activeRef = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -102,10 +108,15 @@ function usePanePeek(panel: DockedPanel, peekable: boolean, focusTerminal: () =>
     // project's browser opens, which gives focus back to a row of the pane when it closes. So does
     // the pointer being on the pane, which a pane that slid in under a still pointer may never have
     // reported (`:hover` is up to date once it is there). Escape and the toggle still close it.
+    // Focus that a press put in the pane (a tab, a button) keeps it only for a pane that does not
+    // say whether the last input was the keyboard's (`keyboardInput`): the sidebar's floating card
+    // stays up for it, the aside's, whose panels take focus on a press, goes when the pointer
+    // leaves, as it did before the press; focus a key put there still keeps it.
+    const focusKeeps = () => holdsFocus(panel) && (keyboardInput === undefined || keyboardInput());
     const tick = () => {
       const popupOpen = document.querySelector(`[data-pane=${panel}] [aria-haspopup][aria-expanded=true]`);
       const pointerOn = document.querySelector(`[data-pane=${panel}]:hover`);
-      if (holdsFocus(panel) || popupOpen || pointerOn || document.querySelector(MODAL_OPEN)) {
+      if (focusKeeps() || popupOpen || pointerOn || document.querySelector(MODAL_OPEN)) {
         timer.current = setTimeout(tick, PEEK_HIDE_DELAY_MS);
       } else {
         hide();
@@ -130,63 +141,56 @@ function usePanePeek(panel: DockedPanel, peekable: boolean, focusTerminal: () =>
 
 export interface PaneToggles {
   sidebarOpen: boolean;
-  asideOpen: boolean;
   sidebarDocked: boolean;
-  asideDocked: boolean;
   /** The hidden docked sidebar floating over the terminal, from its toggle or a console's avatar. */
   sidebarPeek: SidebarPeek;
-  /** The aside's floating, from the window's end edge or the aside's toggle. */
-  asidePeek: PanePeek;
+  /** The aside's floating, from a panel kind's toggle while no panel is open. */
+  asidePeek: PanePeek & {
+    /** Ends the float at once; focus inside the pane goes to the terminal first unless `handFocus`
+     * is false, for a pane that is being docked and so stays on screen. */
+    hide: (handFocus?: boolean) => void;
+  };
   sidebarShown: boolean;
-  asideShown: boolean;
   toggleSidebar: () => void;
-  toggleAside: () => void;
   closeSidebar: () => void;
-  closeAside: () => void;
-  /** Puts the aside on screen for good, for an explicit request to see what it holds: docks it
-   * at and above the breakpoint, opens its drawer (closing the sidebar's) below it. */
-  showAside: () => void;
-  /** Closes every overlay that is open, a narrow-mode drawer or a floating pane, as Escape does;
+  /** Closes every overlay that is open, the sidebar's drawer or a floating pane, as Escape does;
    * does nothing while none is, so focus inside a docked pane stays put. */
   dismissOverlays: () => void;
 }
 
 /**
- * The state behind the two panel toggles, both in the top bar: the sidebar's at its start, the
- * aside's at its end.
- * The aside is the pane at the end side, which shows whatever owns it at the moment: a console
- * session's report panel or a project's browser (`asideOwner.ts`). Below the `docked` breakpoint
- * the sidebar and the aside are closed-by-default overlays (their own components' doc comments
- * have the layout); at and above it the same toggles show or hide the docked panes instead
- * (`panelVisibility.ts`). Both states live in one place since the toggles sit in the window chrome,
- * and widening the window past the breakpoint has to be able to close either overlay.
+ * The state behind the sidebar's toggle in the top bar, and the hover reveal of the aside.
+ * Below the `docked` breakpoint the sidebar is a closed-by-default overlay (its component's doc
+ * comment has the layout); at and above it the toggle shows or hides the docked pane instead
+ * (`panelVisibility.ts`). Both states live in one place since the toggle sits in the window chrome,
+ * and widening the window past the breakpoint has to be able to close the overlay.
  *
- * While a docked pane is hidden, the pointer can float it in over the terminal without resizing
- * it (`sidebarPeek`, `asidePeek`): the sidebar is brought up by its toggle or a console's avatar
- * on the rail, the aside by the window's end edge or its toggle; leaving it (or Escape) hides it again, and
- * pressing the toggle docks it for good. The two never float together: revealing one hides the
- * other.
+ * The aside has no toggle or drawer of its own: it is docked at every width while a panel is open
+ * (`panels/stackState.ts`), and with none open it floats in over the terminal while the pointer
+ * rests on a panel kind's toggle (`asidePeek`), showing that panel; pressing the toggle docks it.
+ * Likewise a hidden docked sidebar floats in from its toggle or a console's avatar on the rail
+ * (`sidebarPeek`). Leaving a floating pane (or Escape) hides it again. The two never float
+ * together: revealing one hides the other.
  *
  * `hasSidebar` is whether the sidebar is rendered at all (it is not while there is no console);
- * `hasAside` is whether anything owns the aside at the moment; `focusTerminal` is where keyboard
- * focus goes when the pane holding it is hidden.
+ * `asidePeekable` is whether the aside may float in now: something owns it and it has no panel
+ * open; `focusTerminal` is where keyboard focus goes when the pane holding it is hidden.
  */
 export function usePaneToggles({
   hasSidebar,
-  hasAside,
+  asidePeekable,
   focusTerminal,
 }: {
   hasSidebar: boolean;
-  hasAside: boolean;
+  asidePeekable: boolean;
   focusTerminal: () => void;
 }): PaneToggles {
   const isNarrow = useIsNarrow();
+  const keyboardInput = useLatest(useFocusVisible().isFocusVisible);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [asideOpen, setAsideOpen] = useState(false);
   const [sidebarDocked, setSidebarDocked] = useDockedPanelVisible("sidebar");
-  const [asideDocked, setAsideDocked] = useDockedPanelVisible("aside");
   const sidebarPeek = usePanePeek("sidebar", !isNarrow && !sidebarDocked && hasSidebar, focusTerminal);
-  const asidePeek = usePanePeek("aside", !isNarrow && !asideDocked && hasAside, focusTerminal);
+  const asidePeek = usePanePeek("aside", asidePeekable, focusTerminal, () => keyboardInput.current);
   const revealPeek = (mine: PeekControl, other: PeekControl) => () => {
     if (!mine.peekable) return;
     other.hide();
@@ -194,8 +198,8 @@ export function usePaneToggles({
   };
   const consolePeek = useConsolePeek({ ...sidebarPeek, reveal: revealPeek(sidebarPeek, asidePeek) });
 
-  // An overlay left open stops meaning anything once the window is wide enough to show its
-  // content in the row instead — without this, widening past the breakpoint with a drawer open
+  // The drawer left open stops meaning anything once the window is wide enough to show its
+  // content in the row instead — without this, widening past the breakpoint with it open
   // would leave the scrim gone (`docked:hidden`) but the drawer's own `open` state still true, so
   // reopening it narrow again would show it already open with no toggle press in between. A
   // drawer closing into a docked pane the user has hidden takes focus along with it, so that is
@@ -205,17 +209,8 @@ export function usePaneToggles({
   useEffect(() => {
     if (isNarrow) return;
     if (!sidebarDocked) releaseFocus("sidebar", focusTerminal);
-    if (!asideDocked) releaseFocus("aside", focusTerminal);
     setSidebarOpen(false);
-    setAsideOpen(false);
   }, [isNarrow]);
-
-  // The aside losing its owner leaves `asideOpen` with nothing to mean: the pane stops rendering,
-  // but a scrim rendered on `asideOpen` alone would still dim the whole viewport with no toggle
-  // left to close it.
-  useEffect(() => {
-    if (!hasAside) setAsideOpen(false);
-  }, [hasAside]);
 
   // The sidebar going away (the last console deleted, perhaps by another client) leaves
   // `sidebarOpen` with nothing to mean: a drawer left open would keep the Escape listener armed with
@@ -228,23 +223,18 @@ export function usePaneToggles({
     releaseFocus("sidebar", focusTerminal);
     setSidebarOpen(false);
   };
-  const closeAside = () => {
-    releaseFocus("aside", focusTerminal);
-    setAsideOpen(false);
-  };
 
   const dismissOverlays = () => {
-    if (!sidebarOpen && !asideOpen && !sidebarPeek.active && !asidePeek.active) return;
+    if (!sidebarOpen && !sidebarPeek.active && !asidePeek.active) return;
     // Only a drawer that is open: closing one runs `releaseFocus`, which would pull focus out of a
     // docked pane that is not being hidden.
     if (sidebarOpen) closeSidebar();
-    if (asideOpen) closeAside();
     sidebarPeek.hide();
     asidePeek.hide();
   };
 
-  // Opening either drawer closes the other — without this, both scrims can be on screen at once,
-  // and since they stack in DOM order, a press only ever reaches the later one.
+  // Opening the drawer hides the aside's floating pane — without this, both can be on screen at
+  // once, and since they stack in DOM order, a press only ever reaches the later one.
   const toggleSidebar = () => {
     if (!isNarrow) {
       // Docking a floating pane keeps it on screen, where it is now in the row, so focus stays.
@@ -254,29 +244,10 @@ export function usePaneToggles({
     }
     if (sidebarOpen) return closeSidebar();
     setSidebarOpen(true);
-    closeAside();
-  };
-  const toggleAside = () => {
-    if (!isNarrow) {
-      if (asideDocked) releaseFocus("aside", focusTerminal);
-      else asidePeek.hide(false);
-      return setAsideDocked(!asideDocked);
-    }
-    if (asideOpen) return closeAside();
-    setAsideOpen(true);
-    closeSidebar();
-  };
-  const showAside = () => {
-    if (!isNarrow) {
-      if (asideDocked) return;
-      asidePeek.hide(false);
-      return setAsideDocked(true);
-    }
-    setAsideOpen(true);
-    closeSidebar();
+    asidePeek.hide();
   };
 
-  // Closes whichever drawer is open, or a floating pane: a scrim already does this on a press,
+  // Closes the drawer when it is open, or a floating pane: a scrim already does this on a press,
   // Escape needs its own listener to do the same. Registered on the capture phase: xterm.js owns
   // Escape too (it forwards the keystroke to the running agent) and stops it bubbling once it has,
   // so a bubble listener here would never see the key while the terminal holds focus, which is
@@ -304,7 +275,7 @@ export function usePaneToggles({
   // what `useRefocusIfLost` in `dialogs/Dialog.tsx` exists to prevent, so it is not worth a second
   // guard here.
   useEffect(() => {
-    if (!sidebarOpen && !asideOpen && !sidebarPeek.active && !asidePeek.active) return;
+    if (!sidebarOpen && !sidebarPeek.active && !asidePeek.active) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       // An element marking itself `data-escape-topmost` is a floating panel over the drawer that
@@ -320,22 +291,24 @@ export function usePaneToggles({
     };
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [sidebarOpen, asideOpen, sidebarPeek.active, asidePeek.active]);
+  }, [sidebarOpen, sidebarPeek.active, asidePeek.active]);
 
   return {
     sidebarOpen,
-    asideOpen,
     sidebarDocked,
-    asideDocked,
     sidebarPeek: { active: sidebarPeek.active, keep: sidebarPeek.keep, leave: sidebarPeek.leave, ...consolePeek },
-    asidePeek: { ...asidePeek, reveal: revealPeek(asidePeek, sidebarPeek) },
+    // The aside's float would come out over the sidebar's open drawer, so the drawer makes way.
+    asidePeek: {
+      ...asidePeek,
+      reveal: () => {
+        if (!asidePeek.peekable) return;
+        if (sidebarOpen) closeSidebar();
+        revealPeek(asidePeek, sidebarPeek)();
+      },
+    },
     sidebarShown: isNarrow ? sidebarOpen : sidebarDocked,
-    asideShown: isNarrow ? asideOpen : asideDocked,
     toggleSidebar,
-    toggleAside,
     closeSidebar,
-    closeAside,
-    showAside,
     dismissOverlays,
   };
 }

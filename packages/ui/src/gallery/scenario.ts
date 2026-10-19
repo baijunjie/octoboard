@@ -2,6 +2,7 @@ import type { Language } from "../i18n/languages";
 import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/ImportReview";
 import type { MacosPermissionsStatus } from "../platform";
+import type { OwnerKind, PanelKind } from "../panels/stackState";
 import type { Agent, AgentModel, DirEntry, GitStatus, MessageParams, ModelsUnavailable, PathLinkKind, PathLinkView, SessionBranchItem, SessionRecordsPresence } from "../protocol";
 import type { FixtureError, FixtureFiles } from "./fixtures/projectFiles";
 import type { GroupTitle } from "./fixtures/groups";
@@ -17,10 +18,13 @@ import type { Ui } from "./interact";
 export interface Preferences {
   /** The docked sidebar is shown (default) or hidden by the user. */
   sidebarVisible?: boolean;
-  asideVisible?: boolean;
   /** Chosen docked widths in pixels. */
   sidebarWidth?: number;
   asideWidth?: number;
+  /** The right pane's panels per owner (a project, a console session's report): which kinds of panel
+   * are open (none open is no pane) and their shares of its height. An owner left out has every one of
+   * its kinds open, the app's default. */
+  panelStacks?: Partial<Record<OwnerKind, { open: PanelKind[]; shares: Record<string, number> }>>;
   /** The console the sidebar shows, and what is in focus mode. */
   sidebarConsole?: string;
   sidebarFocus?: `project:${string}` | `consoleSession:${string}`;

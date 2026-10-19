@@ -4,12 +4,13 @@ import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { InlineChip } from "../components/InlineChip";
+import { PanelHeader } from "../components/PanelHeader";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
 import { ROW_ICON_BUTTON_CLASS } from "../components/RowControls";
 import { useCurrentLanguage, useT } from "../i18n/react";
-import { AsidePane, type AsideLayout } from "../layout/AsidePane";
+import type { PanePeek } from "../layout/usePaneToggles";
 import { usePlatform } from "../platform/react";
 import type { Page } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
@@ -25,8 +26,9 @@ import {
 } from "./pageDocument";
 
 /**
- * A console session's report panel: the aside's content while that console session owns it (see
- * `asideOwner.ts`), which is what makes its pages visible at all. Lists pages on mount and on
+ * A console session's report panel: the Report panel of the right pane (`panels/panelRegistry.tsx`)
+ * while that console session owns the pane (see `layout/asideOwner.ts`), which is what makes its
+ * pages visible at all. Lists pages on mount and on
  * every snapshot — the daemon never replays a missed `page_created` on its own (see the `page_list`
  * row under "Daemon to client" in `apps/daemon/PROTOCOL.md`), so re-listing is the only way to recover
  * from one. Switching to another console session mounting a fresh instance, so that its position is
@@ -34,16 +36,16 @@ import {
  */
 export function ReportPanel({
   consoleSessionId,
-  layout,
+  peek,
   onEscape,
   onCycleRegion,
   onMoveHistory,
   onMoveConsoleSession,
 }: {
   consoleSessionId: string;
-  /** Where the aside is on screen; the panel never unmounts for being closed or hidden, since that
-   * would lose the `list_pages` state below and re-request it on every reopen. */
-  layout: AsideLayout;
+  /** The floating pane's pointer callbacks, wired onto the page's frame, which sends this document
+   * no pointer events of its own; `undefined` while the pane is docked. */
+  peek: Pick<PanePeek, "keep" | "leave"> | undefined;
   /** Escape was pressed inside the page's frame, where this document never sees the key. The
    * owner closes whichever overlay is open, as Escape does elsewhere. */
   onEscape: () => void;
@@ -104,17 +106,18 @@ export function ReportPanel({
     [request, toastError, consoleSessionId],
   );
 
-  // The panel keeps its place in the row while the first `list_pages` is in flight: dropping out
-  // and back would resize the terminal pane, a real SIGWINCH to the agent, on every console
-  // session switch. Below the `docked` breakpoint "its place" is a fixed overlay instead, so
-  // resizing the terminal never comes up there in the first place.
-  if (sessionPages === undefined) return <AsidePane layout={layout} />;
+  // The panel keeps its place while the first `list_pages` is in flight: dropping out and back
+  // would resize the terminal pane, a real SIGWINCH to the agent, on every console session switch.
+  if (sessionPages === undefined) return <PanelHeader title={t("panel.report.name")} />;
 
   if (sessionPages.length === 0) {
     return (
-      <AsidePane layout={layout} className="justify-center-safe">
-        <EmptyPanel icon={FileText} message={t("report.empty")} />
-      </AsidePane>
+      <>
+        <PanelHeader title={t("panel.report.name")} />
+        <div className="flex min-h-0 flex-1 flex-col justify-center-safe">
+          <EmptyPanel icon={FileText} message={t("report.empty")} />
+        </div>
+      </>
     );
   }
 
@@ -132,46 +135,50 @@ export function ReportPanel({
   };
 
   return (
-    <AsidePane layout={layout} className="sidebar-fills">
+    <>
       {/* A previous / next pager with "n / m", hand-assembled from buttons: HeroUI's `Pagination`
           is a list of numbered pages, which neither reads as nor behaves like this. */}
-      <div className="flex h-(--pane-header-height) shrink-0 items-center gap-2 groove-b px-(--pane-inset) text-xs text-app-muted">
-        <TitledControl title={t("report.previous")}>
-          <Button
-            isIconOnly
-            size="sm"
-            variant="ghost"
-            className={ROW_ICON_BUTTON_CLASS}
-            aria-label={t("report.previous")}
-            preventFocusOnPress
-            isDisabled={displayIndex === 0}
-            onPress={() => goTo(displayIndex - 1)}
-          >
-            <ChevronLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" />
-          </Button>
-        </TitledControl>
-        {/* The page count is a range written with `/`, which reads left to right whatever the
-            interface direction is: mirrored, "1 / 12" would say page 12 of 1. */}
-        <span dir="ltr" className="whitespace-nowrap">
-          {t("report.position", { index: displayIndex + 1, total: sessionPages.length })}
-        </span>
-        <TitledControl title={t("report.next")}>
-          <Button
-            isIconOnly
-            size="sm"
-            variant="ghost"
-            className={ROW_ICON_BUTTON_CLASS}
-            aria-label={t("report.next")}
-            preventFocusOnPress
-            isDisabled={displayIndex === sessionPages.length - 1}
-            onPress={() => goTo(displayIndex + 1)}
-          >
-            <ChevronRight aria-hidden="true" className="size-4 rtl:-scale-x-100" />
-          </Button>
-        </TitledControl>
-        {/* The timestamp's width is whatever the user's locale makes of it, so it is the element
-            that gives way, rather than pushing the badge off the panel's edge when narrow. */}
-        <FadeOverflow as="span" className="ms-auto min-w-0">
+      <PanelHeader title={t("panel.report.name")}>
+        <div className="flex shrink-0 items-center gap-1 text-xs text-app-muted">
+          <TitledControl title={t("report.previous")}>
+            <Button
+              isIconOnly
+              size="sm"
+              variant="ghost"
+              className={ROW_ICON_BUTTON_CLASS}
+              aria-label={t("report.previous")}
+              preventFocusOnPress
+              isDisabled={displayIndex === 0}
+              onPress={() => goTo(displayIndex - 1)}
+            >
+              <ChevronLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+            </Button>
+          </TitledControl>
+          {/* The page count is a range written with `/`, which reads left to right whatever the
+              interface direction is: mirrored, "1 / 12" would say page 12 of 1. */}
+          <span dir="ltr" className="whitespace-nowrap">
+            {t("report.position", { index: displayIndex + 1, total: sessionPages.length })}
+          </span>
+          <TitledControl title={t("report.next")}>
+            <Button
+              isIconOnly
+              size="sm"
+              variant="ghost"
+              className={ROW_ICON_BUTTON_CLASS}
+              aria-label={t("report.next")}
+              preventFocusOnPress
+              isDisabled={displayIndex === sessionPages.length - 1}
+              onPress={() => goTo(displayIndex + 1)}
+            >
+              <ChevronRight aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+            </Button>
+          </TitledControl>
+        </div>
+      </PanelHeader>
+      {/* The timestamp's width is whatever the user's locale makes of it, so it is the element
+          that gives way, rather than pushing the badge off the panel's edge when narrow. */}
+      <div className="flex h-8 shrink-0 items-center gap-2 px-(--pane-inset) text-xs text-app-muted">
+        <FadeOverflow as="span" className="min-w-0">
           {new Date(page.created_at).toLocaleString(language)}
         </FadeOverflow>
         {isHistory && (
@@ -189,10 +196,10 @@ export function ReportPanel({
         onCycleRegion={onCycleRegion}
         onMoveHistory={onMoveHistory}
         onMoveConsoleSession={onMoveConsoleSession}
-        onPointerEnter={layout.peek?.keep}
-        onPointerLeave={layout.peek?.leave}
+        onPointerEnter={peek?.keep}
+        onPointerLeave={peek?.leave}
       />
-    </AsidePane>
+    </>
   );
 }
 

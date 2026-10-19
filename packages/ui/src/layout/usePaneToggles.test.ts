@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { setInteractionModality } from "react-aria";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
@@ -49,7 +50,7 @@ function mountToggles(narrow: boolean) {
     removeEventListener: () => {},
   }));
   let latest!: PaneToggles;
-  function Probe({ panes }: { panes: { hasSidebar: boolean; hasAside: boolean } }) {
+  function Probe({ panes }: { panes: { hasSidebar: boolean; asidePeekable: boolean } }) {
     latest = usePaneToggles({ ...panes, focusTerminal: () => {} });
     return null;
   }
@@ -62,35 +63,45 @@ function mountToggles(narrow: boolean) {
     // Hiding a docked pane persists the choice, which the next test would start from.
     localStorage.clear();
   });
-  const render = (panes: { hasSidebar: boolean; hasAside: boolean }) =>
+  const render = (panes: { hasSidebar: boolean; asidePeekable: boolean }) =>
     act(() => root.render(createElement(Probe, { panes })));
-  render({ hasSidebar: true, hasAside: true });
+  render({ hasSidebar: true, asidePeekable: true });
   return { render, panes: () => latest };
 }
 
-it.each([
-  { pane: "sidebar", gone: { hasSidebar: false, hasAside: true } },
-  { pane: "aside", gone: { hasSidebar: true, hasAside: false } },
-] as const)("closes the $pane drawer and stops floating it once the pane no longer exists", ({ pane, gone }) => {
-  const open = (p: PaneToggles) => (pane === "sidebar" ? p.sidebarOpen : p.asideOpen);
-  // The sidebar floats in for a hovered console, so only whether it may is public; the aside's
-  // `reveal` floats it in where it may, so whether it did shows the same.
-  const floats = (p: PaneToggles) => (pane === "sidebar" ? p.sidebarPeek.peekable : p.asidePeek.active);
-  const toggle = (p: PaneToggles) => (pane === "sidebar" ? p.toggleSidebar() : p.toggleAside());
-
+it("closes the sidebar drawer and stops floating it once the sidebar no longer exists", () => {
+  const gone = { hasSidebar: false, asidePeekable: true };
   const narrow = mountToggles(true);
-  act(() => toggle(narrow.panes()));
-  expect(open(narrow.panes())).toBe(true);
+  act(() => narrow.panes().toggleSidebar());
+  expect(narrow.panes().sidebarOpen).toBe(true);
   narrow.render(gone);
-  expect(open(narrow.panes())).toBe(false);
+  expect(narrow.panes().sidebarOpen).toBe(false);
 
-  // At and above the breakpoint a hidden docked pane may float in, until it is gone.
+  // At and above the breakpoint a hidden docked sidebar may float in, until it is gone. Only
+  // whether it may is public, as it floats in for a hovered console.
   const wide = mountToggles(false);
-  act(() => toggle(wide.panes()));
-  if (pane === "aside") act(() => wide.panes().asidePeek.reveal());
-  expect(floats(wide.panes())).toBe(true);
+  act(() => wide.panes().toggleSidebar());
+  expect(wide.panes().sidebarPeek.peekable).toBe(true);
   wide.render(gone);
-  expect(floats(wide.panes())).toBe(false);
+  expect(wide.panes().sidebarPeek.peekable).toBe(false);
+});
+
+it.each([true, false])("floats the aside in on request while it may, in a narrow window too (narrow: %s), and stops once it may not", (narrow) => {
+  const { render, panes } = mountToggles(narrow);
+  act(() => panes().asidePeek.reveal());
+  expect(panes().asidePeek.active).toBe(true);
+  render({ hasSidebar: true, asidePeekable: false });
+  expect(panes().asidePeek.active).toBe(false);
+  act(() => panes().asidePeek.reveal());
+  expect(panes().asidePeek.active).toBe(false);
+});
+
+it("hides the floating aside when the sidebar's drawer opens", () => {
+  const { panes } = mountToggles(true);
+  act(() => panes().asidePeek.reveal());
+  expect(panes().asidePeek.active).toBe(true);
+  act(() => panes().toggleSidebar());
+  expect(panes().asidePeek.active).toBe(false);
 });
 
 it("leaves Escape to a floating panel over an open drawer, and closes the drawer on the next one", () => {
@@ -108,4 +119,39 @@ it("leaves Escape to a floating panel over an open drawer, and closes the drawer
   escape();
   expect(panes().sidebarOpen).toBe(false);
   scope.remove();
+});
+
+it.each([
+  { modality: "pointer", dismissed: true },
+  { modality: "keyboard", dismissed: false },
+] as const)("lets the floating aside go when the pointer leaves with focus a $modality put inside: dismissed $dismissed", ({ modality, dismissed }) => {
+  vi.useFakeTimers();
+  onTestFinished(() => void vi.useRealTimers());
+  const { panes } = mountToggles(false);
+  const pane = document.body.appendChild(document.createElement("div"));
+  pane.setAttribute("data-pane", "aside");
+  pane.innerHTML = '<button type="button">tab</button>';
+  onTestFinished(() => pane.remove());
+  act(() => panes().asidePeek.reveal());
+  expect(panes().asidePeek.active).toBe(true);
+  act(() => setInteractionModality(modality));
+  pane.querySelector("button")!.focus();
+  act(() => panes().asidePeek.leave());
+  act(() => void vi.advanceTimersByTime(1000));
+  expect(panes().asidePeek.active).toBe(!dismissed);
+});
+
+it("closes the sidebar's open drawer when the aside floats in, instead of floating over it", () => {
+  const { panes } = mountToggles(true);
+  act(() => panes().toggleSidebar());
+  expect(panes().sidebarOpen).toBe(true);
+  act(() => panes().asidePeek.reveal());
+  expect(panes().sidebarOpen).toBe(false);
+  expect(panes().asidePeek.active).toBe(true);
+  // Dismissing the aside's float alone leaves the sidebar's state as it is.
+  act(() => panes().toggleSidebar());
+  expect(panes().sidebarOpen).toBe(true);
+  expect(panes().asidePeek.active).toBe(false);
+  act(() => panes().asidePeek.hide());
+  expect(panes().sidebarOpen).toBe(true);
 });

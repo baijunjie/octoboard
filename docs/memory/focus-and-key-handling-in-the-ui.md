@@ -19,9 +19,10 @@ only appears in the running page.
 Hiding a region with CSS (`hidden`, a `docked:hidden` variant) while focus is inside it drops focus to `<body>` the
 same way, with no event, and `preventFocusOnPress` does not help there: focus reaches a pane by Tab or by a click into
 an iframe. So every code path that hides a region able to hold focus — a toggle, a scrim, Escape, a breakpoint change
-— first hands focus to the terminal if the region contains `document.activeElement`. The docked panes already do this
-through `releaseFocus` in `packages/ui/src/layout/usePaneToggles.ts`; hide a new pane through that hook rather than
-beside it.
+— first hands focus to the terminal if the region contains `document.activeElement`. The sidebar does this through
+`releaseFocus` in `packages/ui/src/layout/usePaneToggles.ts`, and a right-pane card through the `HandOffOnUnmount`
+that `packages/ui/src/panels/PanelStack.tsx` renders with it; hide a new pane or card the same way rather than beside
+them.
 
 Reordering does it too: React reorders keyed children by moving their DOM nodes, and moving the node that holds focus
 blurs it to `<body>`, so a keyboard user on a row loses their place whenever a live status update re-sorts the list.
@@ -87,15 +88,16 @@ Two capture-phase `keydown` listeners run before React's own dispatch, so a Reac
 to receive Escape nor hold on to it — `onKeyDownCapture` on a wrapper does not help, as React dispatches from its root
 container (`<body>` for anything portalled there), below both.
 
-The first is this project's own: while a drawer or a floating pane is open, `packages/ui/src/layout/usePaneToggles.ts`
-holds a capture-phase listener on `window` that dismisses the overlay. So a control inside a region marked
-`data-escape-scope` (the sidebar, the aside, the terminal pane, the top bar, the rail, the scrim) that needs Escape
-for itself is accounted for in that listener's own test instead (`holdsText`, which leaves the key to a text field
-that holds text), never guarded locally. A control in a popover or a dialog portalled to `<body>` sits outside every
-scope and is unaffected, which is the only reason the sidebar's project filter and the dialogs' fields never needed
-this. Check it where it shows: the listener is installed only while an overlay is up, so the symptom appears only
-below the layout breakpoint, with the pane as a drawer, or with a docked pane hidden and floated in on hover. A
-gallery scenario at a normal width, both panes docked, never reaches it.
+The first is this project's own: while the sidebar's drawer or either pane's floating card is open,
+`packages/ui/src/layout/usePaneToggles.ts` holds a capture-phase listener on `window` that dismisses the overlay. So
+a control inside a region marked `data-escape-scope` (the sidebar, the aside, the terminal pane, the top bar, the
+rail, the scrim) that needs Escape for itself is accounted for in that listener's own test instead (`holdsText`,
+which leaves the key to a text field that holds text), never guarded locally. A control in a popover or a dialog
+portalled to `<body>` sits outside every scope and is unaffected, which is the only reason the sidebar's project
+filter and the dialogs' fields never needed this. Check it where it shows: the listener is installed only while an
+overlay is up, so the symptom appears only with the sidebar's drawer open below the layout breakpoint, or with a
+pane floated in on hover — the hidden docked sidebar, or the right pane while it has no panel open. A gallery
+scenario at a normal width, with the sidebar docked and nothing floating, never reaches it.
 
 The second is react-aria's: while a tooltip **that has a trigger element** is open, `useTooltipTrigger` holds a
 capture-phase listener on `document` that calls `stopPropagation()` on every Escape, whatever else was waiting for the

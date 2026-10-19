@@ -1,13 +1,16 @@
 # Report panel
 
-The **report panel** is what the window's right pane shows while a **console session** owns it, to the right of the
-terminal (to its left under a right-to-left language, see "Right-to-left layout" in `docs/product/window-layout.md`).
+The **report panel** is the panel the window's right pane holds while a **console session** owns it, to the right of
+the terminal (to its left under a right-to-left language, see "Right-to-left layout" in
+`docs/product/window-layout.md`). It is the console session's one kind of panel, the Report panel, a card like any
+other in the right pane, with its own toggle in the top bar (see `docs/product/right-pane-panels.md`).
 It belongs to the console session rather than to its console: each console session has its own pages, and the panel
 shows those of the selected console session, so two console sessions in one console do not share a history. Selecting
-a console session puts its report panel in the right pane; when the right pane shows something else instead — a
-project pane, or nothing — is in "What the right pane shows" in `docs/product/window-layout.md`. How wide the pane is,
-how the user resizes and hides it, how a hidden one floats in, and what becomes of it in a window too narrow for three
-panes, is described in `docs/product/window-layout.md`.
+a console session gives it the right pane, where the report panel shows while it is open; when the right pane shows
+something else instead — a project's Files panel, or nothing — is in "What the right pane shows" in
+`docs/product/window-layout.md`. How the panel is opened, closed and floated in is in
+`docs/product/right-pane-panels.md`, and how wide the pane is and how the user resizes it in
+`docs/product/window-layout.md`.
 
 A page is a whole HTML document the console session wrote, for anything better shown than typed
 into the terminal — a table, a comparison, a set of choices. A page may carry a form, and what the
@@ -31,13 +34,14 @@ and so with its console, which deletes its console sessions (see "Deleting a con
 `docs/product/consoles.md`). Nothing else deletes a page, and the console session cannot withdraw one it
 has pushed.
 
-The panel's bar carries, left to right (mirrored under a right-to-left language, except for what "Right-to-left
-layout" in `docs/product/window-layout.md` lists as keeping its order): ◀ and ▶ to step one page back and one forward,
-the position as "current / total" counted from 1 with the oldest page first, the page's creation time formatted for the
-UI's current language (see "What follows the language" in `docs/product/language.md`), and — on any page but the
-newest — a "Read-only" badge. The position, the total and the badge all count the selected console session's pages
+The panel's header (see "A panel's header" in `docs/product/right-pane-panels.md`) carries, after its title, left to
+right (mirrored under a right-to-left language, except for what "Right-to-left layout" in
+`docs/product/window-layout.md` lists as keeping its order): ◀ and ▶ to step one page back and one forward, and
+between them the position as "current / total", counted from 1 with the oldest page first. A thin row under the
+header carries the page's creation time formatted for the UI's current language (see "What follows the language" in
+`docs/product/language.md`) and — on any page but the newest — a "Read-only" badge. The position, the total and the badge all count the selected console session's pages
 only. The place the user has paged to is not kept: whenever the report panel gives way in the right pane — another
-session selected, or Browse files putting a project pane in its place — coming back to it shows its newest page again,
+session selected, or Browse files putting a project's Files panel in its place — coming back to it shows its newest page again,
 started over from its markup, with anything typed into its form and not submitted gone.
 
 - The panel follows the newest page: a page pushed while the user is on the newest one moves the view
@@ -46,15 +50,16 @@ started over from its markup, with anything typed into its form and not submitte
   they paged to, and only the total grows.
 - Paging away from a page discards it: paging back to it starts the page over from its markup, and whatever had
   been typed into its form is gone.
-- A console session that has never pushed a page shows an empty panel filling the pane, saying there are no pages yet
-  (see "The full panel" in `docs/product/empty-states.md`).
+- A console session that has never pushed a page shows, under the panel's header, an empty panel filling the card,
+  saying there are no pages yet (see "The full panel" in `docs/product/empty-states.md`). While the console session's
+  pages are first being listed, the card shows its header alone.
 
 ## History pages are read-only
 
 Only a console session's **newest** page can be submitted from. On every older page:
 
 - the page's form controls are disabled, and submitting its form sends nothing;
-- the "Read-only" badge is shown in the panel's bar.
+- the "Read-only" badge is shown in the row under the panel's header.
 
 The rule does not depend on the panel: the daemon refuses any submission naming a page that is not
 its console session's newest, whatever that page's own markup does.
@@ -107,7 +112,7 @@ language and writing direction whatever the UI's language is — see "What follo
 `docs/product/language.md`.
 
 A page's body gets a default inline margin of **16 px** on each side, in place of the browser's 8 px, so its content
-starts where the panel's bar does. Any margin the page sets itself takes precedence, a universal reset such as
+starts where the panel's header does. Any margin the page sets itself takes precedence, a universal reset such as
 `* { margin: 0 }` included; the default leaves the body's top and bottom margins to the browser.
 
 ## Submitting a form back to the console session
@@ -144,8 +149,8 @@ read as being about whichever session the user happens to be looking at.
 ## Escape and F6 inside a page
 
 Pressing Escape while focus is inside a page also tells the window so, on a history page too. The
-key never reaches the window from inside the frame, so without this it could not close the floating
-right pane or the narrow-window drawer. It closes whatever overlay is open, as Escape does
+key never reaches the window from inside the frame, so without this it could not send away a floating
+report panel or close the sidebar's narrow-window drawer. It closes whatever overlay is open, as Escape does
 anywhere else, and with nothing open it does nothing. An Escape pressed during an input
 method's composition, where it cancels the composition, is not relayed. Inside the page the key keeps
 its usual effect either way, such as closing an open drop-down list.

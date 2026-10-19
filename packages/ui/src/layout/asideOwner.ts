@@ -1,4 +1,3 @@
-import type { PlainMessageKey } from "../i18n/catalog";
 import type { Project, Session } from "../protocol";
 
 /**
@@ -71,19 +70,3 @@ export function ownerKey(owner: AsideOwner | undefined): string | undefined {
 export function sameOwner(a: AsideOwner | undefined, b: AsideOwner | undefined): boolean {
   return ownerKey(a) === ownerKey(b);
 }
-
-/** How the aside's controls are named for each kind of owner: the top bar's toggle, the scrim that
- * closes its drawer and its resize handle. A project's are named for the project pane, not its
- * files, as the same pane also shows the project's Git review. */
-export const ASIDE_LABELS: Record<
-  AsideOwner["kind"],
-  { show: PlainMessageKey; hide: PlainMessageKey; close: PlainMessageKey; resize: PlainMessageKey }
-> = {
-  report: { show: "titleBar.report.show", hide: "titleBar.report.hide", close: "app.closeReport", resize: "pane.resizeReport" },
-  project: {
-    show: "titleBar.projectPane.show",
-    hide: "titleBar.projectPane.hide",
-    close: "app.closeProjectPane",
-    resize: "pane.resizeProjectPane",
-  },
-};

@@ -12,7 +12,7 @@ import { STATUS_LABELS, type StatusKey } from "../viewer/statusMarks";
  * in a tag group is a `role="row"`, and a checkbox is its (visually hidden) input: pressing the label
  * HeroUI draws it in does not toggle it. */
 const PRESSABLE =
-  "button, [role=button], [role=menuitem], [role=menuitemradio], [role=tab], [role=option], [role=row], a[href], input[type=checkbox]";
+  "button, [role=button], [role=menuitem], [role=menuitemradio], [role=tab], [role=option], [role=row], a[href], input[type=checkbox], [role=separator][tabindex]";
 
 /** The name a control is found by: its `aria-label`, otherwise its text, and for a checkbox the text
  * of its label. Deliberately not the browser's accessible-name computation, which folds in the label
@@ -176,6 +176,17 @@ export interface Ui {
    * press. The pointer's events are those of a mouse, so the panel is the hovered one and no press
    * pins it. */
   hoverPanel: (host: Matcher, panel: Matcher) => Promise<void>;
+  /** Moves the pointer onto the first control named `toggle`, the toggle of a pane that is closed or
+   * hidden (the sidebar's with the docked sidebar hidden, or a panel kind's with no panel open),
+   * which floats the pane in over the content, then on to the pane (the right pane's first card), which
+   * keeps it there for as long as the pointer rests on it, as a user would reach its content; no
+   * tooltip is left up over it. It returns once the floating pane has finished fading in. Fails if
+   * no pane floats in, which also catches a toggle whose pane is docked. */
+  floatPane: (toggle: Matcher) => Promise<void>;
+  /** Moves the pointer onto the first control named `host` and leaves it there, as `hoverIndicator`
+   * does, for a control whose tooltip is anchored to it rather than linked to it (a resize handle's),
+   * so its name says nothing of the tooltip. It fails unless the tooltip that opens reads `tooltip`. */
+  hoverAnchored: (host: Matcher, tooltip: string) => Promise<void>;
   /** Moves the pointer onto the status letter of the change row named `row` and leaves it there, as
    * `hoverIndicator` does, for the tooltip that names `status`. The letter is `aria-hidden` and its
    * tooltip is the anchored shape, which is mounted only while the pointer is on the letter and is
@@ -568,6 +579,35 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
         () => Array.from(doc.querySelectorAll<HTMLElement>("[role=dialog]")).find((dialog) => matches(panel, labelledNameOf(doc, dialog) ?? "")),
         `The control matching ${String(host)} floated in no dialog matching ${String(panel)} under the pointer`,
       );
+    },
+    async hoverAnchored(host, tooltip) {
+      await hover(() => find(host), `Nothing to hover matching ${String(host)}`);
+      const shown = withoutIsolates(doc.querySelector("[data-anchored-tooltip]")?.textContent ?? "").trim();
+      if (shown !== tooltip) {
+        throw new Error(`The control matching ${String(host)} has no tooltip "${tooltip}": its anchored tooltip is ${shown ? `"${shown}"` : "none"}`);
+      }
+    },
+    async floatPane(toggle) {
+      const control = await waitFor(() => find(toggle), `Nothing to hover matching ${String(toggle)}`);
+      pointAt(control);
+      const pane = await waitFor(() => {
+        // A docked pane is part of the layout; only a floating one is fixed over it. The right
+        // pane's frame is rendered fixed only while it floats; the sidebar's is fixed whenever it is
+        // hidden-docked, so the visibility check tells its floating from its being away.
+        // It is settled once its fade-up has ended: fully opaque, visible and with no transition running.
+        for (const found of doc.querySelectorAll<HTMLElement>("[data-pane=aside], [data-pane=sidebar]")) {
+          const style = found.ownerDocument.defaultView?.getComputedStyle(found);
+          const settled = style?.position === "fixed" && style.visibility === "visible" && style.opacity === "1" && (found.getAnimations?.().length ?? 0) === 0;
+          if (settled) return found;
+        }
+        return undefined;
+      }, `The control matching ${String(toggle)} floated in no pane under the pointer`);
+      const init = { bubbles: true, pointerType: "mouse" } as const;
+      // The floating pane's frame passes pointer events through, so the pointer lands on a card.
+      const target = pane.querySelector<HTMLElement>("[data-panel-card]") ?? pane;
+      control.dispatchEvent(new PointerEvent("pointerout", { ...init, relatedTarget: target }));
+      target.dispatchEvent(new PointerEvent("pointerover", { ...init, relatedTarget: control }));
+      await wait(TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS);
     },
     async hoverSessionUsage(row) {
       const entry = t("session.usage.entry", { label: t("session.usage.input"), tokens: "\0" }).split("\0")[0];

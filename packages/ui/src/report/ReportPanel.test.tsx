@@ -34,7 +34,7 @@ it("composes the embedded report relay before its only srcdoc assignment, includ
       <PlatformProvider value={{ kind: "browser" }}>
         <PageDocumentTransform value={withReportScrollBridge}>
           <DaemonProvider value={daemon}>
-            <ReportPanel consoleSessionId="console-session" layout={{ open: true, width: 430 }}
+            <ReportPanel consoleSessionId="console-session" peek={undefined}
               onEscape={() => {}} onCycleRegion={() => {}} onMoveHistory={() => {}} onMoveConsoleSession={() => {}} />
           </DaemonProvider>
         </PageDocumentTransform>

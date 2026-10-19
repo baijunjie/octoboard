@@ -248,8 +248,8 @@ export function Sidebar({
   // that; the inset card is a later state, only once the column is out of the row.
   const dock = usePaneDockMotion(peek === undefined, peek?.active ?? false, onColumnPhase);
   const drawerClassName = dock.inset
-    ? `docked:rounded-xl ${drawerClass("start", "floating", open, dock.insetShown)}${dock.preparingInset ? " docked:transition-none" : ""}`
-    : `${drawerClass("start", "drawer", open)} docked:h-full`;
+    ? `docked:rounded-xl ${drawerClass("floating", open, dock.insetShown)}${dock.preparingInset ? " docked:transition-none" : ""}`
+    : `${drawerClass("drawer", open)} docked:h-full`;
 
   // What the sidebar is showing, and how it arrived there: going down into a focus mode slides the
   // new view in from the end, coming back up slides it in from the start, and switching to another

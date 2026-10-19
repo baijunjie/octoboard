@@ -24,7 +24,7 @@ export type FocusTarget = { project: Project } | { consoleSession: Session };
  * spread, so a child's prop list says exactly what data it narrows instead of inheriting whatever
  * the parent happened to have in scope under the same names. */
 export interface SidebarHandlers {
-  /** The project whose browser is currently visible, including a drawer or floating pane. */
+  /** The project whose browser is currently visible, docked or floating. */
   visibleBrowserProjectId?: string;
   onSelectSession: (session: Session) => void;
   onReopenSession: (session: Session) => void;

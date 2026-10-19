@@ -142,8 +142,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   notifications bell, the right pane's toggle, Settings), the three panes and what each is allowed to give up, what the
   right pane shows (a console session's report or a project's files) and how that changes on selecting a session, Browse
   files, switching consoles, Back and Forward and deleting its owner, resizing the sidebar and the right pane, hiding
-  either and floating it back in on hover, the macOS window's 1168×600 minimum and the arithmetic behind it, the narrow
-  layout a plain browser gets below 1168 px, where the sidebar and the right pane become drawers over the terminal,
+  the sidebar and floating a pane in on hover, the macOS window's 1168×600 minimum and the arithmetic behind it, the narrow
+  layout a plain browser gets below 1168 px, where the sidebar becomes a drawer over the terminal and the right pane stays
+  docked,
   which right-click menus the desktop app and a browser show, and how all of it mirrors under a right-to-left language
   (and what never does).
 - [Moving focus between regions](product/moving-focus-between-regions.md) — F6 and Shift+F6: the order of the window's
@@ -163,6 +164,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   wrapping long lines, selecting and copying, Previous/Next and the arrow keys, closing it, a file that changes while
   open, and a file opened from the terminal (the click-time choice between the viewer and the host, opening at a line,
   viewer-only files).
+- [Right pane panels](product/right-pane-panels.md) — the right pane as a stack of inset panel cards (a project's
+  Files, a console session's Report): how the cards look, the panel header, opening and closing panels, the per-kind
+  toggles in the top bar, floating a panel in, resizing, maximizing, what is remembered, and keyboard focus.
 - [Project pane: Git mode](product/project-pane-git-mode.md) — the project pane's read-only review of one local branch
   in the Changes tab: the branch selector (the default branch from the worktree holding the project's folder, a choice
   that stands, a branch that goes away), the repository and its worktrees, following the selected session, that it

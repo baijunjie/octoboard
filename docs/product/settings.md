@@ -17,8 +17,8 @@ and change the first three (see "Application settings: `get_settings` and `updat
 
 ## In a narrow window
 
-Below 1168 px — the width under which the window's panes become drawers (see "Below 1168 px: the sidebar and the right
-pane become drawers" in `docs/product/window-layout.md`), so only a client with no window minimum of its own, such as a
+Below 1168 px — the width under which the sidebar becomes a drawer (see "Below 1168 px: the sidebar becomes a drawer"
+in `docs/product/window-layout.md`), so only a client with no window minimum of its own, such as a
 plain browser, gets here — the dialog fills the window inside a 16 px margin on every side, and the list of sections
 becomes a row of tabs along its top, above the selected section. When the tabs do not fit the row's width, the row
 scrolls sideways, fading at the end with more beyond it (see "The surfaces that fade" in

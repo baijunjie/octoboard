@@ -486,7 +486,7 @@ it("closes when F6 inside the panel moves focus to the first region", () => {
   withFakeTimers();
   function Cycle() {
     useRegionCycle({
-      shown: { topbar: true, rail: true, welcome: false, sidebar: false, archive: false, terminal: false, aside: false, banner: false },
+      shown: { topbar: true, rail: true, welcome: false, sidebar: false, archive: false, terminal: false, banner: false },
       focusTerminal: () => {},
     });
     return <div data-region="topbar"><button type="button" id="topbar-control">top</button></div>;
