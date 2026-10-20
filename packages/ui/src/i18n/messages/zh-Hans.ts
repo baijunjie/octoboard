@@ -73,6 +73,7 @@ export const zhHans: Translation<"other"> = {
   "error.recovery.uniqueName": "请输入该智能体的其他账户尚未使用的账户名称，然后重新保存。",
   "error.recovery.launchSetting": "请打开会话启动设置，选择当前智能体支持的模型和推理强度。",
   "error.recovery.accountDirectory": "请选择其他配置目录，或选择已经使用此目录的账户。",
+  "error.recovery.grokSandbox": "请在设置沙箱的位置将其关闭，或联系管理该设置的人，以便通过 {appName} 启动此会话。在沙箱下开始的对话会一直沿用沙箱，请直接在 Grok 中继续该对话。",
   "error.recovery.account": "请选择配置目录可访问的可用账户；需要时在该目录运行智能体 CLI 登录。",
   "error.recovery.tool": "请在 守护进程 所在机器安装提示的智能体 CLI 或 Git，并将其加入登录 shell 的 PATH，然后重新打开 {appName} 并重试。",
   "error.recovery.shell": "请在终端打开登录 shell，修复配置中耗时或阻塞的启动命令，然后重试。",
@@ -215,6 +216,8 @@ export const zhHans: Translation<"other"> = {
     "{agent} 配置目录 {path} 不是守护进程能够访问的目录。请重新创建它，或将账户指向另一个目录。",
   "daemon.grok_home_not_initialized":
     "{path} 还不是 Grok 主目录。请先直接对它运行一次 Grok，使其具有会话记录，再将账户指向它。",
+  "daemon.grok_sandbox_unsupported":
+    "Grok 的沙箱（{profile}，由 {source} 设置）与 {appName} 为每个会话提供的主目录不兼容，因此未启动此会话。",
   "daemon.icon_not_an_image": "控制台头像必须是图片。",
   "daemon.icon_too_large": "控制台头像大于 {limit_kib} KiB。",
   "daemon.configuration_not_recognised": "这不是 {appName} 的配置文件。",

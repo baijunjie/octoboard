@@ -6,7 +6,7 @@ export type ErrorRecovery =
   | "configuration" | "image" | "clipboard" | "file" | "git" | "gitHistory" | "branch"
   | "refresh" | "scope" | "limit" | "openExternal" | "issueLink"
   | "contentSyntax" | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
-  | "sessionBranches" | "projectBranches" | "lostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "quotaUsedUpAgent"
+  | "sessionBranches" | "projectBranches" | "lostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "quotaUsedUpAgent" | "grokSandbox"
   | "none";
 
 /** A local failure whose user remedy is known without inspecting its translated message. */
@@ -42,6 +42,7 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   quotaUsedUp: ["account_quota_exhausted"],
   shell: ["shell_environment_timeout"],
   account: ["unknown_account", "grok_home_not_initialized"],
+  grokSandbox: ["grok_sandbox_unsupported"],
   unresumable: ["conversation_unresumable"],
   unarchive: ["codex_unarchive_failed"],
   conversation: ["conversation_not_found", "conversation_to_resume_not_found", "resume_id_invalid", "conversation_outside_project", "conversation_in_session"],

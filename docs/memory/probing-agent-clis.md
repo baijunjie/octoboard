@@ -148,6 +148,12 @@ event, because the event you were waiting for is armed by a step the path under 
 Establish that mechanism, not a duration; without it the probe has measured its own patience and "wait longer" stays an
 objection you cannot answer.
 
+The reverse holds for a probe whose expected answer is "refused": put the target where nothing else already allows it.
+Grok's sandbox leaves temp directories writable under every profile, and an agent session's scratch directory usually
+sits under one (`/private/tmp` on macOS), so a sandbox-write probe whose target resolves there comes back "allowed"
+whatever the sandbox does with the path under test; place such a target outside every temp directory (on macOS, under
+`~/Library/Caches`, say).
+
 ## Moving files into a config directory is proven only by a resume that opens the intended conversation
 
 Applies whenever a change copies, links or shares an agent's files between config directories — what a session-account
@@ -262,10 +268,11 @@ probes' trust entries and session records — that residue is not evidence of a 
 ## Ask the user before a probe runs a login flow that can open their browser
 
 Applies to any probe of an agent's sign-in — `claude auth login`, `codex login`, `grok login` — including one against a
-scratch config directory. The scratch directory isolates only the credential written on disk; the authorisation runs in
-the user's own default browser, which is usually already signed in to the vendor, so the flow can complete against
-their real account with nobody approving it (a Grok Build login did, in about five seconds), leave a server-side session
-that deleting the scratch credential does not revoke, and put pages up on their screen.
+scratch config directory, **and to any Grok Build run at all whose home holds no login**, since Grok starts the same
+sign-in inline on a plain run. The scratch directory isolates only the credential written on disk; the authorisation
+runs in the user's own default browser, which is usually already signed in to the vendor, so the flow can complete
+against their real account with nobody approving it (a Grok Build login did, in about five seconds), leave a
+server-side session that deleting the scratch credential does not revoke, and put pages up on their screen.
 
 So ask first, naming the agents and saying that pages will open, and leave the probe undone if the answer is no. Without
 that, read the authorisation URL only through routes that open nothing: Claude Code with `BROWSER` set to a script that
@@ -274,6 +281,17 @@ Build and plain `codex login` open the browser themselves and nothing found stop
 "Signing in a config directory without a terminal"), so they have no such route. A login that has to complete is done
 by the user, against an account they choose. If one completes anyway, tell the user which account it signed in, so they
 can revoke the session on the vendor's side.
+
+**For Grok Build, a throwaway `GROK_HOME` and `HOME` with no `auth.json` do not keep a run off the user's account**
+(Grok Build 1.0.62, macOS). A first run there, with no login intended, ran the inline sign-in through the already
+signed-in browser and wrote a real token into the scratch home within seconds, with nothing in the probe's own output;
+a later run with `auth.json` emptied to `{}` still authenticated with a session token from somewhere outside both
+directories (source not found). A probe that must not touch the account sets `GROK_CODE_XAI_API_KEY` to a fake key,
+which makes Grok select API-key auth instead of any cached token, and points the model it selects with `--model` at a
+per-model `[model.<name>]` entry in the scratch `config.toml` carrying a `base_url` on `127.0.0.1` and a fake
+`api_key`, so inference never leaves the machine. Confirm afterwards from `$GROK_HOME/logs/unified.jsonl`, not from
+the terminal: its `auth method selection` record should name the API key with `has_cached_token` false, and no
+`auth: inline auth flow` or `cached_token` record should appear.
 
 ## A probe that goes through the daemon runs against the user's live Octoboard data unless its `HOME` is a throwaway one
 

@@ -29,6 +29,23 @@
 //!   own `AGENTS.md`, hooks or MCP servers. Folder trust, not a git repository, is what gates the
 //!   instruction files: outside one Grok reads only the working directory's own.
 //!
+//! Four more entries are real copies too, `bundled/`, `bundles/`, `hooks-paths` and
+//! `sandbox.toml`: Grok's startup sandbox check refuses to start when they are symlinks (it
+//! documents that it write-protects them under its sandbox). They are copied on every launch, even
+//! though a sandboxed launch is refused (see `SANDBOX_CHECKED_ENTRIES` for why). A source that is
+//! itself a symlink becomes a real file or directory in the farm, which is what Grok checks. An entry the source lacks stays absent, for Grok to create. A bundle
+//! update Grok downloads during a session lands in the copy and is lost; the next launch copies
+//! whatever the user's own `grok` has fetched since.
+//!
+//! A launch that would run under Grok's sandbox is refused up front (`require_unsandboxed`),
+//! because the sandbox lets Grok write only to its home, the working directory and temp
+//! directories, with links resolved: the farm's `sessions/` and `auth.json` links lead back into
+//! the source home, so creating a session would fail. The profile is read from the sources Grok
+//! layers (see `sandbox_setting`); macOS managed preferences (`ai.x.grok`) are not read, a known
+//! gap that leaves such a launch to fail inside Grok. The home's own `requirements.toml` and
+//! `managed_config.toml` are not read either, because the farm excludes them and Grok never loads
+//! them from it; the system directory's are.
+//!
 //! A session pins its source home at creation, because the session records a resume looks for
 //! live in that home's `sessions/`; the farm is still what Grok runs against, so nothing changes
 //! except which directory the links and copies come from.
@@ -91,9 +108,20 @@ const TRUST_STORE: &str = "trusted_folders.toml";
 /// Entries Octoboard owns in its `GROK_HOME` rather than linking to the user's.
 const COPIED_ENTRIES: &[&str] = &["config.toml", TRUST_STORE];
 
+/// Entries Grok's startup sandbox check wants as real files rather than symlinks; copied from the
+/// source when it has them. They are copied on every launch, although a launch that runs under the
+/// sandbox is refused: detection cannot see every source (macOS managed preferences, policy synced
+/// from the server), and a launch it misses must still get past Grok's startup check rather than
+/// fail there. Copying unconditionally also avoids depending on detection.
+const SANDBOX_CHECKED_ENTRIES: &[&str] = &["bundled", "bundles", "hooks-paths", "sandbox.toml"];
+
 /// Entries that must never exist in the farm: Grok's deployment sync deletes them at runtime, and
 /// an organisation-distributed config is not Octoboard's to reproduce.
 const EXCLUDED_ENTRIES: &[&str] = &["managed_config.toml", "requirements.toml", "hooks"];
+
+/// Where Grok reads the fleet-wide `managed_config.toml` and `requirements.toml` from. The ones in
+/// its home are excluded from the farm, so Grok running against it never loads them.
+const SYSTEM_GROK_DIR: &str = "/etc/grok";
 
 pub struct GrokAdapter;
 
@@ -145,76 +173,86 @@ impl AgentAdapter for GrokAdapter {
     }
 
     fn plan(&self, spec: &LaunchSpec<'_>) -> Result<LaunchPlan> {
-        let pinned = super::pinned_config_dir(spec, Agent::Grok)?;
-        // Unlike the other two agents, an account Grok has never been run against cannot simply be
-        // created on first use: the per-session home only links what already exists in the source,
-        // so an empty one would have Grok write its login and conversation into the throw-away
-        // farm instead, discarded with the process — the exact silent failure a switch must not
-        // produce. Checked only for a *pinned* source home: the default's own (the shell's
-        // `GROK_HOME`, or `~/.grok`) is the user's existing setup, which is not Octoboard's to
-        // second-guess.
-        if let Some(dir) = pinned {
-            require_initialized_grok_home(dir)?;
-        }
-        let (grok_home, source_home) = build_grok_home(spec, pinned)?;
-
-        let mut args = Vec::new();
-        match spec.resume_agent_session_id {
-            // The id is required: a bare `--resume` swallows whatever argument follows as its
-            // value.
-            Some(id) => {
-                args.push("--resume".to_string());
-                args.push(id.to_string());
-            }
-            None => {
-                args.push("--session-id".to_string());
-                args.push(spec.new_agent_session_id.to_string());
-            }
-        }
-
-        // `--rules` appends to the system prompt and persists into the session record. It is
-        // passed on every launch anyway, so a session whose record predates the current text is
-        // not left without a role.
-        args.push("--rules".to_string());
-        args.push(mcp::role::role_description(
-            spec.role,
-            spec.owner.as_ref(),
-            Agent::Grok,
-        ));
-
-        // Grok persists some session settings back into `config.toml`, but the per-session farm
-        // keeps `config.toml` as a copy (see the module comment), so these flags cannot leak into
-        // the user's own configuration.
-        if let Some(model) = spec.model {
-            args.push("--model".to_string());
-            args.push(model.to_string());
-        }
-        if let Some(effort) = spec.effort {
-            args.push("--reasoning-effort".to_string());
-            args.push(effort.to_string());
-        }
-
-        if spec.resume_agent_session_id.is_none() {
-            if let Some(task) = spec.task {
-                args.push(task.to_string());
-            }
-        }
-
-        let carried_trust = CarriedTrust {
-            session_store: grok_home.join(TRUST_STORE),
-            user_store: source_home.join(TRUST_STORE),
-            folder: canonical_cwd(spec.cwd),
-        };
-        Ok(LaunchPlan {
-            args,
-            env: vec![(
-                "GROK_HOME".to_string(),
-                grok_home.to_string_lossy().into_owned(),
-            )],
-            carried_trust: Some(carried_trust),
-            ..LaunchPlan::default()
-        })
+        plan_under(spec, Path::new(SYSTEM_GROK_DIR))
     }
+}
+
+/// `plan` with the directory of Grok's system-wide configuration passed in, so a test never
+/// reads the machine's own.
+fn plan_under(spec: &LaunchSpec<'_>, system_dir: &Path) -> Result<LaunchPlan> {
+    let pinned = super::pinned_config_dir(spec, Agent::Grok)?;
+    // Unlike the other two agents, an account Grok has never been run against cannot simply be
+    // created on first use: the per-session home only links what already exists in the source,
+    // so an empty one would have Grok write its login and conversation into the throw-away
+    // farm instead, discarded with the process — the exact silent failure a switch must not
+    // produce. Checked only for a *pinned* source home: the default's own (the shell's
+    // `GROK_HOME`, or `~/.grok`) is the user's existing setup, which is not Octoboard's to
+    // second-guess.
+    if let Some(dir) = pinned {
+        require_initialized_grok_home(dir)?;
+    }
+    let source_home = pinned
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| default_grok_home(spec));
+    require_unsandboxed(spec, &source_home, system_dir)?;
+    let grok_home = build_grok_home(spec, &source_home)?;
+
+    let mut args = Vec::new();
+    match spec.resume_agent_session_id {
+        // The id is required: a bare `--resume` swallows whatever argument follows as its
+        // value.
+        Some(id) => {
+            args.push("--resume".to_string());
+            args.push(id.to_string());
+        }
+        None => {
+            args.push("--session-id".to_string());
+            args.push(spec.new_agent_session_id.to_string());
+        }
+    }
+
+    // `--rules` appends to the system prompt and persists into the session record. It is
+    // passed on every launch anyway, so a session whose record predates the current text is
+    // not left without a role.
+    args.push("--rules".to_string());
+    args.push(mcp::role::role_description(
+        spec.role,
+        spec.owner.as_ref(),
+        Agent::Grok,
+    ));
+
+    // Grok persists some session settings back into `config.toml`, but the per-session farm
+    // keeps `config.toml` as a copy (see the module comment), so these flags cannot leak into
+    // the user's own configuration.
+    if let Some(model) = spec.model {
+        args.push("--model".to_string());
+        args.push(model.to_string());
+    }
+    if let Some(effort) = spec.effort {
+        args.push("--reasoning-effort".to_string());
+        args.push(effort.to_string());
+    }
+
+    if spec.resume_agent_session_id.is_none() {
+        if let Some(task) = spec.task {
+            args.push(task.to_string());
+        }
+    }
+
+    let carried_trust = CarriedTrust {
+        session_store: grok_home.join(TRUST_STORE),
+        user_store: source_home.join(TRUST_STORE),
+        folder: canonical_cwd(spec.cwd),
+    };
+    Ok(LaunchPlan {
+        args,
+        env: vec![(
+            "GROK_HOME".to_string(),
+            grok_home.to_string_lossy().into_owned(),
+        )],
+        carried_trust: Some(carried_trust),
+        ..LaunchPlan::default()
+    })
 }
 
 /// Refuses a pinned source home Grok has never been run against: it carries no `sessions/`
@@ -238,11 +276,126 @@ pub(super) fn require_initialized_grok_home(dir: &Path) -> Result<()> {
     ))
 }
 
-/// Builds the session's `GROK_HOME`, and returns its path and the source home it was built from.
-fn build_grok_home(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> Result<(PathBuf, PathBuf)> {
-    let source_home = pinned
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| default_grok_home(spec));
+/// One sandbox profile in effect, and where it is set.
+struct SandboxSetting {
+    /// The environment variable, or the file, that sets it.
+    source: String,
+    profile: String,
+}
+
+/// Refuses a launch that would run under Grok's sandbox; see the module comment for why the farm
+/// cannot support one.
+fn require_unsandboxed(spec: &LaunchSpec<'_>, source_home: &Path, system_dir: &Path) -> Result<()> {
+    let Some(setting) = sandbox_setting(spec, source_home, system_dir) else {
+        return Ok(());
+    };
+    Err(CodedError::raised(
+        error_code::GROK_SANDBOX_UNSUPPORTED,
+        format!(
+            "Octoboard's per-session Grok home is incompatible with Grok's sandbox (profile `{}`, \
+             set by {}): to launch this session through Octoboard, turn the sandbox off where it \
+             is set, or ask whoever manages that setting to. A conversation started under the \
+             sandbox keeps it, so continue that one in Grok itself",
+            setting.profile, setting.source
+        ),
+        &[("source", &setting.source), ("profile", &setting.profile)],
+    ))
+}
+
+/// The sandbox profile Grok would apply to this launch, `None` when it would run unsandboxed or
+/// the profile cannot be read reliably. A non-`off` `requirements.toml` pin (the system
+/// directory's; the home's is excluded from the farm) refuses, and an `off` pin stops the search.
+/// On a resume, either the profile saved with the session or `GROK_SANDBOX` in the launch
+/// environment being non-`off` refuses, because Grok restores a saved profile and refuses a resume
+/// whose requested one differs. Otherwise, and for a resume with no saved profile found,
+/// `GROK_SANDBOX` beats the user's `config.toml`, which beats the system `managed_config.toml`.
+/// `GROK_SANDBOX` is read from the launch environment, not the daemon's own.
+fn sandbox_setting(
+    spec: &LaunchSpec<'_>,
+    source_home: &Path,
+    system_dir: &Path,
+) -> Option<SandboxSetting> {
+    let on = |source: String, profile: String| {
+        (profile != "off").then_some(SandboxSetting { source, profile })
+    };
+    let from_file = |dir: &Path, name: &str| {
+        let file = dir.join(name);
+        let profile = toml_sandbox_profile(&file)?;
+        Some((file.to_string_lossy().into_owned(), profile))
+    };
+    let from_env = || {
+        spec.shell_env
+            .get("GROK_SANDBOX")
+            .map(|profile| profile.trim())
+            .filter(|profile| !profile.is_empty())
+            .map(|profile| ("GROK_SANDBOX".to_string(), profile.to_string()))
+    };
+
+    if let Some((source, profile)) = from_file(system_dir, "requirements.toml") {
+        return on(source, profile);
+    }
+
+    let saved = spec
+        .resume_agent_session_id
+        .and_then(|id| saved_sandbox_profile(source_home, id));
+    if let Some(saved) = saved {
+        return [Some(saved), from_env()]
+            .into_iter()
+            .flatten()
+            .find_map(|(source, profile)| on(source, profile));
+    }
+
+    if let Some((source, profile)) = from_env() {
+        return on(source, profile);
+    }
+    [
+        (source_home, "config.toml"),
+        (system_dir, "managed_config.toml"),
+    ]
+    .into_iter()
+    .find_map(|(dir, name)| from_file(dir, name))
+    .and_then(|(source, profile)| on(source, profile))
+}
+
+/// `[sandbox] profile` of a Grok TOML file; `None` when the file is absent, unreadable, or does
+/// not set a non-empty one.
+fn toml_sandbox_profile(file: &Path) -> Option<String> {
+    let table = std::fs::read_to_string(file)
+        .ok()?
+        .parse::<toml::Table>()
+        .ok()?;
+    let profile = table.get("sandbox")?.get("profile")?.as_str()?.trim();
+    (!profile.is_empty()).then(|| profile.to_string())
+}
+
+/// The profile Grok saved in the `summary.json` of conversation `id`, found one directory below
+/// `sessions/` rather than by reproducing how Grok encodes the working directory into its name.
+fn saved_sandbox_profile(source_home: &Path, id: &str) -> Option<(String, String)> {
+    // The id joins a path below, so only the shape of an id Grok mints is looked up.
+    if !crate::agent_records::plausible_id(id) {
+        return None;
+    }
+    for entry in std::fs::read_dir(source_home.join("sessions"))
+        .ok()?
+        .flatten()
+    {
+        let summary = entry.path().join(id).join("summary.json");
+        if !std::fs::symlink_metadata(&summary).is_ok_and(|meta| meta.is_file()) {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(&summary) else {
+            continue;
+        };
+        let document: serde_json::Value = serde_json::from_str(&text).ok()?;
+        let profile = document.get("sandbox_profile")?.as_str()?.trim();
+        return (!profile.is_empty())
+            .then(|| (summary.to_string_lossy().into_owned(), profile.to_string()));
+    }
+    None
+}
+
+/// Builds the session's `GROK_HOME` and returns its path.
+fn build_grok_home(spec: &LaunchSpec<'_>, source_home: &Path) -> Result<PathBuf> {
     let farm = spec.scratch.join("grok-home");
     if farm.exists() {
         std::fs::remove_dir_all(&farm).ok();
@@ -250,7 +403,7 @@ fn build_grok_home(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> Result<(Path
     std::fs::create_dir_all(&farm).with_context(|| format!("creating {}", farm.display()))?;
 
     if source_home.is_dir() {
-        for entry in std::fs::read_dir(&source_home)
+        for entry in std::fs::read_dir(source_home)
             .with_context(|| format!("reading {}", source_home.display()))?
         {
             let entry = entry?;
@@ -258,6 +411,7 @@ fn build_grok_home(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> Result<(Path
             let name_str = name.to_string_lossy();
             if EXCLUDED_ENTRIES.contains(&name_str.as_ref())
                 || COPIED_ENTRIES.contains(&name_str.as_ref())
+                || SANDBOX_CHECKED_ENTRIES.contains(&name_str.as_ref())
             {
                 continue;
             }
@@ -272,9 +426,12 @@ fn build_grok_home(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> Result<(Path
     append_mcp_server(&config, spec)?;
 
     copy_if_present(&source_home.join(TRUST_STORE), &farm.join(TRUST_STORE))?;
+    for name in SANDBOX_CHECKED_ENTRIES {
+        copy_if_present(&source_home.join(name), &farm.join(name))?;
+    }
     write_hooks(&farm, spec.hook_script)?;
 
-    Ok((farm, source_home))
+    Ok(farm)
 }
 
 /// The user's own Grok home when the session pins none, read from the launch environment rather
@@ -320,9 +477,42 @@ fn append_mcp_server(config: &Path, spec: &LaunchSpec<'_>) -> Result<()> {
     Ok(())
 }
 
+/// Copies a file, or a directory with everything under it; an absent source is left absent. A
+/// link is followed only at the top, so a linked source becomes a real file or directory in the
+/// copy; inside a directory a link is recreated as a link rather than followed.
 fn copy_if_present(from: &Path, to: &Path) -> Result<()> {
-    if from.is_file() {
-        std::fs::copy(from, to).with_context(|| format!("copying {}", from.display()))?;
+    if from.is_dir() {
+        copy_tree(from, to)
+    } else if from.is_file() {
+        std::fs::copy(from, to)
+            .map(drop)
+            .with_context(|| format!("copying {}", from.display()))
+    } else {
+        Ok(())
+    }
+}
+
+/// The inside of `copy_if_present` for a directory: files are copied, links recreated as they are,
+/// anything else (a FIFO, a socket) skipped, since opening one could block or fail the launch.
+fn copy_tree(from: &Path, to: &Path) -> Result<()> {
+    std::fs::create_dir_all(to).with_context(|| format!("creating {}", to.display()))?;
+    for entry in std::fs::read_dir(from).with_context(|| format!("reading {}", from.display()))? {
+        let entry = entry?;
+        let (source, target) = (entry.path(), to.join(entry.file_name()));
+        let kind = entry
+            .file_type()
+            .with_context(|| format!("reading {}", source.display()))?;
+        if kind.is_symlink() {
+            let destination = std::fs::read_link(&source)
+                .with_context(|| format!("reading link {}", source.display()))?;
+            std::os::unix::fs::symlink(destination, &target)
+                .with_context(|| format!("linking {}", target.display()))?;
+        } else if kind.is_dir() {
+            copy_tree(&source, &target)?;
+        } else if kind.is_file() {
+            std::fs::copy(&source, &target)
+                .with_context(|| format!("copying {}", source.display()))?;
+        }
     }
     Ok(())
 }
@@ -403,6 +593,11 @@ mod tests {
         );
     }
 
+    /// `plan` against an empty system-wide configuration directory of the fixture's own.
+    fn plan_isolated(spec: &LaunchSpec<'_>) -> Result<LaunchPlan> {
+        plan_under(spec, &spec.scratch.join("etc-grok"))
+    }
+
     /// Stands a fake `~/.grok` up inside the fixture and points the launch environment at it.
     fn with_default_home(fixture: &mut SpecFixture) -> PathBuf {
         let home = fixture.scratch.join("user-grok-home");
@@ -421,7 +616,7 @@ mod tests {
     fn no_model_or_effort_adds_no_flags() {
         let mut fixture = spec_fixture();
         with_default_home(&mut fixture);
-        let plan = GrokAdapter.plan(&fixture.spec()).expect("plan");
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
         for flag in ["--model", "--reasoning-effort"] {
             assert!(!plan.args.iter().any(|arg| arg == flag), "{flag}");
         }
@@ -435,7 +630,7 @@ mod tests {
         fixture.effort = Some("low".to_string());
         let mut spec = fixture.spec();
         spec.task = Some("do it");
-        let plan = GrokAdapter.plan(&spec).expect("plan");
+        let plan = plan_isolated(&spec).expect("plan");
         let rules = plan.args.iter().position(|arg| arg == "--rules").unwrap();
         assert_eq!(
             plan.args[rules + 2..],
@@ -463,7 +658,7 @@ mod tests {
         .expect("trust store");
         fixture.config_dir = Some(pinned.clone());
 
-        let plan = GrokAdapter.plan(&fixture.spec()).expect("plan");
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
         let farm = PathBuf::from(&plan.env[0].1);
         // Still Octoboard's own farm that Grok runs against, never the chosen directory itself.
         assert_eq!(plan.env.len(), 1);
@@ -494,7 +689,7 @@ mod tests {
         fixture.config_dir = Some(fixture.scratch.join("missing"));
         let mut spec = fixture.spec();
         spec.resume_agent_session_id = Some("agent-side-id");
-        let err = GrokAdapter.plan(&spec).err().expect("refused");
+        let err = plan_isolated(&spec).err().expect("refused");
         let message = err.to_string();
         assert!(message.contains("Grok"), "{message}");
         assert!(message.contains("missing"), "{message}");
@@ -509,7 +704,7 @@ mod tests {
     fn a_pinned_grok_home_that_has_gone_refuses_a_fresh_launch_too() {
         let mut fixture = spec_fixture();
         fixture.config_dir = Some(fixture.scratch.join("missing"));
-        let err = GrokAdapter.plan(&fixture.spec()).err().expect("refused");
+        let err = plan_isolated(&fixture.spec()).err().expect("refused");
         assert_eq!(
             err.downcast_ref::<crate::protocol::CodedError>()
                 .expect("coded")
@@ -528,7 +723,7 @@ mod tests {
         let empty = fixture.scratch.join("never-run");
         std::fs::create_dir_all(&empty).expect("empty directory");
         fixture.config_dir = Some(empty.clone());
-        let err = GrokAdapter.plan(&fixture.spec()).err().expect("refused");
+        let err = plan_isolated(&fixture.spec()).err().expect("refused");
         let message = err.to_string();
         assert!(message.contains("never-run"), "{message}");
         assert!(!message.contains("  "), "stray spaces in: {message}");
@@ -549,14 +744,14 @@ mod tests {
         fixture
             .shell_env
             .insert("GROK_HOME".to_string(), home.to_string_lossy().into_owned());
-        GrokAdapter.plan(&fixture.spec()).expect("not refused");
+        plan_isolated(&fixture.spec()).expect("not refused");
     }
 
     #[test]
     fn the_farm_links_the_users_home_but_owns_the_files_grok_writes_back_to() {
         let mut fixture = spec_fixture();
         let home = with_default_home(&mut fixture);
-        let plan = GrokAdapter.plan(&fixture.spec()).expect("plan");
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
 
         let farm = PathBuf::from(&plan.env[0].1);
         assert_eq!(plan.env[0].0, "GROK_HOME");
@@ -587,7 +782,7 @@ mod tests {
         let users = "[folders.\"/somewhere/else\"]\ntrusted = true\n";
         std::fs::write(home.join(TRUST_STORE), users).expect("trust store");
 
-        let plan = GrokAdapter.plan(&fixture.spec()).expect("plan");
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
         let farm = PathBuf::from(&plan.env[0].1);
         assert!(!farm.join(TRUST_STORE).is_symlink());
         assert_eq!(
@@ -605,7 +800,7 @@ mod tests {
     fn the_mcp_server_is_appended_to_the_farms_config_without_losing_the_users_own() {
         let mut fixture = spec_fixture();
         with_default_home(&mut fixture);
-        let plan = GrokAdapter.plan(&fixture.spec()).expect("plan");
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
         let farm = PathBuf::from(&plan.env[0].1);
         let config = std::fs::read_to_string(farm.join("config.toml")).expect("the copy");
         assert!(
@@ -624,7 +819,7 @@ mod tests {
     fn the_servers_tool_timeout_sits_above_octoboards_own_call_limit() {
         let mut fixture = spec_fixture();
         with_default_home(&mut fixture);
-        let plan = GrokAdapter.plan(&fixture.spec()).expect("plan");
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
         let farm = PathBuf::from(&plan.env[0].1);
         let config = std::fs::read_to_string(farm.join("config.toml")).expect("the copy");
         // Read out of Octoboard's own table rather than from anywhere in the file: emitted above
@@ -652,7 +847,7 @@ mod tests {
     fn the_role_text_travels_in_rules() {
         let mut fixture = spec_fixture();
         with_default_home(&mut fixture);
-        let plan = GrokAdapter.plan(&fixture.spec()).expect("plan");
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
         let at = plan
             .args
             .iter()
@@ -668,7 +863,7 @@ mod tests {
     fn the_hooks_are_command_type_with_an_explicit_timeout() {
         let mut fixture = spec_fixture();
         with_default_home(&mut fixture);
-        let plan = GrokAdapter.plan(&fixture.spec()).expect("plan");
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
         let farm = PathBuf::from(&plan.env[0].1);
         let document: serde_json::Value = serde_json::from_str(
             &std::fs::read_to_string(farm.join("hooks").join("octoboard.json")).expect("hooks"),
@@ -685,5 +880,406 @@ mod tests {
             // the UI for ten minutes on a wedged hook.
             assert_eq!(handler["timeout"], HOOK_TIMEOUT_SECS);
         }
+    }
+
+    #[test]
+    fn the_entries_grok_protects_under_its_sandbox_are_real_copies() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        std::fs::create_dir_all(home.join("bundled/nested")).expect("bundled");
+        std::fs::write(home.join("bundled/nested/tool"), "tool").expect("bundled file");
+        std::fs::write(home.join("bundled/top"), "top").expect("bundled file");
+        std::fs::create_dir_all(home.join("bundles")).expect("bundles");
+        std::fs::write(home.join("hooks-paths"), "/some/hooks\n").expect("hooks-paths");
+        std::fs::write(home.join("trusted_folders.toml"), "").expect("trust store");
+
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
+        let farm = PathBuf::from(&plan.env[0].1);
+
+        for name in ["bundled", "bundles", "hooks-paths"] {
+            assert!(!farm.join(name).is_symlink(), "{name}");
+        }
+        assert!(farm.join("bundled").is_dir());
+        assert!(farm.join("bundles").is_dir());
+        assert_eq!(
+            std::fs::read_to_string(farm.join("bundled/nested/tool")).expect("nested copy"),
+            "tool"
+        );
+        assert_eq!(
+            std::fs::read_to_string(farm.join("bundled/top")).expect("copy"),
+            "top"
+        );
+        assert_eq!(
+            std::fs::read_to_string(farm.join("hooks-paths")).expect("copy"),
+            "/some/hooks\n"
+        );
+        // Absent in the source stays absent, for Grok to create.
+        assert!(!farm.join("sandbox.toml").exists());
+        assert!(!farm.join("sandbox.toml").is_symlink());
+        // Writing into the copy never reaches the source.
+        std::fs::write(farm.join("bundled/top"), "changed").expect("write");
+        assert_eq!(
+            std::fs::read_to_string(home.join("bundled/top")).expect("source"),
+            "top"
+        );
+        // Everything else is as before.
+        assert!(farm.join("auth.json").is_symlink());
+        assert!(farm.join("sessions").is_symlink());
+        assert!(!farm.join("config.toml").is_symlink());
+        assert!(!farm.join(TRUST_STORE).is_symlink());
+    }
+
+    /// Grok checks that the entry is a real directory, so a source `bundled` that is a link becomes
+    /// one in the farm; a link inside it stays a link rather than being followed.
+    #[test]
+    fn a_linked_source_directory_becomes_a_real_one_and_inner_links_stay_links() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        let elsewhere = fixture.scratch.join("elsewhere");
+        std::fs::create_dir_all(elsewhere.join("sub")).expect("target directory");
+        std::fs::write(elsewhere.join("sub/tool"), "tool").expect("file");
+        std::os::unix::fs::symlink("sub/tool", elsewhere.join("inner")).expect("inner link");
+        std::os::unix::fs::symlink(&elsewhere, home.join("bundled")).expect("link");
+
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
+        let farm = PathBuf::from(&plan.env[0].1);
+
+        assert!(!farm.join("bundled").is_symlink());
+        assert!(farm.join("bundled").is_dir());
+        assert_eq!(
+            std::fs::read_to_string(farm.join("bundled/sub/tool")).expect("copy"),
+            "tool"
+        );
+        assert_eq!(
+            std::fs::read_link(farm.join("bundled/inner")).expect("still a link"),
+            Path::new("sub/tool")
+        );
+    }
+
+    #[test]
+    fn a_sandbox_profile_file_is_copied_too() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        std::fs::write(home.join("sandbox.toml"), "[profiles.p]\n").expect("sandbox.toml");
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
+        let farm = PathBuf::from(&plan.env[0].1);
+        assert!(!farm.join("sandbox.toml").is_symlink());
+        assert_eq!(
+            std::fs::read_to_string(farm.join("sandbox.toml")).expect("copy"),
+            "[profiles.p]\n"
+        );
+    }
+
+    /// Plans the launch and returns what refused it, `(source, profile)`, or `None` when it was not
+    /// refused. A refusal is also asserted to carry `GROK_SANDBOX_UNSUPPORTED` and to leave no farm.
+    fn refused_profile(fixture: &SpecFixture, resume: Option<&str>) -> Option<(String, String)> {
+        let mut spec = fixture.spec();
+        spec.resume_agent_session_id = resume;
+        let farm = spec.scratch.join("grok-home");
+        std::fs::remove_dir_all(&farm).ok();
+        let result = plan_isolated(&spec);
+        match result {
+            Ok(_) => None,
+            Err(err) => {
+                let coded = err.downcast_ref::<CodedError>().expect("coded");
+                assert_eq!(coded.code, error_code::GROK_SANDBOX_UNSUPPORTED);
+                assert!(!farm.exists(), "a refusal builds no farm");
+                Some((
+                    coded.params["source"].clone(),
+                    coded.params["profile"].clone(),
+                ))
+            }
+        }
+    }
+
+    /// Writes the `summary.json` Grok keeps for conversation `id` with `profile` as its saved
+    /// sandbox profile, under a working-directory-named folder of the home's `sessions/`.
+    fn save_session_profile(home: &Path, id: &str, profile: &str) {
+        let dir = home.join("sessions/%2Fsome%2Fcwd").join(id);
+        std::fs::create_dir_all(&dir).expect("session directory");
+        std::fs::write(
+            dir.join("summary.json"),
+            format!("{{\"sandbox_profile\":\"{profile}\"}}"),
+        )
+        .expect("summary");
+    }
+
+    const SAVED_ON: &str = "11111111-1111-4111-8111-111111111111";
+    const SAVED_OFF: &str = "22222222-2222-4222-8222-222222222222";
+    const NEVER_SAVED: &str = "33333333-3333-4333-8333-333333333333";
+
+    #[test]
+    fn a_launch_with_no_sandbox_anywhere_is_not_refused() {
+        let mut fixture = spec_fixture();
+        with_default_home(&mut fixture);
+        assert_eq!(refused_profile(&fixture, None), None);
+    }
+
+    #[test]
+    fn a_sandbox_in_the_launch_environment_refuses_the_launch() {
+        let mut fixture = spec_fixture();
+        with_default_home(&mut fixture);
+        fixture
+            .shell_env
+            .insert("GROK_SANDBOX".to_string(), "workspace".to_string());
+        assert_eq!(
+            refused_profile(&fixture, None),
+            Some(("GROK_SANDBOX".to_string(), "workspace".to_string()))
+        );
+        fixture
+            .shell_env
+            .insert("GROK_SANDBOX".to_string(), "off".to_string());
+        assert_eq!(refused_profile(&fixture, None), None);
+    }
+
+    #[test]
+    fn the_sandbox_profile_of_the_users_config_refuses_unless_it_is_off() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        std::fs::write(
+            home.join("config.toml"),
+            "[sandbox]\nprofile = \"strict\"\n",
+        )
+        .expect("config");
+        assert_eq!(
+            refused_profile(&fixture, None),
+            Some((
+                home.join("config.toml").to_string_lossy().into_owned(),
+                "strict".to_string()
+            ))
+        );
+        std::fs::write(home.join("config.toml"), "[sandbox]\nprofile = \"off\"\n").expect("config");
+        assert_eq!(refused_profile(&fixture, None), None);
+    }
+
+    #[test]
+    fn an_off_environment_outranks_a_sandbox_in_the_users_config() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        std::fs::write(
+            home.join("config.toml"),
+            "[sandbox]\nprofile = \"workspace\"\n",
+        )
+        .expect("config");
+        fixture
+            .shell_env
+            .insert("GROK_SANDBOX".to_string(), "off".to_string());
+        assert_eq!(refused_profile(&fixture, None), None);
+    }
+
+    #[test]
+    fn a_config_that_is_not_toml_is_ignored() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        std::fs::write(home.join("config.toml"), "[sandbox\nprofile = ").expect("config");
+        assert_eq!(refused_profile(&fixture, None), None);
+    }
+
+    #[test]
+    fn the_environment_outranks_the_users_config_and_the_config_outranks_the_managed_default() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        let system = fixture.scratch.join("etc-grok");
+        std::fs::create_dir_all(&system).expect("system directory");
+        std::fs::write(
+            system.join("managed_config.toml"),
+            "[sandbox]\nprofile = \"workspace\"\n",
+        )
+        .expect("managed config");
+        let check = |fixture: &SpecFixture| {
+            sandbox_setting(&fixture.spec(), &home, &system).map(|found| found.profile)
+        };
+        assert_eq!(
+            check(&fixture).as_deref(),
+            Some("workspace"),
+            "a managed default with no user setting"
+        );
+        std::fs::write(home.join("config.toml"), "[sandbox]\nprofile = \"off\"\n").expect("config");
+        assert_eq!(check(&fixture), None, "the user's config wins");
+        fixture
+            .shell_env
+            .insert("GROK_SANDBOX".to_string(), "strict".to_string());
+        assert_eq!(
+            check(&fixture).as_deref(),
+            Some("strict"),
+            "the environment wins"
+        );
+    }
+
+    /// The home's own `requirements.toml` and `managed_config.toml` are excluded from the farm, so
+    /// Grok never loads them and they refuse nothing.
+    #[test]
+    fn the_homes_own_requirements_and_managed_config_are_not_read() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        for name in ["requirements.toml", "managed_config.toml"] {
+            std::fs::write(home.join(name), "[sandbox]\nprofile = \"workspace\"\n").expect(name);
+        }
+        assert_eq!(refused_profile(&fixture, None), None);
+    }
+
+    #[test]
+    fn a_system_wide_requirements_pin_refuses_whatever_else_is_set() {
+        let mut fixture = spec_fixture();
+        with_default_home(&mut fixture);
+        let system = fixture.scratch.join("etc-grok");
+        std::fs::create_dir_all(&system).expect("system directory");
+        std::fs::write(
+            system.join("requirements.toml"),
+            "[sandbox]\nprofile = \"workspace\"\n",
+        )
+        .expect("requirements");
+        fixture
+            .shell_env
+            .insert("GROK_SANDBOX".to_string(), "off".to_string());
+        assert_eq!(
+            refused_profile(&fixture, None),
+            Some((
+                system
+                    .join("requirements.toml")
+                    .to_string_lossy()
+                    .into_owned(),
+                "workspace".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn a_system_wide_requirements_pin_and_managed_default_are_read() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        let system = fixture.scratch.join("etc-grok");
+        std::fs::create_dir_all(&system).expect("system directory");
+        let check = |fixture: &SpecFixture| {
+            sandbox_setting(&fixture.spec(), &home, &system).map(|found| found.profile)
+        };
+        assert_eq!(check(&fixture), None);
+
+        std::fs::write(
+            system.join("managed_config.toml"),
+            "[sandbox]\nprofile = \"read-only\"\n",
+        )
+        .expect("managed config");
+        assert_eq!(check(&fixture).as_deref(), Some("read-only"));
+
+        // A requirements pin of `off` outranks a sandbox set anywhere below it.
+        std::fs::write(
+            system.join("requirements.toml"),
+            "[sandbox]\nprofile = \"off\"\n",
+        )
+        .expect("requirements");
+        assert_eq!(check(&fixture), None);
+        std::fs::write(
+            system.join("requirements.toml"),
+            "[sandbox]\nprofile = \"custom\"\n",
+        )
+        .expect("requirements");
+        assert_eq!(check(&fixture).as_deref(), Some("custom"));
+    }
+
+    #[test]
+    fn a_resumed_session_follows_the_profile_saved_with_it() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        save_session_profile(&home, SAVED_ON, "workspace");
+        save_session_profile(&home, SAVED_OFF, "off");
+
+        let saved = home
+            .join("sessions/%2Fsome%2Fcwd")
+            .join(SAVED_ON)
+            .join("summary.json");
+        assert_eq!(
+            refused_profile(&fixture, Some(SAVED_ON)),
+            Some((
+                saved.to_string_lossy().into_owned(),
+                "workspace".to_string()
+            ))
+        );
+        assert_eq!(refused_profile(&fixture, Some(SAVED_OFF)), None);
+        // A conversation with nothing saved falls back to the rules for a new session.
+        assert_eq!(refused_profile(&fixture, Some(NEVER_SAVED)), None);
+
+        // The saved profile decides over a configuration that says otherwise ...
+        std::fs::write(
+            home.join("config.toml"),
+            "[sandbox]\nprofile = \"workspace\"\n",
+        )
+        .expect("config");
+        assert_eq!(refused_profile(&fixture, Some(SAVED_OFF)), None);
+        assert!(refused_profile(&fixture, Some(NEVER_SAVED)).is_some());
+        // ... but not over a requirements pin.
+        let system = fixture.scratch.join("etc-grok");
+        std::fs::create_dir_all(&system).expect("system directory");
+        std::fs::write(
+            system.join("requirements.toml"),
+            "[sandbox]\nprofile = \"strict\"\n",
+        )
+        .expect("requirements");
+        assert!(refused_profile(&fixture, Some(SAVED_OFF)).is_some());
+    }
+
+    /// Grok refuses a resume whose requested profile differs from the saved one, so the launch
+    /// environment counts on a resume even when the saved profile is `off`.
+    #[test]
+    fn on_a_resume_either_the_saved_profile_or_the_environment_refuses() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        save_session_profile(&home, SAVED_ON, "workspace");
+        save_session_profile(&home, SAVED_OFF, "off");
+
+        fixture
+            .shell_env
+            .insert("GROK_SANDBOX".to_string(), "workspace".to_string());
+        assert_eq!(
+            refused_profile(&fixture, Some(SAVED_OFF)),
+            Some(("GROK_SANDBOX".to_string(), "workspace".to_string()))
+        );
+        fixture
+            .shell_env
+            .insert("GROK_SANDBOX".to_string(), "off".to_string());
+        assert_eq!(
+            refused_profile(&fixture, Some(SAVED_ON)).map(|found| found.1),
+            Some("workspace".to_string())
+        );
+        assert_eq!(refused_profile(&fixture, Some(SAVED_OFF)), None);
+    }
+
+    /// The id becomes a path component, so one that is not the shape of a Grok conversation id is
+    /// not looked up at all.
+    #[test]
+    fn an_implausible_resume_id_is_ignored_not_read() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        let outside = fixture.scratch.join("outside");
+        std::fs::create_dir_all(&outside).expect("outside directory");
+        std::fs::write(
+            outside.join("summary.json"),
+            "{\"sandbox_profile\":\"workspace\"}",
+        )
+        .expect("summary");
+        // Reached from a folder under `sessions/` as `../x`, and by an absolute path.
+        std::fs::create_dir_all(home.join("sessions/%2Fsome%2Fcwd")).expect("sessions folder");
+        std::fs::create_dir_all(home.join("sessions/x")).expect("x");
+        std::fs::write(
+            home.join("sessions/x/summary.json"),
+            "{\"sandbox_profile\":\"workspace\"}",
+        )
+        .expect("summary");
+        for id in ["../x".to_string(), outside.to_string_lossy().into_owned()] {
+            assert_eq!(saved_sandbox_profile(&home, &id), None, "{id}");
+            assert_eq!(refused_profile(&fixture, Some(&id)), None, "{id}");
+        }
+    }
+
+    #[test]
+    fn a_summary_that_is_a_link_is_not_read() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        let target = fixture.scratch.join("elsewhere.json");
+        std::fs::write(&target, "{\"sandbox_profile\":\"workspace\"}").expect("target");
+        let dir = home.join("sessions/%2Fsome%2Fcwd").join(SAVED_ON);
+        std::fs::create_dir_all(&dir).expect("session directory");
+        std::os::unix::fs::symlink(&target, dir.join("summary.json")).expect("link");
+        assert_eq!(refused_profile(&fixture, Some(SAVED_ON)), None);
     }
 }

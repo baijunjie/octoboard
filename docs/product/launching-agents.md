@@ -335,7 +335,8 @@ user's shell exports, else `~/.codex`. The account choices and their lifetime ru
 exports, else `~/.grok`. The per-session home links back to the source home's entries, so the login and the
 session records are the source home's own, and a session Octoboard started stays resumable from the user's own `grok`
 command run against that same home — for a console's Grok Build config directory, `GROK_HOME=<that directory> grok`.
-Two of its files are **copies** taken at launch rather than links, with consequences worth knowing:
+Some of its entries are **copies** taken at launch rather than links. Two are files whose copying has consequences
+worth knowing:
 
 - the Grok configuration file: an edit the user makes to it while a session is running is not picked up by that
   session, and a setting the session persists (changing its reasoning effort, for instance) lands in Octoboard's copy
@@ -344,6 +345,33 @@ Two of its files are **copies** taken at launch rather than links, with conseque
   Grok with shows Grok's own trust confirmation. The one entry Grok writes into the copy when that confirmation is
   accepted is the exception to its being lost: it is carried into the source home's store (see "Carrying Grok
   Build's trust record" in `docs/product/folder-trust.md`).
+
+Grok's built-in bundles and its sandbox files — `bundled/`, `bundles/`, `hooks-paths` and `sandbox.toml` — are copies
+taken on every launch as well, whichever of them the source home holds. A bundle update Grok downloads during a
+session lands in Octoboard's copy and is not kept; the next launch copies whatever the user's own `grok` has fetched
+since.
+
+**A Grok Build launch that would run under Grok's own sandbox is refused** before the per-session home is built,
+with the code `grok_sandbox_unsupported`, whose message names the sandbox profile and what sets it. The sandbox lets
+Grok write only to its own home, the working directory and temporary directories, judged by where links really lead,
+and the per-session home's login and session records are links back into the source home, so a sandboxed session
+could not even create its conversation. The alert's remedy is to turn the sandbox off where it is set, or to have
+whoever manages that setting do so; a conversation begun under the sandbox keeps it, so it is to be continued in Grok
+itself. A profile of `off` is no sandbox. Which profile applies is read as Grok layers it:
+
+- `[sandbox] profile` in the system-wide `/etc/grok/requirements.toml` is a pin that takes precedence over
+  everything: any other profile there refuses, and `off` there allows the launch whatever else is set;
+- on a resume, the profile Grok saved with the conversation (its `summary.json`'s `sandbox_profile`), or a
+  `GROK_SANDBOX` in the launch environment (see "The launch environment" above), refuses when either is not `off`,
+  since Grok restores a saved profile and refuses a resume that asks for a different one; a resume whose
+  conversation has no saved profile is judged like a new session;
+- otherwise the first of these that sets a profile decides: `GROK_SANDBOX` in the launch environment, then
+  `[sandbox] profile` in the source home's `config.toml`, then the fleet default in the system-wide
+  `/etc/grok/managed_config.toml`.
+
+Not read: macOS managed preferences for Grok, so a sandbox set only there is not refused up front and the session
+fails inside Grok instead; and the source home's own `requirements.toml` and `managed_config.toml`, which are left
+out of the per-session home, so Grok never loads them for an Octoboard session.
 
 Octoboard's own MCP server is declared in that copy of the configuration file, and its entry sets **Grok Build's own
 time limit on a call to Octoboard's tools** above Octoboard's own limit on a forwarded call (the 10 minutes in

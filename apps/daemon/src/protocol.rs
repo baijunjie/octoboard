@@ -3121,6 +3121,10 @@ pub mod error_code {
     /// it carries no login and no session history for the per-session home to link. `params` names
     /// `path`.
     pub const GROK_HOME_NOT_INITIALIZED: &str = "grok_home_not_initialized";
+    /// A Grok Build launch would run under Grok's sandbox, which the per-session home cannot
+    /// support. `params` names the `source` that sets the `profile`: an environment variable, or
+    /// the file it is read from.
+    pub const GROK_SANDBOX_UNSUPPORTED: &str = "grok_sandbox_unsupported";
     /// The `format` of a configuration document is absent or names something else, so the file is
     /// not one.
     pub const CONFIGURATION_NOT_RECOGNISED: &str = "configuration_not_recognised";

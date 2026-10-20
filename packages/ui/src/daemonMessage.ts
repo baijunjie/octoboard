@@ -49,6 +49,7 @@ export const CODE_PARAMS: Record<string, readonly string[]> = {
   repository_name_missing: ["url"],
   config_dir_unreachable: ["path"],
   grok_home_not_initialized: ["path"],
+  grok_sandbox_unsupported: ["source", "profile"],
   trust_directory_too_broad: ["path"],
   trust_not_carried_over: ["path"],
   clean_filtered: ["path", "filter"],

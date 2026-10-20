@@ -887,6 +887,14 @@ and the process killed; one Grok Build login completed on its own (see below).
   known. It wrote `auth.json` into the scratch home, printed `✓ Signed in as <email>` on stderr and exited 0. So
   completion is exit 0, with `auth.json` present in `GROK_HOME`. Killed while waiting, it died on SIGTERM.
 
+  A plain `grok` run (no `login` subcommand) against a home with no login does the same: it starts the grok.com
+  sign-in inline (`auth: inline auth flow` in `$GROK_HOME/logs/unified.jsonl`), and on a machine whose browser was
+  signed in it wrote a real `auth.json` into a scratch home within seconds (Grok Build 1.0.62, 2026-10-20). Another
+  run, with a scratch `HOME` too and `auth.json` holding `{}`, still authenticated from a session token found outside
+  both directories (`auth: cached_token handler set api_key (SessionToken)`); where that token is kept was not found.
+  With `GROK_CODE_XAI_API_KEY` set, Grok selected `xai.api_key`, logged `has_cached_token:false` and completed no
+  sign-in.
+
 **How long each waits**, left running with nobody to authorize:
 
 - **Claude Code** was still waiting, its loopback port still listening, when it was killed after 610 seconds. So it
@@ -1501,7 +1509,7 @@ edit of the project's or the user's files, and was exercised against the version
 |---|---|---|---|
 | Launch with an initial task | `claude "<task>"` | `codex "<task>"` | `grok "<task>"` |
 | Pre-allocate a session id | `--session-id <uuid>` | **Not possible.** Take it from the `SessionStart` payload; the interactive thread is created lazily on the first prompt, so a session opened without a task has no id until the user types | `--session-id <uuid>` (new sessions only) |
-| Inject hooks | `--settings <json-or-path>`, merged with the project settings | `-c 'hooks.<Event>=[{hooks=[{type="command",command=…,timeout=3,async=true}]}]'`, one per event, plus the hook-trust step | A per-session `GROK_HOME` whose `hooks/` directory is Octoboard's and whose other entries symlink to the source home |
+| Inject hooks | `--settings <json-or-path>`, merged with the project settings | `-c 'hooks.<Event>=[{hooks=[{type="command",command=…,timeout=3,async=true}]}]'`, one per event, plus the hook-trust step | A per-session `GROK_HOME` whose `hooks/` directory is Octoboard's and whose other entries mostly symlink to the source home |
 | Inject MCP | `--mcp-config <json>` | `-c 'mcp_servers.octoboard.command=…'`, `.args=[…]`, `.default_tools_approval_mode="approve"` and `.tool_timeout_sec=660` | An `[mcp_servers.octoboard]` block appended to the `config.toml` copy inside that `GROK_HOME`, with `tool_timeout_sec = 660` |
 | Inject a role description | `--append-system-prompt` | `-c 'developer_instructions="…"'`, which adds a developer message and leaves the rest of the prompt byte-identical; not `-c instructions=`, which replaces the system prompt | `--rules "…"`, appended to the system prompt and persisted into the session record |
 | Resume | `claude --resume <id>` | `codex resume <id>` | `grok --resume <id>` |
@@ -1514,8 +1522,21 @@ edit of the project's or the user's files, and was exercised against the version
 - **Grok Build** has no flag for hooks or MCP, and its `GROK_CONFIG` / `GROK_CONFIG_PATH` overlay accepts only
   allowlisted keys, so both silently drop. The working mechanism is a per-session `GROK_HOME` where every entry links
   back to the source home, except a copied `config.toml` carrying the MCP block, a copied `trusted_folders.toml` with
-  nothing added to it, and an Octoboard `hooks/` directory. `auth.json` and `sessions/` stay links, so login is shared
-  and sessions stay resumable from the user's own `grok`.
+  nothing added to it, an Octoboard `hooks/` directory, and real copies of `bundled/`, `bundles/`, `hooks-paths` and
+  `sandbox.toml`. `auth.json` and `sessions/` stay links, so login is shared and sessions stay resumable from the
+  user's own `grok`. The mechanism cannot run under Grok's sandbox (Grok Build 1.0.62, macOS):
+  - With any profile but `off`, Grok refuses to start when `bundled/` or `bundles/` is not a real directory, or
+    `hooks-paths` or `sandbox.toml` not a real file: `hook write-deny ensure failed: Grok directory has wrong type
+    (expected real directory)`, then `Refusing to start with its protections missing`. Missing ones it creates itself,
+    together with empty `managed_config.toml` and `requirements.toml`.
+  - Past that check, the sandbox lets Grok write only to its home, the working directory and temp directories, judged
+    on the resolved path, so a `sessions/` link into another directory fails session creation
+    (`session.create.failed … FS_PERMISSION_DENIED`); a real `sessions/` in the home works, and without the sandbox
+    the link works.
+  - The profile a conversation started under is saved as `sandbox_profile` in its `summary.json` (`"off"` when
+    unsandboxed) and restored on a resume.
+
+  Octoboard therefore refuses a launch whose profile it can read as non-`off` (`grok_sandbox_unsupported`).
 - **Codex** gates hooks behind a persisted trust hash: without it an interactive session raises a blocking review modal
   and a headless one **hangs indefinitely**. `--dangerously-bypass-hook-trust` clears that at the cost of two warning
   lines per launch. The hash is taken over the handler definition, which includes the hook command, and that command is

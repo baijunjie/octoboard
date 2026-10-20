@@ -85,6 +85,7 @@ export const en = {
   "error.recovery.uniqueName": "Enter an account name that is not already used by another account of this agent, then save again.",
   "error.recovery.launchSetting": "Open the session launch settings and select a model and reasoning effort offered by the selected agent.",
   "error.recovery.accountDirectory": "Choose a different configuration directory, or select the account already using this directory.",
+  "error.recovery.grokSandbox": "To launch this session through {appName}, turn the sandbox off where it is set, or ask whoever manages that setting to. A conversation started under the sandbox keeps it, so continue that one in Grok itself.",
   "error.recovery.account": "Select an available account with an accessible configuration directory; run the agent CLI there to log in if needed.",
   "error.recovery.tool": "Install the named agent CLI or Git on the daemon host and make it available in the login shell PATH, then reopen {appName} and retry.",
   "error.recovery.shell": "Open your login shell in Terminal and fix slow or blocked startup commands in its configuration, then retry.",
@@ -236,6 +237,8 @@ export const en = {
     "The {agent} config directory {path} is not a directory the daemon can reach. Recreate it, or point the account at a different directory.",
   "daemon.grok_home_not_initialized":
     "{path} is not a Grok home yet. Run Grok against it directly at least once so it has a session history, before pointing an account at it.",
+  "daemon.grok_sandbox_unsupported":
+    "Grok's sandbox ({profile}, set by {source}) is incompatible with the home {appName} gives each session, so the session was not launched.",
   "daemon.icon_not_an_image": "The console avatar must be an image.",
   "daemon.icon_too_large": "The console avatar is larger than {limit_kib} KiB.",
   "daemon.configuration_not_recognised": "This is not a {appName} configuration file.",

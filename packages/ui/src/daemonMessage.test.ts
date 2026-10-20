@@ -153,3 +153,13 @@ it("shows the default account of an exhausted quota by its name in the UI's lang
   expect(daemonMessage("en", "account_quota_exhausted", params, "x", records)).toContain(isolate("Default"));
   expect(daemonMessage("zh-Hans", "account_quota_exhausted", params, "x", records)).toContain(isolate("默认"));
 });
+
+it("words a refused Grok sandbox with its profile and where it was set, leaving no placeholder in either language", () => {
+  const params = { source: "GROK_SANDBOX", profile: "workspace" };
+  for (const language of ["en", "zh-Hans"] as const) {
+    const text = daemonMessage(language, "grok_sandbox_unsupported", params, "fallback", records);
+    expect(text).toContain(isolate("workspace"));
+    expect(text).toContain(isolate("GROK_SANDBOX"));
+    expect(text).not.toMatch(/\{\w+\}/);
+  }
+});

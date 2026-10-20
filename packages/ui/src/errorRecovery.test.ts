@@ -15,6 +15,7 @@ it.each([
   ["session_working", "wait"], ["handoff_messages_dropped", "lostMessages"], ["message_not_sent", "unsentMessage"],
   ["agent_not_installed", "tool"], ["agent_availability_pending", "availability"], ["added_agents_undecided", "availability"],
   ["agent_already_added", "addedAgents"], ["agent_order_invalid", "addedAgents"], ["agent_not_added", "agentNotAdded"],
+  ["grok_sandbox_unsupported", "grokSandbox"],
 ])("classifies the known domain code %s with its specific remedy", (code, recovery) => {
   const error = new DaemonRequestError("localized text", code, { session: "s1" });
   expect(errorPresentation(error)).toBe(error);

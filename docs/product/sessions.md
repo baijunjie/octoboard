@@ -176,16 +176,17 @@ under, whichever agent asked — or asks them first; see `docs/product/folder-tr
 If the launch itself fails — the directory cannot be reached, the agent binary is not on the user's `PATH`, the user's
 shell environment could not be captured (see "The launch environment" in `docs/product/launching-agents.md`), or, for
 Grok Build only, the account the session would hold pins a directory that is not an initialized Grok home (see "Agent
-config directories" in `docs/product/consoles.md`) — the *starting* session is removed again and no session is left
-behind. For a session opened from the dialog, or with defaults (see "Opening a session with defaults" below), the
-failure is reported in an error alert that names the session and gives the reason, worded from the failure's own code in
-the UI's language; for a shell environment capture that ran out of time, the title names the session alone and the
-explanation is laid out beneath it — the command that did not finish and its time limit, the likely cause, and what to
-fix. Should the session's record itself fail to be removed, it is left *interrupted* instead, and the error alert is
-shown all the same. For `new_session` and an approved session request the failure is reported through that call instead
-(see "When an approval cannot be carried out" in `docs/product/session-requests.md` for the latter). A missing config
-directory does not fail a brand new session for the other two agents: it has no conversation to lose, so Claude Code
-creates the directory itself and Octoboard creates it for Codex.
+config directories" in `docs/product/consoles.md`) or the launch would run under Grok's own sandbox (see "Per-agent
+specifics a user will notice" in `docs/product/launching-agents.md`) — the *starting* session is removed again and no
+session is left behind. For a session opened from the dialog, or with defaults (see "Opening a session with defaults"
+below), the failure is reported in an error alert that names the session and gives the reason, worded from the failure's
+own code in the UI's language; for a shell environment capture that ran out of time, the title names the session alone
+and the explanation is laid out beneath it — the command that did not finish and its time limit, the likely cause, and
+what to fix. Should the session's record itself fail to be removed, it is left *interrupted* instead, and the error
+alert is shown all the same. For `new_session` and an approved session request the failure is reported through that call
+instead (see "When an approval cannot be carried out" in `docs/product/session-requests.md` for the latter). A missing
+config directory does not fail a brand new session for the other two agents: it has no conversation to lose, so Claude
+Code creates the directory itself and Octoboard creates it for Codex.
 
 **When no agent is both added and installed, the window offers no way to open a session, before any of that** (an
 agent counts as installed until it has been determined unavailable; see "Which agents the agent pickers list" in
