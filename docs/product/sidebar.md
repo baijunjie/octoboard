@@ -561,8 +561,8 @@ keyboard focus inside one, or an open menu in one brings the whole inactive grou
 **Sessions** within a project are listed, by the same scheme:
 
 1. pinned sessions first;
-2. then by status: waiting for the user, then awaiting instructions and starting alike, then working and running in
-   background alike, then interrupted;
+2. then by status: waiting for the user, then awaiting instructions and starting alike, then running in background,
+   then working, then interrupted;
 3. then the most recently started first.
 
 The console sessions section lists its console sessions by that same session scheme.

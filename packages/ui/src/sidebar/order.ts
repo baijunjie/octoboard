@@ -1,34 +1,26 @@
-import { type Console, type Project, type Session, type SessionStatus } from "../protocol";
-import { sessionStatusKind } from "../sessionLabel";
+import { type Console, type Project, type Session } from "../protocol";
+import { sessionStatusKind, type StatusKind } from "../sessionLabel";
 
-/** How urgently a status asks for the user's attention: a raised hand first, then one sitting
- * at its prompt or still coming up (it is about to be one), then a session at work, then one with
- * no process. Archived sessions are listed
- * apart and never ranked against the others. */
-const STATUS_RANK: Record<SessionStatus, number> = {
+/** How urgently a session asks for attention: a raised hand, a prompt, background work,
+ * foreground work, then no process. Archived sessions are listed separately. */
+const STATUS_RANK: Record<StatusKind, number> = {
   waiting_user: 0,
   starting: 1,
   idle: 1,
-  working: 2,
-  interrupted: 3,
-  archived: 4,
+  background: 2,
+  working: 3,
+  interrupted: 4,
+  archived: 5,
 };
 
-/** The status `session` is ranked and summed up by: one running in the background has work under
- * way, so it sits with the working sessions. Its wire status stays `idle`, so everything else about
- * it (input, notifications) is an idle one's. */
-function rankedStatus(session: Pick<Session, "status" | "background_tasks">): SessionStatus {
-  return sessionStatusKind(session) === "background" ? "working" : session.status;
-}
-
-/** Whether `session` has work under way, by `rankedStatus`. */
+/** Whether a session has work under way, including work left running between turns. */
 export function countsAsWorking(session: Pick<Session, "status" | "background_tasks">): boolean {
-  return rankedStatus(session) === "working";
+  const kind = sessionStatusKind(session);
+  return kind === "working" || kind === "background";
 }
 
-/** A session's `STATUS_RANK`, by `rankedStatus`. */
 function rankOf(session: Session): number {
-  return STATUS_RANK[rankedStatus(session)];
+  return STATUS_RANK[sessionStatusKind(session)];
 }
 
 /** Pinned first; then by status (`STATUS_RANK`); then newest first. */

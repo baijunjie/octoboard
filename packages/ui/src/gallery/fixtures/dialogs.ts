@@ -922,7 +922,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Archive view",
     category: "normal",
     title: "Archive a session running in the background",
-    description: "The session is idle, yet archiving it asks first, as it does a working one, and the message adds that the work it is running in the background is stopped: Its process ends, and the work it is running in the background is stopped. You can reopen it later. The row behind the dialog shows the pinging hollow green ring, listed below the idle Fix the summary layout as a working session is; that one, with nothing running, has an Archive shortcut that archives at once, and this one has none.",
+    description: "The session is idle, yet archiving it asks first, as it does a working one, and the message adds that the work it is running in the background is stopped: Its process ends, and the work it is running in the background is stopped. You can reopen it later. The row behind the dialog shows the pinging hollow green ring, listed below the idle Fix the summary layout; that one, with nothing running, has an Archive shortcut that archives at once, and this one has none.",
     state: backgroundArchiveState,
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: watcher.title })),

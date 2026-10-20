@@ -75,9 +75,17 @@ describe("countsAsWorking", () => {
 describe("a session running in the background", () => {
   const background = { ...session("bg", "idle", 1), background_tasks: [{ id: "b1" }] };
 
-  it("sorts with the working sessions", () => {
-    const ordered = liveSessions([session("working", "working", 2), background, session("idle", "idle", 3), session("interrupted", "interrupted", 4)]);
-    expect(ordered.map((s) => s.id)).toEqual(["idle", "working", "bg", "interrupted"]);
+  it("puts background before newer working sessions, keeping pins, prompts and newest-first ties", () => {
+    const ordered = liveSessions([
+      session("working", "working", 20),
+      background,
+      { ...background, id: "new-bg", started_at: 5 },
+      session("idle", "idle", 3),
+      session("interrupted", "interrupted", 40),
+      session("waiting", "waiting_user", 4),
+      session("pinned-work", "working", 0, true),
+    ]);
+    expect(ordered.map((s) => s.id)).toEqual(["pinned-work", "waiting", "idle", "new-bg", "bg", "working", "interrupted"]);
   });
 
   it("makes a project rank and a console show work", () => {

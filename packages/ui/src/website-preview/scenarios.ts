@@ -105,7 +105,7 @@ export function createPreviewScenario(
       workspace.id,
       projects[3].id,
       copy.serverTask,
-      "idle",
+      scene === "overview" ? "working" : "idle",
       { agent: "codex", bound_to: coordinator.id },
     ),
     sessionOf(
