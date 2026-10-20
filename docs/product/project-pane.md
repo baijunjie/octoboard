@@ -245,9 +245,12 @@ menu at the pointer** (Control-click also works in the desktop app).
 - **File manager** opens the containing folder and selects that entry, including when the entry is a folder.
   **Default application** opens the live file or folder with the operating system's default application.
   Both act on the machine running the daemon, including when the client is a browser on another machine. Files uses
-  the project directory; an uncommitted change uses the worktree the branch is checked out in and the project's
-  directory within it. They act on what is on disk now, including for a staged change. **A committed change offers
-  neither action**, since it names versions in commits rather than in a live worktree: its only action is Copy path.
+  the project directory; a change, uncommitted or committed, uses the worktree the chosen branch is checked out in
+  and the project's directory within it. When the branch is checked out nowhere, a committed change uses the project's
+  registered directory, which can itself be in a linked worktree. They act on what is on disk now, including for a
+  staged change or a change under an individual commit; they do not open a historical version, and the current file
+  can differ from the change shown in the viewer. The viewer's own header actions follow "The header" in
+  `docs/product/file-viewer.md`.
 - **Copy path** puts the file or folder's path on the clipboard, slash separated, as a path within the project. For a
   change it is the path the row names, which for a rename is its new path — the old one only where the new side is
   absent (a deletion) or outside the project (see "What is listed" in `docs/product/project-pane-git-change-list.md`).

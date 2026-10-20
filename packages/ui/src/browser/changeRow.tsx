@@ -11,7 +11,7 @@ import { StatusChip } from "../viewer/StatusChip";
 import { STATUS_LABELS, STATUS_MARKS, type StatusKey } from "../viewer/statusMarks";
 import { displayWirePath, wireBaseName } from "../wirePath";
 import type { ChangeItem } from "./changes";
-import { RowActions, RowPathScope } from "./RowActions";
+import { RowActions } from "./RowActions";
 
 // The lowercase words the row's accessible name is built from; the tooltip says the capitalised
 // `STATUS_LABELS` instead, which is what the viewer's header chip shows.
@@ -84,9 +84,8 @@ export function changeRowText(
 
 /** What a change's row shows: its status mark, its file's name and the detail beside it, and at its
  * end the lines it adds and removes and the button of the row's actions. The button keeps its room
- * while hidden, so the counts do not move when it shows. A committed change names versions in
- * commits rather than in a worktree, so its actions have no live directory to act on, whatever the
- * list's is. */
+ * while hidden, so the counts do not move when it shows. Host actions use the live directory of
+ * the list even when the change itself names versions in commits. */
 export function ChangeRowBody({ item, name, detail, contextTargetRef }: { item: ChangeItem; name: string; detail: string; contextTargetRef: React.RefObject<HTMLElement | null> }): React.ReactElement {
   const prose = pathDetail(item);
   const shownDetail = prose ? <Message id={prose.id} params={{ path: <InlineChip monospace size="inherit">{prose.path}</InlineChip> }} /> : detail;
@@ -104,13 +103,7 @@ export function ChangeRowBody({ item, name, detail, contextTargetRef }: { item: 
         <span className="flex-1" />
       )}
       <LineCounts item={item} />
-      {item.entry.group === "committed" ? (
-        <RowPathScope.Provider value={undefined}>
-          <RowActions reserve contextTargetRef={contextTargetRef} path={item.path} name={name} />
-        </RowPathScope.Provider>
-      ) : (
-        <RowActions reserve contextTargetRef={contextTargetRef} path={item.path} name={name} />
-      )}
+      <RowActions reserve contextTargetRef={contextTargetRef} path={item.path} name={name} />
     </>
   );
 }

@@ -8,8 +8,8 @@ import { useHostPathActions } from "../components/useHostPathActions";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 
-/** The live directory behind the displayed rows: the project's, or the worktree a branch is checked
- * out in. A committed change has none. */
+/** The live directory behind the displayed rows: the worktree a branch is checked out in, or the
+ * project's directory when it is checked out nowhere. Historical rows act on today's files. */
 export const RowPathScope = createContext<{ project: string; worktree?: string } | undefined>(undefined);
 
 /** The row's button and right-click share the same actions and focus handling. */

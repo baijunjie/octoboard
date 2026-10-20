@@ -166,8 +166,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   files or by selecting a project session without starting or resuming anything, the file tree, always by folder (what
   is listed, its order, rows and the keyboard, the selected file and a removed one), recursive file-name filtering with
   results shown as a tree, the button and right-click menus of file and change rows (opening live paths with the system,
-  revealing them in the file manager and copying paths; committed changes offer only Copy path), when the tree is listed
-  again, what is remembered per project, its errors (the file viewer's included), and a pane that fails to load.
+  revealing them in the file manager and copying paths; change rows use the branch's worktree or fall back to the
+  project directory), when the tree is listed again, what is remembered per project, its errors (the file viewer's
+  included), and a pane that fails to load.
 - [File viewer](product/file-viewer.md) — the read-only file viewer opened from Files rows, Git changes and terminal
   path links: its header (Copy path, the view choices, File manager and Default application), what it shows, including
   a Markdown document's diagrams, formulas, project images and links to other project files, notices and stand-ins,

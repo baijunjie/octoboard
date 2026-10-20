@@ -725,10 +725,10 @@ const reviewScenarios: Scenario[] = [
     category: "normal",
     title: "The selected session's branch",
     description:
-      "The selected session is responsible for feature/ranking-experiments, which the side worktree has checked out, so the selector starts on it. One header groups the branch selector, the worktree named by its folder with a button to copy its full path, then the fork and current commits. The detail lines share the same spacing, with no divider between them; one bottom border separates the whole header from the changes. The uncommitted change (README.md) comes from this worktree, and Committed lists everything the branch changed since the fork. Right-clicking a committed row offers Copy path only, because that version has no live file to open or reveal.",
+      "The selected session is responsible for feature/ranking-experiments, which the side worktree has checked out, so the selector starts on it. One header groups the branch selector, the worktree named by its folder with a button to copy its full path, then the fork and current commits. The detail lines share the same spacing, with no divider between them; one bottom border separates the whole header from the changes. The uncommitted change (README.md) comes from this worktree, and Committed lists everything the branch changed since the fork. The committed ranking.ts row's menu keeps Copy path beside Open in, whose File manager and Default application actions use the current file in the side worktree.",
     state,
     preferences,
-    steps: selecting(rankingSession),
+    steps: [...selecting(rankingSession), (ui) => ui.contextMenu(ui.changeRow("ranking.ts", "modified")), (ui) => ui.press(ui.t("common.openIn"))],
   },
   {
     id: "git-changes-unpushed",
@@ -831,10 +831,10 @@ const reviewScenarios: Scenario[] = [
     category: "normal",
     title: "A branch checked out nowhere",
     description:
-      "The selected session is responsible for chore/update-dependencies, which no worktree has checked out. The header groups the branch selector and fork comparison without a worktree row or a notice explaining the absence of uncommitted changes. Its bottom border remains above the committed changes. Main has moved on since the fork, so the fork commit is not main's tip.",
+      "The selected session is responsible for chore/update-dependencies, which no worktree has checked out. The header groups the branch selector and fork comparison without a worktree row or a notice explaining the absence of uncommitted changes. Its bottom border remains above the committed changes. Main has moved on since the fork, so the fork commit is not main's tip. The committed package.json row still offers Copy path and Open in: File manager and Default application use the current file in the project directory.",
     state,
     preferences,
-    steps: selecting(dependenciesSession),
+    steps: [...selecting(dependenciesSession), (ui) => ui.contextMenu(ui.changeRow("package.json", "modified")), (ui) => ui.press(ui.t("common.openIn"))],
   },
   {
     id: "git-changes-scope-missing",

@@ -6,7 +6,7 @@ import { isolate } from "../i18n/isolate";
 import type { PlatformAdapter } from "../platform";
 import { RowActions, RowPathScope } from "./RowActions";
 import { ChangeList } from "./ChangeList";
-import { change, changeViewFixture, mountRows } from "./browserTestSupport";
+import { change, changeViewFixture, committedChange, mountRows } from "./browserTestSupport";
 import { changeItems } from "./changes";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -112,6 +112,38 @@ it("offers Copy path where the platform has no clipboard, copying through the se
 
 
 const openIn = () => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((item) => item.textContent === "Open in")!;
+
+it.each([
+  { layout: "flat", worktree: undefined },
+  { layout: "tree", worktree: undefined },
+  { layout: "flat", worktree: "w" },
+  { layout: "tree", worktree: "w" },
+] as const)("$layout: committed row host actions use worktree $worktree, falling back to the project directory", async ({ layout, worktree }) => {
+  const request = vi.fn(async () => ({ type: "ack" as const }));
+  const onOpen = vi.fn();
+  const container = mountRows(
+    <RowPathScope.Provider value={{ project: "p", worktree }}>
+      <ChangeList
+        items={changeItems([committedChange("src/alpha.ts")])}
+        selected={undefined}
+        label="Changes"
+        onOpen={onOpen}
+        listRef={() => {}}
+        changeView={changeViewFixture({ layout })}
+      />
+    </RowPathScope.Provider>,
+    { request, toasts },
+  );
+  for (const [label, type] of [["File manager", "reveal_project_path"], ["Default application", "open_project_path"]] as const) {
+    act(() => actionsOf(rowOf(container, "alpha.ts")).click());
+    act(() => openIn().click());
+    act(() => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((item) => item.textContent === label)!.click());
+    await flush();
+    expect(request).toHaveBeenLastCalledWith({ type, project: "p", ...(worktree !== undefined && { worktree }), path: "src/alpha.ts" });
+  }
+  expect(request).toHaveBeenCalledTimes(2);
+  expect(onOpen).not.toHaveBeenCalled();
+});
 
 it.each(["open_project_path", "reveal_project_path"] as const)("sends %s with the live scope and wire path even without a clipboard", async (type) => {
   const request = vi.fn(async () => ({ type: "ack" as const }));
