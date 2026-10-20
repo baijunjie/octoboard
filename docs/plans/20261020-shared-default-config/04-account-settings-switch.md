@@ -18,6 +18,12 @@
 - [ ] Add the switch to the account's settings, wired to 03's requests.
 - [ ] Add gallery scenarios for the new states.
 
+## Handoff
+
+- Once the switch ships, `docs/agent-cli-reference.md`'s "Sharing a session directory between accounts" no longer
+  opens on a true statement ("Octoboard does not offer sharing an agent's session directory"), and its entry in
+  `docs/README.md` says the same; both are reworded to what Octoboard then offers.
+
 ## Notes for the developer
 
 - **Reusable capabilities**: the account settings already in the section (approval mode and the like) and their

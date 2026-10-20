@@ -299,8 +299,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   to the server and to its own model when the limit passes, and whether its model takes turns while a call is
   outstanding — what the model is handed and how it reaches an MCP tool, the rules for writing into a running session,
   where each keeps a session's conversation record (Codex's history segments included) and what moving it to another
-  config directory or another account takes, and the measured risks of two accounts sharing a session directory, which
-  are why Octoboard does not offer it.
+  config directory or another account takes, the measured risks of two accounts sharing a session directory, which
+  are why Octoboard does not offer it, and how each agent treats a configuration directory whose entries are links into
+  another — which entries it keeps and what they hold, whether a linked file survives the agent saving it, what loads
+  through a link, and what loses its automatic approval there.
 - [UI accessibility standard](ui-accessibility.md) — HeroUI default styles taking precedence, WCAG 2.2 AA for custom
   styles in both appearances, and the application-level accessibility rules: keyboard access (Tab, the exception for a
   react-aria collection that manages its own focus, F6 as the way out of the terminal), visible focus and why it never

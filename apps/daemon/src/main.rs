@@ -64,6 +64,7 @@ mod session;
 mod session_history;
 mod session_request;
 mod session_title;
+mod shared_items;
 mod sharing;
 mod shell_terminal;
 mod state;

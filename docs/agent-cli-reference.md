@@ -3,9 +3,9 @@
 Per-agent facts about the three agent CLIs Octoboard launches: the hook events, what their payloads carry, what the
 payloads can and cannot be correlated on, what a failing hook costs, how a project's own configuration layers around an
 injected one, the mechanism and conditions for injecting Octoboard into each, what it takes to move a session's
-conversation into another config directory, how each signs in a config directory without a terminal and what it
-answers before that, what happens when two accounts share a session directory, and how to ask each one how much of
-its plan quota is left.
+conversation into another config directory, how each signs in a config directory without a terminal and what it answers
+before that, what happens when two accounts share a session directory or the rest of a configuration directory, and how
+to ask each one how much of its plan quota is left.
 
 Established against **Claude Code 2.1.274**, **Codex 0.160.0** and **Grok Build 1.0.46**; what the Claude Code section
 says about a declined prompt was measured on **2.1.286** as well, and held identically on both. What "Moving a
@@ -22,11 +22,12 @@ first measured on that build. What "Plan quota" says was measured on **Claude Co
 What "Sharing a session directory between accounts" says, and the "Codex, history segments" and "Under a different
 account" notes under "Moving a conversation to another config directory", were measured on 2026-10-19 on **Claude Code
 2.1.302**, **Codex 0.162.1** and **Grok Build 1.0.62**. What "Codex resume from aged rollouts" says was measured on
-**Codex 0.162.1**. What "Signing in a config directory without a terminal" says was measured on 2026-10-19 on **Claude
-Code 2.1.303**, **Codex 0.162.1** and **Grok Build 1.0.62**. What "Writing into a running session" says about invisible
-characters was read from the executable of, and measured on, **Claude Code 2.1.304** on 2026-10-20. All three rewrite
-their hook surface, their payload fields, their configuration layering and their on-disk layout on upgrade, so check a
-detail here against the installed version before relying on it.
+**Codex 0.162.1**. What "Sharing a configuration directory between accounts" says was measured on 2026-10-20 on **Claude
+Code 2.1.304**, **Codex 0.162.1** and **Grok Build 1.0.62**. What "Signing in a config directory without a terminal"
+says was measured on 2026-10-19 on **Claude Code 2.1.303**, **Codex 0.162.1** and **Grok Build 1.0.62**. What "Writing
+into a running session" says about invisible characters was read from the executable of, and measured on, **Claude Code
+2.1.304** on 2026-10-20. All three rewrite their hook surface, their payload fields, their configuration layering and
+their on-disk layout on upgrade, so check a detail here against the installed version before relying on it.
 
 How Octoboard's status mapping handles these traps is encoded in `apps/daemon/src/hooks.rs`; the product behavior
 built on them is in the product docs.
@@ -731,10 +732,10 @@ built from, never the per-session home itself, which is discarded with the proce
     with `relocation_failed`, rather than update a database it has guessed, when the configuration cannot be read or
     parsed, `CODEX_SQLITE_HOME` is relative (the starting directory is not known there), or the directory cannot be
     listed; a directory that does not exist means no database.
-  - **A managed daemon holding the thread was not measured.** In a scratch home the 0.162.1 TUI, started in a
-    pseudo-terminal, showed no `app-server` process, so no daemon could be made to hold the thread there (the
-    per-home daemon described under "When that can happen for real" below was seen in a real home only). Whether a
-    daemon in the target holding the thread loaded would ignore a changed row is unverified.
+  - **A managed daemon holding the thread was not measured.** In a scratch home every 0.162.1 TUI start launched
+    `<home>/packages/app-server-daemon/…/codex app-server --managed-daemon` (parent pid 1), which outlived the TUI and
+    copied about 323 MB into the home's `packages/` (measured 2026-10-20). Whether a daemon in the target holding the
+    thread loaded would ignore a changed row is unverified.
 - **Claude Code, beside the transcript** — `projects/<slug>/<session id>/` holds `subagents/`, `tool-results/` and
   `custom-title.json`, and `file-history/<session id>/` holds the rewind checkpoints (`<hash>@v<n>`). Both are layout
   as found on disk; a resume with the transcript alone was measured above, and what a resume without these loses
@@ -942,9 +943,10 @@ markers comes from one build, so a reply that matches none of them should still 
 ## Sharing a session directory between accounts
 
 Octoboard does not offer sharing an agent's session directory between accounts, whether by linking `projects/` or
-`sessions/` or otherwise. This section records the measurements behind that decision. Codex and Claude Code lose or
-split conversations in a shared directory, in ways they give no warning of, and Grok Build has no guard against two
-writers:
+`sessions/` or otherwise. This section records the measurements behind that decision; linking the rest of a
+configuration directory, and what changes once the databases are linked too, is under "Sharing a configuration directory
+between accounts" below. Codex and Claude Code lose or split conversations in a shared directory, in ways they give no
+warning of, and Grok Build has no guard against two writers:
 
 - **Codex.** One home's rollout compression unlinks a rollout that another home holds open, and the turns that home
   writes afterwards are lost. A home whose database row names an older history segment resumes a stale branch and
@@ -1074,6 +1076,261 @@ how a session is found and written, not a completed model turn. A failed turn st
   turns interleave there was not measured, because of the exhausted balance.
 - **Not measured:** whether a session made under one Grok account resumes, or is restored from the registry, under a
   different account. The machine has one Grok Build account.
+
+## Sharing a configuration directory between accounts
+
+Measured on 2026-10-20 on **Claude Code 2.1.304**, **Codex 0.162.1** and **Grok Build 1.0.62**, the installs the login
+shell resolves, in scratch config directories (a throwaway `HOME`, the agent's config-directory variable set
+explicitly, a local stub as the model endpoint with a fake key, no login). The setup was a default directory D and
+account directories whose entries are symbolic links into D. "Executable" below marks what was read out of the
+binary and not observed. A link to a file is called a file link, a link to a directory a directory link.
+
+**What an account keeps in its directory divides three ways**, and only the first two are candidates for linking.
+
+- **Claude Code**
+  - *Configuration:* `settings.json`, `CLAUDE.md`, `keybindings.json`; `agents/`, `commands/`, `skills/`,
+    `output-styles/`, `rules/`, `plugins/`. From the executable only, loading not measured: `workflows/`, `routines/`,
+    `themes/`, `hooks/`, `agent-memory/` (user-scope subagent memory), `loop.md`. `settings.local.json` in the config
+    directory is not read (measured). `skills/synced/<org>_<account>/` holds skills synced from claude.ai per
+    organisation and account; how it behaves across signed-in accounts was not measured.
+  - *Conversation history:* `projects/` (which also holds `<slug>/memory/`, the auto memory), `file-history/`,
+    `paste-cache/` (referenced from `history.jsonl`), `image-cache/`, `session-env/`, `plans/` (named by a random slug,
+    not the session id) and the file `history.jsonl`. `todos/` and `tasks/` are swept by cleanup, but nothing in 2.1.304
+    wrote them.
+  - *Per account or per process:* the login and identity files (`.credentials.json`, `.claude.json`, `backups/`,
+    `.claude.json.backup`, `hfi-auth.json`, `.session_ingress_token`, `mcp-needs-auth-cache.json`); `sessions/`, a
+    per-process registry (`<pid>.json` and a `.key`), so linking it would show one account the other's processes,
+    sockets and keys; organisation policy (`remote-settings.json`, `policy-limits.json` with its signature and consent
+    files); `shell-snapshots/`; caches, logs and telemetry (`cache/`, `stats-cache.json`, `statsig/`, `telemetry/`,
+    `debug/`, `mcp-discovery-cache/`, `state/` and similar); the daemon, job and remote-control state; install-level
+    files (`local/`, `chrome/`, updater files, `.deep-link-register-failed`); `.last-cleanup`. The executable has its
+    own list of what a host configuration snapshot leaves out as per-host state or credentials, and it matches this
+    split. `bridge-spawn` is always at `~/.claude/bridge-spawn` whatever `CLAUDE_CONFIG_DIR` says (executable).
+  - *Absolute paths inside shareable entries:* `plugins/known_marketplaces.json` `installLocation` and
+    `plugins/installed_plugins.json` `installPath` hold the installing directory's own path; the `debug/latest`
+    symlink; the request blobs in transcripts hold the writing account's auto-memory path.
+- **Codex**
+  - *Configuration:* `config.toml`; `AGENTS.md` and `AGENTS.override.md` (Codex never writes the home copy); `rules/`
+    (Codex appends on "always allow"); `skills/` (Codex also writes `skills/.system/` on start, with a versioned
+    marker, so the directory is not user-only and `.system` comes from whichever version ran last); `prompts/` (0.162.1
+    does not load custom prompts at all); `plugins/`, `themes/`, `hooks.json`, `agents/` (named in the binary or empty
+    in the real home; not exercised).
+  - *Conversation history:* `sessions/`; `archived_sessions/` (`codex archive` moves the rollout into the archiving
+    home's own, so another home cannot find it unless this directory is shared too); `session_index.jsonl` (thread
+    names); `history.jsonl` (prompt recall, not needed to resume); `state_5.sqlite`, with its `-wal` and `-shm` files
+    beside the link's target.
+  - *Per account or per process:* `auth.json` and `.credentials.json` (the MCP OAuth file store); `models_cache.json`
+    (per-account catalogue and default effort); `cache/` (account-dependent apps and connectors); `installation_id`,
+    `version.json`; `thread_history_1.sqlite` (a projection Codex rebuilds), `goals_1`, `queue_1`, `memories_1` /
+    `memories_v2_1`, and `logs_2.sqlite` with its WAL files; the daemon's `packages/`, `app-server-daemon/` and
+    `app-server-control/` (a symlink to a socket in `/tmp/codex-daemon-<uid>/<hash>`, so linking it would let one
+    account's TUI reach another's daemon); locks and runtime state (`thread-writer-locks/`, `.tmp/`, `tmp/`,
+    `.sqlite-maintenance.lock`, `.sandbox_migration`, `shell_snapshots/`, `project-metadata-locks/`,
+    `rollout-migrations/`, `log/`); entries the ChatGPT desktop app keeps in the same directory
+    (`.codex-global-state.json`, `sqlite/codex-dev.db`, `computer-use/`, `browser/`, `worktrees/`, `pets/` and
+    others; the CLI created none).
+  - *Absolute paths inside shareable entries:* the real `config.toml` holds the default home's path in `notify` and in
+    `[mcp_servers.node_repl.env]` (`CODEX_HOME = "/…/.codex"`), and any absolute `sqlite_home` or `log_dir` would
+    apply to every account that shares the file; rollouts record the running home's `skills/.system` path per turn;
+    database rows record absolute rollout paths. A shared `config.toml` also makes the per-project trust
+    (`[projects."…"] trust_level`) common to every account.
+- **Grok Build**
+  - *Configuration:* `config.toml` (model, MCP servers, plugin switches, marketplace sources); `AGENTS.md`,
+    `pager.toml`, `lsp.json`, `settings.json` (marketplace settings in Claude Code's format), `sandbox.toml`,
+    `statusline.sh`, `disabled-hooks`; `rules/`, `skills/`, `commands/`, `agents/`, `personas/`, `workflows/`,
+    `plugins/`, `hooks/`, `installed-plugins/`. No Grok writer was found for `lsp.json`, `settings.json`,
+    `sandbox.toml` or `statusline.sh`, and loading of `personas/`, `workflows/` and those four was not checked.
+  - *Conversation history:* `sessions/`. It also holds a per-folder `prompt_history.jsonl`, the search index
+    `session_search.sqlite` and, per the guide and not measured, per-project `permission.toml` "always allow" grants,
+    so linking it shares those too. `memory-v2/` was never created in a logged-out scratch home, even with
+    `[memory] enabled = true`.
+  - *Per account or per process:* credentials (`auth.json` with its lock, `mcp_credentials.json`);
+    `trusted_folders.toml` with its lock (see below); identity, state and caches (`agent_id`, `models_cache.json`,
+    `settings_cache.json`, which is signed per account, `campaigns_state.json`, `experiments_state.json`,
+    `tip_cursor.json`, `slash-mru.json`, `last-copy.txt`, `dashboard/`, `grove/`, `worktrees.db`, `worktrees/`,
+    `worktree_pool/`, `long-running-background-tasks/`, `marketplace-cache/`); runtime state (`active_sessions.json`
+    with its lock, which stays per home, `.config-init.lock`, `managed_config.lock`, `daemon/`, `leader.log`); logs
+    (`logs/`, `memtrace/`, `crash/`); install and update files (`bin/`, `downloads/`, `docs/`, `bundled/`, `bundles/`,
+    `vendor/`, `version.json` and similar); managed configuration (`managed_config.toml`, `requirements.toml`).
+  - *Absolute paths inside shareable entries:* `summary.json` `grok_home` (the creating home, informational; resume
+    from another home works), `chat_history.jsonl` and `prompt_context.json` (paths of the skills and instruction
+    files loaded under whichever home ran), `installed-plugins/registry.json` `path`, `hooks-paths` entries.
+
+**Whether a linked file survives the agent saving it** (a file link replaced by a plain file stops following the
+target).
+
+| File | Writer | Result |
+|---|---|---|
+| Claude Code `settings.json` | `/model`, a `/config` toggle, a `/permissions` rule saved to User settings, `claude plugin marketplace add` and `plugin install`, a startup migration | link kept, target updated: Claude Code follows the link one step, writes a temp file and renames it onto the target |
+| Claude Code `CLAUDE.md`, `keybindings.json` | the model's Edit and Write tools | refused (`Refusing to write …: it is a symbolic link. Write to the link's target path instead: <target>`), link intact; whether the model retries on the target was not measured |
+| Claude Code `CLAUDE.md` | `/memory` | opens `$VISUAL` / `$EDITOR` on the link path; vim kept the link |
+| Claude Code `history.jsonl` | normal appends | appended through the link, link kept; a lock is created beside the target (executable: proper-lockfile on the real path) |
+| Codex `config.toml` | first TUI start, folder-trust accept, `/model`, `codex mcp add` / `remove` | link kept, the target replaced (new inode, mode 644 to 600) |
+| Codex `history.jsonl`, `session_index.jsonl` | appends, `[history] max_bytes` trimming, `/rename` | written in place, same inode |
+| Codex `AGENTS.md` | none | Codex never writes it |
+| Grok `config.toml` | `grok mcp add -s user`, a `/settings` toggle, `/model` | link kept, the target replaced (new inode) |
+| Grok `AGENTS.md`, `pager.toml` | the model's edit tools, `/settings` | link kept, the target replaced |
+| Grok `disabled-hooks` | `/hooks` disable and enable | link kept; disable writes in place, enable replaces the target |
+| Grok `trusted_folders.toml` | accepting the trust prompt | **link replaced by a plain file** |
+| Grok `hooks-paths` | `/hooks-add` | write refused: `<home>/hooks-paths is a symlink`; its entries must lie under the home |
+
+- **A two-level chain breaks the first link** (Claude Code 2.1.304). With the account's `settings.json` linked to
+  `default/settings.json`, itself a link to `dotfiles/settings.json`, a save from the account replaced
+  `default/settings.json`'s link with a plain file, and the dotfiles copy stopped updating. A save from the default
+  account (one level) wrote through correctly. Not measured for the other agents.
+- **Grok's `disabled-hooks` is keyed by hook source**, e.g. `global/octoboard:session_start[0].hooks[0]`. Switching
+  Octoboard's hook off in one session writes the entry into the source home's file, silencing it in every later session
+  from that home; with the file linked, that is every sharing account.
+- **Grok's sandbox mode refuses a linked tree** (1.0.62, measured in a per-session home built over a home with
+  `bundled/`). `grok --sandbox workspace` refuses to start when `hooks/`, `hooks-paths` or `bundled/` is a symlink (the
+  guide adds `bundles/` and a symlinked `GROK_HOME`). Octoboard's per-session homes already link `bundled/` and, when
+  present, `hooks-paths`, so a session with a sandbox profile is refused today, with or without account sharing. Sandbox
+  mode is off by default.
+
+**Items load through links** (measured with a control for each).
+
+- **Claude Code:** `CLAUDE.md`, a skill, an agent and a command reached the request (the command body expanded); an
+  output style reached the system prompt; `settings.json` `env` reached a Bash call; a `rules/` file reached the
+  request; a `keybindings.json` binding took effect.
+- **Codex:** every account home ran on D's provider, model and trust from a linked `config.toml`; `AGENTS.md` appeared
+  in `codex debug prompt-input` and in the stub's request; a skill was listed in both homes, with its roots resolved to
+  D; a `rules/` file loaded (`loaded 1 .rules files`), and a broken rule in D made `exec` fail with `Error loading
+  rules: …`. A rule's effect on a real tool call was not verified. `prompts/` could not be confirmed (it does not load
+  in a plain home either).
+- **Grok:** in an account home with each item linked, `grok inspect --json` found `AGENTS.md`, `rules/`, a skill, a
+  command, an agent, hooks and a `plugins/` plugin; a real turn's request carried the markers of all of those but
+  hooks, which fired. Through Octoboard's per-session home (a farm over the account home, whose entries are links into
+  D) the same items loaded and the session landed in D's `sessions/`; `hooks-paths` entries loaded.
+- **Grok's `hooks/` does not reach an Octoboard session.** The per-session home leaves `hooks/` out and writes its own,
+  so only Octoboard's hook ran there. A `grok` run directly against the account home does load the linked hooks.
+- **Grok's marketplace plugins stay off in other accounts.** `grok plugin install` copies the plugin into
+  `installed-plugins/` but turns it on (`[plugins].enabled`, `[[marketplace.sources]]`) in `config.toml`. A plugin
+  installed in D showed in another account's list, with `inspect` saying `enabled: true`, but its skill did not load
+  until the plugin was added to that account's own `config.toml`; a plugin installed from the account landed in D's
+  directory and was on only there. With `config.toml` linked the switch is shared too (not re-measured). Plugins placed
+  directly in `plugins/` are found under any home that links it.
+- **Plugin registries record the installing directory.** Grok's `installed-plugins/registry.json` holds a path into the
+  installing home (`homes/A/installed-plugins/…`), which points into an empty directory once that account stops
+  sharing. Claude Code's `installed_plugins.json` and `known_marketplaces.json` do the same. With A's `plugins/` link
+  removed, the default account still loaded the plugin installed through A and `plugin list` showed it enabled, with
+  no `.orphaned_at` after two starts (executable: an install into a symlinked cache folder is refused under a flagged
+  storage backend, not observed).
+
+**Concurrent conversation-history writes from two directories.**
+
+- **Claude Code** (2.1.304). Two TUIs at once, accounts A and B with `projects/` and the rest linked, same working
+  directory, six turns each including Read, Edit and Bash: each transcript was complete (own session id only, no
+  dangling parents), `file-history/<id>/` and `session-env/<id>/` stayed separate, and `history.jsonl` took 12 new
+  interleaved lines, all valid JSON. A conversation started under A resumed under B, which sent A's whole
+  conversation and appended to the same file; B's `/resume` listed A's sessions. Resuming one id from two accounts at
+  once still forks the transcript (see "Sharing a session directory between accounts").
+- **One account's cleanup reaches every linked directory** (Claude Code 2.1.304, `cleanupPeriodDays: 1`). It deleted
+  old entries through the links in the transcript and its project directory, `file-history/<id>/`, `session-env/<id>/`,
+  `image-cache/<id>/`, `tasks/<id>/`, the plan file, the paste-cache file, the shell-snapshots file and the debug file.
+  An old `todos/` file and an old `history.jsonl` entry were kept.
+- **Codex** (0.162.1). Two homes sharing `config.toml`, `sessions/` and `history.jsonl`, each running a TUI (two
+  turns) and two `exec` workers (four turns) at once: every process exited 0, each of the six rollouts held only its
+  own turns, `history.jsonl` interleaved and parsed, and every thread resumed with all its turns from the other home
+  and from a fresh one. Two homes on the same thread were not re-measured here (see "Sharing a session directory
+  between accounts").
+- **Grok** (1.0.62). Eight `-p` sessions at once (four per account, same working directory, within 0.3 s, replies
+  delayed 4 s): all exited 0, all eight session folders were complete, the shared `prompt_history.jsonl` held all eight
+  prompts with no broken line, and `session_search.sqlite` passed `integrity_check` with eight rows. Two TUIs at once
+  both finished a turn, each home's `active_sessions.json` listing only its own. Cross-account resume carried the
+  earlier turns in both directions, also from one per-session home to another. Two processes on one session were not
+  measured here.
+
+**Codex's state database through a link** (0.162.1).
+
+- **The write-ahead log sits beside the target.** With `A/state_5.sqlite` linked to `D/state_5.sqlite`, no `-wal` or
+  `-shm` appeared in A, and `lsof` showed D's database and both companions open.
+- **Concurrency.** Three rounds: six `exec` workers over D, A and B (two each) with four turns; fifteen workers with six
+  turns; nine workers while TUIs, each with its daemon, ran turns in A and D. All exited 0, every thread had its row,
+  every rollout had the expected `task_complete` count, `PRAGMA integrity_check` returned ok on copies after exit and
+  on a `.backup` taken while the daemons ran, and no locked or busy error appeared in stderr, the daemon logs or any
+  `logs_2.sqlite`.
+- **A dangling link** made Codex create the database at the target and keep the link. **A corrupt target** made Codex
+  run with no runtime databases, without a warning, leaving the link and file untouched.
+- **Mixed versions.** A fake future migration row (99) was tolerated. The real default database was already at
+  migration 61 (from the desktop app's newer Codex) while the CLI knows 59, so mixed versions on one database already
+  happen. A future `state_6.sqlite` could not be measured: a new version would presumably create a plain `state_6` in
+  each home and the link would quietly stop being used, so launch-time repair should match `state_*.sqlite`.
+- **Effect of sharing it.** Every account sees every account's rows (the resume picker lists them). Backfill runs once
+  per database, so an account's private rollouts made before it linked are not imported.
+
+**Codex resume across homes with only `sessions/` shared** (0.162.1; each home keeps its own database).
+
+- A thread made by `exec` in A resumed by `exec resume <id>` in B with A's turns in the request, and A later saw B's
+  turn. A TUI thread made in A was listed by B's `codex resume` picker (B adds the row on start by scanning the shared
+  directory, naming the link path `B/sessions/…`, and the resolved path after a resume), and both `exec resume` and TUI
+  resume carried both turns. The picker reads the database and never lists `exec` threads.
+- **Archiving needs `archived_sessions/` shared**: after `codex archive` in A, B answered `no rollout found for thread
+  id …`.
+- **With `archived_sessions/` shared but the databases separate**, B's row predated the archive and still named the old
+  path: resume gave `no rollout found` and `codex unarchive` from B failed (`failed to unarchive session`), whereas a
+  fresh home gave the proper "is archived" refusal; after A unarchived, B resumed again. With the database shared too
+  (A and B), archive and unarchive were consistent across homes.
+- **Names need `session_index.jsonl` shared**: `/rename` writes the home's own index, and in B without it
+  `exec resume <name>` silently started a new session (Codex does this for any unknown name); with the index linked
+  the name resolved.
+- The revert case (a row naming an older segment) was not re-measured; a shared database removes it, since there is one
+  row.
+
+**Claude Code's auto-allow for auto memory and plan files is lost through a link** (2.1.304; `-p` and TUI, with a
+real-directory control). A write into `projects/<slug>/memory/` is refused under `-p`, and the TUI asks "Do you want to
+create …? … (outside working directory) via a symlink"; the resolved shared path behaves the same. A plan file in
+`plans/` is refused under `-p` (`Cannot write to …plans/… while in plan mode`) and prompts in the TUI. In a real
+directory both go through. Mechanism (executable, confirmed by the results below): the write check runs for every
+spelling of the path, the requested `<account>/projects/…` and the link-resolved `<shared>/projects/…`, and each must
+be allowed. Auto memory is allowed when the path starts with `<configDir>/projects/<key>/memory/` (the account's
+spelling) and a plan file when its parent equals `<configDir>/plans`; the resolved spelling never matches, and only
+fixed system pairs such as `/private/tmp` and `/tmp` count as equivalent.
+
+- **Auto memory, what restored it:**
+  - `CLAUDE_CODE_REMOTE_MEMORY_DIR=<shared directory's real path>` works under `-p` and in the TUI (process
+    environment); set in the shared `settings.json` `env` block it works for sharing and default accounts (`-p` only
+    measured). Memory lands in `<shared>/projects/<key>/memory/` with the same key the default account uses natively
+    (the git root), so nothing moves and a resume under another account sees it. It is an internal, undocumented
+    variable and is passed on to child processes. From the executable, not measured: it also moves user-scope agent
+    memory to `<shared>/agent-memory` and local-scope agent memory to `<shared>/projects/<key>/agent-memory-local`, and
+    a restarted background job drops it.
+  - `permissions.allow` rules for both spellings (`Edit(/<shared>/projects/*/memory/**)` and
+    `Edit(/<account>/projects/*/memory/**)`) work, but the account spelling differs per account, so it needs a
+    per-launch `--settings`; one spelling alone is refused; the wildcard `Edit(//**/projects/*/memory/**)` worked under
+    `-p` and is broad.
+  - Not restoring it, or only badly: `autoMemoryDirectory` set to the link path (refused, prompts); set to the
+    resolved `<shared>/projects/<slug>/memory` it works, but it is one directory for all projects (another working
+    directory used it too), merging every project's memory; `additionalDirectories: [<shared>/projects]` does nothing.
+- **Plan files, what restored it:** `plansDirectory: ".claude/plans"` (relative to the project) works under `-p` and in
+  the TUI, also from a shared `settings.json`, for account and default alike; plans then live in the project's working
+  tree (could be committed), visible to every account there, move the default account's plans too, and fall out of
+  the configuration directory's cleanup sweep (inferred). An absolute `plansDirectory` outside the project is ignored
+  and refused (it must resolve inside the project root, else it falls back to `<config>/plans`).
+- **Plan files, what did not:** allow rules for both spellings, `additionalDirectories`, and
+  `CLAUDE_CODE_REMOTE_MEMORY_DIR`. Linking per-project subdirectories still puts a link in the path (same rejection by
+  reasoning; not run).
+- **Not measured:** leaving `plans/` unshared, which keeps the auto-allow but means an in-progress plan file does not
+  follow a conversation resumed under another account.
+
+**Residue the probes leave outside the scratch directory.**
+
+- **Grok** writes lock-slot files to `/tmp/grok-file-lock-<uid>/` whatever `TMPDIR` says.
+- **Claude Code** creates per-working-directory temp directories in `/tmp/claude-<uid>/` despite `TMPDIR`. Its first
+  TUI run from a throwaway `HOME` also registered `<HOME>/Applications/Claude Code URL Handler.app` as a system-wide
+  `claude-cli://` handler with LaunchServices (`lsregister -u` removes it); setting `disableDeepLinkRegistration` to
+  `"disable"` in the settings stops later runs from doing it.
+- **Codex** makes every TUI start in a scratch home launch `<home>/packages/app-server-daemon/…/codex app-server
+  --managed-daemon` (parent pid 1), which outlives the TUI and copies about 323 MB into that home's `packages/`. Its
+  sockets in `/tmp/codex-daemon-<uid>/` are removed on exit.
+
+**Not verified.** Claude Code: the model's retry of a refused Edit or Write on the link's target; synced-skill buckets
+across accounts; whether the history lock is shared across accounts; the retention prune of `history.jsonl` (it never
+ran, even in a control); loading of `workflows/`, `themes/`, `hooks/`, `agent-memory/` and `loop.md` through a link;
+the install refusal for a symlinked `plugins/`; Claude Code 2.1.274. Codex: a link on a future `state_6.sqlite`;
+`plugins/`, `agents/`, `themes/`, `hooks.json` through a link; whether rollouts reference `generated_images/`; a rule's
+effect on a real tool call; whether a daemon holding a thread notices another home changing the shared row; `prompts/`
+on other versions. Grok: whether `--reasoning-effort` writes into `config.toml`; two processes on one session;
+loading of `personas/`, `workflows/`, `lsp.json`, `settings.json`, `sandbox.toml`, `statusline.sh`.
 
 ## Codex resume from aged rollouts
 

@@ -17,22 +17,36 @@ account's login.
 ## Key design decisions
 
 - **One switch per account, sharing everything shareable.** There is no per-item choice: each agent has a fixed list of
-  shareable items (milestone 01), and the switch links all of them.
+  shareable items, catalogued in the daemon, and the switch links all of them.
 - **The default directory is the one the agent's default account resolves to** — the shell's `CLAUDE_CONFIG_DIR` /
   `CODEX_HOME` / `GROK_HOME` when set, else `~/.claude` / `~/.codex` / `~/.grok` — the same resolution Octoboard already
   uses for the default account.
 - **The default account has no switch** — it is the directory being shared.
 - **Never shared**: login credentials (Claude Code's credentials, `auth.json`), Claude Code's `.claude.json` (it holds
   the account's identity, per-project trust and user-scope MCP servers in one file, so it cannot be shared in part; a
-  user-scope MCP server is therefore not shared), and Grok Build's `config.toml` and `trusted_folders.toml`, which Grok
-  rewrites by replacing the file.
+  user-scope MCP server is therefore not shared), Grok Build's `trusted_folders.toml`, which Grok replaces with a plain
+  file when it saves it, and Grok Build's `hooks-paths`, which Grok refuses to write through a link.
+- **Configuration files are shared whole, account-specific settings included.** Codex's and Grok Build's `config.toml`
+  are shared: they hold the model, MCP servers and plugin switches (Grok turns an installed plugin on there, so an
+  unshared `config.toml` would leave shared plugins off), and both agents save them by replacing the link's target,
+  keeping the link. The cost is accepted: Codex's per-project trust becomes common to every sharing account, and any
+  absolute path written in the default directory's `config.toml` applies to all of them.
 - **Conversation history is shared.** Claude Code's `projects/`, `file-history/` and the other per-session data,
-  Codex's `sessions/`, Grok Build's `sessions/`. Session files are named by session id, so accounts writing at once do
-  not collide.
-- **Codex's state database is shared only if it is safe.** Codex resumes the rollout its `state_<n>.sqlite` names. If
-  milestone 01 finds the database cannot be safely opened through a link by several processes, Codex shares
-  `sessions/` without it — provided a conversation still resumes under another sharing account; if it does not, Codex
-  shares no conversation history and its account switch keeps copying.
+  Codex's `sessions/`, `archived_sessions/`, `session_index.jsonl` and state database, Grok Build's `sessions/`.
+  Session files are named by session id, so accounts writing different sessions at once do not collide.
+- **Claude Code's `plans/` is not shared.** Claude Code writes a plan file in plan mode without asking only when its
+  directory is the account's own `plans/`; through a link it asks, or refuses outright in a headless run, and no setting
+  restores that outside the project tree. An in-progress plan file therefore does not follow a conversation to another
+  account.
+- **Claude Code's auto memory is pointed at the shared directory.** Its writes into `projects/<key>/memory/` are
+  allowed without asking only when the path is spelled inside the account's own directory, so through a linked
+  `projects/` they ask or are refused. Octoboard sets `CLAUDE_CODE_REMOTE_MEMORY_DIR` to the resolved default
+  directory in the launch environment of a sharing Claude Code account's sessions, which keeps memory where the default
+  account keeps it and restores the exemption. It is never written into the user's `settings.json`. Its limits are
+  accepted: it is an undocumented internal variable, and it is not in effect when the account is run from a terminal.
+- **Codex's state database is shared.** Codex resumes the rollout its `state_<n>.sqlite` names; opened through a link,
+  SQLite keeps its write-ahead log beside the target, so several processes across accounts share one log safely, and a
+  shared database keeps a per-account row from naming a stale rollout or an archived thread.
 - **Turning the switch on:**
   - configuration items the account already holds are renamed to a backup (`<name>.bak-<date>`) and replaced by the
     link — nothing is lost and nothing is merged into the default directory behind the user's back;
@@ -54,7 +68,7 @@ account's login.
 
 ## Milestones
 
-- [01 Shareable item catalog](01-shareable-item-catalog.md)
+- 01 Shareable item catalog (closed)
 - 02 Account switch over shared conversations (closed)
 - [03 Linking, restoring and launch-time repair](03-linking-and-repair.md)
 - [04 Account settings switch](04-account-settings-switch.md)
