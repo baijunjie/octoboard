@@ -394,9 +394,17 @@ export function App(): React.ReactElement {
    * hold any number of live console sessions, so there is nothing to pre-emptively refuse here —
    * selecting, resuming or reopening one simply works, whatever else is running in the console. */
   const resumeSession = async (sessionId: string): Promise<boolean> =>
-    runOnce(`resume:${sessionId}`, () =>
-      whileResuming(setResumingIds, sessionId, () => request({ type: "resume_session", session: sessionId })),
-    );
+    runOnce(`resume:${sessionId}`, () => startResume(sessionId));
+
+  const startResume = (sessionId: string): Promise<void> =>
+    whileResuming(setResumingIds, sessionId, () => request({ type: "resume_session", session: sessionId }));
+
+  /** Resumes an archived or interrupted session for the session dialog: the same request as
+   * `resumeSession`, with the terminal's resuming state and in-flight guard, but rejecting with the
+   * daemon's reason (an unresumable conversation, a failed unarchive) for the dialog to show, rather
+   * than toasting it. */
+  const resumeFromDialog = (sessionId: string): Promise<void> =>
+    runOnceRejecting(inFlightRef.current, `resume:${sessionId}`, () => startResume(sessionId));
 
   /** Switches a session's account. The session counts as resuming while it runs, so its terminal
    * says so instead of offering a Resume that would race the switch. Rejects with the daemon's
@@ -1026,6 +1034,7 @@ export function App(): React.ReactElement {
           onClose={closeDialog}
           onSessionOpened={showOpenedSession}
           onSwitchAccount={switchAccount}
+          onResumeSession={resumeFromDialog}
         />
       )}
       {linkedFile && (
@@ -1057,7 +1066,7 @@ export function App(): React.ReactElement {
   );
 }
 
-// The two helpers below sit outside `App` because the React Compiler cannot compile a component
+// The helpers below sit outside `App` because the React Compiler cannot compile a component
 // holding a `try` with a `finally`.
 
 /** Runs `action` unless one with the same `key` is in `inFlight`; says whether it went through. A
@@ -1069,21 +1078,29 @@ async function runOnceGuarded(
   action: () => Promise<void>,
   toastError: (message: string | Error) => void,
 ): Promise<boolean> {
-  if (inFlight.has(key)) return true;
+  try {
+    await runOnceRejecting(inFlight, key, action);
+    return true;
+  } catch (err) {
+    toastError(errorPresentation(err as Error));
+    return false;
+  }
+}
+
+/** `runOnceGuarded` without the toast: a failure is rethrown for the caller to show. The same
+ * calls count as having gone through: one while another is in flight, and an "already running"
+ * refusal. */
+async function runOnceRejecting(inFlight: Set<string>, key: string, action: () => Promise<void>): Promise<void> {
+  if (inFlight.has(key)) return;
   inFlight.add(key);
   try {
     await action();
-    return true;
   } catch (err) {
     // The in-flight guard above already stops this client from causing the double-click kind of
     // "already running" (see `ALREADY_RUNNING_CODES`), but another path to the same session — the
     // sidebar row and the terminal's Resume button, for instance — can still race it.
     const isAlreadyRunning = err instanceof DaemonRequestError && ALREADY_RUNNING_CODES.includes(err.code);
-    if (!isAlreadyRunning) {
-      toastError(errorPresentation(err as Error));
-      return false;
-    }
-    return true;
+    if (!isAlreadyRunning) throw err;
   } finally {
     inFlight.delete(key);
   }

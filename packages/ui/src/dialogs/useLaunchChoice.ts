@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { avoidExhaustedAccount, choiceExhaustion, choiceGroups, choiceKey, currentChoice, findEntry, inheritedAccount, settledInitialChoice, type AccountChoice } from "../accountChoices";
+import { avoidExhaustedAccount, choiceExhaustion, choiceGroups, choiceKey, currentChoice, findEntry, inheritedAccount, settledInitialChoice, type AccountChoice, type ChoiceGroup } from "../accountChoices";
 import { AGENT_LABEL, agentsInListingOrder, defaultAccountName, inheritedSessionLaunch, launchWithOverrides, pickableAgents, projectSessionAgent } from "../agents";
 import { agentIconPickerOptions } from "../components/AgentIcon";
 import { useT } from "../i18n/react";
@@ -12,19 +12,8 @@ import { accountOption } from "./accountOptions";
 
 type Overrides = { model?: string | null; effort?: string | null };
 
-/**
- * What a dialog that starts a session of some agent asks for: the agent and its account, which
- * open on what a new session of the project (or, without one, the console) would use and which the
- * user can change, and the model and reasoning effort, which follow the project or console until
- * changed. `exclude` leaves one agent out of the choice altogether (a handoff never goes to the
- * session's own agent). `overrides` holds only what the user changed, for the request.
- *
- * An account whose quota is used up cannot be chosen: it is listed disabled with why, the choice
- * opens on another account of the agent when the one it would inherit is used up, and `usedUp`, when
- * even the account the choice ends on is used up (every account of the agent is, or it is the agent's
- * only one), says why it cannot be used, for the dialog to refuse its submit with.
- */
-export function useLaunchChoice(parentConsole: Console, project: Project | undefined, exclude?: Agent) {
+/** Every agent's group of accounts as the pickers offer them, with the used-up quota of each account marked. */
+export function useChoiceGroups(): ChoiceGroup[] {
   const t = useT();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
@@ -32,11 +21,34 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const quotas = useDaemonStore((s) => s.accountQuotas);
   const now = useNow();
+  return choiceGroups(accounts, agentAvailability, addedAgents, (agent) => defaultAccountName(t, defaultNames, agent), { quotas, now });
+}
+
+/**
+ * What a dialog that starts a session of some agent asks for: the agent and its account, which
+ * open on what a new session of the project (or, without one, the console) would use and which the
+ * user can change, and the model and reasoning effort, which follow the project or console until
+ * changed. `exclude` leaves one agent out of the choice altogether (a handoff never goes to the
+ * session's own agent). `forced` is an agent and account the dialog settles itself, which then stand
+ * in place of the pickers' (ignored while that pair may not be picked). `overrides` holds only what the
+ * user changed, for the request.
+ *
+ * An account whose quota is used up cannot be chosen: it is listed disabled with why, the choice
+ * opens on another account of the agent when the one it would inherit is used up, and `usedUp`, when
+ * even the account the choice ends on is used up (every account of the agent is, or it is the agent's
+ * only one), says why it cannot be used, for the dialog to refuse its submit with.
+ */
+export function useLaunchChoice(parentConsole: Console, project: Project | undefined, exclude?: Agent, forced?: AccountChoice) {
+  const t = useT();
+  const agentAvailability = useDaemonStore((s) => s.agentAvailability);
+  const addedAgents = useDaemonStore((s) => s.settings.added_agents);
+  const accounts = useDaemonStore((s) => s.settings.accounts);
+  const now = useNow();
   const [pickedAgent, setPickedAgent] = useState<Agent>();
   const [pickedAccounts, setPickedAccounts] = useState<Partial<Record<Agent, string | null>>>({});
   const [launchSettings, setLaunchSettings] = useState<Partial<Record<Agent, Overrides>>>({});
 
-  const groups = choiceGroups(accounts, agentAvailability, addedAgents, (agent) => defaultAccountName(t, defaultNames, agent), { quotas, now }).filter((group) => group.agent !== exclude);
+  const groups = useChoiceGroups().filter((group) => group.agent !== exclude);
   const pickedAccount = pickedAgent ? pickedAccounts[pickedAgent] : undefined;
   const pickedEntry = groups.find((group) => group.agent === pickedAgent)?.entries.find((entry) => entry.account === pickedAccount);
   const picked = pickedAgent
@@ -56,7 +68,8 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
     const agent = selectable.includes(wanted) ? wanted : selectable[0] ?? agentsInListingOrder(addedAgents).find((other) => other !== exclude)!;
     initial = avoidExhaustedAccount({ agent, account: inheritedAccount(parentConsole, project, agent, accounts) }, groups);
   }
-  const choice = currentChoice(picked, initial, groups);
+  const forcedEntry = forced && findEntry(groups, choiceKey(forced));
+  const choice = forced && forcedEntry?.selectable ? forced : currentChoice(picked, initial, groups);
   const accountEntries = groups.find((group) => group.agent === choice.agent)?.entries ?? [];
   const overrides = launchSettings[choice.agent];
   const { model, effort } = launchWithOverrides(inheritedSessionLaunch(parentConsole, project, choice.agent), overrides);

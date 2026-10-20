@@ -114,7 +114,7 @@ command form stays silent.
 into the conversation on its first turn and replay it on every resume afterwards, so changing a
 session's role later is not possible: a session that belongs on the other side of the orchestration
 is a new session. For the same reason, a session opened to resume a conversation started outside Octoboard (see
-"Resuming a conversation started outside Octoboard" in `docs/product/sessions.md`) may not take up its role
+"Resuming a conversation by its session ID" in `docs/product/sessions.md`) may not take up its role
 description with Claude Code or Grok Build, which keep what that conversation recorded; the status hooks and
 Octoboard's MCP server are injected as on any resume.
 

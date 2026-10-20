@@ -37,6 +37,25 @@ describe("the fixture daemon's session archiving", () => {
   });
 });
 
+describe("the fixture daemon's conversation lookup", () => {
+  const ID = "3f2b8c1e-7a4d-4e9b-9c55-0d6a1b2e4f70";
+  const ask = (conversationLocation?: NonNullable<Parameters<typeof createFixtureDaemon>[0]["conversationLocation"]>) =>
+    createFixtureDaemon({ id: "locate", group: "Sidebar sessions", category: "normal", title: "", conversationLocation }).request({ type: "locate_conversation_to_resume", project: "p", agent_session_id: ID });
+
+  it("answers with the location the scenario gives, and not found by default", async () => {
+    await expect(ask({ kind: "record", agent: "codex", account: null })).resolves.toEqual({ type: "conversation_located", location: { kind: "record", agent: "codex", account: null } });
+    await expect(ask()).resolves.toMatchObject({ type: "conversation_located", location: { kind: "not_found" } });
+  });
+
+  it("refuses with the scenario's error, and never answers a pending one", async () => {
+    await expect(ask({ code: "unknown_project", params: { project: "p" }, message: "unknown project p" })).rejects.toMatchObject({ code: "unknown_project" });
+    const settled = vi.fn();
+    void ask("pending").then(settled, settled);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(settled).not.toHaveBeenCalled();
+  });
+});
+
 describe("the fixture daemon's session reopening", () => {
   it("restores an archived session and its archived owners while preserving its children", async () => {
     const owner = sessionOf("owner", "c", undefined, "Hub", "archived", { ended_at: 10 });

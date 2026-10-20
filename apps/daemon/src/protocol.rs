@@ -1626,6 +1626,20 @@ pub enum RequestBody {
         #[serde(default)]
         account: Option<String>,
     },
+    /// Where the conversation `agent_session_id` (an id the agent wrote, as `open_session`'s
+    /// `resume_agent_session_id`) is held, for the new-session dialog of the project `project`,
+    /// answered with `conversation_located`. A session that records it comes first, whatever its
+    /// agent or project: an archived session of `project` (to reopen), another session of
+    /// `project` (running already), or a session outside `project`. Otherwise the on-disk record
+    /// is looked for in the default account and every account of each agent that is available
+    /// and added, in the directory a launch would use, and a conversation recorded in more than
+    /// one is placed in the one whose record was written to last. An id that is not a UUID is
+    /// refused with `resume_id_invalid`, a `project` that does not exist with `unknown_project`.
+    /// Reads the disk only.
+    LocateConversationToResume {
+        project: String,
+        agent_session_id: String,
+    },
     /// The configuration document of the console `console`, or, when it is absent, of every
     /// console and the application settings, answered with `configuration_exported`. A console
     /// that does not exist is refused with `unknown_console`. Reads what is stored; touches no
@@ -2372,6 +2386,11 @@ pub enum Event {
         models: Vec<AgentModel>,
         unavailable: Option<ModelsUnavailable>,
     },
+    /// The reply to `locate_conversation_to_resume`: where the conversation is held.
+    ConversationLocated {
+        id: Option<String>,
+        location: ConversationLocation,
+    },
     /// The reply to `export_configuration`: the configuration document, which a client saves as
     /// the file the user keeps (see "Configuration export" in `apps/daemon/PROTOCOL.md`).
     ConfigurationExported {
@@ -2598,6 +2617,27 @@ impl Event {
             message,
         }
     }
+}
+
+/// Where a conversation is held, as `locate_conversation_to_resume` reports it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ConversationLocation {
+    /// An archived session of the asking project records it: reopening that session continues it.
+    ArchivedSession { session: String },
+    /// A session of the asking project that is not archived records it, running or dormant: its
+    /// conversation is in use already.
+    LiveSession { session: String },
+    /// A session outside the asking project, a console session included, records it in any state.
+    OutsideProject { session: String },
+    /// No session records it, and an agent's own records do, in this account (`null` for the
+    /// agent's default account).
+    Record {
+        agent: Agent,
+        account: Option<String>,
+    },
+    /// No session records it and no account of an available, added agent holds it.
+    NotFound,
 }
 
 /// One model an agent offers, as `list_agent_models` reports it.

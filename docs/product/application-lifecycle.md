@@ -118,7 +118,7 @@ is marked invalid. A field is never marked before the user has tried to submit: 
 which sends nothing while any field is still wanting — and from then on follows what is typed, so it goes as soon as
 the field is corrected and comes back if the field is emptied again. A rejection by the daemon that is about one
 field's value is said under that field too, where the dialog knows which field it concerns: the session dialog's
-refusals of a conversation to resume (see "Resuming a conversation started outside Octoboard" in
+refusals of a conversation to resume (see "Resuming a conversation by its session ID" in
 `docs/product/sessions.md`).
 
 ## Closing the window

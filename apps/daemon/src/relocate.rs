@@ -353,7 +353,7 @@ fn search(
     }
 }
 
-fn modified(path: &Path) -> SystemTime {
+pub(crate) fn modified(path: &Path) -> SystemTime {
     std::fs::metadata(path)
         .and_then(|metadata| metadata.modified())
         .unwrap_or(SystemTime::UNIX_EPOCH)

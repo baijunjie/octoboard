@@ -422,6 +422,12 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           if (!owner) return fail({ code: "unknown_console", params: { console: body.console }, message: `unknown console ${body.console}` });
           return { type: "console_session_title", console: body.console, title: owner.name };
         }
+        case "locate_conversation_to_resume": {
+          const located = scenario.conversationLocation ?? { kind: "not_found" as const };
+          if (located === "pending") return new Promise<Event>(() => {});
+          if ("code" in located) return fail(located);
+          return { type: "conversation_located", location: located };
+        }
         case "open_session": {
           if (scenario.sessionOpenError) return fail(scenario.sessionOpenError);
           const current = store.getState();

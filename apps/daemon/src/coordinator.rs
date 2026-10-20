@@ -9,7 +9,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use anyhow::{Context, Result};
 use uuid::Uuid;
@@ -38,9 +38,9 @@ use crate::open_directory;
 use crate::open_terminal;
 use crate::protocol::{
     error_code, error_parts, notice_code, now_millis, Account, Agent, ApprovalReviewer,
-    Availability, ClaudeApprovalMode, CodedError, Console, ConsoleSessionColour, Event, Notice,
-    Origin, Present, Project, ProjectAccount, ProjectSource, RequestBody, Role, Session,
-    SessionBranchItem, SessionBranchTarget, SessionStatus,
+    Availability, ClaudeApprovalMode, CodedError, Console, ConsoleSessionColour,
+    ConversationLocation, Event, Notice, Origin, Present, Project, ProjectAccount, ProjectSource,
+    RequestBody, Role, Session, SessionBranchItem, SessionBranchTarget, SessionStatus,
 };
 use crate::relocate;
 use crate::reporting;
@@ -565,6 +565,43 @@ async fn handle_inner(
                 account: account_id,
                 models: listing.models,
                 unavailable: listing.unavailable,
+            }))
+        }
+
+        RequestBody::LocateConversationToResume {
+            project,
+            agent_session_id,
+        } => {
+            if state.store.get_project(&project)?.is_none() {
+                return Err(CodedError::unknown_project(&project));
+            }
+            let id = parse_conversation_id(&agent_session_id)?;
+            let location = match state.store.session_by_agent_session_id(&id, None)? {
+                Some(holder) => held_conversation(&holder, &project),
+                None => {
+                    // An undecided list offers every agent, as `refuse_unless_agent_added` does.
+                    let added = state.store.added_agents()?;
+                    let agents: Vec<Agent> = Agent::ALL
+                        .into_iter()
+                        .filter(|agent| agent_is_available(state, *agent))
+                        .filter(|agent| added.as_ref().is_none_or(|list| list.contains(agent)))
+                        .collect();
+                    let accounts = state.store.list_accounts()?;
+                    tokio::task::spawn_blocking(move || {
+                        find_conversation_to_resume(
+                            &agents,
+                            &accounts,
+                            &id,
+                            env_shell::launch_snapshot,
+                        )
+                    })
+                    .await??
+                    .unwrap_or(ConversationLocation::NotFound)
+                }
+            };
+            Ok(Some(Event::ConversationLocated {
+                id: request_id,
+                location,
             }))
         }
 
@@ -2070,24 +2107,29 @@ fn checked_resume_id(
             &[("first", "resume_agent_session_id"), ("second", "bound_to")],
         ));
     }
-    let Ok(parsed) = Uuid::parse_str(&id) else {
-        return Err(CodedError::raised(
-            error_code::RESUME_ID_INVALID,
-            format!("`{id}` is not a conversation id: it must be a UUID"),
-            &[("id", &id)],
-        ));
-    };
-    // The agents write their ids lowercase and hyphenated, which is how a record is looked for
-    // and stored, however the user typed it.
-    let id = parsed.hyphenated().to_string();
+    let id = parse_conversation_id(&id)?;
     refuse_if_conversation_recorded(state, &id, project_id, None)?;
     Ok(Some(id))
+}
+
+/// `id` as the agents write a conversation id, lowercase and hyphenated, which is how a record is
+/// looked for and stored however the user typed it; refused with `resume_id_invalid` when it is no
+/// UUID.
+fn parse_conversation_id(id: &str) -> Result<String> {
+    match Uuid::parse_str(id) {
+        Ok(parsed) => Ok(parsed.hyphenated().to_string()),
+        Err(_) => Err(CodedError::raised(
+            error_code::RESUME_ID_INVALID,
+            format!("`{id}` is not a conversation id: it must be a UUID"),
+            &[("id", id)],
+        )),
+    }
 }
 
 /// Refuses `id` when a session other than `except` records it as its agent's conversation id, in
 /// any project and in any state: two processes must never share one transcript. A session of
 /// `project_id` is named so the user can resume it instead; any other, a console session
-/// included, is only said to be outside the project.
+/// included, is said to be outside the project, with its id for the UI to name.
 fn refuse_if_conversation_recorded(
     state: &Arc<AppState>,
     id: &str,
@@ -2110,7 +2152,7 @@ fn refuse_if_conversation_recorded(
         CodedError::raised(
             error_code::CONVERSATION_OUTSIDE_PROJECT,
             "this conversation already belongs to a session outside this project",
-            &[("id", id)],
+            &[("id", id), ("session", &holder.id)],
         )
     })
 }
@@ -2162,6 +2204,88 @@ fn locate_conversation_to_resume(
         Err(err) => err,
     })?;
     Ok(shell_env)
+}
+
+/// Where a conversation is held that `holder` records, for the project `project` asking: an
+/// archived session of it can be reopened, any other session of it is running already, and one
+/// outside it (another project's, or a console session) belongs elsewhere whatever its state.
+fn held_conversation(holder: &Session, project: &str) -> ConversationLocation {
+    if holder.project_id.as_deref() != Some(project) {
+        ConversationLocation::OutsideProject {
+            session: holder.id.clone(),
+        }
+    } else if holder.status == SessionStatus::Archived {
+        ConversationLocation::ArchivedSession {
+            session: holder.id.clone(),
+        }
+    } else {
+        ConversationLocation::LiveSession {
+            session: holder.id.clone(),
+        }
+    }
+}
+
+/// Where the record of the conversation `id` is among the accounts a session could be opened with:
+/// for each of `agents`, its default account (resolved from the shell snapshot, taken only if
+/// there is one to look in) and each of its `accounts`, in the directory
+/// [`locate_conversation_to_resume`] would look in. When more than one holds it, the account whose
+/// record was written to last, since that is the conversation that went on, as a
+/// [`ConversationLocation::Record`] (`None` for the default account, as in a session's own
+/// account). A record's age is the modification time of what [`relocate::locate`] names, which for
+/// Grok Build is the session's directory, so only approximately when the last write was inside it.
+/// A snapshot that fails leaves the default accounts out, so as not to hide a stored account's
+/// record, and is the error only when nothing was found anywhere. Blocking.
+fn find_conversation_to_resume(
+    agents: &[Agent],
+    accounts: &[Account],
+    id: &str,
+    snapshot: impl FnOnce() -> Result<HashMap<String, String>>,
+) -> Result<Option<ConversationLocation>> {
+    let mut snapshot = Some(snapshot);
+    let mut shell_env: Option<HashMap<String, String>> = None;
+    let mut snapshot_error = None;
+    let mut newest: Option<(SystemTime, ConversationLocation)> = None;
+    for &agent in agents {
+        let default = (None, None);
+        let pinned = accounts
+            .iter()
+            .filter(|account| account.agent == agent)
+            .map(|account| (Some(account.id.clone()), Some(account.config_dir.as_str())));
+        for (account, config_dir) in std::iter::once(default).chain(pinned) {
+            if config_dir.is_none() {
+                if let Some(take) = snapshot.take() {
+                    match take() {
+                        Ok(env) => shell_env = Some(env),
+                        Err(err) => {
+                            snapshot_error =
+                                Some(err.context("snapshotting the user's shell environment"))
+                        }
+                    }
+                }
+                if shell_env.is_none() {
+                    continue;
+                }
+            }
+            let dir = account_dir(agent, config_dir, shell_env.as_ref());
+            let record = match relocate::locate(agent, &dir, id) {
+                Ok(record) => record,
+                Err(err) => match err.downcast::<CodedError>() {
+                    Ok(coded) if coded.code == error_code::CONVERSATION_NOT_FOUND => continue,
+                    Ok(coded) => return Err(anyhow::Error::new(coded)),
+                    Err(err) => return Err(err),
+                },
+            };
+            let written = relocate::modified(&dir.join(record));
+            if newest.as_ref().is_none_or(|(latest, _)| written > *latest) {
+                newest = Some((written, ConversationLocation::Record { agent, account }));
+            }
+        }
+    }
+    match (newest, snapshot_error) {
+        (Some((_, location)), _) => Ok(Some(location)),
+        (None, Some(err)) => Err(err),
+        (None, None) => Ok(None),
+    }
 }
 
 /// A session that is recorded and published as `starting`, whose agent process is still to be
@@ -9329,6 +9453,11 @@ mod tests {
             err.downcast_ref::<CodedError>().unwrap().params["session"],
             "holder"
         );
+        let err = check(Role::Project, Some("project-2"), None, ID).unwrap_err();
+        assert_eq!(
+            err.downcast_ref::<CodedError>().unwrap().params["session"],
+            "holder"
+        );
         let free = "99999999-2222-3333-4444-555555555555";
         assert_eq!(
             check(
@@ -9391,6 +9520,173 @@ mod tests {
         std::fs::create_dir_all(record.parent().unwrap()).unwrap();
         std::fs::write(&record, "").unwrap();
         locate_conversation_to_resume(Agent::Claude, None, ID, snapshot).unwrap();
+    }
+
+    /// The conversation to resume is placed in the account whose record was written to last, in the
+    /// default account and the pinned ones of every agent offered, and nowhere when none holds it.
+    #[test]
+    fn a_conversation_to_resume_is_located_in_the_account_written_to_last() {
+        const ID: &str = "11111111-2222-3333-4444-555555555555";
+        let dir = temp_dir("resume-conversation-found");
+        let account = |id: &str, agent, dir: PathBuf| Account {
+            id: id.to_string(),
+            agent,
+            name: id.to_string(),
+            config_dir: dir.to_string_lossy().into_owned(),
+            approval_reviewer: None,
+            approval_mode: None,
+        };
+        let (work, other) = (dir.join("work"), dir.join("other"));
+        let accounts = [
+            account("work", Agent::Claude, work.clone()),
+            account("other", Agent::Claude, other.clone()),
+        ];
+        let write_record = |config_dir: &Path, seconds: u64| {
+            let record = config_dir.join("projects/slug").join(format!("{ID}.jsonl"));
+            std::fs::create_dir_all(record.parent().unwrap()).unwrap();
+            std::fs::write(&record, "").unwrap();
+            std::fs::File::options()
+                .write(true)
+                .open(&record)
+                .unwrap()
+                .set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(seconds))
+                .unwrap();
+        };
+        let find = |agents: &[Agent]| {
+            find_conversation_to_resume(agents, &accounts, ID, shell_env(&dir)).unwrap()
+        };
+        let in_account = |agent, account: &str| {
+            Some(ConversationLocation::Record {
+                agent,
+                account: Some(account.to_string()),
+            })
+        };
+
+        assert_eq!(find(&[Agent::Claude, Agent::Grok]), None);
+
+        write_record(&other, 100);
+        assert_eq!(find(&[Agent::Claude]), in_account(Agent::Claude, "other"));
+        assert_eq!(
+            find(&[Agent::Codex, Agent::Grok]),
+            None,
+            "only the agents offered"
+        );
+
+        write_record(&work, 200);
+        assert_eq!(find(&[Agent::Claude]), in_account(Agent::Claude, "work"));
+
+        // The default account's directory comes from the snapshot, which only a lookup that has a
+        // default account to look in takes.
+        write_record(&dir.join("default-claude"), 300);
+        assert_eq!(
+            find(&[Agent::Claude]),
+            Some(ConversationLocation::Record {
+                agent: Agent::Claude,
+                account: None,
+            })
+        );
+
+        // A shell that cannot be snapshotted leaves the default accounts out, not the stored ones;
+        // it is the failure only when nothing was found.
+        let no_shell = || -> Result<HashMap<String, String>> { anyhow::bail!("no login shell") };
+        assert_eq!(
+            find_conversation_to_resume(&[Agent::Claude], &accounts, ID, no_shell).unwrap(),
+            in_account(Agent::Claude, "work"),
+        );
+        let other_id = "99999999-2222-3333-4444-555555555555";
+        let err = find_conversation_to_resume(&[Agent::Claude], &accounts, other_id, no_shell)
+            .expect_err("nothing found, and the default account unknown");
+        assert!(format!("{err:#}").contains("no login shell"));
+
+        // A Grok record in another agent's directory layout, written later still.
+        let grok = dir.join("grok-home");
+        let grok_account = account("grok", Agent::Grok, grok.clone());
+        std::fs::create_dir_all(grok.join("sessions/cwd").join(ID)).unwrap();
+        let both = [accounts[0].clone(), grok_account];
+        assert_eq!(
+            find_conversation_to_resume(&[Agent::Claude, Agent::Grok], &both, ID, shell_env(&dir))
+                .unwrap(),
+            in_account(Agent::Grok, "grok"),
+        );
+    }
+
+    /// `locate_conversation_to_resume` names the session that records the conversation, by whose
+    /// it is and what state it is in, before any record on disk is looked at; an id that is no UUID
+    /// and a project that does not exist are refused, and a conversation nobody holds is not found.
+    #[tokio::test]
+    async fn locating_a_conversation_to_resume_names_the_session_that_holds_it() {
+        const ID: &str = "11111111-2222-3333-4444-555555555555";
+        let (state, _dir) = console_with_project_and_accounts("coordinator-locate-held");
+        let locate = |project: &str, id: &str| {
+            handle(
+                &state,
+                Some("req-1".to_string()),
+                RequestBody::LocateConversationToResume {
+                    project: project.to_string(),
+                    agent_session_id: id.to_string(),
+                },
+            )
+        };
+        let located = |reply: Option<Event>| match reply {
+            Some(Event::ConversationLocated { id, location }) => {
+                assert_eq!(id.as_deref(), Some("req-1"));
+                location
+            }
+            other => panic!("expected conversation_located, got {other:?}"),
+        };
+        let mut holder = project_session("holder", Agent::Claude, SessionStatus::Archived);
+        holder.agent_session_id = Some(ID.to_string());
+        state.store.insert_session(&holder).unwrap();
+        let project = holder.project_id.clone().expect("a project session");
+        let mut other = state.store.get_project(&project).unwrap().unwrap();
+        other.id = "project-2".to_string();
+        other.path.push_str("-2");
+        state.store.insert_project(&other).unwrap();
+
+        // Upper case, as the user may type it: held all the same.
+        let archived = located(locate(&project, &ID.to_uppercase()).await.unwrap());
+        assert_eq!(
+            archived,
+            ConversationLocation::ArchivedSession {
+                session: "holder".to_string()
+            }
+        );
+
+        for (status, project_id, expected) in [
+            (
+                SessionStatus::Idle,
+                Some(project.as_str()),
+                ConversationLocation::LiveSession {
+                    session: "holder".to_string(),
+                },
+            ),
+            (
+                SessionStatus::Archived,
+                Some("project-2"),
+                ConversationLocation::OutsideProject {
+                    session: "holder".to_string(),
+                },
+            ),
+            (
+                SessionStatus::Idle,
+                None,
+                ConversationLocation::OutsideProject {
+                    session: "holder".to_string(),
+                },
+            ),
+        ] {
+            let mut moved = holder.clone();
+            moved.status = status;
+            moved.project_id = project_id.map(str::to_string);
+            state.store.delete_session("holder").unwrap();
+            state.store.insert_session(&moved).unwrap();
+            assert_eq!(located(locate(&project, ID).await.unwrap()), expected);
+        }
+
+        let err = locate(&project, "my-title").await.expect_err("refused");
+        assert_eq!(code_of(&err), error_code::RESUME_ID_INVALID);
+        let err = locate("no-such-project", ID).await.expect_err("refused");
+        assert_eq!(code_of(&err), error_code::UNKNOWN_PROJECT);
     }
 
     /// Every refusal that can be told before the process is ended names its reason and records

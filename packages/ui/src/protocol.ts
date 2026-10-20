@@ -402,6 +402,18 @@ export interface AgentAvailability {
   default_account_dir?: string | null;
 }
 
+/** Where a conversation is held, as `locate_conversation_to_resume` reports it: `archived_session`,
+ * an archived session of the asking project (to reopen); `live_session`, another session of it that is
+ * not archived, running or dormant; `outside_project`, a session of another project or a console
+ * session, in any state (`session` is its id); `record`, no session but an agent's own record in `account` (an account id, null for the
+ * agent's default account); `not_found`. */
+export type ConversationLocation =
+  | { kind: "archived_session"; session: string }
+  | { kind: "live_session"; session: string }
+  | { kind: "outside_project"; session: string }
+  | { kind: "record"; agent: Agent; account: string | null }
+  | { kind: "not_found" };
+
 /** One model an agent offers, as `list_agent_models` reports it. */
 export interface AgentModel {
   /** What is passed to the agent as its model: Claude Code's alias (`best`, `opus`, `sonnet`,
@@ -1028,6 +1040,13 @@ export type RequestBody =
    * account; one that does not exist or belongs to another agent is refused with
    * `unknown_account`. Anything else that goes wrong is an empty list with a reason, not an error. */
   | { type: "list_agent_models"; agent: Agent; account?: string }
+  /** Answered with `conversation_located`: where the conversation `agent_session_id` is held, for the
+   * new-session dialog of the project `project`. A session that records it comes first (an archived
+   * session of the project, another session of it, or one outside it); otherwise the agents' own
+   * records are searched in the default account and every account of the agents that are available
+   * and added, the newest record winning. Nothing found is `not_found`, not an error; an ID that is
+   * no UUID is refused with `resume_id_invalid`, a project that does not exist with `unknown_project`. */
+  | { type: "locate_conversation_to_resume"; project: string; agent_session_id: string }
   /** Answered with `configuration_exported`: the document of the console `console` names, or, with
    * none, of every console and the application settings. Refused with `unknown_console` for a
    * console that does not exist. */
@@ -1455,6 +1474,8 @@ export type Event =
     models: AgentModel[];
     unavailable: ModelsUnavailable | null;
   }
+  /** The reply to `locate_conversation_to_resume`. */
+  | { type: "conversation_located"; id?: string; location: ConversationLocation }
   /** The reply to `export_configuration`: the document to save as a file. */
   | { type: "configuration_exported"; id?: string; document: ConfigurationDocument }
   /** The reply to `inspect_configuration`: one entry per console of the document, in its order,

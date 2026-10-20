@@ -7,7 +7,8 @@ import type { Account, Console, Project, Session, SessionStatus, Settings } from
 import type { Activity } from "./sidebar/order";
 
 /** Keeps the agent's current task beside the session name the user created. Each name is
- * isolated separately so mixed reading directions cannot reorder them across the separator. */
+ * isolated separately so mixed reading directions cannot reorder them across the separator.
+ * The result is for display only: a field that edits the name starts from `session.title`. */
 export function sessionDisplayTitle(t: Translate, session: Session): string {
   const terminalTitle = session.terminal_title?.trim();
   if (!terminalTitle || terminalTitle === session.title.trim()) return session.title;

@@ -39,7 +39,10 @@ collapsed when the dialog opens. The handoff dialog holds one too, which works a
 session that takes over (see "Handing off from the window" in `docs/product/handing-off-sessions.md`).
 
 In the project dialog and the session dialog it holds a **Model** picker and a **Reasoning effort** picker for the
-agent the dialog's agent field currently settles on, and a note saying whose sessions they apply to. In the session
+agent the dialog's agent field currently settles on, and a note saying whose sessions they apply to. The session
+dialog's **Resume conversation** tab never lets the agent be picked: it shows the section only once the conversation
+is found in an agent's own records, for the agent and account that hold it (see "Resuming a conversation by its session ID" in
+`docs/product/sessions.md`). In the session
 dialog, untouched fields show the values the session would inherit — for a project session each from its project, else
 its console's project session pair; for a console session the console's console session pair — and keep following
 them; changing a field applies only to that session, including its later resumes. Switching agents shows the other

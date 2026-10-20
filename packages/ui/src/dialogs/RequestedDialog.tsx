@@ -287,6 +287,7 @@ export function RequestedDialog({
   onClose,
   onSessionOpened,
   onSwitchAccount,
+  onResumeSession,
 }: {
   dialog: DialogRequest;
   onClose: () => void;
@@ -294,6 +295,9 @@ export function RequestedDialog({
   /** Switches a session's account (`null`, the default account); resolves once the daemon has
    * the result, and rejects with the reason when the switch did not happen. */
   onSwitchAccount: (sessionId: string, account: string | null) => Promise<void>;
+  /** Resumes a session the session dialog found, an archived one (reopening it) or an interrupted one;
+   * rejects with the reason when it did not happen. */
+  onResumeSession: (sessionId: string) => Promise<void>;
 }): React.ReactElement {
   const t = useT();
   const { request, toastNotice } = useDaemon();
@@ -358,6 +362,7 @@ export function RequestedDialog({
           sessions={Array.from(sessions.values())}
           onClose={onClose}
           onOpened={onSessionOpened}
+          onResume={onResumeSession}
         />
       );
     case "new-session":
@@ -369,6 +374,7 @@ export function RequestedDialog({
           sessions={Array.from(sessions.values())}
           onClose={onClose}
           onOpened={onSessionOpened}
+          onResume={onResumeSession}
         />
       );
     case "rename-project":

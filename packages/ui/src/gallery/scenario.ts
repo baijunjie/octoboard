@@ -3,7 +3,7 @@ import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/ImportReview";
 import type { MacosPermissionsStatus } from "../platform";
 import type { OwnerKind, PanelKind } from "../panels/stackState";
-import type { Agent, AgentModel, DirEntry, GitStatus, MessageParams, ModelsUnavailable, PathLinkKind, PathLinkView, SessionBranchItem, SessionRecordsPresence } from "../protocol";
+import type { Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, MessageParams, ModelsUnavailable, PathLinkKind, PathLinkView, SessionBranchItem, SessionRecordsPresence } from "../protocol";
 import type { FixtureError, FixtureFiles } from "./fixtures/projectFiles";
 import type { GroupTitle } from "./fixtures/groups";
 import type { FixtureGit } from "./fixtures/changeFixtures";
@@ -172,6 +172,10 @@ export interface Scenario {
   agentModels?: Partial<Record<Agent, { models: AgentModel[]; unavailable?: ModelsUnavailable } | "pending">>;
   /** A refused session launch, such as a shell environment that could not be read. */
   sessionOpenError?: FixtureError;
+  /** What `locate_conversation_to_resume` answers for any ID: where the conversation is held, a daemon
+   * error refusing the lookup, or `"pending"` for a request that is never answered. Left out, no
+   * conversation was found. */
+  conversationLocation?: ConversationLocation | FixtureError | "pending";
   /** A runtime refusal after the user confirms archiving; no session changes on failure. */
   sessionArchiveError?: FixtureError;
   /** Native session-file inspection per session. Unlisted or missing sessions are unknown;

@@ -214,7 +214,7 @@ looked up again for each launch; keeping a directory does not freeze that choice
 If a session's directory no longer exists when it is launched or resumed, the launch is refused rather than
 started — but only for a session that has a conversation on the agent's side to resume. A session with none yet — a
 new one, or one opened and never typed into, unless it was opened to resume a conversation (see "Resuming a
-conversation started outside Octoboard" in `docs/product/sessions.md`) — launches into the missing directory instead,
+conversation by its session ID" in `docs/product/sessions.md`) — launches into the missing directory instead,
 and the directory is created as above;
 a Codex session whose directory Octoboard cannot create is refused on this same path. This narrower refusal holds for
 all three agents, and the message names the agent and the directory and says to recreate it or to point the account at

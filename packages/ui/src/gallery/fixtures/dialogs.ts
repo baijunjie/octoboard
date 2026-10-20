@@ -1,6 +1,6 @@
 import type { Agent, AgentAvailability, Settings } from "../../protocol";
 import type { Ui } from "../interact";
-import type { Scenario } from "../scenario";
+import type { Scenario, Step } from "../scenario";
 import { ALL_AGENTS, SAMPLE, branchItemOf, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState, worktreeItemOf } from "./builders";
 import { SAMPLE_CODEX_MODELS } from "./agentModels";
 import { IMAGES } from "./viewerImages";
@@ -320,6 +320,48 @@ const sessionLaunchState = {
   }]]),
   sessions: new Map([...dialogState.sessions].filter(([, session]) => !session.project_id || session.project_id === web.id)),
 };
+
+// What the Resume conversation tab can find: an archived session of the project holding a conversation (to
+// reopen), an interrupted one (to resume), a running one (the project's "Fix the summary layout"), and a Codex
+// account for a record to sit in.
+const resumeState = {
+  ...sessionLaunchState,
+  sessions: new Map([
+    ...sessionLaunchState.sessions,
+    ["s-web-archived", sessionOf("s-web-archived", console_.id, web.id, "Migrate the build to Vite", "archived", { account_id: "a-work", config_dir: "/Users/dev/.claude-work" })],
+    ["s-web-interrupted", sessionOf("s-web-interrupted", console_.id, web.id, "Port the importer to the new parser", "interrupted", { account_id: "a-work", config_dir: "/Users/dev/.claude-work" })],
+  ]),
+  settings: {
+    ...accountsState.settings!,
+    accounts: [
+      ...accountsState.settings!.accounts,
+      { id: "a-codex-team", agent: "codex" as const, name: "Team Codex", config_dir: "/Users/dev/.codex-team" },
+    ],
+  },
+};
+
+// Resume's "held outside this project" wording names the holder and where it is, so the store must have it: a
+// session of another project (named to sort after "Website", the project whose first "Open session" button the
+// steps press) for the project wording, and the console's own "Hub" session for the console wording.
+const otherProject = { ...SAMPLE.api, name: "Website API" };
+const heldElsewhereState = {
+  ...resumeState,
+  projects: new Map([...resumeState.projects, [otherProject.id, otherProject]]),
+  sessions: new Map([
+    ...resumeState.sessions,
+    ["s-api-held", sessionOf("s-api-held", console_.id, otherProject.id, "Add idempotency keys", "waiting_user")],
+  ]),
+};
+
+// Open the project's new-session dialog on the Resume tab, type a valid ID and let the lookup settle (it waits
+// 300 ms after the last keystroke before asking).
+const resumeLookup: Step[] = [
+  (ui) => ui.press(ui.t("sidebar.project.openSession")),
+  (ui) => ui.press(ui.t("dialog.session.conversationResume")),
+  (ui) => ui.focus(ui.t("dialog.session.resumeId")),
+  (ui) => ui.type(RESUME_ID),
+  (ui) => ui.wait(600),
+];
 
 const consoleSessionLaunchState = {
   ...sessionLaunchState,
@@ -714,7 +756,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Session resume, conversation ID not valid",
-    description: "On the Resume conversation tab, a session title typed instead of an ID is marked invalid under the Session ID field once Open is pressed, with an example ID as code in the danger tone, the field focused and Report to gone; the dialog stays as typed and nothing is sent.",
+    description: "On the Resume conversation tab, a session title typed instead of an ID is marked invalid under the Session ID field once Open is pressed, with an example ID as code in the danger tone and the field focused; nothing else appears below it, the dialog stays as typed and nothing is sent.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.openSession")),
       (ui) => ui.press(ui.t("dialog.session.conversationResume")),
@@ -725,24 +767,140 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
-    state: sessionLaunchState,
+    state: resumeState,
+    id: "dialog-new-session-resume-record",
+    group: "Sidebar sessions",
+    category: "normal",
+    title: "Session resume, conversation found in an agent's default account",
+    description: "On the Resume conversation tab, once the conversation is found in an agent's record, an empty Name and the Agent and Account field appear under the Session ID: the field is disabled and shows the record's own agent and account (Claude Code, default account), not the project's choice. Advanced is available below and the footer button reads Open.",
+    conversationLocation: { kind: "record", agent: "claude", account: null },
+    steps: resumeLookup,
+  },
+  {
+    ...dialogFixture,
+    state: resumeState,
+    id: "dialog-new-session-resume-record-account",
+    group: "Sidebar sessions",
+    category: "normal",
+    title: "Session resume, conversation found in a named account of another agent",
+    description: "The disabled Agent and Account field shows Codex and its account Team Codex, though the project's own agent is Claude Code; the Advanced section, once opened, carries Codex's model and reasoning effort.",
+    conversationLocation: { kind: "record", agent: "codex", account: "a-codex-team" },
+    steps: [...resumeLookup, (ui) => ui.press(ui.t("dialog.agentSettings.advanced"))],
+  },
+  {
+    ...dialogFixture,
+    state: resumeState,
+    id: "dialog-new-session-resume-archived",
+    group: "Sidebar sessions",
+    category: "normal",
+    title: "Session resume, conversation held by an archived session",
+    description: "Name is filled with the archived session's title and stays editable; the Agent and Account field is disabled with the session's agent and its account; there is no Advanced section, since reopening changes no settings; the footer button reads Reopen.",
+    conversationLocation: { kind: "archived_session", session: "s-web-archived" },
+    steps: resumeLookup,
+  },
+  {
+    ...dialogFixture,
+    state: resumeState,
+    id: "dialog-new-session-resume-interrupted",
+    group: "Sidebar sessions",
+    category: "normal",
+    title: "Session resume, conversation held by an interrupted session",
+    description: "Like the archived session, but Name is disabled as well (the session keeps its title) beside the disabled Agent and Account field; there is no Advanced section, and the footer button reads Resume.",
+    conversationLocation: { kind: "live_session", session: "s-web-interrupted" },
+    steps: resumeLookup,
+  },
+  {
+    ...dialogFixture,
+    state: resumeState,
+    id: "dialog-new-session-resume-pending",
+    group: "Sidebar sessions",
+    category: "normal",
+    title: "Session resume, looking for the conversation",
+    description: "With a valid ID typed and no answer yet, a small spinner sits at the right end of the Session ID field, nothing else appears under it, and the footer button is disabled.",
+    conversationLocation: "pending",
+    steps: resumeLookup,
+  },
+  {
+    ...dialogFixture,
+    state: resumeState,
+    id: "dialog-new-session-resume-live",
+    group: "Sidebar sessions",
+    category: "normal",
+    title: "Session resume, conversation already running",
+    description: "Name and the Agent and Account field are both disabled and show the running session's title, agent and account; there is no Advanced section, and the footer button reads Go to session and is enabled.",
+    conversationLocation: { kind: "live_session", session: "s-web-1" },
+    steps: resumeLookup,
+  },
+  {
+    ...dialogFixture,
+    state: heldElsewhereState,
+    id: "dialog-new-session-resume-outside-project",
+    group: "Sidebar sessions",
+    category: "exceptional",
+    title: "Session resume, conversation held by a session of another project",
+    description: "The Session ID is marked invalid in the danger tone, saying the conversation is already held by the session \"Add idempotency keys\" in Website API; nothing appears below the field and the footer button is disabled.",
+    conversationLocation: { kind: "outside_project", session: "s-api-held" },
+    steps: resumeLookup,
+  },
+  {
+    ...dialogFixture,
+    state: resumeState,
+    id: "dialog-new-session-resume-outside-console",
+    group: "Sidebar sessions",
+    category: "exceptional",
+    title: "Session resume, conversation held by a console session",
+    description: "The Session ID is marked invalid in the danger tone, saying the conversation is already held by the console session \"Hub\" in Main; nothing appears below the field and the footer button is disabled.",
+    conversationLocation: { kind: "outside_project", session: "s-console" },
+    steps: resumeLookup,
+  },
+  {
+    ...dialogFixture,
+    state: resumeState,
+    id: "dialog-new-session-resume-unlocated",
+    group: "Sidebar sessions",
+    category: "exceptional",
+    title: "Session resume, no conversation with this ID",
+    description: "Under the Session ID, no conversation with this ID was found in any account; nothing appears below the field and the footer button is disabled.",
+    conversationLocation: { kind: "not_found" },
+    steps: resumeLookup,
+  },
+  {
+    ...dialogFixture,
+    state: resumeState,
+    id: "dialog-new-session-resume-unavailable",
+    group: "Sidebar sessions",
+    category: "exceptional",
+    title: "Session resume, account holding the conversation no longer offered",
+    description: "The record sits in a Codex account that is no longer set up: under the Session ID stands that the agent or account is no longer available; nothing appears below the field and the footer button is disabled.",
+    conversationLocation: { kind: "record", agent: "codex", account: "a-removed" },
+    steps: resumeLookup,
+  },
+  {
+    ...dialogFixture,
+    state: resumeState,
+    id: "dialog-new-session-resume-lookup-failed",
+    group: "Sidebar sessions",
+    category: "exceptional",
+    title: "Session resume, lookup refused",
+    description: "The daemon refused the lookup, and its reason stands under the Session ID in the danger tone; nothing appears below the field and the footer button is disabled.",
+    conversationLocation: { code: "unknown_project", params: { project: "p-web" }, message: "unknown project p-web" },
+    steps: resumeLookup,
+  },
+  {
+    ...dialogFixture,
+    state: resumeState,
+    conversationLocation: { kind: "record", agent: "claude", account: null },
     sessionOpenError: {
       code: "conversation_to_resume_not_found",
-      params: { agent: "Claude Code", path: "/Users/dev/.claude-personal", id: RESUME_ID },
-      message: "no conversation `" + RESUME_ID + "` of Claude Code was found in `/Users/dev/.claude-personal`",
+      params: { agent: "Claude Code", path: "/Users/dev/.claude", id: RESUME_ID },
+      message: "no conversation `" + RESUME_ID + "` of Claude Code was found in `/Users/dev/.claude`",
     },
     id: "dialog-new-session-resume-not-found",
     group: "Sidebar sessions",
     category: "exceptional",
-    title: "Session resume, conversation not found",
-    description: "On the Resume conversation tab with a session ID filled in and Report to gone, the refusal stands under the Session ID field, which is focused: no conversation with this ID is in the account's directory, the directory path set as code in the danger tone and the typed ID not repeated. The dialog has no alert at its foot.",
-    steps: [
-      (ui) => ui.press(ui.t("sidebar.project.openSession")),
-      (ui) => ui.press(ui.t("dialog.session.conversationResume")),
-      (ui) => ui.focus(ui.t("dialog.session.resumeId")),
-      (ui) => ui.type(RESUME_ID),
-      (ui) => ui.confirm(),
-    ],
+    title: "Session resume, conversation gone when opened",
+    description: "The lookup found the conversation in an agent's record, but it was removed before Open was pressed: the refusal stands under the Session ID, which is focused, with the directory path set as code in the danger tone and the typed ID not repeated. The Name and Agent and Account fields stay below it, as the record is still on offer, and the dialog has no alert at its foot.",
+    steps: [...resumeLookup, (ui) => ui.confirm()],
   },
   {
     ...dialogFixture,

@@ -88,7 +88,7 @@ A session is unused, whatever its status, while all of these hold:
 
 - **It has no conversation yet.** The first prompt its agent reports as submitted makes it used for good, whether the
   user typed it or Octoboard wrote it in; a session opened to resume a conversation is used from the moment it is
-  opened (see "Resuming a conversation started outside Octoboard" in `docs/product/sessions.md`).
+  opened (see "Resuming a conversation by its session ID" in `docs/product/sessions.md`).
 - **It is bound to no owner, or the user opened it.** A session the user opened bound to an owner — choosing a
   console session under "Report to" in the session dialog, or opening it from a console session's focus mode (see
   "A console session's focus mode" in `docs/product/focus-mode.md`) — can be unused. A session an agent started with

@@ -784,6 +784,10 @@ element, an error from `role="alert"`.
   the login runs and on Log in again once it ends or is refused. Its progress text is a `StatusAnnouncer` with
   `firstWriteDelayMs` set to `AFTER_FOCUS_MOVE_DELAY_MS`, mounted with the dialog, while the visible line is
   `aria-hidden`, so the text is spoken once and not twice.
+  The rule is about a state the user waits on, not a footer button relabelled by what the user is typing: there focus
+  stays in the field, and a `StatusAnnouncer` says what the new state is. The new-session dialog's Resume tab is the
+  instance (`packages/ui/src/dialogs/ResumeConversationFields.tsx`): the lookup of the typed Session ID turns the
+  submit into Open, Reopen, Resume or Go to session while focus stays in the ID input.
 - HeroUI's `Alert` renders no role at all, its name notwithstanding. An error that can appear in one after the user has
   moved on puts `role="alert"` on an element of your own inside it.
 

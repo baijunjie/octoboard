@@ -39,10 +39,12 @@ and Tab as well — and for any control a handler of its own takes away, call `h
 (`packages/ui/src/components/handFocusOff.ts`) before the removal, as `PinButton` in
 `packages/ui/src/sidebar/rows.tsx` and `AvatarField` in `packages/ui/src/dialogs/AvatarField.tsx` do. Where the
 element goes away from a state change rather than from a handler of its own — a region closed by a toggle pressed
-with `preventFocusOnPress`, a control removed by the answer it was waiting for — there is no removal handler to put
-focus back from, so wrap it in `useFocusHandoff` (`packages/ui/src/components/useFocusHandoff.ts`), which after each
-render notices that the element focus was on has left the document. Its caller has to stay mounted and render nothing
-for that check to run in, rather than unmount with the element.
+with `preventFocusOnPress`, a control removed or disabled by the answer it was waiting for — there is no removal
+handler to put focus back from, so wrap it in `useFocusHandoff` (`packages/ui/src/components/useFocusHandoff.ts`),
+which after each render notices that the element focus was on has left the document or turned disabled. Use it rather
+than a check of your own: the browser blurs a control as it is disabled, before the render's effect runs, so a
+hand-rolled "forget the element on blur" has already forgotten it by then. Its caller has to stay mounted and render
+nothing for that check to run in, rather than unmount with the element.
 
 ## "Focus left" is three things: check `document.hasFocus()` before answering a `focusout` with no `relatedTarget`
 
@@ -88,12 +90,15 @@ the duration of its own action — the obvious way to keep a slow request from b
 `<body>` and takes the dialog's Escape and Tab with it until the action ends. Mark it `isPending` instead: that blocks
 press and hover, keeps the control focusable, and announces the pending state. Keep `isDisabled` for a control
 that is unavailable for a reason outside the action itself (a field not filled in yet), where focus is not on it.
-When such an outside change can still land while focus is on the control (a quota reading arriving under an open
+When such an outside change can still land while focus is on a button (a quota reading arriving under an open
 dialog), hand focus on with `useFocusLeavingWhenDisabled` from `packages/ui/src/dialogs/Dialog.tsx`, as the shared
 dialog footer and `ConfirmDialog` do, rather than testing `document.activeElement` against the control in an effect:
 WebKit has already blurred it to `<body>` by then. jsdom never blurs a disabled element, so the suite passes that
 test; a test reaches the WebKit case only by dispatching the `focusout` and reporting `<body>` as the active element
 by hand.
+For a field such a change locks (the answer to a lookup), hand focus on with `useFocusHandoff`, as for a control that
+goes away; there too a test blurs the control itself as it disables it, or it passes against the ordering that breaks
+in the browser.
 
 ## Escape is taken above the React tree: a pane's listener, and react-aria's while a tooltip is open
 

@@ -2,15 +2,13 @@ import { Tabs } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
 import { ErrorAlert } from "../components/ErrorAlert";
-import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { FadeOverflow } from "../components/FadeOverflow";
-import { InlineChip } from "../components/InlineChip";
 import { useTabScrollLabels } from "../components/tabScrollLabels";
-import { CONVERSATION_ID, EXAMPLE_CONVERSATION_ID } from "../conversationId";
 import { DaemonRequestError } from "../daemon-client";
 import { errorPresentation } from "../errorPresentation";
+import type { MessageKey } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
-import { Message, useT } from "../i18n/react";
+import { useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessionLabel";
 import { BindingBadge } from "../sidebar/BindingBadge";
@@ -20,8 +18,10 @@ import { AgentAccountField } from "./AgentAccountField";
 import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "./Dialog";
 import type { NewSessionBinding } from "./dialogRequest";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
+import { ResumeConversationFields } from "./ResumeConversationFields";
 import { useCloseWhenBlocked } from "./useCloseWhenBlocked";
 import { useLaunchChoice } from "./useLaunchChoice";
+import { useResumeTarget, type ResumeTarget } from "./useResumeTarget";
 import { openSessionRequest } from "./openSessionRequest";
 import { OptionSelect } from "./OptionSelect";
 import { TextInput } from "./TextInput";
@@ -36,6 +36,15 @@ const RESUME_REFUSALS = new Set([
   "conversation_outside_project",
   "resume_id_invalid",
 ]);
+
+/** The submit button's label for what the Resume tab found; a new conversation, or nothing found
+ * yet, is "Open". */
+const SUBMIT_LABEL = {
+  archived: "dialog.session.reopen",
+  interrupted: "dialog.session.resume",
+  running: "dialog.session.goTo",
+  record: "dialog.session.open",
+} as const satisfies Record<ResumeTarget["kind"], MessageKey>;
 
 /** The panel of a conversation tab: the dialog's own column of fields, with HeroUI's padding and
  * top margin off so the first field keeps the dialog's spacing below the tabs. */
@@ -67,8 +76,16 @@ const NO_OWNER = "none";
  *
  * A project session, unless it is fixed to its owner, opens with a pair of tabs at the head of the
  * form, choosing between a new conversation and resuming one started outside Octoboard. Resuming
- * asks for the conversation's session ID (`resume_agent_session_id`), always required, and takes
- * the choice of owner away, since such a session is always unbound.
+ * asks for the conversation's session ID, always required, and takes the choice of owner away, since
+ * such a session is always unbound. The tab holds the ID alone until it is valid and the daemon has
+ * said where the conversation is held (`locate_conversation_to_resume`); that settles which fields
+ * follow and what the submit button does. An archived session of the project is resumed (`onResume`;
+ * the name is editable and `rename_session` follows for a name changed), and an interrupted one is
+ * resumed the same way with its name fixed; both show their agent and account, fixed, with no launch
+ * settings since the session keeps its own. A running session of the project is gone to. An agent's
+ * own record opens a new session (`resume_agent_session_id`) on the agent and account that hold it,
+ * shown fixed beside the name and the launch settings. A session outside the project or no
+ * conversation at all is said under the ID field; the submit button waits in each case.
  */
 export function SessionDialog({
   console: parentConsole,
@@ -77,6 +94,7 @@ export function SessionDialog({
   sessions,
   onClose,
   onOpened,
+  onResume,
 }: {
   console: Console;
   project?: Project;
@@ -84,10 +102,12 @@ export function SessionDialog({
   sessions: Session[];
   onClose: () => void;
   onOpened: (sessionId: string) => void;
+  /** Resumes an archived or interrupted session the way the Resume action does; rejects with the reason, shown at the dialog's foot. */
+  onResume: (sessionId: string) => Promise<void>;
 }): React.ReactElement {
   const t = useT();
   const tabScrollLabels = useTabScrollLabels();
-  const { request } = useDaemon();
+  const { request, toastError } = useDaemon();
   const [title, setTitle] = useState("");
   const [pickedOwner, setPickedOwner] = useState(NO_OWNER);
   const [conversation, setConversation] = useState<Conversation>("new");
@@ -95,10 +115,27 @@ export function SessionDialog({
   // a tab switch must not, or it would take focus off the tab the user is on.
   const [switched, setSwitched] = useState(false);
   const [resumeId, setResumeId] = useState("");
-  const [refusal, setRefusal] = useState<{ error: DaemonRequestError; asked: string }>();
+  // The name typed over an archived session's own, for that session only; unedited, the field shows its title.
+  const [heldName, setHeldName] = useState<{ session: string; value: string }>();
+  // A refusal of the conversation to resume, with the ID and (for a record) the agent and account it refused.
+  const [refusal, setRefusal] = useState<{ error: DaemonRequestError; id: string; record?: string }>();
   const { error, busy, run } = useDialogAction();
 
-  const { choice, blocked, usedUp, overrides, agentOptions, setPickedAgent, account: accountField, launch } = useLaunchChoice(parentConsole, project);
+  // A resumed conversation is always a plain session, so choosing to resume takes the choice of
+  // owner away; a session fixed to its owner never offers the choice in the first place.
+  const sessionBinding: NewSessionBinding = project ? binding : { kind: "unbound" };
+  const resumable = project !== undefined && sessionBinding.kind !== "bound";
+  const resuming = resumable && conversation === "resume";
+  // The daemon is asked once the ID is valid; where the conversation is held settles what the
+  // submit does (resume a session, go to one, or open one on an agent's record) and on which
+  // agent and account.
+  const resume = useResumeTarget(project, resumeId, resuming, sessions);
+  const { target } = resume;
+  const record = target?.kind === "record" ? target : undefined;
+
+  const { choice, blocked, usedUp, overrides, agentOptions, setPickedAgent, account: accountField, launch } = useLaunchChoice(parentConsole, project, undefined, record);
+  // A used-up account only matters for a session about to be opened on it, not for resuming one that has its own.
+  const quotaUsedUp = !resuming || record ? usedUp : undefined;
   // Nothing to open a session with (an agent was removed or uninstalled while this was open).
   useCloseWhenBlocked(blocked, t("dialog.session.noAgent"), onClose);
 
@@ -118,43 +155,50 @@ export function SessionDialog({
   // falls back to none, visibly in the select. `pickedOwner` keeps the stale id, so reopening that
   // console session while the dialog is still open restores the choice, which is harmless. A fixed
   // owner that is no longer live cannot fall back to anything, so it stops the dialog instead.
-  const sessionBinding: NewSessionBinding = project ? binding : { kind: "unbound" };
   const owners = liveConsoleSessions(sessions, parentConsole.id);
   const storedFixedOwner = useDaemonStore((s) => sessionBinding.kind === "bound" ? s.sessions.get(sessionBinding.to.id) : undefined);
   const fixedOwner = sessionBinding.kind === "bound"
     ? storedFixedOwner ?? sessions.find((s) => s.id === sessionBinding.to.id) ?? sessionBinding.to
     : undefined;
   const fixedOwnerGone = fixedOwner !== undefined && !owners.some((s) => s.id === fixedOwner.id);
-  // A resumed conversation is always a plain session, so choosing to resume takes the choice of
-  // owner away; a session fixed to its owner never offers the choice in the first place.
-  const resumable = project !== undefined && sessionBinding.kind !== "bound";
-  const resuming = resumable && conversation === "resume";
   const owner = fixedOwner ?? (sessionBinding.kind === "choose" && !resuming ? owners.find((s) => s.id === pickedOwner) : undefined);
   const [ownerOffered, setOwnerOffered] = useState(owners.length > 0);
   if (owners.length > 0 && !ownerOffered) setOwnerOffered(true);
 
   const { shown, attempt } = useSubmitValidation();
   const resumeFieldRef = useRef<HTMLDivElement>(null);
-  // What is wrong with the ID, by kind; the wording is chosen where it is shown.
-  const resumeProblem: "required" | "invalid" | undefined = !resuming ? undefined : resumeId === "" ? "required" : !CONVERSATION_ID.test(resumeId) ? "invalid" : undefined;
-  const resumeProblems = {
-    required: t("dialog.session.resumeRequired"),
-    invalid: <Message id="dialog.session.resumeInvalid" params={{ example: <InlineChip monospace wrap size="inherit">{EXAMPLE_CONVERSATION_ID}</InlineChip> }} />,
-  };
-  const shownProblem = shown(resumeProblem);
+  // What the user's attempt to submit found wrong with the ID, by kind.
+  const shownProblem = shown(resume.idProblem);
 
-  // What a refusal was about: it stands under the field only while the ID, agent and account are
-  // still those it refused, since changing any of them asks a different question.
-  const asked = JSON.stringify([resumeId, choice.agent, choice.account]);
-  const refused = resuming && refusal?.asked === asked ? refusal.error : undefined;
+  // The name of a found session: an archived one's may be edited, and only while it is archived;
+  // any other state shows the session's own.
+  const foundSession = target && target.kind !== "record" ? target.session : undefined;
+  const foundName = target?.kind === "archived" && heldName?.session === target.session.id ? heldName.value : foundSession?.title ?? "";
+
+  // A refusal stands under the field only while the ID and the record are still those it refused,
+  // since changing either asks a different question; between its answers the lookup has no record,
+  // and an answer that is no record settles the matter.
+  const recordKey = record && JSON.stringify([record.agent, record.account]);
+  const refused = resuming && refusal?.id === resumeId && (resume.looking || recordKey === refusal.record) ? refusal.error : undefined;
 
   const submit = () => {
-    if (!attempt(resumeProblem)) {
+    if (!attempt(resume.idProblem)) {
       resumeFieldRef.current?.querySelector("input")?.focus();
       return;
     }
     void run(async () => {
       setRefusal(undefined);
+      if (target && target.kind !== "record") {
+        // The session continues its own conversation, so only a name the user changed to another
+        // one is applied: a rename that fails after the resume is reported, not allowed to hold
+        // the dialog open.
+        if (target.kind !== "running") await onResume(target.session.id);
+        const name = foundName.trim();
+        if (target.kind === "archived" && name && name !== target.session.title) await request({ type: "rename_session", session: target.session.id, title: name }).catch((err: unknown) => toastError(errorPresentation(err)));
+        onOpened(target.session.id);
+        onClose();
+        return;
+      }
       const reply = await request(openSessionRequest(t, {
         console: parentConsole,
         project,
@@ -165,7 +209,10 @@ export function SessionDialog({
         overrides,
       })).catch((err: unknown) => {
         if (!(err instanceof DaemonRequestError) || !resuming || !RESUME_REFUSALS.has(err.code)) throw err;
-        setRefusal({ error: err, asked });
+        setRefusal({ error: err, id: resumeId, record: recordKey });
+        // Anything but a conversation that is not there at all may mean the answer held is stale
+        // (it was taken into a session, say), so the daemon is asked again.
+        if (err.code !== "conversation_to_resume_not_found") resume.reask();
         resumeFieldRef.current?.querySelector("input")?.focus();
       });
       if (!reply) return;
@@ -174,17 +221,22 @@ export function SessionDialog({
     });
   };
 
-  // The fields every session has, in either conversation tab and, where there are no tabs, on their own.
+  // The Name field of a session about to be opened, in the New tab, on the Resume tab once an
+  // agent's record is found and, where there are no tabs, on its own.
+  const nameField = (
+    <TextInput
+      label={t("common.name")}
+      value={title}
+      onChange={setTitle}
+      placeholder={t("session.defaultName", { name: project?.name ?? parentConsole.name })}
+      autoFocus={!switched}
+      description={t("dialog.session.defaultNameHint")}
+    />
+  );
+  // What a new conversation asks for: the New tab's panel and, where there are no tabs, the whole form.
   const sharedFields = (
     <>
-      <TextInput
-        label={t("common.name")}
-        value={title}
-        onChange={setTitle}
-        placeholder={t("session.defaultName", { name: project?.name ?? parentConsole.name })}
-        autoFocus={!switched}
-        description={t("dialog.session.defaultNameHint")}
-      />
+      {nameField}
       <AgentAccountField
         label={t("dialog.session.agent")}
         options={agentOptions}
@@ -225,12 +277,12 @@ export function SessionDialog({
         ? t("dialog.session.title", { project: isolate(project.name) })
         : t("dialog.consoleSession.title", { console: isolate(parentConsole.name) })}
       onClose={onClose}
-      submitLabel={t("dialog.session.open")}
+      submitLabel={t(target ? SUBMIT_LABEL[target.kind] : "dialog.session.open")}
       busy={busy}
-      submitDisabled={blocked || fixedOwnerGone || usedUp !== undefined}
+      submitDisabled={blocked || fixedOwnerGone || quotaUsedUp !== undefined || (resuming && resume.idProblem === undefined && target === undefined)}
       onSubmit={submit}
     >
-      {usedUp && <ErrorAlert announce>{usedUp}</ErrorAlert>}
+      {quotaUsedUp && <ErrorAlert announce>{quotaUsedUp}</ErrorAlert>}
       {fixedOwner && fixedOwnerGone && <ErrorAlert>{t("dialog.session.ownerGone", { name: isolate(sessionDisplayTitle(t, fixedOwner)) })}</ErrorAlert>}
       {resumable && (
         <Tabs selectedKey={conversation} onSelectionChange={(key) => {
@@ -250,27 +302,27 @@ export function SessionDialog({
               </Tabs.Tab>
             </Tabs.List>
           </Tabs.ListContainer>
-          {/* Both tabs hold the fields they share, so each has a real panel to name: the tab's own
-              part (the Session ID, while resuming) comes first. They are mounted one at a time, so
-              what the form remembers lives in this dialog's state; only whether Advanced is unfolded
-              is the section's own, and it folds back on a switch. */}
+          {/* The New tab holds the fields of a new conversation. The Resume tab holds its Session
+              ID, then the fields that what the lookup found calls for. Only the selected tab's
+              panel is mounted, so what the form remembers lives in this dialog's state; only
+              whether Advanced is unfolded is the section's own, and it folds back on a switch. */}
           <Tabs.Panel id="new" className={PANEL_CLASS}>
             {sharedFields}
           </Tabs.Panel>
           <Tabs.Panel id="resume" className={PANEL_CLASS}>
-            <div ref={resumeFieldRef}>
-              <TextInput
-                label={t("dialog.session.resumeId")}
-                value={resumeId}
-                onChange={setResumeId}
-                placeholder={t("dialog.session.resumeExample", { example: EXAMPLE_CONVERSATION_ID })}
-                description={t("dialog.session.resumeHint")}
-                errorMessage={shownProblem ? resumeProblems[shownProblem] : refused && <DaemonErrorMessage error={errorPresentation(refused)} />}
-                dir="ltr"
-                isDisabled={blocked}
-              />
-            </div>
-            {sharedFields}
+            <ResumeConversationFields
+              idFieldRef={resumeFieldRef}
+              resumeId={resumeId}
+              onResumeIdChange={setResumeId}
+              shownProblem={shownProblem}
+              refusal={refused}
+              resume={resume}
+              name={foundName}
+              onNameChange={(value) => target && target.kind !== "record" && setHeldName({ session: target.session.id, value })}
+              recordName={nameField}
+              launch={launch}
+              blocked={blocked}
+            />
           </Tabs.Panel>
         </Tabs>
       )}

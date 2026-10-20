@@ -1,4 +1,4 @@
-import { FieldError, Input, Label, TextField } from "@heroui/react";
+import { FieldError, Input, InputGroup, Label, TextField } from "@heroui/react";
 import React from "react";
 
 import { CodeToneContext } from "../components/codeTone";
@@ -11,7 +11,10 @@ import { TextFieldDescription, TextLengthHint } from "./TextFieldDescription";
  * anything else the field has to say, and `errorMessage` marks the field invalid and says what is
  * wrong with it, right under the field — HeroUI hides the description for as long as that lasts.
  * `trailing` is a control that belongs to the field, such as a browse button, and sits beside the
- * input. */
+ * input. `endAdornment` is a decoration inside the field's frame at its end (a spinner), seated by
+ * HeroUI's input group; it is not interactive. The field keeps one structure for as long as
+ * `endAdornment` is given at all (`null` for "nothing at the moment"), so an adornment that comes
+ * and goes while the user types does not remount the input and drop its focus. */
 export function TextInput({
   label,
   value,
@@ -20,6 +23,7 @@ export function TextInput({
   description,
   errorMessage,
   trailing,
+  endAdornment,
   autoFocus,
   dir,
   isDisabled,
@@ -32,6 +36,7 @@ export function TextInput({
   description?: string;
   errorMessage?: React.ReactNode;
   trailing?: React.ReactNode;
+  endAdornment?: React.ReactNode;
   autoFocus?: boolean;
   dir?: "ltr";
   isDisabled?: boolean;
@@ -40,7 +45,15 @@ export function TextInput({
   const field = useTrimmedField(value, onChange);
   const invalid = errorMessage !== undefined && errorMessage !== null && errorMessage !== false && errorMessage !== "";
   // Dialog fields hold application metadata, so 1Password must not offer identity or login fills.
-  const input = <Input data-1p-ignore dir={dir} placeholder={placeholder} className={trailing ? "min-w-0 flex-1" : undefined} />;
+  const input = endAdornment !== undefined ? (
+    // The direction is the group's, so the affix stays on the input's side whatever the UI's direction.
+    <InputGroup variant="secondary" fullWidth dir={dir} className={trailing ? "min-w-0 flex-1" : undefined}>
+      <InputGroup.Input data-1p-ignore placeholder={placeholder} />
+      <InputGroup.Suffix>{endAdornment}</InputGroup.Suffix>
+    </InputGroup>
+  ) : (
+    <Input data-1p-ignore dir={dir} placeholder={placeholder} className={trailing ? "min-w-0 flex-1" : undefined} />
+  );
   return (
     <TextField
       fullWidth
