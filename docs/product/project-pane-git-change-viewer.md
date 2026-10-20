@@ -208,10 +208,13 @@ normally too. Where such a change has also moved on since it was read, the notic
 From the keyboard, **Tab** from the code region moves into the separators' controls and then along them, run by run
 from the top of the diff and, within a run, in the order they are read — the control or pair that reveals part of the
 run, the separator's own text, then Show whole file — and after the last one leaves the diff; **Shift+Tab** from the
-first goes back to the code region. **Enter** or **Space** uses a control, and once the diff is drawn again keyboard
-focus is back on it, or on the nearest control left where that one is gone, or on the code region where none is left
-at all — after Show whole file, and after a diff turns out to offer no expansion. A control reached from the keyboard
-shows a focus ring, in either appearance; pressing one with the mouse leaves keyboard focus where it was.
+first goes back to the code region. **Enter** or **Space** uses a control. Whenever the control used had keyboard focus
+— pressed with Enter or Space, or pressed by a screen reader such as VoiceOver on the control it is on, which arrives
+as a click — keyboard focus is given back once the diff is drawn again: on that control, or on the nearest control left
+where that one is gone, or on the code region where none is left at all — after Show whole file, and after a diff
+turns out to offer no expansion. A control reached from the keyboard shows a focus ring, in either appearance, and so
+does the code region when focus falls back to it. A mouse press never moves focus onto a control, so pressing one that
+did not have focus leaves keyboard focus where it was.
 
 ## Moving between changes
 

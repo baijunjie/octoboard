@@ -164,16 +164,20 @@ export function setWholeFile(separator: HTMLElement, offered: boolean): void {
   separator.append(all);
 }
 
+/** Gives focus to the code frame around `root` where a redraw or a daemon reply took the focused
+ * control away. The user did not aim focus there, so the modality is set to keyboard for the focus
+ * ring to show where it went. */
+export function handFocusToCode(root: ShadowRoot): void {
+  setInteractionModality("keyboard");
+  focusCodeRegion(root, { preventScroll: true });
+}
+
 /** Takes a separator off the screen, with every control in it. Focus inside it goes to the code
- * frame first, as a removed focused element would otherwise drop it to the page. The user did not
- * trigger that hand-off (a daemon reply did), so the modality is set to keyboard for the focus ring
- * to show where focus went. */
+ * frame first (`handFocusToCode`), as a removed focused element would otherwise drop it to the
+ * page. */
 export function removeSeparator(separator: HTMLElement): void {
   const root = separator.getRootNode();
-  if (root instanceof ShadowRoot && root.activeElement && separator.contains(root.activeElement)) {
-    setInteractionModality("keyboard");
-    focusCodeRegion(root, { preventScroll: true });
-  }
+  if (root instanceof ShadowRoot && root.activeElement && separator.contains(root.activeElement)) handFocusToCode(root);
   separator.remove();
 }
 

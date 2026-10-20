@@ -12,7 +12,7 @@ import {
   describeControl,
   dropFocusRing,
   expandTargetOf,
-  focusCodeRegion,
+  handFocusToCode,
   hiddenCount,
   inCodeColumn,
   gapOf,
@@ -110,7 +110,11 @@ function bind(root: ShadowRoot): { current?: Expansion } {
       const target = expandTargetOf(event);
       if (!target) return;
       event.stopPropagation();
-      holder.current?.activate(target.gap, target.kind, false);
+      // A click on the control that has focus is to be handed focus back like a key press: that is
+      // how a screen reader presses the control it is on (VoiceOver's press arrives as a click), and
+      // the redraw takes that control away with the focus on it.
+      const active = root.activeElement;
+      holder.current?.activate(target.gap, target.kind, active !== null && event.composedPath().includes(active));
     },
     true,
   );
@@ -215,9 +219,11 @@ export class Expansion {
     this.decorate();
   }
 
-  activate(gap: number, kind: ExpandKind, keyboard: boolean): void {
+  /** Expands `gap` by `kind`. `focused` says the control used had focus, which the drawing that
+   * follows takes away with it, so focus is to be given back (`restoreFocus`). */
+  activate(gap: number, kind: ExpandKind, focused: boolean): void {
     if (this.loadingGap !== undefined) return;
-    this.wantsFocus = keyboard ? { gap, kind } : undefined;
+    this.wantsFocus = focused ? { gap, kind } : undefined;
     if (this.bodies) {
       this.expand(gap, kind);
       return;
@@ -354,6 +360,6 @@ export class Expansion {
     const root = this.root;
     if (!wanted || !root || refocusControl(root, wanted)) return;
     this.wantsFocus = undefined;
-    focusCodeRegion(root, { preventScroll: true });
+    handFocusToCode(root);
   }
 }

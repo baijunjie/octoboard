@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { setInteractionModality } from "react-aria";
+import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
+import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { ChangeBodiesError, type ChangeBodies } from "./content";
 import { EXPANSION_STEP, Expansion, type ExpansionStatus, type HunkExpander, type SeparatorLabels } from "./expansion";
@@ -283,5 +285,52 @@ it("gives focus back after the label revealed its whole gap to the next gap's co
   root.innerHTML = "";
   expansion.attach(host, expander);
   expect(document.activeElement).toBe(region);
+  region.remove();
+});
+
+// VoiceOver presses the control it is on with a click, not a key, and the redraw takes that control
+// away with the focus on it.
+it("gives focus back after a redraw when the control clicked had focus, as a screen reader's press does", async () => {
+  const root = host.shadowRoot!;
+  const label = control("[data-separator-content]");
+  label.focus();
+  // On the text inside the label, where a click on it lands.
+  await press(label.querySelector<HTMLElement>("[data-unmodified-lines]")!);
+  root.innerHTML = separator("gutter", 2) + separator("content", 2);
+  expansion.attach(host, expander);
+  expect(root.activeElement).toBe(control("[data-expand-up]"));
+  expect(root.activeElement?.closest("[data-separator]")?.getAttribute("data-expand-index")).toBe("2");
+});
+
+it("gives focus to the code with a focus ring when a focused control's press leaves no control", async () => {
+  const region = document.body.appendChild(document.createElement("div"));
+  region.setAttribute("role", "region");
+  region.tabIndex = 0;
+  region.append(host);
+  const label = control("[data-separator-content]");
+  label.focus();
+  const modality = getInteractionModality();
+  // The getter can return the initial null state, which the setter accepts at runtime.
+  onTestFinished(() => Reflect.apply(setInteractionModality, undefined, [modality]));
+  setInteractionModality("pointer");
+  await press(label);
+  host.shadowRoot!.innerHTML = "";
+  expansion.attach(host, expander);
+  expect(document.activeElement).toBe(region);
+  expect(getInteractionModality()).toBe("keyboard");
+  region.remove();
+});
+
+it("leaves focus where it was after a click on a control that did not have it", async () => {
+  const region = document.body.appendChild(document.createElement("div"));
+  region.setAttribute("role", "region");
+  region.tabIndex = 0;
+  region.append(host);
+  region.focus();
+  await press(control("[data-separator-content]"));
+  host.shadowRoot!.innerHTML = separator("gutter", 2) + separator("content", 2);
+  expansion.attach(host, expander);
+  expect(document.activeElement).toBe(region);
+  expect(host.shadowRoot!.activeElement).toBeNull();
   region.remove();
 });
