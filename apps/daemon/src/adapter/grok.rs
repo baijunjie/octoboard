@@ -7,7 +7,11 @@
 //!
 //! What works is a per-session `GROK_HOME` built as a symlink farm over the source home: the
 //! console's pinned directory when set, else the shell's `GROK_HOME`, else `~/.grok`. Every entry is
-//! a symlink back to the source's except the ones Octoboard has to own. `auth.json` and `sessions/`
+//! a symlink to the source's except the ones Octoboard has to own. A link leads straight to the
+//! entry's fully resolved target, one link deep, so a source entry that is itself a link (an account
+//! sharing the default configuration) is not reached through a chain: Grok saves a file by following
+//! one link and replacing its target, which through two links would replace the middle one. A
+//! dangling source link keeps pointing at the source entry. `auth.json` and `sessions/`
 //! stay symlinks, so login state is shared and a session Octoboard started stays resumable from the
 //! user's own `grok` — plain for the default home, with `GROK_HOME=<that directory>` for a pinned
 //! one.
@@ -416,7 +420,11 @@ fn build_grok_home(spec: &LaunchSpec<'_>, source_home: &Path) -> Result<PathBuf>
                 continue;
             }
             let link = farm.join(&name);
-            std::os::unix::fs::symlink(entry.path(), &link)
+            // The fully resolved target, so a source entry that is itself a link (an account sharing
+            // the default configuration) is reached through one link: Grok saves by following one
+            // link and replacing its target, which through two would replace the middle link.
+            let target = std::fs::canonicalize(entry.path()).unwrap_or_else(|_| entry.path());
+            std::os::unix::fs::symlink(&target, &link)
                 .with_context(|| format!("linking {}", link.display()))?;
         }
     }
@@ -675,11 +683,11 @@ mod tests {
         // Login and session records are the chosen directory's, so a resume finds its transcript.
         assert_eq!(
             std::fs::read_link(farm.join("auth.json")).expect("a link"),
-            pinned.join("auth.json")
+            std::fs::canonicalize(pinned.join("auth.json")).expect("canonical path")
         );
         assert_eq!(
             std::fs::read_link(farm.join("sessions")).expect("a link"),
-            pinned.join("sessions")
+            std::fs::canonicalize(pinned.join("sessions")).expect("canonical path")
         );
     }
 
@@ -954,6 +962,127 @@ mod tests {
             std::fs::read_link(farm.join("bundled/inner")).expect("still a link"),
             Path::new("sub/tool")
         );
+    }
+
+    /// A sharing account's entries are links into the default directory; the farm links straight to
+    /// the final target rather than through the account's link, however long the chain.
+    #[test]
+    fn a_source_entry_that_is_a_link_is_reached_through_one_link() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        let default = fixture.scratch.join("default-home");
+        std::fs::create_dir_all(default.join("skills")).expect("default directory");
+        std::fs::write(default.join("AGENTS.md"), "shared").expect("default file");
+        std::os::unix::fs::symlink(default.join("AGENTS.md"), home.join("AGENTS.md"))
+            .expect("file link");
+        std::os::unix::fs::symlink(default.join("skills"), home.join("skills"))
+            .expect("directory link");
+        let middle = fixture.scratch.join("middle");
+        std::os::unix::fs::symlink(default.join("AGENTS.md"), &middle).expect("first hop");
+        std::os::unix::fs::symlink(&middle, home.join("chained.md")).expect("second hop");
+
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
+        let farm = PathBuf::from(&plan.env[0].1);
+
+        let file = std::fs::canonicalize(default.join("AGENTS.md")).expect("canonical path");
+        assert_eq!(
+            std::fs::read_link(farm.join("AGENTS.md")).expect("a link"),
+            file
+        );
+        assert_eq!(
+            std::fs::read_link(farm.join("chained.md")).expect("a link"),
+            file
+        );
+        assert_eq!(
+            std::fs::read_link(farm.join("skills")).expect("a link"),
+            std::fs::canonicalize(default.join("skills")).expect("canonical path")
+        );
+        assert_eq!(
+            std::fs::read_to_string(farm.join("AGENTS.md")).expect("read"),
+            "shared"
+        );
+    }
+
+    #[test]
+    fn a_plain_source_entry_is_linked_to_itself() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        std::fs::write(home.join("AGENTS.md"), "own").expect("file");
+
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
+        let farm = PathBuf::from(&plan.env[0].1);
+
+        assert_eq!(
+            std::fs::read_link(farm.join("AGENTS.md")).expect("a link"),
+            std::fs::canonicalize(home.join("AGENTS.md")).expect("canonical path")
+        );
+    }
+
+    /// With nothing to resolve to, the farm link keeps pointing at the source entry, so Grok sees
+    /// the same dangling link it would in the source.
+    #[test]
+    fn a_dangling_source_link_is_linked_to_the_source_entry() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        std::os::unix::fs::symlink(fixture.scratch.join("gone"), home.join("AGENTS.md"))
+            .expect("dangling link");
+
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
+        let farm = PathBuf::from(&plan.env[0].1);
+
+        assert_eq!(
+            std::fs::read_link(farm.join("AGENTS.md")).expect("a link"),
+            home.join("AGENTS.md")
+        );
+    }
+
+    /// Copies are taken from the source entries' contents, so links in the source change nothing
+    /// about which entries are real.
+    #[test]
+    fn linked_source_entries_still_yield_real_copies_of_the_owned_files() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        let default = fixture.scratch.join("default-home");
+        std::fs::create_dir_all(default.join("bundles")).expect("default directory");
+        std::fs::write(default.join("bundles/one"), "1").expect("bundle");
+        std::fs::write(default.join("hooks-paths"), "/h\n").expect("hooks-paths");
+        std::fs::write(default.join("sandbox.toml"), "[profiles.p]\n").expect("sandbox");
+        std::fs::write(default.join(TRUST_STORE), "[folders.\"/t\"]\n").expect("trust");
+        std::fs::remove_file(home.join("config.toml")).expect("replace config");
+        std::fs::write(default.join("config.toml"), "default_model = \"d\"\n").expect("config");
+        for name in [
+            "bundles",
+            "hooks-paths",
+            "sandbox.toml",
+            TRUST_STORE,
+            "config.toml",
+        ] {
+            std::os::unix::fs::symlink(default.join(name), home.join(name)).expect("link");
+        }
+
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
+        let farm = PathBuf::from(&plan.env[0].1);
+
+        for name in [
+            "bundles",
+            "hooks-paths",
+            "sandbox.toml",
+            TRUST_STORE,
+            "config.toml",
+        ] {
+            assert!(!farm.join(name).is_symlink(), "{name}");
+        }
+        assert_eq!(
+            std::fs::read_to_string(farm.join("bundles/one")).expect("copy"),
+            "1"
+        );
+        assert_eq!(
+            std::fs::read_to_string(farm.join("hooks-paths")).expect("copy"),
+            "/h\n"
+        );
+        assert!(std::fs::read_to_string(farm.join("config.toml"))
+            .expect("copy")
+            .contains("default_model = \"d\""));
     }
 
     #[test]
