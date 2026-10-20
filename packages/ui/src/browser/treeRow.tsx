@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronRight, Folder, FolderOpen, FolderSymlink } from "lucide-react";
 import React from "react";
-import { Button } from "react-aria-components";
 
+import { Button } from "../components/Button";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
 import { useT } from "../i18n/react";
@@ -19,7 +19,7 @@ export function ExpandChevron({ isExpanded }: { isExpanded: boolean }): React.Re
     <TitledControl title={toggleTitle}>
       {/* React Aria appends the row's name through aria-labelledby. Its default translation
           of Expand differs from the tooltip, so both use the app's catalog. */}
-      <Button slot="chevron" aria-label={toggleTitle} className="flex size-4 shrink-0 items-center justify-center text-app-muted outline-none">
+      <Button slot="chevron" aria-label={toggleTitle} size="xs" variant="ghost" isIconOnly className="shrink-0">
         {isExpanded
           ? <ChevronDown aria-hidden="true" className="size-3.5" />
           : <ChevronRight aria-hidden="true" className="size-3.5 rtl:-scale-x-100" />}

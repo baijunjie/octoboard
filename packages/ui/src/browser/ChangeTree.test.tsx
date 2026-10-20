@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, useState } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { isolate } from "../i18n/isolate";
@@ -96,6 +96,29 @@ const commitRows = commitItems([
   { commit: "2222222222", parent: "1111111111", subject: "Add the lexer", changes: [committedChange("src/lex.ts"), committedChange("src/parse.ts")] },
 ]);
 const asRows = [...items, ...commitRows];
+
+it.each([
+  ["directory", directoryKey("staged", "src"), items, "tree"],
+  ["commit", commitKey("3333333333"), commitRows, "flat"],
+] as const)("keeps a %s's shared chevron in the collection's expansion slot", (_kind, key, rows, layout) => {
+  function Changes() {
+    const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+    return <ChangeTree items={rows} selected={undefined} label="Changes" onOpen={() => {}} listRef={() => {}} layout={layout} collapsed={collapsed} onCollapsedChange={setCollapsed} />;
+  }
+  const container = mountRows(<Changes />);
+  const parent = row(container, key);
+  const chevron = parent.querySelector<HTMLButtonElement>("[slot=chevron]")!;
+  expect(chevron.classList.contains("app-button--xs")).toBe(true);
+  expect(chevron.tabIndex).toBe(-1);
+  expect(chevron.getAttribute("aria-labelledby")).toBe(`${chevron.id} ${parent.id}`);
+  act(() => parent.focus());
+  act(() => chevron.click());
+  expect(parent.getAttribute("aria-expanded")).toBe("false");
+  expect(document.activeElement).toBe(parent);
+  press(parent, "Enter");
+  expect(parent.getAttribute("aria-expanded")).toBe("true");
+  expect(document.activeElement).toBe(parent);
+});
 
 it("nests a row per commit in the committed section, newest first, each counting its changes and holding them one level in", () => {
   for (const layout of ["flat", "tree"] as const) {

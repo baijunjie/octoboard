@@ -69,6 +69,47 @@ it("labels a directory's expand control from the catalog, by whether the directo
   expect(chevron().getAttribute("aria-labelledby")).toBe(`${chevron().id} ${container.querySelector("[role=row]")!.id}`);
 });
 
+it("keeps shared chevron presses in the tree's expansion and row-focus model", async () => {
+  const directory: TreeNode = {
+    type: "directory", key: rowKey("src"), path: "src",
+    entry: { name: "src", kind: "directory", size: 0, version: "v1", target: null },
+    children: [fileNode("src/child.ts", false)],
+  };
+  function Files() {
+    const [expanded, setExpanded] = useState(new Set<string | number>());
+    return <FileTree nodes={[directory, fileNode("top.ts", false)]} expanded={new Set([...expanded].map(String))} label="Files" onExpandedChange={setExpanded} onOpenFile={() => {}} onRetry={() => {}} treeRef={() => {}} />;
+  }
+  const container = mountRows(<Files />, { clipboard: { writeText: async () => {} } });
+  const row = (path: string) => container.querySelector<HTMLElement>(`[role=row][data-key="${rowKey(path)}"]`)!;
+  const folder = row("src");
+  const chevron = folder.querySelector<HTMLButtonElement>("[slot=chevron]")!;
+  expect(chevron.classList.contains("app-button--xs")).toBe(true);
+  expect(chevron.classList.contains("button--ghost")).toBe(true);
+  expect(chevron.classList.contains("button--icon-only")).toBe(true);
+  expect(chevron.tabIndex).toBe(-1);
+  act(() => folder.focus());
+  press(folder, "Enter");
+  expect(folder.getAttribute("aria-expanded")).toBe("true");
+  expect(document.activeElement).toBe(folder);
+  const actions = folder.querySelector<HTMLButtonElement>("button[aria-haspopup]")!;
+  press(folder, "ArrowRight");
+  expect(document.activeElement).toBe(actions);
+  press(actions, "ArrowLeft");
+  expect(document.activeElement).toBe(folder);
+  press(folder, "ArrowDown");
+  expect(document.activeElement).toBe(row("src/child.ts"));
+  press(document.activeElement as HTMLElement, "Home");
+  expect(document.activeElement).toBe(folder);
+  press(folder, "End");
+  expect(document.activeElement).toBe(row("top.ts"));
+  act(() => row("src/child.ts").focus());
+  act(() => chevron.click());
+  expect(folder.getAttribute("aria-expanded")).toBe("false");
+  expect(row("src/child.ts")).toBeNull();
+  await vi.waitFor(() => expect(document.activeElement).toBe(folder));
+  expect(chevron.tabIndex).toBe(-1);
+});
+
 it("gives each file row an actions button, named for its file, that the row's arrow keys reach", () => {
   const container = render([fileNode("a.ts", false)], { clipboard: { writeText: async () => {} } });
   const row = container.querySelector<HTMLElement>("[role=row]")!;
