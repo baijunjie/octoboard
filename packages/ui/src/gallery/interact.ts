@@ -17,12 +17,18 @@ import { STATUS_LABELS, type StatusKey } from "../viewer/statusMarks";
 const PRESSABLE =
   "button, [role=button], [role=menuitem], [role=menuitemradio], [role=tab], [role=option], [role=row], a[href], input[type=checkbox], [role=separator][tabindex]";
 
-/** The name a control is found by: its `aria-label`, otherwise its text, and for a checkbox the text
- * of its label. Deliberately not the browser's accessible-name computation, which folds in the label
- * of a `role="img"` child — such a child inside a control does not enter the name a `Matcher` is
+/** The name a control is found by: its `aria-label`, otherwise its text, and for a checkbox or switch
+ * the text of its label, or of the element its `aria-labelledby` names when the label stands beside
+ * it. Deliberately not the browser's accessible-name computation, which folds in the label of a
+ * `role="img"` child — such a child inside a control does not enter the name a `Matcher` is
  * handed. */
 function nameOf(element: Element): string {
-  const label = element instanceof HTMLInputElement ? element.labels?.[0]?.textContent : undefined;
+  let label: string | undefined;
+  if (element instanceof HTMLInputElement) {
+    // A switch's label may hold only its control, with the words in a sibling it is labelled by.
+    const labelledBy = element.getAttribute("aria-labelledby");
+    label = element.labels?.[0]?.textContent || (labelledBy ? element.ownerDocument.getElementById(labelledBy)?.textContent : undefined) || undefined;
+  }
   return withoutIsolates(element.getAttribute("aria-label") ?? label ?? element.textContent ?? "").trim();
 }
 

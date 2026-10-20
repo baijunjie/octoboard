@@ -275,6 +275,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           return { type: "ack" };
         }
         case "resume_session": {
+          if (scenario.sessionResumes?.[body.session] === "pending") return new Promise<Event>(() => {});
           const current = store.getState();
           const session = current.sessions.get(body.session);
           if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
@@ -725,6 +726,13 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           const current = store.getState().consoles.get(body.console);
           if (current) store.setState((state) => ({ consoles: new Map(state.consoles).set(current.id, { ...current, ...consoleFields(body) }) }));
           return { type: "ack" };
+        }
+        case "read_session_history": {
+          if (!store.getState().sessions.has(body.session)) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
+          const history = scenario.sessionHistory?.[body.session] ?? [];
+          if (history === "pending") return new Promise<Event>(() => {});
+          if (history === "unavailable") return { type: "session_history", session: body.session, messages: [], unavailable: true };
+          return { type: "session_history", session: body.session, messages: history };
         }
         case "inspect_session_records":
           return { type: "session_records_inspected", presence: recordsPresence(body.sessions) };

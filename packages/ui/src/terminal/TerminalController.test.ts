@@ -36,7 +36,6 @@ const { FakeTerminal } = vi.hoisted(() => {
     onWriteParsed = () => ({ dispose: () => {} });
     onResize = () => ({ dispose: () => {} });
     keyHandler?: (event: KeyboardEvent) => boolean;
-    wheelHandler?: () => boolean;
     buffer = {
       onBufferChange: () => ({ dispose: () => {} }),
       active: { type: "normal", viewportY: 0, baseY: 0, cursorY: 0, getLine: () => undefined, getNullCell: () => ({}) },
@@ -44,9 +43,6 @@ const { FakeTerminal } = vi.hoisted(() => {
 
     attachCustomKeyEventHandler(handler: (event: KeyboardEvent) => boolean): void {
       this.keyHandler = handler;
-    }
-    attachCustomWheelEventHandler(handler: () => boolean): void {
-      this.wheelHandler = handler;
     }
     textarea?: HTMLTextAreaElement;
     /** xterm names its input textarea in English when it opens. */
@@ -180,9 +176,6 @@ const settle = async () => {
   while (term.parsing || framesPending.size > 0);
 };
 
-let wakes: string[];
-/** What `onWake` reports: whether the session started. */
-let wakeStarts: boolean;
 let painted: boolean[];
 let container: HTMLElement;
 let controller: TerminalController;
@@ -204,17 +197,11 @@ beforeEach(async () => {
     clearTimeout(frame);
     framesPending.delete(frame);
   });
-  wakes = [];
-  wakeStarts = false;
   painted = [];
   controller = new TerminalController(
     {
       onStatusChange: () => {},
       onPaintedChange: (value) => painted.push(value),
-      onWake: async (session) => {
-        wakes.push(session);
-        return wakeStarts;
-      },
     },
     "dark",
   );
@@ -253,16 +240,14 @@ describe("a live session's replay", () => {
 });
 
 describe("a dormant session's saved output", () => {
-  it("is loaded once, read-only, and only typing wakes the session", async () => {
+  it("is loaded once and read-only, and typing over it sends nothing", async () => {
     controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
-    controller.armWake("a");
     const saved = lastSocket();
     expect(saved.url).toBe(url("a"));
 
     saved.receive("last words\x1b[c");
     await settle();
     expect(term.screen).toContain("last words");
-    expect(wakes).toEqual([]);
     expect(painted).toEqual([]);
 
     // Every later render of the same dormant session detaches again.
@@ -272,7 +257,6 @@ describe("a dormant session's saved output", () => {
     expect(term.screen).toContain("last words");
 
     term.userTypes("x");
-    expect(wakes).toEqual(["a"]);
     expect(saved.sent).toEqual([]);
   });
 
@@ -285,7 +269,6 @@ describe("a dormant session's saved output", () => {
     expect(term.screen).toContain("shutdown cleanup");
 
     controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
-    controller.armWake("a");
     const saved = lastSocket();
     expect(saved).not.toBe(live);
     expect(live.closed).toBe(true);
@@ -301,7 +284,6 @@ describe("a dormant session's saved output", () => {
     expect(FakeSocket.all).toHaveLength(2);
     expect(term.screen).toContain("frozen conversation");
     expect(term.screen).not.toContain("cleanup");
-    expect(wakes).toEqual([]);
     expect(saved.sent).toEqual([]);
   });
 
@@ -310,10 +292,8 @@ describe("a dormant session's saved output", () => {
     const live = lastSocket();
     live.receive("shutdown cleanup\x1b[c");
     controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
-    controller.armWake("a");
     // The snapshot can arrive after the live output already queued in xterm is parsed.
     await settle();
-    expect(wakes).toEqual([]);
     lastSocket().receive("frozen conversation");
     await settle();
 
@@ -321,38 +301,10 @@ describe("a dormant session's saved output", () => {
     expect(term.screen).not.toContain("shutdown cleanup");
   });
 
-  it.each([
-    ["a key", (t: FakeTerminal) => t.press("x", "x")],
-    ["a paste", (t: FakeTerminal) => t.userTypes("pasted")],
-    ["an input method's text", (t: FakeTerminal) => t.userTypes("你好")],
-  ])("lets %s through while it is being parsed", (_, input) => {
+  it("passes a focus report on to a live process", async () => {
     controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
-    controller.armWake("a");
-    lastSocket().receive("last words");
-    input(term);
-    expect(wakes).toEqual(["a"]);
-  });
-
-  it("drops xterm's own answer to a query in it", async () => {
-    controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
-    controller.armWake("a");
-    lastSocket().receive("last words\x1b[c");
-    await settle();
-    expect(wakes).toEqual([]);
-
-    // Once parsed, the same data from xterm is typing again.
-    term.emit("x");
-    expect(wakes).toEqual(["a"]);
-  });
-
-  it("does not take a focus report for typing, but passes it on to a live process", async () => {
-    controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
-    controller.armWake("a");
     lastSocket().receive("last words");
     await settle();
-    term.emit("\x1b[I");
-    term.emit("\x1b[O");
-    expect(wakes).toEqual([]);
 
     controller.attach("a", url("a"), false);
     const live = lastSocket();
@@ -362,68 +314,14 @@ describe("a dormant session's saved output", () => {
     expect(live.sent).toContainEqual(new TextEncoder().encode("\x1b[I"));
   });
 
-  it("does not take a mouse report for typing while saved output has mouse tracking on", async () => {
+  it("holds the user's typing for the connection but not xterm's answer to a query, while the screen resets", async () => {
     controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
-    controller.armWake("a");
     lastSocket().receive("last words");
-    term.modes.mouseTrackingMode = "vt200";
-    term.userTypes("\x1b[<0;10;5M");
-    term.userTypes("\x1b[<0;10;5m");
-    term.binary("\x1b[M #\xe0");
-    expect(wakes).toEqual([]);
-
-    // Typing is still typing under the same mode.
-    term.userTypes("x");
-    expect(wakes).toEqual(["a"]);
-  });
-
-  it("takes an SGR-shaped report for typing when mouse tracking is off", () => {
-    controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
-    controller.armWake("a");
-    lastSocket().receive("last words");
-    term.userTypes("\x1b[<0;10;5M");
-    expect(wakes).toEqual(["a"]);
-  });
-
-  it("does not let an Alt+click move the cursor, which would reopen it, until it is attached", () => {
-    const altClick = () => term.options.altClickMovesCursor;
-    expect(altClick()).toBe(false);
-    controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
-    expect(altClick()).toBe(false);
-
-    controller.attach("a", url("a"), false);
-    expect(altClick()).toBe(true);
-
-    controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
-    expect(altClick()).toBe(false);
-  });
-
-  it("asks again on the next input when an accepted wake left the session dormant", async () => {
-    controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
-    controller.armWake("a");
-    wakeStarts = true;
-    term.userTypes("x");
-    term.userTypes("y");
-    expect(wakes).toEqual(["a"]);
-
-    await settle();
-    term.userTypes("z");
-    expect(wakes).toEqual(["a", "a"]);
-  });
-
-  it("does not pass on xterm's answer to a query that follows the user's typing", async () => {
-    controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
-    controller.armWake("a");
-    wakeStarts = true;
-    const saved = lastSocket();
-    saved.receive("last words");
-    term.userTypes("x");
-    saved.receive("more\x1b[c");
-    await settle();
-    expect(wakes).toEqual(["a"]);
-
     controller.attach("a", url("a"), false);
     const live = lastSocket();
+    term.emit("\x1b[c");
+    term.userTypes("x");
+    await settle();
     live.open();
     expect(live.sent).toEqual([
       JSON.stringify({ type: "resize", cols: 80, rows: 24 }),
@@ -431,17 +329,27 @@ describe("a dormant session's saved output", () => {
     ]);
   });
 
-  it("does not turn the wheel into arrow keys over saved output left in the alternate screen", () => {
-    controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
-    term.buffer.active.type = "alternate";
-    expect(term.wheelHandler?.()).toBe(false);
-
-    term.buffer.active.type = "normal";
-    expect(term.wheelHandler?.()).toBe(true);
-
+  it("does not take a mouse report for typing while the screen resets under mouse tracking", () => {
     controller.attach("a", url("a"), false);
-    term.buffer.active.type = "alternate";
-    expect(term.wheelHandler?.()).toBe(true);
+    const live = lastSocket();
+    term.modes.mouseTrackingMode = "vt200";
+    term.userTypes("\x1b[<0;10;5M");
+    term.userTypes("\x1b[<0;10;5m");
+    term.binary("\x1b[M #\xe0");
+    term.userTypes("x");
+    live.open();
+    expect(live.sent).toEqual([
+      JSON.stringify({ type: "resize", cols: 80, rows: 24 }),
+      new TextEncoder().encode("x"),
+    ]);
+  });
+
+  it("takes an SGR-shaped report for typing when mouse tracking is off", () => {
+    controller.attach("a", url("a"), false);
+    const live = lastSocket();
+    term.userTypes("\x1b[<0;10;5M");
+    live.open();
+    expect(live.sent).toContainEqual(new TextEncoder().encode("\x1b[<0;10;5M"));
   });
 
   it.each([
@@ -506,17 +414,6 @@ it("pastes through xterm into a connecting session, retaining bracketed paste", 
   lastSocket().open();
   const bytes = lastSocket().sent.filter((entry) => ArrayBuffer.isView(entry)) as Uint8Array[];
   expect(bytes.map((entry) => new TextDecoder().decode(entry))).toEqual(["\x1b[200~first\nsecond\x1b[201~"]);
-});
-
-it("pasting into an archived session uses the wake pipeline", () => {
-  controller.detach({ keepScreenFor: "s-archived" });
-  controller.armWake("s-archived");
-  controller.paste("wake", "s-archived");
-  expect(wakes).toEqual(["s-archived"]);
-  controller.attach("s-archived", url("s-archived"), false);
-  lastSocket().open();
-  const bytes = lastSocket().sent.filter((entry) => ArrayBuffer.isView(entry)) as Uint8Array[];
-  expect(bytes.map((entry) => new TextDecoder().decode(entry))).toEqual(["\x1b[200~wake\x1b[201~"]);
 });
 
 it("drops paste after its destination changed or input became unavailable", () => {

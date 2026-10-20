@@ -1,0 +1,11 @@
+{"type": "session_meta", "payload": {"id": "x"}}
+{"type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "# AGENTS.md instructions INJECTED"}]}}
+{"type": "event_msg", "payload": {"type": "item_completed", "item": {"type": "UserMessage", "content": [{"type": "text", "text": "Fix the flaky test"}]}}}
+{"type": "event_msg", "payload": {"type": "item_completed", "item": {"type": "AgentMessage", "content": [{"type": "Text", "text": "COMMENTARY looking now."}], "phase": "commentary"}}}
+{"type": "event_msg", "payload": {"type": "item_completed", "item": {"type": "AgentMessage", "content": [{"type": "Text", "text": "It was a race; fixed."}], "phase": "final_answer"}}}
+{"type": "event_msg", "payload": {"type": "task_complete", "last_agent_message": "It was a race; fixed."}}
+{"type": "event_msg", "payload": {"type": "user_message", "message": "Report from session s-1 \u2014 Child\nStatus: Done"}}
+{"type": "event_msg", "payload": {"type": "agent_message", "message": "Thanks, closing it out."}}
+{"type": "event_msg", "payload": {"type": "user_message", "message": "And mind the docs"}}
+{"type": "event_msg", "payload": {"type": "agent_message", "message": "COMMENTARY checking docs", "phase": "commentary"}}
+{"type": "event_msg", "payload": {"type": "agent_message", "message": "Docs updated.", "phase": "final_answer"}}

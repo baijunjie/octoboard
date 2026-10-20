@@ -3,7 +3,7 @@ import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/ImportReview";
 import type { MacosPermissionsStatus } from "../platform";
 import type { OwnerKind, PanelKind } from "../panels/stackState";
-import type { Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, MessageParams, ModelsUnavailable, PathLinkKind, PathLinkView, SessionBranchItem, SessionRecordsPresence } from "../protocol";
+import type { Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, MessageParams, ModelsUnavailable, PathLinkKind, PathLinkView, SessionBranchItem, SessionRecordsPresence } from "../protocol";
 import type { FixtureError, FixtureFiles } from "./fixtures/projectFiles";
 import type { GroupTitle } from "./fixtures/groups";
 import type { FixtureGit } from "./fixtures/changeFixtures";
@@ -182,6 +182,14 @@ export interface Scenario {
    * has_conversation does not establish whether files exist. Aggregate presence is present if
    * any inspected session has files, otherwise unknown if any cannot be established. */
   sessionRecords?: Record<string, SessionRecordsPresence>;
+  /** What `read_session_history` answers per archived session: the messages its record holds (none
+   * for an empty history), `"unavailable"` for a record that is missing or unreadable, or `"pending"`
+   * for a read that is never answered, so the history view stays loading. A session not listed has
+   * an empty history. */
+  sessionHistory?: Record<string, HistoryMessage[] | "unavailable" | "pending">;
+  /** Sessions whose `resume_session` is never answered, so a Reopen stays in flight and the terminal
+   * keeps its "Resuming session…" cover. Other sessions reopen at once. */
+  sessionResumes?: Record<string, "pending">;
   /** The branches and worktrees bound to sessions, as `inspect_session_branches` finds them: those
    * whose `session` is among the sessions asked about and still exists. Without it none are bound,
    * so an archive or deletion shows no section about them; `"pending"` is an inspection that is never

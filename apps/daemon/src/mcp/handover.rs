@@ -17,7 +17,7 @@ use crate::branch_origin::session_branches::{self, Worktree};
 use crate::branch_origin::{self, repository_of};
 use crate::browse::wire_path;
 use crate::protocol::{error_code, CodedError, Project, Role, Session, SessionStatus};
-use crate::reporting::{self, WhenBlocked};
+use crate::reporting::{self, WhenBlocked, NOTICE_PREFIX};
 use crate::sharing::named_session;
 use crate::state::AppState;
 
@@ -414,7 +414,7 @@ async fn tell(
         (
             from,
             format!(
-                "Message from Octoboard: {owner}, your owner, handed the {noun} {named} over to \
+                "{NOTICE_PREFIX}: {owner}, your owner, handed the {noun} {named} over to \
                  {to}. You are no longer responsible for {them}: do not touch {them} or the \
                  worktrees {them} {is} checked out in, and leave any uncommitted changes there as \
                  they are.{lines}",
@@ -425,7 +425,7 @@ async fn tell(
         (
             to,
             format!(
-                "Message from Octoboard: {owner}, your owner, handed the {noun} {named} over to \
+                "{NOTICE_PREFIX}: {owner}, your owner, handed the {noun} {named} over to \
                  you from {from}. You are now the session responsible for {them}, and the previous \
                  session no longer is. Your owner will tell you what to do with {them}.{lines}",
                 from = named_session(from),

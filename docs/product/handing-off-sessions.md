@@ -183,7 +183,7 @@ Once it is running, it takes the original's whole place:
 - **the original's pin**, when it had one.
 
 The binding and the owned sessions move together. Every connected window shows the moves at once. The original is
-then archived, last, once nothing is bound to it: it keeps its saved screen as any archived session does, none of the
+then archived, last, once nothing is bound to it: none of the
 sessions that moved is archived with it, and **its branches and worktrees are not cleaned up**, since they moved to the
 receiving session.
 

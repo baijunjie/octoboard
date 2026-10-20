@@ -747,7 +747,7 @@ fn can_own(state: &Arc<AppState>, session: &Session, owner: &Session) -> bool {
 
 /// How an approval's outcome written into the caller's session opens, which is what tells the turn
 /// it starts from any other.
-const OUTCOME_OPENING: &str = "Message from Octoboard about your";
+const OUTCOME_OPENING: &str = concat!(reporting::notice_prefix!(), " about your");
 
 /// Writes an approval's outcome into the caller's session through the delivery every message takes.
 /// The turn the message starts is credited as reported: it only reads an outcome the caller already

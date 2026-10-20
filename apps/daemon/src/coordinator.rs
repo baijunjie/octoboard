@@ -45,6 +45,7 @@ use crate::protocol::{
 use crate::relocate;
 use crate::reporting;
 use crate::session::LiveSession;
+use crate::session_history;
 use crate::state::{AppState, Deletion};
 use crate::store::{ReorderOutcome, Store, LOCAL_HOST_ID};
 use crate::term;
@@ -805,6 +806,28 @@ async fn handle_inner(
             Ok(Some(Event::SessionRecordsInspected {
                 id: request_id,
                 presence,
+            }))
+        }
+
+        RequestBody::ReadSessionHistory { session } => {
+            let state = Arc::clone(state);
+            let record = state.session_record(&session)?;
+            // A record can run to tens of megabytes: parsed off the async threads.
+            let messages = tokio::task::spawn_blocking(move || -> Result<_> {
+                let accounts = state.store.list_accounts()?;
+                Ok(session_history::of_session(
+                    &state.record_hints,
+                    &mut agent_records::Locator::default(),
+                    &accounts,
+                    &record,
+                ))
+            })
+            .await??;
+            Ok(Some(Event::SessionHistory {
+                id: request_id,
+                session,
+                unavailable: messages.is_none(),
+                messages: messages.unwrap_or_default(),
             }))
         }
 

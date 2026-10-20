@@ -306,14 +306,28 @@ pub fn submitted_prompt(agent: Agent, payload: &Value) -> Option<&str> {
     if agent != Agent::Claude {
         return None;
     }
-    let prompt = payload.get("prompt")?.as_str()?.trim_start();
-    Some(match prompt.strip_prefix("<pasted_content") {
-        Some(tag) => tag
-            .split_once('>')
-            .map_or(tag, |(_, text)| text)
-            .trim_start(),
-        None => prompt,
-    })
+    Some(without_paste_wrapper(payload.get("prompt")?.as_str()?))
+}
+
+/// `text` with the wrapper Claude Code puts around a paste taken off: the `<pasted_content id="…">`
+/// line before it and the closing tag after it, when it has them.
+pub fn without_paste_wrapper(text: &str) -> &str {
+    let text = text.trim_start();
+    let Some(tag) = text.strip_prefix("<pasted_content") else {
+        return text;
+    };
+    let inner = tag.split_once('>').map_or(tag, |(_, inner)| inner).trim();
+    // The closing tag counts only as the last line: text typed after it, or a second paste, stays.
+    match inner.rsplit_once('\n') {
+        Some((rest, last)) if is_closing_tag(last) => rest.trim_end(),
+        None if is_closing_tag(inner) => "",
+        _ => inner,
+    }
+}
+
+fn is_closing_tag(line: &str) -> bool {
+    let line = line.trim();
+    line.starts_with("</pasted_content") && line.ends_with('>')
 }
 
 /// The event name as the payload itself reports it. This is the only source: the hook script is
@@ -463,6 +477,26 @@ mod tests {
         });
         let prompt = submitted_prompt(Agent::Claude, &pasted).unwrap();
         assert!(prompt.starts_with("Message from Octoboard"), "{prompt}");
+    }
+
+    /// Only a closing tag on the last line is the wrapper's: text after it, or a second paste, stays.
+    #[test]
+    fn the_paste_wrapper_comes_off_only_at_the_last_line() {
+        assert_eq!(
+            without_paste_wrapper("<pasted_content id=\"a\">\nbody\n</pasted_content id=\"a\">\n"),
+            "body"
+        );
+        let typed_after = "<pasted_content id=\"a\">\nbody\n</pasted_content id=\"a\">\nthen this";
+        assert_eq!(
+            without_paste_wrapper(typed_after),
+            "body\n</pasted_content id=\"a\">\nthen this"
+        );
+        let two = "<pasted_content id=\"a\">\none\n</pasted_content id=\"a\">\n<pasted_content id=\"b\">\ntwo\n</pasted_content id=\"b\">";
+        assert_eq!(
+            without_paste_wrapper(two),
+            "one\n</pasted_content id=\"a\">\n<pasted_content id=\"b\">\ntwo"
+        );
+        assert_eq!(without_paste_wrapper("plain"), "plain");
     }
 
     /// Grok fires `Stop` twice per session and `idle_prompt` after every turn, so the events that

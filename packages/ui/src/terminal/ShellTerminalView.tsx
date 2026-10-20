@@ -34,7 +34,7 @@ export interface ShellTerminalViewHandle {
  * and its connection. It draws with xterm's DOM renderer, never on the GPU (see where the
  * controller is built).
  *
- * It is a shell's view, not a session's: input never starts anything (no `armWake`) and there is no
+ * It is a shell's view, not a session's: there is no
  * saved output to load (no `detach` with one), as the daemon keeps the terminal's output for as
  * long as the terminal exists. What to do about a dropped socket is decided here from the record:
  * a running shell is reattached, which replays its output; an exited one is not, and its final

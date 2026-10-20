@@ -61,8 +61,12 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   daemon's automatic deletion of archived sessions whose conversation is gone.
 - [Session terminal](product/session-terminal.md) — the selected session's terminal: what its area shows with no
   session selected, typing and the mouse, output, scrollback and resizing, the reconnect and loading covers,
-  interrupted, archived and dormant sessions and the saved preview, links in the output (web addresses and file paths:
-  click to open, the OSC 8 target tooltip, which paths link), and the creation offer while a console has nothing in it.
+  interrupted, archived and dormant sessions (an interrupted one's saved preview, an archived one's history in its
+  place), links in the output (web addresses and file paths: click to open, the OSC 8 target tooltip, which paths
+  link), and the creation offer while a console has nothing in it.
+- [Session history](product/session-history.md) — what an archived session shows in the terminal's place: the user's
+  and Octoboard's messages read from the agent's own record, the Show agent replies switch, per-agent differences, the
+  loading / empty / unavailable / failed states, and keyboard focus.
 - [Session titles](product/session-titles.md) — the task title alongside created session names: where it is
   displayed, what renaming edits, where it comes from (the agent's records, its decorated terminal title, the first
   prompt), how titles are retained, and the accepted terminal sequences.
@@ -473,6 +477,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Adding a user setting](memory/adding-a-user-setting.md) — the checklist for adding a user setting: exposing it in
   the agents' settings tools unless only the user may change it, and carrying a portable application setting through a
   full configuration export and import.
+- [Writing text into a session](memory/writing-text-into-a-session.md) — why any new notice, brief or opening prompt the
+  daemon writes into a session's input needs a fixed opening constant listed in `session_history.rs`'s
+  `OCTOBOARD_OPENINGS`, or the archived history shows it as the user's own words.
 - [Writing daemon code](memory/writing-daemon-code.md) — conventions for the Rust daemon: live state the daemon derives
   held on `AppState` and published by its own event rather than as a field on a stored record, with the cleanups that
   follow from there being no deletion event for it; why a repeating refresh is timed by the client and has to be bounded

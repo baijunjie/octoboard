@@ -58,6 +58,7 @@ mod rollout;
 mod saved_output;
 mod server;
 mod session;
+mod session_history;
 mod session_request;
 mod session_title;
 mod sharing;

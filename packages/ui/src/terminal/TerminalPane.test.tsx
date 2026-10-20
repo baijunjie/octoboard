@@ -51,9 +51,10 @@ const { FakeController } = vi.hoisted(() => {
       this.currentStatus = "connecting";
       this.callbacks.onStatusChange("connecting");
     }
-    detach(): void {}
-    armWake(): void {}
-    disarmWake(): void {}
+    detaches: unknown[] = [];
+    detach(options: unknown): void {
+      this.detaches.push(options);
+    }
     settle(status: TermStatus): void {
       this.currentStatus = status;
       act(() => this.callbacks.onStatusChange(status));
@@ -387,4 +388,87 @@ it("hands a path with a view to the file viewer once it has read it, and opens a
   await act(async () => FakeController.last.openPath({ path: "/tmp/b.png" }));
   expect(onViewFile).toHaveBeenCalledOnce();
   expect(daemon.request).toHaveBeenLastCalledWith({ type: "open_path_link", project: "p-1", path: "/tmp/b.png" });
+});
+
+const archived = sessionOf("s-old", "c-1", undefined, "Old work", "archived");
+
+function mountArchived(props: Partial<React.ComponentProps<typeof TerminalPane>> = {}) {
+  const handle = createRef<TerminalPaneHandle>();
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  const show = (next: Partial<React.ComponentProps<typeof TerminalPane>> = props) =>
+    act(() => root.render(<TerminalPane ref={handle} session={archived} onResume={async () => true} onAddAgent={() => {}} {...next} />));
+  show();
+  return { container, handle, show };
+}
+
+it("shows an archived session's history over an inert terminal", async () => {
+  const { container } = mountArchived();
+  await act(async () => {});
+  expect(daemon.request).toHaveBeenCalledWith({ type: "read_session_history", session: "s-old" });
+  expect(container.querySelector("section h2")?.textContent).toBe("Session history");
+  expect(container.querySelector("[inert]")?.contains(container.querySelector("[dir=ltr]"))).toBe(true);
+  expect(FakeController.last.attaches).toBe(0);
+  expect(FakeController.last.detaches).toEqual([{}]);
+  expect(container.textContent).toContain("This session is archived");
+});
+
+it("keeps an interrupted session's saved screen and shows no history for it", () => {
+  const { container } = mountArchived({ session: sessionOf("s-int", "c-1", undefined, "Stopped", "interrupted") });
+  expect(container.querySelector("section")).toBeNull();
+  expect(FakeController.last.detaches).toEqual([{ keepScreenFor: "s-int", savedOutputUrl: "" }]);
+});
+
+it("puts focus asked for the terminal on the history's scrolling region when it is archived", async () => {
+  daemon.request.mockResolvedValueOnce({ type: "session_history", messages: [{ speaker: "user", text: "Hello", turn: 1 }] } as { type: string });
+  const { container, handle } = mountArchived();
+  await act(async () => {});
+  act(() => handle.current?.focus());
+  expect(FakeController.last.focuses).toBe(0);
+  expect(document.activeElement).toBe(container.querySelector("[role=region][tabindex]"));
+});
+
+it("covers the history with the loading state while a reopen is under way", async () => {
+  const { container, show } = mountArchived();
+  await act(async () => {});
+  show({ resuming: true });
+  expect(container.querySelector("[inert] section")).not.toBeNull();
+  const statuses = [...container.querySelectorAll("[role=status]")].map((node) => node.textContent);
+  expect(statuses).toContain("Resuming session…");
+});
+
+it("moves focus held inside the pane to the history when the session on screen becomes archived", async () => {
+  const { container, show } = mountArchived({ session });
+  const held = container.querySelector("[data-region=terminal]")!.appendChild(document.createElement("button"));
+  held.focus();
+  expect(document.activeElement).toBe(held);
+  show({ session: { ...session, status: "archived" } });
+  await act(async () => {});
+  expect(container.querySelector("section")?.contains(document.activeElement)).toBe(true);
+});
+
+it("reaches the history's first control through the handle while it is still loading", () => {
+  daemon.request.mockImplementationOnce(() => new Promise(() => {}));
+  const { container, handle } = mountArchived();
+  act(() => handle.current?.focus());
+  expect(document.activeElement).toBe(container.querySelector("section input"));
+});
+
+it("falls back to the Reopen button when the history has no control to focus", () => {
+  daemon.request.mockImplementationOnce(() => new Promise(() => {}));
+  const { container, handle } = mountArchived();
+  container.querySelector("section")!.replaceChildren();
+  act(() => handle.current?.focus());
+  expect(document.activeElement?.textContent).toBe("Reopen");
+});
+
+it("hands focus back to the history when a reopen ends with the session still archived", async () => {
+  const { container, show } = mountArchived();
+  await act(async () => {});
+  show({ resuming: true });
+  (document.activeElement as HTMLElement | null)?.blur();
+  expect(document.activeElement).toBe(document.body);
+  show({ resuming: false });
+  expect(container.querySelector("section")?.contains(document.activeElement)).toBe(true);
 });

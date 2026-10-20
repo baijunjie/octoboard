@@ -101,13 +101,23 @@ impl Conversation {
     }
 }
 
-/// Reads the conversation made of `stretches` in order: each file, and of it the first `cut` bytes
-/// when there is one (a Codex thread's earlier segments end where the next picks up),
-/// decompressing a Codex rollout that Codex has compressed. A stretch that fails part-way (a
-/// compressed record cut short) yields what was read before it; one that fails before anything of
-/// it was read is the error.
+/// Reads the conversation made of `stretches` in order, see [`for_each_line`].
 pub fn read_stretches(agent: Agent, stretches: &[Stretch]) -> std::io::Result<Conversation> {
     let mut conversation = Conversation::default();
+    for_each_line(stretches, |value| {
+        for entry in line_entries(agent, value) {
+            conversation.fold(entry);
+        }
+    })?;
+    Ok(conversation)
+}
+
+/// Calls `visit` with each line of `stretches` that parses, in order: each file, and of it the
+/// first `cut` bytes when there is one (a Codex thread's earlier segments end where the next picks
+/// up), decompressing a Codex rollout that Codex has compressed. A stretch that fails part-way (a
+/// compressed record cut short) yields what was read before it; one that fails before anything of
+/// it was read is the error.
+pub fn for_each_line(stretches: &[Stretch], mut visit: impl FnMut(&Value)) -> std::io::Result<()> {
     for Stretch { path, cut } in stretches {
         let reader = crate::line_file::open(path, 0)?;
         let mut reader: Box<dyn BufRead> = match cut {
@@ -124,15 +134,12 @@ pub fn read_stretches(agent: Agent, stretches: &[Stretch]) -> std::io::Result<Co
                 Err(_) if lines > 0 => break,
                 Err(err) => return Err(err),
             }
-            let Ok(value) = serde_json::from_slice::<Value>(&line) else {
-                continue;
-            };
-            for entry in line_entries(agent, &value) {
-                conversation.fold(entry);
+            if let Ok(value) = serde_json::from_slice::<Value>(&line) {
+                visit(&value);
             }
         }
     }
-    Ok(conversation)
+    Ok(())
 }
 
 /// The entries one line of a record holds.

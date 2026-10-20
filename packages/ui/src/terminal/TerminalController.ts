@@ -55,8 +55,7 @@ function keepModifiersFromArmingKeyDownSeen(term: Terminal): (event: KeyboardEve
  * input method's text, a wheel turned into arrow keys. xterm's own answers to queries in the output
  * (device attributes, cursor position, colours, focus and window reports) are not marked. Mouse
  * reports are marked too when they come through `onData` (the SGR and SGR-pixels encodings), as is
- * an Alt+click that moves the cursor (the controller keeps that off outside `attach`..`detach`,
- * so a click never reopens a dormant session); the default encoding comes through `onBinary`
+ * an Alt+click that moves the cursor; the default encoding comes through `onBinary`
  * unmarked. The controller itself tells the mouse reports apart (see `MOUSE_REPORT`, `onBinary`),
  * since they are not typing. The public API does not expose the mark, so this reaches
  * `coreService.onUserInput` through the private `_core`; recheck it on every `@xterm/xterm`
@@ -76,11 +75,6 @@ function watchUserInput(term: Terminal, onUserInput: () => void): void {
  * xterm's default encoding always goes through `onBinary`, and it has no urxvt encoding. */
 // eslint-disable-next-line no-control-regex -- Terminal mouse reports begin with the escape control character.
 const MOUSE_REPORT = /^\x1b\[<\d+;\d+;\d+[Mm]$/;
-
-/** A focus report (`CSI I` / `CSI O`), which xterm sends unmarked whenever the terminal gains or
- * loses focus while focus reporting (`?1004h`) is on. */
-// eslint-disable-next-line no-control-regex -- Terminal focus reports begin with the escape control character.
-const FOCUS_REPORT = /^\x1b\[[IO]$/;
 
 /** Turns off the mouse tracking (X10 to any-motion, and the SGR encoding) and focus reporting an
  * agent may have switched on, which xterm answers with input of its own. `?1015l` (urxvt) is a
@@ -126,10 +120,6 @@ export interface TerminalControllerHandlers {
    * first output after it has been written and drawn. Saved output (see `detach`) does not count:
    * it is not what a session being started is waiting for. */
   onPaintedChange?: (painted: boolean) => void;
-  /** Input typed while armed for a session with no process (see `armWake`), at most one call in
-   * flight per session; resolves to whether the session was started. When it was not, the held
-   * input is dropped and the next input asks again. */
-  onWake?: (sessionId: string) => Promise<boolean>;
   /** Opens a web address the user clicked in the output, in their own browser; absent
    * where the platform has no way to, which leaves the links inert. */
   openLink?: (url: string) => Promise<void>;
@@ -203,10 +193,6 @@ export class TerminalController {
   private userInput = false;
   private disposed = false;
   private pendingInput: Uint8Array[] = [];
-  /** The session whose process typing should start (an archived one on screen), if any. */
-  private wakeFor: string | undefined;
-  /** The session an `onWake` is in flight for, so input typed meanwhile does not ask again. */
-  private waking: string | undefined;
   /** The pending trailing send of `syncSize`, and the size the daemon was last told. */
   private resizeTimer?: ReturnType<typeof setTimeout>;
   private sentSize?: { cols: number; rows: number };
@@ -232,9 +218,7 @@ export class TerminalController {
       // Faint text is held to half of it, and box-drawing, block-element and most powerline glyphs
       // are left as they are.
       minimumContrastRatio: 4.5,
-      // An Option+click sends cursor-move arrow keys marked as the user's input, which would
-      // reopen a dormant session; it is only on from `attach` until `detach`.
-      altClickMovesCursor: false,
+      altClickMovesCursor: true,
       // Decorations, which colour the links, are an experimental API xterm gates behind this.
       allowProposedApi: true,
       // Leaving `allowNonHttpProtocols` unset is what keeps an OSC 8 link to any other scheme
@@ -286,21 +270,10 @@ export class TerminalController {
       return true;
     });
 
-    // Saved output may be left in the alternate screen, where xterm turns a wheel turn into arrow
-    // keys: that would be input, and would wake an archived session. In the normal buffer the wheel
-    // scrolls, which is wanted.
-    this.term.attachCustomWheelEventHandler(
-      () => this.socket !== undefined || this.term.buffer.active.type !== "alternate",
-    );
-
     watchUserInput(this.term, () => (this.userInput = true));
     this.term.onData((data) => {
       let fromUser = this.userInput;
       this.userInput = false;
-      // With no socket attached, a focus report is never the user typing, and must not wake a
-      // dormant session: focus returning to the terminal (a dialog closing, say) before the mode
-      // reset (`RESET_REPORTING_MODES`) is parsed would otherwise reopen it.
-      if (!this.socket && FOCUS_REPORT.test(data)) return;
       // Saved output may have turned mouse tracking on, with the reset (`RESET_REPORTING_MODES`)
       // still to be parsed: a click then would be reported, and a report is not the user typing.
       if (
@@ -421,11 +394,11 @@ export class TerminalController {
     if (this.touchable && !this.disposed) this.term.selectAll();
   }
 
-  /** The session that can accept input now, including an archived one armed to reopen. */
+  /** The session that can accept input now: the one the socket is connected or connecting to. */
   get inputSessionId(): string | undefined {
     if (this.disposed || !this.touchable) return undefined;
     if (this.socket?.readyState === WebSocket.OPEN || this.socket?.readyState === WebSocket.CONNECTING) return this.sessionId;
-    return this.wakeFor;
+    return undefined;
   }
 
   /** Checks the destination again after a clipboard read and lets xterm apply bracketed paste. */
@@ -486,10 +459,8 @@ export class TerminalController {
     this.socket?.close();
     this.socket = undefined;
     this.sessionId = sessionId;
-    // Input typed to wake this very session carries over into its connection; anything else held
-    // belonged to another session.
-    if (this.wakeFor !== sessionId) this.pendingInput = [];
-    this.wakeFor = undefined;
+    // Anything held belonged to the connection before.
+    this.pendingInput = [];
     // Reset unconditionally rather than appending the replay to what is already on screen: the
     // ring buffer always replays its full retained window from the start, not just what changed
     // since the drop, so appending would duplicate whatever overlaps. Losing scrollback older than
@@ -498,7 +469,6 @@ export class TerminalController {
     this.resetScreen();
     this.screenSessionId = sessionId;
     this.setStatus("connecting");
-    this.term.options.altClickMovesCursor = true;
 
     const socket = new WebSocket(wsUrl);
     socket.binaryType = "arraybuffer";
@@ -557,8 +527,8 @@ export class TerminalController {
    *
    * With `savedOutputUrl` (the session's terminal socket), replaces the live screen with the
    * daemon's saved snapshot, even for the same session: a live socket may already have delivered
-   * the agent's shutdown cleanup. Read-only: nothing is sent on the saved-output socket, and a
-   * keystroke still goes to `armWake`. A later detach for the same dormant session keeps that
+   * the agent's shutdown cleanup. Read-only: nothing is sent on the saved-output socket, and
+   * nothing typed goes anywhere. A later detach for the same dormant session keeps that
    * snapshot, including while its load is pending; `attach()` replaces it on resume.
    *
    * `keepScreenFor` names the session the pane is detaching to. Without a saved-output URL, its
@@ -576,7 +546,6 @@ export class TerminalController {
     this.socket?.close();
     this.socket = undefined;
     this.sessionId = undefined;
-    this.term.options.altClickMovesCursor = false;
     if (
       keepScreenFor === undefined ||
       keepScreenFor !== this.screenSessionId ||
@@ -599,8 +568,8 @@ export class TerminalController {
       if (this.savedLoad !== socket || !(ev.data instanceof ArrayBuffer)) return;
       this.savedWritesInFlight++;
       this.write(new Uint8Array(ev.data));
-      // The process that left these modes on is gone, so anything xterm would report under them
-      // could only wake the session by accident (see `armWake`).
+      // The process that left these modes on is gone, so nothing is listening for what xterm
+      // would report under them.
       this.term.write(RESET_REPORTING_MODES, () => this.savedWritesInFlight--);
     });
   }
@@ -645,8 +614,8 @@ export class TerminalController {
     this.savedLoad = undefined;
     this.setPainted(false);
     if (!this.touchable) return;
-    // Queued live output may contain a query. Its answer must not wake the dormant session
-    // while this reset waits for that output to finish parsing.
+    // Queued live output may contain a query. Its answer must not reach the next session's
+    // connection while this reset waits for that output to finish parsing.
     this.savedWritesInFlight++;
     this.term.write("", () => {
       this.savedWritesInFlight--;
@@ -685,43 +654,8 @@ export class TerminalController {
     this.handlers.onStatusChange(status);
   }
 
-  /** Makes the next input start `sessionId`'s process: it is held (`pendingInput`) and handed to
-   * the session once `attach` connects to it, and `onWake` is told whenever none is already in
-   * flight for it. A wake reported as started can still leave the session dormant: an "already
-   * running" refusal counts as started, and the daemon gives one to a wake that races the archive
-   * of a process still exiting; the next input then asks again rather than piling up behind it.
-   * Re-arming the same session keeps what is already held.
-   *
-   * The screen is kept, along with the modes the dead process left on it (mouse tracking, focus
-   * reports), under which xterm would answer a click or a focus change with a report that is not
-   * the user typing; so the modes are reset locally, without clearing the screen. */
-  armWake(sessionId: string): void {
-    if (this.wakeFor === sessionId) return;
-    this.wakeFor = sessionId;
-    this.pendingInput = [];
-    if (this.touchable) this.term.write(RESET_REPORTING_MODES);
-  }
-
-  disarmWake(): void {
-    this.wakeFor = undefined;
-  }
-
   private sendInput(data: Uint8Array, fromUser = true): void {
     if (this.savedWritesInFlight > 0 && !fromUser) return;
-    if (!this.socket && this.wakeFor !== undefined) {
-      this.pendingInput.push(data);
-      const sessionId = this.wakeFor;
-      if (this.handlers.onWake && this.waking !== sessionId) {
-        this.waking = sessionId;
-        void this.handlers.onWake(sessionId).then((started) => {
-          if (this.waking === sessionId) this.waking = undefined;
-          // Still waiting on this very session: forget what was typed, so the next input tries again
-          // instead of replaying stale keystrokes into whenever the session does start.
-          if (!started && this.wakeFor === sessionId && !this.socket) this.pendingInput = [];
-        });
-      }
-      return;
-    }
     if (this.socket?.readyState === WebSocket.OPEN) {
       this.socket.send(data);
     } else if (this.socket?.readyState === WebSocket.CONNECTING) {

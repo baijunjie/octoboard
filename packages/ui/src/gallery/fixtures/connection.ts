@@ -88,19 +88,6 @@ export const connectionScenarios: Scenario[] = [
     ],
   },
   {
-    id: "terminal-output",
-    group: TERMINAL,
-    category: "normal",
-    title: "Archived terminal with readable output",
-    description: "The read-only archived terminal keeps readable coloured output, the prompt and follow-up instruction and a long wrapping line, and its breadcrumb shows the archived status. The notice above the terminal output offers Reopen, which reopens the session.",
-    state: connected("open"),
-    steps: [
-      (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
-      (ui) => ui.press(ui.t("sidebar.project.archive")),
-      (ui) => ui.press((name) => name === "Archived and done"),
-    ],
-  },
-  {
     id: "terminal-edit-menu",
     group: TERMINAL,
     category: "normal",

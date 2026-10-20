@@ -1760,6 +1760,10 @@ pub enum RequestBody {
     InspectSessionRecords {
         sessions: Vec<String>,
     },
+    /// The user-facing history of one session, read from the agent's own conversation record.
+    ReadSessionHistory {
+        session: String,
+    },
     /// What removing `project` with its folder moved to the Trash would also remove: the linked
     /// worktrees outside the folder (every one when the folder holds the repository, those bound
     /// to the project's sessions otherwise) and, when the repository outlives the folder, the bound
@@ -2080,6 +2084,31 @@ pub enum SessionRecordPresence {
     Unknown,
 }
 
+/// Who said a message in a session's history.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HistorySpeaker {
+    /// What the user typed.
+    User,
+    /// A message Octoboard wrote into the session: a brief, a report, shared information, a notice.
+    Octoboard,
+    /// The agent's final reply to the message of its turn.
+    Agent,
+}
+
+/// One message of a session's history, as `read_session_history` returns it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct HistoryMessage {
+    pub speaker: HistorySpeaker,
+    pub text: String,
+    /// The turn it belongs to, counted from 1: a message that opens a turn and the reply to it
+    /// share one.
+    pub turn: u32,
+    /// When the record dated it, in milliseconds since the Unix epoch.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub at: Option<i64>,
+}
+
 /// A git branch or a linked worktree bound to a session: a branch whose responsible session it
 /// is, or a linked worktree with such a branch checked out. What `inspect_session_branches`
 /// reports, and what an archive or a deletion leaves behind. A project's removal also takes
@@ -2191,6 +2220,13 @@ pub struct PathLinkView {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Event {
+    SessionHistory {
+        id: Option<String>,
+        session: String,
+        messages: Vec<HistoryMessage>,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        unavailable: bool,
+    },
     SessionRecordsInspected {
         id: Option<String>,
         presence: SessionRecordPresence,
@@ -3389,7 +3425,9 @@ pub fn now_millis() -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{ProjectAccount, ProjectSource, Request, RequestBody};
+    use super::{
+        Event, HistoryMessage, HistorySpeaker, ProjectAccount, ProjectSource, Request, RequestBody,
+    };
 
     #[test]
     fn an_absent_detect_default_agent_means_true() {
@@ -3460,6 +3498,47 @@ mod tests {
         );
     }
 
+    /// `at` and `unavailable` are left out when absent, and the speakers go out in snake_case.
+    #[test]
+    fn a_session_history_serializes_without_what_is_absent() {
+        let message = |speaker, at| HistoryMessage {
+            speaker,
+            text: "hi".to_owned(),
+            turn: 1,
+            at,
+        };
+        let event = |unavailable, messages| {
+            serde_json::to_value(Event::SessionHistory {
+                id: Some("request-1".to_owned()),
+                session: "s-1".to_owned(),
+                messages,
+                unavailable,
+            })
+            .unwrap()
+        };
+        assert_eq!(
+            event(
+                false,
+                vec![
+                    message(HistorySpeaker::User, Some(5)),
+                    message(HistorySpeaker::Octoboard, None),
+                    message(HistorySpeaker::Agent, None),
+                ]
+            ),
+            serde_json::json!({
+                "type": "session_history",
+                "id": "request-1",
+                "session": "s-1",
+                "messages": [
+                    {"speaker": "user", "text": "hi", "turn": 1, "at": 5},
+                    {"speaker": "octoboard", "text": "hi", "turn": 1},
+                    {"speaker": "agent", "text": "hi", "turn": 1},
+                ],
+            })
+        );
+        assert_eq!(event(true, Vec::new())["unavailable"], true);
+    }
+
     /// The envelope's request id and the request's own fields arrive in one flat object, so a
     /// request field named `id` would be indistinguishable from the envelope's — and the daemon
     /// would act on the request id as if it were a record id. These are the requests that address
@@ -3514,6 +3593,13 @@ mod tests {
                 r#"{"type":"hand_off_session","id":"request-1","session":"session-7","agent":"codex"}"#,
                 |body| match body {
                     RequestBody::HandOffSession { session, .. } => Some(session),
+                    _ => None,
+                },
+            ),
+            (
+                r#"{"type":"read_session_history","id":"request-1","session":"session-7"}"#,
+                |body| match body {
+                    RequestBody::ReadSessionHistory { session } => Some(session),
                     _ => None,
                 },
             ),

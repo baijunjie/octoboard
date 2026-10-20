@@ -21,7 +21,7 @@ const MarkdownDocument = lazy(() => import("./MarkdownDocument").then((module) =
 /** Link colours measured at 4.5:1 or more on the code background of each appearance (the accent
  * colours of the same GitHub high-contrast palettes the code is drawn in). Links are underlined too,
  * so colour is not what marks them. */
-const LINK_COLOURS = { light: "#0349b4", dark: "#71b7ff" } as const;
+export const LINK_COLOURS = { light: "#0349b4", dark: "#71b7ff" } as const;
 
 /**
  * A Markdown file, as the rendered document or as its source by the user's choice

@@ -324,15 +324,15 @@ function select(all, { patterns, group }) {
 // ---- one page ------------------------------------------------------------------------------------
 
 /** Behavioral checks run after the gallery settles, so the displayed scenario remains archived.
- * Without terminal isolation, xterm's transparent WebGL link canvas can intercept the notice. DOM clicks
- * bypass that hit testing; drive the actual pointer and verify the fixture session becomes live. */
-async function checkArchivedTerminalReopen(page, language) {
-  await page.locator('[data-region="terminal"] .xterm-link-layer').waitFor({ state: "attached", timeout: READ_TIMEOUT_MS });
+ * The floating bar sits over the history view, which covers the terminal beneath it. DOM clicks bypass
+ * hit testing; drive the actual pointer and verify the fixture session becomes live. */
+async function checkArchivedReopen(page, language) {
+  await page.getByRole("status").getByRole("button").first().waitFor({ state: "attached", timeout: READ_TIMEOUT_MS });
   const labels = await page.evaluate(async (language) => {
     const { format } = await import("/src/i18n/catalog.ts");
     const { sessionAriaLabel } = await import("/src/sessionLabel.ts");
     const { SCENARIOS } = await import("/src/gallery/fixtures/index.ts");
-    const session = SCENARIOS.find((scenario) => scenario.id === "terminal-output").state.sessions.get("s-archived");
+    const session = SCENARIOS.find((scenario) => scenario.id === "history-loaded").state.sessions.get("s-history");
     return {
       reopen: format(language, "sidebar.session.reopen"),
       liveSession: sessionAriaLabel((key, params) => format(language, key, params), language, { ...session, status: "idle" }, []),
@@ -349,7 +349,8 @@ async function checkArchivedTerminalReopen(page, language) {
   });
   await page.mouse.click(target.x, target.y);
   await button.waitFor({ state: "hidden", timeout: READ_TIMEOUT_MS });
-  await page.getByRole("button", { name: labels.liveSession, exact: true }).waitFor({ timeout: READ_TIMEOUT_MS });
+  // A focus card carries more after the status (its model), so the name is matched as a substring.
+  await page.getByRole("button", { name: labels.liveSession }).waitFor({ timeout: READ_TIMEOUT_MS });
 }
 
 /** Runs one scenario in its own page of `context` and returns the failure text, or undefined if clean. */
@@ -373,7 +374,7 @@ async function sweepOne(context, origin, scenario, language, theme) {
       problems.push(`the page never became ready within ${READY_TIMEOUT_MS / 1000}s`);
     }
     await page.waitForTimeout(SETTLE_MS);
-    if (scenario.id === "terminal-output" && problems.length === 0) await checkArchivedTerminalReopen(page, language);
+    if (scenario.id === "history-loaded" && problems.length === 0) await checkArchivedReopen(page, language);
     const banner = await within(
       READ_TIMEOUT_MS,
       page.evaluate(() => Array.from(document.querySelectorAll("[data-gallery-failure] > div"), (line) => line.textContent ?? "")),

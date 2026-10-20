@@ -2,7 +2,8 @@
 
 The terminal in the window's content panel, where the selected session's agent is shown and typed into. Sessions
 themselves — opening and statuses — are described in `docs/product/sessions.md`, and archiving, interruption and
-resuming in `docs/product/archiving-and-resuming-sessions.md`.
+resuming in `docs/product/archiving-and-resuming-sessions.md`. What an archived session shows in the terminal's
+place is in `docs/product/session-history.md`.
 
 ## With no session selected
 
@@ -24,8 +25,8 @@ focus between regions with F6" in `docs/product/moving-focus-between-regions.md`
 
 ## Copy, paste and selection
 
-With a session selected, right-clicking its terminal opens an editing menu in both the desktop app and a browser.
-On macOS, Control-click opens it too. With keyboard focus in the terminal, the context-menu key or `Shift+F10`
+With a session selected that is not archived, right-clicking its terminal opens an editing menu in both the desktop
+app and a browser. On macOS, Control-click opens it too. With keyboard focus in the terminal, the context-menu key or `Shift+F10`
 opens the same menu; neither key is sent to the agent. Opening it preserves the terminal's selection, and closing it
 returns keyboard focus to the terminal. There is no separate menu button.
 
@@ -33,8 +34,6 @@ returns keyboard focus to the terminal. There is no separate menu button.
   platform has no clipboard, or it refuses, the text is copied through the browser's selection copy instead.
 - **Paste** reads text from the clipboard and sends it as terminal input, respecting the running program's bracketed
   paste mode. It is disabled without clipboard reading support or while the selected session cannot accept input.
-  Pasting into an archived session reopens it and holds the pasted input until it connects, as typing does (see
-  "Interrupted, archived and dormant sessions" below).
 - **Select all** selects the terminal's contents, including its available scrollback, for copying.
 
 The clipboard is read only when Paste is chosen, so merely opening the menu does not request clipboard access. If
@@ -45,8 +44,8 @@ allows, shows an error alert.
 ## Output, scrollback and size
 
 - Attaching to a running session replays the **most recent 2 MiB** of that session's raw output, then follows live
-  output. The terminal itself keeps 10,000 lines of scrollback. Dormant sessions show the saved preview described in
-  "Interrupted, archived and dormant sessions" below.
+  output. The terminal itself keeps 10,000 lines of scrollback. An interrupted session shows the saved preview
+  described in "Interrupted, archived and dormant sessions" below; an archived one shows its history instead.
 - **Once a session has written more than those 2 MiB, the replay first restores the terminal modes the agent has
   on at that moment**, since agents announce them only once, at startup: the alternate screen, mouse reporting,
   focus reporting, bracketed paste, application cursor and keypad keys, a hidden cursor and disabled line wrap. A
@@ -123,19 +122,22 @@ or disconnected, the cover described in "Reconnecting" above is shown in its pla
   "The switch strip" in `docs/product/focus-mode.md`). While a session has no process and no resume of
   it is under way, the terminal shows a card at its bottom centre, raised over it by a large shadow with no outline
   (see "The window chrome and the content panel" in `docs/product/window-layout.md`): for an interrupted session it
-  reads "Not running" and offers "Resume"; for an archived one it says the session is archived and that typing reopens it, and offers
-  "Reopen". The card is hidden while the session is being resumed.
-- **Typing into an archived session's terminal reopens it.** The first input starts the relaunch, and what is typed
-  until the session is connected is held and handed to the agent once it is, so it reaches the agent's prompt.
-- **A dormant session shows its own saved terminal preview**, behind that card, read-only. Entering dormancy replaces
-  the live screen with that preview, even while the same session remains selected; reopening the view or loading it
-  on another client shows the same saved content. Selecting a different dormant session shows its own preview, or a
-  blank terminal if it has none. Clicking, selecting, scrolling or focusing the terminal does not resume it. Nothing
-  typed reaches the stopped process; typing into an archived session reopens it as above.
+  reads "Not running" and offers "Resume"; for an archived one it says the session is archived and offers "Reopen".
+  The card is hidden while the session is being resumed.
+- **An archived session shows its history, not its terminal**: a read-only list of what was said in it, read from the
+  agent's own record (see `docs/product/session-history.md`). Its terminal cannot be reached: nothing typed or pasted
+  goes anywhere, and typing does not reopen it. Reopening it — the card's "Reopen", or the other ways in "Archiving,
+  interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md` — is the way back to its terminal.
+- **An interrupted session shows its own saved terminal preview**, behind that card, read-only. A session interrupted
+  while it is shown has its live screen replaced by that preview; reopening the view or loading it on another client
+  shows the same saved content. Showing a different interrupted session shows its own preview, or a blank terminal if
+  it has none. Clicking, selecting, scrolling or focusing the terminal does not resume it, and nothing typed reaches
+  the stopped process.
 - **Archiving preserves the screen before the agent is asked to exit.** The same rule applies when switching accounts
   or stopping the daemon normally: cleanup, a clear screen or leaving an agent's full-screen interface cannot replace
   the captured preview. An agent that exits or crashes on its own instead leaves its final screen, so content it clears
-  before exiting need not survive. These rules are shared by every supported agent.
+  before exiting need not survive. These rules are shared by every supported agent. An archived session's preview is
+  kept, but its history is what is shown.
 - The preview contains the active terminal screen, retaining text colours and styles. With the normal screen active,
   it includes up to **10,000 rows of scrollback**. An agent's alternate full-screen interface has no scrollback:
   its preview contains only that visible screen, without the hidden normal screen's history. The preview is
@@ -185,8 +187,8 @@ described under "Web addresses" and "File paths" below; the rest holds for both:
 - **An OSC 8 hyperlink shows its real target as a tooltip** once the pointer has rested on it for the window's usual
   tooltip delay (see "How a tooltip behaves" in `docs/product/labels-and-tooltips.md`). A plain-text address has no
   tooltip, its text being its target. The tooltip goes when the pointer leaves the link, when the terminal's view
-  scrolls, and when the terminal is cleared to draw a session afresh — selecting another session, a reattach, or a
-  dormant session's preview replacing the screen. It also closes on any key press or pointer press, including the
+  scrolls, and when the terminal is cleared to draw a session afresh — selecting another session, a reattach, or an
+  interrupted session's preview replacing the screen. It also closes on any key press or pointer press, including the
   click that opens the link. The target reaches no assistive technology, as none of the terminal's
   output does.
 - **An address the program itself breaks onto the next line is joined**: when the program ends a row partway through

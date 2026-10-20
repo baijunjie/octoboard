@@ -629,7 +629,7 @@ its live Unlock control. A lock among descendants outside the list still refuses
 Selecting a session shows its terminal; selecting an interrupted one resumes it, except by `Ctrl+Tab` or
 `Ctrl+Shift+Tab` in a console session's focus mode, which only shows an interrupted console session (see "The switch
 strip" in `docs/product/focus-mode.md`). Selecting an archived one does not reopen it: it is shown still archived,
-with its saved terminal preview read-only, and typing into its terminal or pressing Reopen reopens it
+with its history in place of its terminal (see `docs/product/session-history.md`), and pressing Reopen reopens it
 (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md` and "Interrupted, archived and dormant
 sessions" in `docs/product/session-terminal.md`). Selecting a session also
 gives the window's right pane to its own owner: a console session's report panel, a project session's project's Files
@@ -706,8 +706,8 @@ scope and nesting are described below.
   session row uses (see "The binding badge" above). The 30 rows are counted as rows, so an inset row is never shown before the row it is
   inset under.
 - **Selecting a row** — clicking it, or `Enter` or `Space` on it — selects its session, which closes the view (see
-  "Selecting a session" above): the session is shown still archived, its saved terminal preview read-only behind the
-  card that offers Reopen, just as when it is selected from a preview. Selecting it does not reopen it. Pressing the
+  "Selecting a session" above): the session is shown still archived, its history in place of its terminal and the
+  card that offers Reopen over it, just as when it is selected from a preview. Selecting it does not reopen it. Pressing the
   row's Reopen or Delete does not select the row. The row of the selected session is marked as selected.
 - **Reopen** resumes the session and selects it, which closes the view (see "Selecting a session" above).
 - **Delete** deletes that session, with the confirmation rules in "Deleting archived sessions" in

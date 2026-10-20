@@ -389,8 +389,7 @@ export function App(): React.ReactElement {
   const runOnce = (key: string, action: () => Promise<void>): Promise<boolean> =>
     runOnceGuarded(inFlightRef.current, key, action, toastError);
 
-  /** Resumes a session; resolves to whether the daemon accepted it, so input held for a session
-   * that could not start is not replayed later (`TerminalController.armWake`). A console may now
+  /** Resumes a session; resolves to whether the daemon accepted it. A console may now
    * hold any number of live console sessions, so there is nothing to pre-emptively refuse here —
    * selecting, resuming or reopening one simply works, whatever else is running in the console. */
   const resumeSession = async (sessionId: string): Promise<boolean> =>
@@ -476,7 +475,7 @@ export function App(): React.ReactElement {
       focusTerminal();
     }
     // An interrupted session is resumed by selecting it, unless `resume` is off; an archived one only
-    // shows, and is reopened by typing to it (`TerminalPane`) or an explicit Reopen (`reopenSession`).
+    // shows its history, and is reopened by the Reopen button or an explicit Reopen (`reopenSession`).
     if (resume && session.status === "interrupted") void resumeSession(session.id);
   };
 

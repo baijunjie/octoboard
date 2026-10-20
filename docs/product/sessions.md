@@ -903,5 +903,6 @@ and an owner's `rename_session` tool still accept archived sessions. An agent's 
 ## The terminal
 
 The selected session's terminal — what its area shows with no session selected, typing into it, its output and
-scrollback, reconnecting and loading, a dormant session's saved preview, links in its output, and what it offers while
-a console has nothing in it — is described in `docs/product/session-terminal.md`.
+scrollback, reconnecting and loading, an interrupted session's saved preview, links in its output, and what it offers
+while a console has nothing in it — is described in `docs/product/session-terminal.md`; what an archived session shows
+in its place, in `docs/product/session-history.md`.

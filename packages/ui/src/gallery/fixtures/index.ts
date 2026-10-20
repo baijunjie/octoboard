@@ -18,6 +18,7 @@ import { noticeScenarios } from "./notices";
 import { quotaGatingScenarios } from "./quotaGating";
 import { railQuotaScenarios } from "./railQuota";
 import { reportScenarios } from "./report";
+import { sessionHistoryScenarios } from "./sessionHistory";
 import { settingsScenarios } from "./settings";
 import { startupScenarios } from "./startup";
 import { terminalPanelScenarios } from "./terminalPanel";
@@ -43,6 +44,7 @@ export const SCENARIOS: Scenario[] = [
   ...filterScenarios,
   ...startupScenarios,
   ...connectionScenarios,
+  ...sessionHistoryScenarios,
   ...terminalPanelScenarios,
   ...noticeScenarios,
   ...archiveScenarios,

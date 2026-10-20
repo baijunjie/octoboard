@@ -309,6 +309,14 @@ fn modified(path: &Path) -> Option<SystemTime> {
     std::fs::metadata(path).ok()?.modified().ok()
 }
 
+/// Whether a directory entry is the rollout file of the Codex thread `agent_id`; the name and the
+/// id both lowercased.
+fn is_rollout_of(kind: std::fs::FileType, name: &str, agent_id: &str) -> bool {
+    kind.is_file()
+        && name.starts_with("rollout-")
+        && rollout_stem(name).is_some_and(|stem| names_thread(stem, agent_id))
+}
+
 /// A Codex rollout's file name without its extension: `.jsonl`, or `.jsonl.zst` once Codex has
 /// compressed it (it does so for rollouts older than a week).
 pub fn rollout_stem(name: &str) -> Option<&str> {
@@ -580,6 +588,50 @@ pub fn conversation_branch(
     Some(Branch { record, stretches })
 }
 
+/// [`conversation_branch`], and for a Codex thread that `codex archive` moved out of `sessions/`,
+/// the rollouts it left in the account's `archived_sessions/`. That one a resume refuses, but the
+/// conversation in it can still be read.
+pub fn history_branch(
+    hints: &Hints,
+    locator: &mut Locator,
+    accounts: &[Account],
+    session: &Session,
+) -> Option<Branch> {
+    conversation_branch(hints, locator, accounts, session)
+        .or_else(|| archived_codex_branch(locator, accounts, session))
+}
+
+fn archived_codex_branch(
+    locator: &mut Locator,
+    accounts: &[Account],
+    session: &Session,
+) -> Option<Branch> {
+    let agent_id = session
+        .agent_session_id
+        .as_deref()
+        .filter(|id| session.agent == Agent::Codex && plausible_id(id))?
+        .to_ascii_lowercase();
+    let (roots, _) = account_roots(locator, accounts, session);
+    let mut files: Vec<PathBuf> = Vec::new();
+    for root in roots {
+        walk_records(
+            &root.join("archived_sessions"),
+            6,
+            &mut |path, name, kind, _| {
+                if is_rollout_of(kind, &name.to_ascii_lowercase(), &agent_id) {
+                    files.push(path.to_path_buf());
+                    Step::Matched
+                } else {
+                    Step::Descend
+                }
+            },
+        );
+    }
+    let record = rollout_head(&files)?;
+    let stretches = rollout_branch(&record, &files);
+    Some(Branch { record, stretches })
+}
+
 /// Whether all known account locations can prove the absence of this session's native records.
 /// Missing ids and unreadable or linked directories cannot establish absence.
 pub fn presence(
@@ -721,11 +773,7 @@ fn locate_own_record(locator: &Locator, session: &Session) -> Result<Located, Re
         let name = name.to_ascii_lowercase();
         match agent {
             Agent::Claude => kind.is_file() && name == format!("{agent_id}.jsonl"),
-            Agent::Codex => {
-                kind.is_file()
-                    && name.starts_with("rollout-")
-                    && rollout_stem(&name).is_some_and(|stem| names_thread(stem, &agent_id))
-            }
+            Agent::Codex => is_rollout_of(kind, &name, &agent_id),
             Agent::Grok => kind.is_dir() && name == agent_id,
         }
     };
@@ -1583,6 +1631,36 @@ mod tests {
         );
         assert_eq!(judged(&own), Resumability::Resumable);
         assert!(needs_unarchive(&own));
+    }
+
+    /// The history of a Codex thread that `codex archive` moved out of `sessions/` is read from
+    /// `archived_sessions/`, and a record in `sessions/` still wins over it.
+    #[test]
+    fn history_finds_a_codex_rollout_that_was_archived() {
+        let dir = crate::test_support::ScratchDir::new("agent-records-history-archived");
+        let account = dir.join("account");
+        let own = session(Agent::Codex, CODEX_ID, Some(&account));
+        let found = |own: &Session| {
+            let mut locator = Locator::with_shell(HashMap::from([(
+                "HOME".to_owned(),
+                dir.join("home").to_string_lossy().into_owned(),
+            )]));
+            history_branch(&Hints::default(), &mut locator, &[], own).map(|branch| branch.record)
+        };
+        assert_eq!(found(&own), None);
+
+        let name = format!("rollout-2026-10-01T00-00-00-{CODEX_ID}.jsonl");
+        let archived = account.join("archived_sessions").join(&name);
+        touch(&archived);
+        assert_eq!(found(&own), Some(archived));
+
+        let live = account.join("sessions/2026/10/01").join(&name);
+        touch(&live);
+        assert_eq!(found(&own), Some(live));
+
+        // Another agent's session is not looked for there.
+        let other = session(Agent::Claude, CLAUDE_ID, Some(&account));
+        assert_eq!(found(&other), None);
     }
 
     #[test]

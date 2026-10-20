@@ -25,6 +25,27 @@ use crate::protocol::{error_code, CodedError, Session, SessionStatus};
 use crate::state::{AppState, TurnClose};
 use crate::{coordinator, hooks, term};
 
+/// How every notice Octoboard writes into a session begins, worded after it at several places. A
+/// macro so that a constant can be built on it with `concat!`.
+macro_rules! notice_prefix {
+    () => {
+        "Message from Octoboard"
+    };
+}
+pub(crate) use notice_prefix;
+
+/// [`notice_prefix!`] as a value.
+pub(crate) const NOTICE_PREFIX: &str = notice_prefix!();
+
+/// How [`render_brief`] begins.
+pub(crate) const BRIEF_OPENING: &str = "## Goal";
+
+/// How [`render_report`] begins.
+pub(crate) const REPORT_OPENING: &str = "Report from session ";
+
+/// How [`render_page_submission`] begins.
+pub(crate) const PAGE_SUBMISSION_OPENING: &str = "Report panel form submission";
+
 /// What a session is handed as its opening prompt, rendered from the console session's `brief`.
 ///
 /// A fixed template rather than something the console session composes, so what a session is
@@ -37,7 +58,7 @@ pub fn render_brief(
     acceptance: Option<&str>,
     constraints: Option<&str>,
 ) -> String {
-    let mut prompt = format!("## Goal\n\n{}\n", goal.trim());
+    let mut prompt = format!("{BRIEF_OPENING}\n\n{}\n", goal.trim());
     for (heading, body) in [
         ("Context", context),
         ("Acceptance", acceptance),
@@ -460,7 +481,7 @@ fn render_report(session: &Session, project: Option<&str>, report: &Report<'_>) 
         None => session.title.clone(),
     };
     let mut message = format!(
-        "Report from session {} — {origin}\nStatus: {}",
+        "{REPORT_OPENING}{} — {origin}\nStatus: {}",
         session.id,
         report.status.label()
     );
@@ -488,7 +509,7 @@ fn render_report(session: &Session, project: Option<&str>, report: &Report<'_>) 
 /// normally takes — an object of scalar values, one `key: value` line each — and falls back to
 /// pretty-printed JSON for anything else, rather than guessing at a layout for nested data.
 pub(crate) fn render_page_submission(page_id: &str, data: &serde_json::Value) -> String {
-    let mut message = format!("Report panel form submission — page {page_id}\n\n");
+    let mut message = format!("{PAGE_SUBMISSION_OPENING} — page {page_id}\n\n");
     match data.as_object().filter(|fields| {
         !fields.is_empty()
             && fields

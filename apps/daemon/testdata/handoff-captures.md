@@ -25,3 +25,17 @@ Synthesized, because no record on the machine holds a sample, from the tools' pu
   0.162.1 runs its tools through a code-mode `exec`, so none of its rollouts held either as a call of its own.
 - The `todo_write` calls and the `search_replace` / `write` edits of the Grok capture have the real argument shapes with
   neutral content, put into the real assistant line shape.
+
+## Session history fixtures
+
+`history_claude.jsonl`, `history_codex_rollout.jsonl` and `history_grok_chat_history.jsonl` are replayed through the
+session history reader (`src/session_history.rs`). Unlike the captures above they are written by hand, in the shape of
+real captured lines, so that each case is pinned exactly (an Octoboard-written message, a Codex `commentary` message,
+a slash command with arguments) rather than found by luck in a capture:
+
+- Claude Code: a message Octoboard wrote as a paste (the `<pasted_content>` wrapper), a "Message from Octoboard" line, a
+  slash command's `<command-…>` line, an interrupted-turn note, reasoning-only and stand-in assistant lines, and a turn
+  whose reply is spread over several assistant lines.
+- Codex: `AgentMessage` items and `agent_message` events with `commentary` and `final_answer` phases, one with no
+  phase, and a "Report from session" user message.
+- Grok Build: a prompt inside `<user_query>` wrapping a paste.

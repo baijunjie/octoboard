@@ -64,20 +64,20 @@ sessions started by the owner.
 or, for a project session, by giving its conversation's session ID in the session dialog's **Resume conversation** tab
 (see "Resuming or going to a session of this project from the tab" in `docs/product/sessions.md`).
 **Reopening** an archived session is the same relaunch, but selecting an archived session does not do it:
-the session is shown, still archived, and is reopened by typing into its terminal, by pressing "Reopen" on its
-terminal's card, in a focus mode's archived-row action menu (see "What both views show" in
-`docs/product/focus-mode.md`), in the archive view (see "The archive view" in `docs/product/sidebar.md`), or, for a
-project session, by giving its conversation's session ID in the session dialog's **Resume conversation** tab (see
-"Reopening an archived session from the tab" in `docs/product/sessions.md`). Each relaunches the same agent in the same directory and reassembles everything Octoboard injects.
+the session is shown, still archived, with its history in place of its terminal (see
+`docs/product/session-history.md`), and is reopened by pressing "Reopen" on its terminal's card, in a focus mode's
+archived-row action menu (see "What both views show" in `docs/product/focus-mode.md`), in the archive view (see "The
+archive view" in `docs/product/sidebar.md`), or, for a project session, by giving its conversation's session ID in the
+session dialog's **Resume conversation** tab (see "Reopening an archived session from the tab" in
+`docs/product/sessions.md`). Each relaunches the same agent in the same directory and reassembles everything Octoboard
+injects.
 
 - Where the agent has a stored conversation, that conversation is resumed.
 - A session that **nobody ever typed into** has no stored conversation on the agent's side; resuming it opens a fresh
   conversation in its place, in the same project and under the same session. A session opened to resume a
   conversation is the exception: it has that conversation from the start (see "Resuming a conversation by its
   session ID" in `docs/product/sessions.md`).
-- A resume carries no opening prompt, so the session comes up at the agent's prompt; an archived session reopened by
-  typing into its terminal is then handed what was typed (see "Interrupted, archived and dormant sessions" in
-  `docs/product/session-terminal.md`).
+- A resume carries no opening prompt, so the session comes up at the agent's prompt.
 - A session relaunches with the account and the config directory it last recorded for its agent — the one it was
   opened with until it is switched to another account (see `docs/product/switching-session-accounts.md`), not the console's current
   reference — and is refused if that directory no longer exists, but only when the session has a conversation to

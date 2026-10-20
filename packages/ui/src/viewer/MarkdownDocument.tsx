@@ -4,7 +4,7 @@
 // libraries load on first use, and a project file is the only thing a path in the text can read.
 // An address is never followed by the viewer itself: a project file is handed to `onOpenFile`, and
 // an absolute web or mail address to `onOpenLink`.
-import React, { memo, useEffect, useMemo, useRef } from "react";
+import React, { memo, useEffect, useId, useMemo, useRef } from "react";
 import Markdown, { type Components, type ExtraProps, type Options } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -47,6 +47,10 @@ export interface MarkdownDocumentProps {
   isDirectory?: (path: string) => boolean;
   /** A heading to move to once the document is shown, from a link that opened this file. */
   anchor?: string;
+  /** The document is one of several inside a view with headings of its own: its headings are
+   * demoted two levels (`h1` to `h3`, none below `h6`) so none outranks the view's, and it gives
+   * no heading an id and its footnotes ids of their own, so documents side by side cannot clash. */
+  embedded?: boolean;
 }
 
 /** The text a node reads as; an image reads as its alt text. */
@@ -93,6 +97,24 @@ function frameDocument(fallback: Direction, style: MarkdownStyle) {
         children: tree.children,
       },
     ];
+  };
+}
+
+/** Gives the footnotes' heading, whose id the library fixes as `footnote-label`, an id of its own,
+ * and points the references that the library describes by it (`aria-describedby`) there, so
+ * documents side by side do not share one. */
+function scopeFootnoteLabel(scope: string) {
+  const scoped = `footnote-label-${scope}`;
+  return () => (tree: DirectionNode & { children: DirectionNode[] }) => {
+    const visit = (node: DirectionNode & { properties?: Record<string, unknown>; children?: DirectionNode[] }) => {
+      const props = node.properties;
+      if (props?.id === "footnote-label") props.id = scoped;
+      if (Array.isArray(props?.ariaDescribedBy)) {
+        props.ariaDescribedBy = props.ariaDescribedBy.map((id) => (id === "footnote-label" ? scoped : id));
+      }
+      node.children?.forEach(visit);
+    };
+    visit(tree);
   };
 }
 
@@ -216,6 +238,16 @@ const BLOCKS = {
   section: styled("section", "mt-6 border-t border-current/25 pt-3 text-xs"),
 } satisfies Components;
 
+// An embedded document's headings sit two levels down, clamped at the last.
+const DEMOTED_BLOCKS = {
+  h1: styled("h3", "", "first-strong"),
+  h2: styled("h4", "", "first-strong"),
+  h3: styled("h5", "", "first-strong"),
+  h4: styled("h6", "", "first-strong"),
+  h5: styled("h6", "", "first-strong"),
+  h6: styled("h6", "", "first-strong"),
+} satisfies Components;
+
 // A task list's boxes are drawn as the checked or unchecked state they record, not as controls. The
 // library already marks them disabled; this keeps them inert whatever it does.
 function TaskBox({ node: _, className, ...props }: ExtraProps & React.InputHTMLAttributes<HTMLInputElement>): React.ReactElement {
@@ -239,11 +271,13 @@ export const MarkdownDocument = memo(function MarkdownDocument({
   onOpenFile,
   isDirectory,
   anchor,
+  embedded = false,
 }: MarkdownDocumentProps): React.ReactElement {
   const t = useT();
   const appDirection = textDirection(useCurrentLanguage());
   const style = markdownStyle.useValue();
   const frameRef = useRef<HTMLDivElement>(null);
+  const idScope = useId();
   useEffect(() => {
     if (!anchor) return;
     const root = frameRef.current?.querySelector("[data-markdown-document]");
@@ -252,13 +286,16 @@ export const MarkdownDocument = memo(function MarkdownDocument({
   // Not memoised, unlike the components below: the library builds its processor on every render
   // whatever this array's identity is, so holding one would buy nothing.
   const remarkPlugins: NonNullable<Options["remarkPlugins"]> = [remarkGfm, remarkMath, prepareMarkdown(text, path), limitFences];
-  const rehypePlugins: NonNullable<Options["rehypePlugins"]> = [headingIds, frameDocument(appDirection, style)];
+  const rehypePlugins: NonNullable<Options["rehypePlugins"]> = embedded
+    ? [scopeFootnoteLabel(idScope), frameDocument(appDirection, style)]
+    : [headingIds, frameDocument(appDirection, style)];
   // Memoised: the library takes a new component for an element to be a new kind of element and
   // mounts it afresh, which would take the focus of a link with it and draw every fenced block again
   // each time the caller renders (as it does when the frame gains or loses its focus ring).
   const components = useMemo<Components>(
     () => ({
       ...BLOCKS,
+      ...(embedded ? DEMOTED_BLOCKS : {}),
       input: TaskBox,
       img: ({ src, alt, node }) => (
         <DocumentImage src={src} alt={alt} documentPath={path} project={project} overBudget={overBudget(node)} />
@@ -333,18 +370,19 @@ export const MarkdownDocument = memo(function MarkdownDocument({
         return <>{children}</>;
       },
     }),
-    [renderCode, onOpenLink, onOpenFile, isDirectory, path, project, theme],
+    [renderCode, onOpenLink, onOpenFile, isDirectory, path, project, theme, embedded],
   );
   // The library words the footnotes' heading and each backlink's name in English.
   const remarkRehypeOptions = useMemo<Options["remarkRehypeOptions"]>(
     () => ({
+      ...(embedded ? { clobberPrefix: `user-content-${idScope}-` } : {}),
       footnoteLabel: t("viewer.markdown.footnotes"),
       footnoteBackLabel: (referenceIndex, rereferenceIndex) =>
         t("viewer.markdown.footnoteBack", {
           reference: rereferenceIndex > 1 ? `${referenceIndex + 1}-${rereferenceIndex}` : referenceIndex + 1,
         }),
     }),
-    [t],
+    [t, embedded, idScope],
   );
   return (
     <div ref={frameRef} className="contents">

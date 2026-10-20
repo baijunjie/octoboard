@@ -19,6 +19,7 @@ import { useOctoboardTheme } from "../theme";
 import type { ViewedFile } from "../browser/TerminalFileViewer";
 import { TerminalController, type TermStatus } from "./TerminalController";
 import { openPathTarget } from "./openPathTarget";
+import { SessionHistoryView } from "./SessionHistoryView";
 import { TerminalEditMenu } from "./TerminalEditMenu";
 import { TerminalLinkTooltip } from "./TerminalLinkTooltip";
 import { MAX_AUTO_RECONNECT_ATTEMPTS, reconnectDelay, STABLE_CONNECTION_MS } from "./reconnectPolicy";
@@ -121,16 +122,35 @@ export function TerminalPane({
   // goes to the top bar wherever it is now, except on `<body>`: `refocusIfLost` asks at mount, and
   // launching the app must not pull focus onto a control.
   const hasSessionRef = useLatest(session !== undefined);
+  // An archived session's terminal is covered by its history and inert, so focus asked for the
+  // terminal goes to the history's scrolling region instead, or while there is none (loading, no
+  // messages, a failed read) to its first control, and then to the bar's Reopen.
+  const isArchived = session?.status === "archived";
+  const archivedRef = useLatest(isArchived);
+  const historyRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
   const focusTerminal = useCallback(() => {
-    if (hasSessionRef.current) controllerRef.current?.focus();
+    if (archivedRef.current) {
+      const history = historyRef.current;
+      (
+        history?.querySelector<HTMLElement>("[role=region][tabindex]") ??
+        history?.querySelector<HTMLElement>("input, button") ??
+        barRef.current?.querySelector<HTMLElement>("button")
+      )?.focus();
+    } else if (hasSessionRef.current) controllerRef.current?.focus();
     else if (document.activeElement !== document.body) focusTopBar();
-  }, [hasSessionRef]);
+  }, [hasSessionRef, archivedRef]);
   // The session going away turns the terminal inert, and focus inside it would then fall to
   // `<body>` with no event; hand it to the top bar first.
   const noSession = session === undefined;
   useLayoutEffect(() => {
     if (noSession && rootRef.current?.contains(document.activeElement)) focusTopBar();
   }, [noSession]);
+  // The session on screen turning archived makes the terminal inert under focus, which falls to
+  // `<body>` with no event; it goes to the history first.
+  useLayoutEffect(() => {
+    if (isArchived && rootRef.current?.contains(document.activeElement)) focusTerminal();
+  }, [isArchived, focusTerminal]);
   const held = useFocusHandoff(focusTerminal);
 
   useImperativeHandle(
@@ -161,9 +181,6 @@ export function TerminalPane({
     if (!canReconnect || !rootRef.current?.contains(document.activeElement)) return;
     coverRef.current?.querySelector("button")?.focus();
   }, [canReconnect]);
-  // The controller is built once; what it calls on input that wakes an archived session must be
-  // the latest `onResume`.
-  const onResumeRef = useLatest(onResume);
   const translateRef = useLatest(t);
   // The paths in the output are asked about for the session on screen, which the controller built
   // once does not otherwise follow.
@@ -190,7 +207,6 @@ export function TerminalPane({
       {
         onStatusChange: handleStatusChange,
         onPaintedChange: setPainted,
-        onWake: (sessionId) => onResumeRef.current(sessionId),
         openLink: links && ((url) => links.open(url).catch((cause: unknown) => reportExternalLinkFailure(translateRef.current, url, cause))),
         onLinkHover: (link) => setLinkRef.current?.(link),
         pathLinks: {
@@ -291,7 +307,7 @@ export function TerminalPane({
     const controller = controllerRef.current;
     if (!controller) return;
     // A dormant session is resumed by the caller before it is ever attached to directly (selecting
-    // an interrupted one, or typing to or reopening an archived one) — the daemon has no process to
+    // an interrupted one, or reopening an archived one) — the daemon has no process to
     // connect the terminal socket to for a session with no running process
     // (`apps/daemon/PROTOCOL.md`), only the output its last one left. Once the resume's
     // `session_upserted` broadcast flips the status, this effect re-runs and attaches for real.
@@ -300,7 +316,13 @@ export function TerminalPane({
       // attaches for real. The screen is cleared: it may hold the session shown before.
       reconnectAttemptsRef.current = 0;
       controller.detach({});
-      controller.disarmWake();
+      return;
+    }
+    if (session && isArchived) {
+      // The history view stands in for the screen, so no saved output is loaded behind it, and
+      // nothing typed reaches the terminal to reopen the session: the Reopen button does.
+      reconnectAttemptsRef.current = 0;
+      controller.detach({});
       return;
     }
     if (!session || isDormant) {
@@ -311,10 +333,6 @@ export function TerminalPane({
         keepScreenFor: session?.id,
         savedOutputUrl: session ? terminalUrl(session.id) : undefined,
       });
-      // An archived session is not reopened by selecting it, only by typing to it: the first
-      // input starts it (`onResume`), and is handed to it once connected.
-      if (session?.status === "archived") controller.armWake(session.id);
-      else controller.disarmWake();
       return;
     }
     // Only skip when a connection to this exact session is already in flight or open — any other
@@ -328,7 +346,7 @@ export function TerminalPane({
     // terminal on every status update. Only the user's Reconnect (`reconnectNow`) retries then.
     if (controller.currentSessionId === session.id && reconnectAttemptsRef.current >= MAX_AUTO_RECONNECT_ATTEMPTS) return;
     attachCurrent(true);
-  }, [session, isDormant, isStarting, attachCurrent, terminalUrl]);
+  }, [session, isDormant, isArchived, isStarting, attachCurrent, terminalUrl]);
 
   // A fresh snapshot (the control connection came back, possibly after an outage longer than the
   // automatic attempts' budget) is a deliberate chance to recover a terminal that gave up: the
@@ -370,6 +388,15 @@ export function TerminalPane({
     // for this session would otherwise tear the pending timer down and start it over, so under a
     // working agent the reconnect could be postponed indefinitely.
   }, [status, session?.id, isDormant, sessionIsLive, attachCurrent, terminalReconnectDelay]);
+
+  // A reopen that is refused ends with the session still archived and its history no longer
+  // inert; focus that fell to `<body>` while it was goes back to the history.
+  const wasResumingRef = useRef(false);
+  useLayoutEffect(() => {
+    const ended = wasResumingRef.current && !resuming;
+    wasResumingRef.current = resuming;
+    if (ended && archivedRef.current && document.activeElement === document.body) focusTerminal();
+  }, [resuming, archivedRef, focusTerminal]);
 
   const reconnectNow = useCallback(() => {
     reconnectAttemptsRef.current = 0;
@@ -444,12 +471,19 @@ export function TerminalPane({
           the terminal from that element's computed height and width, padding included, so padding
           there gives it rows and columns that the overflow then clips. Isolation keeps xterm's
           transparent link canvas below the pane's overlays so it cannot intercept their clicks. */}
-      <div inert={!session} className="isolate min-h-0 flex-1 px-3 py-2">
+      <div inert={!session || isArchived} className="isolate min-h-0 flex-1 px-3 py-2">
         {/* xterm lays its cells out left to right whatever the page's direction. */}
         <div dir="ltr" className="h-full overflow-hidden" ref={containerRef} />
       </div>
-      {session && <TerminalEditMenu key={session.id} sessionId={session.id} controllerRef={controllerRef} contextTargetRef={containerRef} />}
+      {session && !isArchived && <TerminalEditMenu key={session.id} sessionId={session.id} controllerRef={controllerRef} contextTargetRef={containerRef} />}
       <TerminalLinkTooltip setLinkRef={setLinkRef} />
+      {session && isArchived && (
+        // Under the cover, which a resume raises over it; inert meanwhile, so what is hidden is
+        // out of reach too.
+        <div ref={historyRef} {...held} inert={resuming} className="contents">
+          <SessionHistoryView key={session.id} sessionId={session.id} />
+        </div>
+      )}
       {cover && (
         <div
           ref={coverRef}
@@ -516,7 +550,7 @@ export function TerminalPane({
           exist before its content changes to be announced. */}
       <div role="status" className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
         {session && isDormant && !resuming && (
-          <Surface className="pointer-events-auto flex items-center gap-3 rounded-lg px-3 py-2 text-sm shadow-lg">
+          <Surface ref={barRef} className="pointer-events-auto flex items-center gap-3 rounded-lg px-3 py-2 text-sm shadow-lg">
             <span className="text-app-muted">
               {t(session.status === "archived" ? "terminal.archived" : "terminal.notRunning")}
             </span>

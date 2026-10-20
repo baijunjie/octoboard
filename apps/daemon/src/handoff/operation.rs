@@ -28,7 +28,7 @@ use uuid::Uuid;
 use crate::coordinator::{self, OpenRequest};
 use crate::mcp::qualified_tool_name;
 use crate::protocol::{error_code, notice_code, Agent, CodedError, Notice, Session, SessionStatus};
-use crate::reporting::{self, WhenBlocked};
+use crate::reporting::{self, WhenBlocked, NOTICE_PREFIX};
 use crate::sharing::{named_session, one_line, place_of, quote};
 use crate::state::{AppState, OutboxHold};
 use crate::term;
@@ -180,9 +180,12 @@ fn refuse_unless_it_can_be_handed_off(original: &Session, agent: Agent) -> Resul
     Ok(())
 }
 
+/// How [`brief`] begins.
+pub(crate) const TAKEOVER_OPENING: &str = "You are taking over the work of the ";
+
 /// The receiving session's opening prompt: where the package is, to be read before anything else,
 /// and the note of the owner that asked for the handoff, when it left one.
-fn brief(original: &Session, package: &Path, note: Option<&str>) -> String {
+pub(crate) fn brief(original: &Session, package: &Path, note: Option<&str>) -> String {
     let note = note.map_or_else(String::new, |note| {
         format!(
             "\n\nThe owner that handed the work off left you this note:\n\n{}",
@@ -190,7 +193,7 @@ fn brief(original: &Session, package: &Path, note: Option<&str>) -> String {
         )
     });
     format!(
-        "You are taking over the work of the {kind} session `{id}` (\"{title}\"), a {agent} \
+        "{TAKEOVER_OPENING}{kind} session `{id}` (\"{title}\"), a {agent} \
          session. Octoboard is handing it off to you because the work moves to another agent. Its \
          conversation cannot be resumed here, so Octoboard built a handoff package from its \
          records:\n\n{path}\n\nRead that file first, all of it, before you do anything else. It \
@@ -305,7 +308,7 @@ async fn tell(state: &Arc<AppState>, original: &Session, moved: &Moved, asked_by
 
     for session in moved.owned.iter().filter(|s| !s.status.is_dormant()) {
         let text = format!(
-            "Message from Octoboard: your owner has changed. {from} was handed off to {to}, which \
+            "{NOTICE_PREFIX}: your owner has changed. {from} was handed off to {to}, which \
              is your owner from now on and took its place: take work only from it, or from the \
              user typing in this terminal, and report to it with `{report}`. This replaces what you \
              were told of your owner when you were started. `{from_id}` no longer drives you; it \
@@ -323,7 +326,7 @@ async fn tell(state: &Arc<AppState>, original: &Session, moved: &Moved, asked_by
         .filter(|owner| !owner.status.is_dormant() && asked_by != Some(owner.id.as_str()));
     if let Some(owner) = to_tell {
         let text = format!(
-            "Message from Octoboard: {from}, which reported to you, was handed off to a session \
+            "{NOTICE_PREFIX}: {from}, which reported to you, was handed off to a session \
              of {agent}, because its work moves to another agent. {to}{place} took its place and \
              reports to you from now on: you drive it like any session of yours, with \
              `{send_message}`, `{archive_session}` and `{reopen_session}`. The original is \
@@ -385,7 +388,7 @@ async fn tell(state: &Arc<AppState>, original: &Session, moved: &Moved, asked_by
         ));
     }
     let text = format!(
-        "Message from Octoboard about the handoff: you took over the place of {from}. The \
+        "{NOTICE_PREFIX} about the handoff: you took over the place of {from}. The \
          original is archived; what it held is yours now:{held}",
         from = named_session(original),
     );

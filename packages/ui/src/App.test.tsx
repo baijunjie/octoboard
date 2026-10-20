@@ -23,7 +23,6 @@ vi.mock("./terminal/TerminalController", () => ({
     syncSize() {}
     setInputLabel() {}
     detach() {}
-    disarmWake() {}
   },
 }));
 

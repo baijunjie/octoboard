@@ -1091,3 +1091,27 @@ describe("the fixture daemon's quota gate", () => {
     await expect(daemon([], grok).request({ type: "hand_off_session", session: "s", agent: "grok" })).rejects.toMatchObject({ code: "account_quota_exhausted", params: { window: "Weekly" } });
   });
 });
+
+describe("the fixture daemon's session history", () => {
+  const archived = sessionOf("archived", "c", "p", "Archived", "archived");
+  const base = { id: "history", group: "Terminal" as const, category: "normal" as const, title: "", state: snapshotState({ sessions: [archived] }) };
+  const messages = [{ speaker: "user" as const, text: "Add an index", turn: 1 }];
+
+  it("answers a session's messages, an empty history for one not listed, and unavailable for a record it cannot read", async () => {
+    const request = { type: "read_session_history" as const, session: archived.id };
+    await expect(createFixtureDaemon({ ...base, sessionHistory: { [archived.id]: messages } }).request(request)).resolves.toEqual({ type: "session_history", session: archived.id, messages });
+    await expect(createFixtureDaemon(base).request(request)).resolves.toEqual({ type: "session_history", session: archived.id, messages: [] });
+    await expect(createFixtureDaemon({ ...base, sessionHistory: { [archived.id]: "unavailable" } }).request(request)).resolves.toMatchObject({ messages: [], unavailable: true });
+    await expect(createFixtureDaemon(base).request({ type: "read_session_history", session: "missing" })).rejects.toMatchObject({ code: "unknown_session" });
+  });
+
+  it("can leave a read, and a reopen, unanswered", async () => {
+    const daemon = createFixtureDaemon({ ...base, sessionHistory: { [archived.id]: "pending" }, sessionResumes: { [archived.id]: "pending" } });
+    const answered = vi.fn();
+    void daemon.request({ type: "read_session_history", session: archived.id }).then(answered);
+    void daemon.request({ type: "resume_session", session: archived.id }).then(answered);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(answered).not.toHaveBeenCalled();
+    expect(daemon.store.getState().sessions.get(archived.id)?.status).toBe("archived");
+  });
+});

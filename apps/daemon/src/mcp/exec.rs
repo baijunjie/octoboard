@@ -263,12 +263,23 @@ async fn new_session(
     Ok(answer)
 }
 
+/// How [`branches_opening_prompt`] begins.
+pub(crate) const BRANCHES_OPENING: &str = "The session `";
+
+/// What follows the session's title in [`branches_opening_prompt`], which tells it from a user's
+/// message that happens to begin like it.
+pub(crate) const BRANCHES_MARKER: &str = "\"), which started you, also handed the ";
+
 /// The opening prompt of a session `new_session` hands branches to: the brief, and that the
 /// session starting it handed it the branches and it is now the one responsible for them.
-fn branches_opening_prompt(caller: &Session, handover: &Handover, brief: &str) -> String {
+pub(crate) fn branches_opening_prompt(
+    caller: &Session,
+    handover: &Handover,
+    brief: &str,
+) -> String {
     let (noun, them) = branch_noun_and_pronoun(&handover.branches);
     format!(
-        "The session `{id}` (\"{title}\"), which started you, also handed the {noun} {} over to \
+        "{BRANCHES_OPENING}{id}` (\"{title}{BRANCHES_MARKER}{noun} {} over to \
          you: you are now the session responsible for {them}, so carry on the work on {them}. \
          This is the brief it wrote:\n\n{brief}",
         named_branches(&handover.branches),
@@ -826,9 +837,12 @@ async fn request_session(
     .await
 }
 
+/// How [`request_opening_prompt`] begins.
+pub(crate) const REQUEST_OPENING: &str = "You were started at the request of the session ";
+
 /// The opening prompt of a session started at `caller`'s request: whoever reads the brief is to
 /// know who wrote it, how the request was approved, and that it is not that session's to drive.
-fn request_opening_prompt(
+pub(crate) fn request_opening_prompt(
     caller: &Session,
     handover: Option<&Handover>,
     automatic: bool,
@@ -848,7 +862,7 @@ fn request_opening_prompt(
         )
     });
     format!(
-        "You were started at the request of the session `{id}` (\"{title}\"), {approval}. Nobody \
+        "{REQUEST_OPENING}`{id}` (\"{title}\"), {approval}. Nobody \
          owns you but the user: that session is not your owner, and it and you can only share \
          information with each other.{handed} This is the brief it wrote:\n\n{brief}",
         id = caller.id,

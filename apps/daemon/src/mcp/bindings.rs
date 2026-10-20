@@ -11,7 +11,7 @@ use serde_json::{json, Map, Value};
 
 use crate::coordinator;
 use crate::protocol::{Agent, Role, Session};
-use crate::reporting::{self, Delivery, ReportStatus, WhenBlocked};
+use crate::reporting::{self, Delivery, ReportStatus, WhenBlocked, NOTICE_PREFIX};
 use crate::sharing;
 use crate::state::AppState;
 
@@ -65,7 +65,7 @@ pub(super) async fn transfer_session(
         String::new()
     };
     let to_session = format!(
-        "Message from Octoboard: your owner has changed. {from} handed you over to {to}, which is \
+        "{NOTICE_PREFIX}: your owner has changed. {from} handed you over to {to}, which is \
          your owner from now on: take work only from it, or from the user typing in this \
          terminal, and report to it with `{report}`. This replaces what you were told of your \
          owner when you were started; `{from_id}` no longer drives you.{tools}",
@@ -81,7 +81,7 @@ pub(super) async fn transfer_session(
         ""
     };
     let to_owner = format!(
-        "Message from Octoboard: {from} handed its session `{id}` (\"{title}\"){place} over to \
+        "{NOTICE_PREFIX}: {from} handed its session `{id}` (\"{title}\"){place} over to \
          you. It is yours from now on: it reports to you, and you drive it like any session of \
          yours, with `{send_message}`, `{archive_session}` and `{reopen_session}`.{lead} The \
          handover note:\n\n{note}\n— end of the handover note —",

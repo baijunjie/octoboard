@@ -202,3 +202,13 @@ it("pressWithModifier presses with the platform's shortcut modifier down and pre
   await plain;
   expect(seen).toEqual([IS_MAC ? { meta: true, ctrl: false } : { meta: false, ctrl: true }, { meta: false, ctrl: false }]);
 });
+
+it("press finds a switch by the text beside it that labels it, past a label holding only the control", async () => {
+  document.body.innerHTML = "<div><label><input type=\"checkbox\" role=\"switch\" aria-labelledby=\"words\"></label><span id=\"words\">Show agent replies</span></div>";
+  const control = document.querySelector("input") as HTMLInputElement;
+  const ui = createUi(document, "en");
+  const pressed = ui.press("Show agent replies");
+  await vi.advanceTimersByTimeAsync(300);
+  await pressed;
+  expect(control.checked).toBe(true);
+});

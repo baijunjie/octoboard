@@ -7,6 +7,19 @@
 /** Unknown when the daemon cannot prove presence or absence of the sessions’ native files. */
 export type SessionRecordsPresence = "present" | "absent" | "unknown";
 
+/** Who said a message in a session's history: the user, Octoboard (a brief, a report, shared
+ * information or a notice it wrote into the session), or the agent (its final reply to a turn). */
+export type HistorySpeaker = "user" | "octoboard" | "agent";
+
+export interface HistoryMessage {
+  speaker: HistorySpeaker;
+  text: string;
+  /** The turn it belongs to, from 1: a message that opens a turn and the reply to it share one. */
+  turn: number;
+  /** When the record dated it, in milliseconds since the epoch. */
+  at?: number;
+}
+
 /** Where a git branch or linked worktree bound to a session stands: `removable` goes without
  * asking; `uncommitted_changes`, `submodules`, `unmerged` and `locked` go only when a request names
  * them in `force_remove`; the rest stay whatever is asked. */
@@ -1113,6 +1126,9 @@ export type RequestBody =
    * `only_if_unused` atomically rejects unless the session remains unused, including when archived;
    * it never falls back to deleting an archived owner's group. */
   | { type: "delete_session"; session: string; trash_agent_records?: boolean; only_if_unused?: boolean; force_remove?: SessionBranchTarget[]; keep?: SessionBranchTarget[] }
+  /** What the session's conversation record says was said, for the history view of an archived
+   * session: replies with `session_history`. */
+  | { type: "read_session_history"; session: string }
   /** Inspects the agent-native files of the entire supplied deletion scope; reads no transcripts. */
   | { type: "inspect_session_records"; sessions: string[] }
   /** The git branches and linked worktrees bound to exactly the supplied sessions, as an archive
@@ -1344,6 +1360,8 @@ export type RequestBody =
 export type Request = RequestBody & { id?: string };
 
 export type Event =
+  /** `unavailable` is set when the agent's record is not found or cannot be read. */
+  | { type: "session_history"; id?: string; session: string; messages: HistoryMessage[]; unavailable?: boolean }
   | { type: "session_records_inspected"; id?: string; presence: SessionRecordsPresence }
   | { type: "session_branches_inspected"; id?: string; items: SessionBranchItem[] }
   | { type: "project_removal_inspected"; id?: string; items: SessionBranchItem[] }

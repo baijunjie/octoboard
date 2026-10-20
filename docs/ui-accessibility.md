@@ -161,7 +161,9 @@ made `inert`) is not a stop. A region lands F6 on its first control unless a con
 follows whether a region holds a control, not whether its element is in the document: the terminal counts while a
 session is selected, and also while its empty state offers a creation action for the current context or the Add
 agent button (agents are installed but none is added), since that button is then the one thing to do there; with only
-its empty line (nothing installed) it is skipped. A region whose focus goes through a method
+its empty line (nothing installed) it is skipped. An archived session's terminal is covered by its history and made
+`inert`, so the region lands on the history instead: its message list, or while there is none, its first control,
+and failing that the floating bar's Reopen. A region whose focus goes through a method
 of its own rather than its first control (the terminal's) is only a stop when that method actually leaves focus inside
 it, which is how the cycle tells the two apart.
 
@@ -675,7 +677,9 @@ it carries its own size and colour instead. `EmptyPanel`'s full panel is the cas
 A heading also never outranks the one above it. `EmptyPanel` takes `headingLevel` for that: its heading stands at the
 level of the heading naming whatever it fills, so the two read as one thing. The default `<h2>` is the level of a
 pane's own title (`ArchiveView`, `ProjectBrowser`) and of a dialog's, which react-aria sets for every `Frame.Heading`.
-The sidebar's empty lists use compact rows instead, which add no heading to the outline.
+The sidebar's empty lists use compact rows instead, which add no heading to the outline. Markdown rendered inside a
+view that has its own heading (an agent reply in a session's history) is rendered `embedded`: its headings start one
+level below that view's, and it sets no heading ids, since several such documents share one page.
 
 ### An empty state is a glyph, a heading, and what fills it
 
