@@ -189,6 +189,12 @@ export function AdvancedSection({
           <Disclosure.Indicator className="ms-0" />
         </Disclosure.Trigger>
       </Disclosure.Heading>
+      {/* Outside the folded body, and only while the section is open. The body stays mounted while
+          folded, so a region inside it would be past its first write delay by the time the section
+          opens again, and the note kept from before would be written in the very render that shows
+          the body: text that appears with its region, which VoiceOver does not say. Mounted with
+          each opening, the region writes the note after its delay, with the trigger still focused. */}
+      {expanded && <StatusAnnouncer text={status} />}
       {/* HeroUI pads the body by 8px on every side and the content clips what overflows it, so that
           padding is the room the fields' focus rings need. Taking all of it out as a margin would
           reach past the dialog body, whose own slack is 4px, so the content takes 4px of it back
@@ -197,7 +203,6 @@ export function AdvancedSection({
           first note and below the last field is HeroUI's own, the same on both sides. */}
       <Disclosure.Content className="-mx-1">
         <Disclosure.Body className="-mx-1 flex flex-col gap-4">
-          <StatusAnnouncer text={status} />
           {children}
         </Disclosure.Body>
       </Disclosure.Content>
