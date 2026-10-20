@@ -25,8 +25,8 @@ export function RowIconLine({ icon, children, className = "" }: { icon?: React.R
 
 /** The controls at a row's end show while it is hovered, focused, selected or has its menu open.
  * Hidden actions stay in the tab order, so reaching one reveals it. `fixed` markers and pins stay
- * outside the animated clip. The clip contains its leading gap too, leaving no empty column beside
- * fixed icons when actions are hidden. Two buttons plus both gaps set the animation cap;
+ * outside the animated clip. The clip contains its leading gap too (`--row-controls-gap` cancels
+ * the parent gap), leaving no empty column beside fixed icons when actions are hidden. Two buttons plus both gaps set the animation cap;
  * keyboard focus removes clipping so its ring can paint outside the box. A `reserve`d slot keeps
  * its width while the actions are hidden and only fades them in, for a row whose other content is
  * laid out against its end and must not slide when they show. */
@@ -46,18 +46,18 @@ export function RowControls({
   className?: string;
 }): React.ReactElement {
   return (
-    <div className={`flex shrink-0 items-center ${className}`}>
-      {fixed && <RowIconGroup>{fixed}</RowIconGroup>}
+    <div className={`-ms-(--row-controls-gap,0px) flex shrink-0 items-center ${className}`}>
+      {fixed && <RowIconGroup className="ps-(--row-controls-gap,0px)">{fixed}</RowIconGroup>}
       <div
         className={`flex shrink-0 transition-[opacity,max-width] duration-150 motion-reduce:transition-none ${
           always
             ? ""
             : reserve
               ? "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 group-data-selected:opacity-100 group-data-current:opacity-100 has-[[aria-expanded=true]]:opacity-100"
-              : "max-w-0 overflow-hidden opacity-0 group-hover:max-w-(--row-controls-max-width) group-hover:opacity-100 group-focus-within:max-w-(--row-controls-max-width) group-focus-within:overflow-visible group-focus-within:opacity-100 group-data-selected:max-w-(--row-controls-max-width) group-data-selected:opacity-100 group-data-current:max-w-(--row-controls-max-width) group-data-current:opacity-100 has-[[aria-expanded=true]]:max-w-(--row-controls-max-width) has-[[aria-expanded=true]]:opacity-100"
+              : "max-w-0 overflow-hidden opacity-0 group-hover:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] group-hover:opacity-100 group-focus-within:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] group-focus-within:overflow-visible group-focus-within:opacity-100 group-data-selected:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] group-data-selected:opacity-100 group-data-current:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] group-data-current:opacity-100 has-[[aria-expanded=true]]:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] has-[[aria-expanded=true]]:opacity-100"
         }`}
       >
-        <RowIconGroup className={fixed ? "ps-(--row-control-gap)" : ""}>{children}</RowIconGroup>
+        <RowIconGroup className={fixed ? "ps-(--row-control-gap)" : "ps-(--row-controls-gap,0px)"}>{children}</RowIconGroup>
       </div>
     </div>
   );
