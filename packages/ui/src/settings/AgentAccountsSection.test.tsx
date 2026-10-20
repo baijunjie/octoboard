@@ -2,13 +2,18 @@
 import { act, StrictMode, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
 import { setInteractionModality } from "react-aria";
+import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import type { Account, AccountLogin, AccountQuota, Agent, AgentAvailability, Console, Project, Session, Settings } from "../protocol";
-import { AddAgentOnOpenContext } from "./AddAgentOnOpenContext";
+import { DaemonRequestError } from "../daemon-client";
+import { errorAlerts } from "../errorAlerts";
+import { ErrorAlerts } from "../dialogs/ErrorAlerts";
+import { trackMountRefocus } from "../dialogs/dialogTestSupport";
+import { SettingsDialog } from "./SettingsDialog";
+import { registerSettingsLauncher } from "./settingsLauncher";
+import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentAccountsSection } from "./AgentAccountsSection";
-
-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const request = vi.fn(() => Promise.resolve({}));
 const toastError = vi.fn();
@@ -62,9 +67,10 @@ vi.mock("../components/FadeOverflow", () => ({ FadeOverflow: ({ children }: { ch
 vi.mock("../components/MarkedPath", () => ({ MarkedPath: ({ path }: { path: string }) => path }));
 // What a section does when focus is lost, with the Settings dialog's section entry stood in for by a button.
 const sectionEntry = vi.hoisted(() => ({ current: null as HTMLElement | null }));
-vi.mock("./useSectionRefocus", async () => {
+vi.mock("./useSectionRefocus", async (importOriginal) => {
   const { useEffect } = await import("react");
   return {
+    ...(await importOriginal<typeof import("./useSectionRefocus")>()),
     useSectionRefocus: (deps: unknown[]) => useEffect(() => {
       if (document.activeElement === document.body) sectionEntry.current?.focus();
     }, deps),
@@ -89,6 +95,16 @@ const account = (id: string, agent: Account["agent"]): Account => ({ id, agent, 
 // stub is what lets a test see the motion a removal or a tab switch starts.
 const animate = vi.fn(() => ({ cancel: vi.fn(), effect: { getComputedTiming: () => ({ progress: 0 }) }, onfinish: null }));
 beforeEach(() => {
+  const globals = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+  const actEnvironment = globals.IS_REACT_ACT_ENVIRONMENT;
+  const modality = getInteractionModality();
+  globals.IS_REACT_ACT_ENVIRONMENT = true;
+  onTestFinished(() => {
+    // The getter can return the initial null state, which the setter accepts at runtime.
+    act(() => Reflect.apply(setInteractionModality, undefined, [modality]));
+    if (actEnvironment === undefined) delete globals.IS_REACT_ACT_ENVIRONMENT;
+    else globals.IS_REACT_ACT_ENVIRONMENT = actEnvironment;
+  });
   HTMLElement.prototype.animate = animate as unknown as typeof HTMLElement.prototype.animate;
   animate.mockClear();
   request.mockReset().mockResolvedValue({});
@@ -108,6 +124,7 @@ beforeEach(() => {
   availability.clear();
 });
 afterEach(() => {
+  act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   delete (HTMLElement.prototype as Partial<HTMLElement>).animate;
 });
 
@@ -132,8 +149,10 @@ function mount(tab?: string, strict = false) {
     entry.remove();
     sectionEntry.current = null;
   });
+  let navigation = { pending: false, dismissForms: 0, consume: () => {} };
   const render = () => act(() => {
-    root.render(strict ? <StrictMode><AgentAccountsSection /></StrictMode> : <AgentAccountsSection />);
+    const section = <AccountsNavigationContext.Provider value={navigation}><AgentAccountsSection /></AccountsNavigationContext.Provider>;
+    root.render(strict ? <StrictMode>{section}</StrictMode> : section);
     bus.notify();
   });
   render();
@@ -146,7 +165,11 @@ function mount(tab?: string, strict = false) {
     select.value = value;
     select.dispatchEvent(new Event("change", { bubbles: true }));
   });
-  return { container, selects, change, opening, render };
+  const navigate = (addAgent: boolean) => {
+    navigation = { ...navigation, pending: addAgent, dismissForms: navigation.dismissForms + 1 };
+    render();
+  };
+  return { container, selects, change, opening, render, navigate };
 }
 
 it("offers a mode for the Codex default and each Codex account, following configuration by default", () => {
@@ -608,7 +631,7 @@ it("opens the Add agent dialog once when Settings asked for it, and takes the re
     container.remove();
   });
   const render = (pending: boolean) => act(() => {
-    root.render(<AddAgentOnOpenContext.Provider value={{ pending, consume, dismiss: 0 }}><AgentAccountsSection /></AddAgentOnOpenContext.Provider>);
+    root.render(<AccountsNavigationContext.Provider value={{ pending, consume, dismissForms: 0 }}><AgentAccountsSection /></AccountsNavigationContext.Provider>);
     bus.notify();
   });
   render(true);
@@ -623,7 +646,7 @@ it("opens the Add agent dialog once when Settings asked for it, and takes the re
     second.remove();
   });
   act(() => {
-    secondRoot.render(<AddAgentOnOpenContext.Provider value={{ pending: false, consume, dismiss: 0 }}><AgentAccountsSection /></AddAgentOnOpenContext.Provider>);
+    secondRoot.render(<AccountsNavigationContext.Provider value={{ pending: false, consume, dismissForms: 0 }}><AgentAccountsSection /></AccountsNavigationContext.Provider>);
     bus.notify();
   });
   expect(document.querySelector('[role="dialog"]')).toBeNull();
@@ -637,13 +660,13 @@ it("closes its Add agent dialog when Settings asks for anything else", () => {
     act(() => root.unmount());
     container.remove();
   });
-  const render = (value: { pending: boolean; dismiss: number }) => act(() => {
-    root.render(<AddAgentOnOpenContext.Provider value={{ ...value, consume: () => {} }}><AgentAccountsSection /></AddAgentOnOpenContext.Provider>);
+  const render = (value: { pending: boolean; dismissForms: number }) => act(() => {
+    root.render(<AccountsNavigationContext.Provider value={{ ...value, consume: () => {} }}><AgentAccountsSection /></AccountsNavigationContext.Provider>);
     bus.notify();
   });
-  render({ pending: true, dismiss: 0 });
+  render({ pending: true, dismissForms: 0 });
   expect(document.querySelector('[role="dialog"]')).not.toBeNull();
-  render({ pending: false, dismiss: 1 });
+  render({ pending: false, dismissForms: 1 });
   expect(document.querySelector('[role="dialog"]')).toBeNull();
 });
 
@@ -1103,4 +1126,104 @@ describe("an account's actions menu", () => {
     await act(async () => buttonNamed(document.querySelector('[role="alertdialog"], [role="dialog"]')!, "Remove")!.click());
     expect(request).toHaveBeenCalledExactlyOnceWith({ type: "delete_account", account: "claude-work" });
   });
+});
+
+it.each([
+  ["edit", false], ["edit", true],
+  ["add", false], ["add", true],
+  ["rename", false], ["rename", true],
+  ["remove account", false], ["remove account", true],
+  ["remove agent", false], ["remove agent", true],
+] as const)("dismisses the %s form for navigation requesting Add agent=%s", async (form, addAgent) => {
+  const { container, navigate } = mount();
+  if (form === "add") {
+    act(() => buttonNamed(container, "Add account")!.click());
+  } else if (form === "remove agent") {
+    await openTabMenu(container, "Claude Code");
+    await chooseItem("Remove agent");
+  } else {
+    const row = container.querySelector(`[data-list-motion="${form === "rename" ? "default:claude" : "claude-work"}"]`)!;
+    const trigger = row.querySelector<HTMLButtonElement>('button[aria-label^="Actions"]')!;
+    await act(async () => {
+      trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse", button: 0 }));
+      trigger.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "mouse", button: 0 }));
+      trigger.click();
+    });
+    await chooseItem(form === "edit" ? "Edit" : form === "rename" ? "Rename" : "Remove");
+  }
+  expect(document.querySelector('[role="dialog"], [role="alertdialog"]')).not.toBeNull();
+  navigate(addAgent);
+  await act(async () => {});
+  const dialogs = [...document.querySelectorAll('[role="dialog"], [role="alertdialog"]')];
+  if (addAgent) {
+    expect(dialogs).toHaveLength(1);
+    expect(dialogs[0]!.textContent).toContain("Only an agent installed on this machine can be added.");
+  } else {
+    expect(dialogs).toHaveLength(0);
+  }
+});
+
+it.each([false, true])("keeps an active login for navigation requesting Add agent=%s", async (addAgent) => {
+  const login: AccountLogin = {
+    agent: "claude", account: "claude-work", status: "waiting", authorization_url: null,
+    device_code: null, opened_by_agent: false, failure: null,
+  };
+  accountLogins.push(login);
+  const { navigate } = mount();
+  await act(async () => {});
+  const dialog = document.querySelector('[role="dialog"]')!;
+  expect(dialog.textContent).toContain("Waiting for you to authorize");
+  navigate(addAgent);
+  await act(async () => {});
+  expect(dialog.isConnected).toBe(true);
+  expect(dialog.textContent).toContain("Waiting for you to authorize");
+  expect(accountLogins).toEqual([login]);
+  expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "cancel_account_login" }));
+});
+
+it("lets Manage accounts recovery dismiss a stale editor and focus the real Settings section", async () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
+  onTestFinished(() => { document.documentElement.style.removeProperty("--breakpoint-docked"); });
+  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: media.startsWith("(min-width:"), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+  onTestFinished(() => { vi.unstubAllGlobals(); });
+  let nonce = 1;
+  const render = () => act(() => root.render(<><SettingsDialog navigation={{ nonce, section: "accounts", addAgent: false }} onClose={() => {}} /><ErrorAlerts /></>));
+  const unregister = registerSettingsLauncher(() => { nonce += 1; render(); });
+  onTestFinished(() => {
+    unregister();
+    act(() => {
+      root.unmount();
+      while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
+    });
+    container.remove();
+  });
+  render();
+  await trackMountRefocus()();
+  const row = document.querySelector('[data-list-motion="claude-work"]')!;
+  await act(async () => {
+    const trigger = row.querySelector<HTMLButtonElement>('button[aria-label^="Actions"]')!;
+    trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse", button: 0 }));
+    trigger.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "mouse", button: 0 }));
+    trigger.click();
+  });
+  await chooseItem("Edit");
+  await trackMountRefocus()();
+  act(() => {
+    settings.accounts = settings.accounts.filter((account) => account.id !== "claude-work");
+    bus.notify();
+  });
+  request.mockRejectedValueOnce(new DaemonRequestError("Account no longer exists.", "unknown_account", {}));
+  await act(async () => buttonNamed(document, "Save")!.click());
+  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Manage accounts…");
+  act(() => buttonNamed(document, "Manage accounts…")!.click());
+  await act(async () => {
+    for (let frame = 0; frame < 4; frame++) await new Promise((resolve) => requestAnimationFrame(resolve));
+  });
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+  const selected = document.querySelector('[role="tab"][aria-selected="true"]');
+  expect(selected?.textContent).toContain("Agent accounts");
+  expect(document.activeElement).toBe(selected);
 });

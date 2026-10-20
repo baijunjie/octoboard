@@ -2,24 +2,32 @@
 import { useContext, useEffect } from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { AddAgentOnOpenContext } from "./AddAgentOnOpenContext";
+import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { SettingsDialog, type SettingsSectionId } from "./SettingsDialog";
 
-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+beforeEach(() => {
+  const globals = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+  const actEnvironment = globals.IS_REACT_ACT_ENVIRONMENT;
+  globals.IS_REACT_ACT_ENVIRONMENT = true;
+  onTestFinished(() => {
+    if (actEnvironment === undefined) delete globals.IS_REACT_ACT_ENVIRONMENT;
+    else globals.IS_REACT_ACT_ENVIRONMENT = actEnvironment;
+  });
+});
 
 const taken = vi.hoisted(() => ({ count: 0, dismiss: 0 }));
 vi.mock("./AgentAccountsSection", () => ({
   AGENT_STRIP_HEIGHT: 45,
   AgentAccountsSection: () => {
-    const request = useContext(AddAgentOnOpenContext);
-    taken.dismiss = request.dismiss;
+    const accountsNavigation = useContext(AccountsNavigationContext);
+    taken.dismiss = accountsNavigation.dismissForms;
     useEffect(() => {
-      if (!request.pending) return;
+      if (!accountsNavigation.pending) return;
       taken.count += 1;
-      request.consume();
-    }, [request.pending]);
+      accountsNavigation.consume();
+    }, [accountsNavigation.pending]);
     return <p>accounts section</p>;
   },
 }));
@@ -87,16 +95,16 @@ it("leaves the Add agent request for the accounts section to take up when anothe
   expect(taken.count).toBe(1);
 });
 
-it("asks an open Add agent dialog to close for a later request for anything else, and keeps it for one for Add agent", async () => {
+it("asks account forms to close for every later navigation request", async () => {
   const { show } = mount({ nonce: 1, section: "accounts", addAgent: true });
   await act(async () => {});
   expect(taken.dismiss).toBe(0);
   show({ nonce: 2, section: "accounts", addAgent: true });
   await act(async () => {});
-  expect(taken.dismiss).toBe(0);
+  expect(taken.dismiss).toBe(1);
   show({ nonce: 3, section: "accounts", addAgent: false });
   await act(async () => {});
-  expect(taken.dismiss).toBe(1);
+  expect(taken.dismiss).toBe(2);
 });
 
 it("waits for a modal still in front, such as the Add agent dialog being dismissed, before the new tab takes focus", async () => {

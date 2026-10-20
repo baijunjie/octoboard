@@ -10,8 +10,10 @@ connection" in `docs/product/application-lifecycle.md`. Notices that are not err
 The error alert uses the standard danger icon and a danger acknowledgement button. It appears above any open dialog
 and takes keyboard focus. It identifies the failure and preserves available details, including the affected
 session's location when the failure carries one. It has one acknowledgement button. Escape, a click outside and a
-close button cannot dismiss it, and it never dismisses itself. Acknowledgement does not retry the failed operation. The originating dialog remains available for correcting inputs or retrying
-unless that operation's own contract closes it.
+close button cannot dismiss it, and it never dismisses itself. Acknowledgement does not retry the failed operation.
+The originating dialog remains available for correcting inputs or retrying unless that operation's own contract
+closes it, or a recovery action navigates Settings and closes its account or agent forms (see "Opening and closing
+Settings" in `docs/product/settings.md`).
 
 Errors are queued and normally shown one at a time in arrival order. An identical failure already waiting for
 acknowledgement is not queued again: its message, affected session, original diagnostic message, recovery category

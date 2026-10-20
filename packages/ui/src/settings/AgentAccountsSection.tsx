@@ -26,7 +26,7 @@ import { AccountDialog } from "./AccountDialog";
 import { AccountLoginAnnouncement, accountLoginOf, loginIsActive, useClearSucceededLogin } from "./AccountLogin";
 import { AccountLoginDialog } from "./AccountLoginDialog";
 import { AddAgentDialog } from "./AddAgentDialog";
-import { AddAgentOnOpenContext } from "./AddAgentOnOpenContext";
+import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentMoreMenu, AgentTabMenu, RemoveAgentDialog, useAgentList } from "./AgentListMenu";
 import { useSectionRefocus } from "./useSectionRefocus";
 
@@ -54,31 +54,39 @@ export function AgentAccountsSection(): React.ReactElement {
   const [removing, setRemoving] = useState<Account>();
   // The agent whose default account is being renamed.
   const [renamingDefault, setRenamingDefault] = useState<Agent>();
+  const [removingAgent, setRemovingAgent] = useState<Agent>();
   // The account whose login is in the modal; `start` is whether opening it starts the login, which it does not for one
   // found running when the section opened.
   const [loggingIn, setLoggingIn] = useState<{ agent: Agent; account: string | null; start: boolean }>();
   // The Add agent dialog is open when Settings was asked to put it in front, on opening or by a later request,
   // which the section takes up once; closing that one then puts focus on the button that opens it, as no
   // control had it before.
-  const addAgentRequest = useContext(AddAgentOnOpenContext);
+  const accountsNavigation = useContext(AccountsNavigationContext);
   const openedWithAddAgent = useRef(false);
   // Opened after the first render rather than with it: both dialogs are portalled to the end of `<body>` on the
   // same stacking level, so the later one sits on top, and this one must come after Settings' own.
   const [addingAgent, setAddingAgent] = useState(false);
+  // Navigation dismisses account forms so its destination is not left behind a modal; the login dialog keeps
+  // its lifecycle.
+  const lastDismiss = useRef(accountsNavigation.dismissForms);
   useEffect(() => {
-    if (!addAgentRequest.pending) return;
-    addAgentRequest.consume();
+    if (accountsNavigation.dismissForms === lastDismiss.current) return;
+    lastDismiss.current = accountsNavigation.dismissForms;
+    if (!accountsNavigation.pending) {
+      openedWithAddAgent.current = false;
+      setAddingAgent(false);
+    }
+    setEditing(undefined);
+    setRemoving(undefined);
+    setRenamingDefault(undefined);
+    setRemovingAgent(undefined);
+  }, [accountsNavigation.dismissForms, accountsNavigation.pending]);
+  useEffect(() => {
+    if (!accountsNavigation.pending) return;
+    accountsNavigation.consume();
     openedWithAddAgent.current = true;
     setAddingAgent(true);
-  }, [addAgentRequest.pending]);
-  // A later request for something else closes it, so what that request shows is not left behind a modal.
-  const lastDismiss = useRef(addAgentRequest.dismiss);
-  useEffect(() => {
-    if (addAgentRequest.dismiss === lastDismiss.current) return;
-    lastDismiss.current = addAgentRequest.dismiss;
-    openedWithAddAgent.current = false;
-    setAddingAgent(false);
-  }, [addAgentRequest.dismiss]);
+  }, [accountsNavigation.pending]);
   const addAgentButton = useRef<HTMLButtonElement>(null);
   const closeAddAgent = () => {
     setAddingAgent(false);
@@ -92,7 +100,6 @@ export function AgentAccountsSection(): React.ReactElement {
     const running = store.getState().accountLogins.find((held) => loginIsActive(held));
     if (running) setLoggingIn({ agent: running.agent, account: running.account, start: false });
   }, []);
-  const [removingAgent, setRemovingAgent] = useState<Agent>();
   const [chosen, setChosen] = useState<Agent>(agents[0] ?? "claude");
   // The tab in view: the chosen one unless its agent has left the list.
   const selected = agents.includes(chosen) ? chosen : agents[0];

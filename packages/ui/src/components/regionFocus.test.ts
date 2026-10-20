@@ -1,7 +1,25 @@
 // @vitest-environment jsdom
-import { expect, it, onTestFinished, vi } from "vitest";
+import { act, createElement } from "react";
+import { createRoot } from "react-dom/client";
+import { setInteractionModality } from "react-aria";
+import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
+import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { focusAfterLoss } from "./regionFocus";
+import { useFocusVisibleProps } from "./useFocusVisibleProps";
+
+beforeEach(() => {
+  const globals = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+  const actEnvironment = globals.IS_REACT_ACT_ENVIRONMENT;
+  const modality = getInteractionModality();
+  globals.IS_REACT_ACT_ENVIRONMENT = true;
+  onTestFinished(() => {
+    // The getter can return the initial null state, which the setter accepts at runtime.
+    act(() => Reflect.apply(setInteractionModality, undefined, [modality]));
+    if (actEnvironment === undefined) delete globals.IS_REACT_ACT_ENVIRONMENT;
+    else globals.IS_REACT_ACT_ENVIRONMENT = actEnvironment;
+  });
+});
 
 function addToBody(html: string): HTMLElement {
   const holder = document.body.appendChild(document.createElement("div"));
@@ -44,4 +62,20 @@ it("goes to the sidebar, then the rail, when the terminal takes no focus", () =>
   document.getElementById("second")!.setAttribute("disabled", "");
   focusAfterLoss(() => {});
   expect(document.activeElement?.id).toBe("rail-button");
+});
+
+it("marks a fallback control with its focus ring even after a pointer acknowledged the alert", () => {
+  const container = addToBody("<div></div>");
+  const root = createRoot(container);
+  onTestFinished(() => act(() => root.unmount()));
+  function Sidebar() {
+    const focus = useFocusVisibleProps();
+    return createElement("div", { "data-region": "sidebar" }, createElement("button", { ...focus }, "Actions"));
+  }
+  act(() => root.render(createElement(Sidebar)));
+  act(() => setInteractionModality("pointer"));
+  act(() => focusAfterLoss(() => {}));
+  const button = container.querySelector("button")!;
+  expect(document.activeElement).toBe(button);
+  expect(button.hasAttribute("data-focus-visible")).toBe(true);
 });

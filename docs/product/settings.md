@@ -66,9 +66,11 @@ Settings opens from:
   way, above whatever dialog is open (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`).
 
 When the Add agent dialog is put in front, that dialog holds keyboard focus rather than the selected section's tab. A
-request to open Settings on a section while it is already open moves it to that section, putting focus on that
-section's tab and closing the Add agent dialog first if it is open, or, when the Add agent dialog is asked for, shows
-the Agent accounts section with that dialog in front.
+request to open Settings on a section while it is already open moves it to that section and closes the account add,
+edit, rename and remove forms and the agent-removal form. It also closes the Add agent dialog unless the request is
+for that dialog. When the destination is not behind a login dialog, focus goes to the requested section's tab, or,
+when Add agent is requested, to that dialog in front of the Agent accounts section. The login dialog keeps its
+lifecycle (see "Logging an account in" in `docs/product/agent-accounts.md`).
 
 Settings closes on `Escape`, on its close button, and on a press on the dimmed area around it. Closing it puts
 keyboard focus back on the selected session's terminal, unless a dialog is open beneath it: focus then stays in that

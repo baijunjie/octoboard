@@ -1,3 +1,5 @@
+import { setInteractionModality } from "react-aria";
+
 /** A window region, named by its `data-region`. */
 export type Region = string;
 
@@ -76,8 +78,10 @@ export function focusRegion(region: Region, focusTerminal: () => void): boolean 
  * while focus is on `<body>`): the dialog still open (the window's regions are inert behind it), else
  * wherever `focusTerminal` puts it, which for the selected session's terminal is the terminal; the empty
  * terminal and the welcome screen decline from `<body>`, so then the first of the sidebar and the rail that has
- * a control takes it, each landing where F6 would. With none to take it, focus stays on `<body>`. */
+ * a control takes it, each landing where F6 would. With none to take it, focus stays on `<body>`. Keyboard modality
+ * gives the fallback a visible focus ring even when a pointer acknowledged the alert. */
 export function focusAfterLoss(focusTerminal: () => void): void {
+  setInteractionModality("keyboard");
   if (focusOpenDialog()) return;
   focusTerminal();
   if (document.activeElement && document.activeElement !== document.body) return;

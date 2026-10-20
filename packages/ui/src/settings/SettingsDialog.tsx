@@ -10,7 +10,7 @@ import { useEscapeWhileTooltipOpen } from "../dialogs/useEscapeWhileTooltipOpen"
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
 import { useIsNarrow } from "../layout/breakpoint";
-import { AddAgentOnOpenContext } from "./AddAgentOnOpenContext";
+import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentAccountsSection, AGENT_STRIP_HEIGHT } from "./AgentAccountsSection";
 import { ConfigurationSection } from "./ConfigurationSection";
 import { GeneralSection } from "./GeneralSection";
@@ -97,8 +97,8 @@ export function SettingsDialog({
   const addAgentOnOpen = navigation?.addAgent ?? false;
   // Taken up once by the Agent accounts section, which may be mounted again later by switching back to it.
   const [addAgentPending, setAddAgentPending] = useState(addAgentOnOpen);
-  const [dismissAddAgent, setDismissAddAgent] = useState(0);
-  const addAgentRequest = useMemo(() => ({ pending: addAgentPending, consume: () => setAddAgentPending(false), dismiss: dismissAddAgent }), [addAgentPending, dismissAddAgent]);
+  const [dismissAccountForms, setDismissAccountForms] = useState(0);
+  const accountsNavigation = useMemo(() => ({ pending: addAgentPending, consume: () => setAddAgentPending(false), dismissForms: dismissAccountForms }), [addAgentPending, dismissAccountForms]);
   const lastNonce = useRef(navigation?.nonce);
   // Counts the requests whose section's tab takes focus (all but those for the Add agent dialog).
   const [tabFocusRequests, setTabFocusRequests] = useState(0);
@@ -107,8 +107,8 @@ export function SettingsDialog({
     lastNonce.current = navigation.nonce;
     if (navigation.section) setSectionId(navigation.section);
     setAddAgentPending(navigation.addAgent);
-    // A request for anything but Add agent closes one that is open, before its section's tab takes focus.
-    if (!navigation.addAgent) setDismissAddAgent((count) => count + 1);
+    // Dismiss account forms before showing the requested section or Add agent dialog.
+    setDismissAccountForms((count) => count + 1);
     if (!navigation.addAgent) setTabFocusRequests((count) => count + 1);
   }, [navigation?.nonce]);
   const selectedRef = useRef<HTMLDivElement | null>(null);
@@ -206,9 +206,9 @@ export function SettingsDialog({
               <SectionPanel key={id} id={id} stickyHeadingHeight={"stickyHeadingHeight" in section ? section.stickyHeadingHeight : undefined}>
                 <h2 className="pb-2 text-xl font-semibold">{t(label)}</h2>
                 <SettingsFocusContext.Provider value={focusTarget}>
-                  <AddAgentOnOpenContext.Provider value={addAgentRequest}>
+                  <AccountsNavigationContext.Provider value={accountsNavigation}>
                     <Content />
-                  </AddAgentOnOpenContext.Provider>
+                  </AccountsNavigationContext.Provider>
                 </SettingsFocusContext.Provider>
               </SectionPanel>
             ))}
