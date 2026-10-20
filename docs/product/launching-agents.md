@@ -216,6 +216,16 @@ one it was:
 The same capture is what gives a git clone the user's `git` and git credentials, so a clone is refused the same
 way (see "Associating a project" in `docs/product/projects.md`).
 
+**A capture leaves nothing it started running.** Whatever its outcome — success, any of the refusals above, a timeout
+included — once a capture ends, everything still in its shell's process group is first sent a hangup, so it can clean
+up (drop a lock, finish a write), and whatever is still there after at most half a second is killed. That reaches the
+helpers a user's interactive rc file starts and disowns (`&!`, `disown`), such as a prompt theme's status daemon or an
+update check. A helper that detaches itself into a new session (`setsid`, as ssh-agent, gpg-agent and tmux do) is out
+of reach and is not stopped. What a capture hands on is therefore only an environment, never a process: a shell
+terminal's own shell runs the rc file itself and starts its own helpers, but an agent, which is run directly with the
+captured environment and no shell, may inherit variables that point at an rc helper the capture started and has since
+stopped.
+
 Two groups of variables are removed from that snapshot:
 
 - the snapshot shell's own terminal variables, which would otherwise make the agent downgrade its renderer, colours

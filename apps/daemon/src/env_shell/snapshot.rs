@@ -4,7 +4,7 @@
 //! manager's shims are set up in `~/.zshrc`, which a login-only non-interactive zsh never sources.
 //! The working form is `$SHELL -l -i -c 'env -0 && printf <marker>'`, where `<marker>` is a fresh
 //! random token generated per call (`snapshot_marker`) and searched for rather than inferred from
-//! the shape of a trailing byte — see `wait_with_timeout` for why. Forcing `TERM=dumb` and feeding
+//! the shape of a trailing byte — see `wait_unreaped` for why. Forcing `TERM=dumb` and feeding
 //! `/dev/null` on stdin keeps that interactive shell from printing a prompt or reading a stray tty.
 //!
 //! That `TERM` is for the snapshot shell only and must not reach the agent: `env -0` dumps it like
@@ -22,6 +22,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
 
+use crate::process_session::{self, Unreaped};
 use crate::protocol::{error_code, CodedError};
 use crate::subprocess::{PIPE_CHUNK_SIZE, REAP_GRACE};
 
@@ -31,6 +32,11 @@ use crate::subprocess::{PIPE_CHUNK_SIZE, REAP_GRACE};
 /// resolves on its own) into a reported failure within a single human-noticeable wait instead of
 /// a launch that hangs forever.
 const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// How long what the snapshot shell left in its process group is given to exit after a hangup
+/// before it is killed (see `kill_group_and_reap`). Long enough for a job to drop a lock or finish
+/// a write, short enough that a launch waiting on the snapshot does not notice it.
+const HANGUP_GRACE: Duration = Duration::from_millis(500);
 
 /// Variables that belong to the snapshot shell rather than to the agent, and are stripped from the
 /// snapshot before it is handed to a PTY command.
@@ -101,7 +107,7 @@ pub fn shell_path() -> String {
 /// string: an environment variable's value is arbitrary text the user's own shell configuration
 /// controls, and a hardcoded sentinel could in principle appear inside one and be mistaken for the
 /// real end of the dump. A random 122-bit value makes that collision not worth guarding against
-/// further. See `wait_with_timeout` for what the marker is used for.
+/// further. See `wait_unreaped` for what the marker is used for.
 fn snapshot_marker() -> String {
     format!("OCTOBOARD-ENV-SNAPSHOT-END-{}", uuid::Uuid::new_v4())
 }
@@ -117,7 +123,7 @@ pub fn take() -> Result<HashMap<String, String>> {
 fn snapshot_with(shell: &str, timeout: Duration) -> Result<HashMap<String, String>> {
     let marker = snapshot_marker();
     // `&&` keeps a failing `env -0` on the non-zero-exit branch below: there is then no marker to
-    // search for, and `wait_with_timeout` must not wait around for one.
+    // search for, and `wait_unreaped` must not wait around for one.
     let command = format!("env -0 && printf '%s' '{marker}'");
     let mut child = Command::new(shell)
         .args(["-l", "-i", "-c", &command])
@@ -125,11 +131,11 @@ fn snapshot_with(shell: &str, timeout: Duration) -> Result<HashMap<String, Strin
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        // A new process group with this process as its own leader (`setpgid(0, 0)`), so the
-        // timeout below can kill everything the shell started — including a background process
-        // an rc file left running — rather than only the shell itself: such a process lives in
-        // the shell's group, not under the shell as a reapable child, so signalling the leader
-        // alone would leave it running.
+        // A new process group with this process as its own leader (`setpgid(0, 0)`), so that
+        // `wait_with_timeout` can kill everything the shell started once the snapshot is over —
+        // including a background process an rc file left running — rather than only the shell
+        // itself: such a process lives in the shell's group, not under the shell as a reapable
+        // child, so signalling the leader alone would leave it running.
         .process_group(0)
         .spawn()
         .with_context(|| {
@@ -141,19 +147,14 @@ fn snapshot_with(shell: &str, timeout: Duration) -> Result<HashMap<String, Strin
     // notices it, which is exactly the kind of hang this function exists to avoid. Each thread
     // forwards what it reads in chunks over an unbounded channel instead of being `join()`ed or
     // read to completion in one shot, so the consumer can inspect what has arrived so far without
-    // waiting for the pipe to close — see `wait_with_timeout` for why that matters. On a timeout
-    // the threads are left to finish on their own once the killed process group closes the pipes,
-    // which happens promptly enough that nothing meaningful leaks.
-    //
-    // A successful snapshot can leak one of these threads instead: when a backgrounded process
-    // is still holding a pipe open, `wait_with_timeout` deliberately returns without killing the
-    // group (see there), so that thread stays parked in `read()` — and leaked with it, one pipe
-    // read-end — until whatever it backgrounded writes again or dies. This is accepted rather
-    // than fixed: the only portable way to unstick a thread blocked in `read()` is to close its
-    // fd out from under it, and doing that from a different thread while the read is in flight is
-    // its own hazard (the closed descriptor number can be reused for an unrelated file before the
-    // blocked call notices, misdirecting it). A thread and an fd per long-lived backgrounded
-    // process over the daemon's own lifetime is the cheaper failure mode.
+    // waiting for the pipe to close — see `wait_unreaped` for why that matters. The threads
+    // are left to finish on their own once the process group killed at the end of every snapshot
+    // closes the pipes, which happens promptly enough that nothing meaningful leaks. A helper that
+    // left the group with `setsid()` and still holds a pipe keeps its thread parked in `read()`,
+    // with one pipe read-end, until it writes again or dies; the only portable way to unstick a
+    // thread blocked in `read()` is to close its fd out from under it, and doing that from a
+    // different thread while the read is in flight is its own hazard (the closed descriptor number
+    // can be reused for an unrelated file before the blocked call notices, misdirecting it).
     let mut stdout_pipe = child.stdout.take().expect("stdout was piped");
     let mut stderr_pipe = child.stderr.take().expect("stderr was piped");
     let (stdout_tx, stdout_rx) = mpsc::channel();
@@ -272,12 +273,45 @@ fn find_marker(haystack: &[u8], marker: &[u8]) -> Option<usize> {
     haystack.windows(marker.len()).position(|w| w == marker)
 }
 
-/// Waits for `child` to exit, then drains both output pipes, all within `timeout`.
+/// Waits for `child` to exit and drains both output pipes within `timeout` (`wait_unreaped`),
+/// then, in every outcome, hangs up and kills the shell's whole process group (unless `waitid` can
+/// no longer see the shell) and reaps the shell, which adds at most `HANGUP_GRACE` and
+/// `REAP_GRACE` on top.
 ///
-/// The two phases need different completion signals. Up to exit, `try_wait` is polled rather than
+/// The group kill is what keeps the snapshot from leaving anything behind: an rc file that starts
+/// a helper and disowns it (`&!`, `disown` — powerlevel10k's `gitstatusd` is the common case) has
+/// left it in the shell's group but not under the shell, so once the shell exits it is re-parented
+/// to pid 1 and runs for as long as it likes. Whoever is handed the snapshot gets only its
+/// environment, never a process — a shell terminal starts a shell of its own, which starts its
+/// own helper — so the snapshot's copy serves nobody. A helper that calls `setsid()` itself has
+/// left the group and is out of reach.
+///
+/// The shell is not reaped until that kill: exit is detected with `WNOWAIT`, so its zombie keeps
+/// its pid, and with it the group id, from passing to another process — the signal cannot reach
+/// an unrelated group, whether or not anything else is left in this one.
+fn wait_with_timeout(
+    child: &mut Child,
+    stdout_rx: mpsc::Receiver<io::Result<Vec<u8>>>,
+    stderr_rx: mpsc::Receiver<io::Result<Vec<u8>>>,
+    shell: &str,
+    command: &str,
+    marker: &str,
+    timeout: Duration,
+) -> Result<(ExitStatus, Vec<u8>, Vec<u8>)> {
+    let output = wait_unreaped(child, stdout_rx, stderr_rx, shell, command, marker, timeout);
+    let status = kill_group_and_reap(child);
+    let (stdout, stderr) = output?;
+    let status = status.with_context(|| {
+        format!("reaping `{shell} -l -i -c '{command}'` after its environment snapshot")
+    })?;
+    Ok((status, stdout, stderr))
+}
+
+/// `wait_with_timeout`'s wait for the shell to exit and drain of its output.
+///
+/// The two phases need different completion signals. Up to exit, `waitid` is polled rather than
 /// blocking on `wait()` in another thread, since there is no portable way to cancel the latter —
-/// the child would still have to be killed through `child` itself, from this thread, once the
-/// deadline passed.
+/// the shell would still have to be killed from this thread once the deadline passed.
 ///
 /// After exit, EOF on the pipes is not a safe signal to wait for: an rc file that starts a
 /// background process (a version manager's update check, `direnv`, `brew` autoupdate) hands it
@@ -292,13 +326,9 @@ fn find_marker(haystack: &[u8], marker: &[u8]) -> Option<usize> {
 ///
 /// A disconnected stdout reader (its pipe hit EOF) with no marker yet means the shell has already
 /// exited without producing a complete dump and nothing is left holding stdout open — there is
-/// nothing to wait for, so this fails immediately instead of spinning to the deadline, and skips
-/// the group kill below: an empty group has no member for `-pid` to still validly reach (see
-/// `kill_group_after_timeout`).
-///
-/// On either phase's timeout the whole process group is killed (not just the shell, for the same
-/// reason `process_group(0)` was set above), so anything still holding a pipe open is stopped.
-fn wait_with_timeout(
+/// nothing to wait for, so this fails immediately instead of spinning to the deadline. Either
+/// phase running out of time is reported as a timeout. `child` is left unreaped in every outcome.
+fn wait_unreaped(
     child: &mut Child,
     stdout_rx: mpsc::Receiver<io::Result<Vec<u8>>>,
     stderr_rx: mpsc::Receiver<io::Result<Vec<u8>>>,
@@ -306,19 +336,22 @@ fn wait_with_timeout(
     command: &str,
     marker: &str,
     timeout: Duration,
-) -> Result<(ExitStatus, Vec<u8>, Vec<u8>)> {
+) -> Result<(Vec<u8>, Vec<u8>)> {
+    let pid = child.id() as libc::pid_t;
     let deadline = Instant::now() + timeout;
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
 
-    let status = loop {
+    let succeeded = loop {
         drain_available(&stdout_rx, &mut stdout, "stdout", "the snapshot shell")?;
         drain_stderr_best_effort(&stderr_rx, &mut stderr, "the snapshot shell");
-        if let Some(status) = child.try_wait()? {
-            break status;
+        match process_session::unreaped_state(pid) {
+            Some(Unreaped::Exited { success }) => break success,
+            Some(Unreaped::Running) => {}
+            None => bail!("could not tell whether `{shell} -l -i -c '{command}'` has exited"),
         }
         if Instant::now() >= deadline {
-            return Err(kill_group_after_timeout(child, shell, command, timeout));
+            return Err(timeout_error(shell, command, timeout));
         }
         thread::sleep(Duration::from_millis(20));
     };
@@ -330,7 +363,7 @@ fn wait_with_timeout(
     // buffer nobody will parse must not replace that message), and stderr is given a short
     // settle rather than one non-blocking grab, so a diagnostic longer than a single chunk does
     // not reach the user cut off at a chunk boundary.
-    if !status.success() {
+    if !succeeded {
         let _ = drain_available(&stdout_rx, &mut stdout, "stdout", "the snapshot shell");
         let settle = Instant::now() + REAP_GRACE;
         while Instant::now() < settle {
@@ -342,7 +375,7 @@ fn wait_with_timeout(
             }
             thread::sleep(Duration::from_millis(20));
         }
-        return Ok((status, stdout, stderr));
+        return Ok((stdout, stderr));
     }
 
     let marker = marker.as_bytes();
@@ -363,46 +396,52 @@ fn wait_with_timeout(
             );
         }
         if Instant::now() >= deadline {
-            return Err(kill_group_after_timeout(child, shell, command, timeout));
+            return Err(timeout_error(shell, command, timeout));
         }
         thread::sleep(Duration::from_millis(20));
     }
-    Ok((status, stdout, stderr))
+    Ok((stdout, stderr))
 }
 
-/// Kills the whole process group behind `child` (including anything an rc file backgrounded that
-/// is still holding a pipe open) and returns the user-facing timeout error.
-fn kill_group_after_timeout(
-    child: &mut Child,
-    shell: &str,
-    command: &str,
-    timeout: Duration,
-) -> anyhow::Error {
-    let pid = child.id();
-    // SAFETY: a plain signal to a process group number. `-pid` stays valid for it as long as
-    // some member of the group is still alive, and that is exactly the condition each of
-    // `wait_with_timeout`'s two timeout call sites diagnoses before calling here: the shell
-    // itself hasn't exited, or its stdout reader is still connected (something still holds the
-    // pipe open) with the marker not yet found. The narrow residual risk is the group emptying
-    // out in the gap between that diagnosis and this call, in which case the id could have been
-    // recycled and the signal reaches an unrelated group.
-    unsafe {
-        libc::kill(-(pid as i32), libc::SIGKILL);
-    }
-    // A bounded reap, not `child.wait()`: on the drain-timeout call site `child` is already
-    // reaped (the exit-wait loop above got `Some` from `try_wait`), so this is a no-op there, but
-    // on the exit-timeout call site it still needs reaping — and a shell wedged in an
-    // uninterruptible kernel wait (a dead network mount under `/Volumes` is the realistic
-    // trigger) can leave the `SIGKILL` pending indefinitely, which would turn this error path
-    // into the same unbounded hang it exists to report. A zombie left behind on that rare timeout
-    // is far cheaper than a second wedged launch.
-    let reap_deadline = Instant::now() + REAP_GRACE;
-    while Instant::now() < reap_deadline {
-        match child.try_wait() {
-            Ok(Some(_)) | Err(_) => break,
-            Ok(None) => thread::sleep(Duration::from_millis(20)),
+/// Ends the process group the shell `child` leads, then reaps the shell within `REAP_GRACE`. The
+/// group is hung up first, so that a job an rc file left running (an update check writing a
+/// cache, a `brew` autoupdate holding a lock) can clean up after itself, and killed once nothing
+/// but the shell is left in it, once `HANGUP_GRACE` has passed, or at once when the processes
+/// cannot be listed to tell — a launch is not held up over a listing that failed. The group is
+/// signalled only while `waitid` still sees the shell unreaped: when it cannot say, the shell may
+/// already have been reaped and its pid passed on, so only the reap is attempted.
+///
+/// A bounded reap, not `child.wait()`: an exited shell is a zombie and reaps at once, but on the
+/// exit-timeout path it is still running, and a shell wedged in an uninterruptible kernel wait (a
+/// dead network mount under `/Volumes` is the realistic trigger) can leave the `SIGKILL` pending
+/// indefinitely, which would turn that error path into the same unbounded hang it exists to
+/// report. A zombie left behind on that rare timeout is far cheaper than a second wedged launch.
+fn kill_group_and_reap(child: &mut Child) -> Result<ExitStatus> {
+    let pid = child.id() as libc::pid_t;
+    if process_session::unreaped_state(pid).is_some() {
+        process_session::signal_group(pid, libc::SIGHUP);
+        let hangup_deadline = Instant::now() + HANGUP_GRACE;
+        while process_session::group_has_members(pid) == Some(true)
+            && Instant::now() < hangup_deadline
+        {
+            thread::sleep(Duration::from_millis(20));
         }
+        process_session::kill_group(pid);
     }
+    let reap_deadline = Instant::now() + REAP_GRACE;
+    loop {
+        if let Some(status) = child.try_wait()? {
+            return Ok(status);
+        }
+        if Instant::now() >= reap_deadline {
+            bail!("the shell had not exited {REAP_GRACE:?} after its process group was killed");
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+}
+
+/// The user-facing timeout error.
+fn timeout_error(shell: &str, command: &str, timeout: Duration) -> anyhow::Error {
     CodedError::raised(
         error_code::SHELL_ENVIRONMENT_TIMEOUT,
         format!(
@@ -563,11 +602,9 @@ mod tests {
             "snapshot_with took {:?}, far longer than the snapshot needs",
             started.elapsed(),
         );
-        // A successful snapshot has no reason to touch the process group, so the backgrounded
-        // sleep is still alive here; clean it up ourselves rather than leaking it for its full
-        // 300s.
+        // The snapshot ends by killing the shell's process group, so the backgrounded sleep
+        // holding the pipe goes with it.
         let bg_pid: i32 = env.get("BGPID").expect("BGPID").parse().expect("bg pid");
-        unsafe { libc::kill(bg_pid, libc::SIGKILL) };
         assert_gone_by(bg_pid, Instant::now() + PATIENCE);
     }
 
@@ -588,7 +625,62 @@ mod tests {
         assert_eq!(env.get("FOO"), Some(&"bar".to_string()));
         assert!(started.elapsed() < NOT_THE_SLEEP);
         let bg_pid: i32 = env.get("BGPID").expect("BGPID").parse().expect("bg pid");
-        unsafe { libc::kill(bg_pid, libc::SIGKILL) };
+        assert_gone_by(bg_pid, Instant::now() + PATIENCE);
+    }
+
+    #[test]
+    fn a_successful_snapshot_leaves_nothing_it_started_running() {
+        // The shape of powerlevel10k starting `gitstatusd` from `.zshrc`: a helper with its
+        // streams off the snapshot's pipes, so nothing here ever waits on it, and which outlives
+        // the shell. Once the snapshot has returned it must be gone; left alone, it would be
+        // re-parented to pid 1 and run until killed by hand, one more per snapshot.
+        let shell = FakeShell::new(
+            "sleep 300 </dev/null >/dev/null 2>&1 &\nprintf 'BGPID=%s\\0' \"$!\"\nprintf '%s' \"$OCTOBOARD_TEST_MARKER\"",
+        );
+        let env = snapshot_with(shell.path(), PATIENCE).expect("snapshot");
+        let bg_pid: i32 = env.get("BGPID").expect("BGPID").parse().expect("bg pid");
+        assert_gone_by(bg_pid, Instant::now() + PATIENCE);
+    }
+
+    #[test]
+    fn a_helper_left_running_is_hung_up_before_it_is_killed() {
+        // A job an rc file left running gets the chance to clean up — drop a lock, finish a
+        // write — before it is killed: the hangup reaches it first, and its trap runs. The shell
+        // finishes only once the trap is set, so the hangup cannot land before it, and the helper
+        // waits with the `wait` builtin, which a trapped signal ends at once, so its trap does not
+        // wait on an exec of its own.
+        let hung_up = ScratchFile::new("env-shell-test-hung-up", "txt");
+        let trap_set = ScratchFile::new("env-shell-test-trap-set", "txt");
+        let shell = FakeShell::new(&format!(
+            "sh -c 'trap \"echo hup > {hung_up}; exit 0\" HUP; : > {trap_set}; \
+             sleep 300 & wait' </dev/null >/dev/null 2>&1 &\n\
+             while [ ! -e {trap_set} ]; do sleep 0.01; done\n\
+             printf 'BGPID=%s\\0' \"$!\"\nprintf '%s' \"$OCTOBOARD_TEST_MARKER\"",
+            hung_up = hung_up.display(),
+            trap_set = trap_set.display(),
+        ));
+        let env = snapshot_with(shell.path(), PATIENCE).expect("snapshot");
+        let bg_pid: i32 = env.get("BGPID").expect("BGPID").parse().expect("bg pid");
+        assert_gone_by(bg_pid, Instant::now() + PATIENCE);
+        assert_eq!(
+            std::fs::read_to_string(&*hung_up).ok().as_deref(),
+            Some("hup\n")
+        );
+    }
+
+    #[test]
+    fn a_helper_ignoring_the_hangup_is_still_killed() {
+        // The shell finishes only once the helper ignores the hangup, so a hangup landing first
+        // cannot end it in place of the kill.
+        let ignoring = ScratchFile::new("env-shell-test-ignoring-hangup", "txt");
+        let shell = FakeShell::new(&format!(
+            "(trap '' HUP; : > {ignoring}; exec sleep 300) </dev/null >/dev/null 2>&1 &\n\
+             while [ ! -e {ignoring} ]; do sleep 0.01; done\n\
+             printf 'BGPID=%s\\0' \"$!\"\nprintf '%s' \"$OCTOBOARD_TEST_MARKER\"",
+            ignoring = ignoring.display(),
+        ));
+        let env = snapshot_with(shell.path(), PATIENCE).expect("snapshot");
+        let bg_pid: i32 = env.get("BGPID").expect("BGPID").parse().expect("bg pid");
         assert_gone_by(bg_pid, Instant::now() + PATIENCE);
     }
 
@@ -621,9 +713,7 @@ mod tests {
             read_pid_file(&child_pid_path)
         });
 
-        // Confirms the drain-timeout branch's group kill reached the backgrounded process too —
-        // this is exactly the path whose `-pid` validity is subtlest (the group is diagnosed as
-        // still populated by this very process holding the pipe open).
+        // Confirms the group kill after the drain timeout reached the backgrounded process too.
         assert_gone_by(bg_pid, Instant::now() + PATIENCE);
     }
 
@@ -632,10 +722,8 @@ mod tests {
     ) {
         // Nothing is backgrounded and no marker is printed: the shell's own exit closes both
         // pipes immediately, so the stdout reader thread disconnects right away with an
-        // incomplete buffer. This is the empty process group `kill_group_after_timeout`'s `-pid`
-        // reasoning depends on never reaching — waiting out the deadline here would signal a
-        // process-group id that may already have been recycled for something unrelated — so it
-        // must be reported, fast, without going anywhere near the kill.
+        // incomplete buffer. Nothing will ever complete the dump, so it must be reported fast
+        // rather than waiting out the deadline.
         let shell = FakeShell::new("printf 'FOO=ba'");
         // No wall-clock check: an exec stall would trip any bound short of the timeout. Failing
         // fast shows as the error not being the timeout's.

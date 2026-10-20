@@ -1,11 +1,13 @@
-//! Starting a process as the leader of a session of its own, and killing what it left in that
-//! session. An agent CLI moves some helpers (a REPL or code-execution host, a background shell
-//! task) into process groups of their own, so a signal to its process group leaves them running;
-//! they keep its session, which is what reaches them. A helper that called `setsid()` itself has
-//! left the session and is out of reach.
+//! Starting a process as the leader of a session of its own, and ending what a process left in a
+//! session or a process group it leads. An agent CLI moves some helpers (a REPL or code-execution
+//! host, a background shell task) into process groups of their own, so a signal to its process
+//! group leaves them running; they keep its session, which is what reaches them. A helper that
+//! called `setsid()` itself has left the session and is out of reach.
 //!
-//! The session is told by its id, which is the leader's pid, so it is swept only while the leader
-//! is unreaped: until then its pid, and with it the session id, cannot pass to another process.
+//! A session or a group is told by its id, which is the leader's pid, so it is signalled or swept
+//! only while the leader is unreaped: until then its pid, and with it that id, cannot pass to
+//! another process. Whether a child has exited is found out without reaping it for the same
+//! reason.
 
 use std::os::unix::process::CommandExt;
 use std::process::Command;
@@ -27,10 +29,20 @@ pub(crate) fn lead_session(command: &mut Command) {
     }
 }
 
-/// Whether the child `pid` has exited, found out without reaping it (`WNOWAIT`), or `None` when
-/// `waitid` cannot say — as when the child has already been reaped, its pid then free to pass to
-/// another process, so `None` never allows a sweep.
-pub(crate) fn exited_unreaped(pid: libc::pid_t) -> Option<bool> {
+/// How an unreaped child stands, as [`unreaped_state`] finds it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Unreaped {
+    Running,
+    /// Exited, with status 0 when `success`.
+    Exited {
+        success: bool,
+    },
+}
+
+/// How the child `pid` stands, found out without reaping it (`WNOWAIT`), or `None` when `waitid`
+/// cannot say — as when the child has already been reaped, its pid then free to pass to another
+/// process, so `None` never allows a sweep.
+pub(crate) fn unreaped_state(pid: libc::pid_t) -> Option<Unreaped> {
     // SAFETY: a zeroed `siginfo_t` is a valid buffer for `waitid` to fill in, and it is only read
     // once `waitid` has succeeded.
     unsafe {
@@ -40,17 +52,45 @@ pub(crate) fn exited_unreaped(pid: libc::pid_t) -> Option<bool> {
             return None;
         }
         // With `WNOHANG`, a child that has not exited leaves `si_pid` as it was: 0.
-        Some(info.si_pid() != 0)
+        if info.si_pid() == 0 {
+            return Some(Unreaped::Running);
+        }
+        let success = info.si_code == libc::CLD_EXITED && info.si_status() == 0;
+        Some(Unreaped::Exited { success })
     }
 }
 
-/// Kills the process group `leader` leads, which a session leader does too. The caller holds
-/// `leader` unreaped, or knows the group still has a member, so the group id is still its own.
+/// Whether the child `pid` has exited, found out without reaping it, or `None` when `waitid`
+/// cannot say, as for [`unreaped_state`].
+pub(crate) fn exited_unreaped(pid: libc::pid_t) -> Option<bool> {
+    unreaped_state(pid).map(|state| state != Unreaped::Running)
+}
+
+/// [`signal_group`] with `SIGKILL`.
 pub(crate) fn kill_group(leader: libc::pid_t) {
+    signal_group(leader, libc::SIGKILL);
+}
+
+/// Sends `signal` to the process group `leader` leads, which a session leader does too. The
+/// caller holds `leader` unreaped, or knows the group still has a member, so the group id is still
+/// its own.
+pub(crate) fn signal_group(leader: libc::pid_t, signal: libc::c_int) {
     // SAFETY: a plain signal to a process group whose id is still its own, as above.
     unsafe {
-        libc::kill(-leader, libc::SIGKILL);
+        libc::kill(-leader, signal);
     }
+}
+
+/// Whether the process group `leader` leads has a member other than the leader, or `None` when
+/// the system cannot list its processes. The caller holds `leader` unreaped, so a process found
+/// in that group is the leader's.
+pub(crate) fn group_has_members(leader: libc::pid_t) -> Option<bool> {
+    // SAFETY: `getpgid` only reads; a pid that is gone in the meantime reports an error.
+    Some(
+        candidates()?
+            .into_iter()
+            .any(|pid| pid != leader && unsafe { libc::getpgid(pid) } == leader),
+    )
 }
 
 /// What [`kill_members`] did.
@@ -124,8 +164,8 @@ pub(crate) fn kill_members(leader: libc::pid_t) -> Swept {
     }
 }
 
-/// Every process id on the system, a superset of the session's members for the caller to filter
-/// with `getsid`, or `None` when the system cannot list them.
+/// Every process id on the system, a superset of a session's or a group's members for the caller
+/// to filter with `getsid` or `getpgid`, or `None` when the system cannot list them.
 #[cfg(target_os = "linux")]
 fn candidates() -> Option<Vec<libc::pid_t>> {
     let entries = std::fs::read_dir("/proc").ok()?;
