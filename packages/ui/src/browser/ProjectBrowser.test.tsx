@@ -413,7 +413,7 @@ it("keeps Files result folders collapsed through tab switches", async () => {
 it("puts the Files / Changes switch right after the project name, and only icon buttons at the end of the header", async () => {
   await mount("header-order", "files");
   await answer("list_project_dir", dir("header-order"));
-  const header = document.querySelector<HTMLElement>("h2")!.parentElement!;
+  const header = document.querySelector<HTMLElement>("h2")!.closest(".groove-b")!;
   const follows = (a: Element, b: Element) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
   const tabs = header.querySelector('[role="tablist"]')!;
   const refresh = header.querySelector('button[aria-label="Refresh"]')!;

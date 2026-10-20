@@ -26,8 +26,9 @@ alone, are in "The surfaces that fade" below.
   begins below the agent tab strip once the strip is pinned at the top (see "The agent strip" in
   `docs/product/agent-accounts.md`).
 - Only the **top and bottom** edges fade, apart from the strips that scroll sideways and fade at their sideways
-  edges: focus mode's strip of console session chips (see "The switch strip" in `docs/product/focus-mode.md`) and a
-  strip of tabs. The file viewer's long lines, read by scrolling sideways while
+  edges: focus mode's strip of console session chips (see "The switch strip" in `docs/product/focus-mode.md`), a
+  strip of tabs, and the Files panel's header controls (see "A panel's header" in
+  `docs/product/right-pane-panels.md`). The file viewer's long lines, read by scrolling sideways while
   wrapping is off, fade at neither side (see "Wrapping long lines" in `docs/product/file-viewer.md`).
 
 **Some surfaces draw no scrollbar at all**, so the fade is what says there is more: the rail's column of console
@@ -46,6 +47,8 @@ Once it holds more than it can show, each of these fades at its edge:
 - **every dialog's body**, and in Settings the panel holding the section on screen (see `docs/product/settings.md`);
 - the **project pane's** file tree (see "The file tree" in `docs/product/project-pane.md`), and the Git mode's change
   list (see `docs/product/project-pane-git-change-list.md`);
+- the **Files panel's header controls** other than Close panel (see "A panel's header" in
+  `docs/product/right-pane-panels.md`);
 - the **file viewer's** reading surfaces — a file shown as plain text, a highlighted file, a diff and a rendered
   Markdown document (see "What it shows" and "A Markdown file as a document" in `docs/product/file-viewer.md`);
 - the **lists inside a popover**: the list of branches of the Git mode's branch selector (see "The branch
@@ -106,7 +109,8 @@ covers. These are:
 the edge, clear of the fade, rather than arriving underneath. In focus mode's lists and the Git mode's change lists
 that space is measured below the section heading (see "What both views show" in `docs/product/focus-mode.md` and
 "Folding a section" in `docs/product/project-pane-git-change-list.md`), and in Settings' Agent accounts section below the
-agent tab strip. A strip of tabs is the exception, as above.
+agent tab strip. A strip of tabs is the exception, as above. For focus visibility in the Files panel's header
+controls, see "A panel's header" in `docs/product/right-pane-panels.md`.
 
 **A control in a section heading pinned at the top is not scrolled to**: in the sidebar, in focus mode and in
 Settings' Agent accounts section, a heading that stays at the top of its list is in view already, so moving keyboard

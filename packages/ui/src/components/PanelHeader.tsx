@@ -4,6 +4,7 @@ import React, { createContext, useContext } from "react";
 import { Button } from "./Button";
 import { FadeOverflow } from "./FadeOverflow";
 import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "./RowControls";
+import { FadedScroller } from "./scrollFade";
 import { TitledControl } from "./TitledControl";
 import { useT } from "../i18n/react";
 
@@ -26,28 +27,44 @@ export const PanelFrameProvider = PanelFrameContext.Provider;
  * its own actions at the end, then the stack's maximize / restore, for a kind that offers it, and
  * close, which every kind has. When the pane is too narrow for all of it the children give way (a tab list scrolls),
  * never the title or the controls at the end. A header outside a stack (a test)
- * has neither of the stack's controls.
+ * has neither of the stack's controls. `prioritizeChildren` keeps a mode switch whole instead:
+ * the title gives way first, then the kind's actions scroll, with close always outside the clip.
  */
 export function PanelHeader({
   title,
   actions,
   children,
+  prioritizeChildren = false,
 }: {
   title: string;
   /** The kind's own icon controls. */
   actions?: React.ReactNode;
   children?: React.ReactNode;
+  /** Keep the mode switch and close visible, giving up the title before the scrollable actions. */
+  prioritizeChildren?: boolean;
 }): React.ReactElement {
   const t = useT();
   const frame = useContext(PanelFrameContext);
+  const heading = (
+    <h2 className={`flex min-w-0 max-w-40 ${prioritizeChildren ? "overflow-hidden" : "shrink-0"} text-base font-semibold`}>
+      <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={title}>{title}</FadeOverflow>
+    </h2>
+  );
   return (
-    <div className="flex h-(--pane-header-height-floating) shrink-0 items-center gap-2 groove-b px-(--pane-inset)">
-      <h2 className="flex min-w-0 max-w-40 shrink-0 text-base font-semibold">
-        <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={title}>{title}</FadeOverflow>
-      </h2>
-      {children}
-      <RowIconGroup className="ms-auto">
-        {actions}
+    <div className={`${prioritizeChildren ? "grid min-w-0 grid-cols-[minmax(min-content,1fr)_minmax(0,max-content)_max-content]" : "flex"} h-(--pane-header-height-floating) shrink-0 items-center gap-2 groove-b px-(--pane-inset)`}>
+      {prioritizeChildren ? (
+        <div className="grid grid-cols-[minmax(0,max-content)_max-content] items-center gap-2">
+          {heading}
+          {children}
+        </div>
+      ) : <>{heading}{children}</>}
+      {prioritizeChildren && (
+        <FadedScroller orientation="horizontal" className="min-w-0 p-1.5 -m-1.5 has-[[data-focus-visible=true]]:mask-none">
+          <RowIconGroup className="w-max">{actions}</RowIconGroup>
+        </FadedScroller>
+      )}
+      <RowIconGroup className={prioritizeChildren ? "" : "ms-auto"}>
+        {!prioritizeChildren && actions}
         {frame?.canMaximize && (
           <TitledControl title={t(frame.maximized ? "panel.restore" : "panel.maximize")}>
             <Button isIconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t(frame.maximized ? "panel.restore" : "panel.maximize")} preventFocusOnPress onPress={frame.onToggleMaximized}>

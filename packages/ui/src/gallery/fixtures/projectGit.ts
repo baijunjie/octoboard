@@ -703,7 +703,7 @@ const reviewScenarios: Scenario[] = [
     category: "normal",
     title: "Project pane header at the narrowest docked width",
     width: 1168,
-    description: "The 1168px minimum window width leaves the docked project pane its 320px minimum, the narrowest the Git mode's header has to fit: the project name shrinks to a stub and the Files and Changes tabs scroll, while the layout, filter and refresh buttons and Close panel at the end stay whole and inside the card.",
+    description: "The 1168px minimum window width leaves the docked project pane its 320px minimum. Files and Changes stay fully visible beside Close panel. The project name gives up its space first; when the remaining icon controls no longer fit, they fade at the clipped edge and scroll horizontally without moving the tabs or Close panel.",
     state,
     preferences,
     steps: [...openGit, (ui) => ui.wait(300)],

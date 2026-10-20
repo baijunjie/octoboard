@@ -44,10 +44,9 @@ The Files panel has **one header row**, its panel header (see "A panel's header"
 `docs/product/right-pane-panels.md`). At its leading side are the visible project name as the panel's title and, right after the name, two peer tabs — **Files** and **Changes**; at its trailing side are icon
 buttons alone: the controls for the chosen tab, then **Refresh**, then the panel's own **Close panel**. Spare width
 stays between the tabs and those buttons. The tabs are compact, with a pill behind the selected tab and muted labels
-on the others, and no filled track behind them. When space is tight the tabs scroll under a fade at their cut edge,
-while the project name keeps its width — a name too long for the title's room fades out, with the full name as its
-tooltip (see "A panel's header" in `docs/product/right-pane-panels.md`) — and the buttons at the trailing side always
-stay whole. Files offers one control, the file-name filter toggle (see "Filtering by file
+on the others, and no filled track behind them. The tabs and Close panel have priority over the project title and
+other icon buttons; their behavior in a narrow header is in "A panel's header" in
+`docs/product/right-pane-panels.md`. Files offers one control, the file-name filter toggle (see "Filtering by file
 name" below); Changes offers its filter toggle, Group by folder and Group by commit (see "The Changes view" in
 `docs/product/project-pane-git-mode.md`). The buttons keep that place in loading, empty and error states too. Pressing
 Refresh with the mouse leaves keyboard focus where it was.

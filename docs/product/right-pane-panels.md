@@ -50,9 +50,13 @@ from its leading side:
 - **Close panel** (see "Opening and closing panels" below).
 
 The title is at most 160 px wide; a longer one fades out, with its full text as its tooltip while it is cut (see
-"Names too long for their space" in `docs/product/labels-and-tooltips.md`). When space is tight, what the kind puts
-beside the title gives way — a row of tabs scrolls — while the title and the buttons at the end never do. Pressing a
-header button with the mouse leaves keyboard focus where it was.
+"Names too long for their space" in `docs/product/labels-and-tooltips.md`). In the Files panel, **Files and Changes
+and Close panel stay fully visible**. As space tightens, the project title shrinks, fades and disappears before the
+other icon buttons lose room. Those buttons scroll horizontally within their own area, fading at edges with more
+beyond them; Close panel stays outside that area. Scrolling and moving keyboard focus through the buttons reveal
+them, and the area's fades disappear while a button has keyboard focus so its focus ring stays visible. In the
+Terminal and report panels, what the kind puts beside the title gives way — a row of tabs scrolls — while the title
+and the buttons at the end keep their width. Pressing a header button with the mouse leaves keyboard focus where it was.
 
 The pane's 16 px horizontal inset (see "The window chrome and the content panel" in `docs/product/window-layout.md`)
 is measured from the card's edge.
