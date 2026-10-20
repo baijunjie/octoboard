@@ -23,8 +23,10 @@ What "Sharing a session directory between accounts" says, and the "Codex, histor
 account" notes under "Moving a conversation to another config directory", were measured on 2026-10-19 on **Claude Code
 2.1.302**, **Codex 0.162.1** and **Grok Build 1.0.62**. What "Codex resume from aged rollouts" says was measured on
 **Codex 0.162.1**. What "Signing in a config directory without a terminal" says was measured on 2026-10-19 on **Claude
-Code 2.1.303**, **Codex 0.162.1** and **Grok Build 1.0.62**. All three rewrite their hook surface, their payload fields, their configuration layering and their
-on-disk layout on upgrade, so check a detail here against the installed version before relying on it.
+Code 2.1.303**, **Codex 0.162.1** and **Grok Build 1.0.62**. What "Writing into a running session" says about invisible
+characters was read from the executable of, and measured on, **Claude Code 2.1.304** on 2026-10-20. All three rewrite
+their hook surface, their payload fields, their configuration layering and their on-disk layout on upgrade, so check a
+detail here against the installed version before relying on it.
 
 How Octoboard's status mapping handles these traps is encoded in `apps/daemon/src/hooks.rs`; the product behavior
 built on them is in the product docs.
@@ -1356,7 +1358,7 @@ Octoboard recognizes it in the terminal output and presses it; what pressing it 
 
 The sequence for all three agents is `ESC[200~`, the text with LF separators, `ESC[201~`, then `CR`; multi-line text
 arrives as one message with no delay between paste and Enter. Every agent queues a message written mid-turn and consumes
-it when the turn ends. (Codex additionally has `codex queue --thread <session id>`.) Four rules, each failing silently
+it when the turn ends. (Codex additionally has `codex queue --thread <session id>`.) Five rules, each failing silently
 or destructively if ignored:
 
 - A message starting with `/` runs as a slash command even inside a bracketed paste; prefix a single space.
@@ -1375,3 +1377,26 @@ or destructively if ignored:
   a session from its launch until its first hook has arrived; for Codex, which runs none until its first prompt, also
   until the confirmation has been pressed, the person's answer in the terminal is seen to replace it, or the watch for
   it has ended with none sighted.
+- Claude Code does not send a prompt that holds an invisible character. When Enter submits one, it removes those
+  characters, leaves the cleaned text in the input box with "Removed N invisible characters · review and press Enter to
+  send", and starts no turn (its code returns before the submission that fires `UserPromptSubmit`, read from the
+  executable rather than observed through a hook); the `CR` that follows the paste is spent on that hold, so the write
+  succeeds and nothing is sent. A message written mid-turn is held the same way rather than queued, and is still sitting
+  in the input box when the turn ends. A later bare `CR` sends the cleaned text. What it removes is: the control
+  characters other than tab and LF; U+00AD, U+034F, U+061C, U+115F, U+1160, U+17B4, U+17B5, U+180B–U+180F,
+  U+200B–U+200F, U+2028–U+202E, U+2060–U+206F, U+3164, U+FE00–U+FE0F, U+FEFF, U+FFA0, U+FFF0–U+FFFB, U+1107F,
+  U+13430–U+1343F, U+16FE4, U+1BCA0–U+1BCA3, U+1D173–U+1D17A and U+E0000–U+E0FFF. A line break other than LF (CR, VT,
+  FF, NEL, U+2028, U+2029) becomes LF but still counts as a removal; only a CR right before an LF is dropped without
+  counting. It keeps some of them by context: a zero-width joiner between two `Extended_Pictographic` characters
+  (looking back past up to two U+FE0F or skin-tone modifiers), U+FE0E or U+FE0F right after an emoji or between a digit,
+  `#` or `*` and U+20E3, the England, Scotland and Wales tag flags, and script-dependent cases — a joiner or non-joiner
+  among letters of Arabic, Indic and some other scripts, a zero-width space in Thai, Khmer, Lao or Myanmar text, a
+  direction mark in a line holding right-to-left letters, U+034F after a combining mark, and a few more. Private-use and
+  unassigned code points, and format characters outside the list such as U+0600, pass untouched. The UI's bidirectional
+  isolates (U+2068, U+2069), which an agent copies into what it writes, are the usual trigger. So Octoboard removes the
+  same characters from every message before writing it and keeps only the joiner and presentation-selector cases above:
+  the script-dependent ones need Unicode script data to judge, and the tag flags are too rare to be worth a rule, so
+  those characters are removed too (a tag flag arrives as a plain black flag). Removing one too many costs a letterform,
+  a direction mark or a flag; keeping one too many costs the message. It is encoded in
+  `apps/daemon/src/term/invisible.rs`. Codex and Grok Build were not measured: neither executable carries any wording
+  about such a hold, but neither was run against one.

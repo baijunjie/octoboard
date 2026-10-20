@@ -56,6 +56,28 @@ accepted whatever is written in them, invented ones included, while the same fil
 loudly — so "it was registered and the session started without complaint" is not evidence the event exists, and the
 loud validation next door is exactly what makes it feel like evidence.
 
+## To know exactly what Claude Code does to an input, run the code that produced the symptom
+
+Applies when the question is the precise behaviour of a check or transform Claude Code runs locally — which characters
+a prompt check removes, which inputs it lets through — and above all when Octoboard has to reimplement it. Claude Code
+is a Bun single-file executable with its JavaScript embedded as plain text, so the code itself is the answer.
+
+**Find it by the wording the symptom puts on screen, never by a plausible-looking pattern elsewhere in the
+executable.** The binary carries many similar regexes for unrelated features: the `\p{Cf}`, `\p{Co}` and `\p{Cn}`
+patterns in it belong to tool-name and path handling, and a set taken from them for the prompt's invisible-character
+check was wrong in both directions (the check uses a hand-picked list, leaves private-use, unassigned and most format
+characters alone, and removes letters and marks those three categories miss). The same goes for a list of what an agent
+strips that comes from a model's or a brief's summary: trace it to the code path behind the observed message first.
+Search the executable with a short script that maps the file and runs a regex over its bytes; a `grep` with long
+context fails on a binary that size (inside a Claude Code session `grep` is ugrep, and it hits its complexity limit).
+
+Cut the self-contained function out and run it under Node: it answers any input with no session and no model turn, and
+for a reimplementation it is a differential oracle — feed random strings through Octoboard's version and assert the
+extracted function would change nothing in its output. Keep one real session for the end-to-end confirmation. A Unicode
+property escape (`\p{Extended_Pictographic}`, `\p{Script=…}`) resolves against the running engine's Unicode data, and
+Node's need not be the version Claude Code's runtime carries, so before generating a table from Node's answers check
+which way the two versions differ and that the table errs on the side the reimplementation can afford.
+
 ## Settle it without spending a model turn, and ask before redirecting traffic
 
 Before running a real session to find out what an agent does, try the free routes. The CLIs' own inspection

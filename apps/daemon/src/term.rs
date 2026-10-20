@@ -1,5 +1,7 @@
 //! Launching an agent in a PTY, and writing messages into a running one.
 
+mod invisible;
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -241,11 +243,11 @@ pub fn send_message(session: &LiveSession, text: &str) -> Result<(), crate::ptyi
     session.write_input(&frame_message(text))
 }
 
-/// Shapes a message into the bracketed-paste buffer `send_message` writes: strip controls, guard
-/// a leading slash, then frame. Pulled out as a pure function so the ordering between the two
-/// steps — strip before guard, not after — is something a test can pin directly, rather than
-/// re-deriving it from a copy of this logic; `send_message` itself needs a `LiveSession` and a PTY,
-/// which is why it is not tested directly.
+/// Shapes a message into the bracketed-paste buffer `send_message` writes: strip controls and
+/// invisible characters, guard a leading slash, then frame. Pulled out as a pure function so the
+/// ordering — both strips before the slash guard, not after — is something a test can pin
+/// directly, rather than re-deriving it from a copy of this logic; `send_message` itself needs a
+/// `LiveSession` and a PTY, which is why it is not tested directly.
 pub(crate) fn frame_message(text: &str) -> Vec<u8> {
     // `text` can be model-authored (a report panel submission, a project session's report summary)
     // and is never reviewed before it is written here. Without this, a value containing the
@@ -259,7 +261,11 @@ pub(crate) fn frame_message(text: &str) -> Vec<u8> {
     // `/clear` makes the raw text not start with `/`, but stripping it bare would still leave
     // `/clear` for the agent to execute as a command. Checking the stripped text instead closes
     // that gap.
-    let text = strip_control_chars(text);
+    //
+    // The invisible characters go for a different reason: Claude Code holds back a prompt that
+    // contains any, and the Enter written after the paste does not send it (see `invisible`).
+    // They are stripped before the slash check for the same reason as the controls.
+    let text = invisible::strip_invisible(&strip_control_chars(text));
 
     // A message starting with `/` is executed as a slash command even inside a bracketed paste, so
     // it never reaches the model; a single leading space makes it arrive as ordinary text.
@@ -316,6 +322,20 @@ mod tests {
         let mut expected = Vec::new();
         expected.extend_from_slice(PASTE_START);
         expected.extend_from_slice(text.as_bytes());
+        expected.extend_from_slice(PASTE_END);
+        expected.extend_from_slice(SUBMIT);
+        assert_eq!(framed, expected);
+    }
+
+    /// Claude Code holds back a prompt holding bidirectional isolates instead of sending it, so
+    /// none may reach the framed buffer — and an isolate in front of a slash command must not keep
+    /// it from being guarded, any more than a control character may.
+    #[test]
+    fn invisible_characters_are_stripped_before_the_slash_guard() {
+        let framed = frame_message("\u{2068}/clear\u{2069} the cache");
+        let mut expected = Vec::new();
+        expected.extend_from_slice(PASTE_START);
+        expected.extend_from_slice(b" /clear the cache");
         expected.extend_from_slice(PASTE_END);
         expected.extend_from_slice(SUBMIT);
         assert_eq!(framed, expected);

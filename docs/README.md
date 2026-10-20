@@ -332,17 +332,18 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Probing agent CLIs](memory/probing-agent-clis.md) — how to establish what the three agent CLIs actually do, and how
   to probe a live Octoboard session that launches them: which session markers to strip and why enumerating them beats
   matching a prefix, why neither `--help`, the binary's own strings, nor a config file's silent acceptance of a
-  capability's name can be trusted, how to settle a question without spending a model turn and where that stops being
-  yours to decide — substituting only the inference endpoint with a local stub where the question is what the agent
-  does, and driving a probe that goes through the daemon from a client of its own on the control WebSocket rather than
-  building the application — how to prove a per-launch injection and an MCP tool out of band rather than through the
-  model, why a probe expecting "no" needs a positive control and why a measured silence also has to be bounded by what
-  would have ended it, why a permission probe has to be set up against the user's own settings with the mode in effect
-  confirmed from the session itself, and the residue a probe leaves — in the user's configuration and in their live
-  `~/.octoboard` data — and how a probe that needs no logged-in agent avoids the latter with a throwaway
-  `HOME`/`TMPDIR`, using Codex's sign-in screen as session output, and how to put a fake agent CLI on `PATH` for an
-  isolated daemon so the real one does not launch instead, and which entries a throwaway config directory built as a
-  symlink farm has to own so the probe does not write through them into the user's own.
+  capability's name can be trusted, why the exact behaviour of a check Claude Code runs on an input is settled by
+  finding the code behind the symptom's wording in its executable and running it as an oracle, how to settle a question
+  without spending a model turn and where that stops being yours to decide — substituting only the inference endpoint
+  with a local stub where the question is what the agent does, and driving a probe that goes through the daemon from a
+  client of its own on the control WebSocket rather than building the application — how to prove a per-launch injection
+  and an MCP tool out of band rather than through the model, why a probe expecting "no" needs a positive control and why
+  a measured silence also has to be bounded by what would have ended it, why a permission probe has to be set up against
+  the user's own settings with the mode in effect confirmed from the session itself, and the residue a probe leaves — in
+  the user's configuration and in their live `~/.octoboard` data — and how a probe that needs no logged-in agent avoids
+  the latter with a throwaway `HOME`/`TMPDIR`, using Codex's sign-in screen as session output, and how to put a fake
+  agent CLI on `PATH` for an isolated daemon so the real one does not launch instead, and which entries a throwaway
+  config directory built as a symlink farm has to own so the probe does not write through them into the user's own.
 - [Building and launching the app for verification](memory/building-and-launching-the-app-for-verification.md) — how to
   build, launch and isolate the app for a verification: when to launch the real window, building the daemon and
   confirming the running sidecar's binary, `pnpm build:app` (a `tauri build` that cannot sign), `open` rather than

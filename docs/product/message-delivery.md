@@ -8,11 +8,33 @@ information shared by another session, a report panel form submission — and wh
 A session that is working, awaiting instructions or running in background takes a message straight away; every agent
 queues one written mid-turn and consumes it when the turn ends.
 
-**A message is not written verbatim.** Every control character except newline and tab is removed from its text, and a
-message that would otherwise begin with `/` is written with a single leading space, so it reaches the model as text
-instead of being run as one of the agent's own slash commands. This holds for everything Octoboard writes into a running
-session — an instruction, a report, a report panel form submission, information shared by another session — because all
-of them can be model-authored and none is reviewed first.
+**A message is not written verbatim.** Its text is reshaped in three steps, in this order:
+
+1. Every control character except newline and tab is removed.
+2. Every character Claude Code treats as invisible is removed. Claude Code does not send a prompt that holds one: it
+   removes them, leaves the cleaned text in its input box for the user to review and send, and starts no turn, so the
+   Enter Octoboard writes after the message would be spent on that hold and the message would sit unsent — one written
+   mid-turn included — while its sender was told it had been delivered. The usual carriers are the bidirectional
+   isolates (U+2068, U+2069) the UI wraps values in, which agents copy from what the UI shows. The set follows Claude
+   Code 2.1.304: U+00AD, U+034F, U+061C, U+115F, U+1160, U+17B4, U+17B5, U+180B–U+180F, U+200B–U+200F, U+2028–U+202E,
+   U+2060–U+206F, U+3164, U+FE00–U+FE0F, U+FEFF, U+FFA0, U+FFF0–U+FFFB, U+1107F, U+13430–U+1343F, U+16FE4,
+   U+1BCA0–U+1BCA3, U+1D173–U+1D17A and U+E0000–U+E0FFF. The line and paragraph separators (U+2028, U+2029) become
+   newlines instead. Inside emoji the characters Claude Code keeps are kept: a zero-width joiner between two
+   pictographs, a text or emoji presentation selector (U+FE0E, U+FE0F) right after an emoji, and one between a digit,
+   `#` or `*` and the keycap mark U+20E3. Claude Code's exceptions that depend on the surrounding script — a joiner
+   among Arabic or Indic letters, a zero-width space in Thai and similar scripts, a direction mark in a right-to-left
+   line — are not kept: those characters are removed. Nor is its exception for the England, Scotland and Wales tag
+   flags: their tag characters are removed, so each arrives as a plain black flag. Private-use and unassigned
+   characters, and format characters outside the set, pass through. The removal applies whatever the session's agent;
+   Codex and Grok Build have not been measured for such a hold.
+3. A message that would otherwise begin with `/` is written with a single leading space, so it reaches the model as
+   text instead of being run as one of the agent's own slash commands. The check is made on the text left after the
+   removals, so a removed character in front of a slash command does not keep it from being guarded.
+
+This holds for everything Octoboard writes into a running session — an instruction, a report, a report panel form
+submission, information shared by another session, the instruction `reopen_session` hands over — because all of them
+can be model-authored and none is reviewed first. Octoboard does not check that the agent submitted what it wrote: a
+message counts as delivered once it has been written.
 
 An instruction, a report or information shared by another session, for a session that **cannot** take one right now — it
 is waiting for the user at a permission prompt or a question — is queued rather than dropped, and delivered as soon as
