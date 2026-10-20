@@ -438,7 +438,7 @@ function ViewerContentBody({
     case "loading":
       return <Loading />;
     case "error":
-      return <Failure title={t("viewer.error")} message={content.message} />;
+      return <Failure title={t("viewer.error")} message={content.message} path={subject.path} />;
     case "disconnected":
       return <Disconnected what={content.what} />;
     case "file":
@@ -450,7 +450,7 @@ function ViewerContentBody({
           {content.body ? (
             <BodyView resetKey={key} name={name} body={content.body} theme={theme} />
           ) : content.message !== undefined ? (
-            <Failure title={t("viewer.error")} message={content.message} />
+            <Failure title={t("viewer.error")} message={content.message} path={subject.path} />
           ) : (
             <Loading />
           )}
@@ -460,6 +460,7 @@ function ViewerContentBody({
       return (
         <ChangeView
           resetKey={key}
+          path={subject.path}
           name={name}
           change={content.change}
           layout={layout}
@@ -540,6 +541,7 @@ function ImageView({
 
 function ChangeView({
   resetKey,
+  path,
   name,
   change,
   layout,
@@ -547,6 +549,7 @@ function ChangeView({
   theme,
 }: {
   resetKey: string;
+  path: string;
   name: string;
   change: ViewerChange;
   layout: DiffLayout;
@@ -618,7 +621,7 @@ function ChangeView({
       return <Unsupported message={t("viewer.change.binary")} sizes={[size(change.old), size(change.new)]} />;
     }
     case "unreadable":
-      return presentation.message !== undefined ? <Failure title={t("viewer.error")} message={presentation.message} /> : <Unreadable />;
+      return presentation.message !== undefined ? <Failure title={t("viewer.error")} message={presentation.message} path={path} /> : <Unreadable />;
   }
 }
 

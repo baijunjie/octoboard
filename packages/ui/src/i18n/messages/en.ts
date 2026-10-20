@@ -817,6 +817,13 @@ export const en = {
   // The read-only file viewer (`src/viewer/`).
   "viewer.loading": "Loading…",
   "viewer.error": "Could not open this file",
+  "viewer.error.invalidPath": "This is not a valid path in this project.",
+  "viewer.error.fileNotFound": "This file does not exist any more.",
+  "viewer.error.permissionDenied": "{appName} is not allowed to read this file: {detail}",
+  "viewer.error.outsideScope": "This file leads outside this project, so it is not shown.",
+  "viewer.error.unsupportedFileType": "This is not a regular file.",
+  "viewer.error.unmerged": "This file is in conflict, so it has no single version to read.",
+  "viewer.error.sourceChanged": "This file changed while it was being read.",
   "viewer.disconnected": "Daemon connection lost",
   "viewer.disconnected.file.description": "This file is read again when the connection is back.",
   "viewer.disconnected.change.description": "This change is read again when the connection is back.",

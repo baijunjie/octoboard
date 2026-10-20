@@ -313,7 +313,8 @@ last only while the project's pane stays in the right pane (see "Filtering by fi
 ## Errors
 
 A file or folder that cannot be shown says why, in the current language (see "What follows the language" in
-`docs/product/language.md`), naming the file or folder it is about by its path within the project. The cases:
+`docs/product/language.md`), naming the file or folder it is about by its path within the project — except where the
+file viewer's header already shows that path (see "Notices and stand-ins" in `docs/product/file-viewer.md`). The cases:
 
 | Situation | What the user is told |
 |---|---|

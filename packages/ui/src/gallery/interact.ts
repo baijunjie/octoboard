@@ -118,6 +118,7 @@ export interface Ui {
   /** Presses the control named `matcher` inside the card of the `kind` panel, for a name two panels
    * share (each has its own close), where `press` would take the first in the stack. */
   pressInPanel: (kind: PanelKind, matcher: Matcher) => Promise<void>;
+  pressInDiff: (matcher: Matcher) => Promise<void>;
   /** Presses every control named `matcher` that is there when the first appears, in document order:
    * for controls that keep one name whatever their state, such as the disclosures of a dialog's
    * options, where pressing the name twice would fold the first again. */
@@ -842,6 +843,15 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
         const card = doc.getElementById(panelId(kind));
         return card ? findAll(matcher, card)[0] : undefined;
       }, `Nothing to press matching ${String(matcher)} in the ${kind} panel`);
+    },
+    async pressInDiff(matcher) {
+      await clickWhenFound(() => {
+        for (const host of doc.querySelectorAll("*")) {
+          const found = host.shadowRoot && Array.from(host.shadowRoot.querySelectorAll<HTMLElement>("[data-expand-button], [role=button]")).find((element) => matches(matcher, nameOf(element)));
+          if (found) return found;
+        }
+        return undefined;
+      }, `Nothing to press matching ${String(matcher)} in the diff`);
     },
     async pressEach(matcher) {
       const controls = await waitFor(() => {

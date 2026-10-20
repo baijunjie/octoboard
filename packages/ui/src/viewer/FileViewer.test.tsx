@@ -4,13 +4,16 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../errorAlerts";
+import { DaemonRequestError } from "../daemon-client";
 import { isolate } from "../i18n/isolate";
+import { t } from "../i18n/language";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
 import { ThemeProvider } from "../theme";
 import { ChangeBodiesError, type ViewerChangeSide, type ViewerContent, type ViewerSubject } from "./content";
 import { diffLayout } from "./diffLayout";
 import { FileViewer, type ViewerNavigation } from "./FileViewer";
 import { ViewerHost } from "./viewerTestSupport";
+import { viewerErrorText } from "./viewerError";
 import { wordWrap } from "./wordWrap";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -52,7 +55,7 @@ vi.mock("./renderer", async () => {
       layout: string;
       wrap: boolean;
       onDrawn?: () => void;
-      loadBodies?: () => void;
+      loadBodies?: () => Promise<unknown>;
       onExpansion?: (status: unknown) => void;
     }) => {
       if (patch.includes("unrenderable")) throw new Error("The patch cannot be read");
@@ -61,6 +64,7 @@ vi.mock("./renderer", async () => {
           <Stand text={patch} wrap={wrap} onDrawn={onDrawn} />
           <button type="button" data-report="changed" onClick={() => onExpansion?.({ kind: "changed" })} />
           <button type="button" data-report="failed" onClick={() => onExpansion?.({ kind: "failed", message: "No luck." })} />
+          <button type="button" data-report="read-failed" onClick={() => void loadBodies?.().catch((error: Error) => onExpansion?.({ kind: "failed", message: error.message }))} />
         </div>
       );
     },
@@ -107,6 +111,22 @@ function show(subject: ViewerSubject | undefined, navigation?: ViewerNavigation,
     );
   });
 }
+
+it.each(["error", "conflict", "change"] as const)("does not repeat the header path in a %s failure", (state) => {
+  const path = "src/gone.ts";
+  const error = new DaemonRequestError("src/gone.ts does not exist any more.", "file_not_found", { path });
+  const content: ViewerContent = state === "error"
+    ? { state, message: error }
+    : state === "conflict"
+      ? { state, conflict: "Merge conflict", message: error }
+      : { state, change: { old: { state: "present", path, kind: "file" }, new: { state: "absent" }, unavailable: error } };
+  show({ key: state, path, content });
+  const dialog = document.querySelector("[role=dialog]")!;
+  expect(dialog.textContent).toContain("This file does not exist any more.");
+  expect(dialog.textContent?.match(/src\/gone\.ts/g)).toHaveLength(1);
+  expect(errorAlerts.getSnapshot()).toMatchObject([{ error }]);
+  expect(errorAlerts.getSnapshot()[0].error).toBe(error);
+});
 
 // The code surface draws through a lazily imported renderer. The import settles several microtask
 // hops after the first render that needs it (the module load, then two `.then`s), so a bare `await`
@@ -328,6 +348,29 @@ it("falls back to saying nothing changed when that content cannot be read", asyn
   await settled();
   expect(dialog()?.textContent).toContain(`Could not read this file's content. ${isolate("git failed")}`);
   expect(dialog()?.textContent).toContain("No differences");
+});
+
+it.each([false, true])("does not repeat the path when unchanged content fails to load, renamed %s", async (renamed) => {
+  const path = "src/gone.ts";
+  const side = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file" });
+  const message = viewerErrorText(t, new DaemonRequestError("gone", "file_not_found", { path }), path);
+  const loadBodies = () => Promise.reject(new ChangeBodiesError("failed", message));
+  show({ key: "missing-content", path, content: { state: "change", change: { old: side(renamed ? "src/old.ts" : path), new: side(path), patch: "", loadBodies } } });
+  await settled();
+  expect(dialog()?.textContent).toContain(`Could not read this file's content. ${isolate(message)}`);
+  expect(dialog()?.textContent?.match(/src\/gone\.ts/g)).toHaveLength(1);
+});
+
+it("does not repeat the path in an expansion failure", async () => {
+  const path = "src/gone.ts";
+  const side: ViewerChangeSide = { state: "present", path, kind: "file" };
+  const message = viewerErrorText(t, new DaemonRequestError("gone", "file_not_found", { path }), path);
+  const loadBodies = () => Promise.reject(new ChangeBodiesError("failed", message));
+  show({ key: "missing-lines", path, content: { state: "change", change: { old: side, new: side, patch: "@@ -1 +1 @@\n-a\n+b\n", loadBodies } } });
+  await settled();
+  await act(async () => dialog()!.querySelector<HTMLButtonElement>("[data-report=read-failed]")!.click());
+  expect(dialog()?.textContent).toContain(`Could not read the unmodified lines. ${isolate(message)}`);
+  expect(dialog()?.textContent?.match(/src\/gone\.ts/g)).toHaveLength(1);
 });
 
 // A joined patch holds both sides whole, so nothing in it is collapsed: offering to expand it would

@@ -143,6 +143,13 @@ same glyph as a failure notice so that neither is louder than the other, headed 
 reason under it (see "Errors" in `docs/product/project-pane.md`). The error alert announces it and requires
 acknowledgement.
 
+A reason the viewer gives for a read that failed — in an error or in a failure notice — does not repeat a path the
+header already shows: when the reason is about the file on screen, it speaks of "this file" instead. A reason about any
+other path, such as a parent folder or the path a rename came from, still names that path, and a reason the viewer
+does not recognise is shown as it arrived. For an error that fills the body, the error alert carries the full reason,
+path included, since it is read without the header beside it; a failure notice and its error alert carry the same
+shortened reason.
+
 ## A Markdown file as a document
 
 A Markdown file — one whose name ends in `.md` or `.markdown`, in any case — opens as a **rendered document**, and the

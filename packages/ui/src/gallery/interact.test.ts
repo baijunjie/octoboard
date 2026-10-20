@@ -189,6 +189,19 @@ it("pressInPanel presses the control of the panel it names and leaves the same n
   expect(pressed).toEqual(["panel-terminal"]);
 });
 
+it("pressInDiff presses the named control inside the diff renderer's shadow root", async () => {
+  document.body.innerHTML = "<button aria-label=\"Show unmodified lines above\"></button><div id=\"diff\"></div>";
+  const root = document.getElementById("diff")!.attachShadow({ mode: "open" });
+  root.innerHTML = "<div data-expand-button data-expand-up aria-label=\"Show unmodified lines above\"></div>";
+  const pressed: string[] = [];
+  document.querySelector("button")!.addEventListener("click", () => pressed.push("outside"));
+  root.querySelector("div")!.addEventListener("click", () => pressed.push("diff"));
+  const done = createUi(document, "en").pressInDiff("Show unmodified lines above");
+  await vi.advanceTimersByTimeAsync(500);
+  await done;
+  expect(pressed).toEqual(["diff"]);
+});
+
 it("pressWithModifier presses with the platform's shortcut modifier down and press without it", async () => {
   document.body.innerHTML = "<button>New session</button>";
   const seen: { meta: boolean; ctrl: boolean }[] = [];

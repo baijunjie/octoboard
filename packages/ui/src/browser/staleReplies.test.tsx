@@ -441,6 +441,20 @@ it("reads a change's whole bodies only when asked, from the versions its patch r
   expect(await loaded).toEqual({ old: "old\n", new: "new\n" });
 });
 
+it("omits the current path from a failed body read", async () => {
+  const { pending, loadBodies } = await openedChange();
+  const outcome = expect(loadBodies()).rejects.toMatchObject({ reason: "failed", message: "This file does not exist any more." });
+  await act(async () => pending[0].reject(new DaemonRequestError("gone", "file_not_found", { path: "a.ts" })));
+  await outcome;
+});
+
+it("keeps a different path in a failed body read", async () => {
+  const { pending, loadBodies } = await openedChange();
+  const outcome = expect(loadBodies()).rejects.toMatchObject({ reason: "failed", message: expect.stringContaining("previous-name.ts") });
+  await act(async () => pending[0].reject(new DaemonRequestError("gone", "file_not_found", { path: "previous-name.ts" })));
+  await outcome;
+});
+
 it.each([
   [{ code: "limit_exceeded", params: { limit: "file_bytes", size: "5242880", max: "4194304" } }, "unavailable"],
   [{ code: "unsupported_file_type", params: { file_type: "symlink" } }, "unavailable"],

@@ -4,7 +4,6 @@ import { createElement, useEffect, useRef, useState } from "react";
 import { InlineChip } from "../components/InlineChip";
 import { useLatest } from "../components/useLatest";
 import { DaemonRequestError } from "../daemon-client";
-import { errorText } from "../errorText";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
@@ -29,6 +28,7 @@ import {
   type ViewerContent,
   type ViewerSubject,
 } from "../viewer/content";
+import { viewerErrorText } from "../viewer/viewerError";
 import { displayWirePath } from "../wirePath";
 import { browseFailure } from "./browseError";
 import { CONFLICT_LABELS, SECTION_LABELS, type ChangeItem, type CommitRef, type ShownChange } from "./changes";
@@ -296,7 +296,7 @@ export function useChangeReader(project: string, onWorktreeGone?: () => void): C
           case "disconnected":
             throw new ChangeBodiesError("failed", t("viewer.expand.disconnected"));
           case "failed":
-            throw new ChangeBodiesError("failed", errorText(failure.message));
+            throw new ChangeBodiesError("failed", viewerErrorText(t, failure.message, item.path));
         }
       }
     };

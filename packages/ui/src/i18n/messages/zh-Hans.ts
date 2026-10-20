@@ -753,6 +753,13 @@ export const zhHans: Translation<"other"> = {
 
   "viewer.loading": "加载中…",
   "viewer.error": "无法打开此文件",
+  "viewer.error.invalidPath": "这不是此项目中的有效路径。",
+  "viewer.error.fileNotFound": "此文件已不存在。",
+  "viewer.error.permissionDenied": "{appName} 无权读取此文件：{detail}",
+  "viewer.error.outsideScope": "此文件指向项目之外，因此不显示。",
+  "viewer.error.unsupportedFileType": "这不是普通文件。",
+  "viewer.error.unmerged": "此文件存在冲突，没有单一版本可读取。",
+  "viewer.error.sourceChanged": "此文件在读取过程中发生了更改。",
   "viewer.disconnected": "与守护进程的连接已断开",
   "viewer.disconnected.file.description": "连接恢复后会重新读取此文件。",
   "viewer.disconnected.change.description": "连接恢复后会重新读取此更改。",
