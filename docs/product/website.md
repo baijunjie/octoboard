@@ -300,6 +300,14 @@ while it has room to scroll in that direction. At its top or bottom boundary, co
 scrolls the surrounding homepage. Horizontal gestures, gestures modified by Shift, Ctrl or Meta, and zoom retain
 their normal behavior. The standalone preview keeps native scrolling within the application.
 
+On touch screens the same handoff applies to a one-finger vertical drag, decided once per gesture from its first
+movement: if the embedded list, terminal, code or report can scroll in that direction, the drag scrolls it and never
+the homepage; otherwise the whole drag scrolls the homepage. Mostly horizontal drags, pinches and drags that start on
+a control that handles touches itself, such as a resize handle, are left alone. When a drag that scrolled the
+homepage ends while the finger is still moving, the homepage keeps gliding and slows to a stop, as native scrolling
+does; touching the screen again, using the wheel, reaching the top or bottom of the page or leaving the page ends the
+glide. Visitors who prefer reduced motion get no glide.
+
 When the embedded preview's container is 800 pixels wide or narrower, the application uses that width in a
 640-pixel-high viewport. Both the embedded and standalone previews support the application's responsive layout;
 on narrow screens the sidebar is a drawer, while the report and Files panels dock beside the terminal. The overview

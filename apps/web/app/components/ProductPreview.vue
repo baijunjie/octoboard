@@ -51,6 +51,43 @@ function syncFrameFocus() {
     frameFocused.value = document.activeElement === frame.value;
   }, 0);
 }
+// Release velocity arrives in px/ms. Each millisecond keeps 0.998 of it, iOS's normal deceleration.
+const flingFriction = 0.998;
+const flingStop = 0.02;
+const flingMax = 4;
+let flingFrame = 0;
+function stopFling() {
+  cancelAnimationFrame(flingFrame);
+  flingFrame = 0;
+}
+function startFling(initial: number) {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  let velocity = Math.max(-flingMax, Math.min(flingMax, initial));
+  let last = performance.now();
+  // Some engines scroll in whole pixels, so keep the fractional part for the next frame.
+  let remainder = 0;
+  const step = (now: number) => {
+    const elapsed = Math.min(Math.max(now - last, 0), 64);
+    last = now;
+    velocity *= flingFriction ** elapsed;
+    remainder += velocity * elapsed;
+    const whole = Math.trunc(remainder);
+    remainder -= whole;
+    const before = window.scrollY;
+    if (whole !== 0) window.scrollBy({ top: whole, behavior: "instant" });
+    const root = document.scrollingElement ?? document.documentElement;
+    // A mobile toolbar can make innerHeight disagree with the real viewport, so a whole step
+    // that moved nothing also marks the edge.
+    const atEdge =
+      (whole !== 0 && window.scrollY === before) ||
+      (velocity > 0
+        ? window.scrollY >= root.scrollHeight - window.innerHeight - 0.5
+        : window.scrollY <= 0.5);
+    flingFrame =
+      Math.abs(velocity) < flingStop || atEdge ? 0 : requestAnimationFrame(step);
+  };
+  flingFrame = requestAnimationFrame(step);
+}
 function receive(event: MessageEvent) {
   if (event.source !== frame.value?.contentWindow) return;
   if (
@@ -58,7 +95,16 @@ function receive(event: MessageEvent) {
     typeof event.data.deltaY === "number" &&
     Number.isFinite(event.data.deltaY)
   ) {
-    window.scrollBy({ top: event.data.deltaY, behavior: "instant" });
+    // Any message from the preview, a stop signal included, ends a glide in progress.
+    stopFling();
+    if (event.data.stop === true) return;
+    if (event.data.deltaY !== 0)
+      window.scrollBy({ top: event.data.deltaY, behavior: "instant" });
+    else if (
+      typeof event.data.velocity === "number" &&
+      Number.isFinite(event.data.velocity)
+    )
+      startFling(event.data.velocity);
     return;
   }
   if (event.data?.type === "octoboard-preview-ready") {
@@ -88,6 +134,8 @@ onMounted(() => {
   );
   observer.observe(host.value);
   window.addEventListener("message", receive);
+  window.addEventListener("wheel", stopFling, { passive: true });
+  window.addEventListener("touchstart", stopFling, { passive: true });
   window.addEventListener("blur", syncFrameFocus);
   window.addEventListener("focus", syncFrameFocus);
   document.addEventListener("focusin", syncFrameFocus);
@@ -97,6 +145,9 @@ onBeforeUnmount(() => {
   dimensions?.disconnect();
   observer?.disconnect();
   window.removeEventListener("message", receive);
+  window.removeEventListener("wheel", stopFling);
+  window.removeEventListener("touchstart", stopFling);
+  stopFling();
   clearTimeout(focusTimer);
   window.removeEventListener("blur", syncFrameFocus);
   window.removeEventListener("focus", syncFrameFocus);

@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { composePageDocument } from "../report/pageDocument";
 import {
-  installBoundaryWheelRelay,
+  installBoundaryScrollRelay,
   installPreviewScrollBridge,
   PREVIEW_SCROLL_MESSAGE,
   withReportScrollBridge,
@@ -40,9 +40,47 @@ function wheel(
   target.dispatchEvent(event);
   return event;
 }
+function touch(
+  type: string,
+  target: EventTarget,
+  points: [number, number][],
+  options: EventInit = {},
+  time?: number,
+) {
+  const event = new Event(type, {
+    bubbles: true,
+    composed: true,
+    cancelable: true,
+    ...options,
+  });
+  Object.defineProperty(event, "touches", {
+    value: points.map(([screenX, screenY]) => ({
+      clientX: screenX,
+      clientY: screenY,
+      screenX,
+      screenY,
+    })),
+  });
+  if (time !== undefined)
+    Object.defineProperty(event, "timeStamp", { value: time });
+  target.dispatchEvent(event);
+  return event;
+}
 function relay() {
   const send = vi.fn();
-  cleanups.push(installBoundaryWheelRelay(window, send));
+  cleanups.push(installBoundaryScrollRelay(window, send));
+  return send;
+}
+// Touch tests look at scroll deltas and velocity only; stop signals have their own test.
+function touchRelay() {
+  const send = vi.fn();
+  cleanups.push(
+    installBoundaryScrollRelay(window, (deltaY, velocity, stop) => {
+      if (stop) return;
+      if (velocity === undefined) send(deltaY);
+      else send(deltaY, velocity);
+    }),
+  );
   return send;
 }
 const reportDocument = () =>
@@ -133,12 +171,180 @@ describe("preview wheel boundary handoff", () => {
   });
   it("removes the capture listener on cleanup", () => {
     const send = vi.fn();
-    const cleanup = installBoundaryWheelRelay(window, send);
+    const cleanup = installBoundaryScrollRelay(window, send);
     cleanup();
     wheel(document.body, 40);
     expect(send).not.toHaveBeenCalled();
   });
 });
+
+describe("preview touch drag handoff", () => {
+  it("relays a boundary drag from its start, preventing native handling", () => {
+    const send = touchRelay();
+    touch("touchstart", document.body, [[10, 300]]);
+    expect(
+      touch("touchmove", document.body, [[10, 296]]).defaultPrevented,
+    ).toBe(false);
+    const moved = touch("touchmove", document.body, [[10, 280]]);
+    expect(moved.defaultPrevented).toBe(true);
+    touch("touchmove", document.body, [[10, 290]]);
+    touch("touchend", document.body, []);
+    expect(send.mock.calls.filter(([deltaY]) => deltaY !== 0)).toEqual([
+      [20],
+      [-10],
+    ]);
+  });
+  it("leaves a drag to the inner scroller and keeps that verdict after it reaches a boundary", () => {
+    const send = touchRelay();
+    const list = scroller(document.body, 100);
+    touch("touchstart", list, [[10, 300]]);
+    expect(touch("touchmove", list, [[10, 280]]).defaultPrevented).toBe(false);
+    list.scrollTop = 200;
+    expect(touch("touchmove", list, [[10, 250]]).defaultPrevented).toBe(false);
+    touch("touchend", list, []);
+    expect(send).not.toHaveBeenCalled();
+    // The reverse direction has room in the same scroller, so it is native again.
+    touch("touchstart", list, [[10, 300]]);
+    expect(touch("touchmove", list, [[10, 320]]).defaultPrevented).toBe(false);
+  });
+  it("keeps relaying after an inner scroller gains room mid-gesture", () => {
+    const send = touchRelay();
+    const list = scroller(document.body, 0);
+    touch("touchstart", list, [[10, 300]]);
+    touch("touchmove", list, [[10, 320]]);
+    list.scrollTop = 100;
+    touch("touchmove", list, [[10, 340]]);
+    expect(send.mock.calls).toEqual([[-20], [-20]]);
+  });
+  it("ignores mostly horizontal drags, multi-touch and non-cancelable moves", () => {
+    const send = touchRelay();
+    touch("touchstart", document.body, [[10, 300]]);
+    touch("touchmove", document.body, [[40, 290]]);
+    touch("touchmove", document.body, [[40, 200]]);
+    touch("touchend", document.body, []);
+    touch("touchstart", document.body, [[10, 300]]);
+    touch("touchstart", document.body, [
+      [10, 300],
+      [50, 300],
+    ]);
+    touch("touchmove", document.body, [[10, 200]]);
+    touch("touchend", document.body, []);
+    touch("touchstart", document.body, [[10, 300]]);
+    touch("touchmove", document.body, [[10, 200]], { cancelable: false });
+    touch("touchmove", document.body, [[10, 100]]);
+    expect(send).not.toHaveBeenCalled();
+  });
+  it("measures drags in screen coordinates, which do not move with the frame", () => {
+    const send = touchRelay();
+    touch("touchstart", document.body, [[10, 300]]);
+    touch("touchmove", document.body, [[10, 290]]);
+    // The frame scrolls under the finger: clientY jumps back while the finger steadily advances.
+    for (const screenY of [280, 270, 260]) {
+      const event = new Event("touchmove", { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "touches", {
+        value: [{ clientX: 10, clientY: 500, screenX: 10, screenY }],
+      });
+      document.body.dispatchEvent(event);
+    }
+    expect(send.mock.calls).toEqual([[10], [10], [10], [10]]);
+  });
+  it("posts the release velocity from the last 100ms of a relayed drag", () => {
+    const send = touchRelay();
+    touch("touchstart", document.body, [[10, 300]], {}, 0);
+    touch("touchmove", document.body, [[10, 280]], {}, 0);
+    touch("touchmove", document.body, [[10, 260]], {}, 50);
+    touch("touchmove", document.body, [[10, 240]], {}, 100);
+    touch("touchend", document.body, [], {}, 110);
+    expect(send.mock.calls.at(-1)).toEqual([0, 0.4]);
+    // Older samples fall out of the window.
+    send.mockClear();
+    touch("touchstart", document.body, [[10, 300]], {}, 0);
+    touch("touchmove", document.body, [[10, 200]], {}, 0);
+    touch("touchmove", document.body, [[10, 190]], {}, 150);
+    touch("touchmove", document.body, [[10, 180]], {}, 200);
+    touch("touchend", document.body, [], {}, 210);
+    expect(send.mock.calls.at(-1)).toEqual([0, 0.2]);
+  });
+  it("posts no velocity after a pause, a cancel or a native drag", () => {
+    const send = touchRelay();
+    touch("touchstart", document.body, [[10, 300]], {}, 0);
+    touch("touchmove", document.body, [[10, 280]], {}, 0);
+    touch("touchmove", document.body, [[10, 260]], {}, 50);
+    send.mockClear();
+    touch("touchend", document.body, [], {}, 400);
+    touch("touchstart", document.body, [[10, 300]], {}, 0);
+    touch("touchmove", document.body, [[10, 280]], {}, 0);
+    touch("touchmove", document.body, [[10, 260]], {}, 50);
+    touch("touchcancel", document.body, [], {}, 60);
+    const list = scroller(document.body, 100);
+    touch("touchstart", list, [[10, 300]], {}, 0);
+    touch("touchmove", list, [[10, 280]], {}, 0);
+    touch("touchmove", list, [[10, 260]], {}, 50);
+    touch("touchend", list, [], {}, 60);
+    expect(send.mock.calls.filter(([deltaY]) => deltaY === 0)).toEqual([]);
+  });
+  it("leaves drags on elements that opt out of vertical panning", () => {
+    const send = touchRelay();
+    const handle = document.createElement("div");
+    const pannable = document.createElement("div");
+    document.body.append(handle, pannable);
+    // jsdom does not compute touch-action, so the test supplies it through a data attribute.
+    const getComputedStyle = window.getComputedStyle.bind(window);
+    vi.spyOn(window, "getComputedStyle").mockImplementation((element) => {
+      const style = getComputedStyle(element);
+      const touchAction = (element as HTMLElement).dataset?.touchAction;
+      return touchAction ? ({ ...style, touchAction, overflowY: "visible" } as CSSStyleDeclaration) : style;
+    });
+    handle.dataset.touchAction = "none";
+    pannable.dataset.touchAction = "pan-y";
+    touch("touchstart", handle, [[10, 300]]);
+    touch("touchmove", handle, [[10, 280]]);
+    touch("touchend", handle, []);
+    expect(send).not.toHaveBeenCalled();
+    touch("touchstart", pannable, [[10, 300]]);
+    touch("touchmove", pannable, [[10, 280]]);
+    expect(send).toHaveBeenCalledExactlyOnceWith(20);
+  });
+  it("signals a stop on every touchstart, including multi-touch", () => {
+    const send = vi.fn();
+    cleanups.push(installBoundaryScrollRelay(window, send));
+    touch("touchstart", document.body, [[10, 300]]);
+    touch("touchstart", document.body, [
+      [10, 300],
+      [50, 300],
+    ]);
+    expect(send.mock.calls).toEqual([
+      [0, undefined, true],
+      [0, undefined, true],
+    ]);
+  });
+  it("removes the touch listeners on cleanup", () => {
+    const send = vi.fn();
+    installBoundaryScrollRelay(window, send)();
+    touch("touchstart", document.body, [[10, 300]]);
+    touch("touchmove", document.body, [[10, 200]]);
+    expect(send).not.toHaveBeenCalled();
+  });
+});
+
+// A preview window with the bridge installed and one injected report iframe inside it.
+async function liveReport() {
+  const preview = document.createElement("iframe");
+  document.body.appendChild(preview);
+  const child = preview.contentWindow!;
+  child.document.body.innerHTML = '<div class="website-preview-app"></div>';
+  const wrapper = child.document.body.firstElementChild!;
+  const send = vi
+    .spyOn(child.parent, "postMessage")
+    .mockImplementation(() => {});
+  const cleanup = installPreviewScrollBridge(child);
+  cleanups.push(cleanup);
+  const frame = child.document.createElement("iframe");
+  frame.srcdoc = withReportScrollBridge(reportDocument());
+  wrapper.appendChild(frame);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  return { child, wrapper, frame, send, cleanup };
+}
 
 describe("sample report relay", () => {
   it("only injects once into the known nonce-protected fixture", () => {
@@ -153,9 +359,9 @@ describe("sample report relay", () => {
         source.replaceAll("data-website-preview-report", "other-report"),
       ),
     ).toBe(source.replaceAll("data-website-preview-report", "other-report"));
-    expect(
-      withReportScrollBridge("<body data-website-preview-report>"),
-    ).toBe("<body data-website-preview-report>");
+    expect(withReportScrollBridge("<body data-website-preview-report>")).toBe(
+      "<body data-website-preview-report>",
+    );
   });
   it("serializes executable code with no module closure dependencies", () => {
     const injected = withReportScrollBridge(reportDocument())!;
@@ -178,6 +384,60 @@ describe("sample report relay", () => {
       { type: "octoboard-preview-report-scroll", deltaY: -27 },
       "*",
     );
+    send.mockClear();
+    for (const type of [
+      "touchstart",
+      "touchmove",
+      "touchend",
+      "touchcancel",
+    ] as const) {
+      const touchListener = add.mock.calls.find(([name]) => name === type)![1];
+      cleanups.push(() =>
+        window.removeEventListener(type, touchListener, true),
+      );
+    }
+    touch("touchstart", document.body, [[10, 300]]);
+    touch("touchmove", document.body, [[10, 270]]);
+    expect(send).toHaveBeenCalledWith(
+      { type: "octoboard-preview-report-scroll", deltaY: 30 },
+      "*",
+    );
+  });
+  it("forwards a report's release velocity and rejects invalid ones", async () => {
+    const { child, frame, send } = await liveReport();
+    const message = (deltaY: unknown, velocity?: unknown) =>
+      child.dispatchEvent(
+        new MessageEvent("message", {
+          source: frame.contentWindow,
+          data: { type: "octoboard-preview-report-scroll", deltaY, velocity },
+        }),
+      );
+    message(0);
+    message(0, Infinity);
+    message(0, "1");
+    expect(send).not.toHaveBeenCalled();
+    message(0, 0.5);
+    expect(send).toHaveBeenCalledExactlyOnceWith(
+      { type: PREVIEW_SCROLL_MESSAGE, deltaY: 0, velocity: 0.5 },
+      "*",
+    );
+    send.mockClear();
+    const stopMessage = (stop: unknown) =>
+      child.dispatchEvent(
+        new MessageEvent("message", {
+          source: frame.contentWindow,
+          data: { type: "octoboard-preview-report-scroll", deltaY: 0, stop },
+        }),
+      );
+    stopMessage(false);
+    stopMessage("true");
+    stopMessage(1);
+    expect(send).not.toHaveBeenCalled();
+    stopMessage(true);
+    expect(send).toHaveBeenCalledExactlyOnceWith(
+      { type: PREVIEW_SCROLL_MESSAGE, deltaY: 0, stop: true },
+      "*",
+    );
   });
   it("leaves independently opened previews and their reports untouched", () => {
     const report = document.createElement("iframe");
@@ -189,20 +449,7 @@ describe("sample report relay", () => {
     expect(report.srcdoc).not.toContain("data-website-preview-scroll-bridge");
   });
   it("validates live report sources without rewriting their documents and cleans up", async () => {
-    const preview = document.createElement("iframe");
-    document.body.appendChild(preview);
-    const child = preview.contentWindow!;
-    child.document.body.innerHTML = '<div class="website-preview-app"></div>';
-    const wrapper = child.document.body.firstElementChild!;
-    const send = vi
-      .spyOn(child.parent, "postMessage")
-      .mockImplementation(() => {});
-    const cleanup = installPreviewScrollBridge(child);
-    cleanups.push(cleanup);
-    const frame = child.document.createElement("iframe");
-    frame.srcdoc = withReportScrollBridge(reportDocument());
-    wrapper.appendChild(frame);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    const { child, frame, send, wrapper, cleanup } = await liveReport();
     const injected = frame.srcdoc;
     expect(injected).toContain("data-website-preview-scroll-bridge");
     await new Promise((resolve) => setTimeout(resolve, 0));
