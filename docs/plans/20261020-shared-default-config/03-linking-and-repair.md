@@ -22,6 +22,15 @@
 - [ ] Hook the pending change and the repair into the launch and resume path of every agent, a switch to the account
       included.
 
+## Handoff
+
+- A shared Codex state database names a rollout by whichever account's path wrote it — Codex records an absolute path
+  through the running account's `sessions/` link, and an account switch leaves a row alone when it already names the
+  carried rollout by another account's route. Turning an account's sharing off replaces its `sessions/` link with an
+  empty directory, so every row naming a rollout through that account's link would then name a missing file for the
+  accounts still sharing. Turning off has to account for this (for example by rewriting such rows to the default
+  directory's path), and a test should cover it.
+
 ## Notes for the developer
 
 - **Reusable capabilities**: the account store and its protocol requests; the launch path every adapter shares; the

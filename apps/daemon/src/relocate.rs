@@ -170,7 +170,10 @@ const DATABASE_PATIENCE: std::time::Duration = std::time::Duration::from_secs(5)
 /// (title, pin, section, project) and the rows other tables keep of the thread (links, tools) stay
 /// as the user left them. The path written is the head's in the target without any `.zst`, the
 /// form Codex keeps for a rollout it has compressed. A home with no row of the thread has nothing
-/// to point.
+/// to point, and neither has one whose row names no path or already names that same file: the
+/// path it names and the head resolve to one file when the two accounts share `sessions/` and the
+/// database, and a row that names another file is pointed even if the database is shared (two
+/// homes may keep one database without sharing their rollouts).
 ///
 /// `launch_env` is the environment the relaunch will see, which with the home's `config.toml` says
 /// where the home keeps its database ([`database_directory`]). A switch fails
@@ -226,9 +229,6 @@ fn repoint_within(
     };
     for entry in entries {
         let entry = entry.map_err(listing)?;
-        if !entry.file_type().map_err(listing)?.is_file() {
-            continue;
-        }
         // `state_<n>.sqlite`: the number is Codex's schema generation, which a newer Codex may
         // raise.
         let path = entry.path();
@@ -237,10 +237,25 @@ fn repoint_within(
             .and_then(|name| name.to_str())
             .and_then(|name| name.strip_prefix("state_")?.strip_suffix(".sqlite"))
             .is_some_and(|n| !n.is_empty() && n.bytes().all(|byte| byte.is_ascii_digit()));
-        if is_database {
-            repoint_in(&path, thread, &rollout, patience)
-                .map_err(|err| failed(format!("updating `{}` failed: {err}", path.display())))?;
+        if !is_database {
+            continue;
         }
+        // A link counts when it leads to a file (an account sharing its database with the default
+        // account links it), and a dangling one is no database. A link that cannot be followed
+        // for another reason fails the switch: it is the database, and its row cannot be checked.
+        match std::fs::metadata(&path) {
+            Ok(metadata) if metadata.is_file() => {}
+            Ok(_) => continue,
+            Err(err) if err.kind() == io::ErrorKind::NotFound => continue,
+            Err(err) => {
+                return Err(failed(format!(
+                    "inspecting `{}` failed: {err}",
+                    path.display()
+                )))
+            }
+        }
+        repoint_in(&path, thread, &rollout, patience)
+            .map_err(|err| failed(format!("updating `{}` failed: {err}", path.display())))?;
     }
     Ok(())
 }
@@ -307,13 +322,38 @@ fn repoint_in(
         )
         .optional()?
         .is_some();
-    if has_table {
+    if !has_table {
+        return Ok(());
+    }
+    let named: Option<Option<String>> = connection
+        .query_row(
+            "SELECT rollout_path FROM threads WHERE id = ?1",
+            [thread],
+            |row| row.get(0),
+        )
+        .optional()?;
+    // A row that already names the rollout, by whatever route, is left as it is.
+    // A row with no path names no rollout to compare, so it is left alone.
+    if named
+        .flatten()
+        .is_some_and(|named| resolved(Path::new(&named)) != resolved(rollout))
+    {
         connection.execute(
-            "UPDATE threads SET rollout_path = ?1 WHERE id = ?2 AND rollout_path <> ?1",
+            "UPDATE threads SET rollout_path = ?1 WHERE id = ?2",
             rusqlite::params![rollout.to_string_lossy(), thread],
         )?;
     }
     Ok(())
+}
+
+/// The path a rollout is found at, with the links of its directory resolved. The file itself is
+/// not looked up, as the path written for a compressed rollout names one that need not exist; a
+/// directory that cannot be resolved leaves the path as written.
+fn resolved(path: &Path) -> PathBuf {
+    match (path.parent().map(std::fs::canonicalize), path.file_name()) {
+        (Some(Ok(parent)), Some(name)) => parent.join(name),
+        _ => path.to_path_buf(),
+    }
 }
 
 fn search(
@@ -1043,13 +1083,304 @@ mod tests {
     fn a_shared_directory_is_left_alone() {
         let dir = temp_dir("shared");
         write(&dir, "projects/slug/claude-id.jsonl", "conversation");
+        let before = inode(&dir, "projects/slug/claude-id.jsonl");
 
         copy(&dir, &dir, Path::new("projects/slug/claude-id.jsonl"), &[]).expect("nothing to do");
 
+        assert_eq!(inode(&dir, "projects/slug/claude-id.jsonl"), before);
         assert_eq!(
             std::fs::read_to_string(dir.join("projects/slug/claude-id.jsonl")).unwrap(),
             "conversation"
         );
+    }
+
+    /// Makes each of `names` in `account` a link to a directory of the same name in `default`, the
+    /// way an account shares its conversation directories with the agent's default account.
+    fn share(account: &Path, default: &Path, names: &[&str]) {
+        for name in names {
+            std::fs::create_dir_all(default.join(name)).unwrap();
+            std::os::unix::fs::symlink(default.join(name), account.join(name)).unwrap();
+        }
+    }
+
+    /// What a switch of the session does to the files: locate, collect the companions, copy.
+    fn carry(agent: Agent, source: &Path, target: &Path, id: &str) -> PathBuf {
+        let record = locate(agent, source, id).expect("found");
+        let companions = companions(agent, source, &record, id);
+        copy(source, target, &record, &companions).expect("copied");
+        record
+    }
+
+    /// The inode a path resolves to: a replaced item, even with the same content, has another.
+    fn inode(root: &Path, relative: &str) -> u64 {
+        use std::os::unix::fs::MetadataExt;
+        std::fs::metadata(root.join(relative)).unwrap().ino()
+    }
+
+    fn read(root: &Path, relative: &str) -> String {
+        std::fs::read_to_string(root.join(relative)).unwrap()
+    }
+
+    /// Claude Code accounts that share `projects/` and `file-history/` hold the one conversation
+    /// already: a switch copies nothing and the transcript, sidecar directory and checkpoints stay
+    /// as they were. Sharing only `projects/` copies the checkpoints alone.
+    #[test]
+    fn claude_accounts_sharing_their_directories_copy_only_what_is_not_shared() {
+        let record = format!("projects/slug/{CLAUDE_ID}.jsonl");
+        let sidecar = format!("projects/slug/{CLAUDE_ID}/tool-results/r.txt");
+        let checkpoint = format!("file-history/{CLAUDE_ID}/0123@v1");
+        for (shared, checkpoints_copied) in [
+            (&["projects", "file-history"][..], false),
+            (&["projects"][..], true),
+        ] {
+            let default = temp_dir("claude-shared-default");
+            let source = temp_dir("claude-shared-source");
+            let target = temp_dir("claude-shared-target");
+            share(&source, &default, shared);
+            share(&target, &default, shared);
+            write(&source, &record, "conversation");
+            write(&source, &sidecar, "result");
+            write(&source, &checkpoint, "checkpoint");
+            let sidecar_dir = format!("projects/slug/{CLAUDE_ID}");
+            let checkpoint_dir = format!("file-history/{CLAUDE_ID}");
+            let items = [&record, &sidecar_dir, &checkpoint_dir];
+            let before = items.map(|item| inode(&source, item));
+
+            carry(Agent::Claude, &source, &target, CLAUDE_ID);
+
+            assert_eq!(items.map(|item| inode(&source, item)), before, "{shared:?}");
+            for (file, content) in [
+                (&record, "conversation"),
+                (&sidecar, "result"),
+                (&checkpoint, "checkpoint"),
+            ] {
+                assert_eq!(read(&source, file), content, "{shared:?} {file}");
+            }
+            // Only an unshared account ends up with checkpoints in a directory of its own.
+            let own_checkpoints = std::fs::symlink_metadata(target.join("file-history"))
+                .is_ok_and(|metadata| metadata.is_dir());
+            assert_eq!(own_checkpoints, checkpoints_copied, "{shared:?}");
+            if checkpoints_copied {
+                assert_eq!(read(&target, &checkpoint), "checkpoint");
+            }
+            assert!(!target.join(STAGING).exists(), "{shared:?} left staging");
+        }
+    }
+
+    /// A switch from a sharing account to one that does not share puts the conversation in the
+    /// target's own real directories; the other way, it is copied through the target's links into
+    /// the default account's directories.
+    #[test]
+    fn a_switch_between_a_sharing_and_a_non_sharing_account_copies_either_way() {
+        let record = format!("projects/slug/{CLAUDE_ID}.jsonl");
+        let checkpoint = format!("file-history/{CLAUDE_ID}/0123@v1");
+        let names = ["projects", "file-history"];
+
+        let default = temp_dir("mixed-default");
+        let sharing = temp_dir("mixed-sharing");
+        let own = temp_dir("mixed-own");
+        share(&sharing, &default, &names);
+        write(&sharing, &record, "conversation");
+        write(&sharing, &checkpoint, "checkpoint");
+        carry(Agent::Claude, &sharing, &own, CLAUDE_ID);
+        for file in [&record, &checkpoint] {
+            assert!(own.join(file).is_file(), "{file}");
+        }
+
+        let default = temp_dir("mixed-default-back");
+        let sharing = temp_dir("mixed-sharing-back");
+        share(&sharing, &default, &names);
+        carry(Agent::Claude, &own, &sharing, CLAUDE_ID);
+        for (file, content) in [(&record, "conversation"), (&checkpoint, "checkpoint")] {
+            assert_eq!(read(&default, file), content, "{file}");
+        }
+        assert!(!sharing.join(STAGING).exists());
+    }
+
+    /// Codex accounts that share `sessions/` hold the whole chain of rollouts already, compressed
+    /// segment included: nothing is copied and every rollout is as it was.
+    #[test]
+    fn codex_accounts_sharing_their_sessions_copy_nothing() {
+        use std::os::unix::fs::MetadataExt;
+        let stamp = |file: &PathBuf| {
+            (
+                std::fs::read(file).unwrap(),
+                std::fs::metadata(file).unwrap().ino(),
+            )
+        };
+        let default = temp_dir("codex-shared-default");
+        let source = temp_dir("codex-shared-source");
+        let target = temp_dir("codex-shared-target");
+        share(&source, &default, &["sessions"]);
+        share(&target, &default, &["sessions"]);
+        let chain = crate::test_support::codex_chain(&source, CODEX_ID, true);
+        let before: Vec<(Vec<u8>, u64)> = chain.all().iter().map(stamp).collect();
+
+        carry(Agent::Codex, &source, &target, CODEX_ID);
+
+        let after: Vec<(Vec<u8>, u64)> = chain.all().iter().map(stamp).collect();
+        assert_eq!(before, after);
+        assert!(!target.join(STAGING).exists());
+    }
+
+    /// Grok Build accounts that share `sessions/` copy nothing and the session directory stays.
+    #[test]
+    fn grok_accounts_sharing_their_sessions_copy_nothing() {
+        let default = temp_dir("grok-shared-default");
+        let source = temp_dir("grok-shared-source");
+        let target = temp_dir("grok-shared-target");
+        share(&source, &default, &["sessions"]);
+        share(&target, &default, &["sessions"]);
+        write(
+            &source,
+            "sessions/enc/grok-id/messages.jsonl",
+            "conversation",
+        );
+
+        let before = inode(&source, "sessions/enc/grok-id");
+
+        carry(Agent::Grok, &source, &target, "grok-id");
+
+        assert_eq!(inode(&source, "sessions/enc/grok-id"), before);
+        assert_eq!(
+            read(&source, "sessions/enc/grok-id/messages.jsonl"),
+            "conversation"
+        );
+        assert!(!target.join(STAGING).exists());
+    }
+
+    fn head_of(home: &Path) -> (crate::test_support::CodexChain, PathBuf) {
+        let chain = crate::test_support::codex_chain(home, CODEX_ID, true);
+        let relative = chain.head.strip_prefix(home).unwrap().to_path_buf();
+        (chain, relative)
+    }
+
+    fn row_of(database: &Path) -> Option<String> {
+        rusqlite::Connection::open(database)
+            .unwrap()
+            .query_row(
+                "SELECT rollout_path FROM threads WHERE id = ?1",
+                [CODEX_ID],
+                |row| row.get(0),
+            )
+            .unwrap()
+    }
+
+    /// Makes `path` a database whose row of the thread names `rollout` (no path when `None`).
+    fn database_naming(path: &Path, rollout: Option<&str>) {
+        let connection = rusqlite::Connection::open(path).unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE IF NOT EXISTS threads (id TEXT PRIMARY KEY, rollout_path TEXT)",
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT OR REPLACE INTO threads VALUES (?1, ?2)",
+                rusqlite::params![CODEX_ID, rollout],
+            )
+            .unwrap();
+    }
+
+    fn point_head(target: &Path, head: &Path, env: &[(&str, &Path)]) {
+        let env = env
+            .iter()
+            .map(|(key, value)| (key.to_string(), value.to_string_lossy().into_owned()))
+            .collect();
+        repoint_within(
+            Agent::Codex,
+            target,
+            head,
+            CODEX_ID,
+            &env,
+            std::time::Duration::from_millis(50),
+        )
+        .unwrap();
+    }
+
+    fn uncompressed(path: &Path) -> String {
+        path.with_extension("").to_string_lossy().into_owned()
+    }
+
+    /// A Codex row is rewritten only when the rollout it names is another file than the head:
+    /// left alone when it names the head by another route (both accounts link `sessions/` and the
+    /// database file into the default's) or names no path, pointed at the head when it names an
+    /// older segment of a shared `sessions/`, and when the database is shared but `sessions/` is
+    /// not (two homes given one `CODEX_SQLITE_HOME`).
+    #[test]
+    fn a_row_is_rewritten_only_when_it_names_another_file_than_the_head() {
+        // Both link `sessions/` and the database file: the row names the source's head, which is
+        // the target's head.
+        let default = temp_dir("row-linked-default");
+        let (source, target) = (temp_dir("row-linked-source"), temp_dir("row-linked-target"));
+        share(&source, &default, &["sessions"]);
+        share(&target, &default, &["sessions"]);
+        let (chain, head) = head_of(&source);
+        let linked = default.join("state_5.sqlite");
+        let named = uncompressed(&chain.head);
+        database_naming(&linked, Some(&named));
+        for home in [&source, &target] {
+            std::os::unix::fs::symlink(&linked, home.join("state_5.sqlite")).unwrap();
+        }
+        point_head(&target, &head, &[]);
+        assert_eq!(row_of(&linked), Some(named));
+
+        // A row with no path is left alone.
+        database_naming(&linked, None);
+        point_head(&target, &head, &[]);
+        assert_eq!(row_of(&linked), None);
+
+        // One database, `sessions/` not shared: the row names the source's file, another file.
+        let (source, target) = (temp_dir("row-own-source"), temp_dir("row-own-target"));
+        let (chain, head) = head_of(&source);
+        head_of(&target);
+        let shared_database = temp_dir("row-shared-database");
+        let database = shared_database.join("state_5.sqlite");
+        database_naming(&database, Some(&uncompressed(&chain.head)));
+        point_head(&target, &head, &[("CODEX_SQLITE_HOME", &shared_database)]);
+        assert_eq!(row_of(&database), Some(uncompressed(&target.join(&head))));
+
+        // `sessions/` shared, the target's own database names an older segment of the chain.
+        let default = temp_dir("row-older-default");
+        let (source, target) = (temp_dir("row-older-source"), temp_dir("row-older-target"));
+        share(&source, &default, &["sessions"]);
+        share(&target, &default, &["sessions"]);
+        let (chain, head) = head_of(&source);
+        let database = target.join("state_5.sqlite");
+        database_naming(&database, Some(&uncompressed(&chain.middle)));
+        point_head(&target, &head, &[]);
+        assert_eq!(row_of(&database), Some(uncompressed(&target.join(&head))));
+    }
+
+    /// Of what a home's database directory holds, a `state_<n>.sqlite` that is a link to a file is
+    /// a database (an account sharing its database with the default account links it), and a link
+    /// to nothing is not; anything else is never looked at, a link that cannot be followed
+    /// included.
+    #[test]
+    fn the_database_scan_follows_a_linked_file_and_ignores_what_is_not_one() {
+        // A source of its own, a target linking `sessions/` and the database file: the chain is
+        // carried in through the link, and the row, naming an older segment, is pointed at it.
+        let default = temp_dir("scan-default");
+        let (source, target) = (temp_dir("scan-source"), temp_dir("scan-target"));
+        share(&target, &default, &["sessions"]);
+        let (chain, _) = head_of(&source);
+        let linked = default.join("state_5.sqlite");
+        database_naming(&linked, Some(&uncompressed(&chain.middle)));
+        std::os::unix::fs::symlink(&linked, target.join("state_5.sqlite")).unwrap();
+        let head = carry(Agent::Codex, &source, &target, CODEX_ID);
+        // A link that loops, and is no database, does not fail the switch.
+        std::os::unix::fs::symlink("loop", target.join("loop")).unwrap();
+        point_head(&target, &head, &[]);
+        assert_eq!(row_of(&linked), Some(uncompressed(&target.join(&head))));
+
+        // A link to nothing is no database.
+        let dangling = temp_dir("scan-dangling");
+        std::os::unix::fs::symlink(
+            dangling.join("gone.sqlite"),
+            dangling.join("state_5.sqlite"),
+        )
+        .unwrap();
+        point_head(&dangling, &head, &[]);
     }
 
     /// A copy that cannot complete is a failure with nothing half-written left behind, whether the

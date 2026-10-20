@@ -119,16 +119,25 @@ came from:
   head's path in the target (without a `.zst` ending, the form Codex keeps for a compressed rollout), where the row
   names another file. Nothing else is changed: the row's other columns and the rows other tables keep of the thread
   are left as they are, so the older branch's title and preview stay on the row. An account with no row of the
-  thread, no database, or none with a thread table has nothing to point.
+  thread, a row that names no path, no database, or none with a thread table has nothing to point.
+  - **Whether the row names another file** is decided by where the two paths lead, not by their text: the
+    directories along each are resolved, links included, and the file names compared. A row that reaches the head by
+    another route — through another account's directory that links to the same `sessions/`, for one — is left as it
+    is. A row that leads to another file is pointed even when the accounts keep one database between them (the same
+    `CODEX_SQLITE_HOME`, say) but not one `sessions/`; that database's row then names the target's copy.
   - **Where the database is**: the directory `sqlite_home` names in the target's `config.toml` (a relative one taken
     against the account's directory, a leading `~` as the home directory in the user's shell environment), else
     `CODEX_SQLITE_HOME` in that environment, else the account's directory. A directory that does not exist holds no
     database.
+  - **Which entries are databases**: those of that directory named `state_<n>.sqlite` that are files, or symbolic
+    links to files. One named so that is a link to nothing, or to something other than a file, is not a database.
+    No other entry of the directory is looked at, so an unrelated link there that cannot be followed does not affect
+    the switch.
   - **Rather than risk resuming the older branch unnoticed, the switch fails** (see "When a switch fails" below) when
     where the database is cannot be determined (a `config.toml` that cannot be read or parsed, a relative
-    `CODEX_SQLITE_HOME`, a directory that cannot be listed), or when a database cannot be opened or written to, or
-    stays busy for 5 seconds. The conversation is already copied by then and stays in the target, and the failure
-    says so.
+    `CODEX_SQLITE_HOME`, a directory that cannot be listed), when an entry named `state_<n>.sqlite` cannot be
+    inspected, or when a database cannot be opened or written to, or stays busy for 5 seconds. The conversation is
+    already copied by then and stays in the target, and the failure says so.
 
   This is the one thing a switch writes to an agent's own state besides the copied conversation.
 - **Codex subagents' rollouts stay behind.** A subagent the session spawned is a thread of its own, with a rollout
@@ -146,7 +155,10 @@ came from:
   The staging directory is removed again either way. Should an earlier copy fail to be put back, it is left in the
   staging directory and the failure says where; it stays there only until Octoboard's daemon next starts or the
   session is next switched into that account, either of which clears it.
-- An item that is the same file in both accounts, as when two accounts share a directory, has nothing to copy.
+- **An item that is the same file in both accounts is skipped**, item by item: its path in the account it came from
+  and its path in the target are compared by where each resolves, links included, so when both accounts' directories
+  holding it link to the same place, it is left as it is and not copied. The other items are copied as above; when
+  every item is skipped, nothing is copied and no staging directory is made.
 
 ## When a switch fails
 

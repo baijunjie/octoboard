@@ -55,6 +55,6 @@ account's login.
 ## Milestones
 
 - [01 Shareable item catalog](01-shareable-item-catalog.md)
-- [02 Account switch over shared conversations](02-account-switch-over-shared-conversations.md)
+- 02 Account switch over shared conversations (closed)
 - [03 Linking, restoring and launch-time repair](03-linking-and-repair.md)
 - [04 Account settings switch](04-account-settings-switch.md)

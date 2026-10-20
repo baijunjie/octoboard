@@ -42,7 +42,7 @@ This is the guarantee the whole design rests on:
   home (or wherever the home's `sqlite_home` setting or `CODEX_SQLITE_HOME` puts it) and resumes the rollout that
   database names, so a target account that held the thread earlier would resume an older branch of it however whole
   the copied conversation is. The switch therefore updates the `rollout_path` that database keeps of that thread to
-  the carried head, and changes nothing else in it; if it cannot, the switch fails before the session is relaunched
+  the carried head where it leads to another file, and changes nothing else in it; if it cannot, the switch fails before the session is relaunched
   (see "Carrying the conversation" in `docs/product/switching-session-accounts.md`). The third is Grok Build's trust
   store: once Grok's own trust confirmation has been accepted, the one entry Grok wrote into its session's copy of the
   store is carried, unchanged, into the user's own (see "Carrying Grok Build's trust record" in
