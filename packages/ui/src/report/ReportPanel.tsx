@@ -1,4 +1,4 @@
-import { Button } from "@heroui/react";
+import { Button } from "../components/Button";
 import { errorPresentation } from "../errorPresentation";
 import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -143,7 +143,7 @@ export function ReportPanel({
           <TitledControl title={t("report.previous")}>
             <Button
               isIconOnly
-              size="sm"
+              size="xs"
               variant="ghost"
               className={ROW_ICON_BUTTON_CLASS}
               aria-label={t("report.previous")}
@@ -162,7 +162,7 @@ export function ReportPanel({
           <TitledControl title={t("report.next")}>
             <Button
               isIconOnly
-              size="sm"
+              size="xs"
               variant="ghost"
               className={ROW_ICON_BUTTON_CLASS}
               aria-label={t("report.next")}

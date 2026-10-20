@@ -1,7 +1,7 @@
-import { Button } from "@heroui/react";
 import React from "react";
 import type { PressEvent } from "react-aria";
 
+import { Button } from "./Button";
 import { TitledControl } from "./TitledControl";
 
 /** The hover and pressed fills of a control on the window chrome: translucent tints (`style.css`), so

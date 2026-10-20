@@ -1,6 +1,7 @@
-import { Button, Spinner } from "@heroui/react";
+import { Spinner } from "@heroui/react";
 import React, { useEffect, useRef, useState } from "react";
 
+import { Button } from "../components/Button";
 import { AGENT_LABEL, defaultAccountName } from "../agents";
 import { codedMessageNode } from "../components/DaemonErrorMessage";
 import { ExternalLink } from "../components/ExternalLink";

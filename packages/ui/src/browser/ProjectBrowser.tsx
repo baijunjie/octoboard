@@ -1,8 +1,9 @@
-import { Button, Spinner, Tabs } from "@heroui/react";
+import { Spinner, Tabs } from "@heroui/react";
 import { FolderX, RefreshCw, SearchX } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Key } from "react-aria-components";
 
+import { Button } from "../components/Button";
 import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { ErrorAlert } from "../components/ErrorAlert";
@@ -254,7 +255,7 @@ export function ProjectBrowser({
                   byCommit={mode === "git" ? { value: browser.byCommit, onChange: browser.setByCommit } : undefined}
                 />
                 <TitledControl title={t("browser.refresh")}>
-                  <Button ref={refreshRef} isIconOnly size="sm" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t("browser.refresh")} preventFocusOnPress onPress={pressRefresh}>
+                  <Button ref={refreshRef} isIconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t("browser.refresh")} preventFocusOnPress onPress={pressRefresh}>
                     <RefreshCw aria-hidden="true" className={spinning > 0 ? "size-4 motion-safe:animate-spin-slow" : "size-4"} />
                   </Button>
                 </TitledControl>

@@ -43,12 +43,13 @@ function LoginStateBadge({ quota }: { quota: QuotaReading }): React.ReactElement
 
 /** The line naming an account: its `name`, its plan chip when the agent names one, with `showLoginState` a badge
  * for an account known to be logged in or not, and a `help` tip that ends the line. */
-export function AccountNameLine({ name, quota, help, showLoginState = false }: { name: React.ReactNode; quota: QuotaReading; help?: React.ReactNode; showLoginState?: boolean }): React.ReactElement {
+export function AccountNameLine({ name, quota, help, showLoginState = false, children }: { children?: React.ReactNode; name: React.ReactNode; quota: QuotaReading; help?: React.ReactNode; showLoginState?: boolean }): React.ReactElement {
   return (
     <div className="flex items-center gap-2 text-sm font-medium">
       <div className="min-w-0">{name}</div>
       <QuotaPlan quota={quota} />
       {showLoginState && <LoginStateBadge quota={quota} />}
+      {children}
       {help}
     </div>
   );

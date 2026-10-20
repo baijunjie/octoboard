@@ -880,7 +880,9 @@ dark material is a grey far lighter than dark `--chrome`.
 ## Pointer target size
 
 A control's pointer target is at least 24 by 24 CSS pixels (WCAG 2.2 AA 2.5.8). HeroUI's own sizes already clear it —
-its smallest icon-only button is 32 — so this only bites where a control is drawn smaller than HeroUI would draw it.
+its smallest icon-only button is 32. The application uses `components/Button.tsx` for every Button, extending
+HeroUI with `size="xs"`: 24px height, a 24px square for icon-only buttons, 12px text and 14px icons.
+Compact actions use that size rather than per-call sizing styles.
 
 Icon buttons in sidebar rows, cards and headers, the right pane and the file viewer share a 24-by-24-pixel target
 and a 4-pixel gap, defined by `--row-control-size` and `--row-control-gap` in `packages/ui/src/style.css`.
@@ -914,10 +916,9 @@ handle stays narrower, as a wider one would take the sidebar's scrollbar and its
 
 Where the drawn size has to stay under 24, extend the target rather than the drawing, as HeroUI does for its own
 select clear button (`.select__clear-button:after{inset:-2px}`): an absolutely positioned `::after` with a negative
-inset enlarges what the pointer hits and changes nothing visible. The avatar field's delete button
-(`packages/ui/src/dialogs/AvatarField.tsx`) is drawn at 20 and hit at 24 that way, and so is the pressable part of a
-checkbox whose label is one line of `text-sm` (`TrustDirCheckbox` in `packages/ui/src/dialogs/TrustPromptDialog.tsx`),
-which HeroUI lays out at the line's own height.
+inset enlarges what the pointer hits and changes nothing visible. The pressable part of a checkbox whose label is
+one line of `text-sm` (`TrustDirCheckbox` in `packages/ui/src/dialogs/TrustPromptDialog.tsx`) extends its target
+this way because HeroUI lays it out at the line's own height.
 
 A control whose height is set in units of something else inherits that thing's constraint. The separators of
 collapsed lines are sized in multiples of the diff's own code line height rather than in pixels, so that they keep

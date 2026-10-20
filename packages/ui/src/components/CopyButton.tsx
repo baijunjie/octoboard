@@ -1,7 +1,7 @@
-import { Button } from "@heroui/react";
 import { Check, Copy } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
+import { Button } from "./Button";
 import { ActionableError } from "../errorRecovery";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";

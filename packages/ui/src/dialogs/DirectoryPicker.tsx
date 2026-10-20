@@ -1,7 +1,8 @@
-import { Button, Input, ListBox } from "@heroui/react";
+import { Input, ListBox } from "@heroui/react";
 import { CornerLeftUp, Folder } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
+import { Button } from "../components/Button";
 import { InlineChip } from "../components/InlineChip";
 import { DaemonRequestError } from "../daemon-client";
 import { FadeOverflow } from "../components/FadeOverflow";

@@ -1,7 +1,7 @@
-import { Button } from "@heroui/react";
 import { ImageUp, X } from "lucide-react";
 import React, { useRef } from "react";
 
+import { Button } from "../components/Button";
 import { handFocusOff } from "../components/handFocusOff";
 import { TitledControl } from "../components/TitledControl";
 import { useT } from "../i18n/react";
@@ -20,9 +20,7 @@ import type { Console } from "../protocol";
  * The field draws no label of its own: it sits beside the console's name, which names what it is
  * the avatar of, and the group carries "Avatar" as its accessible name instead.
  *
- * The delete button is drawn 20px, the size of HeroUI's own clear button, with a 2px margin of hit
- * area around it as that button has, which brings the target to the 24px WCAG 2.2 AA 2.5.8 asks of
- * one that no exception covers. */
+ * The delete button uses the shared extra-small size with a 2px margin of hit area around it. */
 export function AvatarField({
   icon,
   onPick,
@@ -70,7 +68,7 @@ export function AvatarField({
             ref={removeButton}
             type="button"
             isIconOnly
-            size="sm"
+            size="xs"
             variant="secondary"
             aria-label={remove}
             isDisabled={isDisabled}
@@ -80,7 +78,7 @@ export function AvatarField({
               handFocusOff(removeButton.current, uploadButton.current, false);
               onRemove();
             }}
-            className="absolute -end-1.5 -top-1.5 size-5 min-w-0 rounded-full p-0 after:absolute after:-inset-0.5 after:content-[''] opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100 motion-reduce:transition-none"
+            className="absolute -end-1.5 -top-1.5 rounded-full after:absolute after:-inset-0.5 after:content-[''] opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100 motion-reduce:transition-none"
           >
             <X className="size-3" />
           </Button>

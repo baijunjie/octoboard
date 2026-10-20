@@ -196,6 +196,28 @@ html {
     var(--tw-shadow, 0 0 #0000);
 }
 
+/* Unlayered sizing extends HeroUI's scale without changing its variants or focus treatment. */
+.app-button--xs {
+  height: 24px;
+  min-width: 0;
+  gap: 4px;
+  padding-inline: 8px;
+  font-size: 12px;
+  line-height: 16px;
+}
+.app-button--xs.button--icon-only {
+  width: 24px;
+  padding: 0;
+}
+.app-button--xs.button--full-width {
+  width: 100%;
+}
+.app-button--xs svg:not([data-slot="spinner"] svg, [data-slot="link-icon"] svg) {
+  width: 14px;
+  height: 14px;
+  margin-block: 0;
+}
+
 @utility row-icon-control {
   width: var(--row-control-size);
   height: var(--row-control-size);

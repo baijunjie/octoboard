@@ -1,7 +1,8 @@
-import { Badge, Button, Switch, Tooltip } from "@heroui/react";
+import { Badge, Switch, Tooltip } from "@heroui/react";
 import { ArrowLeft, FolderPlus, List, MessageSquarePlus } from "lucide-react";
 import React, { memo, useId, useLayoutEffect, useRef } from "react";
 
+import { Button } from "../components/Button";
 import { ActionMenu } from "../components/ActionMenu";
 import { ActivityMarker } from "../components/ActivityMarker";
 import { AgentIcon } from "../components/AgentIcon";
@@ -332,7 +333,7 @@ function SwitchStrip({
           <Button
             key={consoleSession.id}
             data-list-motion={consoleSession.id}
-            size="sm"
+            size="xs"
             variant="tertiary"
             preventFocusOnPress
             aria-label={activityKey ? t(activityKey, { name: isolate(sessionDisplayTitle(t, consoleSession)) }) : sessionDisplayTitle(t, consoleSession)}
@@ -343,7 +344,7 @@ function SwitchStrip({
             // current one is marked by the selected card's border alone, so it keeps the tertiary
             // fill's hover and press feedback; the others have a transparent border so that nothing
             // shifts when it changes.
-            className="h-7 min-h-0 min-w-0 max-w-48 shrink-0 gap-1.5 rounded-full border border-transparent px-2.5 text-xs font-medium data-switch-current:border-accent-glyph"
+            className="max-w-48 shrink-0 rounded-full border border-transparent font-medium data-switch-current:border-accent-glyph"
           >
             <BindingBadge owner={consoleSession} decorative />
             <FadeOverflow as="span" dir="auto" className="min-w-0" titleWhenClipped={sessionDisplayTitle(t, consoleSession)}>
@@ -447,14 +448,14 @@ function BoundElsewhere({
           <Button
             key={owner.id}
             data-list-motion={owner.id}
-            size="sm"
+            size="xs"
             variant="tertiary"
             preventFocusOnPress
             aria-label={t("sidebar.focus.enterConsoleSession", { name: isolate(sessionDisplayTitle(t, owner)), count: bound })}
             onPress={() => handlers.onFocus({ consoleSession: owner })}
             // Pill-shaped on purpose, on the sidebar's tinted tertiary fill (`.sidebar-fills`): a chip
             // reads as a tag, not as one of the sidebar's buttons.
-            className="h-6 min-h-0 min-w-0 max-w-full gap-1 rounded-full px-2 text-xs font-medium"
+            className="min-w-0 max-w-full rounded-full font-medium"
           >
             <BindingBadge owner={owner} decorative />
             {/* A name longer than the line is cut rather than pushed past the sidebar's edge. */}

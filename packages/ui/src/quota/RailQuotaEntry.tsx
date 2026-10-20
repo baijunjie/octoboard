@@ -1,8 +1,9 @@
-import { Button, Popover, Tabs } from "@heroui/react";
+import { Popover, Tabs } from "@heroui/react";
 import { Bot, Gauge, KeyRound } from "lucide-react";
 import React, { useEffect, useId, useRef, useState } from "react";
 import { useFocusVisible, type PressEvent } from "react-aria";
 
+import { Button } from "../components/Button";
 import { accountsByAgent, defaultAccountName, noAgentState, pickableAgents } from "../agents";
 import { PATH_VAR_PARAMS } from "../components/literalParams";
 import { AgentTabList } from "../components/AgentTabList";

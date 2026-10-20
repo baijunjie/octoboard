@@ -1,13 +1,8 @@
-import {
-  Button,
-  Popover,
-  SearchField,
-  Tag,
-  TagGroup,
-} from "@heroui/react";
+import { Popover, SearchField, Tag, TagGroup } from "@heroui/react";
 import { Check, Funnel, FunnelX, Tags } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
+import { Button } from "../components/Button";
 import { InlineChip } from "../components/InlineChip";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
@@ -108,12 +103,12 @@ export function ProjectFilterButton({
     <TitledControl title={label}>
       <Button
         isIconOnly
-        size="sm"
+        size="xs"
         variant="ghost"
         aria-label={label}
         preventFocusOnPress
         aria-haspopup={clearAction ? false : undefined}
-        className="row-icon-control rounded-md text-app-muted hover:text-foreground"
+        className="shrink-0 rounded-md text-app-muted hover:text-foreground"
       >
         {filtering ? <FunnelX aria-hidden="true" className="size-4" /> : <Funnel aria-hidden="true" className="size-4" />}
       </Button>

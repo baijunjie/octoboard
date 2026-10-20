@@ -124,17 +124,14 @@ function Notice({ notice, projectRoots }: { notice: ChangesNotice; projectRoots:
       return (
         <>
           <Message id="git.changes.worktree" params={{ name: code(notice.name) }} />
-          {/* Drawn 20 px, with a 24 px target from the pseudo-element. Top-aligned with a 2 px negative
-              margin each way, its margin box is exactly the 16 px line, so the line is no taller than
-              its neighbours and the button's centre is the line's, level with the chip. The glyph is
-              the chip's height rather than the button's default. */}
+          {/* Negative vertical margins keep the extra-small button's margin box at the line's 16px height. */}
           <CopyButton
             text={wireRelativeOrAbsolute(notice.root, projectRoots)}
             beforeCopyText={t("git.changes.copyWorktreePath")}
             failedText={t("git.changes.copyWorktreePathFailed")}
-            size="sm"
+            size="xs"
             variant="ghost"
-            className="relative ms-1 -my-0.5 size-5 min-w-0 align-top after:absolute after:-inset-0.5 after:content-[''] [&_svg]:size-3.5"
+            className="relative ms-1 -my-1 align-top after:absolute after:-inset-0.5 after:content-['']"
           />
         </>
       );

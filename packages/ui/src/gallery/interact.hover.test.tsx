@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-import { Button } from "@heroui/react";
+
 import React, { act } from "react";
 import { useHover } from "react-aria";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
+import { Button } from "../components/Button";
 import { change, changeViewFixture, mountRows } from "../browser/browserTestSupport";
 import { ChangeList } from "../browser/ChangeList";
 import { changeItems } from "../browser/changes";

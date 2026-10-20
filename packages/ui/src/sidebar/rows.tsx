@@ -1,8 +1,8 @@
-import { Button } from "@heroui/react";
 import { Lock, LockOpen, Pin, PinOff, type LucideIcon } from "lucide-react";
 import React, { type RefObject, useRef } from "react";
 import type { PressEvent } from "react-aria-components";
 
+import { Button } from "../components/Button";
 import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../components/RowControls";
 import { handFocusOff } from "../components/handFocusOff";
 import { TitledControl } from "../components/TitledControl";
@@ -141,7 +141,7 @@ export function RowIconButton({
       <TitledControl title={label}>
         <Button
           isIconOnly
-          size="sm"
+          size="xs"
           variant="ghost"
           aria-label={ariaLabel}
           preventFocusOnPress
@@ -183,12 +183,12 @@ export function PinButton({
       <TitledControl title={t("sidebar.unpin")}>
         <Button
           isIconOnly
-          size="sm"
+          size="xs"
           variant="ghost"
           aria-label={t("sidebar.unpinItem", { name: isolate(name) })}
           preventFocusOnPress
           onPress={unpin}
-          className="group/pin row-icon-control rounded-md text-app-muted hover:text-foreground"
+          className="group/pin shrink-0 rounded-md text-app-muted hover:text-foreground"
         >
           <Pin aria-hidden="true" className="size-4 group-hover/pin:hidden group-data-[focus-visible=true]/pin:hidden" />
           <PinOff aria-hidden="true" className="hidden size-4 group-hover/pin:block group-data-[focus-visible=true]/pin:block" />
@@ -210,7 +210,7 @@ export function LockButton({ name, onUnlock, returnFocusTo }: {
       <TitledControl title={t("sidebar.session.unlock")}>
         <Button
           isIconOnly
-          size="sm"
+          size="xs"
           variant="ghost"
           aria-label={t("sidebar.session.unlockItem", { name: isolate(name) })}
           preventFocusOnPress
@@ -218,7 +218,7 @@ export function LockButton({ name, onUnlock, returnFocusTo }: {
             handFocusOff(holder.current, returnFocusTo.current, true);
             onUnlock();
           }}
-          className="group/lock row-icon-control rounded-md text-warning-glyph hover:text-foreground"
+          className="group/lock shrink-0 rounded-md text-warning-glyph hover:text-foreground"
         >
           <Lock aria-hidden="true" className="size-4 group-hover/lock:hidden group-data-[focus-visible=true]/lock:hidden" />
           <LockOpen aria-hidden="true" className="hidden size-4 group-hover/lock:block group-data-[focus-visible=true]/lock:block" />

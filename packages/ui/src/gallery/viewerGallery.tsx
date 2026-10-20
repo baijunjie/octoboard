@@ -1,9 +1,10 @@
 // The page a file-viewer scenario renders in place of the app: a list of the scenario's subjects,
 // each opening the real `FileViewer`, whose Previous / Next walk the same list in its order. The
 // viewer opens on the first subject when the page loads.
-import { Button } from "@heroui/react";
+
 import React, { useEffect, useRef, useState } from "react";
 
+import { Button } from "../components/Button";
 import type { ViewerSubject } from "../viewer/content";
 import { FileViewer } from "../viewer/FileViewer";
 import { displayWirePath } from "../wirePath";

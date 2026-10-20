@@ -1,7 +1,8 @@
-import { Button, EmptyState } from "@heroui/react";
+import { EmptyState } from "@heroui/react";
 import type { LucideIcon } from "lucide-react";
 import React, { useId } from "react";
 
+import { Button } from "./Button";
 import { TitledControl } from "./TitledControl";
 
 /** HeroUI's `EmptyState` with the shape every empty list in the app takes: a glyph, a heading

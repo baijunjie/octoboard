@@ -1,7 +1,8 @@
-import { Badge, Button } from "@heroui/react";
+import { Badge } from "@heroui/react";
 import { Hand, Plus, Settings } from "lucide-react";
 import React, { memo, useRef } from "react";
 
+import { Button } from "./Button";
 import { isolate } from "../i18n/isolate";
 import { textDirection } from "../i18n/languages";
 import { useCurrentLanguage, useT } from "../i18n/react";

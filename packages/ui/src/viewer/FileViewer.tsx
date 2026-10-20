@@ -1,7 +1,7 @@
-import { Button } from "@heroui/react";
 import { ChevronLeft, ChevronRight, FolderOpen, SquareArrowOutUpRight } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import { Button } from "../components/Button";
 import { CopyButton } from "../components/CopyButton";
 import { FileTypeIcon } from "../components/FileTypeIcon";
 import { InlineChip } from "../components/InlineChip";
@@ -316,7 +316,7 @@ function NavigationButton({
       <Button
         ref={ref}
         isIconOnly
-        size="sm"
+        size="xs"
         variant="ghost"
         className={ROW_ICON_BUTTON_CLASS}
         aria-label={label}
@@ -341,7 +341,7 @@ function CopyPathButton({ path }: { path: string }): React.ReactElement {
       beforeCopyText={t("common.copyPath")}
       afterCopyText={t("common.pathCopied")}
       failedText={t("common.copyFailed")}
-      size="sm"
+      size="xs"
       variant="ghost"
       className={ROW_ICON_BUTTON_CLASS}
       preventFocusOnPress
@@ -364,7 +364,7 @@ function HostPathButtons({ host }: { host: HostPath }): React.ReactElement {
     <>
       {buttons.map(({ type, title, name, Icon }) => (
         <TitledControl key={type} title={title}>
-          <Button isIconOnly size="sm" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={name} onPress={() => act(type, host)} preventFocusOnPress>
+          <Button isIconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={name} onPress={() => act(type, host)} preventFocusOnPress>
             <Icon aria-hidden="true" className="size-4" />
           </Button>
         </TitledControl>

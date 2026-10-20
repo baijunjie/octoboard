@@ -1,6 +1,6 @@
-import { Button } from "@heroui/react";
 import React from "react";
 
+import { Button } from "../components/Button";
 import { useT } from "../i18n/react";
 import type { PlainMessageKey } from "../i18n/catalog";
 import type { MacosPermissionKind } from "../platform";

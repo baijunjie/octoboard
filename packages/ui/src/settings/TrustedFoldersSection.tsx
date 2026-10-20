@@ -1,7 +1,7 @@
-import { Button } from "@heroui/react";
 import { FolderOpen } from "lucide-react";
 import React, { useState } from "react";
 
+import { Button } from "../components/Button";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { InlineChip } from "../components/InlineChip";
 import { MarkedPath } from "../components/MarkedPath";

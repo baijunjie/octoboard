@@ -1,6 +1,6 @@
-import { Button } from "@heroui/react";
 import React, { useState } from "react";
 
+import { Button } from "../components/Button";
 import { ExportConfigurationDialog } from "../configuration/ExportConfigurationDialog";
 import { ImportConfigurationDialog } from "../configuration/ImportConfigurationDialog";
 import { useT } from "../i18n/react";

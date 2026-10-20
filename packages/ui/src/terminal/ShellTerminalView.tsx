@@ -1,8 +1,9 @@
-import { Button, Spinner, Surface } from "@heroui/react";
+import { Spinner, Surface } from "@heroui/react";
 import { Unplug } from "lucide-react";
 import React, { useEffect, useImperativeHandle, useRef, useState } from "react";
 
 import "@xterm/xterm/css/xterm.css";
+import { Button } from "../components/Button";
 import type { ViewedFile } from "../browser/TerminalFileViewer";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { reportExternalLinkFailure } from "../components/ExternalLink";

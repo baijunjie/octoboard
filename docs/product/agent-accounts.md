@@ -117,8 +117,7 @@ agent** stays.
 Each agent's panel starts with the agent's **default account**, with the directory it currently resolves to. A "?"
 ends its name line, after the plan, and says in its tooltip, or in a popover once pressed, that the default account is
 the setup a session runs under when no account is pinned. Its directory cannot be edited, and the default account cannot
-be removed. Its actions menu holds **Rename** and **Log in** (see "Logging an account in"
-below).
+be removed. Its actions menu holds **Rename**; where **Log in** appears follows "Logging an account in" below.
 
 **Rename** opens a dialog, titled for the default account of that agent, with a single name field holding the name the
 user gave it, empty when there is none, and a note that leaving it empty uses the standard name. The name is stored
@@ -139,8 +138,8 @@ settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-
 ## The accounts the user owns
 
 The accounts the user owns follow the default account, each with its name, its directory and an actions menu holding
-**Edit**, **Log in** and, set apart, **Remove**. Both kinds of directory are shown as in "How paths are shown" in
-`docs/product/settings.md`.
+**Edit** and, set apart, **Remove**; where **Log in** appears follows "Logging an account in" below. Both kinds of
+directory are shown as in "How paths are shown" in `docs/product/settings.md`.
 
 Every account of an available agent, the default account included, also shows its plan quota: the plan beside its
 name, and beneath the account's row, across its whole width, one line and bar per quota window — or, in its place,
@@ -153,7 +152,7 @@ with a dot, not in colour alone:
 | Badge | When |
 |---|---|
 | **Logged in**, in the success colour | The latest reading of its quota succeeded with at least one quota window. |
-| **Not logged in**, in the warning colour | Its quota is in the not-logged-in state (see "Quota states" in `docs/product/account-quotas.md`). The row then shows no quota line beneath it; the badge is all that says so. |
+| **Not logged in**, in the warning colour | Its quota is in the not-logged-in state (see "Quota states" in `docs/product/account-quotas.md`). The row then shows no quota line beneath it. |
 | None | Anything else: the quota not read yet, a reading that failed for another reason, or windows kept from before a newer reading failed. |
 
 ## Approval modes
@@ -225,10 +224,14 @@ account, or pointing it at another directory, ends a login running for it.
 
 ## Logging an account in
 
-**Log in**, in an account's actions menu, signs the account in with its agent's own CLI, run by the daemon in the
-background against the account's config directory (for the default account, the directory the user's login shell gives
-the agent), with no terminal and no window. Octoboard never reads or writes the credential itself. Each agent signs in
-its own way:
+For an account known to be signed out, **Log in** appears as a small button directly after its login-state badge,
+before the default account's help tip, and is absent from its actions menu. For an account known to be signed in, or
+whose login state is not known, Log in appears in its actions menu instead. This applies to the default account and
+the accounts the user owns alike.
+
+Log in signs the account in with its agent's own CLI, run by the daemon in the background against the account's config
+directory (for the default account, the directory the user's login shell gives the agent), with no terminal and no
+window. Octoboard never reads or writes the credential itself. Each agent signs in its own way:
 
 | Agent | What the user sees |
 |---|---|

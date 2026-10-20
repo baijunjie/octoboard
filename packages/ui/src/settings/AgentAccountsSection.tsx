@@ -1,10 +1,12 @@
-import { Button, Tabs } from "@heroui/react";
+import { Button } from "../components/Button";
+import { Tabs } from "@heroui/react";
 import { Bot, LogIn, Pencil, Trash2, UserPlus } from "lucide-react";
 import React, { useContext, useEffect, useRef, useState } from "react";
 
 import { AGENT_LABEL, defaultAccountName, isAgentUnavailable } from "../agents";
 import { ActionMenu, type ActionMenuEntry } from "../components/ActionMenu";
 import { AgentTabList } from "../components/AgentTabList";
+import { ExternalLinkIcon } from "../components/ExternalLinkIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { HelpTip } from "../components/HelpTip";
@@ -18,6 +20,7 @@ import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { Account, AccountLogin as Login, Agent } from "../protocol";
 import { AccountNameLine, AccountQuotaSummary } from "../quota/AccountQuotaSummary";
+import { accountQuotaOf } from "../quota/accountQuotaOf";
 import { isNotLoggedIn } from "../quota/quotaFormat";
 import { useAccountQuota } from "../quota/useAccountQuota";
 import { useDaemon, useDaemonStore } from "../store";
@@ -230,6 +233,7 @@ function AgentAccountsPanel({ agent, owned, onEdit, onRemove, onRenameDefault, o
 }): React.ReactElement {
   const t = useT();
   const logins = useDaemonStore((s) => s.accountLogins);
+  const quotas = useDaemonStore((s) => s.accountQuotas);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const defaultName = defaultAccountName(t, defaultNames, agent);
   const listRef = useListMotion<HTMLDivElement>({ descendants: true });
@@ -246,10 +250,11 @@ function AgentAccountsPanel({ agent, owned, onEdit, onRemove, onRenameDefault, o
   // further action is one more entry here.
   const accountMenu = (account: Account | null): ActionMenuEntry[] => {
     const login = { label: t("settings.accounts.login"), icon: LogIn, disabled: loginIsActive(accountLoginOf(logins, agent, account?.id ?? null)), onClick: () => onLogin(agent, account?.id ?? null) };
-    if (!account) return [{ label: t("settings.accounts.renameDefault"), icon: Pencil, onClick: () => onRenameDefault(agent) }, login];
+    const loginItems = isNotLoggedIn(accountQuotaOf(quotas, agent, account?.id ?? null)?.unavailable ?? null) ? [] : [login];
+    if (!account) return [{ label: t("settings.accounts.renameDefault"), icon: Pencil, onClick: () => onRenameDefault(agent) }, ...loginItems];
     return [
       { label: t("common.edit"), icon: Pencil, onClick: () => onEdit(account) },
-      login,
+      ...loginItems,
       "separator",
       { label: t("common.remove"), icon: Trash2, destructive: true, onClick: () => onRemove(account) },
     ];
@@ -259,6 +264,8 @@ function AgentAccountsPanel({ agent, owned, onEdit, onRemove, onRenameDefault, o
     return {
       login: login?.status === "succeeded" ? login : undefined,
       loginName: account?.name ?? defaultName,
+      onLogin: () => onLogin(agent, account?.id ?? null),
+      loginActive: loginIsActive(login),
     };
   };
   const approvalSelect = (account: Account | null) => {
@@ -326,7 +333,7 @@ function AgentAccountsPanel({ agent, owned, onEdit, onRemove, onRenameDefault, o
 
 /** Subgrid shares control widths across accounts.
  * The account's quota takes the row's full width beneath its controls. */
-function AccountRow({ agent, account, label, help, description, approval, children, motionKey, login, loginName }: {
+function AccountRow({ agent, account, label, help, description, approval, children, motionKey, login, loginName, onLogin, loginActive }: {
   agent: Agent;
   account: string | null;
   label: React.ReactNode;
@@ -340,13 +347,22 @@ function AccountRow({ agent, account, label, help, description, approval, childr
    * account in what it says. */
   login?: Login;
   loginName: string;
+  onLogin: () => void;
+  loginActive: boolean;
 }): React.ReactElement {
+  const t = useT();
   const quota = useAccountQuota(agent, account);
+  const notLoggedIn = typeof quota === "object" && isNotLoggedIn(quota.unavailable);
   useClearSucceededLogin(login);
   return (
     <div data-list-motion={motionKey} className="col-span-full grid grid-cols-subgrid items-center gap-x-4 gap-y-3 groove-b py-4 last:border-b-0">
       <div className="min-w-0">
-        <AccountNameLine name={label} quota={quota} help={help} showLoginState />
+        <AccountNameLine name={label} quota={quota} help={help} showLoginState>
+          {notLoggedIn && <Button size="xs" variant="secondary" preventFocusOnPress isDisabled={loginActive} onPress={onLogin}>
+            {t("settings.accounts.login")}
+            <ExternalLinkIcon />
+          </Button>}
+        </AccountNameLine>
         <div className="text-sm text-app-muted">{description}</div>
       </div>
       {approval && <div className="min-w-0">{approval}</div>}

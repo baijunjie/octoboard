@@ -1,6 +1,7 @@
-import { AlertDialog, Button } from "@heroui/react";
+import { AlertDialog } from "@heroui/react";
 import React, { useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 
+import { Button } from "../components/Button";
 import { appConfig } from "../appConfig";
 import { CodeBlock } from "../components/CodeBlock";
 import { ExternalLink } from "../components/ExternalLink";

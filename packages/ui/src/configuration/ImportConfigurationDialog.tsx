@@ -1,6 +1,7 @@
+import { Button } from "../components/Button";
 import { ActionableError } from "../errorRecovery";
 import { reportError } from "../reportError";
-import { Button } from "@heroui/react";
+
 import React, { useEffect, useRef, useState } from "react";
 
 import { errorAlerts } from "../errorAlerts";

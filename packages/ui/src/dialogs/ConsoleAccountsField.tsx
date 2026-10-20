@@ -1,7 +1,7 @@
-import { Button } from "@heroui/react";
 import { KeyRound } from "lucide-react";
 import React, { useId, useRef } from "react";
 
+import { Button } from "../components/Button";
 import { choiceGroups, choiceKey, findEntry, storedAccount } from "../accountChoices";
 import { AGENT_ACCOUNT_FIELD, AGENT_LABEL, agentChoiceBadge, defaultAccountName, isAgentPickable, isDefaultAccountRenamed, listedPickerAgents } from "../agents";
 import { AgentIcon } from "../components/AgentIcon";
@@ -68,10 +68,10 @@ export function ConsoleAccountsField({
         <TitledControl title={t("dialog.console.manageAccounts")}>
           <Button
             isIconOnly
-            size="sm"
+            size="xs"
             variant="ghost"
             aria-label={t("dialog.console.manageAccounts")}
-            className="row-icon-control -my-0.5 rounded-full text-app-muted"
+            className="shrink-0 -my-0.5 rounded-full text-app-muted"
             onPress={onManageAccounts}
           >
             <KeyRound aria-hidden="true" className="size-3.5" />

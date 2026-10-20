@@ -1,7 +1,7 @@
 import React from "react";
 
 /** Shared shape and tints for icon controls in either side pane and the file viewer. */
-export const ROW_ICON_BUTTON_CLASS = "sidebar-fills row-icon-control rounded-md bg-transparent text-app-muted hover:bg-default hover:text-foreground";
+export const ROW_ICON_BUTTON_CLASS = "sidebar-fills shrink-0 rounded-md bg-transparent text-app-muted hover:bg-default hover:text-foreground";
 
 /** Shared spacing for the icons at a row or header's end. */
 export function RowIconGroup({ children, className = "" }: { children: React.ReactNode; className?: string }): React.ReactElement {

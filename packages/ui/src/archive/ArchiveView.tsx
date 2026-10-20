@@ -1,7 +1,8 @@
-import { Button, Spinner } from "@heroui/react";
+import { Spinner } from "@heroui/react";
 import { Archive, RotateCcw, Trash2, X } from "lucide-react";
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
+import { Button } from "../components/Button";
 import { AGENT_LABEL } from "../agents";
 import { AgentIcon } from "../components/AgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";

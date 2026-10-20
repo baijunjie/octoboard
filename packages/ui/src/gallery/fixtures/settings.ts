@@ -234,13 +234,12 @@ const LOGIN_ENDS_WITHIN_MS = 700;
 /** Past any section's end, which the scroller clamps to. */
 const SCROLLED_TO_END = 10_000;
 
-/** Settings → Agent accounts on Claude Code's tab, Log in chosen from the menu of the account named `name`, which opens
- * the login's modal, then the moment the login takes to reach waiting and end inside it. */
-function loginFromMenu(name: string): Scenario["steps"] {
+/** Settings → Agent accounts on Claude Code's tab, Work's inline Log in button (the first signed-out account), then
+ * the moment the login takes to reach waiting and end inside its modal. */
+function loginFromInline(): Scenario["steps"] {
   return [
     (ui) => ui.press(ui.t("rail.settings")),
     (ui) => ui.press(ui.t("settings.section.accounts")),
-    (ui) => ui.press(ui.t("settings.accounts.actionsLabel", { name, agent: AGENT_LABEL.claude })),
     (ui) => ui.press(ui.t("settings.accounts.login")),
     (ui) => ui.wait(LOGIN_ENDS_WITHIN_MS),
   ];
@@ -698,7 +697,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, accounts not logged in yet",
-    description: "Work (never logged in) and Client (whose config directory does not exist yet) both carry the amber \"Not logged in\" badge after the name, with no quota line and no raw CLI error beneath; the default account above them carries the green \"Logged in\" badge beside its plan and reads its quota as usual, so the two badges sit side by side.",
+    description: "Work (never logged in) and Client (whose config directory does not exist yet) both carry the amber \"Not logged in\" badge after the name, immediately followed by a compact Log in button with an outbound arrow on the same line, with no quota line and no raw CLI error beneath; the default account above them carries the green \"Logged in\" badge beside its plan and reads its quota as usual, so the two badges sit side by side.",
     state: notSignedInState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -713,7 +712,7 @@ export const settingsScenarios: Scenario[] = [
     description: "Log in was chosen for Work and the CLI gave up: the modal stays open, now saying \"Could not log in to\" the name as a chip, with the CLI's reason on its own line, and Log in again as its main button beside Close.",
     state: notSignedInState,
     loginOutcome: "failed",
-    steps: loginFromMenu("Work"),
+    steps: loginFromInline(),
   },
   {
     id: "settings-account-login-timed-out",
@@ -723,7 +722,7 @@ export const settingsScenarios: Scenario[] = [
     description: "Log in was chosen for Work and nobody authorized in time: the modal stays open, saying the login to the name as a chip timed out, with no reason beneath, and Log in again as its main button beside Close.",
     state: notSignedInState,
     loginOutcome: "timed_out",
-    steps: loginFromMenu("Work"),
+    steps: loginFromInline(),
   },
   {
     id: "settings-account-login-codex-busy",

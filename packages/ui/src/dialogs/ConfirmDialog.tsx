@@ -1,6 +1,7 @@
-import { Button, Input, Label, TextField } from "@heroui/react";
+import { Input, Label, TextField } from "@heroui/react";
 import React, { useLayoutEffect, useRef, useState } from "react";
 
+import { Button } from "../components/Button";
 import { InlineChip } from "../components/InlineChip";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import { Dialog, DialogError, useDialogAction } from "./Dialog";

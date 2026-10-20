@@ -1,6 +1,6 @@
-import { Button } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
+import { Button } from "../components/Button";
 import { AGENT_INSTALL_URL, AGENT_LABEL, AGENT_OPTIONS } from "../agents";
 import { AgentIcon } from "../components/AgentIcon";
 import { ExternalLink } from "../components/ExternalLink";

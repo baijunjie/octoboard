@@ -1,7 +1,8 @@
-import { Button, Checkbox, Description, Label } from "@heroui/react";
+import { Checkbox, Description, Label } from "@heroui/react";
 import { Info } from "lucide-react";
 import React, { useId, useState } from "react";
 
+import { Button } from "../components/Button";
 import { AGENT_LABEL } from "../agents";
 import { InlineChip } from "../components/InlineChip";
 import { TILDE_PARAMS } from "../components/literalParams";

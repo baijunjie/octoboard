@@ -1,7 +1,7 @@
-import { Button } from "@heroui/react";
 import { RefreshCw, Unplug } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { Button } from "./Button";
 import type { ConnectionState } from "../daemon-client";
 import { useT } from "../i18n/react";
 import { focusOpenDialog } from "./regionFocus";
@@ -21,7 +21,7 @@ const ANNOUNCEMENT_DELAY_MS = 100;
  * border in the banner's text color, faded, the fill still transparent at rest and HeroUI's
  * `--warning-hover` under the pointer and while pressed; sized down to the banner's text. */
 const RETRY_CLASS =
-  "h-6 rounded-lg border-warning-foreground/30 px-2.5 text-xs " +
+  "rounded-lg border-warning-foreground/30 " +
   "[--button-bg-hover:var(--warning-hover)] [--button-bg-pressed:var(--warning-hover)] " +
   "[--button-fg:var(--warning-foreground)]";
 
@@ -135,7 +135,7 @@ export function ConnectionBanner({
               <Unplug aria-hidden="true" className="size-3.5 shrink-0" />
               <span aria-hidden="true">{message}</span>
               <Button
-                size="sm"
+                size="xs"
                 variant="outline"
                 className={RETRY_CLASS}
                 preventFocusOnPress

@@ -1,7 +1,7 @@
-import { Button } from "@heroui/react";
 import { Maximize2, Minimize2, X } from "lucide-react";
 import React, { createContext, useContext } from "react";
 
+import { Button } from "./Button";
 import { FadeOverflow } from "./FadeOverflow";
 import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "./RowControls";
 import { TitledControl } from "./TitledControl";
@@ -50,14 +50,14 @@ export function PanelHeader({
         {actions}
         {frame?.canMaximize && (
           <TitledControl title={t(frame.maximized ? "panel.restore" : "panel.maximize")}>
-            <Button isIconOnly size="sm" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t(frame.maximized ? "panel.restore" : "panel.maximize")} preventFocusOnPress onPress={frame.onToggleMaximized}>
+            <Button isIconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t(frame.maximized ? "panel.restore" : "panel.maximize")} preventFocusOnPress onPress={frame.onToggleMaximized}>
               {frame.maximized ? <Minimize2 aria-hidden="true" className="size-4" /> : <Maximize2 aria-hidden="true" className="size-4" />}
             </Button>
           </TitledControl>
         )}
         {frame && (
           <TitledControl title={t("panel.close")}>
-            <Button isIconOnly size="sm" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t("panel.close")} preventFocusOnPress onPress={frame.onClose}>
+            <Button isIconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t("panel.close")} preventFocusOnPress onPress={frame.onClose}>
               <X aria-hidden="true" className="size-4" />
             </Button>
           </TitledControl>

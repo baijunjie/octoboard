@@ -351,6 +351,18 @@ it("badges an account known to be logged in, one not logged in yet, and none who
   expect([...failed.container.querySelectorAll("[data-inline-chip]")].map((chip) => chip.textContent)).not.toContain("Logged in");
 });
 
+it("logs in a signed-out account from the button after its badge", async () => {
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }));
+  const { container } = mount();
+  const badge = [...container.querySelectorAll("[data-inline-chip]")].find((chip) => chip.textContent === "Not logged in")!;
+  const login = badge.nextElementSibling as HTMLButtonElement;
+  expect(login.textContent).toBe("Log in");
+  expect(login.dataset.size).toBe("xs");
+  await act(async () => login.click());
+  expect(request).toHaveBeenLastCalledWith({ type: "start_account_login", agent: "claude", account: "claude-work" });
+});
+
 it("waits for the first reading of an account of an available agent that has no entry yet", () => {
   availability.set("codex", { agent: "codex", availability: "available" });
   const { container } = mount("Codex");

@@ -1,6 +1,7 @@
-import { AlertDialog, Button, Modal } from "@heroui/react";
+import { AlertDialog, Modal } from "@heroui/react";
 import React, { useEffect, useId, useRef, useState } from "react";
 
+import { Button } from "../components/Button";
 import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { takeMenuFocusToRestore } from "../components/ActionMenu";
 import { FadedScroller, useFadeRegion } from "../components/scrollFade";

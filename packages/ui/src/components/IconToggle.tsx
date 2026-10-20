@@ -36,7 +36,7 @@ export function IconToggle({
         isIconOnly
         size="sm"
         variant="ghost"
-        className={`icon-toggle ${ROW_ICON_BUTTON_CLASS}`}
+        className={`icon-toggle row-icon-control ${ROW_ICON_BUTTON_CLASS}`}
         aria-label={label}
         aria-expanded={expanded}
         isSelected={isSelected}

@@ -1,6 +1,7 @@
-import { Button, Spinner } from "@heroui/react";
+import { Spinner } from "@heroui/react";
 import React, { useRef } from "react";
 
+import { Button } from "../components/Button";
 import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";

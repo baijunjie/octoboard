@@ -1,6 +1,6 @@
-import { Button } from "@heroui/react";
 import React, { useState } from "react";
 
+import { Button } from "../components/Button";
 import { AGENT_DEFAULT_CONFIG_DIR, AGENT_LABEL, defaultAccountName, listedAgents } from "../agents";
 import { agentIconSetupOptions } from "../components/AgentIcon";
 import { DaemonErrorMessage } from "../components/DaemonErrorMessage";

@@ -1,8 +1,9 @@
-import { Button, Popover } from "@heroui/react";
+import { Popover } from "@heroui/react";
 import { CircleHelp } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { useFocusVisible } from "react-aria";
 
+import { Button } from "./Button";
 import { TitledControl } from "./TitledControl";
 
 /** A small muted "?" that carries an explanation, to take a line of explanatory text out of a row. It is an
@@ -64,11 +65,11 @@ export function HelpTip({ label, children }: { label: string; children: React.Re
       <TitledControl title={children} isDisabled={open || (justClosed && (hovered || isFocusVisible))}>
         <Button
           isIconOnly
-          size="sm"
+          size="xs"
           variant="ghost"
           ref={button}
           aria-label={label}
-          className="row-icon-control -my-0.5 rounded-full text-app-muted"
+          className="shrink-0 -my-0.5 rounded-full text-app-muted"
           onBlur={release}
           onHoverStart={() => {
             if (open) return;

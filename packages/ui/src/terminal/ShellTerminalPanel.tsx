@@ -1,8 +1,9 @@
-import { Button, Spinner, Tabs } from "@heroui/react";
+import { Spinner, Tabs } from "@heroui/react";
 import { Pencil, Plus, SquareTerminal, X } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useFocusVisible } from "react-aria";
 
+import { Button } from "../components/Button";
 import type { ViewedFile } from "../browser/TerminalFileViewer";
 import { ActionMenu, type ActionMenuEntry } from "../components/ActionMenu";
 import { AnchoredTooltip } from "../components/AnchoredTooltip";
@@ -228,7 +229,7 @@ export function ShellTerminalPanel({
             actions={
               <>
                 <TitledControl title={t("shellTerminal.new")}>
-                  <Button ref={newRef} isIconOnly size="sm" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t("shellTerminal.new")} preventFocusOnPress onPress={() => void start()}>
+                  <Button ref={newRef} isIconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t("shellTerminal.new")} preventFocusOnPress onPress={() => void start()}>
                     <Plus aria-hidden="true" className="size-4" />
                   </Button>
                 </TitledControl>

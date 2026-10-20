@@ -1,6 +1,6 @@
-import { Button } from "@heroui/react";
 import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
 
+import { Button } from "../components/Button";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
 import { useT } from "../i18n/react";
