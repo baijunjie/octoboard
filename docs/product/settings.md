@@ -232,8 +232,14 @@ is marked pending until they have.
 
 **A change made outside Octoboard is picked up when the window comes back.** The grants are read again every time the
 window regains focus, so one granted or revoked in System Settings — the only way Accessibility is ever granted — takes
-effect in this section on the user's return. Each row's state is announced together with the permission's name, so a
-change that happened elsewhere is not silent for assistive technology.
+effect in this section on the user's return. For assistive technology the section has one status region of its own,
+not shown on screen, which says every row's state in one announcement, row by row: the permission's name, its state,
+and the restart line (below) where that row shows it. It speaks about 1.5 seconds after the rows appear, when the
+user switches to this section. After a change it speaks
+about 1.5 seconds after the user is back in the window: the wait counts only time the window is visible and has focus,
+and starts over each time the user comes back. A reading that changes nothing says nothing again, and a state replaced
+while it waits is never said. The rows' own states stay readable where they stand but are not status regions
+themselves.
 
 **Screen Recording reaches a process only at launch.** A grant made while Octoboard is already running does not reach
 it, so a row that is granted but was not when this Octoboard started adds a line asking the user to restart Octoboard
