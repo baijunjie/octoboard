@@ -110,7 +110,7 @@ The user accepted the numbered split without a scope change. The milestone files
 | Accepted milestone | Findings | Review boundary |
 | --- | --- | --- |
 | 05 Rich names/tooltips (closed) | COPY-02/03, caller-agent COPY-09 | Actual rich visible prose and metadata tooltips |
-| [06 Choice status/direction](06-choice-status-and-direction.md) | COPY-04/05/08, numeric COPY-06 | Badges, raw matching labels, isolation and fixed-order values |
+| 06 Choice status/direction (closed) | COPY-04/05/08, numeric COPY-06 | Badges, raw matching labels, isolation and fixed-order values |
 | [07 Form defaults/validity](07-form-defaults-and-validity.md) | I-01/02/06, S04 | Placeholder/default/typed word and impossible fixed-owner form |
 | [08 Content-width tabs](08-content-width-tabs.md) | G01 | Tab allocation and entire strip paint, ring and scroll clearance |
 | [09 Empty states](09-consistent-empty-states.md) | S03/S05/G03 | Shared compact listing and neutral absence glyphs |

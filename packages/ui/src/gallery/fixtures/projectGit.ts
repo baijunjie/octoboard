@@ -867,7 +867,12 @@ const reviewScenarios: Scenario[] = [
     description: "The comparison is still being made: the line above the list says what it is being compared with, while the uncommitted change from the side worktree is already listed.",
     state,
     preferences,
-    git: { ...SAMPLE_GIT, comparing: "pending" },
+    git: {
+      ...SAMPLE_GIT,
+      comparing: "pending",
+      worktrees: SAMPLE_GIT.worktrees.map((worktree) => worktree.main ? { ...worktree, branch: "main/release-coordination-مرحبا-发布" } : worktree),
+      branches: SAMPLE_GIT.branches!.map((branch) => branch.name === "main" ? { ...branch, name: "main/release-coordination-مرحبا-发布" } : branch),
+    },
     steps: selecting(rankingSession),
   },
   {
@@ -1022,6 +1027,21 @@ const reviewScenarios: Scenario[] = [
     preferences,
     git: { ...SAMPLE_GIT, gone: ["chore/update-dependencies"] },
     steps: [...selecting(dependenciesSession), (ui) => ui.wait(BRANCH_LIST_REREAD_MS)],
+  },
+  {
+    id: "git-branch-gone-worktree",
+    group: GROUP,
+    category: "exceptional",
+    title: "A worktree still naming a deleted branch",
+    description: "The worktree inspection still names a long mixed-script branch that the complete branch list no longer contains. Its clipped selector keeps a separate gone-status badge; hover the name for the rich tooltip, or open the selector to inspect the surviving raw branch choices.",
+    state,
+    preferences,
+    git: {
+      ...SAMPLE_GIT,
+      worktrees: SAMPLE_GIT.worktrees.map((worktree) => worktree.main ? { ...worktree, branch: "feature/deleted-release-coordination-and-compatibility-review-مرحبا-发布" } : worktree),
+      branches: SAMPLE_GIT.branches!.filter((branch) => branch.name !== "main"),
+    },
+    steps: openGit,
   },
   {
     id: "git-compare-gone",

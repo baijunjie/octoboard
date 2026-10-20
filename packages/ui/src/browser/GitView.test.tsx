@@ -4,7 +4,8 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../errorAlerts";
 import type { ProjectSourceInfo } from "../protocol";
-import { changeViewFixture, mountRows } from "./browserTestSupport";
+import { change, changeViewFixture, mountRows } from "./browserTestSupport";
+import { changeItem } from "./changes";
 import { GitView, type ChangesViewProps } from "./GitView";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -102,4 +103,46 @@ it("retains source Git stderr as structured diagnostics in both acknowledgement 
   expect(container.querySelectorAll("pre")).toHaveLength(1);
   expect(container.querySelector("[data-slot=alert-description] pre")).toBeNull();
   expect(container.querySelector("[role=alert]")).toBeNull();
+});
+
+
+it("keeps a pending comparison rich in visible prose and isolated plain text in its announcement", async () => {
+  const branch = "feature/مراجعة-中文(2)";
+  const base = "origin/أساس-中文(1)";
+  const onBranchChange = vi.fn();
+  const container = mountRows(
+    <GitView
+      source={{ state: "loaded", source: source("/r", "/r"), sentAt: 0 }}
+      branches={{ state: "loaded", branches: [{ name: branch, commit: "c1" }], complete: true, sentAt: 0 }}
+      branch={branch}
+      onBranchChange={onBranchChange}
+      uncommitted={{ state: "notCheckedOut", branch }}
+      committed={{ state: "compare", branch, base, baseKind: "remote", comparison: { state: "loading" }, commits: undefined }}
+      items={[changeItem(change("unstaged", "readme.md"))]}
+      selectedChange={undefined}
+      onOpen={() => {}}
+      onRetry={() => {}}
+      listRef={() => {}}
+      selectorsRef={{ current: null }}
+      changeView={changeViewFixture()}
+      selectedSessionId={undefined}
+    />,
+  );
+  const notice = [...container.querySelectorAll("p")].find((node) => node.textContent === `Comparing with ${base}…`)!;
+  expect(notice).toBeDefined();
+  const chip = notice.querySelector("[data-inline-chip]")!;
+  expect(chip.textContent).toBe(base);
+  expect(chip.getAttribute("dir")).toBe("ltr");
+  expect(chip.querySelector("code")?.textContent).toBe(base);
+  expect(chip.getAttribute("data-size")).toBe("inherit");
+  expect(chip.classList.contains("inline-chip--wrap")).toBe(true);
+  const selector = container.querySelector('button[aria-haspopup="listbox"]')!;
+  expect(selector.textContent).toContain(branch);
+  expect(selector.textContent).not.toMatch(/[\u2066-\u2069]/u);
+  expect(selector.querySelector("[data-inline-chip]")).toBeNull();
+  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  const announcement = container.querySelector('[role="status"].sr-only')!;
+  expect(announcement.textContent).toBe(`Comparing with \u2068${base}\u2069…`);
+  expect(announcement.children).toHaveLength(0);
+  expect(onBranchChange).not.toHaveBeenCalled();
 });

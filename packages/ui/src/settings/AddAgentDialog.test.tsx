@@ -46,7 +46,7 @@ const button = (name: string) => [...document.querySelectorAll<HTMLButtonElement
 
 it("lists every agent with whether it is installed or added", () => {
   render({ claude: "available", codex: "unavailable", grok: "not_determined" }, ["claude"]);
-  expect(rows().map((row) => row.textContent)).toEqual(["Claude CodeAdded", "CodexNot installedHow to install", "Grok BuildChecking…Add"]);
+  expect(rows().map((row) => row.textContent)).toEqual(["Claude Code, Added", "Codex, Not installedHow to install", "Grok Build, Checking…Add"]);
 });
 
 it("offers Add only for an installed agent that is not added yet", () => {
@@ -74,7 +74,7 @@ it("sends add_agent, and shows the agent as added once the list follows", async 
   await act(async () => button("Add Codex").click());
   expect(daemon.request).toHaveBeenCalledExactlyOnceWith({ type: "add_agent", agent: "codex" });
   act(() => daemon.store.setState({ settings: { ...daemon.store.getState().settings, added_agents: ["codex"] } }));
-  expect(rows()[1]!.textContent).toBe("CodexAdded");
+  expect(rows()[1]!.textContent).toBe("Codex, Added");
 });
 
 it("moves focus to Close when the button that was pressed goes with the agent being added", async () => {

@@ -276,6 +276,9 @@ const FILE = { name: "octoboard-configuration.json", text: JSON.stringify({ form
 
 const refusal = (name: string, text: string, inspection: FixtureError): ConfigurationFixture => ({ file: { name, text }, inspection });
 
+const DIRECTORY_PROJECT = "Notes for production release coordination مرحبا 发布";
+const DIRECTORY_REVIEW = { ...REVIEW, consoles: REVIEW.consoles.map((console) => ({ ...console, projects: console.projects.map((project) => project.name === "Notes" ? { ...project, name: DIRECTORY_PROJECT } : project) })) };
+
 const reviewing = (extra: Partial<ConfigurationFixture> = {}): ConfigurationFixture => ({ file: FILE, inspection: REVIEW, imported: MIXED_RESULT, ...extra });
 
 export const configurationScenarios: Scenario[] = [
@@ -412,7 +415,7 @@ export const configurationScenarios: Scenario[] = [
     category: "exceptional",
     title: "Import, a file that is not JSON",
     state,
-    configuration: { file: { name: "photo.json", text: "not json at all" } },
+    configuration: { file: { name: "release-configuration-for-production-services-مرحبا-发布.json", text: "not json at all" } },
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -554,12 +557,12 @@ export const configurationScenarios: Scenario[] = [
     category: "exceptional",
     title: "Import placement validation",
     state: state,
-    configuration: reviewing(),
-    description: "Empty and relative directories show errors together; the valid directory is accepted.",
+    configuration: reviewing({ inspection: DIRECTORY_REVIEW, imported: undefined }),
+    description: "Empty and relative directories show errors together; the valid directory is accepted. The empty directory label references a long mixed-script project name.",
     steps: [
       ...importFromSettings,
       chooseFile,
-      (ui) => ui.press(ui.t("configuration.import.project.choice", { project: "Notes" })),
+      (ui) => ui.press(ui.t("configuration.import.project.choice", { project: DIRECTORY_PROJECT })),
       (ui) => ui.press(ui.t("configuration.import.choice.directory")),
       ...placeIn("Search API", "projects/search-api"),
       ...placeIn("Website", "~/work/website"),

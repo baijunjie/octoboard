@@ -157,8 +157,8 @@ retain their code contract. Plain translation, native/accessibility/notification
 collection matching remain separate. Rich session/Git/quota copy helpers preserve their plain counterparts,
 including `quotaUsedUpAlert` and `quotaUsedUpSentence`. Shared field details, complete/summary/details routing,
 producer IDs versus literal names, startup-safe error records, resume-aware gating, acknowledgement, retry,
-context and viewer/report focus behavior retain the 04/12 contracts. Milestone 06's choice/status/direction work
-remains open; its handoff names the rich/plain field and option APIs established here.
+context and viewer/report focus behavior retain the 04/12 contracts. At milestone 05 closure, milestone 06's choice/status/direction work
+remained open; the field and option APIs established here are reused in its closure below.
 
 The final global capture freeze covered all 727 UI/control files, including new runtime files, with SHA-256
 `f5bb9f903e78af9383ae355cfbbf02234a199af37e4e47979c681e8ca4ca4ff1`. The file set, every hash and base HEAD matched
@@ -217,3 +217,88 @@ Sequential map/product/memory documentation work retained one authority for each
 browsers were stopped, the preview port and service record cleared, and no scratch scenarios or staging snapshot
 remain. Raw task logs, commands and captures stay outside Git. No real login, live daemon, website build, packaged
 WKWebView or VoiceOver listening was performed; the earlier native/listening limits remain unchanged.
+
+
+## Milestone 06 choice status and direction closure
+
+Milestone 06 closes COPY-04/05, the numeric-ratio half of COPY-06 and COPY-08 on the audit aggregate,
+based on `5c2dfcf3c4e6187adcd5d5c41d018b7b2ca038a1`. Fresh English catalog inventory is 506 parameterized
+messages / 707 message-parameter pairs, against 505/706 at that base. Historical inventories do not certify this
+source. Manual closure covered Add agent's four statuses; missing stored model/effort trigger and popup choices;
+gone branch and pending comparison; inherited account/model/effort; import choice/editable-directory labels,
+not-JSON and fallback details; tag removal; and the drawn character ratio. Current resume, held-owner,
+`useLocatedConversation`, `useResumeTarget` and `useLaunchChoice` routes were refreshed: fixed disabled single-option
+agent/account fields, raw holder matching, stale-response suppression, plain lookup status and external details remain
+intact. Shared rich option/field APIs, raw labels/keys/textValue/defaults/submitted values, AgentTabList's approved
+warning glyph, and the 04/05/12 routing, tooltip and focus contracts are preserved.
+
+Add agent and gone-branch status use the shared badge after the structured name. Name references use inherit-size,
+nonmonospace directed wrapping chips; technical sentence values use inherit-size LTR code chips. Comparing-base rich
+copy has a separately isolated plain announcement. Only the count/limit ratio is LTR; translated surrounding prose
+retains its direction. A local tag-suggestions tooltip anchor prevents ComboBox InputGroup's injected siblings from
+sharing its tooltip focus context; raw tag matching/removal and keyboard behavior remain intact. Joined agent/account selectors share width so both status badges remain inside their triggers.
+
+The global capture freeze covered all 731 UI/control files, including new tests and runtime/configuration candidates,
+with SHA-256 `9b9362f3a293a5369ec0d667de3c6a2159cf2eedfd59ddd5a6589767bd18bb5c`. File set, every hash and base HEAD
+matched across captures. Dependencies were independently installed and actual fonts loaded. All gallery writes were
+made by gallery-writer and used fixture-daemon state. No source or fixture mutations occurred during final captures.
+
+- The explicit 64-path Vitest command passed 1,124/1,124 tests, including rich/plain/native/matching regressions,
+  current launch/resume/import/catalog/select/branch behavior, retained stock Alert contracts and report/viewer focus.
+  This is a focused result, not a whole-suite pass. Exact commands and outputs remain outside Git.
+- UI-only build passed typecheck, five i18n files / 30 tests and Vite, retaining existing chunk-size/plugin-timing
+  advisories. Repository format checks passed ESLint with zero warnings and Cargo format.
+
+- The unchanged gallery runner with `--jobs 1` passed 474 scenarios × English/Chinese light: 948/948 loads,
+  zero failures, 1511.9 seconds. The 34 affected scenarios passed English/Chinese dark: 68/68, 128.2 seconds;
+  Arabic fallback in both appearances passed 68/68, 128.2 seconds. Canonical total: 1,084 loads, zero failed.
+  The affected set includes all 13 current resume variants and both new gallery fixtures: retained effort choices
+  and the durable gone-worktree branch trigger. The existing comparison-failure fixture is not gone-trigger proof.
+- Actual-font/parent measurements passed 204/204 conditions (34 scenarios × three languages × both appearances):
+  528 chip placements, 120 badges, six Alerts and 18 ratios. Minimum chip text contrast was 5.464:1 light / 5.507:1
+  dark; badge minima were 7.026:1 / 6.578:1. The six Alerts include the stock light danger description at 4.117:1,
+  covered by the previously accepted exception. Only the four accepted light stock Alert.Description exceptions
+  apply; no chip/title/indicator/control/dark exception or foreground override was added. Exact v2 fills are unchanged.
+- Joined-control badge geometry passed 18/18 conditions at 1440/600/390px × English/Chinese/Arabic fallback × both
+  appearances. The unchanged chip geometry script passed both language groups / ten loads: 12/14/16px baseline,
+  390px wrapping/RTL, import path equality and trust sentence containment.
+- Final actual interactions passed 90/90 conditions: 54 in the settled-tooltip run plus 36 supplements. They cover
+  raw typeahead/arrow selection, clearing, dialog Enter submission, all Add agent statuses, gone/surviving branches,
+  comparison rich/plain separation, inherited choices, raw tag add/remove, import-label focus and fixed resume
+  fields. Eighteen final tooltip captures have opacity 1 and fit the viewport; measured rich tooltip chip contrast
+  was at least 13.975:1 light / 10.602:1 dark. Earlier 54/54 behavioral results remain separate from this corrected
+  settled visual measurement.
+
+Earlier attempts remain failed or interrupted. An initial focused run passed 1,120/1,124 tests; four ConsoleDialog
+assertions still expected the pre-05 flattened sentence rather than its rich summary, isolated plain announcement
+and external details. Those contracts were asserted separately before the final passing run. Build attempts caught
+an unsupported public Trigger ref and intermediate focus/union typing errors; the final implementation uses public
+event callbacks and typechecks. Initial local preview loads failed with stale optimized-dependency 504s; only the
+owned preview was restarted cold, without changing dependency versions.
+
+The first actual measurement passed 186/204 conditions and failed 18: 12 used a Description-only selector although
+invalid counts are in FieldError, and six compared chip decoration to a prose edge rather than distinguishing glyphs
+from padding and actual clipping. The next run passed 198/204 and failed six. Four exposed a real joined-account badge
+clipping problem when the agent half took up to 70% of the row; sharing width corrected it, with fresh checks at
+1440/600/390px in all three languages and both appearances. Two Arabic resume conditions needed separate glyph and
+decoration measurements. Measured glyphs fit the prose and actual clipping surfaces. Retained observations include
+import decoration 2.3125px beyond the paragraph but inside its scroll surface, Git metadata decoration clipped by
+4.59375px at its existing FadeOverflow boundary, and Arabic resume-path decoration clipped by 2.265625px while glyphs
+remain inside the scroll surface. These are measured decoration observations, not baseline-proven defects or a
+permission for glyph overflow. No shared chip styling or palette was changed.
+
+Early interaction probes passed 48/54 and 52/54, with a separate interrupted attempt. Removal/exit settling and a
+stationary pointer over a different removal target after reflow were corrected in the probe; raw removal, focus,
+matching and tooltip assertions remain. Independent evidence review also caught a tooltip sampled during entrance
+at opacity 0.112623: those contrast numbers did not describe settled paint. The bounded final tooltip check waits
+for animation completion, asserts every measured ancestor has opacity 1, and checks viewport bounds before sampling
+and capturing. The 204 static conditions had no sampled ancestor opacity below 1. No cause is inferred for the
+separate historical 03a removed-account failure or the separate 13 menu-focus discrepancy.
+
+Independent source and evidence change checks passed, explicitly including names referenced in visible copy through
+shared InlineChip, fixed agent/product references, rich display versus plain accessibility/native/matching boundaries,
+and preservation of 04/05/12. Sequential map/product/memory documentation work retained existing authorities; no
+map changes were needed and all seven code-tree READMEs remain reachable. The preview and owned browsers stopped,
+port and service record cleared, and no scratch scenario remains. The source freeze and bulk slot were released after
+final captures. Raw logs, commands and captures remain in task outputs outside Git. No real login, live daemon,
+website build, packaged WKWebView or native VoiceOver listening was performed; prior native/listening limits remain.

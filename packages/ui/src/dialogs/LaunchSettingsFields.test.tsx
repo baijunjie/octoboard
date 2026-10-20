@@ -5,7 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
-import { LaunchSettingsFields } from "./LaunchSettingsFields";
+import { EffortPicker, LaunchSettingsFields, ModelPicker, type LaunchModels } from "./LaunchSettingsFields";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -93,4 +93,25 @@ it("retains request-refusal metadata for rich model descriptions while keeping s
   await wait(PAST_FIRST_WRITE);
   expect(container.querySelector("[data-slot=description] code")?.textContent).toBe("missing-account");
   expect(exposedStatuses()).toEqual([failure.message]);
+});
+
+it("directs inherited model and effort badges without selecting or submitting their display values", () => {
+  const inherited = { model: "model/中文-مراجعة", effort: "effort/مراجعة-中文" };
+  const changed = vi.fn();
+  const launch: LaunchModels = { loading: false, models: [], modelText: undefined, modelDescription: undefined, modelDetails: undefined };
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  act(() => root.render(<>
+    <ModelPicker launch={launch} model={null} inherit={inherited} onChange={changed} />
+    <EffortPicker launch={launch} model={null} effort={null} inherit={inherited} onChange={changed} />
+  </>));
+  for (const value of Object.values(inherited)) {
+    const badge = [...container.querySelectorAll("button span")].find((node) => node.textContent === value)!;
+    expect(badge.getAttribute("dir")).toBe("auto");
+    expect(badge.textContent).not.toMatch(/[\u2066-\u2069]/);
+  }
+  expect([...container.querySelectorAll("select")].map((select) => select.value)).toEqual(["", ""]);
+  expect([...container.querySelectorAll("option")].map((option) => option.value)).not.toEqual(expect.arrayContaining(Object.values(inherited)));
+  expect(changed).not.toHaveBeenCalled();
 });

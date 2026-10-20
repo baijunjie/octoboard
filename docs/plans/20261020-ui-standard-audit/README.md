@@ -68,7 +68,7 @@ into main. The closed audit changed no production UI; fix milestones implement i
 - 03a Match the HeroUI v2 Alert background reference (closed)
 - 04 Render structured error names and diagnostics (closed)
 - 05 Use rich name chips and tooltip content (closed)
-- [06 Separate choice status and direction](06-choice-status-and-direction.md)
+- 06 Separate choice status and direction (closed)
 - [07 Correct form defaults and blocked validity](07-form-defaults-and-validity.md)
 - [08 Keep horizontal tab strips at content width](08-content-width-tabs.md)
 - [09 Use consistent neutral empty states](09-consistent-empty-states.md)
@@ -77,7 +77,7 @@ into main. The closed audit changed no production UI; fix milestones implement i
 - 12 Hand focus off when report pages are replaced (closed)
 - [13 Use the shared button primitive for tree chevrons](13-collection-button-primitives.md)
 
-Milestones 06–11 and 13 remain open. The open milestones carry their current-source handoffs; the original audit
+Milestones 07–11 and 13 remain open. The open milestones carry their current-source handoffs; the original audit
 inventories remain historical evidence, with check limitations in [the check record](audit-checks.md).
 
 ## Evidence baseline and concurrent integration

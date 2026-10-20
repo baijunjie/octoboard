@@ -873,6 +873,7 @@ export const en = {
   },
   "git.branch.choose": "Choose a branch",
   "git.branch.gone": "{branch} (no longer exists)",
+  "git.branch.goneStatus": "No longer exists",
   "git.branch.responsible": "Session {title} is working on this branch",
   "git.branch.responsibleSelected": "The selected session {title} is working on this branch",
   "git.branch.responsibleGone": "Session {title} was working on this branch and no longer exists",
@@ -1005,7 +1006,8 @@ export const en = {
   "viewer.change.submodule": "Separate repository",
   "viewer.change.submodule.description": "The content of a separate repository is not shown here.",
 
-  "dialog.characterCount": "{count} / {limit} characters",
+  "dialog.characterCount": "{ratio} characters",
+  "dialog.characterRatio": "{count} / {limit}",
   "dialog.nameRequired": "Name is required.",
   "dialog.chooseDirectory": "Choose a directory",
   "dialog.agentSettings.account": "{agent} account",

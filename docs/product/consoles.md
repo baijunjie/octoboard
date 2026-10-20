@@ -56,9 +56,9 @@ moves to another entry.
 
 The mark is a small grey badge after the agent's name, reading **Not installed** or **Not added**, both in the picker's
 list and on the picker while it holds that agent. The badge never shrinks: when room runs short, the name gives way
-first. Where an agent picker is joined to an account picker, a held agent carrying a badge keeps the width its name and
-badge need, up to 70 % of the pair, and the account picker takes what is left. Assistive technology reads the badge as
-part of the agent's name, set apart from it by a pause.
+first. Where an agent picker is joined to an account picker, each takes half of the pair's width; a long name gives way
+within its own half, leaving each status badge visible. Assistive technology reads the badge as part of the agent's
+name, set apart from it by a pause.
 
 The console dialog's per-agent sections — its Agent default accounts rows (see "Agent config directories" below) and
 its Advanced options agent tabs (see "The Advanced section" in `docs/product/model-and-reasoning-effort.md`) — follow

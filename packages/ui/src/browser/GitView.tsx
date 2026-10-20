@@ -13,6 +13,7 @@ import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useListMotion } from "../components/useListMotion";
 import type { Translate } from "../i18n/catalog";
+import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import { displayWirePath, wireRelativeOrAbsolute } from "../wirePath";
 import { BranchSelect } from "./BranchSelect";
@@ -85,7 +86,7 @@ function loadingText(t: Translate, props: ChangesViewProps): string | undefined 
   const parts = partsLoading(props);
   if (items.length === 0) return parts.uncommitted || parts.committed ? t("git.loading") : undefined;
   if (committed.state !== "compare" || !parts.committed) return undefined;
-  return committed.comparison.state === "loading" ? t("git.changes.comparing", { base: displayWirePath(committed.base) }) : t("git.changes.listingCommits");
+  return committed.comparison.state === "loading" ? t("git.changes.comparing", { base: isolate(displayWirePath(committed.base)) }) : t("git.changes.listingCommits");
 }
 
 const UNAVAILABLE_TITLE = <Message id="git.unavailable" />;
@@ -150,7 +151,7 @@ function Notice({ notice, projectRoots }: { notice: ChangesNotice; projectRoots:
     case "noBase":
       return <>{t("git.changes.noBase")}</>;
     case "comparing":
-      return <>{t("git.changes.comparing", { base: notice.base })}</>;
+      return <Message id="git.changes.comparing" params={{ base: code(notice.base) }} />;
     case "base":
       return <Message id="git.changes.base" params={{ base: code(notice.base), baseCommit: code(notice.baseCommit), tip: code(notice.tip) }} />;
     case "listingCommits":

@@ -65,7 +65,7 @@ export function PickedTag({
   tag: string;
   /** The remove button's tooltip, naming the tag. Its accessible name is the bare verb; the row adds
    * the tag's own text to it through react-aria's `aria-labelledby`, so it is not announced twice. */
-  removeTitle: string;
+  removeTitle: React.ReactNode;
 }): React.ReactElement {
   const t = useT();
   const dir = tagDirection(tag, textDirection(useCurrentLanguage()));
@@ -101,6 +101,7 @@ export function PickedTag({
           <TitledControl title={removeTitle}>
             <Tag.RemoveButton
               aria-label={t("common.removeTag")}
+              aria-describedby=""
               className={`${REMOVE_CLASS} ${REMOVE_COLOUR_CLASS}`}
             />
           </TitledControl>

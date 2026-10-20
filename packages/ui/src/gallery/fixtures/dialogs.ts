@@ -16,7 +16,7 @@ const RESUME_ID = "3f2b8c1e-7a4d-4e9b-9c55-0d6a1b2e4f70";
 // Each also carries a description: a short one of a few lines, and one longer than the field is tall.
 const tagged = [
   projectOf("p-docs", console_.id, "Docs Site", {
-    tags: ["x", "frontend", "a-long-tag-for-checking-project-interface-layout"],
+    tags: ["x", "frontend", "a-long-tag-for-checking-project-interface-layout-مرحبا-发布"],
     description: "The public documentation site, built with Astro.\nGuides live under src/content/guides.",
   }),
   projectOf("p-billing", console_.id, "Billing Service", {
@@ -58,8 +58,8 @@ const accountsState = snapshotState({
     added_agents: ALL_AGENTS,
     default_clone_dir: "/Users/dev/Projects",
     accounts: [
-      { id: "a-work", agent: "claude", name: "Work account for release coordination across all production services", config_dir: "/Users/dev/.claude-work" },
-      { id: "a-personal", agent: "claude", name: "Personal account for documentation and experimental development", config_dir: "/Users/dev/.claude-personal" },
+      { id: "a-work", agent: "claude", name: "Work account for release coordination across all production services مرحبا 发布", config_dir: "/Users/dev/.claude-work" },
+      { id: "a-personal", agent: "claude", name: "Personal account for documentation and experimental development مرحبا 发布", config_dir: "/Users/dev/.claude-personal" },
     ],
   },
 });
@@ -94,12 +94,13 @@ const removeState = snapshotState({
 });
 
 // A model the agent no longer lists, long enough to be clipped in a picker.
-const RETIRED_MODEL = "retired-model-for-production-release-coordination-and-compatibility-review";
+const RETIRED_MODEL = "retired-model-for-production-release-coordination-and-compatibility-review-مرحبا-发布";
+const RETIRED_EFFORT = "retired-effort-for-production-release-coordination-مرحبا-发布";
 
 // A console that carries a stored model and effort for its default agent: the model is one the
 // dialog's list no longer names, so it is offered on the end, marked.
 const launchSettingsState = snapshotState({
-  consoles: [{ ...console_, claude_console_session_model: RETIRED_MODEL, claude_console_session_effort: "high" }],
+  consoles: [{ ...console_, claude_console_session_model: RETIRED_MODEL, claude_console_session_effort: RETIRED_EFFORT }],
   projects: [web, api],
   sessions,
 });
@@ -117,7 +118,7 @@ const configured = projectOf("p-configured", console_.id, "Configured Site", {
   default_agent: "claude",
   claude_account_id: { kind: "account", id: "a-work" },
   claude_session_model: RETIRED_MODEL,
-  claude_session_effort: "high",
+  claude_session_effort: RETIRED_EFFORT,
 });
 const configuredState = snapshotState({
   consoles: [{ ...console_, claude_account_id: "a-personal" }],
@@ -338,7 +339,7 @@ const resumeState = {
     ...accountsState.settings!,
     accounts: [
       ...accountsState.settings!.accounts,
-      { id: "a-codex-team", agent: "codex" as const, name: "Team Codex", config_dir: "/Users/dev/.codex-team" },
+      { id: "a-codex-team", agent: "codex" as const, name: "Team Codex for release coordination across production services مرحبا 发布", config_dir: "/Users/dev/.codex-team" },
     ],
   },
 };
@@ -682,7 +683,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "normal",
     title: "Console settings with avatar, stored launch settings and session instructions",
-    description: "The Claude Code tab holds different values for its two groups: the retired console session model is retained and marked, while project sessions have Sonnet at Low. The avatar and its remove control are visible. At the foot of Advanced, the Console session instructions field holds the console's own multi-line text, longer than the field is tall, so it scrolls inside the field.",
+    description: "The Claude Code tab holds different values for its two groups: the retired console session model and effort are retained with status badges, while project sessions have Sonnet at Low. The avatar and its remove control are visible. At the foot of Advanced, the Console session instructions field holds the console's own multi-line text, longer than the field is tall, so it scrolls inside the field.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.edit")),
@@ -1224,15 +1225,29 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
+    id: "dialog-edit-project-effort-choices",
+    group: "Projects",
+    category: "normal",
+    title: "Project reasoning effort choices with a retained value",
+    description: "The open Reasoning effort list retains the stored mixed-script value that no listed model offers, with a Not in the list badge after its raw name. The Model field beside it also retains its unlisted value.",
+    steps: [
+      (ui) => projectActions(ui, configured.name),
+      (ui) => ui.press(ui.t("sidebar.project.edit")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+      (ui) => ui.press(describing("the Reasoning effort picker holding the retired value", (name) => name.startsWith(RETIRED_EFFORT))),
+    ],
+  },
+  {
+    ...dialogFixture,
     state: {
       ...dialogState,
-      consoles: new Map([...dialogState.consoles, [console_.id, { ...dialogState.consoles.get(console_.id)!, claude_project_session_model: RETIRED_MODEL, claude_project_session_effort: null }]]),
+      consoles: new Map([...dialogState.consoles, [console_.id, { ...dialogState.consoles.get(console_.id)!, claude_project_session_model: RETIRED_MODEL, claude_project_session_effort: RETIRED_EFFORT }]]),
     },
     id: "dialog-edit-project-inherited-launch-settings",
     group: "Projects",
     category: "normal",
     title: "Project settings inheriting console launch settings",
-    description: "Model reads Inherit from console with a grey badge after it naming the console's project session model, which is too long for the field and ends in an ellipsis before the chevron; Reasoning effort, which the console leaves to the agent, reads Inherit from console with a grey badge The agent's own setting, in full.",
+    description: "Model reads Inherit from console with a grey badge after it naming the console's project session model, which is too long for the field and ends in an ellipsis before the chevron; Reasoning effort inherits the console's long retained value. Both values mix scripts and keep their own reading order.",
     steps: [
       (ui) => projectActions(ui, onDefault.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),

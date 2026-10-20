@@ -1116,6 +1116,7 @@ WCAG 2.2 A 1.3.2, since a value read in the wrong order says something else.
 is not prose — a path, a URL, a branch name, a commit id, a shell command, a port, a keyboard shortcut, a count written
 as `1 / 12`, a literal to type, a diagram, a formula — reads left to right in every language, and the element that
 *draws* it says so with `dir="ltr"`.
+`TextFieldDescription` puts only the count/limit ratio inside an LTR `bdi`, leaving the translated unit outside it.
 
 An inline formula sits inside a paragraph, so that element is also a bidi isolate: `dir` on it is not always enough
 once a utility class resets `unicode-bidi`, and Tailwind's `isolate` does not do this job (`isolation: isolate` is a
@@ -1151,9 +1152,10 @@ Two cases take no isolate, and putting one there breaks something:
   content, so only a value going into a *string* needs `isolate`. A string wholly wrapped in an isolate also has no
   strong character left for `dir="auto"` to read, which can lay the element out left to right.
 
-`packages/ui/src/browser/BranchSelect.tsx` shows the split: the branch name is plain for `textValue`, for the
-children, and for the `title` that is the name alone, and isolated only where it enters a sentence — the `title` that
-says the branch is gone.
+`packages/ui/src/browser/BranchSelect.tsx` keeps the branch name plain for `textValue` and its LTR primary label.
+Gone status is a separate badge; the clipped tooltip uses a technical inherit-size chip in its sentence.
+`packages/ui/src/browser/GitView.tsx` likewise uses a technical chip in the visible comparing notice, while its
+plain announcement isolates the branch name where it enters the sentence.
 
 **An icon mirrors only when its meaning is a direction.** Back and Forward, a disclosure or submenu chevron, a pane
 toggle, a glyph whose rows hang off the leading side (the fold control, the list and folder-tree layout toggles):

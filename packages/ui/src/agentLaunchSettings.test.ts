@@ -30,6 +30,17 @@ describe("launchSettingOptions", () => {
   it("offers the stored value alone when there is no list", () => {
     expect(launchSettingOptions(t, [], "ultra")).toEqual([{ value: "ultra", label: "ultra", badge: "Not in the list" }]);
   });
+
+  it("marks mixed-script missing values without rewriting them or mutating the live list", () => {
+    const current = "vendor/中文-مراجعة (custom)";
+    const known = [{ value: "listed", label: "Listed model" }];
+    const options = launchSettingOptions(t, known, current);
+    expect(options.at(-1)).toEqual({ value: current, label: current, badge: "Not in the list" });
+    expect(known).toEqual([{ value: "listed", label: "Listed model" }]);
+    expect(options[0]).toBe(known[0]);
+    expect(options.at(-1)?.value).not.toMatch(/[\u2066-\u2069]/);
+    expect(launchSettingOptions(t, options, current)).toBe(options);
+  });
 });
 
 describe("effortLevels", () => {

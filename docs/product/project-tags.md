@@ -22,6 +22,8 @@ rules below do not apply (see "Filtering the project list" in `docs/product/side
   laid over the tag's end, the label fading out ahead of it. A label whose end the button then covers counts as cut,
   and its marquee scrolls until that end is clear of the button; a label that ends well short of the button does not
   move.
+- The remove button's tooltip names the tag, set apart as a chip. Its accessible name names the removal and tag
+  once; the tooltip adds no repeated description.
 - At rest, the tag fits its content with no minimum width. While the pointer is over it or it has keyboard focus,
   it is at least 3rem wide so the remove button and its fade leave part of a short label visible.
 - The tag takes the direction of its own text, decided by its first letter, whatever the UI language: a tag whose

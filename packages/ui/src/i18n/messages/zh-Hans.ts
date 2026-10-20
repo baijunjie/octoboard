@@ -808,6 +808,7 @@ export const zhHans: Translation<"other"> = {
   },
   "git.branch.choose": "选择分支",
   "git.branch.gone": "{branch}（已不存在）",
+  "git.branch.goneStatus": "已不存在",
   "git.branch.responsible": "会话 {title} 正在处理该分支",
   "git.branch.responsibleSelected": "所选会话 {title} 正在处理该分支",
   "git.branch.responsibleGone": "会话 {title} 曾处理该分支，现已不存在",
@@ -929,7 +930,8 @@ export const zhHans: Translation<"other"> = {
   "viewer.change.submodule": "独立仓库",
   "viewer.change.submodule.description": "此处不显示独立仓库的内容。",
 
-  "dialog.characterCount": "{count} / {limit} 字符",
+  "dialog.characterCount": "{ratio} 字符",
+  "dialog.characterRatio": "{count} / {limit}",
   "dialog.nameRequired": "必须填写名称。",
   "dialog.chooseDirectory": "选取目录",
   "dialog.agentSettings.account": "{agent} 账户",
