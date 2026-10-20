@@ -21,7 +21,7 @@ process has open and compare it against the fresh build output. The sidecar dire
 not that executable — the process runs from a further copy under the Tauri crate's own target directory — so an
 up-to-date sidecar directory on its own proves nothing about what is running.
 
-## Read what the shipped webview sends to the daemon off a packaged build, through a wrapped sidecar
+## Read and stage what the shipped webview exchanges with the daemon through a wrapped sidecar in a packaged build
 
 A dev-mode window does not answer what the shipped app puts on the wire: it loads from the dev server (`devUrl` in
 `apps/desktop/src-tauri/tauri.conf.json`), so the `Origin` it sends differs from the packaged webview's. So anything
@@ -32,6 +32,13 @@ daemon instead, without touching the source: in a copy of the built `.app`, rena
 print the daemon's `octoboardd listening on 127.0.0.1:<port>` line again with its own port, because the shell connects
 to whatever port that line on the sidecar's stdout names. This relies on the build being unsigned, as the swap breaks
 a signed bundle's signature.
+
+The same proxy is how a real daemon error reply is put into the window's own request path, for an alert or a recovery
+action that answers one: have it hold one specific request of the window's (an `open_session` for an agent), change
+state through the real daemon on a separate control connection (remove that agent) while withholding from the window
+the broadcasts that would show it the change first, then forward the original request unchanged, so the window
+receives the daemon's genuine refusal (`agent_not_added`). A refusal provoked on the control connection itself never
+reaches the window's alert, so it is no check of that alert, and neither is a race left to timing.
 
 ## Nothing the daemon logs once the application is gone is readable, and putting its log on a file changes what it does
 
@@ -115,17 +122,21 @@ ad-hoc signing identifier, ad-hoc sign only the scratch copy with the chosen ide
 
 Launch that exact scratch path with `open -n` and a clean environment: fresh `HOME`, `TMPDIR`, `ZDOTDIR`, XDG
 directories and agent config directories, with a controlled `PATH`. Set each override through `open --env`; do not
-assume the Launch Services process inherits the caller's environment. Put test projects inside the throwaway home
-(`$HOME/code/<project>`), not beside it: the trust dialog cannot offer a folder checkbox for a project whose parent
-is or contains that home (see the "Trusted folders" section of `docs/product/folder-trust.md`).
+assume the Launch Services process inherits the caller's environment, nor that an `LSEnvironment` in the bundle's
+`Info.plist` is applied: on the first launch of a rebuilt clone Launch Services ignored its `HOME`, and the daemon
+started against the real home and hit the user's instance's occupied lock. Put test projects inside the throwaway home
+(`$HOME/code/<project>`), not beside it: the trust dialog cannot offer a folder checkbox for a project whose parent is
+or contains that home (see the "Trusted folders" section of `docs/product/folder-trust.md`).
 
-Before driving the window, verify isolation positively: the running app executes the scratch bundle, its daemon owns
-the scratch database and lock and listens on its own port, and its WebKit processes have their local storage and
-content rule lists open under the unique identifier. Check the installed app's PID and executable separately so an
-automation target cannot silently select its window. If any of these checks fails, stop the verification rather than
-moving, restoring or editing the installed app's profile. During cleanup, stop only the verification's PIDs and remove
-only its scratch bundle, data, and identifier-specific WebKit/cache/defaults artifacts; real-user Library artifacts
-are outside the throwaway `HOME` and need to be included explicitly.
+Before driving the window, verify isolation positively: the running app executes the scratch bundle, its daemon owns the
+scratch database and lock and listens on its own port, and its WebKit processes have their local storage and content
+rule lists open under the unique identifier. Check the installed app's PID and executable separately so an automation
+target cannot silently select its window. If any of these checks fails, stop the verification rather than moving,
+restoring or editing the installed app's profile. Never run two bundles with the same identifier at once: an earlier
+build retained for comparison carries it too, shares its WebKit profile, and leaves `open -b` and an accessibility
+target free to pick either, so stop one before launching the other. During cleanup, stop only the verification's PIDs
+and remove only its scratch bundle, data, and identifier-specific WebKit/cache/defaults artifacts; real-user Library
+artifacts are outside the throwaway `HOME` and need to be included explicitly.
 
 To test other system languages, pass them for that launch only:
 `open <scratch-app> --args -AppleLanguages '(zh-Hans-CN, en)'`. This steers only a profile with no
