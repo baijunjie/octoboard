@@ -560,6 +560,8 @@ it("shows one agent at a time, opening on the first and switching by tab", () =>
 it("starts a new account on the agent of the tab in view", () => {
   const { container } = mount("Codex");
   const add = [...container.querySelectorAll("button")].find((button) => button.textContent === "Add account")!;
+  expect(add.closest('[role="tabpanel"]')).toBe(container.querySelector('[role="tabpanel"]'));
+  expect(buttonNamed(container, "Add agent")!.closest('[role="tabpanel"]')).toBeNull();
   act(() => add.click());
   expect(document.body.querySelector<HTMLSelectElement>('select[aria-label="Agent"]')!.value).toBe("codex");
 });
@@ -792,7 +794,7 @@ it("shows an empty state with Add agent, and no strip or Add account, when no ag
   const { container } = mount();
   expect(container.querySelector('[role="tablist"]')).toBeNull();
   expect(container.textContent).toContain("No agent added");
-  expect(buttonNamed(container, "Add account")!.disabled).toBe(true);
+  expect(buttonNamed(container, "Add account")).toBeUndefined();
   expect(buttonNamed(container, "Add agent")!.disabled).toBe(false);
 });
 

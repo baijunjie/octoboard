@@ -127,10 +127,6 @@ export function AgentAccountsSection(): React.ReactElement {
         <Message id="settings.accounts.description" params={PATH_VAR_PARAMS} />
       </p>
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="outline" preventFocusOnPress isDisabled={agents.length === 0} onPress={() => setEditing(null)}>
-          <UserPlus aria-hidden="true" className="size-4" />
-          {t("settings.accounts.add")}
-        </Button>
         <Button ref={addAgentButton} size="sm" variant="outline" preventFocusOnPress onPress={() => setAddingAgent(true)}>
           <Bot aria-hidden="true" className="size-4" />
           {t("settings.accounts.addAgent")}
@@ -170,6 +166,7 @@ export function AgentAccountsSection(): React.ReactElement {
               key={agent}
               agent={agent}
               owned={accounts.filter((account) => account.agent === agent)}
+              onAdd={() => setEditing(null)}
               onEdit={setEditing}
               onRemove={setRemoving}
               onRenameDefault={setRenamingDefault}
@@ -234,9 +231,10 @@ export function AgentAccountsSection(): React.ReactElement {
 
 /** One agent's tab panel. It owns its list motion: a panel that mounts or unmounts as the tab changes is a replaced
  * page, which takes none, while rows added or removed within it still animate. */
-function AgentAccountsPanel({ agent, owned, onEdit, onRemove, onRenameDefault, onLogin }: {
+function AgentAccountsPanel({ agent, owned, onAdd, onEdit, onRemove, onRenameDefault, onLogin }: {
   agent: Agent;
   owned: Account[];
+  onAdd: () => void;
   onEdit: (account: Account) => void;
   onRemove: (account: Account) => void;
   onRenameDefault: (agent: Agent) => void;
@@ -255,7 +253,6 @@ function AgentAccountsPanel({ agent, owned, onEdit, onRemove, onRenameDefault, o
   const notUsable = isAgentUnavailable(agentAvailability, agent) && (
     <div><Message id="settings.accounts.notUsable" params={{ agent: AGENT_LABEL[agent], ...PATH_VAR_PARAMS }} /></div>
   );
-  // The strip's own rule is the grid's top edge unless a line of text sits between them.
   const hasApproval = agent === "codex" || agent === "claude";
   // What an account's menu holds. The default account is not a record: it can be named, not edited or removed. A
   // further action is one more entry here.
@@ -290,11 +287,16 @@ function AgentAccountsPanel({ agent, owned, onEdit, onRemove, onRenameDefault, o
     return null;
   };
   return (
-    <Tabs.Panel id={agent} className="px-0 pt-3">
+    <Tabs.Panel id={agent} className="px-0 pt-0">
       <div ref={listRef} className="relative">
-        {agent === "codex" && <p className="pb-2 text-sm text-app-muted">{t("settings.accounts.approval.codexDescription")}</p>}
-        {agent === "claude" && <p className="pb-2 text-sm text-app-muted">{t("settings.accounts.approval.claudeDescription")}</p>}
-        <div className={`grid grid-cols-1 ${hasApproval ? "groove-t sm:grid-cols-[minmax(0,1fr)_auto_auto]" : "sm:grid-cols-[minmax(0,1fr)_auto]"}`}>
+        <div className={`grid grid-cols-1 gap-x-6 ${hasApproval ? "sm:grid-cols-2" : "sm:grid-cols-[minmax(0,1fr)_auto]"}`}>
+          <div className={`col-span-full grid grid-cols-subgrid items-center pb-2 ${hasApproval ? "sm:groove-b" : ""}`}>
+            <Button size="sm" variant="outline" className="justify-self-start" preventFocusOnPress onPress={onAdd}>
+              <UserPlus aria-hidden="true" className="size-4" />
+              {t("settings.accounts.add")}
+            </Button>
+            {hasApproval && <div className="col-start-2 hidden sm:block"><ApprovalHeading agent={agent} /></div>}
+          </div>
           <AccountRow
             motionKey={`default:${agent}`}
             agent={agent}
@@ -391,6 +393,18 @@ function useLoginFocusReturn(
   };
 }
 
+function ApprovalHeading({ agent }: { agent: Agent }): React.ReactElement {
+  const t = useT();
+  return (
+    <div className="flex items-center gap-1 text-sm text-app-muted">
+      {t("settings.accounts.approval.heading")}
+      <HelpTip label={t("settings.accounts.approval.heading")}>
+        {t(agent === "codex" ? "settings.accounts.approval.codexDescription" : "settings.accounts.approval.claudeDescription")}
+      </HelpTip>
+    </div>
+  );
+}
+
 /** Subgrid shares control widths across accounts.
  * The account's quota takes the row's full width beneath its controls. */
 function AccountRow({ agent, account, label, help, description, approval, children, motionKey, login, loginName, onLogin, loginActive }: {
@@ -419,7 +433,7 @@ function AccountRow({ agent, account, label, help, description, approval, childr
   const loginRef = useRef<HTMLButtonElement>(null);
   const returnLoginFocus = useLoginFocusReturn(loginRef, actionsRef, { active: loginActive, succeeded: login !== undefined });
   return (
-    <div data-list-motion={motionKey} className="col-span-full grid grid-cols-subgrid items-center gap-x-4 gap-y-3 groove-b py-4 last:border-b-0">
+    <div data-list-motion={motionKey} className="col-span-full grid grid-cols-subgrid items-center gap-y-3 groove-b py-4 last:border-b-0">
       <div className="min-w-0">
         <AccountNameLine name={label} quota={quota} help={help} showLoginState>
           {notLoggedIn && <Button ref={loginRef} size="xs" variant="secondary" preventFocusOnPress isDisabled={loginActive} onPress={() => onLogin(returnLoginFocus)}>
@@ -429,8 +443,15 @@ function AccountRow({ agent, account, label, help, description, approval, childr
         </AccountNameLine>
         <div className="text-sm text-app-muted">{description}</div>
       </div>
-      {approval && <div className="min-w-0">{approval}</div>}
-      <div ref={actionsRef} className="flex flex-wrap items-center gap-2">{children}</div>
+      <div className="contents sm:flex sm:items-center sm:gap-4">
+        {approval && (
+          <div className="min-w-0 sm:flex-1">
+            <div className="mb-1 sm:hidden"><ApprovalHeading agent={agent} /></div>
+            {approval}
+          </div>
+        )}
+        <div ref={actionsRef} className="flex shrink-0 flex-wrap items-center gap-2">{children}</div>
+      </div>
       {quota && !(typeof quota === "object" && isNotLoggedIn(quota.unavailable)) && <div className="col-span-full"><AccountQuotaSummary quota={quota} /></div>}
       <AccountLoginAnnouncer login={login} name={loginName} />
     </div>

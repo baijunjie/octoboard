@@ -1455,6 +1455,7 @@ export const en = {
   "settings.accounts.login.cancel": "Cancel login",
   "settings.accounts.defaultHelp": "About the default account",
   "settings.accounts.defaultSetup": "The setup a session runs under when no account is pinned.",
+  "settings.accounts.approval.heading": "Permission approval",
   "settings.accounts.approval.label": "Approval mode for {name} ({agent})",
   "settings.accounts.approval.codexDescription": "Choose how Codex reviews permission requests for each account. Applies when a session next starts or resumes. Automatic review may use additional tokens.",
   "settings.accounts.approval.inherit": "Follow account configuration",

@@ -3,7 +3,7 @@
 Settings' **Agent accounts** section (see "Agent accounts" in `docs/product/settings.md`): the agents the user has
 added, and every account of each, grouped by agent. The section opens with a paragraph saying what an account is — a
 named config directory of an agent, where it keeps its login and conversation history — and that an agent has to be on
-the user's `PATH` for its accounts to be usable. Below that paragraph sit the **Add account** and **Add agent** buttons,
+the user's `PATH` for its accounts to be usable. Below that paragraph sits the **Add agent** button,
 then the agent strip with the selected agent's accounts. What an account is and how consoles, projects and sessions use
 one are in "Agent config directories" in `docs/product/consoles.md`.
 
@@ -109,8 +109,8 @@ accounts of the agent stay stored untouched. The consoles, projects and sessions
 ## With no agent added
 
 When the user has removed every agent, the strip is replaced by an empty state titled "No agent added", with a line
-saying to add an agent installed on this machine to manage its accounts here. **Add account** is unavailable; **Add
-agent** stays.
+saying to add an agent installed on this machine to manage its accounts here. **Add account** is absent; **Add agent**
+stays.
 
 ## The default account
 
@@ -157,6 +157,12 @@ with a dot, not in colour alone:
 
 ## Approval modes
 
+Claude Code and Codex show a permission-approval heading above the selectors. In a wide layout it shares a row with
+**Add account**; the heading and selectors start at the second of two equal columns, aligned with the quota layout,
+with the account actions at the row's end. In a narrow layout the heading repeats above each account's selector.
+Its help tip explains how the agent handles permission requests, that the choice applies when a session next starts
+or resumes, and, for Codex, that automatic review may use additional tokens. Grok Build has no approval heading or help tip.
+
 Every Codex account row, including the default account, has an inline approval-mode selector:
 
 - **Follow account configuration** leaves the reviewer to that account's Codex configuration. This is the initial
@@ -196,7 +202,8 @@ appears (see "Per-agent specifics a user will notice" in `docs/product/launching
 
 ## Adding, editing and removing an account
 
-One **Add account** button serves every agent: its form asks for the agent, starting on the agent of the tab in view —
+**Add account** sits at the start of the selected agent's tab panel, above its account list. Its form asks for the
+agent, starting on the agent of the tab in view —
 every added agent is listed, in the list's order (every agent while the list is undecided), and can be picked, one that
 is not installed included and marked with a Not installed badge after its name, since an account may be set up before its agent is, unlike
 the agent pickers elsewhere (see "Which agents the agent pickers list" in `docs/product/consoles.md`) — then a name and a

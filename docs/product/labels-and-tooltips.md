@@ -128,6 +128,10 @@ Every other helping description stays visible, even one that only needs reading 
 field or a setting row, the note at the foot of a form, a section's lead paragraph, status and warnings, and the
 consequences and timing of an action.
 
+The permission-approval explanation in Settings' Agent accounts section is an exception: its handling, timing and
+Codex's possible extra token cost sit in a help tip beside the approval heading (see "Approval modes" in
+`docs/product/agent-accounts.md`).
+
 One status is a deliberate exception: an added agent that is not installed, in Settings' Agent accounts section. The
 status itself stays visible, as a warning glyph after the agent's name on its tab, and each account the user owns of
 that agent still says visibly that it is not usable; only the glyph's explanation — that the agent is not installed and
@@ -139,7 +143,7 @@ An explanation can be split: the part of either kind above goes into the help ti
 tip sits at the end of the line it explains, beside the label rather than inside it, so the name announced for that
 label or field does not include it. A section heading carries no help tip.
 
-Help tips are used in three places:
+Help tips are used in four places:
 
 - Settings' **Automatically pull repositories** row, at the end of the row's name: that the remote is checked every few
   minutes whichever way the switch is set (see "Git" in `docs/product/settings.md`);
@@ -148,6 +152,8 @@ Help tips are used in three places:
   default agent" in `docs/product/projects.md`);
 - each agent's **default account** in Settings' Agent accounts section, at the end of its name line: that it is the
   setup a session runs under when no account is pinned (see "The default account" in
+  `docs/product/agent-accounts.md`);
+- the permission-approval headings in Settings' Agent accounts section (see "Approval modes" in
   `docs/product/agent-accounts.md`).
 
 ## Two-state icon toggles

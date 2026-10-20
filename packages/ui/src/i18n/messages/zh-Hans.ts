@@ -1316,6 +1316,7 @@ export const zhHans: Translation<"other"> = {
   "settings.accounts.login.cancel": "取消登录",
   "settings.accounts.defaultHelp": "关于默认账户",
   "settings.accounts.defaultSetup": "未指定账户时，会话所使用的配置。",
+  "settings.accounts.approval.heading": "权限审批",
   "settings.accounts.approval.label": "{name}（{agent}）的审批方式",
   "settings.accounts.approval.codexDescription": "为每个账户选择 Codex 权限请求的审批方式，下次启动或恢复会话时生效。自动审批可能额外消耗 token。",
   "settings.accounts.approval.inherit": "跟随账户配置",

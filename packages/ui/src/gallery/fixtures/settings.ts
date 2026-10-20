@@ -1,6 +1,6 @@
 import { AGENT_LABEL } from "../../agents";
 import type { AccountLogin, Agent, AgentAvailability } from "../../protocol";
-import type { Scenario } from "../scenario";
+import type { Scenario, Step } from "../scenario";
 import { ALL_AGENTS, SAMPLE, minutesAgo, snapshotState } from "./builders";
 import { noneAddedState } from "./empty";
 import { quotaFailure, quotaOf, quotaWindow } from "./quotas";
@@ -367,7 +367,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Claude Code tab",
-    description: "The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each as wide as its icon and name and the strip starting at the left edge, and Claude Code is open. The default account's name line ends with a small muted \"?\" after Default and its plan chip, with only its config directory beneath. Each account's plan sits beside its name, with its quota windows beneath: a headline with what remains, the countdown at the end of its line and a bar of the same remainder in the agent's colour; the default account lists five-hour quota first, weekly next and Fable last, with no countdown on the model window. Work is spent: 0% remaining, also where use went past 100%. Client has no quota yet and says it is being read. A line under the tab strip describes the approval selector each account has: the default account is set to Automatic, Work to Approve everything and Client follows its account configuration. Remove Work or Client: the account fades out while sliding to the right while the remaining accounts slide into place.",
+    description: "The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each as wide as its icon and name and the strip starting at the left edge, and Claude Code is open. The default account's name line ends with a small muted \"?\" after Default and its plan chip, with only its config directory beneath. Each account's plan sits beside its name, with its quota windows beneath: a headline with what remains, the countdown at the end of its line and a bar of the same remainder in the agent's colour; the default account lists five-hour quota first, weekly next and Fable last, with no countdown on the model window. Work is spent: 0% remaining, also where use went past 100%. Client has no quota yet and says it is being read. Add agent stays above the tab strip; Add account begins the selected tab on the same row as the vertically centered Permission approval column heading, with a help button for its explanation: the default account is set to Automatic, Work to Approve everything and Client follows its account configuration. The heading and selectors align with the start of the right-hand quota column, and account actions stay at the far right. Remove Work or Client: the account fades out while sliding to the right while the remaining accounts slide into place.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -418,7 +418,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Codex tab",
-    description: "Each account has a plan, two quota windows and an approval selector; Automation has no plan, so no plan label. The default account and Personal follow their account configuration, Automation uses automatic review and Production asks you; change any approval mode to save it independently.",
+    description: "Add account and the vertically centered Permission approval column heading share one row, with its explanation behind the adjacent help button. The heading and selectors align with the start of the right-hand quota column, and account actions stay at the far right. Each account has a plan, two quota windows and an approval selector; Automation has no plan, so no plan label. The default account and Personal follow their account configuration, Automation uses automatic review and Production asks you; change any approval mode to save it independently.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -426,12 +426,26 @@ export const settingsScenarios: Scenario[] = [
       (ui) => ui.press(AGENT_LABEL.codex),
     ],
   },
+  ...(["claude", "codex"] as const).map((agent): Scenario => ({
+    id: `settings-accounts-approval-help-${agent}`,
+    group: GROUP,
+    category: "normal",
+    title: `Settings: accounts, ${AGENT_LABEL[agent]} permission approval explanation`,
+    description: "The help button beside the Permission approval column heading is pressed. Its popover keeps the agent-specific explanation next to the selectors it describes, without a tooltip on top.",
+    state: quotaState,
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.accounts")),
+      ...(agent === "codex" ? [((ui) => ui.press(AGENT_LABEL.codex)) satisfies Step] : []),
+      (ui) => ui.press(ui.t("settings.accounts.approval.heading")),
+    ],
+  })),
   {
     id: "settings-accounts-grok",
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Grok Build tab",
-    description: "Grok's one credit pool is a weekly window, with no approval selector.",
+    description: "Add account begins the Grok Build tab, above the account list. Grok's one credit pool is a weekly window, with no approval selector or Permission approval heading.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -444,7 +458,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Claude Code tab in a narrow window",
-    description: "Below 640px the windows stack in one column and a long model name wraps under its own headline, the countdown staying at the end of the first line. The default account's approval selector drops beneath its name. The tab strip fits the width.",
+    description: "Below 640px the windows stack in one column and a long model name wraps under its own headline, the countdown staying at the end of the first line. Each approval selector drops beneath its account name, with its own Permission approval heading and help button directly above. The shared column heading is hidden. The tab strip fits the width.",
     width: 560,
     state: narrowQuotaState,
     steps: [
@@ -471,7 +485,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Codex tab in a narrow window",
-    description: "Below 640px Codex's approval selector and the account's actions button drop beneath the name. The section is scrolled to the end, so Personal's selector and actions button are in view under the pinned tab strip.",
+    description: "Below 640px Codex's approval selector and the account's actions button drop beneath the name. Each selector has its own Permission approval heading and help button; the shared column heading is hidden. The section is scrolled to the end, so Personal's selector and actions button are in view under the pinned tab strip.",
     width: 560,
     state: narrowQuotaState,
     steps: [
@@ -498,7 +512,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, no agent added",
-    description: "Every agent has been removed: no tab strip, a hint to add an installed agent, and Add account is unavailable while Add agent is not. The accounts set up earlier are kept, only unlisted.",
+    description: "Every agent has been removed: no tab strip or Add account button, a hint to add an installed agent, and Add agent is offered. The accounts set up earlier are kept, only unlisted.",
     state: noAgentsState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),

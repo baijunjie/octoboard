@@ -401,7 +401,12 @@ it only on reaching the "?". That is why only a principle-level explanation, whi
 need, or the extra line one item in a set of like items carries, moves there; every other description, a status and a
 warning among them, stays visible text.
 
-One deliberate exception: an added agent that is not installed is marked in the Settings agent strip by a warning glyph
+The permission-approval explanation in Settings' Agent accounts section is an exception: the explanation of how
+requests are handled, when the choice takes effect and Codex's possible extra token cost sits in a `HelpTip` beside
+the approval heading. The heading stays visible above the selector column in wide layouts and above each account's
+selector in narrow layouts.
+
+Another deliberate exception: an added agent that is not installed is marked in the Settings agent strip by a warning glyph
 after its tab's name, and the explanation sits in a tooltip anchored to the tab rather than in a line of text. The
 status itself stays visible as the glyph; the tooltip opens on hover and on the tab's keyboard focus, in the latter
 case once any scroll that focus set off to reveal the tab has settled, since a scroll under an open tooltip closes it;
