@@ -23,7 +23,7 @@ and the right pane" in `docs/product/window-layout.md`.
 The right pane has **no frame or surface of its own**: it is its cards. Each card looks exactly like the sidebar's
 floating card (see "A hidden pane floats in on hover" in `docs/product/window-layout.md`): rounded corners, the
 hairline edge, the light card shadow and the sidebar's background, docked and floating alike. The cards keep
-**8 px** from the top bar, from the window's end edge and from its bottom (or the connection banner), **16 px** from
+**8 px** from the top bar, from the window's end edge and from its bottom (or the connection banner), **8 px** from
 the terminal and **10 px** from each other; the gaps on the terminal's side and between cards hold the resize grips
 (see "Resizing the sidebar and the right pane" in `docs/product/window-layout.md` and "Resizing panels" below). What shows around and between the cards is the
 terminal's area, in the terminal's own background, so the cards read as lying on the content. A single open panel
@@ -146,7 +146,7 @@ it is open in the pane's column, alone or beside the Files panel.
 stands in its place, the archive view included — and nothing else:
 
 - The card is inset **8 px** from every side of that area, the side beside the pane's column excepted, where the
-  column's own 16 px gap parts them; the gaps show the terminal's background, and nothing of what it covers shows
+  column's own 8 px gap parts them; the gaps show the terminal's background, and nothing of what it covers shows
   through. The covered area cannot be used, with the pointer or the keyboard, while it is covered.
 - **The sidebar keeps its own state**, docked, hidden, floating in or as a drawer, and a floating sidebar or its drawer
   comes up above the maximized card as usual.

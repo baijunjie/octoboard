@@ -274,10 +274,10 @@ html {
   --pane-header-height-floating: calc(var(--pane-header-height) - var(--peek-gap));
 
   /* The gap on the terminal side of the right pane (`layout/AsidePane.tsx`), which holds the width
-     grip: wide enough that the 4px grip, centred in it, has 6px clear on either side. The other
+     grip: the 4px grip, centred in it, has 2px clear on either side. The other
      sides of the cards keep `--peek-gap`. `PaneResizeHandle` centres the width grip in this gap by
      calculation, so a change here moves it. */
-  --panel-grip-gap: 16px;
+  --panel-grip-gap: 8px;
 
   /* The gap between two stacked cards of the right pane (`panels/PanelStack.tsx`), which holds the
      height grip: the 4px grip, centred in it, has 3px clear on either side. The grip's hit area

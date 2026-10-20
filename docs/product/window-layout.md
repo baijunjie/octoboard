@@ -386,7 +386,7 @@ Each pane has a resize handle on its inner edge, running the pane's full height,
 connection banner, while it is shown:
 
 - the **sidebar's** on its right edge, drawn on hover and keyboard focus as a line along the whole edge;
-- the **right pane's** in the 16 px gap between the terminal and the cards, drawn as a **grip**: a short rounded bar
+- the **right pane's** in the 8 px gap between the terminal and the cards, drawn as a **grip**: a short rounded bar
   in the middle of the gap's height, light grey while the pointer or keyboard focus is on the handle, and strong only
   while it is pressed or dragged. While a mouse pointer rests on it, a tooltip saying "Resize" opens beside the grip,
   toward the pane. It is named "Resize panel area".
@@ -407,7 +407,7 @@ The sidebar's handle is there only while the sidebar is shown in the row: not wh
 not below 1168 px, where the sidebar is a drawer; it is also absent while its column is easing open or closed. The
 right pane's handle is there whenever the right pane is docked, at every width, and not while a panel only floats in,
 nor while the pane's column is folded away under a maximized Terminal panel (see "Maximizing the Terminal panel" in
-`docs/product/right-pane-panels.md`). Its pointer target is 24 px wide, centred on the 16 px gap.
+`docs/product/right-pane-panels.md`). Its pointer target is 24 px wide, centred on the 8 px gap.
 
 **Each pane's chosen width is remembered per client**, in that client's own browser storage, as the appearance choice
 is (see "Where the choice is stored" in `docs/product/appearance.md`); without that storage a choice lasts until the
@@ -477,7 +477,7 @@ full-height column (see "Hiding the sidebar" above).
   - The **sidebar's card** keeps an 8 px gap from the rail, from the top bar and from the window's bottom (or the
     connection banner), never drawn over the rail.
   - The **right pane's card** keeps the gaps it keeps docked: 8 px from the top bar, from the window's end edge and
-    from the window's bottom (or the connection banner), and 16 px on the terminal's side.
+    from the window's bottom (or the connection banner), and 8 px on the terminal's side.
   - A card's own headers are 8 px shorter than the docked sidebar's — the 8 px gap, the card's edge taking no space —
     so the line under a header stays level across the panel (see "The window chrome and the content panel" above).
 - **How it goes away**: 200 ms after the pointer has left it, the card fades out while moving downward 6 px over
