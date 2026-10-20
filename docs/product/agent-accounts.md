@@ -249,12 +249,21 @@ Log in opens a modal dialog titled for the agent and the account ("Log in to Cod
 login at once. While the login runs, the dialog shows a spinner and says that the account is logging in, then that it
 is waiting for the user to authorize in the browser — for Grok Build, with the code to confirm instead. Its buttons
 are **Open the page again**, while the page's address is known, and **Cancel login**. While the login runs, what the
-dialog says is announced to assistive technology as it changes.
+dialog says is announced to assistive technology as it changes. Its first announcement comes about 1.5 seconds after
+the dialog opens, or after **Log in again** (below) starts a new login, so that it follows the announcement of the
+dialog itself and of the button focus is on.
 
 **Closing the dialog cancels the login**: Cancel login, Escape and the dialog's close button all end a login that is
 still running. Only one login can be followed from Settings at a time, since the dialog is modal; the daemon itself
 runs at most one login per account, and one Codex login at a time across all accounts. Log in is unavailable for an
 account whose login is running.
+
+Where keyboard focus goes once the dialog has closed depends on what opened it. When the account row's own Log in
+button opened it, a login that succeeded puts focus on the row's actions menu button, since Log in goes away once the
+account reads as logged in. When the dialog closes any other way — Cancel login, Escape, the close button, Close after a
+failure — focus goes back to Log in once it is available again, which is after the daemon has answered the cancel, or
+to the row's actions menu button if Log in has gone by then or the login turns out to have succeeded after all. When
+Log in in the actions menu opened it, focus goes back to the actions menu button.
 
 When the Agent accounts section opens while a login is already running — after a reload, or started in another window
 — the dialog opens on that login (on one of them, when several are running), without starting another, so it can be
@@ -264,7 +273,11 @@ A login ends in one of these:
 
 - **Logged in**: the agent confirms the account is signed in. The dialog closes by itself, the account's quota is read
   again at once, and the account's badge then shows the result (see "The accounts the user owns" above). Assistive
-  technology is told once that the account is logged in.
+  technology is told once, by the account's row and naming the account, that it is logged in, about 1.5 seconds after
+  the dialog has closed and focus has returned to Settings. While the user is away from the window — it is minimized
+  or hidden, or another application, such as the browser they authorized in, is in front — the announcement waits, and
+  comes about 1.5 seconds after they are back in it. A success that had already happened when the section or the
+  agent's tab is shown again is not announced.
 - **Could not log in**: the dialog stays open, says the login to the account did not go through and gives the agent's
   reason. When the CLI said it succeeded but the agent still reports the account not signed in, the reason says so.
 - **Timed out**, after 10 minutes of waiting for the user to authorize: the dialog stays open and says the login timed

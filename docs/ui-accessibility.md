@@ -238,6 +238,18 @@ once the daemon's reply says that hunk reaches the end of the file, and the hand
 modality itself. `handFocusOff` cannot be used there, since it looks at `document.activeElement` and cannot see into a
 shadow root.
 
+A dialog opened from a control that never took focus, is disabled, or is gone by the time it closes cannot always hand
+focus back to it: React Aria restores focus to what held it when the dialog opened, which is not the control after an
+accessibility activation or a `preventFocusOnPress` press, and finds nothing that takes it when the control is disabled
+or gone, so focus ends on `<body>`, where VoiceOver reads the whole web area instead of the control the user was on. Two
+hand-offs repair it. The login hand-off (`useLoginFocusReturn` in `packages/ui/src/settings/AgentAccountsSection.tsx`):
+the row's own Log in button is shown only while the account reads as signed out and is disabled while a login runs, so
+after a success focus goes to the row's actions, and after a cancel to the Log in button once it is enabled again, else
+to the actions. The console dialog's Settings (`packages/ui/src/dialogs/ConsoleDialog.tsx`) is handed the exact opener
+that opened it, so closing Settings by its backdrop returns focus there even when Manage accounts was activated without
+taking focus. Both wait a frame past React Aria's restore and leave a restore that landed right alone; they act where
+focus is on `<body>`, and the login hand-off also where it is on its going button.
+
 ### Focus scrolled to the edge of a scroller that fades there
 
 A scroller whose edges are faded gives the scroller a `scroll-padding-block` of at least the fade's own size. A
@@ -687,8 +699,21 @@ element, an error from `role="alert"`.
   reliably announced (VoiceOver in WebKit among others).
 - Even a region that stays mounted afterwards is not announced for the text it was first rendered with.
   `StatusAnnouncer` defers its first write for that, so announce a state with it.
-- VoiceOver also drops a status written within about 300 ms of a focus move (a dialog opening, say), so a surface that
-  takes focus as it opens delays its first status write (`StatusAnnouncer`'s `firstWriteDelayMs`).
+- VoiceOver also drops a status written within about 300 ms of a focus move (a dialog opening or closing, say), so a
+  surface that takes focus as it opens delays its first status write (`StatusAnnouncer`'s `firstWriteDelayMs`, with
+  `AFTER_FOCUS_MOVE_DELAY_MS`).
+- A status written while its region sits under an open modal is effectively written into a hidden region: the modal
+  hides everything outside it from assistive technology, except an element marked `data-live-announcer="true"` or
+  `data-react-aria-top-layer`, and closing the modal moves focus, which replaces what was written. A status about what
+  the modal's own action produced (a login that ends by closing its dialog) is therefore written after the close and
+  the focus move, a delay past both, not at the moment the state changes.
+- A status about something that can happen while the user is out of the window (a login finishing in the browser) waits
+  until the window is attended (`useWindowAttended`: the document is visible and the window has focus), then
+  `AFTER_FOCUS_MOVE_DELAY_MS`: on the way back VoiceOver speaks the window's focused control, and an earlier status is
+  never spoken. A record that clears itself counts only unbroken attended time toward its lifetime, restarted on each
+  return, so it is not gone before the user is back to hear it. A success already present when the row mounts is not
+  said. The instance is `AccountLoginAnnouncer` with `useClearSucceededLogin` in
+  `packages/ui/src/settings/AccountLogin.tsx`.
 - A state whose visible form is durable copy rather than a placeholder — the sentence saying where a macOS permission
   stands, in `packages/ui/src/settings/PermissionsSection.tsx` — announces from a `role="status"` on that copy itself
   instead. `StatusAnnouncer` is `sr-only` and expects the visible form to be `aria-hidden`, which this cannot be: it
@@ -700,44 +725,32 @@ element, an error from `role="alert"`.
 - A dialog step whose title says what happened announces it by moving focus to the dialog, wherever focus was, so the
   dialog is read out by its new name; it adds no `StatusAnnouncer`, which would say the same thing again. The import's
   result step is the instance: its title becomes "Import finished" and the step focuses the dialog itself
-  (`packages/ui/src/configuration/ImportConfigurationDialog.tsx`). That VoiceOver reads the renamed dialog on this
-  focus move has not been listened to yet; confirm it once per "Reusing VoiceOver verification".
+  (`packages/ui/src/configuration/ImportConfigurationDialog.tsx`). Whether VoiceOver reads the renamed dialog on this
+  focus move is an open case in [VoiceOver verification cases](voiceover-cases.md).
 - A status region inside a laid-out row (a grid or flex row) stays mounted while empty by being `sr-only`, never
-  `display:none` or `hidden`, which takes it out of the accessibility tree and so loses the first text it receives.
-  An account row's login announcement is the instance (`packages/ui/src/settings/AgentAccountsSection.tsx`): a hidden
-  region that says once that the account is logged in, while the row's login badge shows the same result visibly; it
-  names the account, since nothing around it does.
+  `display:none` or `hidden`, which takes it out of the accessibility tree and so loses the first text it receives. An
+  account row's login announcement is the instance (`AccountLoginAnnouncer` in
+  `packages/ui/src/settings/AccountLogin.tsx`, mounted by `AccountRow` in
+  `packages/ui/src/settings/AgentAccountsSection.tsx`): a `StatusAnnouncer` that lives as long as the row and says once
+  that the account is logged in, while the row's login badge shows the same result visibly; it names the account, since
+  nothing around it does. It follows the modal rule and the unattended-window rule above: it is written
+  `AFTER_FOCUS_MOVE_DELAY_MS` after the login's dialog has closed and focus has returned, and only while the window is
+  attended. A region that was written under the closing modal, or while the window was unattended, was not spoken in the
+  real-device checks; see the failing patterns in [VoiceOver verification cases](voiceover-cases.md).
 - A dialog whose footer changes with its state puts focus on the state's main action each time the state changes.
   The login dialog is the instance (`packages/ui/src/settings/AccountLoginDialog.tsx`): focus is on Cancel login while
-  the login runs and on Log in again once it ends or is refused; its waiting text is a `role="status"` region mounted
-  from the start.
+  the login runs and on Log in again once it ends or is refused. Its progress text is a `StatusAnnouncer` with
+  `firstWriteDelayMs` set to `AFTER_FOCUS_MOVE_DELAY_MS`, mounted with the dialog, while the visible line is
+  `aria-hidden`, so the text is spoken once and not twice.
 - HeroUI's `Alert` renders no role at all, its name notwithstanding. An error that can appear in one after the user has
   moved on puts `role="alert"` on an element of your own inside it.
 
 ### Reusing VoiceOver verification
 
-Confirm a new announcement mechanism once in the packaged macOS application with VoiceOver. Reusing an existing
-mechanism does not require another listening pass for each caller or message. Check each caller's wiring with
-automated tests and browser inspection instead: the region's lifetime and text changes, duplicate suppression, focus,
-and whether the region or an ancestor is hidden by `aria-hidden` or `inert` while the real overlay is open.
-
-A new mechanism, or a change to its live-region role, mounting or timing behavior that the existing implementation
-does not cover, needs one representative real-device confirmation. A new caller or location alone is not a new
-mechanism: reusing `StatusAnnouncer` with React Aria's existing live-announcer exemption from modal hiding remains
-reuse when the checks above establish the same accessible region and update behavior. Record actual real-device
-confirmations with their mechanism, environment and observed result so later callers can reuse that scope. Existing
-code and passing DOM tests establish the implementation, not a history of actual VoiceOver listening; do not report
-them as a listening result.
-
-The native VoiceOver caption window displaying an announcement is accepted as real-device confirmation of that
-announcement. Record it as caption verification, with the displayed text and the state that caused it.
-
-**Confirmed on 2026-10-14:** in the packaged application's WKWebView on macOS 26.2 (25C56), with Simplified Chinese
-and the dark appearance, the connection banner's persistent `StatusAnnouncer` and 100 ms delay per outage produced
-the reconnecting message in VoiceOver's native caption window after the connection dropped, then the disconnected
-message when automatic retries were spent. The connected window produced no connection announcement. This confirms
-the banner's announcement mechanism; cancellation before the delay and duplicate suppression are covered by the
-component tests and browser inspection.
+Whether a new announcement needs a listening pass in the packaged macOS application is decided by
+[VoiceOver verification cases](voiceover-cases.md): a caller that matches a passing case, and passes the automated and
+browser checks listed there, needs none. The same document holds the recorded results, including the connection banner's
+confirmation and the patterns known not to work.
 
 ## Contrast
 

@@ -13,18 +13,17 @@
       `tokenSource` for a signed-in account, Codex `account/read` after login, a `BROWSER` helper path under a `HOME`
       containing spaces, and the coordinator's `start_account_login` handler (real login-shell snapshot and its
       post-start re-check), which has no test of its own.
-- [ ] VoiceOver reads the login dialog's waiting text as it changes, and the account row's hidden "logged in"
+- [x] VoiceOver reads the login dialog's waiting text as it changes, and the account row's hidden "logged in"
       announcement once a login succeeds.
-- [ ] In the real app window, focus lands where it should when the login dialog's state changes and when it closes, and
-      after Move later in the agent tab menu.
-- [ ] The menu bar icon's native menu (not shown in the gallery, covered only by unit tests): its quota submenus list
+- [x] In the real app window, Move later in the agent tab menu keeps focus on the moved tab.
+- [x] The menu bar icon's native menu (not shown in the gallery, covered only by unit tests): its quota submenus list
       only agents that are added and available, in the added order; a live session whose agent was removed keeps its
       quota capsule.
-- [ ] In the real app window, focus after: an "Add agent…" button opening Settings on the Add agent dialog and that
+- [x] In the real app window, focus after: an "Add agent…" button opening Settings on the Add agent dialog and that
       dialog closing; an error alert's footer recovery button opening or navigating Settings; a session or handoff
       dialog closing itself because no agent is left and its alert being acknowledged; closing Settings opened over
       another dialog. Dragging an agent tab to reorder it still works now that tabs take their content width.
-- [ ] VoiceOver reads an agent's status badge with its name ("Codex, Not added") in pickers, the console dialog's
+- [x] VoiceOver reads an agent's status badge with its name ("Codex, Not added") in pickers, the console dialog's
       account rows and its Advanced tabs.
 
 ## Notes for the developer
@@ -35,93 +34,148 @@
 
 ## Mid-task handoff
 
-A separate packaged confirmation clone was built from `21f19d33e` using existing configuration only: a build-time
-Tauri identifier override and macOS `LSEnvironment` for its own `HOME`, `TMPDIR`, shell and agent configuration
-locations. The bundle was ad-hoc signed under its own identifier. No product changes were needed to build the clone.
-The real window painted and connected to its sidecar. The daemon's snapshot, open lock/database files and executable
-path confirmed it used the clone's data; its sidecar hash matched the newly built binary. Its WebKit profile had the
-clone identifier, and all three default account directories resolved under the clone's home. All three reported not
-logged in. No real login or browser authorization was started.
+### Installed confirmation build
 
-The installed clone still contains that original baseline, **not the subsequent focus fixes**. Installation locations,
-process IDs, build overrides and cleanup details are recorded in the ignored preview scratch directory of the
-`added-agents-final-confirmation` worktree on `docs/added-agents-final-confirmation`;
-those machine-specific details are intentionally not committed here. Leave the user's own app, profile and data alone.
+The isolated packaged clone was first rebuilt from local main `9f4e53ca2`, including the merged focus fixes in
+`0d95add46`, then rebuilt from the reviewed Settings opener fix described below and finally from a code tree equal to
+main `429be4556`. Its signature verified; the live sidecar's executable, open database, lock and snapshot home were
+clone-owned. Its hash matched a fresh build signed with the same clone identifier. The first plist-only launch ignored
+the isolated environment and was refused by the original instance's occupied lock before starting. Subsequent launches
+explicitly passed every clone environment value through `open --env` and connected correctly. Machine-specific source,
+PID, launch, ownership and evidence records remain outside the repository with the clone.
 
-No original checkbox is ticked yet: each contains remaining real-device scenarios. The observations below are partial
-confirmation, not a substitute for the complete checkbox. Desktop automation later returned `cgWindowNotFound`;
-after the account switch no computer-use tool was available in the current session, preventing further window checks
-and runtime fix rechecks. Continuing requires a session with that tool enabled, or a clone-scoped macOS accessibility
-and input helper with working system permissions. The user authorized the latter route; a helper restricted to
-the clone's bundle identifier now reads its real window, focused controls and native status menu, and has
-successfully dismissed that menu through Accessibility. Continue window verification through this route after
-the reviewed fix is available in the clone.
+The owner could not capture this display through computer-use either. Reopening the clone by its bundle identifier,
+then raising and making its AX window main, restored the missing WebKit tree. All input thereafter targeted only
+that clone: AX control actions, PID-targeted keys, and bounded pointer events with the verified clone window ID and
+separate top-left window-local coordinates. No event was posted globally and the real cursor was not moved.
+Only clone-owned main-window and native-popup window IDs were captured. An AX status-item press returned
+`cannotComplete` while actually opening its native popup; the popup's AX geometry and capture verified the result.
 
-### Observed in the packaged clone
+### Agent checks and evidence
 
-- **Move later:** opened the agent-tab menu with Shift+F10 and activated Move later with the keyboard. The list
-  reordered, the moved Claude Code tab retained focus, and its focus ring was visible.
-- **Dragging:** dragged the content-width Claude Code tab past Grok Build. The order changed and the moved tab
-  retained focus. Escape during dragging was not exercised.
-- **Add agent from an empty terminal:** opened Settings with Add agent in front, whose dialog held focus. Escape
-  closed it and focus landed on Settings' Add agent button. The quota-panel entry was not exercised.
-- **Settings over a console dialog:** opened it from the console's Manage accounts control. Closing Settings with
-  Escape returned focus to that same control in the underlying console dialog.
-- **Session dialog loses its last agent:** removed the last eligible agent through a separate control connection.
-  The dialog closed without creating a session and showed an acknowledgement-only alert. After the exit transition,
-  keyboard acknowledgement focused the sidebar's console actions control with its ring; pointer acknowledgement
-  reached the same control but had no ring. The latter is a reproduced defect requiring the focus fix and recheck.
-- **Account error recovery with Settings already open:** opened a test account editor, removed that account through
-  the clone's control connection, then renamed and saved the stale form. The normal `unknown_account` alert offered
-  Manage accounts. Activating it acknowledged the alert but left the account editor above Settings, focused on Save.
-  This is a reproduced defect requiring the navigation fix and recheck.
+- [x] **Native menu order, availability and removal.** The reopened native popup showed Codex quota before Claude
+      quota for that added order. A saved snapshot simultaneously showed Grok Build added but unavailable, and its
+      submenu was absent. Removing Codex removed its submenu. An idle credential-free fixture session stayed live;
+      the native status item's own accessibility description retained its Codex default-account quota at 85%
+      remaining, while the reopened popup listed that session without a Codex quota submenu. The selected-session
+      rail capsule also remained. Native popup captures and AX trees, plus the availability snapshot, are retained.
+- [x] **Quota-panel Add agent.** With no added agent, the panel's Add agent action opened Settings with the nested
+      Add agent dialog holding focus. Closing that dialog returned focus to Settings' Add agent button.
+- [x] **Add agent error footer, Settings closed.** A clone-only sidecar proxy held an actual window `open_session`,
+      removed its chosen agent while withholding that window's broadcasts, then forwarded the unchanged request.
+      The real daemon's `agent_not_added` reply reached the normal window alert; Add agent opened the nested dialog
+      over Settings and focused it. Another eligible agent prevented premature session-dialog closure.
+- [x] **Add agent error footer, Settings already open.** The proxy held the window's quick-create request while
+      Settings was opened on Git. Releasing the real refusal produced the normal footer, which navigated Settings
+      to Agent accounts and focused the nested Add agent dialog.
+- [x] **Manage accounts footer, Settings closed.** Opening a session with an uninitialized clone-only Grok account
+      produced the real launch-failure alert. Its recovery action opened Agent accounts and focused that section's
+      tab. This failure arrives after `session_opened`, so the session dialog has already closed; it is not a
+      suitable way to retain that dialog beneath Settings.
+- [x] **Manage accounts footer, Settings already open on Git.** The proxy held a real quick-create request carrying
+      a named account. Restoring the temporarily removed agent and deleting that account made the unchanged request
+      receive `unknown_account`. Manage accounts navigated the existing Settings to Agent accounts and focused it.
+- [x] **Stale account editor recheck.** After an account was removed through the clone control connection, changing
+      and saving its still-open editor produced the real `unknown_account` alert. Manage accounts dismissed the
+      editor and focused the Agent accounts section tab, confirming the navigation fix in `0d95add46`.
+- [x] **Handoff self-close.** With an idle fixture source and only one eligible receiving agent, removing that
+      receiver closed Hand off without a handoff or new session. Its acknowledgement-only alert returned focus to
+      the selected terminal after the exit transition.
+- [x] **Selected-terminal and underlying-dialog fallbacks.** Removing the last eligible agent from a session dialog
+      above a selected live fixture terminal returned focus to Terminal input after acknowledgement. Repeating with
+      Settings above a retained session dialog returned focus inside Settings. The latter was staged from the
+      pre-recording `agent_not_added` refusal, whose session dialog remains open beneath recovery Settings.
+- [x] **Pointer acknowledgement ring recheck.** A real clone-targeted pointer press acknowledged the last-agent
+      alert with no selected terminal. AX reported the console actions control focused; its window capture showed
+      the blue focus ring, confirming the modality fix in `0d95add46`.
+- [x] **Content-width tab dragging and Escape.** A completed targeted pointer drag moved Claude Code after Codex and
+      kept the moved tab focused. The same active-drag route with Escape before release left the prior order intact
+      and focused the dragged tab. Both the real Settings strip and daemon snapshots confirmed the orders.
+- [x] **Settings close button and backdrop.** The close button returned focus to Terminal input or the underlying
+      console's Manage accounts control. A pointer-only opening and backdrop dismissal also returned there. An
+      additional accessibility-activation followed by pointer-dismissal case exposed the defect below; the reviewed
+      fix was installed and the exact failing sequence passed, as did pure-pointer, close-button and Escape paths.
 
-### Focus fixes prepared for review
+The native-menu, combined nested-focus and Move later checks are complete. Move later was confirmed in the earlier
+baseline run. The user confirms UI focus behavior themselves; login-focus checks are removed from this checklist.
+No real login or browser authorization was performed. Native VoiceOver results are recorded below.
 
-The separate `fix/final-confirmation-focus` branch addresses both defects. The involuntary alert fallback establishes
-keyboard interaction modality before moving focus, so the destination exposes its focus ring after pointer
-acknowledgement. Explicit Settings navigation dismisses account add/edit/rename/removal and agent-removal forms
-before showing the requested section or Add agent dialog. Active-login lifecycle behavior is unchanged.
-The installed baseline clone has not been updated with this branch; passing automated regressions do not replace
-the remaining packaged-window rechecks. Merge awaits the owner's re-review; pushing remains unauthorized.
+### Additional defect fixed on main
 
-The revised fix passed workspace type checking and lint, and 126 tests in the five affected UI test files with
-`--testTimeout=60000`: region focus, Agent accounts, Settings, error alerts and the Settings launcher. Removing each
-fix made its new regression fail, confirming that the tests detect the missing focus ring and the stale editor.
-The recovery regression uses the real Settings, account editor and error-alert components. A review found items in
-documentation, navigation coverage and code clarity that were addressed on the same branches; re-review is pending.
-The navigation regressions cover an active login for both a section request and an Add agent request: its dialog
-stays mounted and no cancellation request is sent. Pending Add agent requests retain their state and focus-return
-flag independently of the dismissal effect's execution order.
-No daemon code changed.
-The full gallery sweep passed all 784 loads (392 scenarios, English and Simplified Chinese, light appearance),
-using an isolated headless browser profile. This confirms rendering and scenario initialization, not native-window
-focus or VoiceOver. The initial sweep was interrupted after regression mutation overlapped it; only the complete
-rerun on the restored, stable source is counted as passing.
+Activating the actual Console dialog's Manage accounts button through AX, then dismissing Settings with a real
+pointer backdrop press, left focus on the WebKit page even after two seconds. Opening the same button with a
+pointer first did not reproduce it. This is the accessibility-activation path: the trigger need not receive browser
+focus before Settings mounts. Captures and AX results preserve both variants.
 
-### Remaining window work
+The fix, now on main as `39c1ec3f3` (Settings opener restored), changes the actual Console dialog's local Settings
+lifecycle: Console accounts supplies the exact opener, and the console repairs otherwise-lost focus after React Aria
+settles, with existing focus and foremost-dialog constraints preserved. Restoration cancels on reopen or unmount. The
+actual Console dialog regression reproduces the baseline failure. An initial review caught a fix aimed only at the
+app-level Settings hook; that superseded code and its synthetic test were removed. The revised actual-path
+implementation passed the second independent code-review round with no remaining findings.
 
-After the focus fixes are available in the clone, repeat the last two observations above and confirm both the focus
-ring and Settings section destination. Also complete:
+The revised source passed workspace type checking, lint and all 300 affected tests in 21 files with two workers. An
+unrestricted run hit one model-list test timeout under concurrent build load; the same complete suite passed with
+reduced concurrency and no source changes. A packaged build of the fix, built before it reached main, passed the exact
+AX-activation plus pointer-backdrop regression, then the pure-pointer, close-button and Escape variants. Its selected
+Console gallery sweep passed 34 loads (17 scenarios, English and Simplified Chinese, light appearance). No gallery
+states or mocks changed: this restores an existing interaction contract. The earlier focus fixes had separately passed
+126 affected tests and the full 784-load gallery sweep; those earlier results are not substituted for this fix's checks.
 
-- Login-dialog focus across starting, waiting, failure/refusal, retry and closing; coordinate this with the user's
-  real-login pass rather than starting another authorization independently.
-- Native quota submenu filtering for added/available agents, added order, and retention of a selected live removed
-  agent's quota capsule. These native-menu scenarios have not been observed in this round. A readable quota is
-  required for the capsule; a fixture CLI can assist native rendering verification, but cannot confirm real login.
-- Add agent from the quota panel; both error-footer recovery actions with Settings closed and already open;
-  the Add agent recovery case needs a controlled stale request reaching the window's normal request/error path
-  (a refusal on a separate control connection is not a window-alert check).
-- A handoff dialog closing when its last eligible receiving agent is removed, followed by acknowledgement and focus
-  restoration. Session-dialog fallback with an existing selected terminal or underlying dialog also remains.
-- Escape cancelling a drag without changing order. Closing Settings through its close button and backdrop remains
-  to be checked separately from the confirmed Escape path.
+### Clone state and next action
 
-The user chooses and authorizes the accounts for real login, and performs VoiceOver listening or native-caption
-observation. Their detailed procedures and pass criteria follow. The clone's actual home already contains spaces;
-use it for the Claude Code helper-path check as well. Only tick a checkbox once its whole scope has been observed.
+The rebuilt clone and all evidence remain installed and recorded externally. The build now installed is E4 of the
+[VoiceOver verification cases](../../voiceover-cases.md), whose code tree equals main `429be4556` (fixes `39c1ec3f3` and
+`429be4556`); the hashes of the earlier local builds are unmerged and not durable references. Temporary credential-free
+Codex/Claude CLIs and a sidecar proxy have been used only inside the clone to stage native quotas, live sessions and
+real error replies; they validate rendering and recovery, not real login. Test sessions and named accounts were removed.
+The proxy is no longer installed in the active bundle, the original clone CLI paths are restored, all three agents are
+available and their added order is restored to Claude Code, Codex, Grok Build. The clone is running the E4 build with
+its confirmation console, no sessions or named accounts, no dialog open, and no login in progress. Its live sidecar
+path, clone database/lock and equally signed fresh-build hash were verified again, and the built source fingerprint was
+checked against its source before recording it. Do not launch the retained baseline bundle and current bundle together:
+they share the clone identifier. Do not merge, push, close the milestone or delete plan documents; the owner and user
+retain those decisions.
 
-### Remaining checks and expected results
+### Testing-only handoff boundary
+
+The scope changed to testing and defect reporting after the Settings opener fix had already been committed and installed
+in the clone. No further implementation or builds are part of this session's work. The passing packaged comparison is
+retained as evidence; it is not approval or a merge. Both fixes are now on main (`39c1ec3f3` and `429be4556`), and the
+evidence is for a build whose code tree equals main `429be4556`. The owner and user-directed agents decide any further
+implementation.
+
+### Native VoiceOver verification, 2026-10-20
+
+Installed builds: a first-round comparison build and builds integrating main with the two fixes named below, in their
+intermediate and final forms (rechecks); only the final one, E4, equals a main commit (`429be4556`). Cases, mechanisms,
+ARIA wiring, exact speech and limits are in [VoiceOver verification cases](../../voiceover-cases.md).
+
+- **Sixth checkbox: PASS.** See the retained picker trigger, opened picker option, console account row and Advanced tab
+  cases.
+- **Second checkbox: PASS on the final build, with a fixture.** On the build whose code tree equals main `429be4556`
+  (fixes `39c1ec3f3` and `429be4556`), the progress changes, the named success announcement (menu, direct button and
+  return to the window) and the focus after success and cancel pass; the earlier builds' failures are recorded as
+  known-not-to-work patterns. See the login cases. Fixture success does not verify real authorization or quota, which
+  stay in the first checkbox.
+- **Settings backdrop focus: PASS** on the same build (focus only, no speech claim).
+- **Restoration: PASS.** Original CLI PATH and console settings restored; Claude Code / Codex / Grok Build order;
+  no named accounts, sessions or active logins. VoiceOver off; no preference or volume setting changed.
+
+Login-focus checks are removed; the user confirms UI focus themselves. Only real login and quota remain user-only. The
+milestone remains open.
+
+### User-only work
+
+1. Choose fresh Claude Code, Codex and Grok Build accounts entitled to quota. Create fresh named configuration
+   directories in the clone, start each login through Settings, complete authorization and verify quota. The
+   clone's actual home contains spaces, covering the Claude Code helper-path case. Record only CLI version/path,
+   account-directory layout, outcome and quota windows; never credentials or authorization URLs.
+
+The original detailed procedures below remain the pass criteria; procedures 4 and 5 document the completed agent
+window work, including the additional fix's packaged recheck.
+
+### Verification procedures and expected results
 
 Use only the separately installed confirmation clone, and choose fresh account configuration directories under its
 isolated home. Do not perform these procedures in the user's original Octoboard instance.
@@ -136,16 +190,13 @@ isolated home. Do not perform these procedures in the user's original Octoboard 
    Repeat the Claude Code login in a test environment whose actual `HOME` contains spaces; a space in the account
    directory alone does not exercise the helper's `HOME` path. Start through Octoboard's Log in action so the real
    coordinator and login-shell capture are exercised, rather than invoking a CLI login separately.
-2. **Login announcements (second checkbox).** Enable VoiceOver before starting a login. Listen to, or record the
-   native captions for, the initial logging-in text and the change to waiting for authorization (the device code for
-   Grok Build). Complete authorization and confirm one announcement naming the account as logged in. Record the
-   actual text, app build, macOS version and interface language. A visible badge or a DOM live region is not proof
-   that VoiceOver announced it.
-3. **Login and reorder focus (third checkbox).** Use the keyboard throughout. During login focus should land on
-   Cancel login; after a failed/refused login or timeout, on Log in again. Retry and verify that focus returns to
-   Cancel login. Check closing after success and cancellation returns focus to the account's available actions
-   control within Settings. Exercise Escape and the close button as cancellation paths too. From an agent tab's
-   menu choose Move later: the new order should appear and the moved tab should keep visible keyboard focus.
+2. **Login announcements (second checkbox).** Enable VoiceOver before starting a login and confirm the initial
+   logging-in text, the change to waiting for authorization (the device code for Grok Build) and one announcement
+   naming the account as logged in on success. Record results as cases in
+   [VoiceOver verification cases](../../voiceover-cases.md), keeping a credential-free fixture run distinct from a real
+   authorization.
+3. **Reorder focus (third checkbox).** From an agent tab's menu choose Move later: the new order should appear and
+   the moved tab should keep visible keyboard focus. This was observed in the earlier baseline run.
 4. **Native menu (fourth checkbox).** With at least two added and installed agents, reorder them in Settings, then
    reopen the menu bar icon's menu: quota submenus should follow that order. Remove one and reopen the menu: its
    submenu should be absent. In the agreed test environment also check an added but unavailable agent has no quota
@@ -172,10 +223,9 @@ isolated home. Do not perform these procedures in the user's original Octoboard 
    tab keep focus. Escape during another drag should leave the order unchanged.
 6. **Named status badges (sixth checkbox).** Before removal, save a console/project Default agent choice pointing
    to an installed agent, a named account selection for that agent in the console, and a supported non-default
-   model or effort in its Advanced settings. These stored values keep the corresponding rows and tab visible.
-   Remove that agent from the added list. With VoiceOver, inspect the retained current choice in an agent picker,
-   the console dialog's account rows and its Advanced tabs. The name and state should be spoken together, such as
-   “Codex, Not added”, rather than an unnamed status. Record actual speech or native captions for each location.
+   model or effort in its Advanced settings; then remove that agent and check the retained choice in a picker, the
+   console dialog's account rows and its Advanced tabs with VoiceOver. Passed: see
+   [VoiceOver verification cases](../../voiceover-cases.md).
 
 Record pass/fail per scenario and only tick a checkbox when its whole scope has been observed. Any failure needs
 reproduction details and a fix on a dedicated branch, followed by the required checks and review before a merge is
