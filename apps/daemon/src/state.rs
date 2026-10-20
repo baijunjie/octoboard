@@ -234,6 +234,9 @@ pub struct AppState {
     pub account_quotas: crate::account_quotas::AccountQuotas,
     /// The logins running now, one per account (`crate::account_login`). Held in memory only.
     pub account_logins: crate::account_login::AccountLogins,
+    /// Serializes carrying out and repairing the accounts' sharing of the default configuration
+    /// (`crate::shared_config`).
+    pub account_sharing: crate::shared_config::Locks,
     /// The shell terminals running, or exited and not yet closed (`crate::shell_terminal`). Held in
     /// memory only: each is a process of this daemon's.
     pub shell_terminals: crate::shell_terminal::ShellTerminals,
@@ -500,6 +503,7 @@ impl AppState {
             agent_models: Default::default(),
             account_quotas: Default::default(),
             account_logins: Default::default(),
+            account_sharing: Default::default(),
             shell_terminals: Default::default(),
             events,
             account_writes: Mutex::new(()),

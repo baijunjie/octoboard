@@ -168,6 +168,8 @@ pub(super) fn probe(
     timeout: Duration,
 ) -> Result<Reading, QuotaUnavailable> {
     let conversation = conversation(agent);
+    // The account's directory must not change sharing under the CLI while it runs.
+    let _reading = crate::shared_config::reading_account(config_dir);
     let mut command = adapter::account_command(agent, shell_env, config_dir, conversation.args)
         .map_err(|binary| {
             QuotaUnavailable::new(

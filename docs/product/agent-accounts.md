@@ -228,7 +228,10 @@ field. So is the English word "Default", which is reserved for the default accou
 Removing an account asks first and says that consoles referring to it go back to the agent's default account and that
 sessions already open are not affected. A project referring to it is put back to inheriting its console's reference at
 the same time (see "The project's account, model and reasoning effort" in `docs/product/projects.md`). Removing an
-account, or pointing it at another directory, ends a login running for it.
+account, or pointing it at another directory, ends a login running for it. An account that shares the default
+configuration, or has a change of it pending, has its sharing turned off first instead, which is refused while
+anything runs under its directory, a login included (see "Removing or repointing a sharing account" in
+`docs/product/sharing-the-default-configuration.md`).
 
 ## Logging an account in
 

@@ -225,6 +225,8 @@ fn run(
     args: &[&str],
     timeout: Duration,
 ) -> Result<String, ModelsUnavailable> {
+    // The account's directory must not change sharing under the CLI while it runs.
+    let _reading = crate::shared_config::reading_account(config_dir);
     let mut command =
         adapter::account_command(agent, shell_env, config_dir, args).map_err(|binary| {
             ModelsUnavailable::new(

@@ -277,6 +277,18 @@ impl AgentAdapter for ClaudeAdapter {
                 dir.to_string_lossy().into_owned(),
             ));
         }
+        // Claude Code writes auto memory into `projects/<key>/memory/` without asking only while
+        // the path is spelled inside the account's own directory, so through a linked
+        // `projects/` it asks, or refuses outright in a headless run. Moving the memory root to
+        // the resolved shared directory restores that, and keeps memory where the default
+        // account keeps it. An undocumented internal variable, set for this launch only and
+        // never in the user's settings.
+        if let Some(dir) = spec.shared_default_dir {
+            env.push((
+                "CLAUDE_CODE_REMOTE_MEMORY_DIR".to_string(),
+                dir.to_string_lossy().into_owned(),
+            ));
+        }
 
         Ok(LaunchPlan {
             args,
@@ -666,6 +678,33 @@ mod tests {
                 "CLAUDE_CONFIG_DIR".to_string(),
                 dir.to_string_lossy().into_owned()
             )]
+        );
+    }
+
+    /// Auto memory is pointed at the shared directory only for a launch of an account that
+    /// shares it, and only through the launch's environment.
+    #[test]
+    fn a_sharing_accounts_launch_points_auto_memory_at_the_shared_directory() {
+        let mut fixture = spec_fixture();
+        let dir = fixture.scratch.join("claude-alt");
+        std::fs::create_dir_all(&dir).expect("config dir");
+        fixture.config_dir = Some(dir);
+        let memory = |plan: LaunchPlan| {
+            plan.env
+                .into_iter()
+                .find(|(key, _)| key == "CLAUDE_CODE_REMOTE_MEMORY_DIR")
+                .map(|(_, value)| value)
+        };
+        assert_eq!(
+            memory(ClaudeAdapter.plan(&fixture.spec()).expect("plan")),
+            None
+        );
+
+        let shared = fixture.scratch.join("default");
+        fixture.shared_default_dir = Some(shared.clone());
+        assert_eq!(
+            memory(ClaudeAdapter.plan(&fixture.spec()).expect("plan")),
+            Some(shared.to_string_lossy().into_owned())
         );
     }
 

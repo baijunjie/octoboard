@@ -404,6 +404,17 @@ pub struct Account {
     /// Claude Code-only launch override; never written into the agent's own configuration.
     #[serde(default)]
     pub approval_mode: Option<ClaudeApprovalMode>,
+    /// Whether the account shares what its directory can share with the agent's default account's
+    /// directory, by linking each item of `crate::shared_items` into it. The user's choice, set by
+    /// `set_account_sharing`; kept local like the launch overrides above.
+    #[serde(default)]
+    pub share_default_config: bool,
+    /// The directory has not been brought in line with `share_default_config` yet: the change
+    /// waits for nothing to run under the account's directory (its sessions, an agent CLI
+    /// reading its quota or models or signing it in), or carrying it out failed; it is tried
+    /// again before the account's next launch, resume or switch to it.
+    #[serde(default)]
+    pub share_default_config_pending: bool,
 }
 
 /// Whether an agent's binary resolves on the user's login shell `PATH`, the only test an agent is
@@ -1953,6 +1964,14 @@ pub enum RequestBody {
         account: Option<String>,
         mode: Option<ClaudeApprovalMode>,
     },
+    /// Sets whether an account shares the agent's default configuration. A null account names
+    /// the default account, which is refused. The change is carried out at once when nothing runs
+    /// under the account's directory (its sessions or agent CLI reads), else before its next
+    /// session starts or resumes, or a session is switched to it.
+    SetAccountSharing {
+        account: Option<String>,
+        share: bool,
+    },
     /// Re-reads the plan quotas of the accounts it selects whose last reading is older than the
     /// polling interval (and not backed off after failures): `agent` limits it to one agent's
     /// accounts, `account` (an account id) to that one account, and with neither it covers every
@@ -3204,6 +3223,26 @@ pub mod error_code {
     /// A `cancel_account_login` for an account that is not being signed in. `params` names
     /// `agent`.
     pub const LOGIN_NOT_RUNNING: &str = "login_not_running";
+    /// A `set_account_sharing` for the default account, which is the configuration the other
+    /// accounts share, or turning sharing on for an account whose directory resolves to the
+    /// default account's. `params` names the `account` and its `name` when one was named.
+    pub const DEFAULT_ACCOUNT_NOT_SHAREABLE: &str = "default_account_not_shareable";
+    /// Carrying out an account's change of sharing did not complete — by `set_account_sharing`,
+    /// before a launch, resume or switch of one of its sessions, or before `delete_account`, each
+    /// of which it then refuses; the change stays pending. `params` names the `account`, its
+    /// `name`, the `detail`, and `items`: a JSON array of `{item, left, detail, sessions?}`, each
+    /// item of the account's directory that was not brought in line, what it was left as
+    /// (`unchanged`, `backed_up`, `partly_moved`, `linked`, `absent`) and why. An entry about a
+    /// conversation turning sharing off could not take back names the agent's id of it as `item`
+    /// and the sessions recording it as `sessions`.
+    pub const ACCOUNT_SHARING_FAILED: &str = "account_sharing_failed";
+    /// A `delete_account`, or an `update_account` pointing it at another directory, for an account
+    /// that shares the default configuration, or has a change of sharing pending, while something
+    /// runs under its directory (one of its sessions, or an agent CLI reading its quota or models
+    /// or signing it in): sharing has to be turned off first, and cannot be now. Nothing was
+    /// changed.
+    /// `params` names the `account` and its `name`.
+    pub const ACCOUNT_STILL_SHARING: &str = "account_still_sharing";
     /// A switch was asked to move a session to the account it is on already.
     pub const SESSION_ALREADY_ON_ACCOUNT: &str = "session_already_on_account";
     /// A switch was asked for an archived session. Reopening one is a resume's job, and a switch
@@ -3427,6 +3466,14 @@ pub mod notice_code {
     /// box; nothing more is written into the session until a prompt is sent. `params` names the
     /// `agent`.
     pub const MESSAGE_NOT_SENT: &str = "message_not_sent";
+    /// Before the session launched, some of its sharing account's links to the default
+    /// configuration could not be repaired; the session launched all the same. `params` names
+    /// the `account`, its `name` and `items`, as `account_sharing_failed`'s.
+    pub const ACCOUNT_SHARING_REPAIR_FAILED: &str = "account_sharing_repair_failed";
+    /// The session's sharing account holds a Codex state database the shared configuration does
+    /// not cover (a newer Codex's), so its threads are kept apart from the other accounts'.
+    /// `params` names the `account`, its `name` and the database's `path`.
+    pub const UNSHARED_STATE_DATABASE: &str = "unshared_state_database";
 }
 
 pub fn now_millis() -> i64 {

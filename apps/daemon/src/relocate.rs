@@ -229,15 +229,12 @@ fn repoint_within(
     };
     for entry in entries {
         let entry = entry.map_err(listing)?;
-        // `state_<n>.sqlite`: the number is Codex's schema generation, which a newer Codex may
-        // raise.
         let path = entry.path();
-        let is_database = path
+        if !path
             .file_name()
             .and_then(|name| name.to_str())
-            .and_then(|name| name.strip_prefix("state_")?.strip_suffix(".sqlite"))
-            .is_some_and(|n| !n.is_empty() && n.bytes().all(|byte| byte.is_ascii_digit()));
-        if !is_database {
+            .is_some_and(is_state_database)
+        {
             continue;
         }
         // A link counts when it leads to a file (an account sharing its database with the default
@@ -258,6 +255,30 @@ fn repoint_within(
             .map_err(|err| failed(format!("updating `{}` failed: {err}", path.display())))?;
     }
     Ok(())
+}
+
+/// Whether `name` is a Codex thread state database, `state_<n>.sqlite`: the number is Codex's
+/// schema generation, which a newer Codex may raise.
+pub(crate) fn is_state_database(name: &str) -> bool {
+    name.strip_prefix("state_")
+        .and_then(|rest| rest.strip_suffix(".sqlite"))
+        .is_some_and(|n| !n.is_empty() && n.bytes().all(|byte| byte.is_ascii_digit()))
+}
+
+/// Opens an agent's SQLite database for writing, waiting up to `patience` while another process
+/// has it busy. Never creates one: a file that is not there, or is not a database, is an error.
+/// Foreign keys are off on it, as SQLite leaves them: a caller deleting `threads` rows turns them on
+/// first, or the child rows stay and attach to a row later inserted with the same id.
+pub(crate) fn open_existing_database(
+    database: &Path,
+    patience: std::time::Duration,
+) -> rusqlite::Result<rusqlite::Connection> {
+    let connection = rusqlite::Connection::open_with_flags(
+        database,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )?;
+    connection.busy_timeout(patience)?;
+    Ok(connection)
 }
 
 /// Where a Codex home keeps its databases: its own directory, unless its `config.toml` sets
@@ -308,12 +329,7 @@ fn repoint_in(
     patience: std::time::Duration,
 ) -> rusqlite::Result<()> {
     use rusqlite::OptionalExtension;
-    // Never created: a file that is not a database already is an error, not a new database.
-    let connection = rusqlite::Connection::open_with_flags(
-        database,
-        rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    )?;
-    connection.busy_timeout(patience)?;
+    let connection = open_existing_database(database, patience)?;
     let has_table = connection
         .query_row(
             "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'threads'",
@@ -569,7 +585,7 @@ fn swap_into_place(items: &[(PathBuf, &Path, PathBuf)]) -> Result<(), Failed> {
     Ok(())
 }
 
-fn remove_any(path: &Path) -> io::Result<()> {
+pub(crate) fn remove_any(path: &Path) -> io::Result<()> {
     match std::fs::symlink_metadata(path) {
         Ok(metadata) if metadata.is_dir() => std::fs::remove_dir_all(path),
         Ok(_) => std::fs::remove_file(path),

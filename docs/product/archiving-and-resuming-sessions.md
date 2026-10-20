@@ -144,6 +144,12 @@ does not count. The answer is one of three:
   session's agent id is missing or is not a UUID; or the record could be behind a symbolic link or a directory that
   cannot be searched in full.
 
+  A session of an account whose directory shares the default configuration (see
+  `docs/product/sharing-the-default-configuration.md`) reaches its records through links, so it is always judged
+  unknown: it is never deleted automatically as a session whose conversation is gone, and never refused with
+  `conversation_unresumable`. Once the account's sharing has been turned off, its sessions' conversations are back in
+  the account's own directories and are judged as usual.
+
 Only an unresumable answer is acted on: it refuses the session's reopen and relaunches an archived owner into a fresh
 conversation (see "Archiving, interruption and resuming" above), and it lets an archived session be deleted
 automatically (see "Deleting archived sessions whose conversation is gone" in `docs/product/deleting-sessions.md`).

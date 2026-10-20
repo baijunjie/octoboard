@@ -29,7 +29,7 @@ This is the guarantee the whole design rests on:
   A check's fetch of remote refs is separate:
   it does not move the working tree and it does not push (see "What one check does" in
   `docs/product/project-git-status.md`).
-- **The user's own agent configuration is never written to, with three narrow exceptions.** Octoboard does not edit
+- **The user's own agent configuration is never written to, with four narrow exceptions.** Octoboard does not edit
   `~/.claude.json`, `~/.codex/`, `~/.grok/`, an account's config directory, or anything else the agent reads as the
   user's global setup, and it never makes a trust decision of its own in any of them. The first exception is switching
   a session to another account: it copies that one session's conversation — its record and what the agent keeps of
@@ -46,7 +46,12 @@ This is the guarantee the whole design rests on:
   (see "Carrying the conversation" in `docs/product/switching-session-accounts.md`). The third is Grok Build's trust
   store: once Grok's own trust confirmation has been accepted, the one entry Grok wrote into its session's copy of the
   store is carried, unchanged, into the user's own (see "Carrying Grok Build's trust record" in
-  `docs/product/folder-trust.md`). Creating a Codex account's directory that does not exist yet, empty, before its
+  `docs/product/folder-trust.md`). The fourth is an account set to share the agent's default configuration: its
+  directory's shareable entries are replaced by links into the default account's directory, its configuration set
+  aside as backups and its conversation history moved into the default directory, the links repaired before each of
+  its sessions launches, and all of it undone when sharing is turned off, together with the paths the default
+  directory's Codex thread database and plugin registries record through the account (see
+  `docs/product/sharing-the-default-configuration.md`). Creating a Codex account's directory that does not exist yet, empty, before its
   first launch is not an exception: Codex refuses to start without it, and nothing of the user's is in it.
 
 Where an agent stops to ask whether to trust a folder, Octoboard decides nothing on its behalf: it presses the
@@ -242,6 +247,8 @@ Besides the terminal type, the variables set over the snapshot are:
   else;
 - for every Grok Build session, `GROK_HOME`, set to the session's own Grok home (see "Per-agent specifics a user will
   notice" below). A Grok Build config directory is not passed as `GROK_HOME` itself.
+- for a Claude Code session whose account's directory shares the default configuration, `CLAUDE_CODE_REMOTE_MEMORY_DIR` (see
+  "Claude Code's auto memory" in `docs/product/sharing-the-default-configuration.md`).
 - for a project session, a `core.hooksPath` entry through `GIT_CONFIG_COUNT`, together with `OCTOBOARD_SESSION_ID` and
   `OCTOBOARD_DAEMON_PORT`, which point every git in the agent's process tree at Octoboard's hook dispatchers; those
   still run the user's own git hooks, and report the branches that git creates (see "The session's git hooks" and

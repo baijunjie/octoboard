@@ -14,6 +14,7 @@ use std::time::{Duration, Instant, SystemTime};
 use anyhow::{Context, Result};
 use uuid::Uuid;
 
+use crate::account_dirs::{account_dir_key, normalize_account_dir};
 use crate::account_login;
 use crate::account_quotas;
 use crate::adapter;
@@ -1147,6 +1148,25 @@ async fn handle_inner(
             name,
             config_dir,
         } => {
+            // A sharing account's directory is brought back to its own before it is let go, once
+            // the new directory is known to be acceptable.
+            let _sharing = match &config_dir {
+                Some(dir) => {
+                    let agent = state
+                        .store
+                        .get_account(&account)?
+                        .ok_or_else(|| CodedError::unknown_account(&account))?
+                        .agent;
+                    let dir = normalize_account_dir(agent, dir)?;
+                    check_account_dir_unique(state, agent, &dir, Some(&account))?;
+                    if let Some(name) = &name {
+                        let name = normalize_account_name(name)?;
+                        check_account_name_unique(state, agent, &name, Some(&account))?;
+                    }
+                    crate::shared_config::before_repoint(state, &account, &dir).await?
+                }
+                None => None,
+            };
             update_account(state, &account, name, config_dir)?;
             Ok(None)
         }
@@ -1161,12 +1181,19 @@ async fn handle_inner(
             Ok(None)
         }
 
+        RequestBody::SetAccountSharing { account, share } => {
+            crate::shared_config::set(state, account, share).await?;
+            Ok(None)
+        }
+
         RequestBody::SetDefaultAccountName { agent, name } => {
             set_default_account_name(state, agent, &name)?;
             Ok(None)
         }
 
         RequestBody::DeleteAccount { account } => {
+            // A sharing account's directory is brought back to its own before it is let go.
+            let _sharing = crate::shared_config::before_delete(state, &account).await?;
             delete_account(state, &account)?;
             Ok(None)
         }
@@ -3325,7 +3352,7 @@ async fn relaunch_session(
     .await
 }
 
-async fn relaunch_session_with(
+pub(crate) async fn relaunch_session_with(
     state: &Arc<AppState>,
     claim: &crate::state::LaunchClaim,
     id: &str,
@@ -3530,6 +3557,12 @@ async fn start_process(
         )?;
     }
     let (model, effort) = launch_settings(state, session)?;
+    // A sharing account's directory is brought in line before its agent starts, and the
+    // agent is told where the shared directory is.
+    let sharing = crate::shared_config::before_launch(state, session).await?;
+    for notice in sharing.notices {
+        state.broadcast(notice.about(&session.id));
+    }
     let request = term::LaunchRequest {
         session_id: session.id.clone(),
         agent: session.agent,
@@ -3541,6 +3574,7 @@ async fn start_process(
         config_dir: session.config_dir.as_ref().map(PathBuf::from),
         approval_reviewer: CODEX_REVIEWER.for_session(state, session)?,
         approval_mode: CLAUDE_MODE.for_session(state, session)?,
+        shared_default_dir: sharing.shared_default_dir,
         model,
         effort,
         preresolved_shell_env: None,
@@ -3993,7 +4027,8 @@ fn prepare_switch(
 /// and (where it can be told beforehand) the process left running: a launch, resume or switch of
 /// the session under way, an archived session, the account it is on already, an account that is
 /// not one of the session's agent, an account whose plan quota is used up, a Grok target that is
-/// not an initialized home, and a conversation record that is not where it is expected. Once the
+/// not an initialized home, a conversation record that is not where it is expected, and a
+/// target whose pending change of sharing cannot be carried out (`account_sharing_failed`). Once the
 /// process has been ended, a relocation that does not complete or a relaunch that is refused or
 /// does not come up leaves the session interrupted on the account it had, with the conversation
 /// still in both directories.
@@ -4073,6 +4108,17 @@ pub(crate) async fn switch_session_account_with(
         .await??
     };
 
+    // The target's pending change of sharing is carried out while the session still runs, so a
+    // refusal leaves it running; the copy below asks again, holding the lock.
+    drop(
+        crate::shared_config::before_switch_copy(
+            state,
+            before.agent,
+            target_account.as_deref(),
+            id,
+        )
+        .await?,
+    );
     if let Some(live) = state.live_session(id) {
         stop_process(live).await?;
     }
@@ -4082,6 +4128,16 @@ pub(crate) async fn switch_session_account_with(
         return Err(session_archived(id));
     }
 
+    // Held from before the copy until the session is recorded on the target, and given up before
+    // the relaunch, which takes it itself: a pending change of the target's sharing is carried out
+    // first, so the copy lands where it stays, and no change of sharing moves what the copy writes.
+    let copying = crate::shared_config::before_switch_copy(
+        state,
+        before.agent,
+        target_account.as_deref(),
+        id,
+    )
+    .await?;
     if let Some((from, to, record, agent_session_id)) = plan.relocation {
         let agent = before.agent;
         // The environment the relaunch will see, which with the target's `config.toml` says where
@@ -4101,6 +4157,7 @@ pub(crate) async fn switch_session_account_with(
         .await??;
     }
     state.set_session_account(id, target_account.as_deref(), target_dir.as_deref())?;
+    drop(copying);
 
     if let Err(err) =
         relaunch_session_with(state, &claim, id, None, false, plan.shell_env, launch).await
@@ -4334,9 +4391,10 @@ pub(crate) async fn trash_agent_records_with(
     }
 }
 
-/// Moves the agent's own records of each of `deleted` (see `agent_records::record_paths`) through
-/// `trash`. The sessions are gone from the store, or are about to give up their conversation and
-/// still on record: either way they do not count as sharing. A session is left alone when another
+/// Moves the agent's own records of each of `deleted` that deleting it may remove (see
+/// `agent_records::removable_record_paths`) through `trash`. The sessions are gone from the store,
+/// or are about to give up their conversation and still on record: either way they no longer count
+/// as holding the conversation with another session. A session is left alone when another
 /// remaining session refers to the same agent session id (a resumed copy, say), and a path that is
 /// missing is skipped. The records' loss costs the session its resumption in the agent only, so a
 /// failure to find or move one is logged, never raised. The accounts' records are listed once for
@@ -4370,9 +4428,12 @@ fn trash_agent_records_of(
         if shared {
             continue;
         }
-        for path in
-            agent_records::record_paths(&state.record_hints, &mut locator, &accounts, session)
-        {
+        for path in agent_records::removable_record_paths(
+            &state.record_hints,
+            &mut locator,
+            &accounts,
+            session,
+        ) {
             if !paths.contains(&path) {
                 paths.push(path);
             }
@@ -4748,33 +4809,6 @@ fn checked_project_account(
     }
 }
 
-/// What the user typed for one agent's config directory, as the absolute, lexically normalised
-/// path an account's own directory is stored as. Required and non-blank: an account always has a
-/// directory. Existence is not checked: the directory is created on first launch (by Claude Code
-/// itself, by the Codex adapter for Codex), so a user pointing an account at a directory they are
-/// about to create should not be stopped; the agent that needs one to already exist (Grok Build,
-/// against a *pinned* source home) checks that itself, at launch.
-fn normalize_account_dir(agent: Agent, text: &str) -> Result<String> {
-    let text = text.trim();
-    if text.is_empty() {
-        return Err(field_required("config_dir"));
-    }
-    let dir = hostfs::expand(text);
-    if !dir.is_absolute() {
-        return Err(CodedError::raised(
-            error_code::CONFIG_DIR_NOT_ABSOLUTE,
-            format!(
-                "the {} config directory must be an absolute path or start with `~/`",
-                agent.label()
-            ),
-            &[("agent", agent.label())],
-        ));
-    }
-    // Lexical only: a symlink stays as typed, so the stored path is what the user chose.
-    let dir = hostfs::lexically_normalise(&dir);
-    Ok(dir.to_string_lossy().into_owned())
-}
-
 /// The comparison key for an account name collision: trimmed and lower-cased, so "Work" and
 /// " work " read as the same name.
 pub(crate) fn account_name_key(name: &str) -> String {
@@ -4871,18 +4905,6 @@ fn account_name_taken(agent: Agent, name: &str, existing: &str) -> anyhow::Error
         ),
         &[("agent", agent.label()), ("name", existing)],
     )
-}
-
-/// The comparison key for an account directory collision. The stored text stays as typed; only
-/// the key folds case on macOS, whose default file system is case-insensitive, so `~/.Claude` and
-/// `~/.claude` read as one directory there. Other platforms compare byte for byte. Unicode
-/// normalisation is not folded: no crate for it is in the dependency tree.
-fn account_dir_key(dir: &str) -> String {
-    if cfg!(target_os = "macos") {
-        dir.to_lowercase()
-    } else {
-        dir.to_string()
-    }
 }
 
 /// The name of the account whose directory is `dir` (as [`normalize_account_dir`] stores it)
@@ -5038,6 +5060,8 @@ fn create_account(
         config_dir,
         approval_reviewer: None,
         approval_mode: None,
+        share_default_config: false,
+        share_default_config_pending: false,
     };
     {
         // The checks and the insert are one step: another create or update cannot slip between.
@@ -6303,6 +6327,8 @@ mod tests {
                 config_dir: "/home/u/.claude-alt".to_string(),
                 approval_reviewer: None,
                 approval_mode: None,
+                share_default_config: false,
+                share_default_config_pending: false,
             })
             .unwrap();
         let reset = now_millis() + 60_000;
@@ -6503,6 +6529,8 @@ mod tests {
                 config_dir: "/home/u/.claude-alt".to_string(),
                 approval_reviewer: None,
                 approval_mode: None,
+                share_default_config: false,
+                share_default_config_pending: false,
             })
             .unwrap();
         state
@@ -6514,6 +6542,8 @@ mod tests {
                 config_dir: "/home/u/.claude-other".to_string(),
                 approval_reviewer: None,
                 approval_mode: None,
+                share_default_config: false,
+                share_default_config_pending: false,
             })
             .unwrap();
         state
@@ -6525,6 +6555,8 @@ mod tests {
                 config_dir: "/home/u/.codex-alt".to_string(),
                 approval_reviewer: None,
                 approval_mode: None,
+                share_default_config: false,
+                share_default_config_pending: false,
             })
             .unwrap();
         let mut console = console(Agent::Claude, Path::new("/tmp/unused"));
@@ -6642,6 +6674,8 @@ mod tests {
                     config_dir: dir.to_string(),
                     approval_reviewer: None,
                     approval_mode: None,
+                    share_default_config: false,
+                    share_default_config_pending: false,
                 })
                 .unwrap();
         }
@@ -9171,6 +9205,8 @@ mod tests {
                     config_dir: format!("/home/u/.{id}"),
                     approval_reviewer: None,
                     approval_mode: None,
+                    share_default_config: false,
+                    share_default_config_pending: false,
                 })
                 .unwrap();
         }
@@ -9321,6 +9357,8 @@ mod tests {
                 config_dir: "/home/u/.codex-alt".to_string(),
                 approval_reviewer: None,
                 approval_mode: None,
+                share_default_config: false,
+                share_default_config_pending: false,
             })
             .unwrap();
         let repo = dir.join("repo");
@@ -9624,6 +9662,8 @@ mod tests {
             config_dir: dir.to_string_lossy().into_owned(),
             approval_reviewer: None,
             approval_mode: None,
+            share_default_config: false,
+            share_default_config_pending: false,
         };
         let (work, other) = (dir.join("work"), dir.join("other"));
         let accounts = [
@@ -10069,6 +10109,8 @@ mod tests {
                 config_dir: broken.to_string_lossy().into_owned(),
                 approval_reviewer: None,
                 approval_mode: None,
+                share_default_config: false,
+                share_default_config_pending: false,
             })
             .unwrap();
         let id = "019a0000-0000-7000-8000-000000000001";

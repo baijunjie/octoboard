@@ -89,6 +89,11 @@ pub struct LaunchSpec<'a> {
     pub approval_reviewer: Option<ApprovalReviewer>,
     /// Claude Code-only override; absent follows its own configuration and passes no flag.
     pub approval_mode: Option<ClaudeApprovalMode>,
+    /// The default account's directory, fully resolved, when the session's account shares the
+    /// default configuration (`crate::shared_config`); `None` for every other launch. An adapter
+    /// whose agent keeps per-project memory in its conversation directory points that memory
+    /// here, so it lands where the default account keeps it.
+    pub shared_default_dir: Option<&'a Path>,
     /// The model to launch with, in the agent's own spelling; `None` leaves it to the agent. Read
     /// from the setting for this agent of the session's console (a console session) or of its
     /// project (a project session), and `None` when that setting is unset.
@@ -245,6 +250,10 @@ pub fn default_account_dir(agent: Agent, shell_env: &HashMap<String, String>) ->
 /// default account), and the home directory as working directory, so no project-level
 /// configuration of whatever directory the daemon started in takes part. `Err` carries the
 /// binary's name when it does not resolve.
+///
+/// A caller running it outside a session or its launch claim holds
+/// [`crate::shared_config::reading_account`] for the whole run: otherwise a change to the account's
+/// sharing can move what the CLI opens, such as Codex's state database and history, from under it.
 pub fn account_command(
     agent: Agent,
     shell_env: &HashMap<String, String>,
@@ -476,6 +485,7 @@ pub mod tests {
         pub hook_script: PathBuf,
         pub shell_env: HashMap<String, String>,
         pub config_dir: Option<PathBuf>,
+        pub shared_default_dir: Option<PathBuf>,
         pub model: Option<String>,
         pub effort: Option<String>,
         pub agent_version: Option<super::AgentVersion>,
@@ -499,6 +509,7 @@ pub mod tests {
                 config_dir: self.config_dir.as_deref(),
                 approval_reviewer: None,
                 approval_mode: None,
+                shared_default_dir: self.shared_default_dir.as_deref(),
                 model: self.model.as_deref(),
                 effort: self.effort.as_deref(),
                 agent_version: self.agent_version,
@@ -528,6 +539,7 @@ pub mod tests {
             hook_script,
             shell_env: HashMap::new(),
             config_dir: None,
+            shared_default_dir: None,
             model: None,
             effort: None,
             agent_version: None,

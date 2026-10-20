@@ -8,10 +8,10 @@
 ## Technical design
 
 - [ ] A Share default configuration switch on each account that is not the default account.
-- [ ] Help text saying what is shared, what never is, and that conversations written while sharing stay in the default
-      directory when sharing is turned off.
-- [ ] A line saying that a change applies when the account's next session starts or resumes and none of its sessions is
-      running.
+- [ ] Help text saying what is shared, what never is, and that when sharing is turned off the account's Octoboard
+      sessions take their conversations back while every other conversation stays in the default directory.
+- [ ] A line saying that a change applies at once when none of the account's sessions is running, and otherwise when
+      its next session starts or resumes and none of its sessions is running.
 
 ## Implementation plan
 
@@ -20,9 +20,13 @@
 
 ## Handoff
 
-- Once the switch ships, `docs/agent-cli-reference.md`'s "Sharing a session directory between accounts" no longer
-  opens on a true statement ("Octoboard does not offer sharing an agent's session directory"), and its entry in
-  `docs/README.md` says the same; both are reworded to what Octoboard then offers.
+- The UI has no messages yet for the daemon's sharing codes: the errors `default_account_not_shareable`,
+  `account_sharing_failed` (its `items` say what each item was left as, `sessions` which sessions a conversation
+  belongs to) and `account_still_sharing` (deleting or repointing a sharing account while something runs under it,
+  a session or the agent's CLI reading its quota or models or signing it in), and the session notices
+  `account_sharing_repair_failed` and `unshared_state_database`. Each needs a `daemon.<code>` message in every
+  locale, and deleting or repointing an account reports the two refusals like any other failure there.
+- A repointed account no longer shares; the account's settings show the switch off afterwards.
 
 ## Notes for the developer
 

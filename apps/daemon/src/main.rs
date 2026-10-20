@@ -4,6 +4,7 @@
 //! `apps/daemon/PROTOCOL.md`.
 
 mod access;
+mod account_dirs;
 mod account_login;
 mod account_quotas;
 mod adapter;
@@ -64,6 +65,7 @@ mod session;
 mod session_history;
 mod session_request;
 mod session_title;
+mod shared_config;
 mod shared_items;
 mod sharing;
 mod shell_terminal;

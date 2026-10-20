@@ -5,9 +5,6 @@
 //! replaces rather than writes through when a link stands in for them. The measurements are in
 //! `docs/agent-cli-reference.md`'s "Sharing a configuration directory between accounts" section.
 
-// TODO: remove once the linking of an account's configuration directory consumes the catalog.
-#![allow(dead_code)]
-
 use crate::protocol::Agent;
 
 /// Whether an item is a single file or a directory. A missing directory item is created in the

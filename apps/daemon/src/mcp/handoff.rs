@@ -206,6 +206,8 @@ mod tests {
                 config_dir: "/tmp/codex-work".to_string(),
                 approval_reviewer: None,
                 approval_mode: None,
+                share_default_config: false,
+                share_default_config_pending: false,
             })
             .unwrap();
         state
@@ -261,6 +263,8 @@ mod tests {
                 config_dir: "/tmp/claude-account".to_string(),
                 approval_reviewer: None,
                 approval_mode: None,
+                share_default_config: false,
+                share_default_config_pending: false,
             })
             .unwrap();
         let before = sessions_as_stored(&state);

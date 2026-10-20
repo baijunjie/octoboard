@@ -134,6 +134,16 @@ impl Flow {
     }
 
     pub(super) async fn run(self, progress: &Progress, cancel: &Notify) -> Outcome {
+        // The account's directory must not change sharing under the CLI while it signs in. A login
+        // waiting for a change being carried out there is still cancelled at once.
+        let dir = self.config_dir.clone();
+        let waiting = tokio::task::spawn_blocking(move || {
+            crate::shared_config::reading_account(dir.as_deref())
+        });
+        let _reading = tokio::select! {
+            reading = waiting => reading.ok().flatten(),
+            () = cancel.notified() => return Outcome::Cancelled,
+        };
         match self.agent {
             Agent::Claude => self.claude(progress, cancel).await,
             Agent::Codex => self.codex(progress, cancel).await,

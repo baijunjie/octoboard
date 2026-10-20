@@ -243,14 +243,19 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   first filled, the undecided state, where it applies), the agent strip and its not-installed warning, Add agent,
   reordering and removing an agent, the empty state, the default account and renaming it, owned accounts and their
   actions menu, approval modes, adding, editing and removing an account, and logging an account in.
+- [Sharing the default configuration](product/sharing-the-default-configuration.md) — a non-default account sharing the
+  agent's default directory through links: the per-account choice, what each agent shares and what is never shared,
+  turning it on (backups, history moved or merged, Codex rows carried) and off (backups restored, the account's own
+  conversations taken back), when a change is carried out and how a failed one is reported, the repair before every
+  launch, Claude Code's auto memory, and removing or repointing a sharing account.
 - [Language](product/language.md) — the 17 offered languages and why they are ordered by tag, English as the fallback,
   the default picked from the system's languages on the first launch and kept from then on, the language chosen in
   Settings, how the system's languages map onto the list, what follows the current language and what does not (report
   pages, text aimed at agents), where the choice is kept, and what is translated so far.
 - [Launching agents](product/launching-agents.md) — the guarantee that Octoboard installs nothing into a project and
-  never writes the user's agent configuration (the three narrow exceptions being the conversation a switch of a
-  session's account copies, the Codex thread row that switch points at the copied head, and the Grok Build trust entry
-  carried to the user's own store), and that a fast-forward and a push are the ways it changes a project repository,
+  never writes the user's agent configuration (the four narrow exceptions being the conversation a switch of a
+  session's account copies, the Codex thread row that switch points at the copied head, the Grok Build trust entry
+  carried to the user's own store, and an account set to share the default configuration), and that a fast-forward and a push are the ways it changes a project repository,
   both only at the user's word; the three things injected per launch and the console's one generated instruction file
   shared by every agent, ending with the console's own instructions, its refresh on each launch and which sessions an
   edit reaches, the launch environment, and the per-agent specifics.
@@ -300,8 +305,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   to the server and to its own model when the limit passes, and whether its model takes turns while a call is
   outstanding — what the model is handed and how it reaches an MCP tool, the rules for writing into a running session,
   where each keeps a session's conversation record (Codex's history segments included) and what moving it to another
-  config directory or another account takes, the measured risks of two accounts sharing a session directory, which
-  are why Octoboard does not offer it, and how each agent treats a configuration directory whose entries are links into
+  config directory or another account takes, the measured risks of two accounts sharing a session directory without the rest
+  of their configuration, and how each agent treats a configuration directory whose entries are links into
   another — which entries it keeps and what they hold, whether a linked file survives the agent saving it, what loads
   through a link, and what loses its automatic approval there.
 - [UI accessibility standard](ui-accessibility.md) — HeroUI default styles taking precedence, WCAG 2.2 AA for custom
@@ -488,15 +493,19 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   held on `AppState` and published by its own event rather than as a field on a stored record, with the cleanups that
   follow from there being no deletion event for it; why a repeating refresh is timed by the client and has to be bounded
   in the daemon by a drop-guard claim and a completion floor, since an in-flight claim alone never fires across clients
-  polling on their own phases; why a file inside a project is read only through `browse::live`, never with
-  `File::open`, since a project's contents can link out, block as a FIFO or be swapped mid-read; why the Rust crates are
+  polling on their own phases; why the Rust crates are
   linted with `cargo clippy --all-targets`, since the plain command lints no `#[cfg(test)]` code and so none of this
   repository's tests; how to type-check Linux-only code from macOS (a scratch crate, since bundled SQLite blocks a cross-check
   of the daemon); why a request handler can never assume it is alone with the daemon's
-  state, so it re-checks after a long step or holds a claim; why a path built from a hook's values,
-  `Session.agent_session_id` among them, holds to the agent's id shape, a daemon-resolved records directory, the exact
-  layout depth and no linked directories; and why macOS host integrations avoid Apple Events (`osascript`, a crate's
-  Finder default) in favour of consent-free APIs.
+  state, so it re-checks after a long step or holds a claim; and why macOS host integrations avoid Apple Events
+  (`osascript`, a crate's Finder default) in favour of consent-free APIs.
+- [Handling paths and files in the daemon](memory/handling-paths-and-files-in-the-daemon.md) — why a path built from a
+  hook's values, `Session.agent_session_id` among them, holds to the agent's id shape, a daemon-resolved records
+  directory, the exact layout depth and no linked directories; why a path taken from text an agent wrote is opened only
+  through `path_links::resolve`; why something counts as gone only on `NotFound`; why a file inside a project is read
+  only through `browse::live`, never with `File::open`, since a project's contents can link out, block as a FIFO or be
+  swapped mid-read; and why two account directories are compared by `account_dirs::account_dir_key`, never by their
+  text.
 - [Writing UI code under the React Compiler](memory/writing-ui-code-under-the-react-compiler.md) — why anything a
   render reads besides props, state, context and hook results (the clock, `getState()`, module state) is frozen at its
   first value and what to read instead; what leaves a component silently uncompiled (ref access during render,

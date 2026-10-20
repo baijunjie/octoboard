@@ -55,10 +55,12 @@ account's login.
   - a directory item the default directory lacks is created there, empty, then linked, so whatever any account
     installs later lands where every account sees it; a missing file item is skipped.
 - **Turning the switch off** removes the links and restores the configuration backups made when it was turned on (an
-  item with no backup is left absent). Conversation history stays in the default directory — both what was moved there
-  and what was written while sharing — and the account starts with empty conversation directories.
+  item with no backup is left absent). The conversations of the Octoboard sessions recorded under the account are moved
+  out of the default directory back into the account's own, so those sessions stay resumable under it; every other
+  conversation (one run from a terminal, say) stays in the default directory.
 - **Applied while no session of the account runs.** The switch can be changed at any time; the change is recorded and
-  carried out before the account's next session starts or resumes, at a moment none of its sessions is running.
+  carried out at once when none of the account's sessions is running, otherwise before the account's next session
+  starts or resumes, at a moment none of its sessions is running.
 - **File links are repaired before every launch and resume.** An agent saving a linked file may replace the link with a
   plain file. Before a session of a sharing account starts or resumes, every file item that is no longer a link is
   backed up and linked again.
@@ -70,5 +72,6 @@ account's login.
 
 - 01 Shareable item catalog (closed)
 - 02 Account switch over shared conversations (closed)
-- [03 Linking, restoring and launch-time repair](03-linking-and-repair.md)
+- 03 Linking, restoring and launch-time repair (closed)
 - [04 Account settings switch](04-account-settings-switch.md)
+- [05 Grok session homes over shared entries](05-grok-farm-links.md)

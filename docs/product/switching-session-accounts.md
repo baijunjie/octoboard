@@ -169,10 +169,13 @@ reading the daemon holds at that moment (`account_quota_exhausted`, carrying wha
 `docs/product/sessions.md` describes for it), when the target is a Grok Build directory that is not an initialized Grok home, when the user's
 shell environment could not be captured — which is read whenever either side of the switch is the default account,
 since that is what resolves its directory, and for any Codex switch, since that environment says where the target
-keeps its database (see "The launch environment" in `docs/product/launching-agents.md`) — and when the conversation
-record is not where it should be; the session's process is then left running. The one further refusal comes after
+keeps its database (see "The launch environment" in `docs/product/launching-agents.md`) — when the conversation
+record is not where it should be, and when the target account has a change of sharing the default configuration
+pending that cannot be carried out (`account_sharing_failed`; see "When a change is carried out" in
+`docs/product/sharing-the-default-configuration.md`); the session's process is then left running. The one further refusal comes after
 the process has been asked to end: a process that has not gone within 30 seconds stops the switch, with nothing
-copied and nothing recorded, and that process may still be running. Once the process has been ended, a copy that
+copied and nothing recorded, and that process may still be running. Once the process has been ended, a change of the
+target's sharing asked for meanwhile that cannot be carried out, a copy that
 does not complete (a Codex account's database that cannot be updated included), a relaunch the launch rules refuse
 and a relaunch whose process ends at once are each reported as a failed switch, not as a success: the session is left
 *interrupted* on its old account, resumable as before, and already reads so everywhere by the time the failure is

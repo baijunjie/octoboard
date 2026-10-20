@@ -200,6 +200,13 @@ export interface Account {
   approval_reviewer?: ApprovalReviewer | null;
   /** Claude Code only; absent or null follows the account configuration. */
   approval_mode?: ClaudeApprovalMode | null;
+  /** Whether the account shares the agent's default configuration (`set_account_sharing`). */
+  share_default_config?: boolean;
+  /** The account's directory has not been brought in line with `share_default_config` yet: the
+   * change waits for nothing to run under the account's directory (its sessions, an agent CLI
+   * reading its quota or models or signing it in), or carrying it out failed; it is tried again
+   * before its next session starts or resumes, or a session is switched to it. */
+  share_default_config_pending?: boolean;
 }
 
 export interface Project {
@@ -1268,6 +1275,7 @@ export type RequestBody =
   | { type: "set_default_account_name"; agent: Agent; name: string }
   | { type: "set_account_approval_reviewer"; account: string | null; reviewer: ApprovalReviewer | null }
   | { type: "set_account_approval_mode"; account: string | null; mode: ClaudeApprovalMode | null }
+  | { type: "set_account_sharing"; account: string | null; share: boolean }
   /** The browse requests (see "Browsing a project" in `apps/daemon/PROTOCOL.md`), answered with
    * `project_source`, `project_dir`, `project_file_matches`, `project_file`, `project_changes`, `project_change`,
    * `project_branches`, `project_comparison`, `project_comparison_change`, `project_change_bodies`,

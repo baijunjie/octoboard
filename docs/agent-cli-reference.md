@@ -950,10 +950,11 @@ markers comes from one build, so a reply that matches none of them should still 
 
 ## Sharing a session directory between accounts
 
-Octoboard does not offer sharing an agent's session directory between accounts, whether by linking `projects/` or
-`sessions/` or otherwise. This section records the measurements behind that decision; linking the rest of a
-configuration directory, and what changes once the databases are linked too, is under "Sharing a configuration directory
-between accounts" below. Codex and Claude Code lose or split conversations in a shared directory, in ways they give no
+Octoboard does not link an account's session directory into another account's on its own: it does so only as part of
+an account sharing the whole of the default account's configuration, conversation databases included (see
+`docs/product/sharing-the-default-configuration.md`). This section records the measurements of a session directory
+shared without the rest; linking the rest of a configuration directory, and what changes once the databases are linked
+too, is under "Sharing a configuration directory between accounts" below. Codex and Claude Code lose or split conversations in a shared directory, in ways they give no
 warning of, and Grok Build has no guard against two writers:
 
 - **Codex.** One home's rollout compression unlinks a rollout that another home holds open, and the turns that home
@@ -1262,9 +1263,16 @@ target).
 - **Mixed versions.** A fake future migration row (99) was tolerated. The real default database was already at
   migration 61 (from the desktop app's newer Codex) while the CLI knows 59, so mixed versions on one database already
   happen. A future `state_6.sqlite` could not be measured: a new version would presumably create a plain `state_6` in
-  each home and the link would quietly stop being used, so launch-time repair should match `state_*.sqlite`.
+  each home and the link would quietly stop being used, so launch-time repair matches `state_*.sqlite` and reports one
+  the catalog does not name.
 - **Effect of sharing it.** Every account sees every account's rows (the resume picker lists them). Backfill runs once
   per database, so an account's private rollouts made before it linked are not imported.
+- **Carried rows.** With an account's thread rows carried into the shared database and its rollouts moved into the
+  default home, both homes' pickers listed both homes' threads, and `exec resume <id>` from either home carried the
+  earlier turns.
+- **Rows written through a link.** A thread started in a linked home is recorded by that home's spelling
+  (`A/sessions/…`). Once A's `sessions/` stopped being a link, D answered `no rollout found for thread id <id>` for it
+  until the row was rewritten to D's own path; after the rewrite D resumed it with its history.
 
 **Codex resume across homes with only `sessions/` shared** (0.162.1; each home keeps its own database).
 

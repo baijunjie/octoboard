@@ -163,10 +163,15 @@ the option is ticked; the option cannot be changed meanwhile.
   | Grok Build | the session's directory |
 
 - **They are looked for wherever this machine's accounts of that agent could hold them**: the account the session last
-  ran under, every account of that agent known to Octoboard, and the agent's default account (see "Agent config
-  directories" in `docs/product/consoles.md`), since a session switched to another account leaves its original copy in
-  the account it came from (see "Carrying the conversation" in `docs/product/switching-session-accounts.md`). The
-  default account is skipped when where it lives cannot be read from the user's shell environment.
+  ran under and every account of that agent known to Octoboard, since a session switched to another account leaves its
+  original copy in the account it came from (see "Carrying the conversation" in
+  `docs/product/switching-session-accounts.md`). The agent's default account (see "Agent config directories" in
+  `docs/product/consoles.md`) is looked in only for a session on the default account, or on an account that shares the
+  default configuration with no change of it pending, whose conversations are kept there (see
+  `docs/product/sharing-the-default-configuration.md`). A session on any other account never has anything removed from
+  the default account's directory, however that directory is spelled or reached through links — a copy an earlier
+  switch left there included. The default account is skipped when where it lives cannot be read from the user's shell
+  environment.
 - **Only the session's own records are taken.** A record is found by the agent's own id of the session, which has to be
   a canonical UUID, at the exact place the agent's layout puts it in the account's directory; a record under a
   symbolically linked directory is left, and nothing else in the account's directory is touched.

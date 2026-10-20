@@ -85,6 +85,7 @@ struct Index {
 pub struct Locator {
     shell: OnceCell<Option<HashMap<String, String>>>,
     indexes: HashMap<(Agent, PathBuf), Index>,
+    record_dirs: HashMap<(Agent, PathBuf), Index>,
 }
 
 impl Locator {
@@ -94,6 +95,7 @@ impl Locator {
         Self {
             shell: OnceCell::from(Some(shell)),
             indexes: HashMap::new(),
+            record_dirs: HashMap::new(),
         }
     }
 
@@ -115,6 +117,14 @@ impl Locator {
         self.indexes
             .entry((agent, root.to_path_buf()))
             .or_insert_with(|| index_records(agent, root))
+    }
+
+    /// The records listed directly under the records directory `records`, a directory of its own
+    /// rather than reached through an account's root.
+    fn index_at(&mut self, agent: Agent, records: &Path) -> &Index {
+        self.record_dirs
+            .entry((agent, records.to_path_buf()))
+            .or_insert_with(|| index_records_at(agent, records))
     }
 
     /// The record of `agent_id` in the account at `root` that holds the conversation as it is now:
@@ -276,6 +286,14 @@ fn walk_level(
 
 /// Index names once per account per pass; never read other sessions' contents or follow links.
 fn index_records(agent: Agent, root: &Path) -> Index {
+    let mut out = index_records_at(agent, &records_dir(agent, root));
+    out.complete &=
+        !std::fs::symlink_metadata(root).is_ok_and(|meta| meta.file_type().is_symlink());
+    out
+}
+
+/// [`index_records`] for the records directory `records` itself.
+fn index_records_at(agent: Agent, records: &Path) -> Index {
     let mut out = Index::default();
     let depth = match agent {
         Agent::Claude | Agent::Grok => 2,
@@ -310,9 +328,8 @@ fn index_records(agent: Agent, root: &Path) -> Index {
         }
         Step::Matched
     };
-    let walked = walk_records(&records_dir(agent, root), depth, &mut visit);
-    out.complete = walked.complete
-        && !std::fs::symlink_metadata(root).is_ok_and(|meta| meta.file_type().is_symlink());
+    let walked = walk_records(records, depth, &mut visit);
+    out.complete = walked.complete;
     out
 }
 
@@ -530,6 +547,131 @@ pub fn record_paths(
     paths
 }
 
+/// [`record_paths`] cut to what deleting `session` may remove: when `session` is on another
+/// account than the default one, nothing in the default account's records directory, by its
+/// spelling or with links resolved, such as the copy a switch left there; the default directory is
+/// the user's own setup. The exception is an account whose directory shares the default
+/// configuration with no change pending: its sessions' records live in the default directory,
+/// reached through its links, and are theirs. While a change of that sharing is pending, nothing
+/// in the default directory is removed: an orphan left there can still be removed by hand, a
+/// conversation removed by mistake cannot.
+pub fn removable_record_paths(
+    hints: &Hints,
+    locator: &mut Locator,
+    accounts: &[Account],
+    session: &Session,
+) -> Vec<PathBuf> {
+    let agent = session.agent;
+    let paths = record_paths(hints, locator, accounts, session);
+    let keeps_default = match session.config_dir.as_deref() {
+        None => true,
+        Some(dir) => {
+            let key = crate::account_dirs::account_dir_key(dir);
+            accounts.iter().any(|account| {
+                account.agent == agent
+                    && crate::account_dirs::account_dir_key(&account.config_dir) == key
+                    && account.share_default_config
+                    && !account.share_default_config_pending
+            })
+        }
+    };
+    if keeps_default {
+        return paths;
+    }
+    let default = locator
+        .root(agent, None)
+        .map(|root| records_dir(agent, &lexically_normalise(&root)));
+    let default_real = default
+        .as_deref()
+        .and_then(|default| std::fs::canonicalize(default).ok());
+    paths
+        .into_iter()
+        .filter(|path| {
+            !default
+                .as_ref()
+                .is_some_and(|default| path.starts_with(default))
+                && !default_real.as_ref().is_some_and(|default| {
+                    path.parent()
+                        .and_then(|parent| std::fs::canonicalize(parent).ok())
+                        .is_some_and(|parent| parent.starts_with(default))
+                })
+        })
+        .collect()
+}
+
+/// Every file the agent keeps of conversation `agent_id` in the account directory `root`, found
+/// as [`record_paths`] finds a record (a canonical id, the agent's exact layout depth, no linked
+/// directory below the records directory), with what the agent keeps beside it: Claude Code's
+/// rewind checkpoints (`file-history/<id>`) and the rollouts `codex archive` moved into
+/// `archived_sessions/`. Each of those directories is looked in where it leads, as a records
+/// directory that is itself a link (to a dotfiles copy, say) is still the account's, and every
+/// path answered is spelled through `root`. Turning an account's sharing off moves these back
+/// into the account; `locator` lists each directory once for all the conversations it moves.
+pub fn conversation_files_in(
+    locator: &mut Locator,
+    agent: Agent,
+    root: &Path,
+    agent_id: &str,
+) -> Vec<PathBuf> {
+    if !plausible_id(agent_id) {
+        return Vec::new();
+    }
+    // `dir` spelled through `root`, and where it leads.
+    let resolved = |dir: PathBuf| std::fs::canonicalize(&dir).ok().map(|real| (dir, real));
+    let spelled = |(dir, real): &(PathBuf, PathBuf), path: &Path| {
+        path.strip_prefix(real).ok().map(|rest| dir.join(rest))
+    };
+    let mut files: Vec<PathBuf> = Vec::new();
+    if let Some(records) = resolved(records_dir(agent, root)) {
+        let found = locator
+            .index_at(agent, &records.1)
+            .records
+            .get(agent_id)
+            .cloned()
+            .unwrap_or_default();
+        for record in found {
+            if !in_real_directories(&record, &records.1) {
+                continue;
+            }
+            for path in own_paths(agent, agent_id, &record, &records.1) {
+                let Some(path) = spelled(&records, &path) else {
+                    continue;
+                };
+                if !files.contains(&path) && std::fs::symlink_metadata(&path).is_ok() {
+                    files.push(path);
+                }
+            }
+        }
+    }
+    match agent {
+        Agent::Claude => {
+            if let Some(history) = resolved(root.join("file-history")) {
+                let checkpoints = history.1.join(agent_id);
+                if std::fs::symlink_metadata(&checkpoints).is_ok() {
+                    files.extend(spelled(&history, &checkpoints));
+                }
+            }
+        }
+        Agent::Codex => {
+            if let Some(archived) = resolved(root.join("archived_sessions")) {
+                let id = agent_id.to_ascii_lowercase();
+                let mut found = Vec::new();
+                walk_records(&archived.1, 6, &mut |path, name, kind, _| {
+                    if is_rollout_of(kind, &name.to_ascii_lowercase(), &id) {
+                        found.push(path.to_path_buf());
+                        Step::Matched
+                    } else {
+                        Step::Descend
+                    }
+                });
+                files.extend(found.iter().filter_map(|path| spelled(&archived, path)));
+            }
+        }
+        Agent::Grok => {}
+    }
+    files
+}
+
 fn account_roots(
     locator: &Locator,
     accounts: &[Account],
@@ -643,8 +785,9 @@ fn archived_codex_branch(
     Some(Branch { record, stretches })
 }
 
-/// Whether all known account locations can prove the absence of this session's native records.
-/// Missing ids and unreadable or linked directories cannot establish absence.
+/// Whether all known account locations can prove the absence of the native records deleting this
+/// session would remove ([`removable_record_paths`]). Missing ids and unreadable or linked
+/// directories cannot establish absence.
 pub fn presence(
     hints: &Hints,
     locator: &mut Locator,
@@ -663,7 +806,7 @@ pub fn presence(
     for root in &roots {
         complete &= locator.index(session.agent, root).complete;
     }
-    for path in record_paths(hints, locator, accounts, session) {
+    for path in removable_record_paths(hints, locator, accounts, session) {
         match std::fs::symlink_metadata(&path) {
             Ok(meta) if meta.file_type().is_file() || meta.file_type().is_dir() => return Present,
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
@@ -726,6 +869,11 @@ pub fn resumability(locator: &Locator, session: &Session) -> Resumability {
 
 /// [`resumability`], with whether resuming first needs `codex unarchive`, from one look at the
 /// account's records.
+///
+/// An account sharing the default configuration reaches its Codex rollouts through linked
+/// `sessions/` and `archived_sessions/`, which leave the verdict `Unknown`, so that nothing is
+/// deleted on it. Whether a rollout Codex archived has to be brought back before a resume is
+/// still decided, from where those links lead.
 pub fn judge(locator: &Locator, session: &Session) -> Judgement {
     let (resumability, needs_unarchive) = match locate_own_record(locator, session) {
         Err(answer) => (answer, false),
@@ -733,12 +881,55 @@ pub fn judge(locator: &Locator, session: &Session) -> Judgement {
         Ok(Located::Archived) => (Resumability::Resumable, true),
         Ok(Located::Missing) if session.agent == Agent::Grok => (Resumability::Unknown, false),
         Ok(Located::Missing) => (Resumability::Unresumable, false),
-        Ok(Located::Uncertain) => (Resumability::Unknown, false),
+        Ok(Located::Uncertain) => (
+            Resumability::Unknown,
+            archived_behind_links(locator, session),
+        ),
     };
     Judgement {
         resumability,
         needs_unarchive,
     }
+}
+
+/// Whether `session`'s Codex rollout sits only in `archived_sessions/` when the account's
+/// `sessions/` or `archived_sessions/` is a link, as an account sharing the default configuration
+/// has them: each linked one is searched where it leads, by the same rules as any records
+/// directory (exact names, no link followed below it).
+fn archived_behind_links(locator: &Locator, session: &Session) -> bool {
+    let Some(agent_id) = session
+        .agent_session_id
+        .as_deref()
+        .filter(|id| session.agent == Agent::Codex && session.has_conversation && plausible_id(id))
+        .map(str::to_ascii_lowercase)
+    else {
+        return false;
+    };
+    let Some(root) = locator.root(Agent::Codex, session.config_dir.as_deref()) else {
+        return false;
+    };
+    let root = lexically_normalise(&root);
+    let dirs = [root.join("sessions"), root.join("archived_sessions")];
+    let is_link =
+        |dir: &Path| std::fs::symlink_metadata(dir).is_ok_and(|meta| meta.file_type().is_symlink());
+    if !dirs.iter().any(|dir| is_link(dir)) {
+        return false;
+    }
+    let is_record = |name: &str, kind: std::fs::FileType| {
+        is_rollout_of(kind, &name.to_ascii_lowercase(), &agent_id)
+    };
+    let found = |dir: &Path| {
+        let dir = if is_link(dir) {
+            match std::fs::canonicalize(dir) {
+                Ok(resolved) => resolved,
+                Err(_) => return Located::Uncertain,
+            }
+        } else {
+            dir.to_path_buf()
+        };
+        scan_for_record(&dir, 6, &is_record)
+    };
+    found(&dirs[0]) == Located::Missing && found(&dirs[1]) == Located::Present
 }
 
 /// `Err` carries the answer when the record need not, or cannot, be looked for.
@@ -842,7 +1033,9 @@ pub fn plausible_id(id: &str) -> bool {
 }
 
 /// Whether every directory from `record`'s parent up to `dir`, inclusive, is a real directory and
-/// not a link to one, so that what lies under it is where it appears to be.
+/// not a link to one, so that what lies under it is where it appears to be. A records directory
+/// that may itself be a link (a sharing account's always is, and a user's own may lead to a
+/// dotfiles copy) is resolved first and the results spelled back through the account's path.
 fn in_real_directories(record: &Path, dir: &Path) -> bool {
     let mut at = record.parent();
     while let Some(current) = at {
@@ -991,6 +1184,66 @@ mod tests {
         );
     }
 
+    /// What deleting a session removes: for a session on another account, nothing in the default
+    /// account's directory, where a switch left a copy, unless that account shares the default
+    /// configuration with nothing pending; for one on the default account, that copy; and never
+    /// the default's record reached under another spelling.
+    #[test]
+    fn default_records_are_removed_only_for_the_default_or_a_sharing_account() {
+        let dir = crate::test_support::ScratchDir::new("agent-records-removable");
+        let (account, default) = (dir.join("account"), dir.join("default"));
+        let transcript = |root: &Path| root.join("projects/one").join(format!("{CLAUDE_ID}.jsonl"));
+        touch(&transcript(&account));
+        touch(&transcript(&default));
+        let mut locator = Locator::with_shell(HashMap::from([(
+            "CLAUDE_CONFIG_DIR".to_owned(),
+            default.to_string_lossy().into_owned(),
+        )]));
+        let hints = Hints::default();
+        let removable = |locator: &mut Locator, accounts: &[Account], on: Option<&Path>| {
+            removable_record_paths(
+                &hints,
+                locator,
+                accounts,
+                &session(Agent::Claude, CLAUDE_ID, on),
+            )
+        };
+        let on_account = removable(&mut locator, &[], Some(&account));
+        assert!(on_account.contains(&transcript(&account)), "{on_account:?}");
+        assert!(
+            on_account.iter().all(|path| !path.starts_with(&default)),
+            "{on_account:?}"
+        );
+        let on_default = removable(&mut locator, &[], None);
+        assert!(on_default.contains(&transcript(&default)), "{on_default:?}");
+
+        let mut sharing = Account {
+            id: "a".to_owned(),
+            agent: Agent::Claude,
+            name: "Sharing".to_owned(),
+            config_dir: account.to_string_lossy().into_owned(),
+            approval_reviewer: None,
+            approval_mode: None,
+            share_default_config: true,
+            share_default_config_pending: false,
+        };
+        let on_sharing = removable(&mut locator, std::slice::from_ref(&sharing), Some(&account));
+        assert!(on_sharing.contains(&transcript(&default)), "{on_sharing:?}");
+        sharing.share_default_config_pending = true;
+        let on_pending = removable(&mut locator, std::slice::from_ref(&sharing), Some(&account));
+        assert!(
+            on_pending.iter().all(|path| !path.starts_with(&default)),
+            "{on_pending:?}"
+        );
+
+        // An account whose directory is a link to the default one reaches the default's record by
+        // its own spelling; that is not its own to remove.
+        let alias = dir.join("alias");
+        std::os::unix::fs::symlink(&default, &alias).unwrap();
+        let through_alias = removable(&mut locator, &[], Some(&alias));
+        assert!(through_alias.is_empty(), "{through_alias:?}");
+    }
+
     /// Where each agent keeps a session's records, and what of them is named: Claude's transcript
     /// in every project directory with the subagent directory beside each, Codex's rollout, Grok's
     /// session directory; one kept in another account of the same agent is found as well.
@@ -1010,6 +1263,8 @@ mod tests {
             config_dir: other.to_string_lossy().into_owned(),
             approval_reviewer: None,
             approval_mode: None,
+            share_default_config: false,
+            share_default_config_pending: false,
         };
 
         let projects = account.join("projects");

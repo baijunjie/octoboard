@@ -134,57 +134,6 @@ one row — and back out if any of it changed. Put
 blocking filesystem or process work in a handler on `tokio::task::spawn_blocking` and await it; do not use
 `block_in_place`, which panics under the current-thread runtime plain `#[tokio::test]` gives the coordinator tests.
 
-## A path built from a hook's values is built as if an attacker chose them
-
-Applies to daemon code that turns a value an agent's hook reported into a path it removes, moves or writes to — and
-`Session.agent_session_id` is such a value, since `hook_callback` (`apps/daemon/src/server.rs`) records it from the
-payload, as are the transcript paths the hooks report. `POST /hook/:session` takes no `Origin`, so any local process
-can post to it (`apps/daemon/PROTOCOL.md`, "Who may connect"), the agent's own model included once something it read
-steers it there. The daemon trusting local processes does not make these values safe to name a path with.
-
-So such a path holds to four conditions: the id must match the agent's real id shape exactly (a canonical UUID),
-never be cut out of a reported path; the path is built from a records directory the daemon resolved itself and that
-id, a reported path counting only when it lies inside that directory; only an entry at the agent's exact layout depth
-is taken, since a name one level higher can be a whole directory's (a Claude project directory is named like
-`-Users-me-work`); and no directory between the records directory and the entry may be a link. `record_paths` in
-`apps/daemon/src/agent_records.rs` does all four; extend it rather than write a second one.
-
-## Opening a path taken from text an agent could have written can run code
-
-Applies to daemon code that hands a path to the host's opener (`/usr/bin/open` on macOS, `xdg-open` on Linux) because
-the path appeared in text an agent, its prompt or a repository could have put there: a session's terminal output, a
-rendered document, a hook's payload. An agent echoes whatever it read, so someone else can choose such a path. And the
-opener does not only show: it runs an application or other bundle, a `.command` or shell script, an installer or any
-file with an executable bit, and follows a `.webloc`, `.fileloc` or `.desktop` shortcut on to somewhere else.
-
-So the daemon resolves such a path itself at the moment it opens it, never trusting a client's earlier answer; it must
-lie inside a root the daemon chose once symbolic links are resolved; nothing launchable may sit anywhere along it; and
-inside a root other users can write to (a system temp directory such as `/tmp`), the file and every directory down to
-it must belong to the daemon's user and be closed to writes by group and others, or another user can swap it between
-the check and the open. `resolve` in `apps/daemon/src/path_links.rs` does all of this; extend it rather than write a
-second one.
-
-## Act destructively on "it is gone" only when `NotFound` said so
-
-Applies to daemon code that deletes, trashes or refuses something because a file or directory is missing — an agent's
-record, an account directory, a worktree. `Path::exists`, `is_dir` and `is_file` answer false on any error (permission
-denied, an I/O error, a volume not mounted), so their false proves nothing: judge absence only from `metadata` or
-`symlink_metadata` failing with `ErrorKind::NotFound`, and take any other error as unknown. A place that reads as
-empty is not proof either — an unmounted volume's mount point is an empty directory, and an agent account directory
-holding none of the agent's record directories has never shown a record to be missing. So such a judgement has three
-answers, and unknown never destroys anything; `agent_records::Resumability` is the shape for a session's
-conversation.
-
-## Read a file inside a project only through `browse::live`, never with `File::open`
-
-Applies to daemon code that reads a file's content from a project's directory or worktree — to count it, sniff it,
-hash it, send it. Go through `live::read_file` (from a path relative to the scope) or `live::read_resolved` (once the
-path has been resolved inside it), never `File::open` or `fs::read`. What sits in a project is whatever the user or an
-agent put there: a link leading out of the project, a FIFO whose open blocks until a writer appears — holding one of
-the browse reads' few daemon-wide slots with no deadline — a device that reads forever, a file swapped mid-read. `live`
-refuses each of these and honours the request's cancel; a direct open does none of it, and a fixture of plain files
-cannot tell the two apart.
-
 ## On macOS, reach the system through APIs that need no consent, never through Apple Events
 
 Applies to host integrations in the daemon and in the desktop shell: moving to the Trash, revealing or opening

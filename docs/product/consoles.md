@@ -134,7 +134,9 @@ Each agent's config directory is where that agent keeps its own configuration, l
 | Grok Build | the Grok home, what Grok itself takes from `GROK_HOME` | `~/.grok` |
 
 How each agent is pointed at its directory is in "The launch environment" and "Per-agent specifics a user will notice"
-in `docs/product/launching-agents.md`.
+in `docs/product/launching-agents.md`. An account other than the default one can share the default account's
+configuration and conversation history through links in its directory, keeping only its login its own (see
+`docs/product/sharing-the-default-configuration.md`).
 
 The console dialog sets them in its **Agent default accounts** section, one row per agent that can be picked, in the
 order of the added agents (see "Which agents the agent pickers list" above), each headed by the agent's icon and name,
