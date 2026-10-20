@@ -30,12 +30,18 @@ pub const FORMAT: &str = "octoboard-configuration";
 
 /// Raised when a change makes an older reader misread a document: a field removed or given another
 /// meaning. A field added, which a reader that does not know it ignores, does not raise it.
+///
+/// Raising it needs a step in `config_upgrade` that upgrades a document of the previous version,
+/// so an export made before stays importable.
 pub const VERSION: u32 = 1;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ConfigurationDocument {
     pub format: String,
     pub version: u32,
+    /// The Octoboard version that produced the document, for diagnosing one that misbehaves. An
+    /// import never reads it, and it is absent in a document exported before it existed.
+    pub exported_by: Option<String>,
     /// The application settings that are not console-scoped. Present in a full export only: its
     /// absence is what says the document holds one console.
     pub settings: Option<DocumentSettings>,
@@ -175,6 +181,7 @@ pub fn build(store: &Store, console: Option<&str>) -> Result<ConfigurationDocume
     Ok(ConfigurationDocument {
         format: FORMAT.to_string(),
         version: VERSION,
+        exported_by: Some(env!("CARGO_PKG_VERSION").to_string()),
         settings,
         consoles,
     })
@@ -419,6 +426,10 @@ mod tests {
         assert_eq!(
             (document.format.as_str(), document.version),
             (FORMAT, VERSION)
+        );
+        assert_eq!(
+            document.exported_by.as_deref(),
+            Some(env!("CARGO_PKG_VERSION"))
         );
         assert_eq!(
             document.settings,

@@ -15,6 +15,7 @@ mod branch_origin;
 mod browse;
 mod config_export;
 mod config_import;
+mod config_upgrade;
 mod coordinator;
 mod crash_cleanup;
 mod env_shell;

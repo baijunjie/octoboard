@@ -608,6 +608,8 @@ export interface DocumentSettings {
 export interface ConfigurationDocument {
   format: "octoboard-configuration";
   version: number;
+  /** The Octoboard version that exported it, for diagnosis only. Absent in an older file. */
+  exported_by?: string | null;
   /** Present in a full export only. */
   settings?: DocumentSettings | null;
   consoles: DocumentConsole[];

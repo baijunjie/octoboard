@@ -59,6 +59,7 @@ once.
 | `src/account_login/` | Signing an account in with its agent's own CLI in the background: `mod.rs` keeps the logins running (`AccountLogins`: one per account, a timeout, cancel, the end of each, the kill on shutdown), `flows.rs` drives the three CLIs and reads what they print |
 | `src/availability.rs` | Working out, once per daemon start, which agents are available and each one's default account, then filling the added agents once |
 | `src/config_export.rs`, `src/config_import.rs` | Building the configuration document `export_configuration` answers with, and reading one back (`inspect` and `apply`) |
+| `src/config_upgrade.rs` | Upgrading a configuration document of an older version, step by step, before an import reads it |
 | `src/git_env.rs` | The base every `git` the daemon runs is built from (non-interactive, read-only, variable filtering) |
 | `src/git_status.rs`, `src/git_push.rs`, `src/git_switch.rs`, `src/git_restore.rs`, `src/git_remote.rs`, `src/git_watch.rs` | Per-project git: status check against the remote and fast-forward, push of the current branch, switch to a local branch, restore of tracked changes, the recorded remote URL, and the ref watch that republishes the branch header |
 | `src/branch_origin/` | Which session is responsible for a git branch: `ref_created`, `annotate`, `hand_over`, `project_deleted`, plus the git hook dispatchers (`git_hooks.rs`, `dispatcher.sh`) that report created branches |

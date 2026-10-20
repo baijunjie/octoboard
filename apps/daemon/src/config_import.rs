@@ -21,6 +21,7 @@ use crate::config_export::{
     self, AccountName, ConfigurationDocument, DocumentConsole, DocumentProject, DocumentSettings,
     ProjectAccountRef,
 };
+use crate::config_upgrade;
 use crate::coordinator::{
     self, AddProjectRequest, NewConsole, NewProjectSettings, SettingsChanges,
 };
@@ -253,7 +254,10 @@ fn parse(value: &serde_json::Value) -> Result<ConfigurationDocument> {
             ],
         ));
     }
-    serde_json::from_value(value.clone()).map_err(|err| unreadable(&err.to_string()))
+    let mut upgraded = object.clone();
+    config_upgrade::upgrade(&mut upgraded, version as u32);
+    serde_json::from_value(serde_json::Value::Object(upgraded))
+        .map_err(|err| unreadable(&err.to_string()))
 }
 
 /// The document's account references bound to this machine's accounts.
@@ -864,6 +868,7 @@ mod tests {
         serde_json::to_value(ConfigurationDocument {
             format: config_export::FORMAT.to_string(),
             version: config_export::VERSION,
+            exported_by: None,
             settings: None,
             consoles,
         })
@@ -954,6 +959,17 @@ mod tests {
             assert_eq!(code_of(&err), code, "{value}");
         }
         parse(&document(vec![console("Hub", Vec::new())])).expect("a valid document is read");
+    }
+
+    #[test]
+    fn a_document_exported_before_exported_by_existed_is_still_read() {
+        let mut value = document(vec![console("Hub", Vec::new())]);
+        value.as_object_mut().unwrap().remove("exported_by");
+
+        let parsed = parse(&value).expect("read");
+
+        assert_eq!(parsed.exported_by, None);
+        assert_eq!(parsed.consoles.len(), 1);
     }
 
     #[test]

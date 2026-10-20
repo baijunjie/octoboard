@@ -821,6 +821,7 @@ input of the import as much as a file the user keeps, so its shape is part of th
 
 ```
 Document { format: "octoboard-configuration", version: 1,
+           exported_by?,                                  // the Octoboard version that exported it; informational
            settings?: { auto_pull_repositories,       // present in a full export only; an older document
                                                       // may carry it as `auto_sync_repositories`, read alike
                         auto_delete_unresumable_archives? },   // absent or null in an older document: left as it is
@@ -879,7 +880,11 @@ ProjectAccountRef { kind: "inherit" } | { kind: "default" } | { kind: "account",
 - **Version.** `format` tells a configuration document from any other JSON; `version` is an integer, 1 today. It is
   raised when a change would make a reader written for the older version misread a document: a field removed, or
   given another meaning. A field added is not such a change, and a reader ignores one it does not know. An import
-  refuses a `format` it does not know, or a `version` newer than it supports, before creating anything.
+  refuses a `format` it does not know, or a `version` newer than it supports, before creating anything. An older
+  `version` is upgraded one version at a time to the current one before the document is read, so an export kept from
+  before a change stays importable. `exported_by` records the Octoboard version that produced the document, for
+  diagnosing one that misbehaves; an import never reads it, it is absent in a document exported before it existed,
+  and it takes no part in `version`.
 
 ### Configuration import
 

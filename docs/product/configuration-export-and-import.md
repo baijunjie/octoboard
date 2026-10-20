@@ -176,9 +176,17 @@ accounts stay out of every document (see "What is not configuration and never tr
 
 The format marker tells a configuration document from any other JSON. The version is a whole number, 1 today, and is
 raised only when a change would make a reader written for an older version misread a document — a field dropped, or
-given another meaning. Adding a field is not such a change, and a reader ignores a field it does not know. An import
-refuses a document whose format it does not recognize, and one whose version is newer than it reads, before it creates
-anything.
+given another meaning. Adding a field is not such a change, and a reader ignores a field it does not know; neither is
+renaming one whose old name an import still reads, as with `auto_sync_repositories` above. An import refuses a document
+whose format it does not recognize, and one whose version is 0 or newer than it reads, before it creates anything.
+
+A document of an older version is not refused: before reading it, an import upgrades it to the current version one
+version at a time, so a file exported before the version was raised stays importable. The upgrade is part of the import
+and the file itself is left as it is. Only version 1 exists today, so no document needs upgrading yet.
+
+A document also carries, under `exported_by`, the version of Octoboard (its daemon) that exported it. It is there only
+for diagnosing a document that misbehaves: an import never reads it, it has no bearing on the version number, and a
+document exported before it existed does not carry it.
 
 ## Importing
 
