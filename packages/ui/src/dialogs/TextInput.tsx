@@ -17,6 +17,7 @@ import { TextFieldDescription, TextLengthHint } from "./TextFieldDescription";
  * and goes while the user types does not remount the input and drop its focus. */
 export function TextInput({
   label,
+  labelContent,
   value,
   onChange,
   placeholder,
@@ -31,10 +32,12 @@ export function TextInput({
   characterLimit,
 }: {
   label: string;
+  /** Rich visible label; the plain label remains the input's accessible name. */
+  labelContent?: React.ReactNode;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  description?: string;
+  description?: React.ReactNode;
   errorMessage?: React.ReactNode;
   errorDetails?: React.ReactNode;
   trailing?: React.ReactNode;
@@ -59,6 +62,7 @@ export function TextInput({
   return (
     <TextField
       fullWidth
+      aria-label={labelContent ? label : undefined}
       variant="secondary"
       {...field}
       autoFocus={autoFocus}
@@ -69,7 +73,7 @@ export function TextInput({
       // before the dialog's handler — and the mark itself only ever appears from that handler.
       validationBehavior="aria"
     >
-      <Label>{label}</Label>
+      <Label>{labelContent ?? label}</Label>
       {/* The row keeps the trailing control level with the input while the description and the
           error stay under both: HeroUI's text field is a plain flex column whose styling reaches
           its input by descendant selector, so a row of its own around them changes nothing.

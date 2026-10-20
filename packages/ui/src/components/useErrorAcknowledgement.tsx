@@ -7,7 +7,7 @@ import { errorText } from "../errorText";
 import { DaemonErrorMessage } from "./DaemonErrorMessage";
 
 /** A durable failed state keeps its recovery controls after the error has been acknowledged. */
-export function useErrorAcknowledgement(message: ErrorPresentation | undefined, title?: string, error?: unknown, recovery?: ErrorRecovery): void {
+export function useErrorAcknowledgement(message: ErrorPresentation | undefined, title?: string | React.ReactElement, error?: unknown, recovery?: ErrorRecovery): void {
   useEffect(() => {
     if (message === undefined) return;
     errorAlerts.report({ message: errorText(message), error: error ?? message, recovery, title, content: <DaemonErrorMessage error={message} /> });

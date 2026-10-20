@@ -140,3 +140,80 @@ run on unchanged runtime source subsequently passed 471/471; the remaining 1,413
 in the original run. All 1,884 cases therefore have a clean latest condition result, but the initial concurrent
 failure remains failed. Independent baseline comparisons did not reproduce it; its cause is unresolved, not a
 proven baseline defect.
+
+
+## Milestone 05 rich references and tooltip closure
+
+Milestone 05 closes COPY-02/03 and the application-caller half of COPY-09 on the audit aggregate, based on
+`041aeb1a75c407888514c9a72b694c0d038a14cd`. The fresh English catalog inventory is 505 parameterized messages /
+706 message-parameter pairs, including plural count parameters, against 494/684 at that base. These are inventory
+counts, not render-route proof; the historical 425/565 inventory remains historical. Manual current-source closure
+covered fixed agent/product/control references, owner and restore titles, session/model/Git metadata and tooltips,
+login/trust/request/import fallback copy, ReasonText/accountUsage, quota refusal/recovery, and resume/history/error
+callers. Whole entity/path rows and foreign source/terminal/report layouts retain their presentation.
+
+`Message` renders referenced names through inherit-size nonmonospace directed wrapping chips; technical values
+retain their code contract. Plain translation, native/accessibility/notification/announcement strings and raw
+collection matching remain separate. Rich session/Git/quota copy helpers preserve their plain counterparts,
+including `quotaUsedUpAlert` and `quotaUsedUpSentence`. Shared field details, complete/summary/details routing,
+producer IDs versus literal names, startup-safe error records, resume-aware gating, acknowledgement, retry,
+context and viewer/report focus behavior retain the 04/12 contracts. Milestone 06's choice/status/direction work
+remains open; its handoff names the rich/plain field and option APIs established here.
+
+The final global capture freeze covered all 727 UI/control files, including new runtime files, with SHA-256
+`f5bb9f903e78af9383ae355cfbbf02234a199af37e4e47979c681e8ca4ca4ff1`. The file set, every hash and base HEAD matched
+before and after captures. Independent dependencies and real fonts were used; no source or fixture mutations
+occurred during that capture window. Subsequent changes are documentation only.
+
+- `pnpm --filter @octoboard/ui exec vitest run` with 52 explicit paths passed 926/926 tests. Selection included the
+  new rich/plain i18n, quota, session metadata and option contracts; retained stock Alert/error-router contracts;
+  affected dialogs, settings, import, matching and metadata callers; resume/history/report/viewer behavior; and
+  catalog/gallery tests. The exact argument list is retained in task outputs outside Git. This is a focused result.
+- `pnpm --filter @octoboard/ui build` passed typecheck, five i18n files / 30 tests and the UI build, retaining the
+  existing chunk-size/plugin-timing advisories. `pnpm format:check` passed ESLint with zero warnings and Cargo format.
+- The unchanged gallery runner, with `--jobs 1`, passed 472 scenarios × English/Chinese light: 944/944 loads,
+  zero failures, 1503.2 seconds. The 91 affected scenarios passed English/Chinese dark: 182/182, 297.2 seconds;
+  Arabic fallback in both themes passed 182/182, 297.4 seconds. Canonical total: 1,308 loads, zero failed.
+- The affected set includes all 13 current resume fixtures, both history failure states and all five named quota
+  scenarios: new-session/handoff all-used-up use Codex Default/Team; switch-account uses Work; new-session refusal
+  names Work; quick-create refuses the default agent. They are not five Work fixtures.
+- Actual-font/parent measurements passed 276/276 conditions across both themes and English/Chinese/Arabic fallback:
+  2,256 chip placements, 96 Alerts and 84 CodeBlocks. Minimum chip text contrast was 4.511:1 light / 5.124:1 dark;
+  CodeBlock text was at least 5.823:1 / 8.545:1. All statuses and dark alpha compositing were measured. Only the
+  previously accepted four light stock Alert.Description exceptions apply; no chip/title/indicator/control/dark
+  exception or foreground override was added. The exact v2 fills remain unchanged.
+- `gallery-chip-geometry.mjs` passed both language groups / ten loads: 12/14/16px baseline geometry, 390px wrapping
+  and RTL, import path equality and trust sentence containment. Actual interaction checks passed 54/54 conditions:
+  rich hover/focus tooltips, accessible names and repeated-description suppression, raw native/owner typeahead,
+  per-label marquee and reduced motion, quota controls, and measured viewer clipping/wrapping. English and Arabic
+  subtitles exercised rich clipped tooltips and key suppression; Chinese fit/wrapped within bounds.
+
+Earlier attempts remain failed or interrupted. Focused test attempts had 200/207, 170/180, 186/189, 300/370,
+835/836 and 168/169 passing before expectation/import/selector corrections; none is relabeled a baseline pass.
+The initial static check had two quote errors, corrected before the passing check. An early invocation also named
+a nonexistent LanguageSetting test path; the final 52-path command contains only existing tests.
+Three earlier full sweeps were interrupted before source repairs. A later 944/944 full pass certified freeze
+`bb8191d1dea1eb734b4fbe6b9970fc0a909eb9e0429a4f94040f1292788ddf66`, before gallery-parent corrections; the final
+1,308-load record above certifies the final freeze instead.
+
+The initial actual measurement was 243 passing / 33 failing conditions: 24 imposed inline display on normal direct
+flex/grid blockification; nine sampled light technical chips on gallery-body parents, including inactive viewer
+launchers behind a modal. CodeGallery standalone accent/success/warning readings on that body were
+4.215/4.022/4.283:1. Gallery-writer put comparison specimens on representative existing product surfaces; native chip
+colors and Alert fills were retained. A following measurement was interrupted after reaching another transparent
+nested specimen parent; that parent was corrected and independently reviewed before the final freeze. These body
+readings are not exceptions for product chips. Final measurements inspect actual active product parents.
+
+An initial interaction probe was interrupted; a following 54-condition probe passed 40 and failed 14. Fixture/control
+scope, settled-state/visibility waits, measured locale-dependent clipping and exit-animation observations were
+corrected without runtime changes, then 54/54 passed. The earlier Git-tooltip observation's cause remains
+unestablished; no cause is inferred for the separate 03a removed-account failure or the separate 13 menu issue.
+The Vite preview logged ResizeObserver-loop notifications; their cause was not diagnosed. Gallery totals refer to
+the unchanged runner's existing assertions, rather than a warning-free-console claim.
+
+Independent change checks passed the shared rich/plain and gallery-parent changes, application callers and
+metadata/tooltip suppression, explicitly including fixed agent/product references and preservation of 04/12.
+Sequential map/product/memory documentation work retained one authority for each rule. The preview and owned
+browsers were stopped, the preview port and service record cleared, and no scratch scenarios or staging snapshot
+remain. Raw task logs, commands and captures stay outside Git. No real login, live daemon, website build, packaged
+WKWebView or VoiceOver listening was performed; the earlier native/listening limits remain unchanged.

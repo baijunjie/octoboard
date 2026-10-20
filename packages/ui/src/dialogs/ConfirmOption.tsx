@@ -16,8 +16,8 @@ export function ConfirmOption({
   onChange: (selected: boolean) => void;
   /** Frozen while the request runs. */
   isReadOnly: boolean;
-  label: string;
-  hint: string;
+  label: React.ReactNode;
+  hint: React.ReactNode;
   /** More that describes the option beside its note: the id of a line said elsewhere about it. */
   describedBy?: string;
 }): React.ReactElement {

@@ -75,7 +75,7 @@ const sessions = [
 ];
 
 // Names that test a narrow layout: a long console-session name and a redesign coordinator.
-const longHub = sessionOf("s-long-hub", console_.id, undefined, "A console session titled at a length no row fits", "idle", { colour: "cyan", terminal_title: "Review a very long agent-generated task title across the entire release pipeline" });
+const longHub = sessionOf("s-long-hub", console_.id, undefined, "Release coordinator مرحبا 東京 UnbrokenOwnerNameForProductionDeploymentCompatibilityReview", "idle", { colour: "cyan", terminal_title: "Review release readiness مرحبا 東京 across the entire production deployment pipeline" });
 const redesignHub = sessionOf("s-redesign-hub", console_.id, undefined, "Website redesign coordinator", "idle", { colour: "yellow" });
 const searchProject = projectOf("p-search", console_.id, "Search interface service");
 
@@ -100,7 +100,7 @@ const crowdedConsole = consoleOf("c-crowded", "Many console sessions");
 const fittingConsole = consoleOf("c-fitting", "Two short hubs");
 const emptyProject = projectOf("p-empty", console_.id, "Archived only");
 const freshProject = projectOf("p-fresh", console_.id, "No sessions yet");
-const longProject = projectOf("p-long", console_.id, "A project whose name is far too long for one row");
+const longProject = projectOf("p-long", console_.id, "Search interface مرحبا 東京 UnbrokenProjectNameForProductionCompatibilityReview");
 const state = snapshotState({
   consoles: [console_, loneConsole, projectlessConsole, crowdedConsole, fittingConsole],
   projects: [project, other, third, searchProject, longProject, emptyProject, freshProject, projectOf("p-lone", loneConsole.id, "No bound sessions"), projectOf("p-fitting", fittingConsole.id, "Short strip")],
@@ -123,7 +123,7 @@ const state = snapshotState({
 // The same workspace under a console whose name no header fits, for the long-names scenario alone.
 const longNameState = {
   ...state,
-  consoles: new Map([...state.consoles!].map(([id, item]) => [id, id === console_.id ? { ...item, name: "A console with a rather long name indeed" } : item] as const)),
+  consoles: new Map([...state.consoles!].map(([id, item]) => [id, id === console_.id ? { ...item, name: "Release console مرحبا 東京 UnbrokenConsoleNameForProductionCompatibilityReview" } : item] as const)),
 };
 
 // The existing focus views share enough cards to scroll even with the console-bound cards
@@ -192,7 +192,7 @@ const observedLaunches: Record<string, Partial<Session>> = {
 const combinedState = {
   ...scrollingFocusState,
   settings: { ...settings, accounts: [...settings.accounts,
-    { id: "a-long", agent: "claude" as const, name: "Release coordination across every production environment", config_dir: "/Users/dev/.claude-release" },
+    { id: "a-long", agent: "claude" as const, name: "Release coordination مرحبا 東京 UnbrokenAccountNameForProductionCompatibilityReview", config_dir: "/Users/dev/.claude-release" },
     { id: "a-release", agent: "claude" as const, name: "Production release coordination and regression review account", config_dir: "/Users/dev/.claude-regression" },
   ] },
   // The project's own setting is what a card with nothing observed or overridden follows.
@@ -547,9 +547,9 @@ export const focusScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "New session from project focus",
-    state: state,
-    preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
-    description: "The dialog offers no owner choice.",
+    state: longNameState,
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${longProject.id}` },
+    description: "The dialog references the long mixed-script project in its title and offers no owner choice.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.openSession")),
     ],
@@ -572,7 +572,7 @@ export const focusScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "New session from console focus, the console session archived meanwhile",
-    state: state,
+    state: { ...state, sessions: new Map([...state.sessions!].map(([id, session]) => [id, id === hub1.id ? { ...session, title: "Release coordinator مرحبا 東京 UnbrokenOwnerNameForProductionCompatibilityReview", terminal_title: "Review release readiness مرحبا 東京" } : session])) },
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
     description: "Reached only when the console session ends under the open dialog (archived from a second window). A danger alert at the top of the dialog body says it is no longer available, so a session cannot be opened for it; the fixed owner line stays and Open is disabled.",
     steps: [

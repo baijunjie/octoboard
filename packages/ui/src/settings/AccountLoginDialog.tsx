@@ -121,7 +121,7 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
   const progress = t(login?.status === "waiting" ? "settings.accounts.login.waiting" : "settings.accounts.login.starting");
   return (
     <Dialog
-      title={<Message id="settings.accounts.login.dialogTitle" params={{ name: who, agent: AGENT_LABEL[agent] }} />}
+      title={<Message id="settings.accounts.login.dialogTitle" params={{ name: who, agent: <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[agent]}</InlineChip> }} />}
       onClose={close}
       footer={ended ? (
         <>

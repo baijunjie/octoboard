@@ -7,10 +7,10 @@ import { useTabScrollLabels } from "../components/tabScrollLabels";
 import { DaemonRequestError } from "../daemon-client";
 import { errorPresentation } from "../errorPresentation";
 import type { MessageKey } from "../i18n/catalog";
-import { isolate } from "../i18n/isolate";
-import { useT } from "../i18n/react";
+import { InlineChip } from "../components/InlineChip";
+import { Message, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
-import { sessionDisplayTitle } from "../sessionLabel";
+import { sessionChoiceTitle, sessionDisplayTitle } from "../sessionLabel";
 import { BindingBadge } from "../sidebar/BindingBadge";
 import { liveConsoleSessions } from "../sidebar/order";
 import { useDaemon, useDaemonStore } from "../store";
@@ -247,8 +247,8 @@ export function SessionDialog({
       {fixedOwner && (
         <div data-marquee-scope className="flex items-center gap-2 text-sm">
           <BindingBadge owner={fixedOwner} decorative />
-          <FadeOverflow dir="auto" className="min-w-0 flex-1" titleWhenClipped={t("dialog.session.ownerFixed", { name: isolate(sessionDisplayTitle(t, fixedOwner)) })}>
-            {t("dialog.session.ownerFixed", { name: isolate(sessionDisplayTitle(t, fixedOwner)) })}
+          <FadeOverflow dir="auto" className="min-w-0 flex-1" titleWhenClipped={<Message id="dialog.session.ownerFixed" params={{ name: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, fixedOwner)}</InlineChip> }} />}>
+            {<Message id="dialog.session.ownerFixed" params={{ name: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, fixedOwner)}</InlineChip> }} />}
           </FadeOverflow>
         </div>
       )}
@@ -259,7 +259,7 @@ export function SessionDialog({
           onChange={setPickedOwner}
           options={[
             { value: NO_OWNER, label: t("dialog.session.ownerNone") },
-            ...owners.map((s) => ({ value: s.id, label: sessionDisplayTitle(t, s), icon: <BindingBadge owner={s} decorative /> })),
+            ...owners.map((s) => ({ value: s.id, label: sessionChoiceTitle(t, s), labelContent: sessionDisplayTitle(t, s), icon: <BindingBadge owner={s} decorative /> })),
           ]}
         />
       )}
@@ -274,8 +274,8 @@ export function SessionDialog({
   return (
     <Dialog
       title={project
-        ? t("dialog.session.title", { project: isolate(project.name) })
-        : t("dialog.consoleSession.title", { console: isolate(parentConsole.name) })}
+        ? <Message id="dialog.session.title" params={{ project: <InlineChip dir="auto" wrap size="inherit">{project.name}</InlineChip> }} />
+        : <Message id="dialog.consoleSession.title" params={{ console: <InlineChip dir="auto" wrap size="inherit">{parentConsole.name}</InlineChip> }} />}
       onClose={onClose}
       submitLabel={t(target ? SUBMIT_LABEL[target.kind] : "dialog.session.open")}
       busy={busy}
@@ -283,7 +283,7 @@ export function SessionDialog({
       onSubmit={submit}
     >
       {quotaUsedUp && <ErrorAlert title={quotaUsedUp.title} announce>{quotaUsedUp.description}</ErrorAlert>}
-      {fixedOwner && fixedOwnerGone && <ErrorAlert>{t("dialog.session.ownerGone", { name: isolate(sessionDisplayTitle(t, fixedOwner)) })}</ErrorAlert>}
+      {fixedOwner && fixedOwnerGone && <ErrorAlert>{<Message id="dialog.session.ownerGone" params={{ name: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, fixedOwner)}</InlineChip> }} />}</ErrorAlert>}
       {resumable && (
         <Tabs selectedKey={conversation} onSelectionChange={(key) => {
           setSwitched(true);

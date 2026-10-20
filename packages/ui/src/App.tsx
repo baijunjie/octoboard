@@ -37,7 +37,7 @@ import { PendingQuestionDialog, usePendingQuestion } from "./dialogs/PendingQues
 import { RequestedDialog } from "./dialogs/RequestedDialog";
 import { useQuickCreateSession } from "./dialogs/useQuickCreateSession";
 import { forcibleBranches, inspectSessionBranches, lockedWorktrees } from "./dialogs/useSessionBranches";
-import { useT } from "./i18n/react";
+import { Message, useT } from "./i18n/react";
 import type { AsideLayout } from "./layout/AsidePane";
 import { liveOwner, ownerAfterMove, ownerForSession, ownerKey, sameOwner, type AsideOwner } from "./layout/asideOwner";
 import { useIsNarrow } from "./layout/breakpoint";
@@ -1053,7 +1053,7 @@ export function App(): React.ReactElement {
       <PendingQuestionDialog />
       {exitConfirmOpen && (
         <ConfirmDialog
-          title={t("app.quit.title")}
+          title={<Message id="app.quit.title" />}
           message={t(exitHolders.terminals ? exitHolders.sessions ? "app.quit.message.both" : "app.quit.message.terminals" : "app.quit.message")}
           confirmLabel={t("common.quit")}
           destructive

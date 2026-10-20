@@ -7,6 +7,7 @@ import { AGENT_LABEL } from "../agents";
 import { SessionAgentIcon } from "../components/SessionAgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
+import { InlineChip } from "../components/InlineChip";
 import { PaneTitle } from "../components/PaneTitle";
 import { ArchivedSessionMetadata, hasVisibleContext, SessionContextLabel } from "../components/SessionMetadata";
 import { TitledControl } from "../components/TitledControl";
@@ -15,7 +16,7 @@ import { useLatest } from "../components/useLatest";
 import type { DialogRequest } from "../dialogs/dialogRequest";
 import { useEscapeWhileTooltipOpen } from "../dialogs/useEscapeWhileTooltipOpen";
 import { isolate } from "../i18n/isolate";
-import { useCurrentLanguage, useT } from "../i18n/react";
+import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Account, Console, Project, Session, Settings } from "../protocol";
 import { sessionAriaLabel, sessionDisplayTitle } from "../sessionLabel";
 import { archivedSessionRows, boundArchivedSessions } from "../sidebar/order";
@@ -172,7 +173,7 @@ export function ArchiveView({
       <header className="flex h-(--pane-header-height) shrink-0 items-center gap-1 groove-b px-2 ps-4">
         <PaneTitle
           heading={t(project ? "archive.heading.project" : boundTo ? "archive.heading.boundSessions" : "archive.heading.consoleSessions")}
-          headingTitle={heading}
+          headingTitle={<Message id={project ? "archive.title.project" : boundTo ? "archive.title.boundSessions" : "archive.title.consoleSessions"} params={{ name: <InlineChip size="inherit" dir="auto" wrap>{project ? project.name : boundTo ? sessionDisplayTitle(t, boundTo) : owner.name}</InlineChip> }} />}
           overline={t("archive.count", { count: archived.length })}
         />
         {archived.length > 0 && (
@@ -283,13 +284,14 @@ function ArchiveRow({
                 <RotateCcw aria-hidden="true" className="size-4" />
                 {t("sidebar.session.reopen")}
               </Button>
-              <TitledControl title={t("archive.delete", { title: isolate(sessionDisplayTitle(t, session)) })}>
+              <TitledControl title={<Message id="archive.delete" params={{ title: <InlineChip size="inherit" dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineChip> }} />}>
                 <Button
                   isIconOnly
                   size="sm"
                   variant="danger-soft"
                   isDisabled={session.locked}
                   aria-label={t("archive.delete", { title: isolate(sessionDisplayTitle(t, session)) })}
+                  aria-describedby=""
                   onPress={() => onOpenDialog({ kind: "delete-session", session })}
                   className="text-app-danger"
                 >

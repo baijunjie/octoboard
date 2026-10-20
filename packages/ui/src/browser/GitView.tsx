@@ -88,12 +88,14 @@ function loadingText(t: Translate, props: ChangesViewProps): string | undefined 
   return committed.comparison.state === "loading" ? t("git.changes.comparing", { base: displayWirePath(committed.base) }) : t("git.changes.listingCommits");
 }
 
+const UNAVAILABLE_TITLE = <Message id="git.unavailable" />;
+
 function GitContent(props: { source: SourceState } & ChangesViewProps): React.ReactElement {
   const t = useT();
   const { source, onRetry } = props;
   const diagnostic = source.state === "loaded" ? source.source.git_error ?? undefined : undefined;
   const failure = useMemo(() => diagnostic === undefined ? undefined : new DaemonRequestError(diagnostic, "git_unavailable", { detail: diagnostic }), [diagnostic]);
-  useErrorAcknowledgement(failure, t("git.unavailable"));
+  useErrorAcknowledgement(failure, UNAVAILABLE_TITLE);
   if (source.state === "loading") return <GitLoading label={t("git.loading")} />;
   if (source.state === "error") return <GitFailure title={t("git.error.source")} message={source.message} onRetry={onRetry} />;
   const git = source.source.git;
@@ -102,13 +104,13 @@ function GitContent(props: { source: SourceState } & ChangesViewProps): React.Re
       <div className="flex min-w-0 flex-1 items-center justify-center p-4">
         <CodeToneContext value="danger">
           <div className="flex w-full min-w-0 max-w-lg flex-col gap-3">
-            <ErrorAlert title={t("git.unavailable")}><DaemonErrorMessage error={failure} part="summary" /></ErrorAlert>
+            <ErrorAlert title={UNAVAILABLE_TITLE}><DaemonErrorMessage error={failure} part="summary" /></ErrorAlert>
             <DaemonErrorMessage error={failure} part="details" />
           </div>
         </CodeToneContext>
       </div>
     ) : (
-      <CenteredEmptyPanel icon={GitFork} message={t("git.notARepository")} />
+      <CenteredEmptyPanel icon={GitFork} message={<Message id="git.notARepository" />} />
     );
   }
   return <ChangesView {...props} projectRoots={[source.source.root, source.source.resolved_root]} />;

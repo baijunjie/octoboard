@@ -990,7 +990,7 @@ it("names what still uses the agent when removing it, and says it keeps its sett
   expect(text).toContain("keep that setting");
   expect(text).not.toMatch(/[()]/);
   // The names stand as chips, with no brackets around them.
-  expect([...dialog.querySelectorAll("[data-inline-chip]")].map((chip) => chip.textContent?.replace(/[\u2066-\u2069]/g, ""))).toEqual(["Main", "Site", "Fix build"]);
+  expect([...dialog.querySelectorAll("[data-inline-chip]")].map((chip) => chip.textContent?.replace(/[\u2066-\u2069]/g, ""))).toEqual(["Codex", "Codex", "Codex", "Main", "Site", "Fix build"]);
 });
 
 describe("dragging a tab", () => {
@@ -1136,7 +1136,7 @@ describe("an account's actions menu", () => {
     expect(request).not.toHaveBeenCalled();
     expect(dialog().textContent).toContain("Waiting for you to authorize in your browser");
     expect(dialog().querySelector('a[href="https://claude.test/authorize"]')?.textContent).toContain("Open the page again");
-    expect([...dialog().querySelectorAll("[data-inline-chip]")].map((chip) => chip.textContent?.replace(/[\u2068\u2069]/g, ""))).toEqual(["claude-work"]);
+    expect([...dialog().querySelectorAll("[data-inline-chip]")].map((chip) => chip.textContent?.replace(/[\u2068\u2069]/g, ""))).toEqual(["Claude Code", "claude-work"]);
     await act(async () => buttonNamed(dialog(), "Cancel login")!.click());
     expect(request).toHaveBeenLastCalledWith({ type: "cancel_account_login", agent: "claude", account: "claude-work" });
     expect(container.querySelector('[role="dialog"]')).toBeNull();
@@ -1195,7 +1195,8 @@ describe("an account's actions menu", () => {
     const dialog = document.querySelector('[role="dialog"]')!;
     const text = dialog.textContent!.replace(/[\u2068\u2069]/g, "");
     expect(text).toContain("Could not log in to claude-work.");
-    expect(text).toContain("Claude Code reported: Login failed: 400");
+    expect(text).toContain("Claude Code could not log in.");
+    expect(text).toContain("Login failed: 400");
     expect(buttonNamed(dialog, "Cancel login")).toBeUndefined();
     await act(async () => buttonNamed(dialog, "Log in again")!.click());
     expect(dismissAccountLogin).toHaveBeenCalledOnce();
@@ -1286,7 +1287,8 @@ describe("an account's actions menu", () => {
     render();
     await act(async () => {});
     const text = document.querySelector('[role="dialog"]')!.textContent!.replace(/[\u2068\u2069]/g, "");
-    expect(text).toContain("Claude Code reported: Login failed: 400");
+    expect(text).toContain("Claude Code could not log in.");
+    expect(text).toContain("Login failed: 400");
     expect(text).not.toContain("already running");
   });
 

@@ -40,7 +40,7 @@ export function useQuickCreateSession(
       // An owner that is no longer live cannot take a session, and there is no dialog to say so.
       const owner = sessions.get(binding.to.id) ?? binding.to;
       if (!liveConsoleSessions([...sessions.values()], target.console.id).some((s) => s.id === owner.id)) {
-        toastError(new ActionableError(t("dialog.session.ownerGone", { name: isolate(sessionDisplayTitle(t, owner)) }), "session"));
+        toastError(new ActionableError(t("dialog.session.ownerGone", { name: isolate(sessionDisplayTitle(t, owner)) }), "session", { code: "quick_create_owner_gone", params: { name: sessionDisplayTitle(t, owner) } }));
         return;
       }
     }

@@ -122,7 +122,7 @@ it.each([
   { name: "binds to the console session chosen", sessions: [hub1, hub2, hubArchived], pick: "Hub", binding: choose, options: ["No console session", "Hub 2", "Hub"], boundTo: "s-hub-1" },
   { name: "offers no choice with no live console session", sessions: [hubArchived], pick: undefined, binding: choose, options: [], boundTo: undefined },
   { name: "offers no choice and sends no binding when unbound", sessions: [hub1, hub2], pick: undefined, binding: { kind: "unbound" } as const, options: [], boundTo: undefined },
-  { name: "binds to the fixed owner without offering a choice", sessions: [hub1, hub2], pick: undefined, binding: { kind: "bound", to: hub1 } as const, options: [], boundTo: "s-hub-1", fixedLine: `Reports to ${isolate("Hub")}` },
+  { name: "binds to the fixed owner without offering a choice", sessions: [hub1, hub2], pick: undefined, binding: { kind: "bound", to: hub1 } as const, options: [], boundTo: "s-hub-1", fixedLine: "Reports to Hub" },
 ])("$name", async ({ sessions, pick, binding, options, boundTo, fixedLine }) => {
   const result = await openWith(sessions, pick, binding);
   expect(result.options).toEqual(options);
@@ -134,7 +134,7 @@ it.each([
 it("cannot open a session for a fixed owner that is no longer live", () => {
   const { container, root } = renderDialog([{ ...hub1, status: "archived" }], {}, {}, { kind: "bound", to: hub1 });
   expect(buttons().find((b) => b.textContent === "Open")?.hasAttribute("disabled")).toBe(true);
-  expect(document.body.textContent).toContain(`${isolate("Hub")} is no longer available`);
+  expect(document.body.textContent).toContain("Hub is no longer available");
   act(() => root.unmount());
   container.remove();
 });
@@ -515,7 +515,7 @@ it("announces exhausted quota only when the selected conversation requires a new
   })) }));
   const assertQuotaAlert = () => {
     const alert = quotaAlert();
-    expect(alert?.querySelector('[data-slot="alert-title"]')?.textContent).toBe(`${isolate("Work")} cannot be used for now`);
+    expect(alert?.querySelector('[data-slot="alert-title"]')?.textContent).toBe("Work cannot be used for now");
     expect(alert?.querySelector('[data-slot="alert-description"]')?.textContent).toContain("It has used up its 5-hour quota.");
     expect(alert?.querySelector('[data-slot="alert-description"]')?.querySelector("div,p,ul,pre,h1,h2,h3")).toBeNull();
     expect(openDisabled()).toBe(true);
@@ -1049,7 +1049,7 @@ it.each(["inherit", "pick", "clear"] as const)("opens console sessions with cons
   }, { kind: "choose" }, null);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
   answerSessionModels(daemon);
-  expect(document.body.querySelector('[role="dialog"] h2')?.textContent).toBe(`Open console session in ${isolate("Main")}`);
+  expect(document.body.querySelector('[role="dialog"] h2')?.textContent).toBe("Open console session in Main");
   expect(document.body.textContent).not.toContain("Report to");
   const name = document.body.querySelector<HTMLInputElement>('[role="dialog"] input')!;
   expect(name.placeholder).toBe(`${parentConsole.name} session`);

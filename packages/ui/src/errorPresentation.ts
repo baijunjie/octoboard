@@ -1,5 +1,6 @@
 import { DaemonRequestError } from "./daemon-client";
 import { CODE_PARAMS, DETAIL_BLOCK_CODES, RECOVERY_CODES, referenceNameParams, leftBranchItems, NAME_PARAMS, runningSessionIds, messageCode, withUiParams } from "./daemonMessage";
+import { globalParam } from "./i18n/catalog";
 import type { MessageParams } from "./protocol";
 
 /** Daemon codes and parameters remain available for rendering and recovery classification. */
@@ -17,7 +18,7 @@ export function hasCodeParams(error: { code: string; params: MessageParams }): b
   const params = withUiParams(error.code, error.params);
   const code = messageCode(error.code, params);
   const references = referenceNameParams(error.code, params);
-  const names = [...(CODE_PARAMS[code] ?? []), ...(NAME_PARAMS[code] ?? []), ...references.filter((name) => name !== "appName")];
+  const names = [...(CODE_PARAMS[code] ?? []), ...(NAME_PARAMS[code] ?? []), ...references.filter((name) => globalParam(name) === undefined)];
   if (!names.every((name) => !!params[name])) return false;
   return names.length > 0 || references.length > 0 || RECOVERY_CODES.has(error.code) || (DETAIL_BLOCK_CODES.has(error.code) && !!params.detail);
 }

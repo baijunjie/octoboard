@@ -109,7 +109,7 @@ export function ExportConfigurationDialog({
         <Alert.Indicator />
         <Alert.Content>
           <Alert.Title>{t("configuration.export.paths.title")}</Alert.Title>
-          <Alert.Description>{t("configuration.export.paths.description")}</Alert.Description>
+          <Alert.Description><Message id="configuration.export.paths.description" /></Alert.Description>
         </Alert.Content>
       </TintedAlert>
       <DialogError message={error} />

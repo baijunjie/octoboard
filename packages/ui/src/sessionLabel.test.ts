@@ -5,7 +5,7 @@ import { format } from "./i18n/catalog";
 import type { Translate } from "./i18n/catalog";
 import { isolate } from "./i18n/isolate";
 import type { Account } from "./protocol";
-import { sessionAgentLabel, sessionAriaLabel, sessionDisplayTitle, sessionStatusKind, sessionWithLocation } from "./sessionLabel";
+import { sessionChoiceTitle, sessionAgentLabel, sessionAriaLabel, sessionDisplayTitle, sessionStatusKind, sessionWithLocation } from "./sessionLabel";
 
 const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as never, args[0] as never)) as Translate;
 const accounts: Account[] = [{ id: "w", agent: "claude", name: "Work", config_dir: "/home/w" }];
@@ -52,4 +52,11 @@ describe("sessionDisplayTitle", () => {
     expect(sessionDisplayTitle(zh, session)).toBe(title);
     expect(session.title).toBe("octoboard");
   });
+});
+
+
+it("keeps composed session choice labels raw while sentence display keeps each name isolated", () => {
+  const session = sessionOf("s", "c", "p", "مراجعة Work", "idle", { terminal_title: "Task 中文" });
+  expect(sessionChoiceTitle(t, session)).toBe("Task 中文｜مراجعة Work");
+  expect(sessionDisplayTitle(t, session)).toBe(`${isolate("Task 中文")}｜${isolate("مراجعة Work")}`);
 });

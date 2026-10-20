@@ -111,7 +111,15 @@ function hoverAndRead(element: Element): string | undefined {
   expect(openTooltip()).toBeNull();
   settle();
   expect(document.querySelectorAll('[role="tooltip"]').length).toBeLessThanOrEqual(1);
-  const text = openTooltip()?.textContent ?? undefined;
+  const tooltip = openTooltip();
+  const text = tooltip?.textContent ?? undefined;
+  if (tooltip) {
+    const branch = tooltip.querySelector("[data-inline-chip]");
+    expect(branch?.getAttribute("dir")).toBe("ltr");
+    expect(branch?.getAttribute("data-size")).toBe("inherit");
+    expect(branch?.querySelector("code")).not.toBeNull();
+    if (text?.includes("Git error:")) expect(tooltip.querySelector("pre code")?.textContent).toBe("fetch failed");
+  }
   leave(element);
   settle();
   expect(openTooltip()).toBeNull();
@@ -139,7 +147,7 @@ const FAILED = ALL_STATES.find(([name]) => name === "failed")!;
 // branch text and counts alike.
 it.each(STATES)("says its whole state in one tooltip: %s", (_, extra, glyph, sentence) => {
   const badge = PLACEMENTS[0].mount(gitStatusOf(web.id, extra), glyph);
-  expect(hoverAndRead(badge.querySelector(`svg.lucide-${glyph}`)!)).toBe(sentence);
+  expect(hoverAndRead(badge.querySelector(`svg.lucide-${glyph}`)!)).toBe(sentence.replace(/[\u2068\u2069]/g, ""));
 });
 
 for (const placement of PLACEMENTS) {
@@ -149,7 +157,7 @@ for (const placement of PLACEMENTS) {
     const badge = placement.mount(gitStatusOf(web.id, { ...extra, branch: "feature/long-branch-name" }), glyph);
     const line = lineOf(badge);
     expect(line.textContent).toBe("feature/long-branch-name");
-    const full = sentence.replace(BRANCH, isolate("feature/long-branch-name"));
+    const full = sentence.replace(BRANCH, "feature/long-branch-name").replace(/[\u2068\u2069]/g, "");
     expect(hoverAndRead(badge.querySelector(`svg.lucide-${glyph}`)!)).toBe(full);
     expect(hoverAndRead(line)).toBe(full);
     expect(hoverAndRead(badge.querySelector(".col-start-3")!)).toBe(full);

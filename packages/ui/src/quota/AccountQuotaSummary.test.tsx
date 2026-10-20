@@ -65,7 +65,7 @@ it("shows short and general weekly windows before model windows with their remai
   expect(headlines(container)).toEqual([
     "5-hour 82% remainingresets in 1h 57m",
     "Weekly 95% remainingresets in 3d 0h",
-    `${isolate("Fable")} weekly 100% remaining`,
+    "Fable weekly 100% remaining",
   ]);
   const meters = Array.from(container.querySelectorAll('[data-slot="meter"]'));
   expect(meters.map((meter) => meter.getAttribute("aria-valuenow"))).toEqual(["82", "95", "100"]);

@@ -359,16 +359,16 @@ it.each([
   ["tool", ["Git", "PATH", "Octoboard"]],
   ["projectBranches", ["Terminal", "git worktree list", "git branch", "Git"]],
   ["sessionBranches", ["Terminal", "Git"]],
-  ["repository", ["Git", "Terminal"]],
+  ["repository", ["Git", "Git", "Terminal"]],
   ["noCommits", ["Terminal"]], ["shell", ["Terminal"]],
-  ["git", ["Terminal"]], ["gitHistory", ["Terminal"]],
+  ["git", ["Terminal", "Git", "Git"]], ["gitHistory", ["Terminal"]],
   ["unsentMessage", ["Enter"]],
 ] as const)("marks %s recovery references while preserving a matching plain companion", (recovery, englishValues) => {
   const container = mount(<RecoveryGuidance recovery={recovery} />);
   for (const language of ["en", "zh-Hans"] as const) {
     act(() => setLanguage(language));
     const chips = [...container.querySelectorAll("[data-inline-chip]")];
-    const expected = language === "zh-Hans" && recovery === "repository" ? ["终端", "Git"] : englishValues.map((value) => language === "zh-Hans" && value === "Terminal" ? "终端" : value);
+    const expected = language === "zh-Hans" && recovery === "repository" ? ["Git", "终端", "Git"] : englishValues.map((value) => language === "zh-Hans" && value === "Terminal" ? "终端" : value);
     expect(chips.map((chip) => chip.textContent)).toEqual(expected);
     for (const chip of chips) {
       const technical = ["PATH", "Enter", "git worktree list", "git branch"].includes(chip.textContent!);

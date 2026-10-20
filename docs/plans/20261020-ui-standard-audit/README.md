@@ -67,7 +67,7 @@ into main. The closed audit changed no production UI; fix milestones implement i
 - 03 Restore stock Alerts (closed)
 - 03a Match the HeroUI v2 Alert background reference (closed)
 - 04 Render structured error names and diagnostics (closed)
-- [05 Use rich name chips and tooltip content](05-rich-names-and-tooltips.md)
+- 05 Use rich name chips and tooltip content (closed)
 - [06 Separate choice status and direction](06-choice-status-and-direction.md)
 - [07 Correct form defaults and blocked validity](07-form-defaults-and-validity.md)
 - [08 Keep horizontal tab strips at content width](08-content-width-tabs.md)
@@ -77,17 +77,18 @@ into main. The closed audit changed no production UI; fix milestones implement i
 - 12 Hand focus off when report pages are replaced (closed)
 - [13 Use the shared button primitive for tree chevrons](13-collection-button-primitives.md)
 
-Milestones 05–11 and 13 remain open. The open milestones carry their current-source handoffs; the original audit
+Milestones 06–11 and 13 remain open. The open milestones carry their current-source handoffs; the original audit
 inventories remain historical evidence, with check limitations in [the check record](audit-checks.md).
 
 ## Evidence baseline and concurrent integration
 
 Evidence and the interpolation inventory describe `3a65c903`, even after this documentation is rebased onto local
-main's quota integration `7a7a2f34e`. Open rich-copy work must re-inventory its Alert, account-name, ReasonText
-and recovery routes and validate the five named exhausted/refused quota scenarios. Original counts and
+main's quota integration `7a7a2f34e`. Milestone 05 refreshed its Alert, account-name, ReasonText
+and recovery routes and validated the five named exhausted/refused quota scenarios; its current-source results are
+in [the check record](audit-checks.md#milestone-05-rich-references-and-tooltip-closure). Original counts and
 captures do not certify the later 95-file change. Resume-by-ID subsequently integrated locally at `368a1f1f3`, followed by archived history (`501bd872d`) and
 MCP defaults (`d6b69d18a`). The shared Alert and error router now include those current callers; their source
-provenance stays separate from the original audit. Open rich-copy work must re-inventory the current source.
+provenance stays separate from the original audit. Milestone 05 also refreshed the resume and history callers. Remaining milestones must refresh their affected current source.
 
 ## Coordination
 

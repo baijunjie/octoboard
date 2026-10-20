@@ -157,7 +157,7 @@ export function AgentAccountsSection(): React.ReactElement {
               />
             )}
             notInstalledTip={(agent) => added !== null && isAgentUnavailable(availability, agent) && (
-              <Message id="settings.accounts.notInstalledTip" params={{ agent: AGENT_LABEL[agent], ...PATH_VAR_PARAMS }} />
+              <Message id="settings.accounts.notInstalledTip" params={{ agent: <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[agent]}</InlineChip>, ...PATH_VAR_PARAMS }} />
             )}
             className={`sticky top-[calc(-1*var(--section-padding))] z-3 h-[45px] groove-b bg-overlay ${pinnedFocus.className}`}
           />
@@ -213,7 +213,7 @@ export function AgentAccountsSection(): React.ReactElement {
       {removing && (
         <ConfirmDialog
           title={<Message id="settings.accounts.removeTitle" params={{ name: <InlineChip dir="auto" wrap size="inherit">{removing.name}</InlineChip> }} />}
-          message={t("settings.accounts.removeMessage", { agent: AGENT_LABEL[removing.agent] })}
+          message={<Message id="settings.accounts.removeMessage" params={{ agent: <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[removing.agent]}</InlineChip> }} />}
           confirmLabel={t("common.remove")}
           destructive
           resetKey={removing.id}
@@ -251,7 +251,7 @@ function AgentAccountsPanel({ agent, owned, onAdd, onEdit, onRemove, onRenameDef
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const state = agentAvailability.get(agent);
   const notUsable = isAgentUnavailable(agentAvailability, agent) && (
-    <div><Message id="settings.accounts.notUsable" params={{ agent: AGENT_LABEL[agent], ...PATH_VAR_PARAMS }} /></div>
+    <div><Message id="settings.accounts.notUsable" params={{ agent: <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[agent]}</InlineChip>, ...PATH_VAR_PARAMS }} /></div>
   );
   const hasApproval = agent === "codex" || agent === "claude";
   // What an account's menu holds. The default account is not a record: it can be named, not edited or removed. A
@@ -399,7 +399,7 @@ function ApprovalHeading({ agent }: { agent: Agent }): React.ReactElement {
     <div className="flex items-center gap-1 text-sm text-app-muted">
       {t("settings.accounts.approval.heading")}
       <HelpTip label={t("settings.accounts.approval.heading")}>
-        {t(agent === "codex" ? "settings.accounts.approval.codexDescription" : "settings.accounts.approval.claudeDescription")}
+        <Message id={agent === "codex" ? "settings.accounts.approval.codexDescription" : "settings.accounts.approval.claudeDescription"} />
       </HelpTip>
     </div>
   );

@@ -28,7 +28,7 @@ it("names the agent, then the account as a badge that takes its text's own direc
 it("lets a long recorded path wrap inside the tooltip, read left to right", () => {
   const path = `/Users/someone/.config/${"deeply-nested-directory/".repeat(8)}claude`;
   const container = mount(<SessionAgentTooltip session={sessionOf("s", "c", "p", "T", "idle", { account_id: "gone", config_dir: path })} accounts={accounts} defaultNames={undefined} />);
-  const badge = container.querySelector<HTMLElement>("[dir]")!;
+  const badge = container.querySelector<HTMLElement>("code")!.parentElement!;
   expect(badge.textContent).toBe(path);
   expect(badge.getAttribute("dir")).toBe("ltr");
   expect(badge.className).toContain("min-w-0");

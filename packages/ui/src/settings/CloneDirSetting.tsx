@@ -8,7 +8,7 @@ import { useLatest } from "../components/useLatest";
 import { errorPresentation } from "../errorPresentation";
 import { DirectoryPicker } from "../dialogs/DirectoryPicker";
 import { useTrimmedField } from "../dialogs/useTrimmedField";
-import { useT } from "../i18n/react";
+import { Message, useT } from "../i18n/react";
 import { isImeKey } from "../imeKey";
 import { abbreviateHome } from "../pathDisplay";
 import { useDaemon, useDaemonStore } from "../store";
@@ -56,7 +56,7 @@ export function CloneDirSetting(): React.ReactElement {
     <>
       <SettingRow
         label={t("settings.cloneDir.label")}
-        description={t("settings.cloneDir.description.gitUrl")}
+        description={<Message id="settings.cloneDir.description.gitUrl" />}
       >
         <div className="flex w-80 items-center gap-2">
           <TextField

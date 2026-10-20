@@ -10,7 +10,6 @@ import { FadeOverflow } from "../components/FadeOverflow";
 import { StatusIcon } from "../components/StatusIcon";
 import { TintedAlert } from "../components/TintedAlert";
 import { ImportConfigurationDialog } from "../configuration/ImportConfigurationDialog";
-import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import { isLive, type Project, type Session, type SessionBranchItem } from "../protocol";
 import { sessionAgentLabel, sessionDisplayTitle, sessionStatusKind } from "../sessionLabel";
@@ -335,7 +334,7 @@ export function RequestedDialog({
     case "restore-project-changes":
       return (
         <ConfirmDialog
-          title={t("dialog.restoreProjectChanges.title", { name: isolate(dialog.project.name) })}
+          title={<Message id="dialog.restoreProjectChanges.title" params={{ name: <InlineChip dir="auto" wrap size="inherit">{dialog.project.name}</InlineChip> }} />}
           message={t("dialog.restoreProjectChanges.message")}
           confirmLabel={t("dialog.restoreProjectChanges.confirm")}
           pendingLabel={t("dialog.restoreProjectChanges.pending")}

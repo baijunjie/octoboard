@@ -640,8 +640,13 @@ the dialog and show a plain error alert dialog explaining why, with only acknowl
 Inline labels and technical literals use the shared `InlineChip`, backed by HeroUI Chip. Technical literals use
 its monospace, left-to-right and wrapping options. A technical literal — a path, a file name, a URL, a branch,
 a commit id, an ID, a command or a setting value — stands without quotation marks, as code where the text is rendered and bare in its plain-text form.
-A name, title or control label quoted within UI copy uses a non-monospace chip instead of quotation marks.
-Plain-text surfaces, including accessible names and system notifications, retain text without chip markup.
+A name, title or control label referenced within visible prose, headings, descriptions or tooltips uses a
+non-monospace `InlineChip` at `inherit` size, with `dir="auto"` and wrapping, instead of quotation marks. This includes
+fixed agent and product names when they are references within copy. Whole entity and control labels, structured
+entity/path rows, and foreign source, terminal and report layouts keep their established presentation.
+Plain-text surfaces, including accessible names, native labels, announcements and system notifications, retain
+readable text without chip markup. Isolate references at the sentence boundary where needed, as specified under
+"Text direction"; collection keys, `textValue`, sorting, defaults and submitted values stay raw.
 Raw diagnostics use `CodeBlock` or the existing source renderer,
 preserving their text, direction and indentation; long content remains scrollable and reachable from the keyboard.
 Keep structured error metadata separate from the plain error message, so notifications and unknown-error fallbacks

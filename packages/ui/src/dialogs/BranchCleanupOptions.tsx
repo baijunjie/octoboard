@@ -2,7 +2,7 @@ import { Disclosure } from "@heroui/react";
 import React, { useId, useState } from "react";
 
 import { BranchGroups, type BranchGroup, type BranchRow } from "../components/BranchGroups";
-import { useT } from "../i18n/react";
+import { Message, useT } from "../i18n/react";
 import { abbreviateHome } from "../pathDisplay";
 import type { SessionBranchItem } from "../protocol";
 import { useDaemonStore } from "../store";
@@ -13,7 +13,7 @@ import { branchChoices, forcibleBranches, lockedWorktrees, useProjectRemovalBran
 
 /** A line the dialog's one warning adds while an option is ticked: `key` names its kind, so a line
  * whose count changes stays the same line; one with an `id` describes an option too. */
-export type WarningLine = { key: string; text: string; id?: string };
+export type WarningLine = { key: string; text: React.ReactNode; id?: string };
 
 /** `items` as rows of a cleanup list, in display form; `tagChanges` marks a worktree with
  * uncommitted changes where the group it is in does not say so already. */
@@ -69,8 +69,8 @@ function BranchOption({
 }: {
   items: SessionBranchItem[];
   groups: BranchGroup[];
-  label: string;
-  hint: string;
+  label: React.ReactNode;
+  hint: React.ReactNode;
   isSelected: boolean;
   onChange: (selected: boolean) => void;
   isReadOnly: boolean;
@@ -135,8 +135,8 @@ export function useBranchCleanup(sessionIds: string[], initial?: SessionBranchIt
     pending,
     forcing: forced.length > 0,
     consequences: [
-      ...(force ? [{ key: "force", text: t("branchCleanup.consequence.force", { count: forcible.length }) }] : []),
-      ...(removeLocked ? [{ key: "locked", text: t("branchCleanup.consequence.locked", { count: locked.length }) }] : []),
+      ...(force ? [{ key: "force", text: <Message id="branchCleanup.consequence.force" params={{ count: forcible.length }} /> }] : []),
+      ...(removeLocked ? [{ key: "locked", text: <Message id="branchCleanup.consequence.locked" params={{ count: locked.length }} /> }] : []),
     ],
     extraControl: (busy) => (
       <>
@@ -147,7 +147,7 @@ export function useBranchCleanup(sessionIds: string[], initial?: SessionBranchIt
             group("submodules", (count) => t("branchCleanup.group.submodules", { count }), submodules),
             group("unmerged", (count) => t("branchCleanup.group.unmerged", { count }), unmerged),
           ]}
-          label={t("dialog.sessionBranches.force", { count: forcible.length })}
+          label={<Message id="dialog.sessionBranches.force" params={{ count: forcible.length }} />}
           hint={t("dialog.sessionBranches.forceHint", { count: forcible.length })}
           isSelected={force}
           onChange={setForce}
@@ -156,7 +156,7 @@ export function useBranchCleanup(sessionIds: string[], initial?: SessionBranchIt
         <BranchOption
           items={locked}
           groups={[{ key: "locked", lead: t("branchCleanup.group.locked", { count: locked.length }), rows: rows(locked, true) }]}
-          label={t("dialog.lockedWorktrees.remove", { count: locked.length })}
+          label={<Message id="dialog.lockedWorktrees.remove" params={{ count: locked.length }} />}
           hint={t("dialog.lockedWorktrees.removeHint", { count: locked.length })}
           isSelected={removeLocked}
           onChange={setRemoveLocked}
@@ -206,7 +206,7 @@ export function useProjectRemovalCleanup(projectId: string, trash: boolean, setT
       <>
         <div className="flex flex-col gap-2">
           <div id={trashId}>
-            <ConfirmOption isSelected={trash} onChange={setTrash} isReadOnly={busy} label={t("dialog.removeProject.trash")} hint={t("dialog.removeProject.trashHint")} describedBy={trash && found.failed ? unknownId : undefined} />
+            <ConfirmOption isSelected={trash} onChange={setTrash} isReadOnly={busy} label={t("dialog.removeProject.trash")} hint={<Message id="dialog.removeProject.trashHint" />} describedBy={trash && found.failed ? unknownId : undefined} />
           </div>
           <KeepFocusInDialog>
             {trash && along.length > 0 && (

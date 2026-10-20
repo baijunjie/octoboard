@@ -367,3 +367,14 @@ it.each([false, true])("offers no lock controls on archived sessions, locked=%s"
   expect(labels).toContain("Reopen");
   expect(labels).toContain("Delete");
 });
+
+
+it("keeps composed archive names raw for matching while retaining their visible overflow presentation", () => {
+  const session = sessionOf("archived", "c", "p", "مراجعة Work", "archived", { terminal_title: "Task 中文" });
+  const entry = archiveSubmenu(t, "Archive", [session], [session], vi.fn(), vi.fn()).items[0];
+  expect(typeof entry).toBe("object");
+  if (typeof entry !== "object" || !("onClick" in entry)) throw new Error("Expected archived session action");
+  expect(entry.label).toBe("Task 中文｜مراجعة Work");
+  expect(entry.label).not.toMatch(/[\u2066-\u2069]/);
+  expect(entry.content).toBeTruthy();
+});

@@ -1,10 +1,11 @@
 import { Meter } from "@heroui/react";
 import React from "react";
 
-import { useT } from "../i18n/react";
+import { Message, useT } from "../i18n/react";
 import type { Agent, QuotaWindow } from "../protocol";
 import { useNow } from "../useNow";
-import { quotaHeadline, quotaResetsIn, quotaWindowLabel, remainingPercent } from "./quotaFormat";
+import { QuotaWindowName } from "./quotaCopy";
+import { quotaResetsIn, quotaWindowLabel, remainingPercent } from "./quotaFormat";
 
 /** The line above or beneath a quota bar: the window's headline ("5-hour 82% remaining") with the
  * countdown to its reset ("resets in 1h 57m") at its end. It is hidden from assistive technology,
@@ -13,7 +14,7 @@ function QuotaHeadline({ window, resets }: { window: QuotaWindow; resets: string
   const t = useT();
   return (
     <div aria-hidden="true" className="flex items-baseline justify-between gap-x-3 text-sm">
-      <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{quotaHeadline(t, window)}</span>
+      <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{<Message id="quota.remaining" params={{ window: <QuotaWindowName window={window} t={t} />, percent: remainingPercent(window) }} />}</span>
       {resets && <span className="shrink-0 text-app-muted">{resets}</span>}
     </div>
   );

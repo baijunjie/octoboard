@@ -90,9 +90,9 @@ export function AccountDialog({
       <Dialog
         title={
           renameDefault
-            ? t("settings.accounts.dialog.renameDefault", { agent: AGENT_LABEL[agent] })
+            ? <Message id="settings.accounts.dialog.renameDefault" params={{ agent: <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[agent]}</InlineChip> }} />
             : editing
-              ? t("settings.accounts.dialog.edit", { agent: AGENT_LABEL[editing.agent] })
+              ? <Message id="settings.accounts.dialog.edit" params={{ agent: <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[editing.agent]}</InlineChip> }} />
               : t("settings.accounts.add")
         }
         onClose={onClose}
@@ -120,7 +120,7 @@ export function AccountDialog({
           placeholder={renameDefault ? t("settings.accounts.defaultName") : t("settings.accounts.nameExample")}
           description={renameDefault ? t("settings.accounts.defaultNameHint") : undefined}
           errorMessage={shown(nameError) && (collision
-            ? <Message id={COLLISION_MESSAGE[collision.kind]} params={{ name: <InlineChip dir="auto" wrap size="inherit">{collision.name}</InlineChip>, agent: AGENT_LABEL[agent] }} />
+            ? <Message id={COLLISION_MESSAGE[collision.kind]} params={{ name: <InlineChip dir="auto" wrap size="inherit">{collision.name}</InlineChip>, agent: <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[agent]}</InlineChip> }} />
             : nameError)}
           autoFocus
         />
@@ -130,7 +130,7 @@ export function AccountDialog({
           onChange={changeConfigDir}
           dir="ltr"
           placeholder={AGENT_DEFAULT_CONFIG_DIR[agent]}
-          description={agent === "grok" ? t("settings.accounts.dirHintGrok") : t("settings.accounts.dirHint")}
+          description={<Message id={agent === "grok" ? "settings.accounts.dirHintGrok" : "settings.accounts.dirHint"} />}
           errorMessage={dirTaken
             ? <DaemonErrorMessage error={dirTaken} showTitle={false} />
             : shown(dirError) && <Message id="settings.accounts.dirNotAbsolute" params={TILDE_PARAMS} />}

@@ -23,7 +23,10 @@ COPY-04, COPY-05, numeric-ratio half of COPY-06 and COPY-08 in [the copy audit](
 
 ## Dependencies and handoff
 
-Coordinate with milestone 05 where rich label APIs are needed; keep one owner for the shared option contract at a time.
+Milestone 05 established `Option.labelContent` for rich display and overflow tooltips, while `label` stays raw for
+collection and native matching. `TextInput.labelContent` pairs rich visible copy with its plain `label`;
+`TextInput.errorDetails` and `OptionSelect.descriptionDetails` retain external supplementary content. Reuse these
+contracts for this milestone's existing choice/status/direction findings, with one owner for further shared API changes.
 
 Resume-by-ID is integrated on main at `368a1f1f3`; no separate resume branch is pending. Refresh the choice and
 sentence inventory against `ResumeConversationFields`, `useResumeTarget` and `useLaunchChoice`: a located record

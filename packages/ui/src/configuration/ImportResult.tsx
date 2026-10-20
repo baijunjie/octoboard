@@ -259,11 +259,11 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
           </h3>
           <p className="flex items-start gap-2 text-sm">
             <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning-glyph" />
-            <span className="min-w-0">{t("configuration.import.result.fallbacks.intro")}</span>
+            <span className="min-w-0"><Message id="configuration.import.result.fallbacks.intro" /></span>
           </p>
           <ul className="flex flex-col gap-1">
             {outcome.fallbacks.map((fallback, index) => {
-              const agent = AGENT_LABEL[fallback.agent];
+              const agent = <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[fallback.agent]}</InlineChip>;
               return (
                 <li key={index} className="[overflow-wrap:anywhere]" dir="auto">
                   {fallback.project === undefined

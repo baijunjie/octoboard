@@ -95,6 +95,7 @@ export const NAME_PARAMS: Record<string, readonly string[]> = {
   unknown_account: ["account"],
   not_a_git_repository: ["project"],
   quick_create_quota_refused: ["action"],
+  quick_create_owner_gone: ["name"],
   account_name_taken: ["name"],
   config_dir_taken: ["name"],
   project_directory_shared: ["project"],

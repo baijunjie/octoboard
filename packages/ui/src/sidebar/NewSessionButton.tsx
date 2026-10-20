@@ -20,6 +20,8 @@ import { useNewSessionMode } from "./useNewSessionMode";
 export function NewSessionButton({
   label,
   quickLabel,
+  title,
+  quickTitle,
   target,
   onOpen,
   onQuickCreate,
@@ -27,6 +29,8 @@ export function NewSessionButton({
 }: {
   label: string;
   quickLabel: string;
+  title?: React.ReactNode;
+  quickTitle?: React.ReactNode;
   target: () => NewSessionRequest | undefined;
   onOpen: (target: NewSessionRequest) => void;
   onQuickCreate: (target: NewSessionRequest, action: string) => void;
@@ -41,6 +45,7 @@ export function NewSessionButton({
       ref={ref}
       icon={quick ? Zap : Plus}
       label={quick ? quickLabel : label}
+      title={quick ? quickTitle : title}
       isDisabled={blocked}
       unavailable={quickUnavailable}
       onPress={(event) => {

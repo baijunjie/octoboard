@@ -10,6 +10,8 @@ import { StatusBadge } from "../components/StatusBadge";
 export type Option<T extends string> = {
   value: T;
   label: string;
+  /** Visible whole-label presentation; matching and hidden native options retain the raw label. */
+  labelContent?: React.ReactNode;
   lang?: string;
   icon?: React.ReactNode;
   /** A status badge after the label ("Not added"), which never shrinks: the label gives way first. */
@@ -149,8 +151,8 @@ export function OptionSelect<T extends string>({
         <Select.Value className="flex min-w-0 flex-1 items-center gap-2 text-clip">
           {() => <>
             {current?.icon && <span aria-hidden="true" className="flex shrink-0">{current.icon}</span>}
-            <FadeOverflow as="span" lang={current?.lang} dir="auto" className={!badge ? "min-w-0 flex-1" : current ? "min-w-0" : "shrink-0"} titleWhenClipped={current?.label ?? placeholder}>
-              {current?.label ?? placeholder}
+            <FadeOverflow as="span" lang={current?.lang} dir="auto" className={!badge ? "min-w-0 flex-1" : current ? "min-w-0" : "shrink-0"} titleWhenClipped={current?.labelContent ?? current?.label ?? placeholder}>
+              {current?.labelContent ?? current?.label ?? placeholder}
             </FadeOverflow>
             {/* A placeholder's own words are short and say what the field does, so its badge (an
                 inherited value that can be a long model id) is what gives way. */}
@@ -187,15 +189,15 @@ export function OptionSelect<T extends string>({
               )}
               {option.detail ? (
                 <span className={`flex min-w-0 flex-col ${option.badge ? "" : "flex-1"}`}>
-                  <FadeOverflow lang={option.lang} dir="auto" className={option.isDisabled && option.reason ? `min-w-0 ${FADED}` : "min-w-0"} titleWhenClipped={option.label}>
-                    {option.label}
+                  <FadeOverflow lang={option.lang} dir="auto" className={option.isDisabled && option.reason ? `min-w-0 ${FADED}` : "min-w-0"} titleWhenClipped={option.labelContent ?? option.label}>
+                    {option.labelContent ?? option.label}
                   </FadeOverflow>
                   <Description className="sr-only">{option.detail}</Description>
                   {option.reason && <span aria-hidden="true" className="text-xs text-app-muted"><ReasonText reason={option.reason} /></span>}
                 </span>
               ) : (
-                <FadeOverflow lang={option.lang} dir="auto" className={option.badge ? "min-w-0" : "min-w-0 flex-1"} titleWhenClipped={option.label}>
-                  {option.label}
+                <FadeOverflow lang={option.lang} dir="auto" className={option.badge ? "min-w-0" : "min-w-0 flex-1"} titleWhenClipped={option.labelContent ?? option.label}>
+                  {option.labelContent ?? option.label}
                 </FadeOverflow>
               )}
               {option.badge && <StatusBadge>{option.badge}</StatusBadge>}

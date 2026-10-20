@@ -4,7 +4,6 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
-import { isolate } from "../i18n/isolate";
 import type { AccountQuota, Agent, AgentAvailability, Session, SessionBranchItem } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
 import { HandoffDialog } from "./HandoffDialog";
@@ -62,7 +61,7 @@ it("says what moves for a project session, then hands off to another agent and s
   const text = document.body.textContent ?? "";
   expect(text).toContain("2 branches it is responsible for");
   expect(text).toContain("1 session it owns, archived ones included");
-  expect(text).toContain(`Its place under ${isolate("Hub")}`);
+  expect(text).toContain("Its place under Hub");
 
   await act(async () => buttons().find((b) => b.textContent === "Hand off")?.click());
   await settle();
