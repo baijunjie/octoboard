@@ -1398,5 +1398,8 @@ or destructively if ignored:
   the script-dependent ones need Unicode script data to judge, and the tag flags are too rare to be worth a rule, so
   those characters are removed too (a tag flag arrives as a plain black flag). Removing one too many costs a letterform,
   a direction mark or a flag; keeping one too many costs the message. It is encoded in
-  `apps/daemon/src/term/invisible.rs`. Codex and Grok Build were not measured: neither executable carries any wording
-  about such a hold, but neither was run against one.
+  `apps/daemon/src/term/invisible.rs`. Because a held prompt fires no `UserPromptSubmit`, that hook is also how
+  Octoboard notices a write to an idle Claude Code session that was not sent, whatever held it; a write mid-turn cannot
+  be checked that way, since the agent sends nothing until its turn ends (the behaviour is in "A message written but not
+  sent" in `docs/product/message-delivery.md`). Codex and Grok Build were not measured: neither executable carries any
+  wording about such a hold, but neither was run against one.

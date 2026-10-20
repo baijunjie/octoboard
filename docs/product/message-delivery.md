@@ -5,16 +5,17 @@ information shared by another session, a report panel form submission — and wh
 
 ## Messages held until a session can take them
 
-A session that is working, awaiting instructions or running in background takes a message straight away; every agent
-queues one written mid-turn and consumes it when the turn ends.
+A session that is working, awaiting instructions or running in background takes a message straight away, unless it is
+a Claude Code session held behind a message its agent did not send (see "A message written but not sent" below); every
+agent queues one written mid-turn and consumes it when the turn ends.
 
 **A message is not written verbatim.** Its text is reshaped in three steps, in this order:
 
 1. Every control character except newline and tab is removed.
 2. Every character Claude Code treats as invisible is removed. Claude Code does not send a prompt that holds one: it
    removes them, leaves the cleaned text in its input box for the user to review and send, and starts no turn, so the
-   Enter Octoboard writes after the message would be spent on that hold and the message would sit unsent — one written
-   mid-turn included — while its sender was told it had been delivered. The usual carriers are the bidirectional
+   Enter Octoboard writes after the message would be spent on that hold and the message would sit unsent, one written
+   mid-turn included (see "A message written but not sent" below). The usual carriers are the bidirectional
    isolates (U+2068, U+2069) the UI wraps values in, which agents copy from what the UI shows. The set follows Claude
    Code 2.1.304: U+00AD, U+034F, U+061C, U+115F, U+1160, U+17B4, U+17B5, U+180B–U+180F, U+200B–U+200F, U+2028–U+202E,
    U+2060–U+206F, U+3164, U+FE00–U+FE0F, U+FEFF, U+FFA0, U+FFF0–U+FFFB, U+1107F, U+13430–U+1343F, U+16FE4,
@@ -33,8 +34,11 @@ queues one written mid-turn and consumes it when the turn ends.
 
 This holds for everything Octoboard writes into a running session — an instruction, a report, a report panel form
 submission, information shared by another session, the instruction `reopen_session` hands over — because all of them
-can be model-authored and none is reviewed first. Octoboard does not check that the agent submitted what it wrote: a
-message counts as delivered once it has been written.
+can be model-authored and none is reviewed first.
+
+**A blank message is refused.** A message passed to `send_message` — a client's request or an owner's tool — that is
+nothing but whitespace once its control characters and invisible characters are removed is not written: a client is
+refused with `field_required` (field `text`), an owner's tool with that reason in prose.
 
 An instruction, a report or information shared by another session, for a session that **cannot** take one right now — it
 is waiting for the user at a permission prompt or a question — is queued rather than dropped, and delivered as soon as
@@ -95,3 +99,74 @@ The loss is reported rather than passed off as delivered, but not to everyone: t
 call ran into it is told (a report fails, and its session is *not* archived), while a sender whose
 message was already queued behind it is not. What covers those is the message the user gets, which
 names the session and tells them to look at it before anything else is sent.
+
+## A message written but not sent
+
+Claude Code can take a message Octoboard writes and still not send it: the text stays in its input box and no turn
+starts. Invisible characters are one cause, which their removal above is there to prevent; anything else that leaves a
+message unsent is caught the same way.
+
+**The check.** When Octoboard writes a message into a Claude Code session whose agent is at its prompt — awaiting
+instructions or running in background, not mid-turn — it waits up to about three seconds for the agent's hooks to report
+a prompt sent (`UserPromptSubmit`). This applies to every message Octoboard writes: an owner's instruction, a report,
+shared information, a report panel form submission, the instruction `reopen_session` hands over, the messages of a
+handover or a handoff, and a client's own `send_message`. A message that was queued is checked the same way when it is
+finally written. When several queued messages are written in one go, each is checked on its own, against the agent's
+status at the moment it is written: once the first is sent the agent reads as working, so the rest are written
+unchecked, as mid-turn messages; if the agent is at its prompt again by then — after a very short turn, say — the next
+one is checked too.
+
+- With the report in time, the message counts as delivered.
+- Without it, the message is taken to be waiting in the session's input box: it is **left unsent**.
+
+A background task's completion does not count as a prompt sent. Claude Code reports a finished background task to
+itself as a `UserPromptSubmit` whose prompt contains `<task-notification>`; that prompt neither confirms a message
+written during the wait nor lifts the hold below. Any other prompt counts, whoever sends it.
+
+**What a message left unsent does:**
+
+- It is not written again, put back in the queue or changed: its text is already in the session's input box.
+- Every client is sent the `message_not_sent` notice about that session, naming its agent, provided the session's
+  process that was written to is still running when the check ends. The window shows it as an error alert (see
+  `docs/product/error-alerts.md`) titled with where the session is, saying the agent did not send a message Octoboard
+  wrote into the session, that the message is waiting in its input box, and that nothing more is written into the
+  session until a prompt is sent; the remedy is to open the session, check the message in its input box and press Enter
+  to send it.
+- Nothing more is written into the session until its agent next reports a prompt sent, whoever sends it: the user
+  pressing Enter on the waiting message, or typing and sending something else. Messages arriving meanwhile are queued,
+  and are then delivered in order, oldest first.
+- The hold belongs to the session's process that was written to and ends with it, as its queue does: a session resumed
+  later starts without one.
+
+**What the sender is told.** A sender whose own message was left unsent is told it was written into the session's input
+but its agent did not send it, so the session has not read it; that the user has been told; and that it must not send
+it again. How each tool words this, and what follows from it, is with the tool: the owner's `send_message` in "The
+console session's tools" in `docs/product/hub-orchestration.md`, `report` in `docs/product/reporting-to-owners.md`,
+`share_info` in `docs/product/information-between-sessions.md`, `transfer_session` in "Handing a session to another
+owner" and `bind_to_session` in "Binding an unbound session to an owner", both in
+`docs/product/changing-session-owners.md`. A sender whose message arrives while the session is held behind an unsent
+one is told it was queued, as for a session that cannot take a message. A sender already told its message was queued
+learns nothing more if that message is later left unsent; the notice is what reports it.
+
+**A client's `send_message`** to a Claude Code session at its prompt is answered once the check has ended, not as soon
+as the message is written. A message left unsent is not refused: the client is still answered with success, and, like
+every client, gets the `message_not_sent` notice.
+
+**What is not checked:**
+
+- A message written while the agent is mid-turn. The agent queues it and sends it only when the turn ends, which no
+  short wait can see, so a mid-turn message Claude Code holds back is not detected and counts as delivered.
+- Codex and Grok Build sessions: a message counts as delivered once it has been written.
+- Which prompt was sent. The prompt's text is not matched against the message: a prompt the user sends within those
+  seconds is taken as the message sent.
+
+**What the check gets wrong.** In two cases a message the agent has in fact queued is reported not sent, with the
+notice and the hold that follow, and a `done` report written then archives nothing (see "Automatic archiving" in
+`docs/product/reporting-to-owners.md`). In both, the hold lifts when the agent sends the queued message at the end of
+its turn.
+
+- After "Chat about this" is chosen on a question, Octoboard reads the Claude Code session from its transcript as back
+  at its prompt while its agent is in fact still working, so a message written then is checked.
+- A background task's completion can arrive during the few seconds' wait. The agent starts a turn on it and queues the
+  message just written until that turn ends, and the completion does not count as a prompt sent. This case is inferred
+  from how the check works and has not been observed.

@@ -422,8 +422,9 @@ const SEND_MESSAGE: ToolDef = ToolDef {
     name: "send_message",
     description: "Append an instruction to a running session of yours. Delivered straight \
                   away when the session is idle or mid-turn; held until the user is done when \
-                  the session is waiting for them. Refused for a session that is not yours \
-                  (`yours: false`): it is somebody else's, to be left alone.",
+                  the session is waiting for them. The answer says if it was queued, or written \
+                  but left unsent by the session's agent. Refused for a session that is not \
+                  yours (`yours: false`): it is somebody else's, to be left alone.",
     schema: || {
         object_schema(
             json!({

@@ -174,6 +174,15 @@ export const noticeScenarios: Scenario[] = [
     ],
   },
   {
+    id: "toast-message-not-sent",
+    group: TRUST,
+    category: "exceptional",
+    title: "Message written but not sent by the agent",
+    description: "An error alert tied to the Claude Code session: it names the agent, says the message waits in the session's input box and that nothing more is written into the session until a prompt is sent, then gives the recovery of opening the session and pressing Enter.",
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
+    toasts: [{ kind: "error", code: "message_not_sent", params: { agent: "Claude Code" }, message: "", session: "s-web-1" }],
+  },
+  {
     id: "error-unexpected",
     group: TRUST,
     category: "exceptional",

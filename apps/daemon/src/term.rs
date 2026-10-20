@@ -265,7 +265,7 @@ pub(crate) fn frame_message(text: &str) -> Vec<u8> {
     // The invisible characters go for a different reason: Claude Code holds back a prompt that
     // contains any, and the Enter written after the paste does not send it (see `invisible`).
     // They are stripped before the slash check for the same reason as the controls.
-    let text = invisible::strip_invisible(&strip_control_chars(text));
+    let text = stripped(text);
 
     // A message starting with `/` is executed as a slash command even inside a bracketed paste, so
     // it never reaches the model; a single leading space makes it arrive as ordinary text.
@@ -282,6 +282,17 @@ pub(crate) fn frame_message(text: &str) -> Vec<u8> {
     buf.extend_from_slice(PASTE_END);
     buf.extend_from_slice(SUBMIT);
     buf
+}
+
+/// Whether nothing but whitespace is left of a message once its control and invisible characters
+/// are stripped. Such a message would be written as an empty prompt, which no agent sends.
+pub(crate) fn is_blank_once_stripped(text: &str) -> bool {
+    stripped(text).trim().is_empty()
+}
+
+/// The text of a message with what `frame_message` strips taken out.
+fn stripped(text: &str) -> String {
+    invisible::strip_invisible(&strip_control_chars(text))
 }
 
 /// Removes every Unicode `Cc` control character — C0, DEL and C1 — except `\n` and `\t`, which
@@ -313,6 +324,15 @@ mod tests {
             occurrences, 1,
             "exactly the trailing PASTE_END, none embedded"
         );
+    }
+
+    #[test]
+    fn a_message_of_only_controls_invisible_characters_and_spaces_is_blank() {
+        assert!(is_blank_once_stripped(
+            "\u{2068}\u{2069}\u{1b}\u{7f} \n\t\u{200B}"
+        ));
+        assert!(!is_blank_once_stripped("\u{2068}ok\u{2069}"));
+        assert!(!is_blank_once_stripped("\u{1F9D1}"));
     }
 
     #[test]

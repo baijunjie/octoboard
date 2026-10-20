@@ -151,9 +151,7 @@ pub fn background_tasks_change(
         "StopFailure" => Some(BackgroundTasksChange::Replace(Vec::new())),
         "UserPromptSubmit" => {
             let prompt = submitted_prompt(agent, payload)?;
-            prompt
-                .contains("<task-notification>")
-                .then(|| BackgroundTasksChange::Finished(task_ids(prompt)))
+            is_task_notification(prompt).then(|| BackgroundTasksChange::Finished(task_ids(prompt)))
         }
         _ => None,
     }
@@ -175,6 +173,12 @@ fn background_task(entry: &Value) -> Option<BackgroundTask> {
         kind: text_field(entry, "type"),
         description: text_field(entry, "description"),
     })
+}
+
+/// Whether a submitted prompt is the agent reporting finished background work to itself rather
+/// than a prompt anyone sent it.
+pub fn is_task_notification(prompt: &str) -> bool {
+    prompt.contains("<task-notification>")
 }
 
 /// The ids of every `<task-id>…</task-id>` in a prompt.

@@ -128,6 +128,9 @@ pub(crate) fn app_state(label: &str) -> (Arc<AppState>, ScratchDir) {
         dir.join("handoff"),
     ));
     state.host_tools.replace(host_tools());
+    // Stand-in sessions run no hooks, so nothing written into one is ever reported sent; a test of
+    // that check sets a wait of its own.
+    *state.send_wait.lock().unwrap() = None;
     (state, dir)
 }
 

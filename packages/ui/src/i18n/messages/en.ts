@@ -95,6 +95,7 @@ export const en = {
   "error.recovery.addedAgents": "The list of added agents is not as this change expected. Check it before changing it again.",
   "error.recovery.wait": "Wait for the session's current turn or operation to finish and check its status before retrying.",
   "error.recovery.lostMessages": "Open the session they were meant for, or the one that took over, and check its terminal. Send again anything that did not arrive.",
+  "error.recovery.unsentMessage": "Open the session, check the message waiting in its input box, and press Enter to send it.",
   "error.recovery.trust": "Open the affected session’s terminal and answer its pending prompt. For folder trust, choose only the project’s folder, then retry.",
   "error.recovery.conversation": "Check the conversation ID and selected account. Resume the existing session when one is named above, or start a new session.",
   "error.recovery.unresumable": "Archive this session if it is not already, delete it, and start a new session to carry on the work.",
@@ -339,6 +340,8 @@ export const en = {
     "{appName} dropped what it had queued for this session. The session's input line may be holding part of a message {appName} could not finish writing. The next message written into the session will be run together with it, so check the session before sending anything else.",
   "daemon.handoff_messages_dropped":
     "{appName} could not deliver messages held back for a session during a handoff, so they were dropped.",
+  "daemon.message_not_sent":
+    "{agent} did not send a message {appName} wrote into this session, so it is waiting in the session's input box. {appName} writes nothing more into the session until a prompt is sent.",
   "daemon.launch_failed": "Could not start {title}: {reason}",
   // The same notice's title when its failure is laid out beneath it, which says the reason itself.
   "daemon.launch_failed.title": "Could not start {title}",

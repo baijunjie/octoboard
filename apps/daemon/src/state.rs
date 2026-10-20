@@ -16,7 +16,7 @@ use anyhow::Result;
 use tokio::sync::broadcast;
 
 use crate::hooks::BackgroundTasksChange;
-use crate::outbox::{Drain, Outbox};
+use crate::outbox::{Drain, Outbox, PromptSignal, Ticket};
 use crate::protocol::{
     error_code, notice_code, now_millis, Agent, AgentAvailability, Availability, BackgroundTask,
     CodedError, Event, GitActivity, GitStatus, Notice, Session, SessionStatus,
@@ -202,6 +202,10 @@ pub struct AppState {
     pub branch_cleanups: crate::branch_origin::cleanup::Cleanups,
     /// What requests reach the host through where a test stands in: `git`, the Trash.
     pub host_tools: crate::host_tools::HostTools,
+    /// How long a message written to an idle Claude Code session is given to be reported sent, or
+    /// `None` for no check at all; see [`HookPrompts`]. A seam for tests, whose stand-in sessions
+    /// run no hooks and so never report sending anything.
+    pub send_wait: Mutex<Option<Duration>>,
     pub record_hints: crate::agent_records::Hints,
     /// The repositories' refs under watch, so a commit made outside the daemon is re-read
     /// (`crate::git_watch`).
@@ -374,6 +378,66 @@ impl Drop for OutboxHold {
     }
 }
 
+/// How long a message written to an idle session is given to be reported sent before it is taken
+/// to be sitting unsent in the input box. A prompt's `UserPromptSubmit` normally arrives well
+/// within a second of the Enter that sent it.
+const SEND_WAIT: Duration = Duration::from_secs(3);
+
+/// A running session's prompts as its hooks report them, for the outbox to tell a message the agent
+/// sent from one it left in the input box.
+struct HookPrompts<'a> {
+    state: &'a AppState,
+    live: &'a LiveSession,
+}
+
+impl HookPrompts<'_> {
+    fn wait(&self) -> Option<Duration> {
+        *self
+            .state
+            .send_wait
+            .lock()
+            .expect("send wait lock poisoned")
+    }
+}
+
+impl PromptSignal for HookPrompts<'_> {
+    fn sent(&self) -> u64 {
+        self.live.prompts_sent()
+    }
+
+    /// Claude Code alone, the one agent seen to take a write and not send it. Read now rather than
+    /// taken from the status the drain was started with, which can be stale by the time a message
+    /// reaches the front: a write that lands mid-turn is queued by the agent and sent only when
+    /// the turn ends, which no short wait would see.
+    fn expects_send(&self) -> bool {
+        self.wait().is_some()
+            && self.live.agent == Agent::Claude
+            && self
+                .state
+                .session_record(&self.live.id)
+                .is_ok_and(|record| self.state.agent_status(&record) == SessionStatus::Idle)
+    }
+
+    fn wait_past(&self, before: u64) -> bool {
+        let deadline = Instant::now() + self.wait().unwrap_or_default();
+        while self.live.prompts_sent() <= before {
+            if Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        true
+    }
+
+    fn mark_unsent(&self, before: u64) {
+        self.live.mark_unsent(before);
+    }
+
+    fn unsent_waiting(&self) -> bool {
+        self.live.unsent_waiting()
+    }
+}
+
 impl AppState {
     pub fn new(
         store: Store,
@@ -405,6 +469,7 @@ impl AppState {
             branch_origins: Default::default(),
             branch_cleanups: Default::default(),
             host_tools: Default::default(),
+            send_wait: Mutex::new(Some(SEND_WAIT)),
             record_hints: Default::default(),
             git_watch: Default::default(),
             agent_availability: RwLock::new(
@@ -1341,14 +1406,14 @@ impl AppState {
     /// Accepts a message for a session, to be written as soon as it can take one. Queued rather
     /// than written even when the session looks ready, so order is structural rather than something
     /// each caller has to get right.
-    pub fn queue_message(&self, id: &str, text: &str) {
-        self.outbox.push(id, text);
+    pub fn queue_message(&self, id: &str, text: &str) -> Ticket {
+        self.outbox.push(id, text)
     }
 
     /// Writes out whatever is queued for this session, and says what became of it.
     ///
-    /// **Blocks** on the PTY write, so callers on an async path go through
-    /// [`Self::spawn_flush_outbox`].
+    /// **Blocks** on the PTY write and on the wait for an idle Claude Code session to send what was
+    /// written, so callers on an async path go through [`Self::spawn_flush_outbox`].
     pub fn flush_outbox(&self, id: &str, status: SessionStatus) -> Drain {
         // A write while a modal dialog is up has its trailing Enter confirm whatever option is
         // highlighted. Check both the caller's hook state and the live interaction below.
@@ -1372,7 +1437,34 @@ impl AppState {
         if live.trust.holds_writes() || live.needs_user_action() {
             return Drain::Pending;
         }
-        let outcome = self.outbox.drain(&live);
+        let outcome = self.outbox.drain(
+            &live,
+            &HookPrompts {
+                state: self,
+                live: &live,
+            },
+        );
+        let still_running = self
+            .live_session(id)
+            .is_some_and(|current| Arc::ptr_eq(&current, &live));
+        if matches!(outcome, Drain::Unsent(_)) && still_running {
+            // The sender may be told, but only the user can see the input box and send what is in
+            // it; and whoever sent a message queued behind it is told nothing at all.
+            self.broadcast(
+                Notice::new(
+                    notice_code::MESSAGE_NOT_SENT,
+                    format!(
+                        "{} wrote a message into this session, but {} did not send it: it is \
+                         waiting in the session's input box. Check it and send it; nothing more \
+                         is written into the session until a prompt is sent.",
+                        crate::APP_NAME,
+                        live.agent.label()
+                    ),
+                    &[("agent", live.agent.label())],
+                )
+                .about(id),
+            );
+        }
         if outcome == Drain::Lost {
             // Nobody is waiting on a return value for most of these drains, and a message Octoboard
             // accepted and then could not deliver is the user's business — the more so because the

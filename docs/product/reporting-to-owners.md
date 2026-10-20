@@ -11,8 +11,10 @@ A project session bound to an owner (see `docs/product/hub-orchestration.md`) re
 The report is written into the session the reporting session is **bound to**, its **owner** — a console session
 or a project session — named by its own binding rather than looked up, since a console may
 hold several console sessions. It arrives as a user message naming the reporting session's id, its title and project,
-the status, the open items, and then the summary. The reporting session is told either that it was delivered or that
-it was accepted and will reach its owner as soon as the owner can take a message, the note calling the owner a console
+the status, the open items, and then the summary. The reporting session is told that it was delivered, that it was
+accepted and will reach its owner as soon as the owner can take a message, or that it was written into the owner's input
+but the owner's agent did not send it, so the owner has not read it, the user has been told, and it must not be sent
+again (see "A message written but not sent" in `docs/product/message-delivery.md`). The note calls the owner a console
 session or a project session according to which it is.
 
 Reporting fails, and leaves the session exactly as it was, when:
@@ -66,6 +68,15 @@ and the report's answer names those that will stay (see "Archives made by an age
 "Accepted" rather than "read" — an owner that is merely busy has the report queued for it,
 and the session is archived anyway rather than being left alive until the owner gets round
 to it.
+
+**A report left unsent archives nothing.** A report that would have archived the session, written into the owner's
+input but not sent by the owner's agent (see "A message written but not sent" in `docs/product/message-delivery.md`),
+leaves the reporting session running and awaiting instructions, and its answer adds that the session was not archived
+because its owner has not read the report. The report still counts as the session's own for that turn, so no report is
+synthesised when the turn ends. Nothing archives the session later by itself, and it was told not to send the report
+again: a later qualifying report or an explicit archive, by its owner or the user, must do so. A report that was only
+queued is different: it archives the session on acceptance, as above, so if it is later written and left unsent, the
+session is already archived, and only the notice the user gets tells anyone.
 
 Anything else — open items, `failed`, `needs_decision` — leaves the session running and awaiting
 instructions, for its owner to continue with `send_message` or to archive explicitly.

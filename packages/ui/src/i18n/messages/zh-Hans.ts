@@ -83,6 +83,7 @@ export const zhHans: Translation<"other"> = {
   "error.recovery.addedAgents": "已添加的智能体列表与此次更改所依据的不一致。请先查看，再重新更改。",
   "error.recovery.wait": "请等待会话当前的回合或操作完成，检查会话状态后重试。",
   "error.recovery.lostMessages": "请打开这些消息原本要发往的会话或接手的会话，检查其终端。未送达的内容请重新发送。",
+  "error.recovery.unsentMessage": "请打开此会话，检查输入框中等待发送的消息，然后按 Enter 发送。",
   "error.recovery.trust": "请打开相关会话的终端，处理其中等待回答的提示。信任文件夹时仅选择项目文件夹，然后重试。",
   "error.recovery.conversation": "请检查对话 ID 和所选账户；上方提示已有会话时请继续该会话，或创建新会话。",
   "error.recovery.unresumable": "如果此会话尚未归档，请先归档，再将其删除，并新建会话继续工作。",
@@ -303,6 +304,8 @@ export const zhHans: Translation<"other"> = {
     "{appName} 丢弃了为此会话排队的内容。会话的输入行中可能残留了 {appName} 未能写完的半条消息。下一条写入会话的消息会与它一起运行，因此在发送其他内容之前请先检查会话。",
   "daemon.handoff_messages_dropped":
     "{appName} 无法送达移交期间为某个会话暂存的消息，这些消息已被丢弃。",
+  "daemon.message_not_sent":
+    "{appName} 写入此会话的一条消息未被 {agent} 发送，仍停留在会话的输入框中。在发送任何提示之前，{appName} 不会再向此会话写入内容。",
   "daemon.launch_failed": "无法启动 {title}：{reason}",
   "daemon.launch_failed.title": "无法启动 {title}",
   "daemon.trust_answer_failed": "{appName} 无法按下 {agent} 的信任确认（{reason}）。请在终端中回应。",

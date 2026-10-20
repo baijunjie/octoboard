@@ -57,6 +57,9 @@ pub enum Delivery {
     /// Accepted and queued. It goes in as soon as the session can take one, so the sender must not
     /// send it again.
     Queued,
+    /// Written, but the session's agent did not send it: the text is waiting in its input box for
+    /// the user, who has been told. The session has not read it, and it must not be sent again.
+    Unsent,
 }
 
 /// What a sender is told when a drain it triggered ran into a message the agent only partly took.
@@ -95,13 +98,22 @@ pub enum WhenBlocked {
 /// and Grok Build would take it as trusting the folder — so a session whose trust watch still holds
 /// writes (`TrustState::holds_writes`) is blocked as well.
 ///
-/// **Blocks** on the PTY write; callers on the runtime are responsible for keeping it off a worker.
+/// **Blocks** on the PTY write and, for an idle Claude Code session, on the few seconds' wait for
+/// its agent to send it; callers on the runtime are responsible for keeping it off a worker.
 pub fn write_message(
     state: &Arc<AppState>,
     id: &str,
     text: &str,
     when_blocked: WhenBlocked,
 ) -> Result<Delivery> {
+    // Written, it would be an empty prompt the agent does not send, and nobody would learn why.
+    if term::is_blank_once_stripped(text) {
+        return Err(CodedError::raised(
+            error_code::FIELD_REQUIRED,
+            "the message is empty once its control and invisible characters are removed",
+            &[("field", "text")],
+        ));
+    }
     let session = state.session_record(id)?;
     // Nothing to write to and nothing to wait for: a resume starts the agent at its prompt rather
     // than replaying a queue, so queuing here would lose the message silently.
@@ -136,10 +148,15 @@ pub fn write_message(
     }
 
     // Queued even when the session looks ready, so messages cannot overtake one another.
-    state.queue_message(id, text);
+    let ticket = state.queue_message(id, text);
     match state.flush_outbox(id, agent_status) {
         Drain::Clear => Ok(Delivery::Written),
         Drain::Pending => Ok(Delivery::Queued),
+        Drain::Unsent(unsent) if unsent == ticket => Ok(Delivery::Unsent),
+        // Tickets follow the queue's order: an earlier message left unsent holds this one back, a
+        // later one was written after this one went in.
+        Drain::Unsent(unsent) if unsent < ticket => Ok(Delivery::Queued),
+        Drain::Unsent(_) => Ok(Delivery::Written),
         Drain::Lost => Err(CodedError::raised(
             error_code::QUEUED_MESSAGES_LOST,
             lost_message(),
@@ -198,7 +215,8 @@ impl ReportStatus {
 /// has read it: an owner that is merely busy still has the report queued for it, and leaving a
 /// finished session alive until the owner gets round to it would strand it. An owner that is not
 /// running at all is a different matter — the report fails, and the session stays as it is for the
-/// user to deal with.
+/// user to deal with. So is a report written into the owner but left unsent by its agent: the owner
+/// has not read it and nothing guarantees it will, so the session is not archived.
 pub fn deliver_report(
     state: &Arc<AppState>,
     session_id: &str,
@@ -207,18 +225,18 @@ pub fn deliver_report(
     // What it archived is dropped, its branches with it: the one caller that archives in earnest,
     // a session's own `done` report, goes through `deliver_own_report`, which removes them, and a
     // synthesised report is never `done`.
-    deliver_and_archive(state, session_id, report).map(|(note, _)| note)
+    deliver_and_archive(state, session_id, report).map(|(note, ..)| note)
 }
 
-/// [`deliver_report`], also returning the sessions it archived, for the removal of the branches
-/// bound to them once their processes have ended, which is the caller's. The answer names the
-/// bound branches and worktrees that removal will leave, judged before the archive, since it has
-/// to reach the session before its process is ended.
+/// [`deliver_report`], also returning what became of the message and the sessions it archived,
+/// for the removal of the branches bound to them once their processes have ended, which is the
+/// caller's. The answer names the bound branches and worktrees that removal will leave, judged
+/// before the archive, since it has to reach the session before its process is ended.
 fn deliver_and_archive(
     state: &Arc<AppState>,
     session_id: &str,
     report: Report<'_>,
-) -> Result<(String, Vec<Session>)> {
+) -> Result<(String, Vec<Session>, Delivery)> {
     let _removal = state.claim_session_removal();
     let session = state.session_record(session_id)?;
     let Some(bound_to) = &session.bound_to else {
@@ -269,6 +287,10 @@ fn deliver_and_archive(
     // archived on the strength of a report its owner never got.
     let delivery = write_message(state, &owner.id, &message, WhenBlocked::Queue)?;
 
+    // A report the owner has not read archives nothing: the session would be gone before its
+    // owner, or the user, ever saw why.
+    let held_back = finished && delivery == Delivery::Unsent;
+    let finished = finished && !held_back;
     let (left, archived) = if finished {
         let left = cleanup::will_be_left(state, std::slice::from_ref(&session));
         (left, coordinator::archive_session(state, session_id)?)
@@ -288,6 +310,15 @@ fn deliver_and_archive(
         (Delivery::Queued, false) => format!(
             "Report accepted; the {owner_kind} will see it as soon as it can take a message."
         ),
+        (Delivery::Unsent, _) => format!(
+            "Your report was written into the {owner_kind}'s input, but its agent did not send it, \
+             so the {owner_kind} has not read it; the user has been told. Do not send it again.{}",
+            if held_back {
+                " This session was not archived, because its owner has not read the report."
+            } else {
+                ""
+            }
+        ),
     };
     if !left.is_empty() {
         note.push_str(&format!(
@@ -295,7 +326,7 @@ fn deliver_and_archive(
             cleanup::lines(&left).join("; ")
         ));
     }
-    Ok((note, archived))
+    Ok((note, archived, delivery))
 }
 
 /// Closes the session's open turn on `turn` ending it, and has a report synthesised for the owner
@@ -364,7 +395,8 @@ fn synthesise_report(state: &Arc<AppState>, session_id: &str, turn: hooks::TurnE
 }
 
 /// [`write_message`] for a caller on the runtime. The write blocks on the PTY for as long as the
-/// child is not draining, so it goes to a blocking thread rather than a runtime worker.
+/// child is not draining, and on the wait for an idle Claude Code session to send it, so it goes to
+/// a blocking thread rather than a runtime worker.
 pub async fn write_message_off_runtime(
     state: &Arc<AppState>,
     id: &str,
@@ -391,7 +423,7 @@ pub async fn deliver_own_report(
     summary: String,
     status: ReportStatus,
     open_items: Vec<String>,
-) -> Result<String> {
+) -> Result<(String, Delivery)> {
     state.hook_queues.settled(session_id).await;
     state.mark_reported(session_id);
     let delivered = {
@@ -414,9 +446,9 @@ pub async fn deliver_own_report(
         .map_err(anyhow::Error::from)
         .and_then(|delivered| delivered)
     };
-    let (note, archived) = delivered.inspect_err(|_| state.clear_reported(session_id))?;
+    let (note, archived, delivery) = delivered.inspect_err(|_| state.clear_reported(session_id))?;
     cleanup::remove_in_background(state, archived);
-    Ok(note)
+    Ok((note, delivery))
 }
 
 /// The report as it is written into the owner. Plain prose with the structured fields spelled out:
@@ -890,6 +922,35 @@ mod tests {
         assert_eq!(status("worker"), SessionStatus::Archived);
         assert_eq!(status("hub"), SessionStatus::Idle);
         assert_eq!(status("sibling"), SessionStatus::Idle);
+    }
+
+    /// A `done` report its owner's agent leaves unsent archives nothing: the reporter is told the
+    /// owner has not read it, and stays as it is.
+    #[test]
+    fn a_done_report_left_unsent_archives_nothing() {
+        let (state, _dir, _live) = team_state(
+            "reporting-unsent-done",
+            &[("worker", "hub", false, SessionStatus::Idle)],
+        );
+        *state.send_wait.lock().unwrap() = Some(std::time::Duration::from_millis(100));
+
+        let note = deliver_report(&state, "worker", done_report()).expect("written");
+
+        assert!(note.contains("has not read it"), "{note}");
+        assert!(note.contains("not archived"), "{note}");
+        let status = state.store.get_session("worker").unwrap().unwrap().status;
+        assert_eq!(status, SessionStatus::Idle);
+    }
+
+    /// A message that would be an empty prompt once stripped is refused, not written.
+    #[test]
+    fn a_message_blank_once_stripped_is_refused() {
+        let (state, _dir, live) = team_state("reporting-blank", &[]);
+        let err = write_message(&state, "hub", "\u{2068}\u{2069} \u{1b}", WhenBlocked::Queue)
+            .unwrap_err();
+        let coded = err.downcast_ref::<CodedError>().expect("a coded refusal");
+        assert_eq!(coded.code, error_code::FIELD_REQUIRED);
+        assert_eq!(live.input_writes(), 0);
     }
 
     /// A session bound to an unbound project session reports there, as one bound to a console

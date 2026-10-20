@@ -590,11 +590,15 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
 
     match hooks::event_name(&payload) {
         Some(event) => {
+            let mut prompt_sent = false;
             if hooks::starts_conversation(&event) {
                 if let Err(err) = state.mark_conversation_started(session_id) {
                     tracing::debug!(session = %session_id, %err, "recording the session's first turn failed");
                 }
                 let prompt = agent.and_then(|agent| hooks::submitted_prompt(agent, &payload));
+                // A background task's completion arrives as a prompt the agent sends itself, which
+                // says nothing about what is in its input box.
+                prompt_sent = !prompt.is_some_and(hooks::is_task_notification);
                 // The previous turn's watch goes before the new turn opens: a watch still current
                 // when it opens could find the previous turn's failure (Codex) or interrupt (Claude
                 // Code) and close this one. Grok has no watch.
@@ -630,6 +634,14 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
                         arm_record_watches(
                             state, session_id, agent, &event, previous, status, &payload,
                         );
+                        // Counted after the status it brings and before the drain that status
+                        // releases: that drain lets a queue held for an unsent message go on, and
+                        // the agent reads as working by the time the outbox sees the count move.
+                        if prompt_sent {
+                            if let Some(live) = state.live_session(session_id) {
+                                live.note_prompt_sent();
+                            }
+                        }
                         // Releasing a message queued while the session could not take one writes
                         // into its PTY, which blocks; it must not sit on this response, where the
                         // adapters' few-second hook timeout would surface as agent-visible noise.
@@ -1266,6 +1278,150 @@ mod tests {
 
     async fn reaches(state: &Arc<AppState>, status: SessionStatus) -> bool {
         reaches_within(state, status, PATIENCE).await
+    }
+
+    /// An idle Claude Code session whose outbox checks that what it writes is sent, with its output
+    /// read so a test can see what reached it.
+    fn checked_claude_session(
+        name: &str,
+    ) -> (
+        Arc<AppState>,
+        crate::test_support::ScratchDir,
+        crate::test_support::StandIn,
+        std::path::PathBuf,
+    ) {
+        let (state, dir, live, path) = claude_session_with_transcript(name, SessionStatus::Idle);
+        crate::session::spawn_reader_thread((*live).clone(), 8 * 1024);
+        *state.send_wait.lock().unwrap() = Some(std::time::Duration::from_millis(300));
+        (state, dir, live, path)
+    }
+
+    /// [`checked_claude_session`] with room for a slow machine to read the write and apply the
+    /// hook: a wait that succeeds ends as soon as the hook lands, so a long one costs nothing.
+    fn patient_claude_session(
+        name: &str,
+    ) -> (
+        Arc<AppState>,
+        crate::test_support::ScratchDir,
+        crate::test_support::StandIn,
+        std::path::PathBuf,
+    ) {
+        let session = checked_claude_session(name);
+        *session.0.send_wait.lock().unwrap() = Some(PATIENCE);
+        session
+    }
+
+    /// A message the agent does not send is reported unsent to its sender and announced to the
+    /// user, and one sent after it waits — unwritten — until the agent reports a prompt sent.
+    #[tokio::test]
+    async fn a_message_left_unsent_holds_what_follows_until_a_prompt_is_sent() {
+        let (state, _dir, live, path) = checked_claude_session("server-unsent");
+        let mut events = state.subscribe();
+
+        let first = crate::reporting::write_message(
+            &state,
+            "s",
+            "first message",
+            crate::reporting::WhenBlocked::Queue,
+        )
+        .unwrap();
+        assert_eq!(first, crate::reporting::Delivery::Unsent);
+        let mut announced = false;
+        while let Ok(event) = events.try_recv() {
+            announced |= matches!(event, Event::SessionNotice { ref session, ref code, .. }
+                if session == "s" && code == crate::protocol::notice_code::MESSAGE_NOT_SENT);
+        }
+        assert!(announced);
+
+        let second = crate::reporting::write_message(
+            &state,
+            "s",
+            "second message",
+            crate::reporting::WhenBlocked::Queue,
+        )
+        .unwrap();
+        assert_eq!(second, crate::reporting::Delivery::Queued);
+        assert_eq!(
+            live.input_writes(),
+            1,
+            "nothing is written behind the unsent message"
+        );
+
+        apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
+        let heard = crate::test_support::output_containing(&live, "second message");
+        assert!(heard.contains("second message"), "{heard}");
+    }
+
+    /// A background task's completion arrives as a prompt the agent sends itself, which leaves
+    /// whatever waits in its input box there, so it does not lift the hold.
+    #[tokio::test]
+    async fn a_task_notification_does_not_lift_the_hold() {
+        let (state, _dir, live, path) = checked_claude_session("server-unsent-notification");
+        let first = crate::reporting::write_message(
+            &state,
+            "s",
+            "first message",
+            crate::reporting::WhenBlocked::Queue,
+        )
+        .unwrap();
+        assert_eq!(first, crate::reporting::Delivery::Unsent);
+
+        let notification = serde_json::json!({
+            "hook_event_name": "UserPromptSubmit",
+            "prompt": "<task-notification><task-id>b1</task-id></task-notification>",
+            "transcript_path": path,
+        });
+        apply_hook(&state, "s", notification.to_string().as_bytes());
+        let second = crate::reporting::write_message(
+            &state,
+            "s",
+            "second message",
+            crate::reporting::WhenBlocked::Queue,
+        )
+        .unwrap();
+        assert_eq!(second, crate::reporting::Delivery::Queued);
+        assert_eq!(live.input_writes(), 1);
+    }
+
+    /// A message the agent reports sending in time is delivered, as before.
+    #[tokio::test]
+    async fn a_message_the_agent_sends_is_delivered() {
+        let (state, _dir, live, path) = patient_claude_session("server-sent");
+        let hook_state = state.clone();
+        let runtime = tokio::runtime::Handle::current();
+        let sender = std::thread::spawn(move || {
+            let _runtime = runtime.enter();
+            crate::test_support::output_containing(&live, "a message");
+            apply_hook(&hook_state, "s", &claude_hook("UserPromptSubmit", &path));
+            live
+        });
+        let delivery = crate::reporting::write_message(
+            &state,
+            "s",
+            "a message",
+            crate::reporting::WhenBlocked::Queue,
+        )
+        .unwrap();
+        let _live = sender.join().unwrap();
+        assert_eq!(delivery, crate::reporting::Delivery::Written);
+    }
+
+    /// A write that lands mid-turn is queued by the agent and sent only when its turn ends, so it
+    /// is not waited on.
+    #[tokio::test]
+    async fn a_message_written_mid_turn_is_not_waited_on() {
+        let (state, _dir, _live, _path) = checked_claude_session("server-mid-turn");
+        state
+            .apply_hook_status("s", SessionStatus::Working)
+            .unwrap();
+        let delivery = crate::reporting::write_message(
+            &state,
+            "s",
+            "a message",
+            crate::reporting::WhenBlocked::Queue,
+        )
+        .unwrap();
+        assert_eq!(delivery, crate::reporting::Delivery::Written);
     }
 
     /// A Claude Code turn the user interrupts fires no hook; its prompt arms the transcript watch

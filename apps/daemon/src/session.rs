@@ -64,6 +64,14 @@ pub struct LiveSession {
     /// input lock, so that the trust path's check of the count and its key are one step that no
     /// other writer can fall between. See [`Self::write_input`].
     input_writes: AtomicU64,
+    /// How many prompts the agent's hooks have reported it sending (`UserPromptSubmit`), counted
+    /// once the event's status has been applied. What the outbox waits on to know that a message
+    /// it wrote was sent rather than left in the input box.
+    prompts_sent: AtomicU64,
+    /// The count of prompts sent at which a message the outbox wrote was left unsent, while that
+    /// message is taken to be waiting in the input box. Kept with the count it is compared with,
+    /// so that it ends with this process.
+    unsent_at: Mutex<Option<u64>>,
 }
 
 impl std::ops::Deref for LiveSession {
@@ -121,6 +129,8 @@ impl LiveSession {
                 session.start_signal_missing,
             ),
             input_writes: AtomicU64::new(0),
+            prompts_sent: AtomicU64::new(0),
+            unsent_at: Mutex::new(None),
         }
     }
 
@@ -219,6 +229,35 @@ impl LiveSession {
         // Under the lock, so that the count is never read in the middle of a write.
         let _input = self.pty.lock_input();
         self.input_writes.load(Ordering::Acquire)
+    }
+
+    /// Counts a prompt the agent's hooks reported it sending.
+    pub fn note_prompt_sent(&self) {
+        self.prompts_sent.fetch_add(1, Ordering::AcqRel);
+    }
+
+    /// How many prompts the agent's hooks have reported it sending so far.
+    pub fn prompts_sent(&self) -> u64 {
+        self.prompts_sent.load(Ordering::Acquire)
+    }
+
+    /// Records that a message written when the count stood at `before` was not sent.
+    pub fn mark_unsent(&self, before: u64) {
+        *self.unsent_at.lock().expect("unsent mark lock poisoned") = Some(before);
+    }
+
+    /// Whether a message marked unsent is still taken to be waiting in the input box: until the
+    /// agent reports a prompt sent after it, whoever sent it.
+    pub fn unsent_waiting(&self) -> bool {
+        let mut unsent_at = self.unsent_at.lock().expect("unsent mark lock poisoned");
+        match *unsent_at {
+            Some(before) if self.prompts_sent() <= before => true,
+            Some(_) => {
+                *unsent_at = None;
+                false
+            }
+            None => false,
+        }
     }
 
     /// Asks the agent to exit, escalating to a kill only if it does not, with its screen frozen

@@ -382,6 +382,11 @@ fn delivery_note(delivery: Delivery) -> &'static str {
             "Queued: this session cannot take a message right now. It will be delivered as soon \
              as it can, so do not send it again."
         }
+        Delivery::Unsent => {
+            "Not sent: the message was written into this session's input, but its agent did not \
+             send it, so the session has not read it. The user has been told to check it; do not \
+             send it again."
+        }
     }
 }
 
@@ -715,6 +720,10 @@ async fn share_info(
         OwnerCopy::Sent(Delivery::Queued) => note.push_str(
             " Its owner's copy is queued, and will arrive as soon as the owner can take it.",
         ),
+        OwnerCopy::Sent(Delivery::Unsent) => note.push_str(
+            " Its owner's copy was written into the owner's input but not sent; the user has been \
+             told.",
+        ),
         OwnerCopy::Failed(reason) => note.push_str(&format!(
             " Its owner could not be sent a copy ({reason}); the information itself was not \
              affected."
@@ -737,7 +746,7 @@ async fn report(
     })?;
     let open_items = string_list(arguments, "open_items");
 
-    let note =
+    let (note, _) =
         reporting::deliver_own_report(state, &session.id, summary.to_string(), status, open_items)
             .await?;
     Ok(json!({ "note": note }))

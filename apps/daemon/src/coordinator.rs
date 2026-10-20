@@ -854,7 +854,7 @@ async fn handle_inner(
         }
 
         RequestBody::SendMessage { session, text } => {
-            send_message(state, &session, &text)?;
+            send_message(state, &session, text).await?;
             Ok(None)
         }
 
@@ -4317,8 +4317,9 @@ fn delete_archived_sessions(
 
 /// The user's own write into a session. Refused rather than queued while the session is waiting for
 /// them: they are the one who has to answer the prompt that is blocking it, and they can be told so.
-fn send_message(state: &Arc<AppState>, id: &str, text: &str) -> Result<()> {
-    reporting::write_message(state, id, text, reporting::WhenBlocked::Refuse)?;
+/// Off the runtime, because the write blocks on the PTY and on the wait for the agent to send it.
+async fn send_message(state: &Arc<AppState>, id: &str, text: String) -> Result<()> {
+    reporting::write_message_off_runtime(state, id, text, reporting::WhenBlocked::Refuse).await?;
     Ok(())
 }
 

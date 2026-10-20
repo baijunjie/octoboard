@@ -33,6 +33,10 @@ fn told(delivery: &Result<Delivery>, who: &str) -> String {
     match delivery {
         Ok(Delivery::Written) => format!("{who} was told."),
         Ok(Delivery::Queued) => format!("{who} will be told as soon as it can take a message."),
+        Ok(Delivery::Unsent) => format!(
+            "{who} was not told: the message was written into its input, but its agent did not \
+             send it. The user has been told to check it."
+        ),
         Err(err) => format!("{who} could not be told ({err:#})."),
     }
 }
@@ -165,6 +169,11 @@ pub(super) async fn bind_to_session(
     // Nothing after the binding fails the call: the session is bound by now, so a first report
     // that was not delivered, for whatever reason, is the session's to send.
     let first = match delivered {
+        Ok((_, Delivery::Unsent)) => {
+            "Your summary was written into its input as your first report, but its agent did not \
+             send it, so it has not read it; the user has been told. Do not send it again."
+                .to_string()
+        }
         Ok(_) => "Your summary was sent to it as your first report.".to_string(),
         Err(err) => format!(
             "Your summary could not be delivered to it ({err:#}), so send it yourself with `{}`.",
