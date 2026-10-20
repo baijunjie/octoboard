@@ -224,7 +224,7 @@ export const quotaGatingScenarios: Scenario[] = [
       (ui) => ui.pressWithModifier(ui.t("sidebar.project.openSession")),
       // The new card slides in before it can be hovered.
       (ui) => ui.wait(600),
-      (ui) => ui.hoverSessionAgent(ui.session(ui.t("session.defaultName", { name: onWork.name })), ui.t("session.agentAccount", { agent: "Claude Code", account: ui.t("settings.accounts.defaultName") })),
+      (ui) => ui.hoverSessionAgent(ui.session(ui.t("session.defaultName", { name: onWork.name })), "Claude Code", ui.t("settings.accounts.defaultName")),
     ],
   },
   {

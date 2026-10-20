@@ -61,6 +61,7 @@ export function OptionSelect<T extends string>({
   value,
   onChange,
   placeholder,
+  placeholderBadge,
   inline,
   joined,
   hideLabel,
@@ -82,12 +83,16 @@ export function OptionSelect<T extends string>({
   describedBy?: string;
   /** With `hideLabel`, the ids of elements elsewhere on the page that name the field. */
   labelledBy?: string;
+  /** A status badge after the placeholder, for a placeholder that names what the empty choice stands for.
+   * Unlike an option's badge it gives way when it is long, clipped with an ellipsis before the clear button. */
+  placeholderBadge?: string;
 } & (
   | { value: T; onChange: (value: T) => void; placeholder?: undefined }
   | { value: T | null; onChange: (value: T | null) => void; placeholder: string }
 )): React.ReactElement {
   const descriptionId = useId();
   const current = options.find((option) => option.value === value);
+  const badge = current ? current.badge : placeholderBadge;
   const hasReason = options.some((option) => option.reason);
   return (
     // HeroUI's variant for a field on a surface: every one of these sits in a dialog.
@@ -99,7 +104,7 @@ export function OptionSelect<T extends string>({
       // is on the flex item, the root, which a trigger's own `z-index` would not be.
       // The start half of a joined pair whose value carries a badge keeps its natural width, so the name and
       // the badge stay readable and the other half is what gives way.
-      className={inline ? "w-48" : joined ? `min-w-0 has-[[data-focus-visible=true]]:z-10 ${joined === "start" && current?.badge ? "flex-none max-w-[70%]" : "flex-1"}` : undefined}
+      className={inline ? "w-48" : joined ? `min-w-0 has-[[data-focus-visible=true]]:z-10 ${joined === "start" && badge ? "flex-none max-w-[70%]" : "flex-1"}` : undefined}
       aria-label={(inline || joined || hideLabel) && !labelledBy ? label : undefined}
       aria-labelledby={labelledBy}
       // react-aria drops the slot's id when no note exists on mount and does not restore it when
@@ -142,10 +147,12 @@ export function OptionSelect<T extends string>({
         <Select.Value className="flex min-w-0 flex-1 items-center gap-2 text-clip">
           {() => <>
             {current?.icon && <span aria-hidden="true" className="flex shrink-0">{current.icon}</span>}
-            <FadeOverflow as="span" lang={current?.lang} dir="auto" className={current?.badge ? "min-w-0" : "min-w-0 flex-1"} titleWhenClipped={current?.label ?? placeholder}>
+            <FadeOverflow as="span" lang={current?.lang} dir="auto" className={!badge ? "min-w-0 flex-1" : current ? "min-w-0" : "shrink-0"} titleWhenClipped={current?.label ?? placeholder}>
               {current?.label ?? placeholder}
             </FadeOverflow>
-            {current?.badge && <StatusBadge>{current.badge}</StatusBadge>}
+            {/* A placeholder's own words are short and say what the field does, so its badge (an
+                inherited value that can be a long model id) is what gives way. */}
+            {badge && <StatusBadge overflow={current ? undefined : "truncate"}>{badge}</StatusBadge>}
           </>}
         </Select.Value>
         {placeholder !== undefined && <Select.ClearButton />}
@@ -166,7 +173,9 @@ export function OptionSelect<T extends string>({
               className={option.isDisabled && option.reason ? "pe-7 data-[disabled=true]:opacity-100" : "pe-7"}
               key={option.value}
               id={option.value}
-              textValue={option.label}
+              // Type-to-select matches on, and the hidden native option reads, "label, badge";
+              // the option's own accessible name comes from its content, where the badge's hidden comma separates them.
+              textValue={option.badge ? `${option.label}, ${option.badge}` : option.label}
               isDisabled={option.isDisabled}
             >
               {option.icon && (

@@ -10,7 +10,7 @@ import { IndicatorTooltip } from "./IndicatorTooltip";
  * the accessible name of the row or written out beside it (`sessionAriaLabel`). `tooltip`, where
  * given, shows on pointer hover only, through `IndicatorTooltip`, without a name of its own, the
  * mark being decorative. */
-export function AgentIcon({ agent, className = "size-4", tooltip }: { agent: Agent; className?: string; tooltip?: string }): React.ReactElement {
+export function AgentIcon({ agent, className = "size-4", tooltip }: { agent: Agent; className?: string; tooltip?: React.ReactNode }): React.ReactElement {
   const { d, fill } = AGENT_MARKS[agent];
   const icon = (
     <svg viewBox="0 0 24 24" className={`shrink-0 ${className}`} fill={fill} fillRule="evenodd" aria-hidden="true">

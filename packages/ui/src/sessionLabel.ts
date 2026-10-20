@@ -76,16 +76,23 @@ export function statusLabel(t: Translate, status: StatusKind): string {
   return t(STATUS_KEY[status]);
 }
 
-/** The name a session's account is shown under: the default account's own name for a session on
- * it, the account's name while it is stored, else the directory the session recorded — or nothing
- * when it recorded none. */
-export function sessionAccountName(t: Translate, session: Session, accounts: Account[], defaultNames: Settings["default_account_names"]): string | undefined {
-  if (!session.account_id) return defaultAccountName(t, defaultNames, session.agent);
-  return accounts.find((account) => account.id === session.account_id)?.name ?? session.config_dir ?? undefined;
+/** The account a session is shown under: the default account's own name for a session on it, the
+ * account's name while it is stored, else the directory the session recorded (`isPath`, text of its
+ * own direction) — or nothing when it recorded none. */
+export function sessionAccount(t: Translate, session: Session, accounts: Account[], defaultNames: Settings["default_account_names"]): { name: string; isPath: boolean } | undefined {
+  if (!session.account_id) return { name: defaultAccountName(t, defaultNames, session.agent), isPath: false };
+  const stored = accounts.find((account) => account.id === session.account_id)?.name;
+  if (stored !== undefined) return { name: stored, isPath: false };
+  return session.config_dir != null ? { name: session.config_dir, isPath: true } : undefined;
 }
 
-/** The agent and the account a session runs under: the text of the agent's mark tooltip, and the
- * agent part of the session's accessible name. */
+/** The name a session's account is shown under: see `sessionAccount`. */
+export function sessionAccountName(t: Translate, session: Session, accounts: Account[], defaultNames: Settings["default_account_names"]): string | undefined {
+  return sessionAccount(t, session, accounts, defaultNames)?.name;
+}
+
+/** The agent and the account a session runs under, as one phrase: the agent part of the session's
+ * accessible name, and what a dialog listing sessions reads out beside the agent's mark. */
 export function sessionAgentLabel(t: Translate, session: Session, accounts: Account[], defaultNames: Settings["default_account_names"]): string {
   const agent = AGENT_LABEL[session.agent];
   const account = sessionAccountName(t, session, accounts, defaultNames);

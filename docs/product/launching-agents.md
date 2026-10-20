@@ -381,7 +381,7 @@ by the agent's rules like any other.
 
 Codex compresses a session's rollout once it is about a week old, replacing `rollout-<timestamp>-<thread id>.jsonl` with
 `rollout-<timestamp>-<thread id>.jsonl.zst` in the same directory. Octoboard takes the compressed rollout for the
-session's record wherever it looks for one: the session's token usage and task title are still read from it, the
+session's record wherever it looks for one: the session's context size and task title are still read from it, the
 check for a session's records before a deletion and the check for whether its conversation can still be resumed find
 it, it is moved to the Trash with the session, and an account switch copies it.
 
@@ -392,8 +392,9 @@ file. Octoboard treats a thread's first rollout and all its segments, plain or c
 is the file no other continues — of several, the one started last — which holds the conversation as it stands; it is
 not necessarily the file written to last:
 
-- the session's token usage is the total the head ends on, since Codex carries the running total over from the file
-  a segment continues;
+- the session's context size is the latest request's in the head; a head that has had no turn since the revert shows
+  the figure where it picks up the conversation from the file it continues (see "Session context size" in
+  `docs/product/session-context.md`);
 - the fallback task title, the user's first prompt (see "Where the task title comes from" in
   `docs/product/session-titles.md`), is taken from the thread's first rollout when it is there, since a segment holds
   only what came after its cut;

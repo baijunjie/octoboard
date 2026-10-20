@@ -385,14 +385,14 @@ Project { id, console_id, host_id, name, path, default_agent?, source, remote_ur
           grok_session_model?, grok_session_effort?,
           trust_consent, pinned, tags: string[], description? }
 Session { id, agent, agent_session_id?, console_id, project_id?, host_id,
-          role: "console"|"project", origin: "console"|"user", title, terminal_title?, usage?: SessionUsage,
+          role: "console"|"project", origin: "console"|"user", title, terminal_title?, context?: SessionContext,
           observed_model?: string, observed_effort?: string, default_effort?: string,
           status: "starting"|"working"|"waiting_user"|"idle"|"interrupted"|"archived",
           background_tasks?: BackgroundTask[],   // only with status "idle"; absent when none
           has_conversation, bound_to?, colour?: "<family>", ordinal?,
           account_id?, config_dir?, model?: string|null, effort?: string|null, pinned, locked, started_at, ended_at? }
 BackgroundTask { id, type?, description? }
-SessionUsage { input_tokens, output_tokens, total_tokens, cached_input_tokens?, cache_write_input_tokens? }
+SessionContext { tokens, window?, used_percent? }
 Page    { id, console_session_id, html, anchor_message_id?, created_at }
 Settings  { auto_pull_repositories, auto_delete_unresumable_archives, auto_approve_session_requests, default_clone_dir, accounts: Account[],
             codex_default_approval_reviewer, claude_default_approval_mode,
@@ -435,15 +435,38 @@ by `session_upserted` and snapshots. Unsupported OSC commands and titles inside 
 raw terminal output is passed through unchanged. A repeated equal title causes no event. An older process cannot replace
 the title once a successor has been registered for the same session.
 
-`Session.usage` is the last valid cumulative token usage read from the agent's native records, persisted independently
-of other session changes and retained when archived or restarted. Missing usage means unknown, not zero. Input includes
-cached and cache-write input; the optional cache counts are subsets, and reasoning is already included in output. Clients
-must not add these subsets again. Native totals are used for Codex and Grok; Claude totals sum input, cache input and output
-once per native message id, including internal agents stored under that parent session's own `subagents` directory.
-Codex reads `event_msg.payload.info.total_token_usage` on `token_count` records; Grok reads the persisted `usage.json`
-ledger's `session` totals (the same ledger exposed by `grok usage`). These are usage counts, not current context size or
-billing estimates. Inherited usage follows each agent's own resume/fork records. A change of native conversation id clears
-the old usage; switching accounts with the same conversation preserves it.
+`Session.context` is the session's current context size, read from the agent's native records: `tokens` is how much the
+main conversation's latest request carried, a gauge of whether continuing the session is getting expensive. It is not
+a cumulative usage count or a billing figure, and subagents and side calls (title generation, summaries, classifiers)
+never count. It is persisted independently of other session changes and retained when archived or restarted, and it
+falls again after a compaction, a revert or a rewind: there is no "never lower" guard. Missing `context` means unknown,
+not zero. `window` is the context-window limit, present only for an agent that records one (Codex, Grok Build); and
+`used_percent`, in whole percent from 0 to 100, is how much of it is in use by that agent's own formula, present only
+with `window`. The daemon computes it so that clients stay agent-agnostic. Claude Code has no `window` and no
+`used_percent`.
+
+- Claude Code reads the main transcript only, never the `subagents` directory. The value is the input of the last
+  `assistant` line that is not a sidechain, `<synthetic>`, `isUnmetered` or `isApiErrorMessage` line and carries input:
+  `input_tokens` plus `cache_creation_input_tokens` plus `cache_read_input_tokens`, with output left out. When
+  `message.usage.iterations` exists, its last `message` or `fallback_message` entry stands in for the top-level
+  usage. A `compact_boundary` line makes the context unknown until the next qualifying `assistant` line.
+- Codex reads the last `event_msg` `token_count` record whose `info` is not null: `tokens` is
+  `info.last_token_usage.total_tokens` and `window` is `info.model_context_window`. `used_percent` is 100 less the
+  percentage left that Codex's own `/status` shows, which counts a fixed 12,000-token baseline as neither used nor
+  available: left = round((window - 12000 - max(0, tokens - 12000)) / (window - 12000) * 100), so 18,999 tokens of a
+  475,000 window is 98% left and 2% used. A thread's head rollout after a revert has no `token_count` until its next
+  turn; until then the last one in the file it continues, before the point it continues from, is used, or failing that the nearest earlier file of the thread that has one. A forked thread
+  stays unknown until its first turn.
+- Grok Build reads the session directory's own `updates.jsonl`, not the `usage.json` ledger (whose totals include
+  subagent calls; the file only marks the session directory): `tokens` is the last `params._meta.totalTokens`. An
+  `auto_compact_completed` update gives the size after the compaction (`tokens_after`), and a later line that repeats
+  `tokens_before` is ignored. `window` is `contextWindowTokens` of the directory's `signals.json`, and `used_percent`
+  is `floor(tokens / window * 100)`, as Grok's own `contextWindowUsage`. A forked session copies its parent's files and
+  so starts with its parent's figure.
+
+A change of native conversation id clears the old context; switching accounts with the same conversation preserves it.
+The store drops the cumulative `usage` that earlier versions kept and reads the records again, so an archived session
+gets its final context size once from what remains of its records.
 
 `Session.observed_model` and `Session.observed_effort` are the model and reasoning effort the agent's own records show
 the session running with, in the agent's spelling; they are not `model` and `effort`, which are the launch overrides.
@@ -453,7 +476,7 @@ Claude reads the `message.model` and the top-level `effort` of the main transcri
 lines and the `<synthetic>` model, and never the subagent transcripts, which run other models. Codex reads
 `payload.model` and `payload.effort` of `turn_context` records. Grok reads the summary file's `current_model_id` and
 `reasoning_effort`, the configured ids rather than the ones a request was served by. They are stored and collected like
-`usage`, retained when archived, and cleared with it when the native conversation id changes.
+`context`, retained when archived, and cleared with it when the native conversation id changes.
 
 `Session.default_effort` is the reasoning effort the agent runs `observed_model` at by itself, present only where the
 records name that model but no effort and the agent's own catalogue gives the model a default. Only Codex produces it: a
@@ -486,12 +509,12 @@ time the session is idle. An idle session with tasks takes messages like any idl
 say that its work is not over.
 
 One daemon collector checks live sources at a one-second interval, reading only newly completed JSONL lines and skipping
-unchanged ledgers. Updates appear when the agent writes its own usage, which may be after a model call or turn completes;
+unchanged files. Updates appear when the agent writes its own record, which may be after a model call or turn completes;
 streaming tokens are not estimated. Existing archived records are read once at daemon start if still available, and a live
-session gets a final scan after its process exits. Missing, malformed or unsupported data leaves the last valid total intact.
+session gets a final scan after its process exits. Missing, malformed or unsupported data leaves the last valid context intact.
 Filesystem work runs on one blocking worker, source paths are indexed once per account in a pass, line parsing is capped at
-8 MiB per record, and changed totals commit in one transaction before `session_upserted` events. Source identity is checked
-again under the store lock so a stale scan cannot write a previous conversation's usage after a resume or account switch.
+8 MiB per record, and changed contexts commit in one transaction before `session_upserted` events. Source identity is checked
+again under the store lock so a stale scan cannot write a previous conversation's context after a resume or account switch.
 
 `Session.origin` is `console` for a session started by a session's `new_session` tool (a console session, or a
 project session that is unbound or a lead session) and `user` for one the user opened, or that the user approved through

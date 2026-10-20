@@ -14,7 +14,7 @@ const archived = Array.from({ length: 70 }, (_, i) =>
     ...(i === 0 ? { terminal_title: "Explain the differences between the three galleries" } : i === 1 ? { terminal_title: "Review a very long archived agent task title and preserve its original session name" } : {}),
     started_at: minutesAgo(120 + i * 400),
     ended_at: minutesAgo(20 + i * 400),
-    ...(i === 0 ? { usage: { input_tokens: 1_280_000, output_tokens: 48_321, cached_input_tokens: 1_100_000, total_tokens: 1_328_321 } } : i === 1 ? { usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 } } : {}),
+    ...(i === 0 ? { context: { tokens: 428_771 } } : i === 1 ? { context: { tokens: 0 } } : {}),
   }),
 );
 const consoleSessions = Array.from({ length: 8 }, (_, i) =>
@@ -22,7 +22,7 @@ const consoleSessions = Array.from({ length: 8 }, (_, i) =>
     ...(i === 0 ? { terminal_title: "Coordinate the search service release" } : i === 1 ? { terminal_title: "Review release readiness across projects" } : {}),
     started_at: minutesAgo(60 * (i + 2)),
     ended_at: minutesAgo(60 * (i + 1)),
-    ...(i === 0 ? { usage: { input_tokens: 180_000, output_tokens: 12_345, cached_input_tokens: 120_000, cache_write_input_tokens: 25_000, total_tokens: 192_345 } } : {}),
+    ...(i === 0 ? { context: { tokens: 192_345 } } : {}),
   }),
 );
 
@@ -49,11 +49,11 @@ export const boundArchived = Array.from({ length: 3 }, (_, i) =>
 export const otherConsoleSession = sessionOf("s-other-console", console_.id, undefined, "Hub 2", "idle", { colour: "lime" });
 export const otherOwnerArchived = sessionOf("s-other-bound", console_.id, project.id, "Archived session bound elsewhere", "archived", {
   bound_to: otherConsoleSession.id,
-  usage: { input_tokens: 2_450_000, output_tokens: 75_320, cached_input_tokens: 2_100_000, cache_write_input_tokens: 250_000, total_tokens: 2_525_320 },
+  context: { tokens: 846_209 },
   ended_at: minutesAgo(5),
 });
 export const unboundArchived = sessionOf("s-unbound-archived", console_.id, project.id, "Unbound archived session", "archived", {
-  usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+  context: { tokens: 0 },
   ended_at: minutesAgo(5),
 });
 
@@ -62,7 +62,7 @@ export const unboundArchived = sessionOf("s-unbound-archived", console_.id, proj
 // `ArchiveView.test.tsx`, as the sessions above are.
 export const archivedLead = sessionOf("s-lead-archived", console_.id, project.id, "Release lead session", "archived", {
   bound_to: boundConsoleSession.id,
-  usage: { input_tokens: 180_000, output_tokens: 12_345, cached_input_tokens: 120_000, total_tokens: 192_345 },
+  context: { tokens: 192_345 },
   ended_at: minutesAgo(8),
 });
 export const underArchivedLead = Array.from({ length: 2 }, (_, i) =>
@@ -202,7 +202,7 @@ export const archiveScenarios: Scenario[] = [
     category: "normal",
     title: "Project archive with live and archived owners",
     state: archiveState,
-    description: "The full archive shows each last active task title beside the original session name, the archived lead's children nested under it and the archived child of the active lead as a standalone row. A compact usage chip follows the agent name, hiding zero and absent totals; only dates sit on the right, archived above created. Each row is a button. Hover or Tab to it to compare its background and focus ring with the Reopen and Delete fills. The archived lead is the selected session. Pressing another row closes the archive and shows that session's history. Delete an entry or a nested child to watch the rows slide into place, then close the archive and reopen it through the project menu to review both transitions.",
+    description: "The full archive shows each last active task title beside the original session name, the archived lead's children nested under it and the archived child of the active lead as a standalone row. A compact context-size chip follows the agent name, hidden for a zero or absent size; only dates sit on the right, archived above created. Each row is a button. Hover or Tab to it to compare its background and focus ring with the Reopen and Delete fills. The archived lead is the selected session. Pressing another row closes the archive and shows that session's history. Delete an entry or a nested child to watch the rows slide into place, then close the archive and reopen it through the project menu to review both transitions.",
     steps: [
       // Selecting the archived lead from the menu, then opening the full archive, marks its row.
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: boundProject.name })),
@@ -219,7 +219,7 @@ export const archiveScenarios: Scenario[] = [
     category: "normal",
     title: "Project archive, many entries",
     state: archiveState,
-    description: "Seventy entries are loaded thirty at a time; the newest keep their last active task titles (one of them long) and the first two show usage chips. Rows offer Reopen and Delete, without lock controls. Delete an entry: it fades out to the right by a quarter of its own width over 300ms while the remaining rows slide into place, and the reduced-motion preference keeps the change immediate.",
+    description: "Seventy entries are loaded thirty at a time; the newest keep their last active task titles (one of them long) and the first shows a context-size chip and the second, whose size is zero, none. Rows offer Reopen and Delete, without lock controls. Delete an entry: it fades out to the right by a quarter of its own width over 300ms while the remaining rows slide into place, and the reduced-motion preference keeps the change immediate.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),

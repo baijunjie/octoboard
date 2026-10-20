@@ -520,7 +520,7 @@ fn session(id: &str, agent: Agent, role: Role, project_id: Option<&str>) -> Sess
         record_titles: Default::default(),
         background_tasks: Vec::new(),
         default_effort: None,
-        usage: None,
+        context: None,
         observed_model: None,
         observed_effort: None,
         model: None,

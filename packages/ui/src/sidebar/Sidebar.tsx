@@ -16,13 +16,13 @@ import { useShallow } from "zustand/react/shallow";
 import { noAgentState } from "../agents";
 import { ActionMenu } from "../components/ActionMenu";
 import { ActivityMarker } from "../components/ActivityMarker";
-import { AgentIcon } from "../components/AgentIcon";
+import { SessionAgentIcon } from "../components/SessionAgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { handFocusOff } from "../components/handFocusOff";
 import { PATH_VAR_PARAMS } from "../components/literalParams";
 import { RowControls, RowIconGroup, RowIconSlot } from "../components/RowControls";
 import { FadedScroller } from "../components/scrollFade";
-import { hasVisibleUsage, SessionUsageLabel } from "../components/SessionMetadata";
+import { hasVisibleContext, SessionContextLabel } from "../components/SessionMetadata";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { StatusIcon } from "../components/StatusIcon";
 import type { NewSessionRequest } from "../dialogs/dialogRequest";
@@ -35,7 +35,7 @@ import { COLUMN_EASE_CLASS, columnSpan, isDockEasing, usePaneDockMotion, type Do
 import type { PanePeek } from "../layout/usePaneToggles";
 import { effectiveTags, matchesFilter, tagVocabulary } from "../projectFiltering";
 import type { Console, Project, Session } from "../protocol";
-import { activityLabelKey, sessionAgentLabel, sessionAriaLabel, sessionDisplayTitle, sessionStatusKind } from "../sessionLabel";
+import { activityLabelKey, sessionAriaLabel, sessionDisplayTitle, sessionStatusKind } from "../sessionLabel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 import { useDaemonStore } from "../store";
 import { BindingBadge } from "./BindingBadge";
@@ -867,17 +867,17 @@ const SessionRow = memo(function SessionRow({
   return (
     <TreeRow
       ref={rowRef}
-      describedBy={hasVisibleUsage(session.usage) ? metadataId : undefined}
+      describedBy={hasVisibleContext(session.context) ? metadataId : undefined}
       ariaLabel={sessionAriaLabel(t, language, session, accounts, owner, defaultNames)}
       selected={selected}
       locked={session.locked}
       onActivate={() => handlers.onSelectSession(session)}
     >
       <StatusIcon status={sessionStatusKind(session)} decorative withTooltip />
-      <AgentIcon agent={session.agent} tooltip={sessionAgentLabel(t, session, accounts, defaultNames)} />
+      <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} />
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <RowLabel title={sessionDisplayTitle(t, session)} className="min-w-0">{sessionDisplayTitle(t, session)}</RowLabel>
-        {hasVisibleUsage(session.usage) && <span id={metadataId} className="shrink-0"><SessionUsageLabel usage={session.usage} /></span>}
+        {hasVisibleContext(session.context) && <span id={metadataId} className="shrink-0"><SessionContextLabel context={session.context} /></span>}
       </div>
       <RowControls
         fixed={badgeOwner?.colour || session.pinned || session.locked ? (

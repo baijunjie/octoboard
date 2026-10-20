@@ -875,7 +875,7 @@ pub(crate) fn bare_session(id: &str, role: Role) -> Session {
         record_titles: Default::default(),
         background_tasks: Vec::new(),
         default_effort: None,
-        usage: None,
+        context: None,
         observed_model: None,
         observed_effort: None,
         model: None,
@@ -937,11 +937,10 @@ impl CodexChain {
 
 /// Writes the chain of thread `thread` into `home`, compressed the way Codex does an old rollout
 /// when `compressed`. Each file holds a prompt of its own (`first prompt`, `middle prompt`, `head
-/// prompt`) and the thread's running token total as of its end (100, 200, 300 tokens), which
-/// carries on from file to file as Codex's does. Each file but the head goes on past the point the
-/// next continues from, with a prompt (`reverted turn A`, `reverted turn B`) that is not part of
-/// the conversation as it stands. The head is backdated, so a reader that took the file written
-/// last would pick another one.
+/// prompt`) and the thread's context size as of its end (100, 200, 300 tokens). Each file but the
+/// head goes on past the point the next continues from, with a prompt (`reverted turn A`,
+/// `reverted turn B`) that is not part of the conversation as it stands. The head is backdated,
+/// so a reader that took the file written last would pick another one.
 pub(crate) fn codex_chain(home: &Path, thread: &str, compressed: bool) -> CodexChain {
     let suffix = if compressed { ".jsonl.zst" } else { ".jsonl" };
     let path = |day: &str, time: &str, name: &str| {
@@ -976,6 +975,8 @@ pub(crate) fn codex_chain(home: &Path, thread: &str, compressed: bool) -> CodexC
                 "message":later,"images":[],"local_images":[],"text_elements":[]}}),
             serde_json::json!({"type":"event_msg","payload":{"type":"token_count","info":{
                 "total_token_usage":{"input_tokens":total,"cached_input_tokens":0,
+                    "output_tokens":0,"reasoning_output_tokens":0,"total_tokens":total},
+                "last_token_usage":{"input_tokens":total,"cached_input_tokens":0,
                     "output_tokens":0,"reasoning_output_tokens":0,"total_tokens":total}}}}),
         ];
         lines.map(|line| line.to_string() + "\n")

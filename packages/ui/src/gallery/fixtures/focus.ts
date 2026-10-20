@@ -1,5 +1,5 @@
 import { AGENT_LABEL } from "../../agents";
-import type { Session, SessionUsage } from "../../protocol";
+import type { Session, SessionContext } from "../../protocol";
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
 import { ALL_AGENTS, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState } from "./builders";
@@ -36,16 +36,16 @@ const settings = {
 // switch strip leaves out. For the strip's three kinds of activity: `hub1` waits through `s-2`, `hub2` is
 // working itself and `hub3` works through `s-3d` (in `consoleFocusState`, idle with a watcher still running),
 // while `hub4` has nothing going on.
-const lead = sessionOf("s-lead", console_.id, project.id, "Rework the result ranking", "idle", { bound_to: hub1.id, account_id: "a-work", terminal_title: "Compare ranking strategies", usage: { input_tokens: 2_450_000, output_tokens: 75_320, cached_input_tokens: 2_100_000, total_tokens: 2_525_320 } });
+const lead = sessionOf("s-lead", console_.id, project.id, "Rework the result ranking", "idle", { bound_to: hub1.id, account_id: "a-work", terminal_title: "Compare ranking strategies", context: { tokens: 846_209 } });
 const sessions = [
   hub1,
   hub2,
   hub3,
   hub4,
   sessionOf("s-console-old", console_.id, undefined, "Archived console session", "archived", { colour: "cyan", started_at: minutesAgo(60 * 25), ended_at: minutesAgo(60 * 24) }),
-  sessionOf("s-1", console_.id, project.id, "Add idempotency keys", "working", { started_at: minutesAgo(3), pinned: true, bound_to: hub1.id, account_id: "a-work", terminal_title: "Prevent duplicate API requests", usage: { input_tokens: 184_320, output_tokens: 16_384, cached_input_tokens: 147_456, cache_write_input_tokens: 8_192, total_tokens: 200_704 } }),
+  sessionOf("s-1", console_.id, project.id, "Add idempotency keys", "working", { started_at: minutesAgo(3), pinned: true, bound_to: hub1.id, account_id: "a-work", terminal_title: "Prevent duplicate API requests", context: { tokens: 200_704 } }),
   sessionOf("s-2", console_.id, project.id, "Fix the rounding of partial results", "waiting_user", { bound_to: hub1.id }),
-  sessionOf("s-3", console_.id, project.id, "Write the migration", "idle", { terminal_title: "Plan the database migration", started_at: minutesAgo(180), background_tasks: [{ id: "task-migration", type: "shell", description: "cargo watch -x check" }], usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 } }),
+  sessionOf("s-3", console_.id, project.id, "Write the migration", "idle", { terminal_title: "Plan the database migration", started_at: minutesAgo(180), background_tasks: [{ id: "task-migration", type: "shell", description: "cargo watch -x check" }], context: { tokens: 0 } }),
   sessionOf("s-3a", console_.id, project.id, "Check the index sizes", "interrupted", { bound_to: "s-3" }),
   lead,
   sessionOf("s-lead-1", console_.id, project.id, "Chase the flaky test", "working", { bound_to: lead.id, started_at: minutesAgo(5) }),
@@ -152,7 +152,7 @@ const scrollingFocusState = {
 // Archive-only views keep the preview boundary and heading counts visible together. The
 // ten-root boundary has no hidden children; the eleven-root overflow also has two hidden children.
 const previewHub = sessionOf("s-preview-hub", console_.id, undefined, "Hub", "idle", { colour: "teal" });
-const previewLead = sessionOf("s-preview-lead", console_.id, emptyProject.id, "Archived lead session", "archived", { bound_to: previewHub.id, ended_at: minutesAgo(8), usage: { input_tokens: 184_320, output_tokens: 16_384, total_tokens: 200_704 } });
+const previewLead = sessionOf("s-preview-lead", console_.id, emptyProject.id, "Archived lead session", "archived", { bound_to: previewHub.id, ended_at: minutesAgo(8), context: { tokens: 200_704 } });
 function archivePreviewState(count: 10 | 11, includeUnused = false) {
   return snapshotState({
     consoles: [console_],
@@ -163,7 +163,7 @@ function archivePreviewState(count: 10 | 11, includeUnused = false) {
       ...Array.from({ length: count === 11 ? 2 : 0 }, (_, i) => sessionOf(`s-preview-child-${i}`, console_.id, emptyProject.id, `Session ${i + 1} of the archived lead`, "archived", { bound_to: previewLead.id, agent: i === 1 ? "codex" : "claude", ended_at: minutesAgo(2 + i * 3) })),
       ...Array.from({ length: count - 1 }, (_, i) => {
         const unused = includeUnused && i === 2;
-        return sessionOf(`s-preview-${i}`, console_.id, emptyProject.id, unused ? "Unused archived draft" : (i === 0 ? "A completed search investigation with a long archived preview title" : i === 1 ? "A completed search investigation whose long archived title scrolls only when hovering the text" : `Bound archived session ${i + 1}`), "archived", { bound_to: unused ? undefined : previewHub.id, has_conversation: !unused, ended_at: minutesAgo(10 + i * 5), ...(i === 0 ? { usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 } } : {}) });
+        return sessionOf(`s-preview-${i}`, console_.id, emptyProject.id, unused ? "Unused archived draft" : (i === 0 ? "A completed search investigation with a long archived preview title" : i === 1 ? "A completed search investigation whose long archived title scrolls only when hovering the text" : `Bound archived session ${i + 1}`), "archived", { bound_to: unused ? undefined : previewHub.id, has_conversation: !unused, ended_at: minutesAgo(10 + i * 5), ...(i === 0 ? { context: { tokens: 0 } } : {}) });
       }),
     ],
   });
@@ -209,21 +209,23 @@ const combinedState = {
   }])),
 };
 
-// The token count of "Add idempotency keys", as an agent that reports no cache would leave it.
-const withoutCache = (usage: SessionUsage): SessionUsage => {
-  const { cached_input_tokens: _cached, cache_write_input_tokens: _written, ...counts } = usage;
-  return counts;
-};
-const uncachedUsageState = {
-  ...scrollingFocusState,
-  sessions: new Map([...scrollingFocusState.sessions].map(([id, session]) => [id, id === "s-1" ? { ...session, usage: session.usage && withoutCache(session.usage) } : session])),
+// The account "Add idempotency keys" ran under is no longer stored, so its tooltip falls back to the
+// directory the session recorded, a path far longer than the tooltip is wide.
+const REMOVED_ACCOUNT_DIR = "/Users/dev/.claude-accounts/production-release-coordination-and-regression-review-account";
+const removedAccountState = {
+  ...combinedState,
+  sessions: new Map([...combinedState.sessions].map(([id, session]) => [id, id === "s-1" ? { ...session, account_id: "a-removed", config_dir: REMOVED_ACCOUNT_DIR } : session])),
 };
 
-// A single recorded token exercises the tooltip heading's singular form.
-const singleTokenUsageState = {
+// "Add idempotency keys" is a Claude session, whose context size never comes with a window. The tooltip
+// that names a limit is about a Codex session, which always reports a window with its used percentage.
+const withContext = (context: SessionContext, codex = false) => ({
   ...scrollingFocusState,
-  sessions: new Map([...scrollingFocusState.sessions].map(([id, session]) => [id, id === "s-1" ? { ...session, usage: { input_tokens: 1, output_tokens: 0, total_tokens: 1 } } : session])),
-};
+  sessions: new Map([...scrollingFocusState.sessions].map(([id, session]) => [id, id === "s-1" ? { ...session, ...(codex ? { agent: "codex" as const, account_id: undefined } : {}), context } : session])),
+});
+const limitContextState = withContext({ tokens: 200_704, window: 475_000, used_percent: 41 }, true);
+// A single token exercises the heading's singular form.
+const singleTokenContextState = withContext({ tokens: 1 });
 
 // Project focus also shows a newer unbound foreground session behind the older migration watcher.
 const runningInBackgroundState = {
@@ -245,8 +247,8 @@ const hierarchyState = {
         : id === "s-3" ? { ...session, pinned: true }
           : id === "s-2" ? { ...session, terminal_title: "Review search result accuracy and verify long session row titles scroll only while hovering their text" }
             : session;
-      const showsUsage = [hub1.id, longHub.id, "s-lead-1", "s-2"].includes(id);
-      return [id, showsUsage ? { ...row, usage: lead.usage } : row] as const;
+      const hasContext = [hub1.id, longHub.id, "s-lead-1", "s-2"].includes(id);
+      return [id, hasContext ? { ...row, context: lead.context } : row] as const;
     }),
     // Locking also protects an unused session that would otherwise offer immediate deletion.
     ["s-unused", sessionOf("s-unused", console_.id, project.id, "Draft the release notes", "idle", { has_conversation: false, locked: true })] as const,
@@ -265,7 +267,7 @@ const unusedBoundSessions = [
 // No native records exist for the unused bound sessions.
 const unusedBoundRecords = Object.fromEntries(unusedBoundSessions.map((session) => [session.id, "absent" as const]));
 
-// `hub1`'s own card in its focus mode: locked, with a token total beside its agent. `s-1` is locked too.
+// `hub1`'s own card in its focus mode: locked, with a context-size chip beside its agent. `s-1` is locked too.
 const consoleFocusState = {
   ...scrollingFocusState,
   sessions: new Map([
@@ -273,7 +275,7 @@ const consoleFocusState = {
       id,
       // `hub3`'s only bound session is idle with a watcher still running, which counts as work.
       id === "s-3d" ? { ...session, status: "idle" as const, background_tasks: [{ id: "task-watch", type: "shell", description: "cargo watch -x test" }] }
-        : id === hub1.id ? { ...session, locked: true, usage: { input_tokens: 1_240_000, output_tokens: 48_000, cached_input_tokens: 980_000, total_tokens: 1_288_000 } }
+        : id === hub1.id ? { ...session, locked: true, context: { tokens: 612_480 } }
           : id === "s-1" ? { ...session, locked: true }
             : session,
     ] as const),
@@ -290,7 +292,7 @@ export const focusScenarios: Scenario[] = [
     state: hierarchyState,
     sessionRecords: { "s-unused": "absent" },
     preferences: { sidebarWidth: 280, sidebarConsole: console_.id },
-    description: "At the sidebar’s 280px minimum width, usage chips follow console, project and nested session titles, staying visible beside long clipped titles; zero and missing totals leave no chip. Hover a chip for its exact total and cache breakdown. The console header keeps New console session immediately before its actions menu. Scroll the sidebar: Console sessions stays pinned until Projects pushes it away, then Projects and its controls stay above the fade. Rounded branches join each project session to its nested sessions and end at the last child. Binding dots and pins stay visible while action menus hide. Hover or focus a row to compare the evenly spaced controls, then unpin a session to see the remaining controls close together. An Archive button precedes the menu only on a session that archives without confirmation: idle or interrupted, with no unarchived session bound under it, like Rework the retry loop. The pinned, locked Profile the slow query shows a persistent Unlock icon without a lock border, and its menu offers Unlock with Archive disabled. The unused but locked Draft the release notes has no Delete shortcut, and its menu offers Unlock with Delete disabled. Set Modifier to Held to see the console header's and each project row's new-session buttons as the bolt that creates with defaults.",
+    description: "At the sidebar’s 280px minimum width, context-size chips follow console, project and nested session titles, staying visible beside long clipped titles; a zero or missing size leaves no chip. Hover a chip for its heading with the exact count. The console header keeps New console session immediately before its actions menu. Scroll the sidebar: Console sessions stays pinned until Projects pushes it away, then Projects and its controls stay above the fade. Rounded branches join each project session to its nested sessions and end at the last child. Binding dots and pins stay visible while action menus hide. Hover or focus a row to compare the evenly spaced controls, then unpin a session to see the remaining controls close together. An Archive button precedes the menu only on a session that archives without confirmation: idle or interrupted, with no unarchived session bound under it, like Rework the retry loop. The pinned, locked Profile the slow query shows a persistent Unlock icon without a lock border, and its menu offers Unlock with Archive disabled. The unused but locked Draft the release notes has no Delete shortcut, and its menu offers Unlock with Delete disabled. Set Modifier to Held to see the console header's and each project row's new-session buttons as the bolt that creates with defaults.",
   },
   {
     id: "focus-project",
@@ -312,7 +314,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project focus including console sessions",
     state: combinedState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}`, projectFocusIncludeConsoleSessions: true },
-    description: "The metadata line shows the agent's mark, the model and effort on its left, and a compact usage chip and creation age on its right in the same muted colour. Zero totals and missing native records omit the chip without adding a row. The model and effort, not the agent's name, follow the mark: Add idempotency keys reads Opus 5.5 · high, the Codex session under Rework the result ranking gpt-6.1-sol · xhigh, Watch the ranking build (also Codex, its records naming a model but no effort) gpt-6.1-sol · medium rather than Default, Document the retry policy (Grok) grok-4.7 · high, and Rework the retry loop Haiku 4.5 with a Default effort. Write the migration follows the project's own setting, Sonnet · medium, as do the other cards left unchanged; Check the index sizes, launched with the agent's defaults, reads Default model. Bound cards keep status, owner and agent marks in one column, with owner badges before long single-line titles. Hover a badge for the owner's name. Titles scroll only when their text is hovered, and titles without a badge start at the content edge. Nested cards inherit their owner's colour. Rounded branches connect the single child under Write the migration and the three under Rework the result ranking. A vertical rail crosses the card gaps and stops at the last child's centre, with none beside top-level cards. Arabic mirrors the branches. Pinned cards come first, then Waiting for you, Awaiting instructions, Running in background, Working and Interrupted. The older migration watcher precedes the newer Document the retry policy, while pinned Add idempotency keys stays above the unpinned cards. Under Rework the result ranking, the older Watch the ranking build precedes the newer Chase the flaky test.",
+    description: "The metadata line shows the agent's mark, the model and effort on its left, and a compact context-size chip, a grey pill (80% foreground on a light tint with a hairline ring), and the creation age on its right. A zero or missing context size omits the chip without adding a row. The model and effort, not the agent's name, follow the mark: Add idempotency keys reads Opus 5.5 · high, the Codex session under Rework the result ranking gpt-6.1-sol · xhigh, Watch the ranking build (also Codex, its records naming a model but no effort) gpt-6.1-sol · medium rather than Default, Document the retry policy (Grok) grok-4.7 · high, and Rework the retry loop Haiku 4.5 with a Default effort. Write the migration follows the project's own setting, Sonnet · medium, as do the other cards left unchanged; Check the index sizes, launched with the agent's defaults, reads Default model. Bound cards keep status, owner and agent marks in one column, with owner badges before long single-line titles. Hover a badge for the owner's name. Titles scroll only when their text is hovered, and titles without a badge start at the content edge. Nested cards inherit their owner's colour. Rounded branches connect the single child under Write the migration and the three under Rework the result ranking. A vertical rail crosses the card gaps and stops at the last child's centre, with none beside top-level cards. Arabic mirrors the branches. Pinned cards come first, then Waiting for you, Awaiting instructions, Running in background, Working and Interrupted. The older migration watcher precedes the newer Document the retry policy, while pinned Add idempotency keys stays above the unpinned cards. Under Rework the result ranking, the older Watch the ranking build precedes the newer Chase the flaky test.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Compare ranking strategies", name: "Rework the result ranking" }))),
     ],
@@ -322,10 +324,20 @@ export const focusScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Agent mark tooltip",
-    description: "The pointer rests on the Claude Code mark of Add idempotency keys. The tooltip names the agent and, in brackets, the account the session runs under: Claude Code (Work).",
+    description: "The pointer rests on the Claude Code mark of Add idempotency keys. The tooltip names the agent and, in a grey badge after it, the account the session runs under: Claude Code and Work.",
     state: combinedState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}`, projectFocusIncludeConsoleSessions: true },
-    steps: [(ui) => ui.hoverSessionAgent(addIdempotencyKeys(ui), ui.t("session.agentAccount", { agent: AGENT_LABEL.claude, account: "Work" }))],
+    steps: [(ui) => ui.hoverSessionAgent(addIdempotencyKeys(ui), AGENT_LABEL.claude, "Work")],
+  },
+  {
+    id: "focus-agent-tooltip-removed-account",
+    group: GROUP,
+    category: "normal",
+    title: "Agent mark tooltip with a removed account",
+    description: "The pointer rests on the Claude Code mark of Add idempotency keys, whose account was removed. The tooltip names the agent and, in a grey badge after it, the directory the session recorded; the long path breaks onto further lines inside the badge instead of running past the tooltip's edge.",
+    state: removedAccountState,
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}`, projectFocusIncludeConsoleSessions: true },
+    steps: [(ui) => ui.hoverSessionAgent(addIdempotencyKeys(ui), AGENT_LABEL.claude, REMOVED_ACCOUNT_DIR)],
   },
   {
     id: "focus-console-session",
@@ -335,7 +347,7 @@ export const focusScenarios: Scenario[] = [
     state: consoleFocusState,
     sessionRecords: unusedBoundRecords,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
-    description: "The header holds only the back button, the console name Main as a single-line heading and the plus menu; Hub's title is on the card below, not in the header. Below the switch strip, fixed above the scrolling list, Hub's own card is not selected: its status, a colour dot, its agent, creation time and 1.3M token count, and its persistent Unlock control before the actions menu, whose items have no Pin or Focus mode. The pinned Add idempotency keys card has a persistent Unlock control too, without lock borders; unlocking either keeps their order. Draft the changelog and Start the benchmark run are both bound to Hub and were never used; the first was opened by the user, so its shortcut and menu offer Delete, while the second was started by an agent and keeps Archive. Within Rework the result ranking, the older Watch the ranking build sits after the waiting child and before the newer working Chase the flaky test. The pinned working Add idempotency keys stays above the waiting and background cards. The switch strip includes waiting, working and inactive sessions; hover markers for details. Hub 3's marker shows work although its only bound session, Document the retry policy, is idle with a test watcher still running. Set Modifier to Held to see the header plus menu and each project group's new-session button as the bolt; choosing a project from the menu then creates with defaults.",
+    description: "The header holds only the back button, the console name Main as a single-line heading and the plus menu; Hub's title is on the card below, not in the header. Below the switch strip, fixed above the scrolling list, Hub's own card is not selected: its status, a colour dot, its agent, creation time and 612K context-size chip, and its persistent Unlock control before the actions menu, whose items have no Pin or Focus mode. The pinned Add idempotency keys card has a persistent Unlock control too, without lock borders; unlocking either keeps their order. Draft the changelog and Start the benchmark run are both bound to Hub and were never used; the first was opened by the user, so its shortcut and menu offer Delete, while the second was started by an agent and keeps Archive. Within Rework the result ranking, the older Watch the ranking build sits after the waiting child and before the newer working Chase the flaky test. The pinned working Add idempotency keys stays above the waiting and background cards. The switch strip includes waiting, working and inactive sessions; hover markers for details. Hub 3's marker shows work although its only bound session, Document the retry policy, is idle with a test watcher still running. Set Modifier to Held to see the header plus menu and each project group's new-session button as the bolt; choosing a project from the menu then creates with defaults.",
     steps: [
       (ui) => ui.press(addIdempotencyKeys(ui)),
     ],
@@ -382,34 +394,34 @@ export const focusScenarios: Scenario[] = [
     ],
   },
   {
-    id: "focus-usage-tooltip",
+    id: "focus-context-tooltip",
     group: GROUP,
     category: "normal",
-    title: "Token usage tooltip",
-    description: "The pointer rests on Add idempotency keys' token count. The tooltip leads with the exact total (plural “tokens” in English), then a divider and a two-column table: muted labels at the start, figures aligned to the end (mirrored under right-to-left), Input and Output followed by Cached input and Cache write.",
+    title: "Context size tooltip",
+    description: "The pointer rests on the context-size chip of Add idempotency keys, a Claude session whose agent reports no window. The tooltip holds only its heading, Context 200,704 tokens (plural “tokens” in English), with no divider and no Limit row. Compare the chip's accessible name: one plain phrase, not the chip's compact number.",
     state: scrollingFocusState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
-    steps: [(ui) => ui.hoverSessionUsage(addIdempotencyKeys(ui))],
+    steps: [(ui) => ui.hoverSessionContext(addIdempotencyKeys(ui))],
   },
   {
-    id: "focus-usage-tooltip-single-token",
+    id: "focus-context-tooltip-limit",
     group: GROUP,
     category: "normal",
-    title: "Token usage tooltip, one token",
-    description: "The heading reads “1 token” in English, using the singular form; Chinese retains its usual token label. The table shows one input token and zero output tokens.",
-    state: singleTokenUsageState,
+    title: "Context size tooltip with a limit",
+    description: "The same chip on a Codex session, whose agent reports the window. Below the heading sits a divider and a Limit row, the muted label at the start and the value, 475,000 (41% used), aligned to the end (mirrored under right-to-left).",
+    state: limitContextState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
-    steps: [(ui) => ui.hoverSessionUsage(addIdempotencyKeys(ui))],
+    steps: [(ui) => ui.hoverSessionContext(addIdempotencyKeys(ui))],
   },
   {
-    id: "focus-usage-tooltip-uncached",
+    id: "focus-context-tooltip-single-token",
     group: GROUP,
     category: "normal",
-    title: "Token usage tooltip without cache",
-    description: "The same count for an agent that reports no cache: the table holds only Input and Output, with no empty rows for the cache entries.",
-    state: uncachedUsageState,
+    title: "Context size tooltip, one token",
+    description: "The chip reads just 1 and the heading “Context 1 token” in English, using the singular form; Chinese retains its usual token label. There is no divider and no Limit row.",
+    state: singleTokenContextState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
-    steps: [(ui) => ui.hoverSessionUsage(addIdempotencyKeys(ui))],
+    steps: [(ui) => ui.hoverSessionContext(addIdempotencyKeys(ui))],
   },
   {
     id: "focus-console-session-long",
@@ -437,7 +449,7 @@ export const focusScenarios: Scenario[] = [
     state: projectArchivePreviewTen,
     sessionRecords: { "s-preview-2": "absent" },
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}`, projectFocusIncludeConsoleSessions: true },
-    description: "The headings count zero live sessions and ten archived parents, all shown without View all; the Show all project sessions switch is absent even when its saved preference is on. Compact archive rows omit dates and show a usage chip only for positive totals. Hover or focus Unused archived draft to see its Delete shortcut before the menu: it has no conversation, so it deletes and moves any native records to the Trash without confirmation, while used rows have only their menu, where Delete still asks. Delete the unused draft or reopen a row, then archive it again: the remaining rows slide into place.",
+    description: "The headings count zero live sessions and ten archived parents, all shown without View all; the Show all project sessions switch is absent even when its saved preference is on. Compact archive rows omit dates and show a context-size chip only for a positive size. Hover or focus Unused archived draft to see its Delete shortcut before the menu: it has no conversation, so it deletes and moves any native records to the Trash without confirmation, while used rows have only their menu, where Delete still asks. Delete the unused draft or reopen a row, then archive it again: the remaining rows slide into place.",
   },
   {
     id: "focus-archived-session-menu",

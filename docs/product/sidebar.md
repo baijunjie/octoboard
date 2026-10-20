@@ -371,20 +371,21 @@ exits unsuccessfully. The refusal carries the reason as `detail`.
 A session row shows the session's status glyph (see "Session statuses" in `docs/product/sessions.md`), its agent's icon,
 its displayed title (see "Displayed names" in `docs/product/session-titles.md`), and its pin button when it is pinned
 (see "Pinning" below). Outside focus mode, every console and project session row, nested sessions included, shows
-native token usage immediately after its title when the total is positive (see "Native session usage" in
-`docs/product/session-usage.md`). The title clips and fades when space is short, keeping the usage chip visible.
-The row's accessible description carries the usage counts. A project session bound to a console session also
+its context-size chip immediately after its title when the context size is known and above zero (see "The
+context-size chip" in `docs/product/session-context.md`). The title clips and fades when space is short, keeping the
+context-size chip visible. The row's accessible description carries the context size. A project session bound to a console session also
 carries that console session's **binding badge**: a small dot in the console session's colour, whose tooltip names it
 (see "The binding badge" below); one bound to a project session carries none, since its row is listed under that
 session instead (see "Project rows" above), with the owner named in the row's own accessible name. A console session's
 own row carries no *binding* badge — what it shows there instead is its own colour (see "The binding badge" below).
 Selecting a row resumes it when it is interrupted; no menu item does that. The row shows its agent as an icon alone;
 wherever the agent is named in visible session metadata, its name appears without an account suffix. The agent's
-icon names the agent and the account the session runs under in its tooltip, the account in parentheses after the
-agent ("Claude Code (Work)"): the account's name, the default account's name for the agent's default account (the
+icon names the agent and the account the session runs under in its tooltip: the agent's name followed by the account
+as a small grey badge (the badge described in "Which agents the agent pickers list" in `docs/product/consoles.md`).
+The account is the account's name, the default account's name for the agent's default account (the
 name the user gave it, else **Default**; see "The default account" in `docs/product/agent-accounts.md`), or, for a
-removed account, the directory the session recorded. A removed account that recorded no directory leaves the agent's name
-alone. The tooltip shows on pointer hover only, and the icon adds no tab stop. It is also available on focus mode's
+removed account, the directory the session recorded. A long account name or directory wraps inside the tooltip rather
+than running past it. A removed account that recorded no directory leaves the agent's name alone, with no badge. The tooltip shows on pointer hover only, and the icon adds no tab stop. It is also available on focus mode's
 session cards and archived rows (see `docs/product/focus-mode.md`), the archive view's rows (see "The archive view" below),
 and sessions listed in a confirmation. Session rows, focus mode cards and the archive view's rows retain the account in
 their accessible names; confirmations provide the agent and account as hidden accessible text beside the icon. Its
@@ -686,8 +687,8 @@ scope and nesting are described below.
   the top bar's breadcrumb (see "The top bar" in `docs/product/window-layout.md`).
 - The list is in the order the sessions were archived, most recent first. It shows 30 rows and adds 30 more each time
   its end is scrolled into view. Each row shows the session's agent's icon, its title, and its agent's name,
-  followed by native token usage when its total is positive (see "Native session usage" in
-  `docs/product/session-usage.md`). At the trailing end, a metadata block shows only dates: the archive date first,
+  followed by its context-size chip when the context size is known and above zero (see "The context-size chip" in
+  `docs/product/session-context.md`). At the trailing end, a metadata block shows only dates: the archive date first,
   when known, then the creation date, each identified by its meaning. These are absolute dates with year, month, day,
   hour and minute, formatted in the current language and the client's local time zone. An unknown archive date is
   omitted; the creation date never stands in for it. Archive previews show no dates: submenu previews keep their compact title-only presentation, and focus

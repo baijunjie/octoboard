@@ -583,16 +583,18 @@ impl Project {
     }
 }
 
-/// Cumulative usage reported by the agent's own session record. Cache counts are subsets of input.
+/// How much the main conversation's latest request carried, as the agent's own session record
+/// shows it: a gauge of whether continuing the session is getting expensive, not a running total.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SessionUsage {
-    pub input_tokens: u64,
-    pub output_tokens: u64,
-    pub total_tokens: u64,
+pub struct SessionContext {
+    pub tokens: u64,
+    /// The context-window limit, for an agent that records one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cached_input_tokens: Option<u64>,
+    pub window: Option<u64>,
+    /// The share of the window in use, in whole percent, by the agent's own formula. Present only
+    /// together with `window`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cache_write_input_tokens: Option<u64>,
+    pub used_percent: Option<u8>,
 }
 
 /// One piece of work a session's agent left running in the background when its turn ended: a
@@ -628,9 +630,10 @@ pub struct Session {
     /// The titles the agent's own records give the session. Stored, never sent.
     #[serde(skip)]
     pub record_titles: crate::session_title::RecordTitles,
-    /// Last known native cumulative usage, retained after archiving. Absent until reported.
+    /// The session's last known context size, retained after archiving. Absent until reported,
+    /// and again after a compaction until the next request.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub usage: Option<SessionUsage>,
+    pub context: Option<SessionContext>,
     /// The model the agent's records show the session running with, as the agent spells it. Unlike
     /// `model`, which is the launch override, this is what was observed; absent until reported.
     #[serde(default, skip_serializing_if = "Option::is_none")]

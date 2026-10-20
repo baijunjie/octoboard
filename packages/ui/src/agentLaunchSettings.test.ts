@@ -23,12 +23,12 @@ describe("launchSettingOptions", () => {
   it("keeps a stored value that is no longer in the list, last and marked", () => {
     expect(launchSettingOptions(t, plain, "ultra")).toEqual([
       ...plain,
-      { value: "ultra", label: "ultra (not in the list)" },
+      { value: "ultra", label: "ultra", badge: "Not in the list" },
     ]);
   });
 
   it("offers the stored value alone when there is no list", () => {
-    expect(launchSettingOptions(t, [], "ultra")).toEqual([{ value: "ultra", label: "ultra (not in the list)" }]);
+    expect(launchSettingOptions(t, [], "ultra")).toEqual([{ value: "ultra", label: "ultra", badge: "Not in the list" }]);
   });
 });
 

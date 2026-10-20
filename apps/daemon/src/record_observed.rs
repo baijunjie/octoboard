@@ -1,6 +1,6 @@
 //! The model and reasoning effort an agent's own records show a session running with. Only the two
 //! values are kept. This module holds each agent's knowledge of which record says them and in which
-//! field; reading the records is the collector's business (`usage.rs`).
+//! field; reading the records is the collector's business (`record_collector.rs`).
 
 use serde_json::Value;
 

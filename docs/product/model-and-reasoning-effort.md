@@ -174,10 +174,10 @@ effort is shown as the agent spells it.
 The last record that names a model, or an effort, wins; a record that names neither leaves the last one known in place.
 Codex's turn context is the exception for the effort: it carries the effort its whole configuration resolved to and
 leaves it out when none sets one, so a turn context that names a model and no effort unsets an effort an earlier turn
-named. They are collected alongside native usage and as often (see "Native session usage" in
-`docs/product/session-usage.md`), kept through archiving and restarting Octoboard, and cleared when the session moves to
-a different native conversation, until the new one shows its own. They are reported on the session as `observed_model`
-and `observed_effort`, separate from the session's launch choices `model` and `effort`.
+named. They are collected alongside the context size and as often (see "When the context size refreshes" in
+`docs/product/session-context.md`), kept through archiving and restarting Octoboard, and cleared when the session moves
+to a different native conversation, until the new one shows its own. They are reported on the session as
+`observed_model` and `observed_effort`, separate from the session's launch choices `model` and `effort`.
 
 **The agent's own default level.** Where the records name the model a session runs but no effort, the level that model
 runs at by itself is worked out per agent:

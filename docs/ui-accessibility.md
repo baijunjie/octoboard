@@ -26,9 +26,13 @@ and the agent tabs in the console dialog's Advanced section keep their labels fu
 foreground colour instead of dimming. Preserve this shared visual treatment as an explicit product choice, while retaining the component's
 layout, selection and keyboard behaviour.
 
-An agent's "Not added" / "Not installed" status after its name is the shared `StatusBadge`: a muted-tint fill with a
-hairline ring, its text at 80% foreground so it keeps at least 4.5:1 on fields, dialogs and popovers, and a
-screen-reader-only comma between name and status. An agent row that cannot be picked is dimmed by its name taking the
+A status mark such as "Not added" or "Not installed", and any other qualifier after a name (a session's account in
+its agent mark's tooltip, "From the console", an inherited value, "Not in the list"), is a badge after the name, never
+parenthesised text in the name's own style. It is the shared `StatusBadge`: a muted-tint fill with a hairline ring, its
+text at 80% foreground so it keeps at least 4.5:1 on every surface it sits on (fields, dialogs, popovers, tooltips,
+sidebar rows and cards), and a screen-reader-only comma between name and qualifier. A user-typed value in it takes
+`dir="auto"` and a path `dir="ltr"`; where its room is bounded (a tooltip, a select trigger) it wraps or truncates
+instead of overflowing. The session context-size indicator is the same badge on its own, without the comma. An agent row that cannot be picked is dimmed by its name taking the
 secondary text colour (still at least 4.5:1) and its icon fading; the text is never faded below AA by opacity.
 
 A select option or menu item that cannot be chosen and says why (an account whose quota is used up) keeps the reason
@@ -497,7 +501,8 @@ being `aria-hidden` as well. The agent is read from the archive view's own rows 
 tooltip and the agent is written out beside it.
 
 **A tooltip is worded from the string that already names the mark**, not from one of its own: the same string where
-it names the mark on its own, so the two cannot drift apart; its own key only where the only string naming it folds
+it names the mark on its own, so the two cannot drift apart (a session's agent mark shows that string's two parts, the
+agent and its account, as text and a `StatusBadge`, reading the same once the badge's comma is spoken); its own key only where the only string naming it folds
 it into the name of what carries it ("{name}, a session is waiting for you"), since reusing that would make the
 tooltip repeat the row's visible name, and composing it out of a fragment is worse to translate.
 
@@ -605,7 +610,7 @@ Choose the chip size by its role, consistently across the UI:
 | Role | Size | Typography and geometry |
 | --- | --- | --- |
 | A value within a sentence, heading, label, description, validation error, tooltip or toast; also a single technical value displayed on its own line in application copy | `inherit` | The surrounding font size and line height, on the text baseline. Typically 12px in field errors or secondary descriptions, 14px in body copy and labels, and 16px in dialog headings. No fixed chip height. |
-| Dense metadata: project filter terms and session usage indicators | `xs` | 12px text, 16px line height and height, no vertical padding. |
+| Dense metadata: project filter terms | `xs` | 12px text, 16px line height and height, no vertical padding. |
 | Independent status, type or size metadata: agent availability, file-change status, staging state, file size, Git-directory markers and report-history indicators | `sm` | 12px text, 20px height, HeroUI's compact preset. This is the component default for independent metadata. |
 | Reserved presets, shown only in the component comparison; no current product use | `md`, `lg` | HeroUI's 24px and 28px heights respectively. Do not use them to enlarge values within copy. |
 
@@ -630,7 +635,6 @@ primary file-path row retain their shared path components, including their icons
 tooltips. Path input fields and source or Markdown content also retain their own layouts.
 
 Inline chips retain HeroUI's colours, soft fill and shape; the secondary hue is the shared purple extension.
-Session usage chips use the same muted text colour as their neighbouring metadata or compact archive title.
 `CodeBlock` uses the shared Typography wrapper for multi-line diagnostics. Outside an Alert, both default to neutral
 and may choose a colour. `TintedAlert` supplies `CodeToneContext`: default stays neutral, accent maps to primary, and
 success, warning and danger use their matching colours. The nearest status context takes precedence over an explicit

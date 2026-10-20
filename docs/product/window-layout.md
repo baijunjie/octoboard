@@ -68,7 +68,7 @@ theirs.
 **The lines that divide a pane's parts are grooves**: the line under every pane header, and the lines that divide
 parts and rows elsewhere in the window — under the project pane's filter bar, the Git mode's worktree selector bar and
 Compare's From and To row, above a note under a pane's list, between Settings' rows and sections, in the configuration
-import's lists, in the welcome screen's list of agents, and in the token-usage tooltip. On a display of 2× pixel density
+import's lists, in the welcome screen's list of agents, and in the context-size tooltip. On a display of 2× pixel density
 or more a groove is two 0.5 px lines, a dark one above a light one, so that it reads as pressed into the surface; below
 2× it is a single 1 px dark line. Either way it takes 1 px. In the light appearance, on a surface that is white or
 nearly so — a dialog such as Settings, or the archive view — the light line cannot show, and the groove reads as a

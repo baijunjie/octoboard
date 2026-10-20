@@ -38,6 +38,12 @@ function withoutIsolates(text: string): string {
   return text.replace(/[\u2066-\u2069]/g, "");
 }
 
+/** The text of a session agent mark's tooltip: the agent's name, then the account as a badge, whose
+ * comma only assistive technology reads (`StatusBadge`). */
+function agentTooltipText(agent: string, account: string | undefined): string {
+  return account === undefined ? agent : `${agent}, ${account}`;
+}
+
 /** The name a region or panel is given by `aria-labelledby` (the text of the element it names) or `aria-label`, with
  * bidi isolates removed and trimmed; `undefined` where it has neither. */
 function labelledNameOf(doc: Document, element: Element): string | undefined {
@@ -165,11 +171,11 @@ export interface Ui {
   /** Moves the pointer onto the agent icon of the session titled `title` in the open confirmation
    * dialog's callout list, and leaves it there, as `hoverIndicator` does: the list row's second
    * element child, after the status glyph. Fails while no dialog lists such a session, and also
-   * unless the tooltip open afterwards reads `tooltip`, the agent and account the icon should name: an
+   * unless the tooltip open afterwards names `agent` and, as a badge after it, `account`: an
    * icon drawn without a tooltip has no trigger to hover, so it is reported as not found, and a
    * tooltip left up from the status glyph beside it (hovered earlier, and never left) would
    * otherwise be taken for this one's. */
-  hoverCalloutAgent: (title: string, tooltip: string) => Promise<void>;
+  hoverCalloutAgent: (title: string, agent: string, account?: string) => Promise<void>;
   /** Moves the pointer onto the status glyph at the end of the top bar's breadcrumb and leaves it
    * there, as `hoverIndicator` does. The glyph's tooltip trigger is the one named `role="img"`
    * in the bar; fails while no session is selected. */
@@ -233,17 +239,17 @@ export interface Ui {
    * `status` that is not the one on screen. A badge that says "No commits yet" in visible text has
    * no tooltip, and fails here rather than hover the activity marker beside it. */
   hoverGitBadge: (status: GitStatus, over: "glyph" | "line", row?: Matcher) => Promise<void>;
-  /** Moves the pointer onto the token count of the session card or row named `row` and leaves it
-   * there, as `hoverIndicator` does, for the tooltip that breaks the usage down. The count is the
-   * `role="img"` trigger whose name carries the Input entry, which a card's status glyph does not,
-   * so a card or row with no count (usage hidden, or none reported) fails there, naming `row`. The
-   * step then fails if the tooltip that opens is not the usage table, one that has no Input entry. */
-  hoverSessionUsage: (row: Matcher) => Promise<void>;
+  /** Moves the pointer onto the context size of the session card or row named `row` and leaves it
+   * there, as `hoverIndicator` does, for the tooltip that gives it exactly. The size is the
+   * `role="img"` trigger whose name starts with the tooltip's "Context" heading, which a card's
+   * status glyph does not, so a card or row with no size (hidden, or none reported) fails there,
+   * naming `row`. The step then fails if the tooltip that opens does not carry that heading. */
+  hoverSessionContext: (row: Matcher) => Promise<void>;
   /** Moves the pointer onto the agent's mark of the focus mode card named `row` (`session(title)`)
-   * and leaves it there, as `hoverIndicator` does, for the tooltip `tooltip` that names the agent
-   * and the account. The mark is the card's last tooltip trigger drawn as a bare glyph; it fails
-   * if the tooltip that opens is any other. */
-  hoverSessionAgent: (row: Matcher, tooltip: string) => Promise<void>;
+   * and leaves it there, as `hoverIndicator` does, for the tooltip that names `agent` and, as a
+   * badge after it, `account` (none for a session that recorded no account). The mark is the card's
+   * last tooltip trigger drawn as a bare glyph; it fails if the tooltip that opens is any other. */
+  hoverSessionAgent: (row: Matcher, agent: string, account?: string) => Promise<void>;
   /** Moves the pointer onto the project filter's conditions on the Projects heading's line and
    * leaves it there, as `hoverIndicator` does, for the tooltip that carries the whole filter. The
    * strip is the box around the keyword and tag groups; it carries a tooltip only while it is
@@ -606,7 +612,8 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
         throw new Error(`The status glyph of ${title} has no tooltip: its last tooltip is ${shown ? `"${shown}"` : "none"}`);
       }
     },
-    async hoverCalloutAgent(title, tooltip) {
+    async hoverCalloutAgent(title, agent, account) {
+      const tooltip = agentTooltipText(agent, account);
       await hover(() => {
         const icon = calloutRow(title)?.children[1];
         return icon?.matches("[role=presentation]") ? (icon as HTMLElement) : undefined;
@@ -682,23 +689,22 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       target.dispatchEvent(new PointerEvent("pointerover", { ...init, relatedTarget: control }));
       await wait(TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS);
     },
-    async hoverSessionUsage(row) {
-      const entry = t("session.usage.entry", { label: t("session.usage.input"), tokens: "\0" }).split("\0")[0];
+    async hoverSessionContext(row) {
+      const heading = t("session.context.heading", { count: 2, tokens: "\0" }).split("\0")[0];
       await hover(
         () =>
           Array.from(find(row)?.querySelectorAll<HTMLElement>("[role=img]") ?? []).find((element) =>
-            withoutIsolates(element.getAttribute("aria-label") ?? "").includes(withoutIsolates(entry)),
+            withoutIsolates(element.getAttribute("aria-label") ?? "").includes(withoutIsolates(heading)),
           ),
-        `No session card or row matching ${String(row)} with a token count to hover`,
+        `No session card or row matching ${String(row)} with a context size to hover`,
       );
-      const shown = Array.from(doc.querySelector("[role=tooltip]")?.querySelectorAll("dt") ?? [], (term) => term.textContent);
-      if (!shown.includes(t("session.usage.input"))) {
-        throw new Error(
-          `The token count of ${String(row)} did not open the usage table, which has an ${t("session.usage.input")} entry: ${shown.length > 0 ? `its entries are ${shown.join(", ")}` : "no table"} is up`,
-        );
+      const shown = doc.querySelector("[role=tooltip]")?.textContent ?? "";
+      if (!withoutIsolates(shown).includes(withoutIsolates(heading))) {
+        throw new Error(`The context size of ${String(row)} did not open its tooltip, which starts with ${heading.trim()}: ${shown === "" ? "no tooltip" : shown} is up`);
       }
     },
-    async hoverSessionAgent(row, tooltip) {
+    async hoverSessionAgent(row, agent, account) {
+      const tooltip = agentTooltipText(agent, account);
       await hover(
         () =>
           Array.from(find(row)?.querySelectorAll<HTMLElement>("[role=presentation]") ?? [])

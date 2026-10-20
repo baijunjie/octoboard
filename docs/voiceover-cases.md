@@ -217,7 +217,7 @@ not a literal HTML serialization. PLAIN-1 and PLAIN-2 are hand-built regions and
 - **Location and state change.** The same picker, opened after removal. Down arrow twice moved Claude Code, Grok Build,
   then the retained Codex. The retained choice stayed selected and was not reselected.
 - **Mechanism.** Option name read on navigation. `packages/ui/src/dialogs/OptionSelect.tsx` (the list item with its
-  `textValue` set to the option label alone, `isDisabled` from the agent option, a child name and `StatusBadge`; the
+  `textValue` set to the option label, followed by ", " and the badge text when it has one, `isDisabled` from the agent option, a child name and `StatusBadge`; the
   select's `disabledBehavior` of selection, so a removed option can be navigated to but not chosen). No explicit option
   `aria-label` and no live region. That the child badge contributes to speech is a verified runtime outcome, not
   something `textValue` alone implies.

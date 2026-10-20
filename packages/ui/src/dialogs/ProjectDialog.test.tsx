@@ -165,7 +165,7 @@ it.each([
   if (!("default_agent" in sent)) expect(added).not.toHaveProperty("default_agent", expect.anything());
 });
 
-const PLACEHOLDER = "Inherit from console (the agent's own setting)";
+const PLACEHOLDER = "Inherit from console, The agent's own setting";
 const buttons = () => Array.from(document.body.querySelectorAll("button"));
 const buttonText = (text: string) => buttons().find((b) => b.textContent === text);
 const choose = (option: string) =>
@@ -233,7 +233,7 @@ it("shows an unset launch setting as its placeholder, and names what the account
   const pending = render(undefined, [work, personal]);
   await fillDirectory(pending);
   // The console refers to the first account.
-  expect(accountPicker()?.textContent).toContain("Work (from the console)");
+  expect(accountPicker()?.textContent).toContain("Work, From the console");
   await click(buttonText("Advanced"));
   expect(pickerNamed("Model").textContent).toContain(PLACEHOLDER);
   expect(pickerNamed("Reasoning effort").textContent).toContain(PLACEHOLDER);
@@ -275,7 +275,7 @@ it("sends only what changed when editing", async () => {
 it("sends an explicit null when a picker is returned to inherit or unset", async () => {
   const pending = render(stored, [work, personal]);
   await click(accountPicker());
-  await choose("Work (from the console)");
+  await choose("Work, From the console");
   await click(buttonText("Advanced"));
   await answerModels(pending);
   await click(clearButton("Model") ?? undefined);
@@ -292,7 +292,7 @@ it("lists inheriting the console's, the default account, then the named accounts
   render(undefined, [work, personal]);
   await click(accountPicker());
   expect(Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent)).toEqual([
-    "Work (from the console)",
+    "Work, From the console",
     "Default",
     "Work",
     "Personal",
@@ -300,8 +300,8 @@ it("lists inheriting the console's, the default account, then the named accounts
 });
 
 it.each([
-  ["inheriting", undefined, "Work (from the console)"],
-  ["inheriting, written out", { kind: "inherit" } as const, "Work (from the console)"],
+  ["inheriting", undefined, "Work, From the console"],
+  ["inheriting, written out", { kind: "inherit" } as const, "Work, From the console"],
   ["the default account", { kind: "default" } as const, "Default"],
   ["a named account", { kind: "account", id: "a-personal" } as const, "Personal"],
 ])("opens a project on %s showing it", async (_, stored, shown) => {
@@ -333,7 +333,7 @@ it("omits the account on create when it is left inheriting, even after being pic
   await click(accountPicker());
   await choose("Default");
   await click(accountPicker());
-  await choose("Work (from the console)");
+  await choose("Work, From the console");
   await click(buttonText("Add"));
   expect(sentOf(pending, "add_project")).not.toHaveProperty("claude_account_id");
 });
@@ -342,7 +342,7 @@ it.each([
   ["inheriting to the default account", undefined, "Default", { kind: "default" }],
   ["a named account to the default account", { kind: "account", id: "a-work" } as const, "Default", { kind: "default" }],
   ["the default account to a named account", { kind: "default" } as const, "Personal", { kind: "account", id: "a-personal" }],
-  ["the default account back to inheriting", { kind: "default" } as const, "Work (from the console)", null],
+  ["the default account back to inheriting", { kind: "default" } as const, "Work, From the console", null],
 ])("sends %s on update", async (_, from, pick, sent) => {
   const pending = render(stateOf(from), [work, personal]);
   await click(accountPicker());
@@ -377,7 +377,7 @@ it("keeps an edit to an agent that is no longer the selected one", async () => {
 it("follows the console's agent for Inherit from console", async () => {
   const pending = render(projectOf("p-2", "c-1", "Site"), [work, personal]);
   expect(accountPicker()).toBeDefined();
-  await click(buttons().find((b) => b.textContent?.includes("Inherit from console (Claude Code)")));
+  await click(buttons().find((b) => b.textContent?.includes("Inherit from console, Claude Code")));
   await choose("Codex");
   expect(accountPicker()).toBeUndefined();
   expect(pending).toHaveLength(0);
@@ -385,20 +385,20 @@ it("follows the console's agent for Inherit from console", async () => {
 
 it("names the console's project session agent on Inherit from console, not its console session agent", async () => {
   render(projectOf("p-2", "c-1", "Site"), [], { default_agent: "claude", project_session_agent: "grok" });
-  expect(buttons().find((b) => b.textContent?.includes("Inherit from console (Grok Build)"))).toBeDefined();
-  expect(buttons().find((b) => b.textContent?.includes("Inherit from console (Claude Code)"))).toBeUndefined();
+  expect(buttons().find((b) => b.textContent?.includes("Inherit from console, Grok Build"))).toBeDefined();
+  expect(buttons().find((b) => b.textContent?.includes("Inherit from console, Claude Code"))).toBeUndefined();
 });
 
 it("names the console session agent on Inherit from console while the console has no project session agent of its own", () => {
   render(projectOf("p-2", "c-1", "Site"), [], { default_agent: "codex" });
-  expect(buttons().find((b) => b.textContent?.includes("Inherit from console (Codex)"))).toBeDefined();
+  expect(buttons().find((b) => b.textContent?.includes("Inherit from console, Codex"))).toBeDefined();
 });
 
 it("leaves the agents known to be missing out of the default agent picker", async () => {
   render(projectOf("p-2", "c-1", "Site"), [], {}, { codex: "unavailable" });
   await click(buttons().find((b) => b.textContent?.includes("Inherit from console")));
   expect(Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent)).toEqual([
-    "Inherit from console (Claude Code)",
+    "Inherit from console, Claude Code",
     "Claude Code",
     "Grok Build",
   ]);
@@ -409,7 +409,7 @@ it("keeps the project's own missing agent in the picker as not installed until a
   expect(buttons().some((b) => b.textContent?.includes("Codex, Not installed"))).toBe(true);
   await click(buttons().find((b) => b.textContent?.includes("Codex, Not installed")));
   expect(Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent)).toEqual([
-    "Inherit from console (Claude Code)",
+    "Inherit from console, Claude Code",
     "Claude Code",
     "Grok Build",
     "Codex, Not installed",
@@ -423,7 +423,7 @@ it("lists only the added agents in the picker, in the order they were added", as
   render(undefined, [], {}, {}, ["grok", "claude"]);
   await click(buttons().find((b) => b.textContent?.includes("Inherit from console")));
   expect(Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent)).toEqual([
-    "Inherit from console (Claude Code)",
+    "Inherit from console, Claude Code",
     "Grok Build",
     "Claude Code",
   ]);
@@ -538,7 +538,7 @@ it("keeps a stored model the list lacks, and says why when there is no list", as
   await click(buttonText("Advanced"));
   await answerModels(pending);
   await click(pickerNamed("Model"));
-  expect(optionTexts()).toEqual(["Alpha", "Beta", "retired (not in the list)"]);
+  expect(optionTexts()).toEqual(["Alpha", "Beta", "retired, Not in the list"]);
 });
 
 it("offers the stored model alone and the reason when the agent cannot list its models", async () => {
@@ -548,14 +548,14 @@ it("offers the stored model alone and the reason when the agent cannot list its 
   await answerModels(pending, { code: "models_timed_out", params: { agent: "claude" }, message: "" });
   expect(document.body.textContent).toContain(`${isolate("claude")} took too long to list its models.`);
   await click(pickerNamed("Model"));
-  expect(optionTexts()).toEqual(["retired (not in the list)"]);
+  expect(optionTexts()).toEqual(["retired, Not in the list"]);
 });
 
 it("names the console's project session value on the unset launch pickers, each value on its own", async () => {
   render(projectOf("p-2", "c-1", "Site"), [], { claude_project_session_model: "opus" });
   await click(buttonText("Advanced"));
-  expect(pickerNamed("Model").textContent).toContain("Inherit from console (opus)");
-  expect(pickerNamed("Reasoning effort").textContent).toContain("Inherit from console (the agent's own setting)");
+  expect(pickerNamed("Model").textContent).toContain("Inherit from console, opus");
+  expect(pickerNamed("Reasoning effort").textContent).toContain("Inherit from console, The agent's own setting");
 });
 
 it("lets the project's own value replace the inherited one and names the console's pair for the agent shown", async () => {
@@ -567,7 +567,7 @@ it("lets the project's own value replace the inherited one and names the console
   await click(buttonText("Advanced"));
   expect(pickerNamed("Reasoning effort").textContent).toContain("high");
   expect(pickerNamed("Reasoning effort").textContent).not.toContain("Inherit");
-  expect(pickerNamed("Model").textContent).toContain("Inherit from console (the agent's own setting)");
+  expect(pickerNamed("Model").textContent).toContain("Inherit from console, The agent's own setting");
 });
 
 const typeDescription = (value: string) => type(document.body.querySelector<HTMLTextAreaElement>("textarea")!, value);

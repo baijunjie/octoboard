@@ -43,10 +43,13 @@ export function useLaunchModels(agent: Agent, account: string | null, enabled: b
 
 export type LaunchModels = ReturnType<typeof useLaunchModels>;
 
-/** What an unset picker says in place of "unset": the value it resolves to, or that it is the agent's
- * own setting while that is none. */
-function inherited(t: Translate, value: string | null): string {
-  return t(value ? "dialog.agentSettings.inheritValue" : "dialog.agentSettings.inheritOwn", { value: value ?? "" });
+/** What an unset picker says in place of "unset": that it inherits, with a badge naming the value it
+ * resolves to, or the agent's own setting while that is none. */
+function inherited(t: Translate, value: string | null): { placeholder: string; placeholderBadge: string } {
+  return {
+    placeholder: t("dialog.agentSettings.inherit"),
+    placeholderBadge: value || t("dialog.agentSettings.inheritOwn"),
+  };
 }
 
 /** The props `ModelPicker` and `EffortPicker` have in common. */
@@ -82,7 +85,7 @@ export function ModelPicker({
 }: PickerProps & { model: string | null; onChange: (value: string | null) => void }): React.ReactElement {
   const t = useT();
   const listed = launch.models.find((candidate) => candidate.id === inherit?.model);
-  const placeholder = inherit && inherited(t, listed ? modelName(t, listed) : inherit.model);
+  const inheritedText = inherit && inherited(t, listed ? modelName(t, listed) : inherit.model);
   return (
     <OptionSelect
       label={t("dialog.agentSettings.model")}
@@ -95,7 +98,8 @@ export function ModelPicker({
       )}
       value={model}
       onChange={onChange}
-      placeholder={placeholder ?? t("dialog.agentSettings.placeholder")}
+      placeholder={inheritedText?.placeholder ?? t("dialog.agentSettings.placeholder")}
+      placeholderBadge={inheritedText?.placeholderBadge}
       isDisabled={isDisabled || launch.loading}
       description={launch.modelDescription}
       describedBy={describedBy}
@@ -120,7 +124,7 @@ export function EffortPicker({
 }: PickerProps & { model: string | null; effort: string | null; onChange: (value: string | null) => void }): React.ReactElement {
   const t = useT();
   const { levels, none } = effortLevels(launch.models, model ?? inherit?.model ?? null);
-  const placeholder = inherit && inherited(t, inherit.effort);
+  const inheritedText = inherit && inherited(t, inherit.effort);
   return (
     <OptionSelect
       label={t("dialog.agentSettings.effort")}
@@ -129,7 +133,8 @@ export function EffortPicker({
       options={launchSettingOptions(t, levels.map((level) => ({ value: level, label: level })), effort)}
       value={effort}
       onChange={onChange}
-      placeholder={placeholder ?? t("dialog.agentSettings.placeholder")}
+      placeholder={inheritedText?.placeholder ?? t("dialog.agentSettings.placeholder")}
+      placeholderBadge={inheritedText?.placeholderBadge}
       isDisabled={isDisabled || launch.loading}
       description={none ? t("dialog.agentSettings.noEffort") : undefined}
       describedBy={describedBy}

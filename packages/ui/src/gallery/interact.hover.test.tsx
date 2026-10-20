@@ -11,18 +11,31 @@ import { changeItems } from "../browser/changes";
 import { ActivityMarker } from "../components/ActivityMarker";
 import { AgentIcon } from "../components/AgentIcon";
 import { AnchoredTooltip } from "../components/AnchoredTooltip";
-import { SessionUsageLabel } from "../components/SessionMetadata";
+import { SessionAgentTooltip } from "../components/SessionAgentIcon";
+import { SessionContextLabel } from "../components/SessionMetadata";
 import { StatusIcon } from "../components/StatusIcon";
 import { TitledControl } from "../components/TitledControl";
 import { leave, mountForTooltip, openTooltip } from "../components/tooltipTestSupport";
 import { gitBadgeAriaLabel } from "../gitStatusLabel";
-import type { ChangeEntry } from "../protocol";
+import { LanguageProvider } from "../i18n/react";
+import type { Account, ChangeEntry } from "../protocol";
 import { GitBadge } from "../sidebar/GitBadge";
 import { ProjectFilterSummary } from "../sidebar/ProjectFilter";
 import { RailQuotaEntry } from "../quota/RailQuotaEntry";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
-import { gitStatusOf } from "./fixtures/builders";
+import { gitStatusOf, sessionOf } from "./fixtures/builders";
 import { createUi } from "./interact";
+
+/** The tooltip of a Claude Code session's agent mark, drawn by the app's own `SessionAgentTooltip`: the
+ * agent's name, then the account the session runs under as a badge. */
+function agentTooltip(account: string): React.ReactElement {
+  const stored: Account = { id: "account", agent: "claude", name: account, config_dir: "/Users/dev/.claude-work" };
+  return (
+    <LanguageProvider>
+      <SessionAgentTooltip session={sessionOf("s-tooltip", "c", "p", "Tooltip", "idle", { account_id: stored.id })} accounts={[stored]} defaultNames={undefined} />
+    </LanguageProvider>
+  );
+}
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -52,7 +65,7 @@ function mountWindow(): void {
       </header>
       <div role="button" aria-label="Fix the layout, Claude Code, Working">
         <StatusIcon status="working" decorative withTooltip />
-        <AgentIcon agent="claude" tooltip="Claude Code (Work)" />
+        <AgentIcon agent="claude" tooltip={agentTooltip("Work")} />
       </div>
       <div role="button" aria-label="Write the migration, Claude Code, Waiting for you">
         <StatusIcon status="waiting_user" decorative withTooltip />
@@ -73,7 +86,7 @@ function mountWindow(): void {
         <ul>
           <li>
             <StatusIcon status="interrupted" withTooltip />
-            <AgentIcon agent="claude" tooltip="Claude Code (Work)" />
+            <AgentIcon agent="claude" tooltip={agentTooltip("Work")} />
             <span className="sr-only">Claude Code</span>
             <span>Tidy the changelog</span>
           </li>
@@ -95,7 +108,7 @@ function mountWindow(): void {
         <div>
           <StatusIcon status="idle" decorative />
         </div>
-        <AgentIcon agent="claude" tooltip="Claude Code (Work)" />
+        <AgentIcon agent="claude" tooltip={agentTooltip("Work")} />
       </div>
     </>,
   );
@@ -231,15 +244,15 @@ it("hoverCalloutStatus fails for a session that is not listed", async () => {
 
 it("hoverCalloutAgent puts up the agent and account of the callout's session it names", async () => {
   mountWindow();
-  await settledLive(createUi(document, "en").hoverCalloutAgent("Tidy the changelog", "Claude Code (Work)"));
-  expect(openTooltip()?.textContent).toBe("Claude Code (Work)");
+  await settledLive(createUi(document, "en").hoverCalloutAgent("Tidy the changelog", "Claude Code", "Work"));
+  expect(openTooltip()?.textContent).toBe("Claude Code, Work");
   release(document.querySelector("[role=alertdialog] li")!.children[1]);
 });
 
 it("hoverCalloutAgent fails where the tooltip is not the one it was told", async () => {
   mountWindow();
-  const done = expect(createUi(document, "en").hoverCalloutAgent("Tidy the changelog", "Claude Code (Home)")).rejects.toThrow(
-    /has no tooltip "Claude Code \(Home\)": its last tooltip is "Claude Code \(Work\)"/,
+  const done = expect(createUi(document, "en").hoverCalloutAgent("Tidy the changelog", "Claude Code", "Home")).rejects.toThrow(
+    /has no tooltip "Claude Code, Home": its last tooltip is "Claude Code, Work"/,
   );
   await vi.advanceTimersByTimeAsync(3000);
   await done;
@@ -248,7 +261,7 @@ it("hoverCalloutAgent fails where the tooltip is not the one it was told", async
 
 it("hoverCalloutAgent fails for an agent icon with no tooltip", async () => {
   mountWindow();
-  const done = expect(createUi(document, "en").hoverCalloutAgent("Bare glyph", "Claude Code (Work)")).rejects.toThrow(/with an agent icon to hover/);
+  const done = expect(createUi(document, "en").hoverCalloutAgent("Bare glyph", "Claude Code", "Work")).rejects.toThrow(/with an agent icon to hover/);
   await vi.advanceTimersByTimeAsync(6000);
   await done;
   expect(openTooltip()).toBeNull();
@@ -256,15 +269,15 @@ it("hoverCalloutAgent fails for an agent icon with no tooltip", async () => {
 
 it("hoverSessionAgent puts up the agent and account of the card it names", async () => {
   mountWindow();
-  await settledLive(createUi(document, "en").hoverSessionAgent(row("Card"), "Claude Code (Work)"));
-  expect(openTooltip()?.textContent).toBe("Claude Code (Work)");
+  await settledLive(createUi(document, "en").hoverSessionAgent(row("Card"), "Claude Code", "Work"));
+  expect(openTooltip()?.textContent).toBe("Claude Code, Work");
   release(document.querySelector('[aria-label^="Card"] [role=presentation]')!);
 });
 
 it("hoverSessionAgent fails where the tooltip is not the one it was told", async () => {
   mountWindow();
-  const done = expect(createUi(document, "en").hoverSessionAgent(row("Card"), "Claude Code (Home)")).rejects.toThrow(
-    /has no tooltip "Claude Code \(Home\)": its last tooltip is "Claude Code \(Work\)"/,
+  const done = expect(createUi(document, "en").hoverSessionAgent(row("Card"), "Claude Code", "Home")).rejects.toThrow(
+    /has no tooltip "Claude Code, Home": its last tooltip is "Claude Code, Work"/,
   );
   await vi.advanceTimersByTimeAsync(3000);
   await done;
@@ -273,7 +286,7 @@ it("hoverSessionAgent fails where the tooltip is not the one it was told", async
 
 it("hoverSessionAgent fails for a card with no agent mark", async () => {
   mountWindow();
-  const done = expect(createUi(document, "en").hoverSessionAgent(row("Docs"), "Claude Code (Work)")).rejects.toThrow(/with an agent mark to hover/);
+  const done = expect(createUi(document, "en").hoverSessionAgent(row("Docs"), "Claude Code", "Work")).rejects.toThrow(/with an agent mark to hover/);
   await vi.advanceTimersByTimeAsync(6000);
   await done;
   expect(openTooltip()).toBeNull();
@@ -494,27 +507,27 @@ it.each(["flat", "tree"] as const)("pressChangeStatus dismisses the %s tooltip w
   release(chip);
 });
 
-/** A session card as focus mode draws it, named by its title, with its token count among the
- * metadata. A card without usage draws no count, as the real one does. */
-function mountCard(usage?: { input_tokens: number; output_tokens: number; cached_input_tokens?: number; total_tokens: number }): void {
+/** A session card as focus mode draws it, named by its title, with its context size among the
+ * metadata. A card without one draws no count, as the real one does. */
+function mountCard(context?: { tokens: number; window?: number; used_percent?: number }): void {
   mountForTooltip(
     <div role="button" aria-label="Add idempotency keys, Claude Code, Working">
       <StatusIcon status="working" decorative />
-      <SessionUsageLabel usage={usage} />
+      <SessionContextLabel context={context} />
     </div>,
   );
 }
 
-it("hoverSessionUsage puts up the table of the card's token count", async () => {
-  mountCard({ input_tokens: 1200, output_tokens: 300, cached_input_tokens: 900, total_tokens: 1500 });
-  await settledLive(createUi(document, "en").hoverSessionUsage((name) => name.startsWith("Add idempotency keys")));
-  expect(Array.from(openTooltip()!.querySelectorAll("dt"), (term) => term.textContent)).toEqual(["Input", "Output", "Cached input"]);
+it("hoverSessionContext puts up the tooltip of the card's context size", async () => {
+  mountCard({ tokens: 1500, window: 475000, used_percent: 40 });
+  await settledLive(createUi(document, "en").hoverSessionContext((name) => name.startsWith("Add idempotency keys")));
+  expect(Array.from(openTooltip()!.querySelectorAll("dt"), (term) => term.textContent)).toEqual(["Limit"]);
   release(document.querySelector("[role=img]")!);
 });
 
-it("hoverSessionUsage fails for a card whose usage is hidden", async () => {
-  mountCard({ input_tokens: 0, output_tokens: 0, total_tokens: 0 });
-  const done = expect(createUi(document, "en").hoverSessionUsage((name) => name.startsWith("Add idempotency keys"))).rejects.toThrow(/with a token count to hover/);
+it("hoverSessionContext fails for a card whose context size is hidden", async () => {
+  mountCard({ tokens: 0 });
+  const done = expect(createUi(document, "en").hoverSessionContext((name) => name.startsWith("Add idempotency keys"))).rejects.toThrow(/with a context size to hover/);
   await vi.advanceTimersByTimeAsync(6000);
   await done;
   runOut();

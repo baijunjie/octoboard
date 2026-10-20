@@ -3,59 +3,66 @@ import React from "react";
 import { isolate } from "../i18n/isolate";
 import { joinPhrases } from "../i18n/joinPhrases";
 import { useCurrentLanguage, useT } from "../i18n/react";
-import type { Session, SessionUsage } from "../protocol";
-import { InlineChip } from "./InlineChip";
+import type { Session, SessionContext } from "../protocol";
 import { IndicatorTooltip } from "./IndicatorTooltip";
+import { StatusBadge } from "./StatusBadge";
 
-export function hasVisibleUsage(usage: SessionUsage | null | undefined): usage is SessionUsage {
-  return (usage?.total_tokens ?? 0) > 0;
+export function hasVisibleContext(context: SessionContext | null | undefined): context is SessionContext {
+  return (context?.tokens ?? 0) > 0;
 }
 
-/** The counts laid out as a table: the total as its heading, then one row per kind of token. */
-function UsageTooltip({ total, rows, format }: {
-  total: string;
-  rows: { key: string; label: string; value: number }[];
-  format: Intl.NumberFormat;
+/** The context size as its heading, then a table of the limit and how much of it is used when the agent gives one. */
+function ContextTooltip({ heading, rows }: {
+  heading: string;
+  rows: { key: string; label: string; value: string }[];
 }): React.ReactElement {
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="font-medium">{total}</div>
-      <hr className="groove-t" />
-      <dl className="grid grid-cols-[auto_auto] gap-x-4 gap-y-0.5">
-        {rows.map((row) => (
-          <React.Fragment key={row.key}>
-            <dt className="text-muted">{row.label}</dt>
-            <dd className="text-end tabular-nums">{format.format(row.value)}</dd>
-          </React.Fragment>
-        ))}
-      </dl>
+      <div className="font-medium">{heading}</div>
+      {rows.length > 0 && (
+        <>
+          <hr className="groove-t" />
+          <dl className="grid grid-cols-[auto_auto] gap-x-4 gap-y-0.5">
+            {rows.map((row) => (
+              <React.Fragment key={row.key}>
+                <dt className="text-muted">{row.label}</dt>
+                <dd className="text-end tabular-nums">{row.value}</dd>
+              </React.Fragment>
+            ))}
+          </dl>
+        </>
+      )}
     </div>
   );
 }
 
-export function SessionUsageLabel({ usage }: { usage?: SessionUsage | null }): React.ReactElement | null {
+export function SessionContextLabel({ context }: { context?: SessionContext | null }): React.ReactElement | null {
   const t = useT();
   const language = useCurrentLanguage();
-  if (!hasVisibleUsage(usage)) return null;
+  if (!hasVisibleContext(context)) return null;
   const number = new Intl.NumberFormat(language);
-  const tokens = (value: number) => isolate(number.format(value));
-  const rows = [
-    { key: "input", label: t("session.usage.input"), value: usage.input_tokens },
-    { key: "output", label: t("session.usage.output"), value: usage.output_tokens },
-    ...(usage.cached_input_tokens == null ? [] : [{ key: "cached", label: t("session.usage.cached"), value: usage.cached_input_tokens }]),
-    ...(usage.cache_write_input_tokens == null ? [] : [{ key: "cacheWrite", label: t("session.usage.cacheWrite"), value: usage.cache_write_input_tokens }]),
-  ];
-  const total = t("session.usage.total", { count: usage.total_tokens, tokens: tokens(usage.total_tokens) });
-  // The accessible name is one plain sentence; the tooltip lays the same counts out as a table.
-  const details = joinPhrases(language, [total, ...rows.map((row) => t("session.usage.entry", { label: row.label, tokens: tokens(row.value) }))]);
-  const tooltip = <UsageTooltip total={total} rows={rows} format={number} />;
+  const heading = t("session.context.heading", { count: context.tokens, tokens: isolate(number.format(context.tokens)) });
+  const rows = [];
+  if (context.window != null) {
+    const limit = isolate(number.format(context.window));
+    rows.push({
+      key: "limit",
+      label: t("session.context.limit"),
+      value: context.used_percent == null
+        ? limit
+        : t("session.context.limitValue", { limit, percent: isolate(new Intl.NumberFormat(language, { style: "percent" }).format(context.used_percent / 100)) }),
+    });
+  }
+  // The accessible name is one plain sentence; the tooltip lays the same facts out as a table.
+  const details = joinPhrases(language, [heading, ...rows.map((row) => t("session.context.entry", { label: row.label, value: row.value }))]);
   const compact = new Intl.NumberFormat(language, { notation: "compact", maximumFractionDigits: 1 });
-  // The chip's own `.sidebar-fills` keep its fill visible on the sidebar's `--panel-sidebar` and on
-  // `--panel` (Focus cards, the archive): 1.19:1 to 1.24:1 resting, the same stacked on a hovered
-  // or selected row. The compact size sits in the metadata line without growing it.
+  // The compact size is a badge, so the metadata line stays as tall as the text beside it; the
+  // exact count is in the name and the tooltip.
   return (
-    <IndicatorTooltip tooltip={tooltip} label={details} className="flex shrink-0">
-      <InlineChip size="xs" aria-hidden="true" className="sidebar-fills text-app-muted">{compact.format(usage.total_tokens)}</InlineChip>
+    <IndicatorTooltip tooltip={<ContextTooltip heading={heading} rows={rows} />} label={details} className="flex shrink-0">
+      <span aria-hidden="true" className="contents">
+        <StatusBadge separated={false}>{compact.format(context.tokens)}</StatusBadge>
+      </span>
     </IndicatorTooltip>
   );
 }

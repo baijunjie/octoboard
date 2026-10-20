@@ -1,8 +1,8 @@
 //! Where an agent keeps its own on-disk records of a session: Claude Code's transcript (and the
 //! directory of subagent transcripts beside it), Codex's rollout files (compressed or not; one
-//! per history segment of a thread), Grok Build's session directory with its usage ledger. Shared
-//! by the usage collector, which reads them (`usage.rs`), and by a session's deletion, which moves
-//! them to the Trash (`record_paths`).
+//! per history segment of a thread), Grok Build's session directory (marked by its `usage.json`).
+//! Shared by the record collector, which reads them (`record_collector.rs`), and by a session's
+//! deletion, which moves them to the Trash (`record_paths`).
 //!
 //! A record is found by its name, which carries the agent session id, in one account's own
 //! directory (the path a hook reported is only a hint). Both the id and the hint come from the
@@ -131,6 +131,17 @@ impl Locator {
             }
         }
         newest.cloned()
+    }
+
+    /// What Codex thread `agent_id`'s conversation as it stands is made of, ending in `head` (see
+    /// [`rollout_branch`]), in the account at `root`.
+    pub fn rollout_stretches(
+        &mut self,
+        root: &Path,
+        agent_id: &str,
+        head: &Path,
+    ) -> Option<Vec<Stretch>> {
+        rollout_branch(head, self.index(Agent::Codex, root).records.get(agent_id)?)
     }
 
     /// The first rollout of Codex thread `agent_id` in the account at `root`, the file the thread's

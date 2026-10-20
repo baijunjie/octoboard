@@ -5,7 +5,7 @@ import { useStableHandler } from "../components/useLatest";
 import { errorPresentation } from "../errorPresentation";
 import { useListMotion } from "../components/useListMotion";
 import { InlineChip } from "../components/InlineChip";
-import { AgentIcon } from "../components/AgentIcon";
+import { SessionAgentIcon } from "../components/SessionAgentIcon";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { StatusIcon } from "../components/StatusIcon";
 import { TintedAlert } from "../components/TintedAlert";
@@ -62,7 +62,7 @@ function ConfirmWarning({ title, sessions, lines = [] }: { title?: string; sessi
             {sessions.map((session) => (
               <li key={session.id} data-list-motion={session.id} className="flex min-w-0 items-center gap-2">
                 {session.status !== "archived" && <StatusIcon status={sessionStatusKind(session)} withTooltip />}
-                <AgentIcon agent={session.agent} tooltip={sessionAgentLabel(t, session, accounts, defaultNames)} />
+                <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} />
                 {/* The icon is decorative, and nothing else here names the agent. */}
                 <span className="sr-only">{sessionAgentLabel(t, session, accounts, defaultNames)}</span>
                 <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={sessionDisplayTitle(t, session)}>

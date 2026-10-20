@@ -80,12 +80,12 @@ const CONFIRMATIONS: Array<[string, DialogRequest, Session]> = [
 
 it.each(CONFIRMATIONS)("says which account a listed session runs under when %s", (_, dialog, listed) => {
   mount(dialog, [owner, listed]);
-  expect(hoverAgentIcon()).toBe(`Claude Code (${isolate("Default")})`);
+  expect(hoverAgentIcon()).toBe("Claude Code, Default");
 });
 
 it.each([
-  ["a named account", { account_id: account.id }, `Claude Code (${isolate("Work")})`],
-  ["an account that is no longer stored", { account_id: "gone", config_dir: "/home/dev/.claude-old" }, `Claude Code (${isolate("/home/dev/.claude-old")})`],
+  ["a named account", { account_id: account.id }, "Claude Code, Work"],
+  ["an account that is no longer stored", { account_id: "gone", config_dir: "/home/dev/.claude-old" }, "Claude Code, /home/dev/.claude-old"],
 ])("says the account of a session on %s", (_, extra, text) => {
   const listed = sessionOf("s-2", console_.id, project.id, "Stopped", "interrupted", { bound_to: owner.id, ...extra });
   mount({ kind: "archive-session", session: owner }, [owner, listed], [account]);
@@ -119,9 +119,9 @@ it.each([
   act(() => void vi.advanceTimersByTime(pause));
   enter(agentIcon());
 
-  expect(openTooltip()?.textContent ?? null).toBe(opensAtOnce ? `Claude Code (${isolate("Default")})` : null);
+  expect(openTooltip()?.textContent ?? null).toBe(opensAtOnce ? "Claude Code, Default" : null);
   settle();
-  expect(openTooltip()?.textContent).toBe(`Claude Code (${isolate("Default")})`);
+  expect(openTooltip()?.textContent).toBe("Claude Code, Default");
 
   leave(agentIcon());
   settle();

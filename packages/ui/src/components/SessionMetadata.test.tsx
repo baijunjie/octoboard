@@ -5,8 +5,8 @@ import { expect, it, onTestFinished } from "vitest";
 
 import { sessionOf } from "../gallery/fixtures/builders";
 import { isolate } from "../i18n/isolate";
-import type { SessionUsage } from "../protocol";
-import { ArchivedSessionMetadata, SessionUsageLabel } from "./SessionMetadata";
+import type { SessionContext } from "../protocol";
+import { ArchivedSessionMetadata, SessionContextLabel } from "./SessionMetadata";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -19,32 +19,36 @@ function mount(element: React.ReactNode) {
   return { container, render };
 }
 
-const usage: SessionUsage = { input_tokens: 123456, output_tokens: 789, cached_input_tokens: 100000, cache_write_input_tokens: 0, total_tokens: 124999 };
+const context: SessionContext = { tokens: 190123, window: 475000, used_percent: 40 };
 
-it("uses the recorded total and exposes full localized counts with cache subsets without adding them", () => {
-  const { container } = mount(<SessionUsageLabel usage={usage} />);
-  expect(container.textContent).toBe("125K");
-  const label = container.querySelector('[role="img"]')?.getAttribute("aria-label");
-  expect(label).toContain(`${isolate("124,999")} tokens`);
-  expect(label).toContain(`Input: ${isolate("123,456")}`);
-  expect(label).toContain(`Cached input: ${isolate("100,000")}`);
-  expect(label).toContain(`Cache write: ${isolate("0")}`);
+it("shows the compact context size, and its exact count with the limit and share used in the name and tooltip", () => {
+  const { container } = mount(<SessionContextLabel context={context} />);
+  expect(container.textContent).toBe("190.1K");
+  const badge = container.querySelector('[aria-hidden="true"] > span:not(.sr-only)')!;
+  expect(badge.textContent).toBe("190.1K");
+  expect(badge.className).toContain("rounded-full");
+  expect(container.querySelector(".sr-only")).toBeNull();
   const indicator = container.querySelector<HTMLElement>('[role="img"]')!;
+  expect(indicator.getAttribute("aria-label")).toBe(`Context ${isolate("190,123")} tokens, Limit: ${isolate("475,000")} (${isolate("40%")} used)`);
   expect(indicator.tabIndex).toBe(-1);
-  expect(indicator.querySelector('[data-inline-chip][data-size="xs"]')?.getAttribute("aria-hidden")).toBe("true");
+  expect(indicator.querySelector(":scope > [aria-hidden]")?.getAttribute("aria-hidden")).toBe("true");
   expect(container.querySelector("button")).toBeNull();
   expect(indicator.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }))).toBe(false);
 });
 
-it("omits unavailable and zero usage until a positive total arrives", () => {
-  const { container, render } = mount(<SessionUsageLabel />);
+it("names the context size alone when the agent records no limit", () => {
+  const { container } = mount(<SessionContextLabel context={{ tokens: 190123 }} />);
+  expect(container.querySelector('[role="img"]')?.getAttribute("aria-label")).toBe(`Context ${isolate("190,123")} tokens`);
+});
+
+it("omits an unknown or zero context size until a positive one arrives", () => {
+  const { container, render } = mount(<SessionContextLabel />);
   expect(container.textContent).toBe("");
-  render(<SessionUsageLabel usage={{ input_tokens: 0, output_tokens: 0, total_tokens: 0 }} />);
+  render(<SessionContextLabel context={{ tokens: 0 }} />);
   expect(container.innerHTML).toBe("");
-  render(<SessionUsageLabel usage={{ input_tokens: 1, output_tokens: 0, total_tokens: 1 }} />);
+  render(<SessionContextLabel context={{ tokens: 1 }} />);
   expect(container.textContent).toBe("1");
-  expect(container.querySelector('[role="img"]')?.getAttribute("aria-label")).toContain(`${isolate("1")} token`);
-  expect(container.querySelector('[role="img"]')?.getAttribute("aria-label")).not.toContain("Cached input");
+  expect(container.querySelector('[role="img"]')?.getAttribute("aria-label")).toBe(`Context ${isolate("1")} token`);
 });
 
 it("shows both absolute timestamps and never invents a missing archive timestamp", () => {

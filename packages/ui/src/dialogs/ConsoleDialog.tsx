@@ -193,7 +193,8 @@ export function ConsoleDialog({
                 options={[
                   {
                     value: "",
-                    label: t("dialog.console.projectAgentSame", { agent: AGENT_LABEL[defaultAgent] }),
+                    label: t("dialog.console.projectAgentSame"),
+                    badge: AGENT_LABEL[defaultAgent],
                     icon: <AgentIcon agent={defaultAgent} className="size-4 opacity-50" />,
                   },
                   ...agentIconPickerOptions(t, agentAvailability, addedAgents, projectAgent || undefined),

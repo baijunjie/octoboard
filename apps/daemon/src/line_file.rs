@@ -64,7 +64,7 @@ impl LineFile {
 
     /// Reads the complete lines after the last read one and settles on the file as checked.
     pub fn read(&mut self, path: &Path, visit: impl FnMut(&str)) -> std::io::Result<()> {
-        self.offset = scan_lines(path, self.offset, visit)?;
+        self.offset = scan_lines(path, self.offset, None, visit)?;
         self.settle();
         Ok(())
     }
@@ -73,6 +73,12 @@ impl LineFile {
     pub fn settle(&mut self) {
         self.signature = self.pending;
     }
+}
+
+/// Reads the complete lines of the first `end` bytes of the file at `path` (decompressed ones for
+/// a compressed file), once and without any cursor.
+pub fn read_to(path: &Path, end: u64, visit: impl FnMut(&str)) -> std::io::Result<()> {
+    scan_lines(path, 0, Some(end), visit).map(drop)
 }
 
 /// Opens the file at `path` for reading from byte `offset`, decompressing it first when it is
@@ -93,8 +99,16 @@ pub fn open(path: &Path, offset: u64) -> std::io::Result<Box<dyn BufRead>> {
 /// Read complete lines with bounded memory even when a tool writes a very large body. A record
 /// larger than 8 MiB is not a supported record and is skipped, never deserialized. The
 /// offset still stops before an unfinished line.
-fn scan_lines(path: &Path, offset: u64, mut visit: impl FnMut(&str)) -> std::io::Result<u64> {
+fn scan_lines(
+    path: &Path,
+    offset: u64,
+    end: Option<u64>,
+    mut visit: impl FnMut(&str),
+) -> std::io::Result<u64> {
     let mut reader = open(path, offset)?;
+    if let Some(end) = end {
+        reader = Box::new(reader.take(end.saturating_sub(offset)));
+    }
     let mut complete = offset;
     let mut position = offset;
     let mut line = Vec::new();

@@ -218,11 +218,12 @@ export function ProjectDialog({
   // `""` is "Inherit from console": the project sets none and follows its console's project session
   // agent (the "Which agent a session uses" section of docs/product/sessions.md); the option names
   // that agent, its icon faded, so it says what it resolves to.
-  const defaultAgentOptions: { value: Agent | "" | "detect"; label: string; icon?: React.ReactNode }[] = [
+  const defaultAgentOptions: { value: Agent | "" | "detect"; label: string; icon?: React.ReactNode; badge?: string }[] = [
     ...(addsParent ? [{ value: "detect" as const, label: t("dialog.project.agentDetect") }] : []),
     {
       value: "",
-      label: consoleAgent ? t("dialog.project.agentInherit", { agent: AGENT_LABEL[consoleAgent] }) : t("dialog.project.agentInheritBare"),
+      label: t("dialog.project.agentInheritBare"),
+      badge: consoleAgent && AGENT_LABEL[consoleAgent],
       icon: consoleAgent && <AgentIcon agent={consoleAgent} className="size-4 opacity-50" />,
     },
     ...agentIconPickerOptions(t, agentAvailability, addedAgents, defaultAgent === "" || defaultAgent === "detect" ? undefined : defaultAgent),
@@ -334,9 +335,8 @@ export function ProjectDialog({
                 options: [
                   {
                     value: accountValue(INHERIT),
-                    label: t("dialog.project.accountInherit", {
-                      account: ownAccounts.find((account) => account.id === consoleAccountId)?.name ?? defaultAccountName(t, defaultNames, agent),
-                    }),
+                    label: ownAccounts.find((account) => account.id === consoleAccountId)?.name ?? defaultAccountName(t, defaultNames, agent),
+                    badge: t("dialog.project.accountInheritBadge"),
                   },
                   { value: accountValue({ kind: "default" }), label: defaultAccountName(t, defaultNames, agent) },
                   ...ownAccounts.map((account) => ({ value: accountValue({ kind: "account", id: account.id }), label: account.name })),

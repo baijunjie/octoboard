@@ -298,7 +298,7 @@ not the branch name is cut (see "The branch badge" in `docs/product/project-git-
   title, a session title and its model line or agent name, or an archive heading and count do not start one another's
   marquee.
   Pointing at a status or agent icon, a branch glyph or upstream count, a row or header button, or the surrounding
-  space starts none of those labels. Session usage and time fields remain separate from the model line's and the
+  space starts none of those labels. Context-size chips and time fields remain separate from the model line's and the
   agent name's marquees.
 - An action-menu item or submenu item, a select's option or directory-picker row runs its one label while the pointer
   is anywhere over that item or row. A select's current choice or placeholder runs while the pointer is over its

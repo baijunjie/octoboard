@@ -187,7 +187,7 @@ mod tests {
             record_titles: Default::default(),
             background_tasks: Vec::new(),
             default_effort: None,
-            usage: None,
+            context: None,
             observed_model: None,
             observed_effort: None,
             model: None,

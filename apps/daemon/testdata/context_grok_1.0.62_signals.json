@@ -1,0 +1,8 @@
+{
+  "turnCount": 10,
+  "compactionCount": 1,
+  "totalTokensBeforeCompaction": 205620,
+  "contextWindowUsage": 9,
+  "contextTokensUsed": 25500,
+  "contextWindowTokens": 256000
+}

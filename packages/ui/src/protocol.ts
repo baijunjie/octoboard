@@ -243,13 +243,13 @@ export interface Project {
   description?: string | null;
 }
 
-/** The agent's recorded cumulative usage. Cache counts are subsets of input_tokens. */
-export interface SessionUsage {
-  input_tokens: number;
-  output_tokens: number;
-  cached_input_tokens?: number;
-  cache_write_input_tokens?: number;
-  total_tokens: number;
+/** How much the main conversation's latest request carried: a gauge of whether continuing the session is
+ * getting expensive, not a running total. `window` and `used_percent` (whole percent, by the agent's own
+ * formula) are present only for an agent that records its context-window limit. */
+export interface SessionContext {
+  tokens: number;
+  window?: number;
+  used_percent?: number;
 }
 
 /** One piece of work an agent left running in the background when its turn ended. */
@@ -313,7 +313,7 @@ export interface Session {
   locked: boolean;
   started_at: number;
   ended_at?: number | null;
-  usage?: SessionUsage | null;
+  context?: SessionContext | null;
   /** The model and reasoning effort the agent's records show the session running with, as the
    * agent spells them; unlike `model` and `effort`, which are the launch overrides. */
   observed_model?: string;

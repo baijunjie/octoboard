@@ -5,12 +5,12 @@ import React, { memo, useId, useLayoutEffect, useRef } from "react";
 import { Button } from "../components/Button";
 import { ActionMenu } from "../components/ActionMenu";
 import { ActivityMarker } from "../components/ActivityMarker";
-import { AgentIcon } from "../components/AgentIcon";
+import { SessionAgentIcon } from "../components/SessionAgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { PaneTitle } from "../components/PaneTitle";
 import { RowControls, RowIconGroup, RowIconLine, RowIconSlot } from "../components/RowControls";
-import { hasVisibleUsage, SessionUsageLabel } from "../components/SessionMetadata";
+import { hasVisibleContext, SessionContextLabel } from "../components/SessionMetadata";
 import { StatusIcon } from "../components/StatusIcon";
 import { TitledControl } from "../components/TitledControl";
 import { useListMotion } from "../components/useListMotion";
@@ -22,7 +22,7 @@ import { joinPhrases } from "../i18n/joinPhrases";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
-import { activityLabelKey, sessionAgentLabel, sessionAriaLabel, sessionDisplayTitle, sessionStatusKind, statusLabel } from "../sessionLabel";
+import { activityLabelKey, sessionAriaLabel, sessionDisplayTitle, sessionStatusKind, statusLabel } from "../sessionLabel";
 import { inheritedLaunch, sessionModelEffort, sessionModelLabel } from "../sessionModel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 import { useHasBoundSessions, useProjectSessions, useSessionProjectId } from "../sessions/useSessions";
@@ -248,7 +248,7 @@ export function ConsoleSessionFocusView({
       </FocusHeader>
       {strip.length > 1 && <SwitchStrip handlers={handlers} entries={strip} currentId={consoleSession.id} />}
       {/* The console session's own card, fixed above the list: selecting it is the only way to reach
-          its terminal and report panel from this view, and its lock, actions and usage live on the
+          its terminal and report panel from this view, and its lock, actions and context size live on the
           card. The strip above supplies the top gap when it is drawn. */}
       <div className={`shrink-0 px-(--row-fill-inset) pb-2 ${strip.length > 1 ? "" : "pt-2"}`}>
         <div className="relative rounded-lg bg-panel">
@@ -596,7 +596,7 @@ const SessionCard = memo(function SessionCard({
   return (
     <TreeRow
       ref={rowRef}
-      describedBy={hasVisibleUsage(session.usage) ? metadataId : undefined}
+      describedBy={hasVisibleContext(session.context) ? metadataId : undefined}
       ariaLabel={joinPhrases(language, [...name, modelLabel])}
       selected={selected}
       locked={session.locked}
@@ -619,7 +619,7 @@ const SessionCard = memo(function SessionCard({
         </FadeOverflow>
       </div>
       <RowIconLine
-        icon={<AgentIcon agent={session.agent} tooltip={sessionAgentLabel(t, session, accounts, defaultNames)} />}
+        icon={<SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} />}
         className="text-xs text-app-muted"
       >
         <FadeOverflow
@@ -630,7 +630,7 @@ const SessionCard = memo(function SessionCard({
           {modelLabel}
         </FadeOverflow>
         <div className="flex shrink-0 items-center gap-2">
-          {hasVisibleUsage(session.usage) && <div id={metadataId}><SessionUsageLabel usage={session.usage} /></div>}
+          {hasVisibleContext(session.context) && <div id={metadataId}><SessionContextLabel context={session.context} /></div>}
           <span>{formatRelativeTime(language, session.started_at, now)}</span>
         </div>
       </RowIconLine>
@@ -657,16 +657,16 @@ function ArchivedRow({
   return (
     <TreeRow
       ref={rowRef}
-      describedBy={hasVisibleUsage(session.usage) ? metadataId : undefined}
+      describedBy={hasVisibleContext(session.context) ? metadataId : undefined}
       ariaLabel={sessionAriaLabel(t, language, session, accounts, undefined, defaultNames)}
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
     >
-      <AgentIcon agent={session.agent} tooltip={sessionAgentLabel(t, session, accounts, defaultNames)} />
+      <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} />
       <RowLabel title={sessionDisplayTitle(t, session)} className="min-w-0 flex-1">
         <span className="text-app-muted">{sessionDisplayTitle(t, session)}</span>
       </RowLabel>
-      {hasVisibleUsage(session.usage) && <span id={metadataId}><SessionUsageLabel usage={session.usage} /></span>}
+      {hasVisibleContext(session.context) && <span id={metadataId}><SessionContextLabel context={session.context} /></span>}
       <RowControls>
         <SessionActions handlers={handlers} session={session} accounts={accounts} hasBoundSessions={false} rowRef={rowRef} />
       </RowControls>

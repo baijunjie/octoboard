@@ -48,6 +48,8 @@ mod process_session;
 mod protocol;
 mod pty;
 mod ptyio;
+mod record_collector;
+mod record_context;
 mod record_observed;
 mod record_titles;
 mod record_watch;
@@ -74,7 +76,6 @@ mod terminal_title;
 mod test_support;
 mod transcript;
 mod trust;
-mod usage;
 
 use std::sync::Arc;
 
@@ -277,7 +278,7 @@ async fn run_daemon(parent_pid: Option<u32>) -> Result<()> {
     // put that cost on every application launch, and clients are served before it lands either way
     // (see `apps/daemon/src/availability.rs`).
     availability::spawn_determine(state.clone());
-    usage::spawn(&state);
+    record_collector::spawn(&state);
     account_quotas::spawn(&state);
     archive_cleanup::spawn(&state);
     // Likewise off the runtime: it runs `git` in every project's directory, a few at a time.

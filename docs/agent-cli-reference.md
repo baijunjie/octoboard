@@ -678,9 +678,12 @@ built from, never the per-session home itself, which is discarded with the proce
   turns, `thread/revert` of the second, a third turn, `thread/revert` of the third, a fourth: a first rollout and two
   segments), the chain copied by that code into a fresh home, plain and compressed, resumed with the surviving first
   and fourth turns and neither reverted one; the new database row named the head (a compressed head came back as a
-  plain `.jsonl`, the other two files stayed compressed). Octoboard reads the head for a thread's usage: the token
-  total in a segment continues from the segment before it (in a real thread the first rollout ended on 964,390 and its
-  segment began at 1,036,910), so the head's last total is the thread's. A segment holds only the lines after the
+  plain `.jsonl`, the other two files stayed compressed). Octoboard reads the head for a thread's context size: the
+  last `token_count` record with a non-null `info` gives `last_token_usage.total_tokens` and `model_context_window`.
+  The cumulative total in a segment continues from the segment before it (in a real thread the first rollout ended on
+  964,390 and its segment began at 1,036,910), which is why the last request's figure is read and not the total. A
+  head segment has no `token_count` until its next turn after a revert, so until then the last one in the file it
+  continues, before that segment's `history_base.end_byte_offset`, stands in, or failing that the nearest earlier file's. A segment holds only the lines after the
   last cut, so the opening prompt comes from the first rollout, and the conversation as it stands is the head preceded
   by each file it continues up to its `history_base.end_byte_offset` (decompressed bytes; in a real thread the offset
   fell on the line boundary before the next segment's first line). Subagents are separate

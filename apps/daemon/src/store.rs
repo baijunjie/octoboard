@@ -185,7 +185,7 @@ impl Store {
                 -- stand-in from its first prompt.
                 record_title     TEXT,
                 record_prompt    TEXT,
-                usage            TEXT,
+                context          TEXT,
                 -- The model and reasoning effort the agent's records show the session running with.
                 observed_model   TEXT,
                 observed_effort  TEXT,
@@ -393,8 +393,13 @@ impl Store {
                 [],
             )?;
         }
-        if !column_exists(&conn, "sessions", "usage")? {
-            conn.execute("ALTER TABLE sessions ADD COLUMN usage TEXT", [])?;
+        if !column_exists(&conn, "sessions", "context")? {
+            conn.execute("ALTER TABLE sessions ADD COLUMN context TEXT", [])?;
+        }
+        // The cumulative token totals this column once held mean something else than the context
+        // size that replaces them; the collector reads the records again to fill the new one.
+        if column_exists(&conn, "sessions", "usage")? {
+            conn.execute("ALTER TABLE sessions DROP COLUMN usage", [])?;
         }
         for column in ["observed_model", "observed_effort"] {
             if !column_exists(&conn, "sessions", column)? {
@@ -1399,7 +1404,7 @@ impl Store {
         let changed = self.lock().execute(
             "UPDATE sessions SET agent = ?2, agent_session_id = ?3, title = ?4, status = ?5,
                                  has_conversation = ?6, started_at = ?7, ended_at = ?8,
-                                 usage = CASE WHEN agent = ?2 AND agent_session_id IS ?3 THEN usage ELSE NULL END,
+                                 context = CASE WHEN agent = ?2 AND agent_session_id IS ?3 THEN context ELSE NULL END,
                                  record_title = CASE WHEN agent = ?2 AND agent_session_id IS ?3 THEN record_title ELSE NULL END,
                                  record_prompt = CASE WHEN agent = ?2 AND agent_session_id IS ?3 THEN record_prompt ELSE NULL END,
                                  observed_model = CASE WHEN agent = ?2 AND agent_session_id IS ?3 THEN observed_model ELSE NULL END,
@@ -1442,10 +1447,10 @@ impl Store {
             {
                 continue;
             }
-            let usage = update
-                .usage
+            let context = update
+                .context
                 .as_ref()
-                .filter(|usage| session.usage.as_ref() != Some(*usage));
+                .filter(|context| &session.context != *context);
             let titles = update
                 .titles
                 .as_ref()
@@ -1458,19 +1463,22 @@ impl Store {
                 .observed_effort
                 .as_ref()
                 .filter(|effort| &session.observed_effort != *effort);
-            if usage.is_none()
+            if context.is_none()
                 && titles.is_none()
                 && observed_model.is_none()
                 && observed_effort.is_none()
             {
                 continue;
             }
-            if let Some(usage) = usage {
+            if let Some(context) = context {
                 tx.execute(
-                    "UPDATE sessions SET usage = ?2 WHERE id = ?1",
-                    params![source.id, serde_json::to_string(usage)?],
+                    "UPDATE sessions SET context = ?2 WHERE id = ?1",
+                    params![
+                        source.id,
+                        context.as_ref().map(serde_json::to_string).transpose()?
+                    ],
                 )?;
-                session.usage = Some(usage.clone());
+                session.context = context.clone();
             }
             if let Some(titles) = titles {
                 tx.execute(
@@ -2099,7 +2107,9 @@ const PROJECT_SETTING_COLUMNS: [&str; 9] = [
 pub struct RecordUpdate {
     /// The session as it was read, which says whose records these are.
     pub session: Session,
-    pub usage: Option<crate::protocol::SessionUsage>,
+    /// The context size the records show: `None` keeps what is stored, `Some(None)` clears it
+    /// (the records say it is not known now, as after a compaction).
+    pub context: Option<Option<crate::protocol::SessionContext>>,
     pub titles: Option<RecordTitles>,
     /// The model and effort the records show, where they show one; an absent value keeps what is
     /// stored. The effort can also be cleared, `Some(None)`, where the records say none is set.
@@ -2110,7 +2120,7 @@ pub struct RecordUpdate {
 const SESSION_COLUMNS: &str = "id, agent, agent_session_id, console_id, project_id, host_id,
                                role, origin, title, status, has_conversation, bound_to, colour,
                                ordinal, account_id, config_dir, pinned, started_at, ended_at,
-                               lead, terminal_title, model, effort, model_override, effort_override, usage,
+                               lead, terminal_title, model, effort, model_override, effort_override, context,
                                record_title, record_prompt, locked, observed_model, observed_effort";
 
 const CONSOLE_COLUMNS: &str = "id, name, workdir, console_session_agent, default_agent,
@@ -2183,7 +2193,7 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
         "INSERT INTO sessions
             (id, agent, agent_session_id, console_id, project_id, host_id, role, origin, title,
              status, has_conversation, bound_to, colour, ordinal, account_id, config_dir, pinned,
-             started_at, ended_at, lead, terminal_title, model, effort, model_override, effort_override, usage,
+             started_at, ended_at, lead, terminal_title, model, effort, model_override, effort_override, context,
              record_title, record_prompt, locked, observed_model, observed_effort)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
                  ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31)",
@@ -2213,7 +2223,7 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
             session.effort.as_ref().and_then(|value| value.as_deref()),
             session.model.is_some(),
             session.effort.is_some(),
-            session.usage.as_ref().map(serde_json::to_string).transpose()?,
+            session.context.as_ref().map(serde_json::to_string).transpose()?,
             session.record_titles.named,
             session.record_titles.prompt,
             session.locked,
@@ -2369,7 +2379,7 @@ fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
             named: row.get(26)?,
             prompt: row.get(27)?,
         },
-        usage: row
+        context: row
             .get::<_, Option<String>>(25)?
             .and_then(|text| serde_json::from_str(&text).ok()),
         model: row.get::<_, bool>(23)?.then(|| row.get(21)).transpose()?,
@@ -2535,7 +2545,7 @@ mod tests {
             record_titles: Default::default(),
             background_tasks: Vec::new(),
             default_effort: None,
-            usage: None,
+            context: None,
             observed_model: None,
             observed_effort: None,
             model: None,
@@ -4505,96 +4515,106 @@ mod tests {
     }
 
     #[test]
-    fn usage_migrates_survives_unrelated_writes_and_rejects_stale_sources() {
-        let path = temp_db("usage");
+    fn context_migrates_survives_unrelated_writes_and_rejects_stale_sources() {
+        let path = temp_db("context");
         let store = Store::open(&path).unwrap();
         store.insert_console(&console(None, None, None)).unwrap();
         let mut source = session(Some("/account-a"));
         source.agent_session_id = Some("native-1".to_owned());
         store.insert_session(&source).unwrap();
         drop(store);
-        Connection::open(&path)
-            .unwrap()
-            .execute("ALTER TABLE sessions DROP COLUMN usage", [])
+        // A database from before the column was renamed holds cumulative totals under `usage`.
+        let old = Connection::open(&path).unwrap();
+        old.execute("ALTER TABLE sessions DROP COLUMN context", [])
             .unwrap();
+        old.execute("ALTER TABLE sessions ADD COLUMN usage TEXT", [])
+            .unwrap();
+        old.execute("UPDATE sessions SET usage = '{\"total_tokens\":9}'", [])
+            .unwrap();
+        drop(old);
         let store = Store::open(&path).unwrap();
-        let usage = crate::protocol::SessionUsage {
-            input_tokens: 100,
-            output_tokens: 20,
-            total_tokens: 120,
-            cached_input_tokens: Some(80),
-            cache_write_input_tokens: None,
+        assert!(store
+            .get_session(&source.id)
+            .unwrap()
+            .unwrap()
+            .context
+            .is_none());
+        assert!(!column_exists(&store.lock(), "sessions", "usage").unwrap());
+        let context = crate::protocol::SessionContext {
+            tokens: 120,
+            window: Some(475_000),
+            used_percent: Some(2),
+        };
+        let update = |session: &Session, context| RecordUpdate {
+            session: session.clone(),
+            context,
+            observed_model: None,
+            observed_effort: None,
+            titles: None,
         };
         assert_eq!(
             store
-                .set_record_data(&[RecordUpdate {
-                    session: source.clone(),
-                    usage: Some(usage.clone()),
-                    observed_model: None,
-                    observed_effort: None,
-                    titles: None
-                }])
+                .set_record_data(&[update(&source, Some(Some(context.clone())))])
                 .unwrap()
                 .len(),
             1
         );
         assert!(store
-            .set_record_data(&[RecordUpdate {
-                session: source.clone(),
-                usage: Some(usage.clone()),
-                observed_model: None,
-                observed_effort: None,
-                titles: None
-            }])
+            .set_record_data(&[update(&source, Some(Some(context.clone())))])
             .unwrap()
             .is_empty());
         source.title = "Renamed".to_owned();
         source.status = SessionStatus::Archived;
         store.update_session(&source).unwrap();
         assert_eq!(
-            store.get_session(&source.id).unwrap().unwrap().usage,
-            Some(usage.clone())
+            store.get_session(&source.id).unwrap().unwrap().context,
+            Some(context.clone())
         );
         drop(store);
         let store = Store::open(&path).unwrap();
         assert_eq!(
-            store.get_session(&source.id).unwrap().unwrap().usage,
-            Some(usage.clone())
+            store.get_session(&source.id).unwrap().unwrap().context,
+            Some(context.clone())
         );
         store
             .set_session_account(&source.id, None, Some("/account-b"))
             .unwrap();
-        let changed = crate::protocol::SessionUsage {
-            total_tokens: 999,
-            ..usage.clone()
+        let changed = crate::protocol::SessionContext {
+            tokens: 999,
+            ..context.clone()
         };
         assert!(store
-            .set_record_data(&[RecordUpdate {
-                session: source.clone(),
-                usage: Some(changed),
-                observed_model: None,
-                observed_effort: None,
-                titles: None
-            }])
+            .set_record_data(&[update(&source, Some(Some(changed)))])
             .unwrap()
             .is_empty());
         let mut current = store.get_session(&source.id).unwrap().unwrap();
+        // The records can also say the size is not known now, which clears it.
+        assert_eq!(
+            store
+                .set_record_data(&[update(&current, Some(None))])
+                .unwrap()
+                .len(),
+            1
+        );
+        assert!(store
+            .get_session(&source.id)
+            .unwrap()
+            .unwrap()
+            .context
+            .is_none());
+        store
+            .set_record_data(&[update(&current, Some(Some(context.clone())))])
+            .unwrap();
         current.agent_session_id = Some("native-2".to_owned());
         store.update_session(&current).unwrap();
         assert!(store
             .get_session(&source.id)
             .unwrap()
             .unwrap()
-            .usage
+            .context
             .is_none());
         assert!(store
-            .set_record_data(&[RecordUpdate {
-                session: source,
-                usage: Some(usage),
-                observed_model: None,
-                observed_effort: None,
-                titles: None
-            }])
+            .set_record_data(&[update(&source, Some(Some(context)))])
             .unwrap()
             .is_empty());
     }
@@ -4621,7 +4641,7 @@ mod tests {
         };
         let updates = [RecordUpdate {
             session: source.clone(),
-            usage: None,
+            context: None,
             observed_model: None,
             observed_effort: None,
             titles: Some(titles.clone()),
@@ -4670,7 +4690,7 @@ mod tests {
         let mut source = store.get_session("session-1").unwrap().unwrap();
         let updates = [RecordUpdate {
             session: source.clone(),
-            usage: None,
+            context: None,
             observed_model: Some("claude-opus-5-5".to_owned()),
             observed_effort: Some(Some("high".to_owned())),
             titles: None,
@@ -4686,7 +4706,7 @@ mod tests {
         assert_eq!(stored.observed_effort.as_deref(), Some("high"));
         let unset = [RecordUpdate {
             session: stored,
-            usage: None,
+            context: None,
             observed_model: None,
             observed_effort: Some(None),
             titles: None,

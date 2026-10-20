@@ -4,11 +4,11 @@ import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "reac
 
 import { Button } from "../components/Button";
 import { AGENT_LABEL } from "../agents";
-import { AgentIcon } from "../components/AgentIcon";
+import { SessionAgentIcon } from "../components/SessionAgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { PaneTitle } from "../components/PaneTitle";
-import { ArchivedSessionMetadata, hasVisibleUsage, SessionUsageLabel } from "../components/SessionMetadata";
+import { ArchivedSessionMetadata, hasVisibleContext, SessionContextLabel } from "../components/SessionMetadata";
 import { TitledControl } from "../components/TitledControl";
 import { FadedScroller } from "../components/scrollFade";
 import { useLatest } from "../components/useLatest";
@@ -17,7 +17,7 @@ import { useEscapeWhileTooltipOpen } from "../dialogs/useEscapeWhileTooltipOpen"
 import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Account, Console, Project, Session, Settings } from "../protocol";
-import { sessionAgentLabel, sessionAriaLabel, sessionDisplayTitle } from "../sessionLabel";
+import { sessionAriaLabel, sessionDisplayTitle } from "../sessionLabel";
 import { archivedSessionRows, boundArchivedSessions } from "../sidebar/order";
 import { NESTED_ROW_CLASS, TreeRow } from "../sidebar/rows";
 import { useFlip } from "../sidebar/useFlip";
@@ -222,7 +222,7 @@ export function ArchiveView({
 /** One row of the list: selects the session (`onSelect`), and holds the Reopen and Delete actions,
  * whose presses must not also select it. Its accessible name is the session's own
  * (`sessionAriaLabel`, which also says which lead session it was archived under, the inset alone
- * being no words); its usage and dates are its description. */
+ * being no words); its context size and dates are its description. */
 function ArchiveRow({
   session,
   under,
@@ -244,18 +244,18 @@ function ArchiveRow({
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
-  const usageId = useId();
+  const contextId = useId();
   const datesId = useId();
-  const usage = hasVisibleUsage(session.usage);
+  const context = hasVisibleContext(session.context);
   return (
     <TreeRow
       ariaLabel={sessionAriaLabel(t, language, session, accounts, under, defaultNames)}
-      describedBy={usage ? `${usageId} ${datesId}` : datesId}
+      describedBy={context ? `${contextId} ${datesId}` : datesId}
       selected={selected}
       onActivate={() => onSelect(session)}
       className="min-h-12 flex-wrap items-center gap-x-3 gap-y-1 px-2 py-2"
     >
-      <AgentIcon agent={session.agent} tooltip={sessionAgentLabel(t, session, accounts, defaultNames)} />
+      <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} />
       <div className="min-w-24 flex-1">
         <FadeOverflow dir="auto" className="text-sm" titleWhenClipped={sessionDisplayTitle(t, session)}>
           {sessionDisplayTitle(t, session)}
@@ -264,7 +264,7 @@ function ArchiveRow({
           <FadeOverflow className="min-w-0" titleWhenClipped={AGENT_LABEL[session.agent]}>
             <span aria-hidden="true">{AGENT_LABEL[session.agent]}</span>
           </FadeOverflow>
-          {usage && <span id={usageId}><SessionUsageLabel usage={session.usage} /></span>}
+          {context && <span id={contextId}><SessionContextLabel context={session.context} /></span>}
         </div>
       </div>
       {/* The actions and the dates move to a line of their own together, so a narrow pane still

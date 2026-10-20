@@ -316,9 +316,9 @@ it("asks for the models only once Advanced is opened, and offers what comes back
 it("keeps a stored model the list lacks, last and marked", async () => {
   render(consoleOf("c-1", "Main", { claude_console_session_model: "retired" }));
   await openAdvanced();
-  expect(pickerNamed("Model").textContent).toContain("retired (not in the list)");
+  expect(pickerNamed("Model").textContent).toContain("retired, Not in the list");
   await click(pickerNamed("Model"));
-  expect(optionTexts()).toEqual(["Alpha", "Beta", "Plain", "retired (not in the list)"]);
+  expect(optionTexts()).toEqual(["Alpha", "Beta", "Plain", "retired, Not in the list"]);
 });
 
 it("asks under the account that is settled, and again when the account or the agent changes", async () => {
@@ -370,7 +370,7 @@ it.each([
   await openAdvanced();
   expect(document.body.textContent).toContain(reason);
   await click(pickerNamed("Model"));
-  expect(optionTexts()).toEqual(["alpha (not in the list)"]);
+  expect(optionTexts()).toEqual(["alpha, Not in the list"]);
   await click(pickerNamed("Model"));
   expect(locked("Reasoning effort")).toBe(false);
   await click(clearButton("Reasoning effort"));
@@ -442,10 +442,10 @@ const picker = (name: string) => buttons().find((b) => b.getAttribute("aria-labe
 
 it("names the agent project sessions follow on the Same as entry, and keeps it current", async () => {
   render(consoleOf("c-1", "Main", { default_agent: "codex" }));
-  expect(picker("Project sessions").textContent).toContain("Same as console sessions (Codex)");
+  expect(picker("Project sessions").textContent).toContain("Same as console sessions, Codex");
   await click(picker("Console sessions"));
   await choose("Grok Build");
-  expect(picker("Project sessions").textContent).toContain("Same as console sessions (Grok Build)");
+  expect(picker("Project sessions").textContent).toContain("Same as console sessions, Grok Build");
 });
 
 it("starts a new console on Same as console sessions and sends no project session agent", async () => {
@@ -478,7 +478,7 @@ it("sends the project session agent only when it changed, and an explicit null w
   await clickButton("Save");
   expect(sent(request)[0]).toEqual({ type: "update_console", console: "c-1", name: "Main", default_agent: "claude" });
   await click(picker("Project sessions"));
-  await choose("Same as console sessions (Claude Code)");
+  await choose("Same as console sessions, Claude Code");
   await clickButton("Save");
   expect(sent(request)[1]).toEqual({ type: "update_console", console: "c-1", name: "Main", default_agent: "claude", project_session_agent: null });
 });
@@ -578,7 +578,7 @@ it("leaves the missing agents out of both default agent pickers", async () => {
   expect(optionTexts()).toEqual(["Claude Code", "Grok Build"]);
   await choose("Claude Code");
   await click(picker("Project sessions"));
-  expect(optionTexts()).toEqual(["Same as console sessions (Claude Code)", "Claude Code", "Grok Build"]);
+  expect(optionTexts()).toEqual(["Same as console sessions, Claude Code", "Claude Code", "Grok Build"]);
 });
 
 it("keeps the stored agent in its picker as not installed while it is the value, and drops it once moved off", async () => {
@@ -608,7 +608,7 @@ it("lists only the added agents, in the order they were added, in the agent pick
   expect(optionTexts()).toEqual(["Grok Build", "Claude Code"]);
   await choose("Grok Build");
   await click(picker("Project sessions"));
-  expect(optionTexts()).toEqual(["Same as console sessions (Grok Build)", "Grok Build", "Claude Code"]);
+  expect(optionTexts()).toEqual(["Same as console sessions, Grok Build", "Grok Build", "Claude Code"]);
   await choose("Claude Code");
   await openAdvanced();
   expect(tabNames()).toEqual(["Grok Build", "Claude Code"]);

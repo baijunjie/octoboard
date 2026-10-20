@@ -7,7 +7,7 @@ import type { AgentModel } from "./protocol";
 // (`list_agent_models`), so it cannot go stale in this source.
 
 /** One entry of a launch-setting picker. */
-export type LaunchSettingOption = { value: string; label: string };
+export type LaunchSettingOption = { value: string; label: string; badge?: string };
 
 /** The reasoning effort levels the agent's models accept, for the effort picker. A chosen model that
  * is listed gets exactly its own, and `[]` (it takes none) is `none`. Otherwise — nothing chosen or
@@ -28,5 +28,5 @@ export function launchSettingOptions(
   current: string | null,
 ): LaunchSettingOption[] {
   if (!current || known.some((option) => option.value === current)) return known;
-  return [...known, { value: current, label: t("dialog.agentSettings.unlisted", { value: current }) }];
+  return [...known, { value: current, label: current, badge: t("dialog.agentSettings.unlisted") }];
 }

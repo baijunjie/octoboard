@@ -39,9 +39,9 @@ is shown running with" in `docs/product/model-and-reasoning-effort.md` decides t
 neither is known; the agent's name is not shown on the card. The model line is one line that fades where it is cut off,
 with its full text as its tooltip while cut (see "Names too long for their space" in
 `docs/product/labels-and-tooltips.md`), and the card's accessible name ends with the same text. Resuming or
-reopening does not reset the creation time. When native token usage has a positive total, it appears immediately before
-the creation time on that same agent line and updates while the session runs (see "Native session usage" in
-`docs/product/session-usage.md`), set apart from the creation time by spacing alone; without visible usage, the trailing
+reopening does not reset the creation time. When the context size is known and above zero, its chip appears immediately
+before the creation time on that same agent line and updates while the session runs (see "The context-size chip" in
+`docs/product/session-context.md`), set apart from the creation time by spacing alone; without the chip, the trailing
 block contains creation time alone. The model line has no adjacent separator. The status
 and agent lines share aligned leading icons and text starts. A title with a console-session colour dot shares that
 alignment;
@@ -64,8 +64,8 @@ console session above them (see "A project's focus mode" below and "The binding 
 
 **Archived (n)**, in both, only while the view has archived sessions — with none, the section is not shown at all: the
 parent-session preview described in "The archive view" in `docs/product/sidebar.md`, each row showing its agent's icon
-and its title on one compact line, with native token usage at the trailing end when its total is positive (see "Native
-session usage" in `docs/product/session-usage.md`). These preview rows show no creation or archive time. The heading
+and its title on one compact line, with its context-size chip at the trailing end when the context size is known and above zero (see "The
+context-size chip" in `docs/product/session-context.md`). These preview rows show no creation or archive time. The heading
 counts every archived session in the view's scope, including children omitted from the preview. Clicking a row selects
 it while leaving it archived. Its action menu offers **Reopen**, which selects and resumes the session, then **Copy
 session ID** (see "Session rows" in `docs/product/sidebar.md`), and after a separator **Delete**, disabled while locked.
@@ -139,7 +139,7 @@ added and installed, the header's **+** is disabled and the empty row is plain t
   archived: see "The switch strip" below.
 - **The console session's own card**, below the switch strip, or right under the header without one. It stays where it
   is while the list below scrolls. It is a session card as in "What both views show" above — status, title, agent,
-  creation time and token usage — with these differences: its title is preceded by the console session's own colour,
+  creation time and context size — with these differences: its title is preceded by the console session's own colour,
   decoratively, since the title names it; it never shows a pin button, even while the console session is pinned; and
   its action menu is the console session's row's (see "Session rows" in `docs/product/sidebar.md`) without **Pin** /
   **Unpin** and **Focus mode**. Its lock button while locked, and its Delete or Archive shortcut, are as on any card.

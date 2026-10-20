@@ -1,5 +1,5 @@
 import type { Agent, AgentAvailability, Settings } from "../../protocol";
-import type { Ui } from "../interact";
+import { describing, type Ui } from "../interact";
 import type { Scenario, Step } from "../scenario";
 import { ALL_AGENTS, SAMPLE, branchItemOf, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState, worktreeItemOf } from "./builders";
 import { SAMPLE_CODEX_MODELS } from "./agentModels";
@@ -93,10 +93,13 @@ const removeState = snapshotState({
   settings: accountsState.settings,
 });
 
+// A model the agent no longer lists, long enough to be clipped in a picker.
+const RETIRED_MODEL = "retired-model-for-production-release-coordination-and-compatibility-review";
+
 // A console that carries a stored model and effort for its default agent: the model is one the
 // dialog's list no longer names, so it is offered on the end, marked.
 const launchSettingsState = snapshotState({
-  consoles: [{ ...console_, claude_console_session_model: "retired-model-for-production-release-coordination-and-compatibility-review", claude_console_session_effort: "high" }],
+  consoles: [{ ...console_, claude_console_session_model: RETIRED_MODEL, claude_console_session_effort: "high" }],
   projects: [web, api],
   sessions,
 });
@@ -113,7 +116,7 @@ const avatarState = snapshotState({
 const configured = projectOf("p-configured", console_.id, "Configured Site", {
   default_agent: "claude",
   claude_account_id: { kind: "account", id: "a-work" },
-  claude_session_model: "retired-model-for-production-release-coordination-and-compatibility-review",
+  claude_session_model: RETIRED_MODEL,
   claude_session_effort: "high",
 });
 const configuredState = snapshotState({
@@ -584,7 +587,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "normal",
     title: "New console with accounts",
-    description: "Project sessions start on Same as console sessions, naming Claude Code beside its faded icon. The \"Agent default accounts\" section has the same picker on every agent's row: Claude Code, which has named accounts, offers them with its default account under the name the user gave it (Studio laptop); Codex and Grok Build have only their default account, so their pickers hold that one option, Codex under its renamed name (Team seat) and Grok Build as \"Default account\". One icon-only key button named \"Manage accounts\" (with a tooltip) sits beside the section title.",
+    description: "Project sessions start on Same as console sessions, followed by a grey Claude Code badge naming the agent it stands for, beside the faded Claude Code icon. The \"Agent default accounts\" section has the same picker on every agent's row: Claude Code, which has named accounts, offers them with its default account under the name the user gave it (Studio laptop); Codex and Grok Build have only their default account, so their pickers hold that one option, Codex under its renamed name (Team seat) and Grok Build as \"Default account\". One icon-only key button named \"Manage accounts\" (with a tooltip) sits beside the section title.",
     state: { ...dialogState, settings: { ...dialogState.settings!, default_account_names: { claude: "Studio laptop", codex: "Team seat" } } },
     steps: [
       (ui) => ui.press(ui.t("rail.newConsole")),
@@ -624,7 +627,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "normal",
     title: "Project sessions agent choices",
-    description: "The list offers Same as console sessions, Claude Code, and Codex as the held value, with a grey Not installed badge after its name in the option as well as in the field; Grok Build, also missing, is left out.",
+    description: "The list offers Same as console sessions (a grey Claude Code badge after it, beside the faded icon), Claude Code, and Codex as the held value, with a grey Not installed badge after its name in the option as well as in the field; Grok Build, also missing, is left out.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.edit")),
@@ -1197,7 +1200,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Stored project account and launch settings",
-    description: "Long selected account and retained model labels fade at the field edge and scroll on hover. Open either picker to inspect the matching option labels.",
+    description: "Long selected account and retained model labels fade at the field edge and scroll on hover; the retained model, which the agent no longer lists, keeps a grey Not in the list badge after its name that stays clear of the fade. Open either picker to inspect the matching option labels.",
     steps: [
       (ui) => projectActions(ui, configured.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),
@@ -1206,15 +1209,30 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
+    id: "dialog-edit-project-model-choices",
+    group: "Projects",
+    category: "normal",
+    title: "Project model choices with a retained model",
+    description: "The open Model list ends with the model the project still stores but the agent no longer lists, selected, with a grey Not in the list badge after its name in the option as well as in the field.",
+    steps: [
+      (ui) => projectActions(ui, configured.name),
+      (ui) => ui.press(ui.t("sidebar.project.edit")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+      // The picker is named by the model it holds, followed by the badge.
+      (ui) => ui.press(describing("the Model picker holding the retired model", (name) => name.startsWith(RETIRED_MODEL))),
+    ],
+  },
+  {
+    ...dialogFixture,
     state: {
       ...dialogState,
-      consoles: new Map([...dialogState.consoles, [console_.id, { ...dialogState.consoles.get(console_.id)!, claude_project_session_effort: null }]]),
+      consoles: new Map([...dialogState.consoles, [console_.id, { ...dialogState.consoles.get(console_.id)!, claude_project_session_model: RETIRED_MODEL, claude_project_session_effort: null }]]),
     },
     id: "dialog-edit-project-inherited-launch-settings",
     group: "Projects",
     category: "normal",
     title: "Project settings inheriting console launch settings",
-    description: "Model inherits the console's project session value, named in its label; Reasoning effort, which the console leaves to the agent, says it inherits the agent's own setting.",
+    description: "Model reads Inherit from console with a grey badge after it naming the console's project session model, which is too long for the field and ends in an ellipsis before the chevron; Reasoning effort, which the console leaves to the agent, reads Inherit from console with a grey badge The agent's own setting, in full.",
     steps: [
       (ui) => projectActions(ui, onDefault.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),
@@ -1227,7 +1245,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Project account choices",
-    description: "Inherited, default and long named accounts coexist. Hover a clipped account option to reveal its text as a marquee.",
+    description: "Inherited, default and long named accounts coexist. The inherited option is the console's account name with a grey From the console badge after it, which stays clear of the fade. Hover a clipped account option to reveal its text as a marquee.",
     steps: [
       (ui) => projectActions(ui, onDefault.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),
@@ -1249,7 +1267,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Add project in a console with its own project session agent",
-    description: "Inherit from console names Codex, the console's project session agent rather than its Claude Code console sessions, beside a faded Codex icon. Grok Build, missing, is not offered.",
+    description: "Inherit from console carries a grey Codex badge, the console's project session agent rather than its Claude Code console sessions, beside a faded Codex icon. Grok Build, missing, is not offered.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),

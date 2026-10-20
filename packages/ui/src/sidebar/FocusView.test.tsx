@@ -473,14 +473,14 @@ it.each(["idle", "archived"] as const)("runs only the hovered text of an %s focu
   expectIndependentMarquees(labels, [row, ...row.querySelectorAll("button, svg")]);
 });
 
-it("updates recorded usage on active cards and keeps archived previews compact without dates", () => {
+it("updates the context size on active cards and keeps archived previews compact without dates", () => {
   let update!: () => void;
-  const zeroUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
-  const active = sessionOf("live-usage", main.id, web.id, "Live usage", "working", { usage: zeroUsage });
-  const archived = sessionOf("old-usage", main.id, web.id, "Old usage", "archived", { ended_at: 1000, usage: zeroUsage });
+  const zeroContext = { tokens: 0 };
+  const active = sessionOf("live-context", main.id, web.id, "Live context", "working", { context: zeroContext });
+  const archived = sessionOf("old-context", main.id, web.id, "Old context", "archived", { ended_at: 1000, context: zeroContext });
   function View({ handlers }: { handlers: SidebarHandlers }) {
     const [session, setSession] = useState(active);
-    update = () => setSession({ ...active, usage: { input_tokens: 1000, output_tokens: 200, total_tokens: 1200 } });
+    update = () => setSession({ ...active, context: { tokens: 1200 } });
     return <ProjectFocusView handlers={handlers} console={main} project={web} sessions={[session, archived]} owners={owners} />;
   }
   const { container } = mount((handlers) => <View handlers={handlers} />);
@@ -490,7 +490,7 @@ it("updates recorded usage on active cards and keeps archived previews compact w
   expect(row(archived.title).getAttribute("aria-describedby")).toBeNull();
   act(update);
   const description = document.getElementById(row(active.title).getAttribute("aria-describedby")!);
-  expect(description?.querySelector('[role="img"]')?.getAttribute("aria-label")).toContain(`${isolate("1,200")} tokens`);
+  expect(description?.querySelector('[role="img"]')?.getAttribute("aria-label")).toContain(`Context ${isolate("1,200")} tokens`);
 });
 
 it("unlocks a locked card without selecting it or changing its position", () => {
