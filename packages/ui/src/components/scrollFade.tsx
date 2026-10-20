@@ -1,6 +1,6 @@
 import { ScrollShadow, scrollShadowVariants, useScrollShadow, type ScrollShadowVisibility } from "@heroui/react";
 import type React from "react";
-import { useEffect, useState, type CSSProperties, type Ref, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useState, type CSSProperties, type Ref, type RefObject } from "react";
 import { useObjectRef } from "react-aria";
 
 import { useFocusVisibleProps } from "./useFocusVisibleProps";
@@ -24,10 +24,30 @@ function scrollPadding(orientation: Orientation): CSSProperties {
   return orientation === "horizontal" ? { scrollPaddingInline: FADE_SIZE } : { scrollPaddingBlock: FADE_SIZE };
 }
 
+/** The room the scrollbars take at the box's end edges, measured: the scrollbar plus the end border,
+ * since both the mask and the sticky overlays are placed from the border box's edge. An overlay
+ * scrollbar (macOS by default) takes none, and leaves only the border. */
+function scrollbarSizes(element: HTMLElement): { inline: number; block: number } {
+  const css = getComputedStyle(element);
+  const border = (...sides: string[]) => sides.reduce((sum, side) => sum + (parseFloat(css.getPropertyValue(`border-${side}-width`)) || 0), 0);
+  return {
+    inline: Math.max(0, element.offsetWidth - element.clientWidth - border("left")),
+    block: Math.max(0, element.offsetHeight - element.clientHeight - border("top")),
+  };
+}
+
 /**
- * Whether the scroller can also scroll sideways, for the fade to leave the horizontal scrollbar
- * undimmed (see `[data-scrolls-sideways]` in `style.css`). Only a vertical fade needs it: the
- * library's horizontal one already reserves the strip along the bottom itself.
+ * The strips the fade's mask leaves undimmed for the scrollbars, sized to the scrollbars the scroller
+ * really has. HeroUI reserves a fixed 10px strip (`--scroll-shadow-scrollbar-size`) along the edge
+ * its scrollbar sits on, so where the scrollbar overlays the content and takes no room, that strip
+ * of content and background stays at full strength while the rest of the edge fades. The vertical
+ * fade's strip is the vertical scrollbar's width, the horizontal one's the horizontal scrollbar's
+ * height.
+ *
+ * It also says whether a vertical fade can scroll sideways, for it to leave the horizontal scrollbar
+ * undimmed too (see `[data-scrolls-sideways]` in `style.css`, whose bottom strip is
+ * `--scroll-shadow-scrollbar-block-size`). Only a vertical fade needs that: the library's horizontal
+ * one already reserves the strip along the bottom itself.
  *
  * It runs on every commit of the caller rather than once, with no dependencies, because what makes
  * a surface start or stop scrolling sideways often leaves nothing an observer would see: the same
@@ -36,22 +56,41 @@ function scrollPadding(orientation: Orientation): CSSProperties {
  * document does on a new subject. A `ResizeObserver` covers the rest — a lazy render finishing, the
  * window resizing — and reads back the same answer when nothing moved, which React drops.
  */
-function useScrollsSideways(ref: RefObject<HTMLElement | null>, orientation: Orientation): { "data-scrolls-sideways"?: true } {
+function useScrollbarStrips(ref: RefObject<HTMLElement | null>, orientation: Orientation): {
+  marker: { "data-scrolls-sideways"?: true };
+  style: CSSProperties;
+  /** The vertical scrollbar's measured width, for a caller that keeps its own overlays clear of it. */
+  inline: number;
+} {
   const [sideways, setSideways] = useState(false);
-  useEffect(() => {
-    const element = orientation === "vertical" ? ref.current : null;
+  const [inline, setInline] = useState(0);
+  const [block, setBlock] = useState(0);
+  // Before paint: the inline value replaces HeroUI's default, so a first frame at 0 would dim a classic scrollbar.
+  useLayoutEffect(() => {
+    const element = ref.current;
     if (!element) {
       setSideways(false);
       return;
     }
-    const measure = () => setSideways(element.scrollWidth > element.clientWidth);
+    const measure = () => {
+      setSideways(orientation === "vertical" && element.scrollWidth > element.clientWidth);
+      const sizes = scrollbarSizes(element);
+      setInline(sizes.inline);
+      setBlock(sizes.block);
+    };
     const resize = new ResizeObserver(measure);
     resize.observe(element);
     for (const child of element.children) resize.observe(child);
     measure();
     return () => resize.disconnect();
   });
-  return sideways ? { "data-scrolls-sideways": true } : {};
+  return {
+    marker: sideways ? { "data-scrolls-sideways": true } : {},
+    style: orientation === "vertical"
+      ? { "--scroll-shadow-scrollbar-size": `${inline}px`, "--scroll-shadow-scrollbar-block-size": `${block}px` } as CSSProperties
+      : { "--scroll-shadow-scrollbar-size": `${block}px` } as CSSProperties,
+    inline,
+  };
 }
 
 function joinClasses(...names: (string | undefined)[]): string {
@@ -143,11 +182,10 @@ type FadedScrollerProps = Omit<React.ComponentProps<typeof ScrollShadow>, "size"
  */
 export function FadedScroller({ orientation = "vertical", region, style, className, ref: forwarded, stickyHeadingHeight, stickySurface, ...props }: FadedScrollerProps): React.ReactElement {
   const ref = useObjectRef(forwarded);
-  const sideways = useScrollsSideways(ref, orientation);
+  const strips = useScrollbarStrips(ref, orientation);
   const [visibility, setVisibility] = useState<ScrollShadowVisibility>("none");
-  const [gutter, setGutter] = useState(0);
   const [topOffset, setTopOffset] = useState(stickyHeadingHeight ?? 0);
-  // Like `useScrollsSideways`, it re-runs on every commit, to pick up children React replaced.
+  // Like `useScrollbarStrips`, it re-runs on every commit, to pick up children React replaced.
   useEffect(() => {
     const element = ref.current;
     if (stickyHeadingHeight === undefined || !element) return;
@@ -156,17 +194,13 @@ export function FadedScroller({ orientation = "vertical", region, style, classNa
       const gap = sticky ? sticky.getBoundingClientRect().top - element.getBoundingClientRect().top : 0;
       setTopOffset(Math.min(stickyHeadingHeight, Math.max(0, stickyHeadingHeight - gap)));
     };
-    const measure = () => {
-      setGutter(element.offsetWidth - element.clientWidth);
-      place();
-    };
     // The heading's place moves with a resize or a re-wrap as well as with scrolling, so what the content
     // is made of is watched too.
-    const resize = new ResizeObserver(measure);
+    const resize = new ResizeObserver(place);
     resize.observe(element);
     for (const child of element.children) resize.observe(child);
     element.addEventListener("scroll", place, { passive: true });
-    measure();
+    place();
     return () => {
       resize.disconnect();
       element.removeEventListener("scroll", place);
@@ -177,14 +211,14 @@ export function FadedScroller({ orientation = "vertical", region, style, classNa
       orientation={orientation}
       size={FADE_SIZE}
       {...props}
-      {...sideways}
+      {...strips.marker}
       ref={ref}
       onVisibilityChange={(value) => {
         if (stickyHeadingHeight !== undefined) setVisibility(value);
         region?.onVisibilityChange?.(value);
       }}
       {...region?.props}
-      style={{ ...scrollPadding(orientation), ...style, ...(stickyHeadingHeight === undefined ? {} : {
+      style={{ ...scrollPadding(orientation), ...style, ...strips.style, ...(stickyHeadingHeight === undefined ? {} : {
         maskImage: "none", WebkitMaskImage: "none", animation: "none",
         scrollPaddingTop: stickyScrollPaddingTop(stickyHeadingHeight),
       }) }}
@@ -192,7 +226,7 @@ export function FadedScroller({ orientation = "vertical", region, style, classNa
     />
   );
   if (stickyHeadingHeight === undefined) return scroller;
-  return <StickyFadeFrame visibility={visibility} gutter={gutter} topOffset={topOffset} surface={stickySurface}>{scroller}</StickyFadeFrame>;
+  return <StickyFadeFrame visibility={visibility} gutter={strips.inline} topOffset={topOffset} surface={stickySurface}>{scroller}</StickyFadeFrame>;
 }
 
 type StickySurface = "sidebar" | "overlay";
@@ -243,8 +277,9 @@ export function useStickyScrollFade({ ref: forwarded, className, stickyHeadingHe
     const element = ref.current;
     if (!element) return;
     const measure = () => {
-      setGutter(element.offsetWidth - element.clientWidth);
-      setBottomGutter(element.offsetHeight - element.clientHeight);
+      const sizes = scrollbarSizes(element);
+      setGutter(sizes.inline);
+      setBottomGutter(sizes.block);
     };
     const resize = new ResizeObserver(measure);
     resize.observe(element);
@@ -313,13 +348,13 @@ export function useScrollFade<T extends HTMLElement = HTMLDivElement>({
     orientation,
     visibility: "auto",
   });
-  const sideways = useScrollsSideways(ref, orientation);
+  const strips = useScrollbarStrips(ref, orientation);
   return {
     ...region?.props,
-    ...sideways,
+    ...strips.marker,
     ref,
     className: joinClasses(scrollShadowVariants({ orientation }).base(), className, region?.className),
-    style: { "--scroll-shadow-size": `${FADE_SIZE}px`, ...scrollPadding(orientation), ...style } as CSSProperties,
+    style: { "--scroll-shadow-size": `${FADE_SIZE}px`, ...scrollPadding(orientation), ...style, ...strips.style } as CSSProperties,
     "data-scroll-shadow-mode": "auto",
   };
 }

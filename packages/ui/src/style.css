@@ -1068,7 +1068,8 @@ html.pane-resizing * {
    they are restated whole; the gradient still comes from `--scroll-linear-gradient`, which HeroUI
    sets from the scroll timeline or from the `data-*-scroll` attributes. `mask-repeat` is left to the
    library, whose single `no-repeat` repeats across all three layers. Unlayered, so it wins over
-   HeroUI's layered rule on both paths. */
+   HeroUI's layered rule on both paths. The strips are the scrollbars' measured thickness, the bottom
+   one from `--scroll-shadow-scrollbar-block-size`, so an overlay scrollbar reserves nothing. */
 .scroll-shadow--fade.scroll-shadow--vertical[data-scrolls-sideways] {
   mask-image: linear-gradient(var(--scroll-linear-gradient)), linear-gradient(#000, #000), linear-gradient(#000, #000);
   mask-position:
@@ -1076,18 +1077,18 @@ html.pane-resizing * {
     right top,
     left bottom;
   mask-size:
-    calc(100% - var(--scroll-shadow-scrollbar-size)) calc(100% - var(--scroll-shadow-scrollbar-size)),
+    calc(100% - var(--scroll-shadow-scrollbar-size)) calc(100% - var(--scroll-shadow-scrollbar-block-size)),
     var(--scroll-shadow-scrollbar-size) 100%,
-    100% var(--scroll-shadow-scrollbar-size);
+    100% var(--scroll-shadow-scrollbar-block-size);
   -webkit-mask-image: linear-gradient(var(--scroll-linear-gradient)), linear-gradient(#000, #000), linear-gradient(#000, #000);
   -webkit-mask-position:
     left top,
     right top,
     left bottom;
   -webkit-mask-size:
-    calc(100% - var(--scroll-shadow-scrollbar-size)) calc(100% - var(--scroll-shadow-scrollbar-size)),
+    calc(100% - var(--scroll-shadow-scrollbar-size)) calc(100% - var(--scroll-shadow-scrollbar-block-size)),
     var(--scroll-shadow-scrollbar-size) 100%,
-    100% var(--scroll-shadow-scrollbar-size);
+    100% var(--scroll-shadow-scrollbar-block-size);
 }
 
 /* Logical corners mirror the branches with the UI. The first-level rail follows the flat

@@ -8,9 +8,14 @@ import { FadedScroller, useScrollFade } from "./scrollFade";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** The width of the content, which each test moves to say the surface started or stopped scrolling
- * sideways. jsdom has no layout, so the two measurements the marker follows are faked from here. */
+ * sideways, and the thickness of the vertical and horizontal scrollbars the box loses room to (0 for
+ * overlay ones). jsdom has
+ * no layout, so the measurements the marker and the mask's scrollbar strips follow are faked from here. */
 let contentWidth = 100;
+let scrollbar = 0;
+let scrollbarBlock = 0;
 const BOX_WIDTH = 100;
+const BOX_HEIGHT = 100;
 
 function Hooked({ wrapped }: { wrapped?: boolean }): React.ReactElement {
   const { className, ...props } = useScrollFade<HTMLPreElement>({ className: wrapped ? "wrap" : "nowrap" });
@@ -22,11 +27,21 @@ const scrollers = {
   useScrollFade: () => <Hooked />,
 };
 
-/** Fakes the two measurements for every element, from `contentWidth` and `BOX_WIDTH`. */
+const ORIGINALS = Object.fromEntries((["scrollWidth", "clientWidth", "clientHeight", "offsetWidth", "offsetHeight"] as const)
+  .map((key) => [key, Object.getOwnPropertyDescriptor(HTMLElement.prototype, key)]));
+
+/** Fakes the measurements for every element, from `contentWidth`, the scrollbars and the box. */
 function fakeLayout(): () => void {
-  const sizes = { scrollWidth: () => contentWidth, clientWidth: () => BOX_WIDTH };
-  const restore = (["scrollWidth", "clientWidth"] as const).map((key) => {
-    const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, key);
+  const sizes = {
+    scrollWidth: () => contentWidth,
+    clientWidth: () => BOX_WIDTH,
+    clientHeight: () => BOX_HEIGHT,
+    offsetWidth: () => BOX_WIDTH + scrollbar,
+    offsetHeight: () => BOX_HEIGHT + scrollbarBlock,
+  };
+  const restore = (Object.keys(sizes) as (keyof typeof sizes)[]).map((key) => {
+    // The descriptor jsdom had before any test, so an undo restores it whatever order undos run in.
+    const original = ORIGINALS[key];
     Object.defineProperty(HTMLElement.prototype, key, { configurable: true, get: sizes[key] });
     return () => (original ? Object.defineProperty(HTMLElement.prototype, key, original) : delete (HTMLElement.prototype as unknown as Record<string, unknown>)[key]);
   });
@@ -104,9 +119,42 @@ it("follows the scroller to a new element when one is put in its place", () => {
   expect(marked(scroller())).toBe(false);
 });
 
-// A horizontal fade reserves the bottom strip in the library's own styles, so the marker would say
-// nothing there, and the work behind it is not worth doing.
+// A horizontal fade reserves the bottom strip in the library's own styles, so the marker would add
+// nothing there.
 it("leaves a horizontal scroller unmarked", () => {
   contentWidth = 500;
   expect(marked(mount(<FadedScroller orientation="horizontal" data-testid="scroller" />).scroller())).toBe(false);
+});
+
+// HeroUI reserves a fixed strip for the scrollbar that the mask leaves undimmed; an overlay scrollbar
+// takes no room, and a strip kept for it would show the content beside the fade at full strength.
+const strips = (el: HTMLElement) => [
+  el.style.getPropertyValue("--scroll-shadow-scrollbar-size"),
+  el.style.getPropertyValue("--scroll-shadow-scrollbar-block-size"),
+];
+
+it.each(Object.entries(scrollers))("%s sizes the mask's scrollbar strips to the scrollbars it has", (_name, Scroller) => {
+  contentWidth = BOX_WIDTH;
+  [scrollbar, scrollbarBlock] = [0, 0];
+  expect(strips(mount(<Scroller />).scroller())).toEqual(["0px", "0px"]);
+  [scrollbar, scrollbarBlock] = [15, 11];
+  expect(strips(mount(<Scroller />).scroller())).toEqual(["15px", "11px"]);
+});
+
+it("sizes a horizontal fade's strip to the horizontal scrollbar", () => {
+  contentWidth = BOX_WIDTH;
+  [scrollbar, scrollbarBlock] = [15, 0];
+  const { scroller, rerender } = mount(<FadedScroller orientation="horizontal" data-testid="scroller" />);
+  expect(strips(scroller())[0]).toBe("0px");
+  scrollbarBlock = 12;
+  rerender(<FadedScroller orientation="horizontal" data-testid="scroller" />);
+  expect(strips(scroller())[0]).toBe("12px");
+});
+
+// The strip is placed from the border box's edge, so it covers the end border and not the start one.
+it("counts the end border into the strip, and not the start one", () => {
+  contentWidth = BOX_WIDTH;
+  [scrollbar, scrollbarBlock] = [2, 2];
+  const { scroller } = mount(<FadedScroller data-testid="scroller" style={{ border: "1px solid" }} />);
+  expect(strips(scroller())).toEqual(["1px", "1px"]);
 });
