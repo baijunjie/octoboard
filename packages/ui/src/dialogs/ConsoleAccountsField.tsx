@@ -26,7 +26,7 @@ import { OptionSelect } from "./OptionSelect";
  * that was since removed is shown as the default but stays as stored, and is sent only if another
  * account is chosen.
  *
- * The Settings dialog is the caller's: `onManageAccounts` asks for it, and focus comes back to the button.
+ * The Settings dialog is the caller's: `onManageAccounts` asks for it and is handed the button, which focus comes back to once Settings closes.
  */
 export function ConsoleAccountsField({
   label,
@@ -39,7 +39,7 @@ export function ConsoleAccountsField({
   description: string;
   values: Record<AccountField, string | null>;
   onChange: (field: AccountField, value: string | null) => void;
-  onManageAccounts: () => void;
+  onManageAccounts: (opener: HTMLButtonElement) => void;
 }): React.ReactElement | null {
   const t = useT();
   const accounts = useDaemonStore((s) => s.settings.accounts);
@@ -54,6 +54,7 @@ export function ConsoleAccountsField({
     picked: pinned(agent),
   }));
   const rowsRef = useRef<HTMLDivElement>(null);
+  const manageRef = useRef<HTMLButtonElement>(null);
   // A row's control can go away under the user: a row once its agent is missing or not added and
   // moved off its account. Focus goes to the first picker left.
   const focusHandoff = useFocusHandoff(() => rowsRef.current?.querySelector<HTMLElement>('[data-slot="select-trigger"]')?.focus());
@@ -72,7 +73,10 @@ export function ConsoleAccountsField({
             variant="ghost"
             aria-label={t("dialog.console.manageAccounts")}
             className="shrink-0 -my-0.5 rounded-full text-app-muted"
-            onPress={onManageAccounts}
+            ref={manageRef}
+            onPress={() => {
+              if (manageRef.current) onManageAccounts(manageRef.current);
+            }}
           >
             <KeyRound aria-hidden="true" className="size-3.5" />
           </Button>

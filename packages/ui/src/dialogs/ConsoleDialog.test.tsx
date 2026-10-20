@@ -10,6 +10,7 @@ import type { Account, Agent, AgentAvailability, AgentModel, Console, Event, Mod
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { imageToAvatar } from "../avatarImage";
 import { ConsoleDialog } from "./ConsoleDialog";
+import { trackMountRefocus } from "./dialogTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -804,4 +805,41 @@ it("keeps the default agent, accounts and session instructions notes visible, an
   expect(text).toContain("take precedence over them where the two conflict. Applies to new console sessions.");
   expect(text).not.toContain("Each agent has its own models");
   expect(buttons().some((b) => b.getAttribute("aria-label")?.startsWith("About"))).toBe(false);
+});
+
+it("restores Manage accounts after virtual activation followed by a pointer backdrop dismissal", async () => {
+  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: true, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
+  onTestFinished(() => {
+    vi.unstubAllGlobals();
+    document.documentElement.style.removeProperty("--breakpoint-docked");
+  });
+  render();
+  await trackMountRefocus()();
+  const opener = buttons().find((button) => button.getAttribute("aria-label") === "Manage accounts")!;
+  const name = Array.from(document.querySelectorAll<HTMLInputElement>("input")).find((input) => input.labels?.[0]?.textContent === "Name")!;
+  act(() => name.focus());
+  expect(document.activeElement).toBe(name);
+  // An accessibility click activates the button without a pointer-down focus transfer.
+  await click(opener);
+  const settings = document.querySelector<HTMLElement>('[role="dialog"][aria-label="Settings"]')!;
+  expect(settings).not.toBeNull();
+  await trackMountRefocus()();
+  expect(settings.contains(document.activeElement)).toBe(true);
+  const backdrop = settings.closest<HTMLElement>('[data-slot="modal-backdrop"]')!;
+  act(() => {
+    backdrop.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerType: "mouse" }));
+    backdrop.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+    // jsdom does not perform WebKit's native blur when pressing a nonfocusable backdrop.
+    (document.activeElement as HTMLElement).blur();
+    backdrop.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0, pointerType: "mouse" }));
+    backdrop.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, button: 0 }));
+    backdrop.click();
+  });
+  await act(async () => {
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  });
+  expect(document.querySelector('[role="dialog"][aria-label="Settings"]')).toBeNull();
+  expect(document.activeElement).toBe(opener);
 });

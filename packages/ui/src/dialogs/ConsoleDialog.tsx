@@ -1,6 +1,6 @@
 import { ActionableError } from "../errorRecovery";
 import { reportError } from "../reportError";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import { changedAgentFields, readAgentFields } from "../agentFields";
 import {
@@ -14,6 +14,7 @@ import {
   selectableAgent,
 } from "../agents";
 import { imageToAvatar } from "../avatarImage";
+import { focusOpenDialog } from "../components/regionFocus";
 import { AgentIcon, agentIconPickerOptions } from "../components/AgentIcon";
 import { useT } from "../i18n/react";
 import type { Agent, Console } from "../protocol";
@@ -72,6 +73,19 @@ export function ConsoleDialog({
   // Settings, opened over this dialog from the accounts table. It is rendered beside the dialog
   // rather than inside it, as its forms would otherwise submit this one.
   const [managingAccounts, setManagingAccounts] = useState(false);
+  const accountsOpener = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (managingAccounts || !accountsOpener.current) return;
+    // A backdrop press can leave focus on `<body>` after React Aria's restore, most visibly when an
+    // accessibility activation opened Settings. Only that focus is handed back to the opener. The second
+    // frame is slack beyond the restore's own, which the packaged app was verified with.
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        if (document.activeElement === document.body) focusOpenDialog(accountsOpener.current);
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [managingAccounts]);
 
   // While a picked image is being read, saving would send the old avatar.
   const [decoding, setDecoding] = useState(false);
@@ -195,7 +209,10 @@ export function ConsoleDialog({
           description={t("dialog.console.accountsNote")}
           values={fields}
           onChange={(field, value) => setFields({ ...fields, [field]: value })}
-          onManageAccounts={() => setManagingAccounts(true)}
+          onManageAccounts={(opener) => {
+            accountsOpener.current = opener;
+            setManagingAccounts(true);
+          }}
         />
         {/* What is inside is the console's own: its sessions' launch settings and its instructions. */}
         <ConsoleLaunchFields
