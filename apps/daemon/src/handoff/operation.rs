@@ -41,6 +41,8 @@ pub struct Handoff {
     pub account: Option<Option<String>>,
     pub model: Option<Option<String>>,
     pub effort: Option<Option<String>>,
+    /// The receiving session's title; `None` keeps the original's.
+    pub title: Option<String>,
     /// What the owner asking says to the receiving session, put in its opening prompt.
     pub note: Option<String>,
     /// The owner that made the call, when one did: it is not sent the message that tells an owner
@@ -81,8 +83,9 @@ pub(crate) async fn hand_off_with(
         model: request.model,
         effort: request.effort,
         task: None,
-        // The original's title, so the work is recognised in the list.
-        title: Some(original.title.clone()),
+        // The original's title unless the owner asking names it anew, so the work is recognised
+        // in the list.
+        title: Some(request.title.unwrap_or_else(|| original.title.clone())),
         origin: original.origin,
         // A bound session's owner is reported to from the first launch. A lead session is bound
         // after the launch instead, for it launches as an unbound one does, with the tools of one.

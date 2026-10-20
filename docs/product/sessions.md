@@ -319,9 +319,12 @@ other in the same console, and all read the same instruction file, described in 
 file" in `docs/product/launching-agents.md`.
 
 The same order settles the agent everywhere a session's agent is not given outright: the session dialog's initial
-choice, a session opened with defaults, `new_session` without an `agent`, a session request without one once it is
-approved (see `docs/product/session-requests.md`), and a session of a project associated with "Detect from files" whose
-directory named no agent (see "The project's default agent" in `docs/product/projects.md`).
+choice, a session opened with defaults, and a session of a project associated with "Detect from files" whose directory
+named no agent (see "The project's default agent" in `docs/product/projects.md`). A session that another session starts
+itself without naming an agent — with `new_session`, or with `request_session` in the caller's own console — runs the
+caller's own agent instead, and falls back to this order only when that agent cannot open a session; a session request
+for another console follows this order (see "The agent and account of a session a session starts" in
+`docs/product/hub-orchestration.md`).
 
 A session's agent is fixed for its lifetime. Resuming or reopening a session always relaunches the same agent —
 session records belong to a specific agent and cannot be moved across agents.
@@ -344,9 +347,11 @@ default account when neither pins anything. The session's account is identified 
 accessible session name, without an account suffix in visible session metadata (see "Session rows" in
 `docs/product/sidebar.md`).
 
-A session that makes no choice of its own — one a console session or a project session starts with its own
-`new_session` tool, or one started on another session's request, without an `account` — takes the project's
-setting. The dialog that opens a session by hand always makes a choice,
+A session that another session starts without naming an `account` — with `new_session`, `request_session` or
+`handoff_session` — runs on the caller's own account when it is of the caller's own agent (for `request_session`,
+only in the caller's own console) and that account can still open a session; otherwise it resolves through this chain
+as a session that makes no choice of its own does (see "The agent and account of a session a session starts" in
+`docs/product/hub-orchestration.md`). The dialog that opens a session by hand always makes a choice,
 opening on the account the rest of the chain resolves to (the project's setting for the agent, else the console's, else
 the agent's default account) and sending that as the session's own choice, so a session opened there runs under that
 account unless the user picks another in the account picker. A session opened from the **Resume conversation** tab is

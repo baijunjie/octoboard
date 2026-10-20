@@ -786,6 +786,7 @@ async fn handle_inner(
                     account,
                     model,
                     effort,
+                    title: None,
                     note: None,
                     asked_by: None,
                 },
@@ -4521,7 +4522,7 @@ async fn submit_page(state: &Arc<AppState>, page_id: &str, data: serde_json::Val
 /// everything that follows, so this is also what a console session's own `new_session` tool is
 /// refused through — it calls this same function.
 fn refuse_if_agent_unavailable(state: &Arc<AppState>, agent: Agent) -> Result<()> {
-    if state.agent_availability_of(agent).availability != Availability::Unavailable {
+    if agent_is_available(state, agent) {
         return Ok(());
     }
     Err(CodedError::raised(
@@ -4549,10 +4550,7 @@ fn refuse_if_account_quota_exhausted(
     config_dir: Option<&str>,
 ) -> Result<()> {
     let now = now_millis();
-    let Some(exhausted) = state
-        .account_quotas
-        .exhausted(agent, account_id, config_dir, now)
-    else {
+    let Some(exhausted) = used_up_quota(state, agent, account_id, config_dir, now) else {
         return Ok(());
     };
     let account = state.store.account_display_name(agent, account_id)?;
@@ -4581,6 +4579,55 @@ fn refuse_if_account_quota_exhausted(
     ))
 }
 
+/// The used-up window that keeps a new session off `account_id` (`None` the default account) of
+/// `agent` at `now`, judged from the reading held alone; `config_dir` is the account's directory,
+/// so a reading taken under another one does not count. What
+/// [`refuse_if_account_quota_exhausted`] refuses and what [`account_can_open`] passes over.
+fn used_up_quota(
+    state: &Arc<AppState>,
+    agent: Agent,
+    account_id: Option<&str>,
+    config_dir: Option<&str>,
+    now: i64,
+) -> Option<account_quotas::Exhausted> {
+    state
+        .account_quotas
+        .exhausted(agent, account_id, config_dir, now)
+}
+
+/// Whether a new session of `agent` would get past the agent's own refusals as things stand
+/// ([`refuse_if_agent_unavailable`], [`refuse_unless_agent_added`]). For a caller choosing a
+/// default it can fall back from, rather than a refusal.
+pub(crate) fn agent_can_open(state: &Arc<AppState>, agent: Agent) -> Result<bool> {
+    Ok(agent_is_available(state, agent) && agent_is_added(state, agent)?)
+}
+
+/// Whether a new session of `agent` could run on `account_id` (`None` the default account) as
+/// things stand: the account is still one of that agent's ([`checked_account_reference`]), and its
+/// quota is not used up ([`refuse_if_account_quota_exhausted`]). For a caller choosing a default
+/// it can fall back from, rather than a refusal.
+pub(crate) fn account_can_open(
+    state: &Arc<AppState>,
+    agent: Agent,
+    account_id: Option<&str>,
+) -> Result<bool> {
+    let config_dir = match account_id {
+        None => None,
+        Some(id) => match account_of_agent(state, agent, id)? {
+            Some(account) => Some(account.config_dir),
+            None => return Ok(false),
+        },
+    };
+    Ok(used_up_quota(
+        state,
+        agent,
+        account_id,
+        config_dir.as_deref(),
+        now_millis(),
+    )
+    .is_none())
+}
+
 /// A span of milliseconds in the rough terms of a message to read: `3d 4h`, `5h 20m` or `7m`.
 fn duration_label(millis: i64) -> String {
     let minutes = millis.max(0) / 60_000;
@@ -4597,17 +4644,25 @@ fn duration_label(millis: i64) -> String {
 /// checked, so a live session of an agent removed since keeps running, and resuming, restarting or
 /// reopening an existing session never comes here.
 fn refuse_unless_agent_added(state: &Arc<AppState>, agent: Agent) -> Result<()> {
-    match state.store.added_agents()? {
-        Some(added) if !added.contains(&agent) => Err(CodedError::raised(
-            error_code::AGENT_NOT_ADDED,
-            format!(
-                "{} is not added. Add it in Settings → Agent accounts to open a session with it.",
-                agent.label()
-            ),
-            &[("agent", agent.label())],
-        )),
-        _ => Ok(()),
+    if agent_is_added(state, agent)? {
+        return Ok(());
     }
+    Err(CodedError::raised(
+        error_code::AGENT_NOT_ADDED,
+        format!(
+            "{} is not added. Add it in Settings → Agent accounts to open a session with it.",
+            agent.label()
+        ),
+        &[("agent", agent.label())],
+    ))
+}
+
+/// Whether `agent` is on the added list; while the list is undecided every agent is.
+fn agent_is_added(state: &Arc<AppState>, agent: Agent) -> Result<bool> {
+    Ok(state
+        .store
+        .added_agents()?
+        .is_none_or(|added| added.contains(&agent)))
 }
 
 /// The agent a session is of: an explicit choice wins over the project's default, then the
@@ -4661,10 +4716,18 @@ fn checked_account_reference(
     id: Option<String>,
 ) -> Result<Option<String>> {
     let Some(id) = id else { return Ok(None) };
-    match state.store.get_account(&id)? {
-        Some(account) if account.agent == agent => Ok(Some(id)),
-        _ => Err(CodedError::unknown_account(&id)),
+    match account_of_agent(state, agent, &id)? {
+        Some(_) => Ok(Some(id)),
+        None => Err(CodedError::unknown_account(&id)),
     }
+}
+
+/// The stored account `id`, when it is one of `agent`'s.
+fn account_of_agent(state: &Arc<AppState>, agent: Agent, id: &str) -> Result<Option<Account>> {
+    Ok(state
+        .store
+        .get_account(id)?
+        .filter(|account| account.agent == agent))
 }
 
 /// A project's setting for `agent` as stored, or the `unknown_account` refusal when it names an

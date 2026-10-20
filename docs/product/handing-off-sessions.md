@@ -36,7 +36,8 @@ background" in `docs/product/sessions.md`). A handoff is refused, with nothing c
 
 The account, model and reasoning effort follow the rules for opening a session (see "Which account a session uses" and
 "Which model and reasoning effort a session uses" in `docs/product/sessions.md`): left out, they come from the project
-or console as for any new session of that agent.
+or console as for any new session of that agent — except that an owner's `handoff_session` naming no account, whose
+receiving agent is the owner's own, takes the owner's own account (see "Handing off from an owner's tool" below).
 
 From the moment a handoff is accepted until it ends, the original cannot be resumed, switched to another account or
 deleted.
@@ -101,7 +102,8 @@ its own without the user.
 |---|---|---|
 | `session` | yes | The session to hand off: one of the caller's (`yours: true`). |
 | `agent` | yes | The receiving agent, `claude`, `codex` or `grok`; not the session's own. |
-| `account` | no | The receiving session's account: an account's id or name, or `default` for the agent's default account. It must belong to `agent`. Left out or blank, it comes from the project or console, as for any handoff (see "What can be handed off" above). |
+| `account` | no | The receiving session's account: an account's id or name, or `default` for the agent's default account. It must belong to `agent`. Left out or blank, it is the caller's own account when `agent` is the caller's own agent, unless that account no longer exists or is used up, as for a session the caller starts (see "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md`); otherwise it comes from the project or console, as for any handoff (see "What can be handed off" above). |
+| `title` | no | The receiving session's name in the session list, stored trimmed. Left out or blank, it keeps the original's title. It is to be written in the user's language (see "Naming the sessions a session starts" in `docs/product/hub-orchestration.md`). |
 | `model`, `effort` | no | The receiving session's model and reasoning effort. Left out, each comes from the project or console, as for any handoff; blank, it is the agent's own default; any other must be one the agent offers. |
 | `note` | no | What the caller tells the receiving session beyond the package, such as where the work stands and what to do first. It is added at the end of the receiving session's opening prompt, introduced as a note from the owner that handed the work off, every line quoted. Blank is the same as left out. |
 
@@ -174,7 +176,8 @@ its place is about to move to it, that it will be told what it holds, and not to
 
 Once it is running, it takes the original's whole place:
 
-- **the same kind, project or console, and title** as the original;
+- **the same kind, project or console, and title** as the original — the title unless the owner's `handoff_session`
+  named another;
 - **the same role and owner**: a bound session is bound to the original's owner from its first launch; a lead session
   launches as an unbound project session does and is then bound to the original's console session as its lead session
   (see "Lead sessions" in `docs/product/hub-orchestration.md`); an unbound session stays unbound;

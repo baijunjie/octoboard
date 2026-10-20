@@ -50,6 +50,13 @@ left as it is, and `null` or a blank string is the agent's own default. A model 
 one the agent offers, under the rules in "The Advanced section" in `docs/product/model-and-reasoning-effort.md`. Results
 give every agent, with `null` for an unset value.
 
+**The default agent and account settings do not decide what a session's own sessions run on.** The tools describe a
+project's `default_agent` and `accounts`, a console's `default_agent`, `project_session_agent` and `accounts`, and what
+`get_console` and `get_project` return, as applying to sessions opened without a choice, and say that a session another
+session starts itself — with `new_session`, or with `request_session` in that session's own console — runs on that
+session's own agent and account unless the call names others (see "The agent and account of a session a session
+starts" in `docs/product/hub-orchestration.md`).
+
 ## A project's settings
 
 `list_projects`, `get_project`, `add_project` and `update_project` give a project as the same set of fields:

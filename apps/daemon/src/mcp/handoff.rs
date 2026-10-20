@@ -13,7 +13,7 @@ use crate::protocol::Session;
 use crate::state::AppState;
 
 use super::args::{optional_string, parse_agent, present_text, required_str};
-use super::exec::resolve_owned_session;
+use super::exec::{callers_account, resolve_owned_session};
 use super::settings::resolve_account;
 
 /// Hands a session of the caller's off to a new session of another agent, which takes its place and
@@ -30,9 +30,10 @@ pub(super) async fn handoff_session(
 ) -> Result<Value> {
     let target = resolve_owned_session(state, caller, required_str(arguments, "session")?)?;
     let agent = parse_agent(required_str(arguments, "agent")?)?;
-    let account = optional_string(arguments, "account")
-        .map(|wanted| resolve_account(state, agent, &wanted))
-        .transpose()?;
+    let account = match optional_string(arguments, "account") {
+        Some(wanted) => Some(resolve_account(state, agent, &wanted)?),
+        None => callers_account(state, caller, agent)?,
+    };
     let moved = operation::hand_off_with(
         state,
         operation::Handoff {
@@ -41,6 +42,7 @@ pub(super) async fn handoff_session(
             account,
             model: present_text(arguments, "model")?,
             effort: present_text(arguments, "effort")?,
+            title: optional_string(arguments, "title"),
             note: optional_string(arguments, "note"),
             asked_by: Some(caller.id.clone()),
         },
@@ -188,6 +190,55 @@ mod tests {
             Some(receiving)
         );
         assert_caller_not_told(&state, &caller);
+    }
+
+    /// The new session takes the title the caller gives it, and, when it runs on the caller's own
+    /// agent and no account is named, the caller's own account.
+    #[tokio::test]
+    async fn a_handoff_to_the_callers_agent_takes_the_callers_account_and_the_title_given() {
+        let (state, _dir) = shared_console_state("handoff-callers-account");
+        state
+            .store
+            .insert_account(&crate::protocol::Account {
+                id: "codex-work".to_string(),
+                agent: Agent::Codex,
+                name: "Work".to_string(),
+                config_dir: "/tmp/codex-work".to_string(),
+                approval_reviewer: None,
+                approval_mode: None,
+            })
+            .unwrap();
+        state
+            .save_session(&Session {
+                agent: Agent::Codex,
+                ..state.session_record("a").unwrap()
+            })
+            .unwrap();
+        state
+            .store
+            .set_session_account("a", Some("codex-work"), Some("/tmp/codex-work"))
+            .unwrap();
+        let _caller = running(&state, "a");
+        let _original = running(&state, "of-a");
+        let (launches, started) = (Launches::default(), Started::default());
+
+        let result = handoff_session(
+            &state,
+            &state.session_record("a").unwrap(),
+            &arguments(json!({ "session": "of-a", "agent": "codex", "title": "修复构建" })),
+            stand_in_launch(&started, &launches, || {}),
+        )
+        .await
+        .unwrap();
+
+        let record = state
+            .store
+            .get_session(result["session"].as_str().unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(record.agent, Agent::Codex);
+        assert_eq!(record.account_id.as_deref(), Some("codex-work"));
+        assert_eq!(record.title, "修复构建");
     }
 
     /// What is not the caller's to hand off (another owner's session, the caller itself), what the

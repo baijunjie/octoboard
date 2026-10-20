@@ -100,8 +100,9 @@ fn relationships(agent: Agent, owns: bool) -> String {
         lines.push(format!(
             "- `{new_session}` starts a session that is yours for its whole life: you instruct \
              it, archive it when it is done, and reopen it with `{reopen_session}` when it has \
-             another task. Pass `branches` to hand it branches you are responsible for. No \
-             approval is needed.",
+             another task. Pass `branches` to hand it branches you are responsible for. It runs \
+             on your own agent and account unless the user asked for others, and `title` names it \
+             in the language the user converses with you in. No approval is needed.",
             new_session = tool("new_session"),
             reopen_session = tool("reopen_session"),
         ));

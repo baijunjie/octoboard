@@ -1856,6 +1856,12 @@ here as well as in the child. A binding changes while a session runs, so every a
 session has the role of a bound one after the call: the `octoboardd mcp` child, started with `--bound`, switches the
 catalogue it announces to match and sends `notifications/tools/list_changed` when it changes.
 
+Every argument named `title` names a session (`new_session`, `request_session`, `handoff_session`, `rename_session`),
+and its description tells the agent to write it in the language the user converses with it in, not that of the
+project, its docs and code, or a brief; a session that takes work from an owner session uses the user's language as
+the owner passes it on, else that of the owner's messages. The brief's `context` description asks the owner to say
+which language that is.
+
 A `request_session` call waits for the user's answer, up to 8 minutes, below the 10-minute timeout the
 `octoboardd mcp` child gives every call it forwards. A third limit is the agent's own on a tool call, and the three are
 kept in this order, 8 minutes < 10 minutes < the agent's as Octoboard sets it:
@@ -1949,8 +1955,15 @@ console, changes a project's path, source, host, remote or `trust_consent`, or w
   `update_settings` takes `auto_pull_repositories`, `auto_delete_unresumable_archives` and `default_clone_dir`
   (blank resets it) through the function `update_settings` runs, so enabling the automatic pull
   fast-forwards the projects already behind at once.
-- `new_session` takes `account` (id or name, `default`), `model` and `effort` besides the brief; the account is read
-  among the accounts of the agent the session will be of.
+- `new_session` takes `title`, `agent`, `account` (id or name, `default`), `model` and `effort` besides the brief; the
+  account is read among the accounts of the agent the session will be of. `title` is the session's title, trimmed; left
+  out or blank, the title is the first line of `brief.goal` cut to 48 characters. Left out, `agent` is the caller's own
+  agent — unless that agent has been determined unavailable or is not on the added agents list, when the project's and
+  console's default applies as for `open_session` — and `account`, for a session of the caller's own agent, is the
+  caller's own account (`Session.account_id`, the default account included) unless that account no longer exists or its
+  quota is used up by the reading held (see `account_quota_exhausted`); a session of another agent, or one whose
+  caller's account was passed over, takes the project's account for the agent, else the console's, as for
+  `open_session`.
 - `request_session` takes `kind` (`project` or `console`), `project`, `console`, `brief` and an optional `branches` —
   and the overrides of `new_session` — and waits for the user's answer. `branches` is a list of local branch names in
   the project's repository to hand to the new session; each must be one the caller is responsible for (see
@@ -1960,21 +1973,24 @@ console, changes a project's path, source, host, remote or `trust_consent`, or w
   being reported in the outcome instead, and a move that cannot be recorded being reported there too, with the caller
   still responsible for the branches; nothing moves on any other ending. A project session is in the named project,
   which defaults to the caller's own, and may belong to any console; a console session is in the named console,
-  defaulting to the caller's own. The new session has no owner and the caller carries on unchanged. See
+  defaulting to the caller's own. The new session has no owner and the caller carries on unchanged. `title` is read as
+  for `new_session`, and so are a left-out `agent` and `account` when the session is in the caller's own console; in
+  another console they are that console's and its project's, as for `open_session`. See
   `docs/product/session-requests.md`.
 - `transfer_session` takes `session` (one of the caller's), `to` (the new owner) and `note`, and needs no approval:
   `Session.bound_to` changes, the session and the new owner are told in messages, and the note reaches the new owner.
   `bind_to_session` takes `owner` and `summary`, which reaches the owner as the caller's first report. Both refuse, in
   prose and changing nothing, an owner that breaks the rules a binding keeps; see "Who can own a session" in
   `docs/product/changing-session-owners.md`.
-- `handoff_session` takes `session` (one of the caller's), `agent`, and optionally `account`, `model`, `effort` and
-  `note`, and needs no approval: it runs `hand_off_session` on the session, with `note` quoted in the receiving
-  session's opening prompt. The receiving session takes the original's place, so it reports to the caller as the
-  original did, and the caller is not sent the message that tells an owner of a handoff. The result carries
-  `session` (the receiving session), `agent`, `archived` (the original), `branches` and `owned_sessions` (what
-  moved; `branches` is `[]`, with the reason in `note`, when the branches could not be moved), and a `note`. A
-  session that is not the caller's, and anything `hand_off_session` refuses, is refused in prose and changes
-  nothing.
+- `handoff_session` takes `session` (one of the caller's), `agent`, and optionally `account`, `title`, `model`, `effort`
+  and `note`, and needs no approval: it runs `hand_off_session` on the session, with `note` quoted in the receiving
+  session's opening prompt and `title` (trimmed; left out or blank, the original's) as its title. A left-out `account`
+  is the caller's own when `agent` is the caller's own agent, under the same conditions as for `new_session`; otherwise
+  it is `hand_off_session`'s. The receiving session takes the original's place, so it reports to the caller as the
+  original did, and the caller is not sent the message that tells an owner of a handoff. The result carries `session`
+  (the receiving session), `agent`, `archived` (the original), `branches` and `owned_sessions` (what moved; `branches`
+  is `[]`, with the reason in `note`, when the branches could not be moved), and a `note`. A session that is not the
+  caller's, and anything `hand_off_session` refuses, is refused in prose and changes nothing.
 - `handover_branches` takes `branches` (a non-empty list of local branch names), and optionally `from` and `to`, each
   the caller itself when left out; it needs no approval. `from` is the caller or a session it owns, archived or not,
   `to` the caller or a non-archived session it owns, and they differ. Each branch must have `from` as its responsible

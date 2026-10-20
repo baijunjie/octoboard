@@ -98,6 +98,27 @@ pub fn qualified_tool_name(agent: Agent, tool: &str) -> String {
     }
 }
 
+/// Which language a session's name is written in, said on every argument that names one. Agents
+/// otherwise take the language of what they read most — the project, its docs and code, the brief —
+/// while the name is for the user, who may speak another.
+const NAMING_LANGUAGE: &str = "Write it in the language the user converses with you in, not \
+     that of the project, its docs and code, or a brief. If you take work from an owner session \
+     rather than from the user directly, use the user's language as your owner passes it on, else \
+     the language of your owner's messages.";
+
+/// What every default agent and account setting says of the sessions a session starts itself,
+/// which follow the session rather than the setting. A macro so the read tools' `&'static str`
+/// descriptions can take it with `concat!`.
+macro_rules! started_by_a_session {
+    () => {
+        "A session that another session starts itself (`new_session`, or `request_session` in \
+         that session's own console) runs on that session's own agent and account instead, \
+         unless the call names others."
+    };
+}
+
+const STARTED_BY_A_SESSION: &str = started_by_a_session!();
+
 const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     ToolDef {
         name: "list_projects",
@@ -155,12 +176,13 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                     "default_agent": {
                         "type": "string",
                         "enum": ["claude", "codex", "grok"],
-                        "description": "The agent sessions in this project use by default. \
-                                        When omitted, the agent the directory is set up for \
-                                        (from its top-level marker files) if exactly one is \
-                                        found and not known to be missing from PATH; \
-                                        otherwise the project follows the console's project \
-                                        session agent (else its `default_agent`).",
+                        "description": format!(
+                            "The agent sessions in this project use by default. When omitted, \
+                             the agent the directory is set up for (from its top-level marker \
+                             files) if exactly one is found and not known to be missing from \
+                             PATH; otherwise the project follows the console's project session \
+                             agent (else its `default_agent`). {STARTED_BY_A_SESSION}"
+                        ),
                     },
                     "description": {
                         "type": "string",
@@ -218,9 +240,11 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                     "default_agent": {
                         "type": ["string", "null"],
                         "enum": ["claude", "codex", "grok", null],
-                        "description": "The agent sessions in this project use by default; \
-                                        `null` goes back to following the console's project \
-                                        session agent (else its `default_agent`).",
+                        "description": format!(
+                            "The agent sessions in this project use by default; `null` goes back \
+                             to following the console's project session agent (else its \
+                             `default_agent`). {STARTED_BY_A_SESSION}"
+                        ),
                     },
                     "accounts": accounts_schema(true),
                     "launch": launch_schema("the project's sessions"),
@@ -231,14 +255,16 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     },
     ToolDef {
         name: "get_console",
-        description: "This console's own settings: `name`, `default_agent` (the agent of console \
-                      sessions), `project_session_agent` (the agent a project session without \
-                      its own default uses; `null` follows `default_agent`), `accounts`, \
-                      `launch` (the model and effort of console sessions like this one), \
-                      `project_session_launch` (the model and effort a project session takes \
-                      when neither it nor its project names one), whether it has an avatar \
-                      (`has_icon`), and its working directory (`workdir`, read-only). Only the \
-                      console this session belongs to can be read.",
+        description: concat!(
+            "This console's own settings: `name`, `default_agent` (the agent of console \
+             sessions), `project_session_agent` (the agent a project session without its own \
+             default uses; `null` follows `default_agent`), `accounts`, `launch` (the model and \
+             effort of console sessions like this one), `project_session_launch` (the model and \
+             effort a project session takes when neither it nor its project names one), whether \
+             it has an avatar (`has_icon`), and its working directory (`workdir`, read-only). \
+             Only the console this session belongs to can be read. ",
+            started_by_a_session!()
+        ),
         schema: || object_schema(json!({}), &[]),
     },
     ToolDef {
@@ -259,14 +285,18 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                     "default_agent": {
                         "type": "string",
                         "enum": ["claude", "codex", "grok"],
-                        "description": "The agent console sessions use by default.",
+                        "description": format!(
+                            "The agent console sessions use by default. {STARTED_BY_A_SESSION}"
+                        ),
                     },
                     "project_session_agent": {
                         "type": ["string", "null"],
                         "enum": ["claude", "codex", "grok", null],
-                        "description": "The agent a project session uses when its project has \
-                                        no default agent of its own. `null` makes it follow \
-                                        `default_agent`.",
+                        "description": format!(
+                            "The agent a project session uses when its project has no default \
+                             agent of its own. `null` makes it follow `default_agent`. \
+                             {STARTED_BY_A_SESSION}"
+                        ),
                     },
                     "accounts": accounts_schema(false),
                     "launch": launch_schema("this console's console sessions"),
@@ -327,7 +357,9 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                       owner, and you instruct it with `send_message`, archive it once it is done \
                       and reopen it with `reopen_session` when it has another task. Needs no \
                       approval. Returns the new session's id. The brief is rendered into the \
-                      session's opening prompt. Use this when you should keep directing the \
+                      session's opening prompt; `title` names the session in the language the \
+                      user converses with you in. It runs on your own agent and account unless \
+                      the user asked for others. Use this when you should keep directing the \
                       session and receiving its reports. To hand your own work to a peer in the \
                       next session, use `request_session`; if the user only wants handover notes \
                       and an end, leave the notes and end. Ask the user if their intent is \
@@ -478,13 +510,17 @@ const ARCHIVE_SELF: ToolDef = ToolDef {
 
 const RENAME_SESSION: ToolDef = ToolDef {
     name: "rename_session",
-    description: "Change the title of a session of yours. Refused for a session that is not \
-                  yours (`yours: false`): it is somebody else's, to be left alone.",
+    description: "Change the title of a session of yours, in the language the user converses with \
+                  you in. Refused for a session that is not yours (`yours: false`): it is \
+                  somebody else's, to be left alone.",
     schema: || {
         object_schema(
             json!({
                 "session": { "type": "string", "description": "The session's id." },
-                "title": { "type": "string", "description": "The new title. Not blank." },
+                "title": {
+                    "type": "string",
+                    "description": format!("The new title. Not blank. {NAMING_LANGUAGE}"),
+                },
             }),
             &["session", "title"],
         )
@@ -591,7 +627,7 @@ const HANDOFF_SESSION: ToolDef = ToolDef {
                   session is in the middle of a turn, and for the agent the session already runs \
                   on (switching it to another account of that agent keeps the conversation). \
                   Returns the new session's id, the branches that moved and the sessions it now \
-                  owns.",
+                  owns. Pass `account` only when the user asked for a particular one.",
     schema: || {
         object_schema(
             json!({
@@ -608,7 +644,17 @@ const HANDOFF_SESSION: ToolDef = ToolDef {
                     "type": "string",
                     "description": "The new session's account: an account's id or name, or \
                                     `default` for the agent's default account. It must belong \
-                                    to `agent`.",
+                                    to `agent`. Left out, it is your own account when `agent` \
+                                    is your own agent and that account's quota is not used up; \
+                                    otherwise the account the session's project (else its \
+                                    console) sets for `agent`.",
+                },
+                "title": {
+                    "type": "string",
+                    "description": format!(
+                        "The new session's name in Octoboard's session list. Left out or blank, \
+                         it keeps the original's. {NAMING_LANGUAGE}"
+                    ),
                 },
                 "model": {
                     "type": "string",
@@ -746,13 +792,14 @@ const SHARE_INFO: ToolDef = ToolDef {
 /// session's binding, and nothing it could change.
 const GET_PROJECT: ToolDef = ToolDef {
     name: "get_project",
-    description:
-        "This project's settings in Octoboard, read-only: name, directory, source, remote \
-                  URL (credentials removed), pin, tags, description, `default_agent`, `accounts` \
-                  and `launch` \
-                  (the model and effort sessions of each agent start with; a value left unset \
-                  falls back to the console's `project_session_launch`). Only this session's \
-                  own project can be read.",
+    description: concat!(
+        "This project's settings in Octoboard, read-only: name, directory, source, remote URL \
+         (credentials removed), pin, tags, description, `default_agent`, `accounts` and `launch` \
+         (the model and effort sessions of each agent start with; a value left unset falls back \
+         to the console's `project_session_launch`). Only this session's own project can be \
+         read. ",
+        started_by_a_session!()
+    ),
     schema: || object_schema(json!({}), &[]),
 };
 
@@ -837,7 +884,10 @@ const REQUEST_SESSION: ToolDef = ToolDef {
                   error and changes nothing. When handing over work on a branch you are \
                   responsible for, pass it in `branches`: the user is shown them, and on \
                   approval the new session becomes responsible for them in your place. Leave \
-                  `branches` out when you are only working on whatever branch is checked out.",
+                  `branches` out when you are only working on whatever branch is checked out. \
+                  `title` names the session in the language the user converses with you in. In \
+                  your own console it runs on your own agent and account unless the user asked \
+                  for others.",
     schema: request_session_schema,
 };
 
@@ -863,18 +913,19 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
         description: "Start a session in this project and hand it a task. It is yours for its \
                       whole life: it reports to this session, its owner, and you instruct it with \
                       `send_message`, archive it once it is done and reopen it with \
-                      `reopen_session` when it has another task. Needs no approval. Any available \
-                      agent can be chosen, not only this session's own. Returns the new session's \
-                      id. The brief is rendered into the session's opening prompt. A session \
-                      started this way cannot start sessions of its own, and only this project is \
-                      available; a session elsewhere, or one that should not report to you, is \
-                      one `request_session` asks the user for. To give the new session a branch \
-                      you are responsible for, pass it in `branches`; `handover_branches` moves \
-                      the branches of any session of yours later. Use this only when you should \
-                      keep directing the session and receiving its reports. To hand your own \
-                      work to a peer in the next session, use `request_session`; if the user only \
-                      wants handover notes and an end, leave the notes and end. Ask the user if \
-                      their intent is unclear.",
+                      `reopen_session` when it has another task. Needs no approval. It runs on \
+                      your own agent and account unless the user asked for others; any available \
+                      agent can be chosen then. Returns the new session's id. The brief is \
+                      rendered into the session's opening prompt; `title` names the session in the \
+                      language the user converses with you in. A session started this way cannot \
+                      start sessions of its own, and only this project is available; a session \
+                      elsewhere, or one that should not report to you, is one `request_session` \
+                      asks the user for. To give the new session a branch you are responsible for, \
+                      pass it in `branches`; `handover_branches` moves the branches of any session \
+                      of yours later. Use this only when you should keep directing the session and \
+                      receiving its reports. To hand your own work to a peer in the next session, \
+                      use `request_session`; if the user only wants handover notes and an end, \
+                      leave the notes and end. Ask the user if their intent is unclear.",
         schema: || new_session_schema(false),
     },
     SEND_MESSAGE,
@@ -933,6 +984,18 @@ fn request_session_schema() -> Value {
         "description": "For `console`: the console's id, or its name when that is unambiguous. \
                         Defaults to this session's own console.",
     });
+    schema["properties"]["agent"]["description"] = json!(
+        "The agent the session runs. Left out, it is your own agent for a session in your own \
+         console, and the agent the other console (and its project) sets for one elsewhere. Pass \
+         one only when the user asked for it."
+    );
+    schema["properties"]["account"]["description"] = json!(
+        "The account the session runs on: an account's id or name, or `default` for the agent's \
+         default account. It must belong to the session's agent. Left out, a session in your own \
+         console of your own agent runs on your own account, unless that account's quota is used \
+         up; any other takes the account its project (else its console) sets for the agent. Pass \
+         one only when the user asked for it."
+    );
     schema["properties"]["branches"] = json!({
         "type": "array",
         "items": { "type": "string" },
@@ -955,7 +1018,12 @@ fn new_session_schema(with_project: bool) -> Value {
             "description": "The task, in natural language per field.",
             "properties": {
                 "goal": { "type": "string", "description": "The outcome to achieve." },
-                "context": { "type": "string", "description": "Background and relevant leads." },
+                "context": {
+                    "type": "string",
+                    "description": "Background and relevant leads. Include which language the \
+                                    user converses with you in, so the session can name any \
+                                    sessions it starts in that language.",
+                },
                 "acceptance": { "type": "string", "description": "Criteria for being done." },
                 "constraints": {
                     "type": "string",
@@ -965,16 +1033,27 @@ fn new_session_schema(with_project: bool) -> Value {
             },
             "required": ["goal"],
         },
+        "title": {
+            "type": "string",
+            "description": format!(
+                "The session's name in Octoboard's session list: a few words saying what its task \
+                 is. Left out or blank, the first line of `brief.goal` is used. {NAMING_LANGUAGE}"
+            ),
+        },
         "agent": {
             "type": "string",
             "enum": ["claude", "codex", "grok"],
-            "description": "Overrides the agent for this one session.",
+            "description": "The agent the session runs. Left out, it is your own agent. Pass \
+                            another only when the user asked for it.",
         },
         "account": {
             "type": "string",
             "description": format!(
-                "Overrides the account for this one session: an account's id or name{}, or \
-                 `default` for the agent's default account. It must belong to the session's agent.",
+                "The account the session runs on: an account's id or name{}, or `default` for \
+                 the agent's default account. It must belong to the session's agent. Left out, a \
+                 session of your own agent runs on your own account, unless that account's quota \
+                 is used up; any other takes the account its project (else its console) sets for \
+                 the agent. Pass one only when the user asked for it.",
                 if with_project { " (see `get_settings`)" } else { "" }
             ),
         },
@@ -1041,7 +1120,7 @@ fn accounts_schema(project: bool) -> Value {
     json!({
         "type": "object",
         "description": format!("{description} Each value is {values}. An account must belong to \
-                                that agent."),
+                                that agent. {STARTED_BY_A_SESSION}"),
         "additionalProperties": { "type": if project { json!("string") } else { json!(["string", "null"]) } },
     })
 }
@@ -1187,6 +1266,37 @@ mod tests {
         assert!(console["properties"]["project"].is_object());
         assert!(project["properties"]["project"].is_null());
         assert_eq!(project["required"], json!(["brief"]));
+    }
+
+    /// Every tool that names a session says, on its `title`, which language to write the name in.
+    #[test]
+    fn every_title_says_which_language_to_write_the_name_in() {
+        let mut naming = Vec::new();
+        for (role, bound) in [
+            (Role::Console, false),
+            (Role::Project, true),
+            (Role::Project, false),
+        ] {
+            for tool in tools_for(role, bound) {
+                let schema = (tool.schema)();
+                let Some(title) = schema["properties"]["title"]["description"].as_str() else {
+                    continue;
+                };
+                assert!(title.ends_with(NAMING_LANGUAGE), "{}: {title}", tool.name);
+                naming.push(tool.name);
+            }
+        }
+        naming.sort_unstable();
+        naming.dedup();
+        assert_eq!(
+            naming,
+            [
+                "handoff_session",
+                "new_session",
+                "rename_session",
+                "request_session"
+            ]
+        );
     }
 
     /// The prefix is the agent's own, and a role description that names the wrong one points the

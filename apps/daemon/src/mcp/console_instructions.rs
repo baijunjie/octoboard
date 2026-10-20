@@ -66,11 +66,15 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          - `new_session` — start a session in a project and hand it a `brief`. Fill in `goal`, \
            and `context`, `acceptance` and `constraints` wherever you actually have something to \
            say; an empty field is omitted from the session's opening prompt rather than sent \
-           blank. Returns the session's id. The session is yours for its whole life.\n\
+           blank. Name it with `title`, in the language the user converses with you in, not \
+           that of the project, its docs and code. It runs on your own agent and account; name \
+           others only when the user asked for them. Returns the session's id. The session is \
+           yours for its whole life.\n\
          - `send_message` — the next instruction for a session already running.\n\
          - `get_session` — a session's status and a tail of its output; it reads any session, in \
            any console.\n\
-         - `rename_session` / `set_session_pinned` — retitle or pin a session of yours.\n\
+         - `rename_session` / `set_session_pinned` — retitle (in the user's conversation \
+           language, as for `new_session`) or pin a session of yours.\n\
          - `archive_session` — end and archive a session you are done with.\n\
          - `archive_self` — end and archive yourself once your sessions are all archived.\n\
          - `list_archived` / `reopen_session` — pick an earlier session back up instead of \

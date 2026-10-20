@@ -32,8 +32,8 @@ use crate::branch_origin::handover::{
 use crate::coordinator::{self, OpenRequest};
 use crate::git_remote;
 use crate::protocol::{
-    error_code, now_millis, CodedError, Console, Event, Origin, Page, Project, ProjectSource, Role,
-    Session, SessionStatus,
+    error_code, now_millis, Agent, CodedError, Console, Event, Origin, Page, Project,
+    ProjectSource, Role, Session, SessionStatus,
 };
 use crate::reporting::{self, Delivery, ReportStatus, WhenBlocked};
 use crate::session_request;
@@ -305,6 +305,7 @@ fn session_to_start(
     };
     let open = session_in(
         state,
+        caller,
         &own_console(state, caller)?,
         Some(project.clone()),
         arguments,
@@ -312,11 +313,12 @@ fn session_to_start(
     Ok((project, open))
 }
 
-/// Reads a brief and the overrides — `new_session`'s arguments, and `request_session`'s alike —
-/// into the session to open, unbound, in `project` of `console`, or a console session of `console`
-/// for none.
+/// Reads a brief, the title and the overrides — `new_session`'s arguments, and `request_session`'s
+/// alike — into the session `caller` asks to open, unbound, in `project` of `console`, or a console
+/// session of `console` for none.
 fn session_in(
     state: &Arc<AppState>,
+    caller: &Session,
     console: &Console,
     project: Option<Project>,
     arguments: &Map<String, Value>,
@@ -338,34 +340,63 @@ fn session_in(
         brief.get("constraints").and_then(Value::as_str),
     );
 
-    let agent = optional_agent(arguments, "agent")?;
+    // Only in the caller's own console does a session follow the caller's agent and account:
+    // another console is set up apart, and its sessions run on what it and its projects set.
+    let in_own_console = caller.console_id == console.id;
+    let agent = match optional_agent(arguments, "agent")? {
+        Some(agent) => Some(agent),
+        None if in_own_console && coordinator::agent_can_open(state, caller.agent)? => {
+            Some(caller.agent)
+        }
+        None => None,
+    };
     // An account is one agent's, so it is read for the agent the session will be of, as
     // `coordinator::session_agent` settles it.
+    let session_agent = coordinator::session_agent(agent, project.as_ref(), console);
     let account = match optional_string(arguments, "account") {
+        Some(wanted) => Some(resolve_account(state, session_agent, &wanted)?),
+        None if in_own_console => callers_account(state, caller, session_agent)?,
         None => None,
-        Some(wanted) => {
-            let agent = coordinator::session_agent(agent, project.as_ref(), console);
-            Some(resolve_account(state, agent, &wanted)?)
-        }
     };
     Ok(OpenRequest {
         console_id: console.id.clone(),
         project_id: project.map(|project| project.id),
         agent,
-        // Without one, a session a session starts takes the project's account for its agent,
-        // else the console's; a blank model or effort is the agent's own default.
+        // Without one, the session takes the project's account for its agent, else the
+        // console's; a blank model or effort is the agent's own default.
         account,
         model: present_text(arguments, "model")?,
         effort: present_text(arguments, "effort")?,
         task: Some(task),
-        // Named for the task, not the project: several sessions dispatched into one project
-        // would otherwise all carry the project's name and be indistinguishable in the menu.
-        title: Some(reporting::title_from_goal(goal)),
+        // Named for the task, not the project, when the caller gives no name: several sessions
+        // dispatched into one project would otherwise all carry the project's name and be
+        // indistinguishable in the menu.
+        title: Some(
+            optional_string(arguments, "title").unwrap_or_else(|| reporting::title_from_goal(goal)),
+        ),
         origin: Origin::Console,
         bound_to: None,
         resume_agent_session_id: None,
         session_id: None,
     })
+}
+
+/// The account a session of `agent` that `caller` starts runs on when the call names none:
+/// `caller`'s own, for a session of `caller`'s own agent, so that work a session hands out goes on
+/// in the same agent and account unless the user asked otherwise. `None` — the project's account
+/// for the agent, else the console's — for another agent, and when `caller`'s account could not
+/// open a session now: removed since, or with its quota used up.
+pub(super) fn callers_account(
+    state: &Arc<AppState>,
+    caller: &Session,
+    agent: Agent,
+) -> Result<Option<Option<String>>> {
+    if agent != caller.agent
+        || !coordinator::account_can_open(state, agent, caller.account_id.as_deref())?
+    {
+        return Ok(None);
+    }
+    Ok(Some(caller.account_id.clone()))
 }
 
 async fn send_message(
@@ -814,7 +845,7 @@ async fn request_session(
         Some(project) => branches_to_hand_over(state, caller, project, arguments).await?,
         None => None,
     };
-    let open = session_in(state, &console, project, arguments)?;
+    let open = session_in(state, caller, &console, project, arguments)?;
     // Read once: the opening prompt says how the request was approved, and the call acts on it.
     let automatic = state.store.auto_approve_session_requests()?;
     let task = open
@@ -3200,5 +3231,159 @@ pub(super) mod tests {
         let mut raw = "ok ".as_bytes().to_vec();
         raw.extend_from_slice(&"日".as_bytes()[..2]);
         assert!(readable_output(&raw).starts_with("ok "));
+    }
+
+    /// A Codex console session `a` on the account `codex-work`, in a console whose sessions
+    /// otherwise default to Claude Code on the default account.
+    fn codex_caller_state(name: &str) -> (Arc<AppState>, ScratchDir, Session) {
+        let (state, dir) = shared_console_state(name);
+        state
+            .store
+            .insert_account(&crate::protocol::Account {
+                id: "codex-work".to_string(),
+                agent: Agent::Codex,
+                name: "Work".to_string(),
+                config_dir: "/tmp/codex-work".to_string(),
+                approval_reviewer: None,
+                approval_mode: None,
+            })
+            .unwrap();
+        let caller = Session {
+            agent: Agent::Codex,
+            account_id: Some("codex-work".to_string()),
+            config_dir: Some("/tmp/codex-work".to_string()),
+            ..state.session_record("a").unwrap()
+        };
+        (state, dir, caller)
+    }
+
+    /// The agent and account `session_in` reads for `caller` from `args`, starting a session in
+    /// `project` of `console`.
+    fn agent_and_account(
+        state: &Arc<AppState>,
+        caller: &Session,
+        console: &str,
+        project: &str,
+        args: Value,
+    ) -> (Option<Agent>, Option<Option<String>>) {
+        let console = state.store.get_console(console).unwrap().unwrap();
+        let project = state.store.get_project(project).unwrap();
+        let mut args = arguments(args);
+        args.insert("brief".to_string(), json!({ "goal": "Fix the build" }));
+        let open = session_in(state, caller, &console, project, &args).unwrap();
+        (open.agent, open.account)
+    }
+
+    /// A session a session starts runs on the caller's own agent and account when the call names
+    /// neither, whatever the console and project set; an agent or account the call names wins.
+    #[test]
+    fn a_started_session_defaults_to_the_callers_agent_and_account() {
+        let (state, _dir, caller) = codex_caller_state("defaults-to-caller");
+        let codex_work = Some(Some("codex-work".to_string()));
+
+        let omitted = agent_and_account(&state, &caller, "console-1", "project-1", json!({}));
+        assert_eq!(omitted, (Some(Agent::Codex), codex_work.clone()));
+        // Naming the caller's own agent keeps the caller's account too.
+        let same_agent = json!({ "agent": "codex" });
+        assert_eq!(
+            agent_and_account(&state, &caller, "console-1", "project-1", same_agent),
+            (Some(Agent::Codex), codex_work)
+        );
+        // Another agent takes what the project and console set for it.
+        let other_agent = json!({ "agent": "claude" });
+        assert_eq!(
+            agent_and_account(&state, &caller, "console-1", "project-1", other_agent),
+            (Some(Agent::Claude), None)
+        );
+        let named = json!({ "account": "default" });
+        assert_eq!(
+            agent_and_account(&state, &caller, "console-1", "project-1", named),
+            (Some(Agent::Codex), Some(None))
+        );
+    }
+
+    /// The caller's account is left for what the project and console set when it could not run
+    /// the session: its quota used up, or the account removed. The caller's agent is left for
+    /// theirs when it could not either.
+    #[test]
+    fn the_callers_account_or_agent_is_passed_over_when_it_could_not_open_a_session() {
+        use crate::protocol::{AccountQuota, QuotaWindow, QuotaWindowKind};
+
+        let (state, _dir, caller) = codex_caller_state("defaults-passed-over");
+        state.account_quotas.hold_in_dir_for_test(
+            &AccountQuota {
+                agent: Agent::Codex,
+                account: Some("codex-work".to_string()),
+                fetched_at: 1,
+                plan: None,
+                windows: vec![QuotaWindow {
+                    kind: QuotaWindowKind::Weekly,
+                    label: None,
+                    used_percent: 100.0,
+                    resets_at: None,
+                    window_minutes: None,
+                }],
+                unavailable: None,
+            },
+            "/tmp/codex-work",
+        );
+        assert_eq!(
+            agent_and_account(&state, &caller, "console-1", "project-1", json!({})),
+            (Some(Agent::Codex), None)
+        );
+
+        let (state, _dir, caller) = codex_caller_state("defaults-account-removed");
+        state.store.delete_account("codex-work").unwrap();
+        assert_eq!(
+            agent_and_account(&state, &caller, "console-1", "project-1", json!({})),
+            (Some(Agent::Codex), None)
+        );
+
+        let (state, _dir, caller) = codex_caller_state("defaults-agent-not-added");
+        state
+            .store
+            .set_added_agents_if_undecided(&[Agent::Claude, Agent::Grok])
+            .unwrap();
+        assert_eq!(
+            agent_and_account(&state, &caller, "console-1", "project-1", json!({})),
+            (None, None)
+        );
+    }
+
+    /// A session asked for in another console runs on what that console and its project set: its
+    /// accounts may be another job's.
+    #[test]
+    fn a_session_in_another_console_does_not_follow_the_caller() {
+        let (state, _dir, caller) = codex_caller_state("defaults-other-console");
+        assert_eq!(
+            agent_and_account(&state, &caller, "console-2", "project-2", json!({})),
+            (None, None)
+        );
+    }
+
+    /// The caller names the session; without a name it is named from the goal's first line.
+    #[test]
+    fn a_started_session_takes_the_title_given_else_its_goals() {
+        let (state, _dir) = shared_console_state("started-session-title");
+        let caller = state.session_record("a").unwrap();
+        let console = state.store.get_console("console-1").unwrap().unwrap();
+        let title = |args: Value| {
+            session_in(&state, &caller, &console, None, &arguments(args))
+                .unwrap()
+                .title
+        };
+        let brief = json!({ "goal": "Fix the build\nIt fails on CI." });
+        assert_eq!(
+            title(json!({ "brief": brief, "title": "  修复构建  " })).as_deref(),
+            Some("修复构建")
+        );
+        assert_eq!(
+            title(json!({ "brief": brief, "title": " " })).as_deref(),
+            Some("Fix the build")
+        );
+        assert_eq!(
+            title(json!({ "brief": brief })).as_deref(),
+            Some("Fix the build")
+        );
     }
 }
