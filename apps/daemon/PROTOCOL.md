@@ -256,7 +256,7 @@ A client also branches on some codes, instead of only showing them:
 | `session_already_starting` | `session` | The session is being started already |
 | `session_already_on_account` | `session` | `switch_session_account` named the account the session is on |
 | `session_archived` | `session` | `switch_session_account` or `hand_off_session` for an archived session; reopening one is `resume_session`'s job |
-| `session_working` | `session` | `hand_off_session` for a session in the middle of a turn, or still starting |
+| `session_working` | `session` | `hand_off_session` for a session in the middle of a turn, or still starting; `handover_branches` for a `from` that is another session and is working, starting or waiting for the user |
 | `handoff_to_same_agent` | `session`, `agent` | `hand_off_session` to the agent the session already runs on; moving to another account of it is `switch_session_account` |
 | `conversation_not_found` | `agent`, `path` | `switch_session_account` found no conversation record of the session in the directory of the account it is on (`path`) |
 | `conversation_unresumable` | `agent`, `session` | `resume_session` (and the `reopen_session` tool) found that the agent no longer has the conversation record of the session, so the launch could only fail: Claude Code's `<id>.jsonl`, or a Codex rollout, is gone from the session's own account. Nothing is reopened and every session keeps its status and `ended_at`. A record that cannot be proven absent (an unresolved default account, an account directory that cannot be read or has no records directory, a linked records directory, a Grok Build session folder missing locally) launches as before. Not raised for an archived owner, which is relaunched into a fresh conversation, nor for a session with no conversation (`has_conversation` false) |
@@ -1876,7 +1876,7 @@ the one waiting request a session may have, are described in `docs/product/sessi
 | `new_session`, `send_message`, `get_session`, `archive_session`, `reopen_session`, `rename_session`, `set_session_pinned` | yes | yes | — |
 | `list_sessions`, `share_info` | yes | yes | yes |
 | `archive_self` | yes | yes (refused once bound, a lead session included, which wraps up with `report`) | — |
-| `handoff_session`, `switch_session_account`, `transfer_session` | yes | yes | — |
+| `handoff_session`, `handover_branches`, `switch_session_account`, `transfer_session` | yes | yes | — |
 | `bind_to_session` | — | yes (refused once bound, a lead session included) | — |
 | `request_session` | yes | yes | yes |
 | `report`, `get_project` | — | yes (`report` is refused until bound) | yes |
@@ -1963,6 +1963,23 @@ console, changes a project's path, source, host, remote or `trust_consent`, or w
   moved; `branches` is `[]`, with the reason in `note`, when the branches could not be moved), and a `note`. A
   session that is not the caller's, and anything `hand_off_session` refuses, is refused in prose and changes
   nothing.
+- `handover_branches` takes `branches` (a non-empty list of local branch names), and optionally `from` and `to`, each
+  the caller itself when left out; it needs no approval. `from` is the caller or a session it owns, archived or not,
+  `to` the caller or a non-archived session it owns, and they differ. Each branch must have `from` as its responsible
+  session. While it is another session that is working, starting or waiting for the user (the stored status or the
+  agent's, which can show a prompt, such as Codex's "Action Required" terminal title, before the record has caught
+  up), `from` is refused with `session_working`; an interrupted or archived
+  one is not. A session other than the caller is claimed (`session_already_starting` while a launch, resume or switch
+  of it is under way) and `from`'s messages are held while everything is checked again and the branches move. It moves
+  the branch records only and messages `from` and `to`, each unless it is the caller, archived or interrupted. The
+  result carries `from`, `to`, `branches` (per branch moved: `branch`; `worktree`, the path when a worktree has it,
+  else `null`; `worktree_status`, one of `checked_out`, `gone` (git's record of the worktree is left, the directory is
+  not), `none` (no worktree has it) and `unknown` (the worktrees could not be read); and `uncommitted_changes`, `null`
+  unless the worktree is checked out and its changes could be read), `not_handed_over` and a `note`, which names any
+  session that could not be told. `new_session` takes the same `branches` as `request_session` does, from a project
+  session only, moved to the new session once it is running and named in its opening prompt, with `branches` (names of
+  those moved) and a `note` added to its result. See "Handing branches between sessions of an owner" in
+  `docs/product/branch-responsible-session.md`.
 - `switch_session_account` takes `session` (one of the caller's) and `account` (an account's id or name, or `default`),
   read for the session's own agent, and needs no approval: it runs `switch_session_account` on the session, which keeps
   its conversation. The session is sent no message for it. The result carries `session`, `agent`, `account` (the id,

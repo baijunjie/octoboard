@@ -19,16 +19,16 @@
 //! told to it in prose as well: in the call's result when it made the change itself, and in a
 //! message written into it when its owner did.
 
-use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 use uuid::Uuid;
 
-use crate::branch_origin;
 use crate::branch_origin::cleanup;
-use crate::browse::wire_path;
+use crate::branch_origin::handover::{
+    branch_name, branch_noun_and_pronoun, move_branches, named_branches, Handed, Handover,
+};
 use crate::coordinator::{self, OpenRequest};
 use crate::git_remote;
 use crate::protocol::{
@@ -36,7 +36,7 @@ use crate::protocol::{
     Session, SessionStatus,
 };
 use crate::reporting::{self, Delivery, ReportStatus, WhenBlocked};
-use crate::session_request::{self, Handover};
+use crate::session_request;
 use crate::sharing::{self, OwnerCopy};
 use crate::state::AppState;
 
@@ -48,6 +48,7 @@ use super::args::{
 };
 use super::bindings;
 use super::handoff;
+use super::handover::{self, branch_names, held_by};
 use super::settings::{
     self, describe_project, launch_argument, project_accounts_argument, resolve_account,
 };
@@ -77,7 +78,7 @@ pub async fn call(
         "update_console" => settings::update_console(state, &session, arguments).await,
         "get_settings" => settings::get_settings(state),
         "update_settings" => settings::update_settings(state, arguments),
-        "new_session" => new_session(state, &session, arguments).await,
+        "new_session" => new_session(state, &session, arguments, crate::term::launch).await,
         "send_message" => send_message(state, &session, arguments).await,
         "get_session" => get_session(state, &session, arguments).await,
         "rename_session" => rename_session(state, &session, arguments),
@@ -86,6 +87,7 @@ pub async fn call(
         "archive_self" => archive_self(state, &session).await,
         "list_archived" => list_archived(state, &session, arguments),
         "reopen_session" => reopen_session(state, &session, arguments).await,
+        "handover_branches" => handover::handover_branches(state, &session, arguments).await,
         "handoff_session" => {
             handoff::handoff_session(state, &session, arguments, crate::term::launch).await
         }
@@ -214,31 +216,74 @@ fn check_clone_url(url: Option<&str>) -> Result<()> {
     Ok(())
 }
 
+/// Starts the session through `launch`: `term::launch` outside the tests, which cannot start an
+/// agent.
 async fn new_session(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
+    launch: impl FnOnce(crate::term::LaunchRequest) -> Result<crate::term::Launch> + Send + 'static,
 ) -> Result<Value> {
-    let open = session_to_start(state, caller, arguments)?;
-    let session = coordinator::open_session(
+    let (project, open) = session_to_start(state, caller, arguments)?;
+    if caller.role == Role::Console
+        && optional_string_list(arguments, "branches")?.is_some_and(|names| !names.is_empty())
+    {
+        bail!(
+            "`branches` is for a project session; a console session is responsible for no branch, \
+             so it has none to hand the new session"
+        );
+    }
+    // Checked before anything is started, as `request_session` checks before it asks.
+    let handover = branches_to_hand_over(state, caller, &project, arguments).await?;
+    // Written before the move, as `request_session`'s is: the session reads it as it starts.
+    let task = match (&handover, open.task) {
+        (Some(handover), Some(brief)) => Some(branches_opening_prompt(caller, handover, &brief)),
+        (_, task) => task,
+    };
+    let session = coordinator::open_session_with(
         state,
         OpenRequest {
+            task,
             // A session a session starts always reports to it.
             bound_to: Some(caller.id.clone()),
             ..open
         },
+        launch,
     )
     .await?;
-    Ok(json!({ "session": session.id, "agent": session.agent }))
+    let mut answer = json!({ "session": session.id, "agent": session.agent });
+    if let Some(handover) = handover {
+        let handed = move_branches(state, &handover, caller, &session).await;
+        answer["branches"] = json!(match &handed {
+            Handed::Moved(moved) => moved.moved.iter().map(|b| branch_name(b)).collect(),
+            Handed::Failed(_) => Vec::new(),
+        });
+        answer["note"] = json!(session_request::branch_outcome(&handed).trim());
+    }
+    Ok(answer)
 }
 
-/// Reads what `new_session` asks for into the session to open, unbound: in the project the
-/// console session names, or in a project session's own.
+/// The opening prompt of a session `new_session` hands branches to: the brief, and that the
+/// session starting it handed it the branches and it is now the one responsible for them.
+fn branches_opening_prompt(caller: &Session, handover: &Handover, brief: &str) -> String {
+    let (noun, them) = branch_noun_and_pronoun(&handover.branches);
+    format!(
+        "The session `{id}` (\"{title}\"), which started you, also handed the {noun} {} over to \
+         you: you are now the session responsible for {them}, so carry on the work on {them}. \
+         This is the brief it wrote:\n\n{brief}",
+        named_branches(&handover.branches),
+        id = caller.id,
+        title = sharing::one_line(&caller.title),
+    )
+}
+
+/// Reads what `new_session` asks for into the project it starts in — the one the console session
+/// names, or a project session's own — and the session to open there, unbound.
 fn session_to_start(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
-) -> Result<OpenRequest> {
+) -> Result<(Project, OpenRequest)> {
     let project = match caller.role {
         Role::Console => resolve_project(
             state,
@@ -247,12 +292,13 @@ fn session_to_start(
         )?,
         Role::Project => own_project(state, caller, optional_string(arguments, "project"))?,
     };
-    session_in(
+    let open = session_in(
         state,
         &own_console(state, caller)?,
-        Some(project),
+        Some(project.clone()),
         arguments,
-    )
+    )?;
+    Ok((project, open))
 }
 
 /// Reads a brief and the overrides — `new_session`'s arguments, and `request_session`'s alike —
@@ -785,11 +831,11 @@ fn request_opening_prompt(
         "with the user's approval"
     };
     let handed = handover.map_or_else(String::new, |handover| {
-        let (noun, them) = session_request::branch_noun_and_pronoun(&handover.branches);
+        let (noun, them) = branch_noun_and_pronoun(&handover.branches);
         format!(
             " It also handed the {noun} {} over to you, with the same approval: you are now the \
              session responsible for {them}, so carry on the work on {them}.",
-            session_request::named_branches(&handover.branches)
+            named_branches(&handover.branches)
         )
     });
     format!(
@@ -801,71 +847,22 @@ fn request_opening_prompt(
     )
 }
 
-/// The branches `request_session` hands over, from its `branches` argument: local branches of the
-/// repository `project` is in that the caller is responsible for, each named once. `None` when
-/// the argument names none. Refused before the user is asked, with the first branch that is not
-/// the caller's to give.
+/// The branches `request_session` and `new_session` hand over, from their `branches` argument:
+/// local branches of the repository `project` is in that the caller is responsible for, each
+/// named once. `None` when the argument names none. Refused before anything is started or asked,
+/// with the first branch that is not the caller's to give.
 async fn branches_to_hand_over(
     state: &Arc<AppState>,
     caller: &Session,
     project: &Project,
     arguments: &Map<String, Value>,
 ) -> Result<Option<Handover>> {
-    let Some(names) = optional_string_list(arguments, "branches")? else {
+    let Some(branches) = branch_names(arguments, "branches")? else {
         return Ok(None);
     };
-    let mut branches: Vec<String> = Vec::new();
-    for name in &names {
-        let name = name.trim();
-        if name.is_empty() {
-            bail!("`branches` must not hold a blank name");
-        }
-        let wire = wire_path::encode(name.as_bytes());
-        if !branches.contains(&wire) {
-            branches.push(wire);
-        }
-    }
-    if branches.is_empty() {
-        return Ok(None);
-    }
-    // Finding the repository reads the filesystem and the holder check reads the store.
-    let (repository, not_held) = {
-        let state = state.clone();
-        let path = project.path.clone();
-        let (branches, caller) = (branches.clone(), caller.id.clone());
-        tokio::task::spawn_blocking(move || {
-            let Some(repository) = branch_origin::repository_of(Path::new(&path)) else {
-                return Ok(None);
-            };
-            let not_held =
-                branch_origin::first_not_held_by(&state, &repository, &branches, &caller)?;
-            Ok::<_, anyhow::Error>(Some((repository, not_held)))
-        })
-        .await??
-        .ok_or_else(|| {
-            anyhow!(
-                "the project `{}` (\"{}\") is not in a git repository, so there is no branch to \
-                 hand to a session there",
-                project.id,
-                project.name
-            )
-        })?
-    };
-    if let Some(branch) = not_held {
-        bail!(
-            "{} is not a branch you are responsible for in the repository of the project `{}` \
-             (\"{}\"): it does not exist there, or it was not created by you or handed to you, or \
-             another session is responsible for it now. Only a branch you are responsible for can \
-             be handed over",
-            session_request::named_branches(&[branch]),
-            project.id,
-            project.name
-        );
-    }
-    Ok(Some(Handover {
-        repository,
-        branches,
-    }))
+    held_by(state, caller, caller, project, branches)
+        .await
+        .map(Some)
 }
 
 // -- argument and record helpers ---------------------------------------------
@@ -1366,6 +1363,154 @@ pub(super) mod tests {
                 .contains("`recreated` is not a branch you are responsible for"),
             "{err}"
         );
+    }
+
+    /// `new_session`'s `branches` are the caller's to give as `request_session`'s are: anything
+    /// else is refused before a session is started, and what is accepted moves to the new session
+    /// once it is running, which the result says.
+    #[tokio::test]
+    async fn new_session_hands_the_callers_branches_to_the_session_it_starts() {
+        use crate::test_support::{stand_in_launch, Launched, StandIn};
+        use std::sync::Mutex;
+
+        let (state, _dir) = shared_console_state("new-session-branches");
+        let repo = crate::test_support::repo_with("new-session-branches-repo", &[(b"a", b"a")]);
+        state
+            .store
+            .insert_project(&Project {
+                id: "repo".to_string(),
+                name: "repo".to_string(),
+                path: repo.to_string_lossy().into_owned(),
+                ..state.store.get_project("project-1").unwrap().unwrap()
+            })
+            .unwrap();
+        state
+            .store
+            .insert_session(&Session {
+                project_id: Some("repo".to_string()),
+                ..project_session("dev", "console-1", None)
+            })
+            .unwrap();
+        crate::test_support::branch_made_by(&state, &repo, "mine", "dev");
+        crate::test_support::branch_made_by(&state, &repo, "also", "dev");
+        crate::test_support::branch_made_by(&state, &repo, "theirs", "a");
+        let _caller = running(&state, "dev");
+        let caller = state.session_record("dev").unwrap();
+        let responsible = |branch: &str| {
+            let key = crate::branch_origin::repo_key(
+                &crate::branch_origin::repository_of(&repo).unwrap(),
+            );
+            state
+                .store
+                .branch_origins(&key)
+                .unwrap()
+                .into_iter()
+                .find(|row| row.branch == branch)
+                .unwrap()
+                .responsible_session
+        };
+        let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
+        let started = Arc::new(Mutex::new(Vec::<StandIn>::new()));
+        let before = state.store.list_sessions().unwrap().len();
+
+        for (branches, reason) in [
+            (
+                json!(["theirs"]),
+                "`theirs` is not a branch you are responsible for",
+            ),
+            (
+                json!(["mine", "absent"]),
+                "`absent` is not a branch you are responsible for",
+            ),
+            (json!(["mine", " "]), "blank name"),
+            (json!("mine"), "array of strings"),
+        ] {
+            let input = arguments(json!({ "brief": { "goal": "x" }, "branches": branches }));
+            let err = new_session(
+                &state,
+                &caller,
+                &input,
+                stand_in_launch(&started, &launches, || {}),
+            )
+            .await
+            .expect_err("refused");
+            assert!(err.to_string().contains(reason), "{branches}: {err}");
+        }
+        assert!(launches.lock().unwrap().is_empty());
+        assert_eq!(state.store.list_sessions().unwrap().len(), before);
+        assert_eq!(responsible("mine"), "dev");
+
+        let input = arguments(json!({
+            "brief": { "goal": "x" },
+            "branches": ["mine", "also", "mine"],
+        }));
+        let answer = new_session(
+            &state,
+            &caller,
+            &input,
+            stand_in_launch(&started, &launches, || {}),
+        )
+        .await
+        .unwrap();
+        let id = answer["session"].as_str().unwrap();
+        assert_eq!(answer["branches"], json!(["mine", "also"]));
+        let opening = launches.lock().unwrap()[0].2.clone().unwrap();
+        assert!(
+            opening.contains("handed the branches `mine`, `also` over to you")
+                && opening.contains("you are now the session responsible for them"),
+            "{opening}"
+        );
+        assert!(answer["note"]
+            .as_str()
+            .unwrap()
+            .contains("Handed over to it"));
+        assert_eq!(responsible("mine"), id);
+        assert_eq!(responsible("also"), id);
+        assert_eq!(responsible("theirs"), "a");
+        assert_eq!(
+            state
+                .store
+                .get_session(id)
+                .unwrap()
+                .unwrap()
+                .bound_to
+                .as_deref(),
+            Some("dev")
+        );
+
+        // A console session is responsible for no branch and is told so, not that it is not
+        // responsible for this one.
+        let console = state.session_record("a").unwrap();
+        let input = arguments(json!({
+            "project": "repo",
+            "brief": { "goal": "x" },
+            "branches": ["mine"],
+        }));
+        let err = new_session(
+            &state,
+            &console,
+            &input,
+            stand_in_launch(&started, &launches, || {}),
+        )
+        .await
+        .expect_err("refused");
+        assert!(
+            err.to_string()
+                .contains("`branches` is for a project session"),
+            "{err}"
+        );
+
+        // Without `branches` the answer is what it was.
+        let input = arguments(json!({ "brief": { "goal": "x" } }));
+        let answer = new_session(
+            &state,
+            &caller,
+            &input,
+            stand_in_launch(&started, &launches, || {}),
+        )
+        .await
+        .unwrap();
+        assert!(answer.get("branches").is_none());
     }
 
     /// An approval starts the session with a brief that says who wrote it, and, when the request

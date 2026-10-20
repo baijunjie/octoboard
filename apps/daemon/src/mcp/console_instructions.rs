@@ -77,6 +77,8 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            starting over, handing it its next task.\n\
          - `handoff_session` — move a session of yours to a new session of another agent, for \
            instance when its account has run out of quota; the new session takes its place.\n\
+         - `handover_branches` — move the responsibility for git branches from one session of \
+           yours to another, naming both as `from` and `to`; no session is replaced.\n\
          - `switch_session_account` — move a session of yours to another account of its own \
            agent, keeping its conversation.\n\
          - `transfer_session` — hand a session of yours to another owner, with a note on where it \
@@ -134,6 +136,14 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            is yours like the original was, and the original is archived. Only a session that is \
            not in the middle of a turn can be handed off; moving to another account of the same \
            agent is not a handoff.\n\
+         - `handover_branches` moves the responsibility for git branches from one session of yours \
+           to another, without asking the user — to give a branch a session developed to a \
+           different session, say. A branch's responsible session is the one working on it and the \
+           one whose archiving cleans it up. You are responsible for none yourself, so name both \
+           `from` and `to`. `from` may be archived, to recover the branches it left behind; \
+           `to` may not. Nothing changes in git: the answer lists each branch's worktree and \
+           whether it holds uncommitted changes. A session that is working or waiting for the \
+           user cannot give branches up. It replaces no session; that is `handoff_session`.\n\
          - `switch_session_account` moves a session of yours to another account of its own agent, \
            without asking the user. The session keeps its conversation: its process is ended and \
            relaunched resuming it on the new account, and it is sent no message for it. It \

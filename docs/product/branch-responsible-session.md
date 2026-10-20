@@ -47,16 +47,19 @@ A branch has at most one responsible session at a time; a session can be respons
 - **It starts as the session whose own git reported creating the branch**, from the branch's creation on (see "When a
   branch gets a responsible session" below). A branch no session's git reported creating has none, and cannot be handed
   over.
-- **It moves only by an explicit handover** of the branch to another session, in one of two ways: the approval of a
+- **It moves only by an explicit handover** of the branch to another session, in one of four ways: the approval of a
   `request_session` call that names the branch, which makes the session the approval starts its responsible
-  session (see "Handing branches over" in `docs/product/session-requests.md`); or a handoff of the session to another
-  agent, which makes the receiving session responsible for every branch the original was (see
-  `docs/product/handing-off-sessions.md`). Nothing else moves it; handing a session to another owner, or a session
-  binding itself to one, leaves the branches it is responsible for where they are. Who was responsible for a branch
-  before is not kept.
+  session (see "Handing branches over" in `docs/product/session-requests.md`); a `new_session` call that names the
+  branch, which makes the session it starts, owned by the caller, responsible for it (see "Handing branches to a
+  session the caller starts" below); an owner's `handover_branches` call, which moves it between the owner and a
+  session of its own, or between two sessions of its own (see "Handing branches between sessions of an owner"
+  below); or a handoff of the session to another agent, which makes the receiving session responsible for every
+  branch the original was (see `docs/product/handing-off-sessions.md`). Nothing else moves it; handing a session to
+  another owner, or a session binding itself to one, leaves the branches it is responsible for where they are. Who was
+  responsible for a branch before is not kept.
 - **The record holds the session's created name from when it became responsible**, to name a session that no longer
   exists: for the session whose git reported the branch, its created name when the report was taken; for a session a
-  handover made responsible, the created name it was started with. Either is cut to its first 80 characters. No task
+  handover made responsible, its created name at the handover. Either is cut to its first 80 characters. No task
   title is recorded.
 - **It is part of the branch's record** (see "What the record is" below) and follows it: it moves to the new name with
   a rename, goes when the branch is deleted, is not inherited by a branch deleted and created again under the same
@@ -64,6 +67,77 @@ A branch has at most one responsible session at a time; a session can be respons
   deleting a session leaves it as it is. Archiving or deleting a session does delete the branches it is responsible
   for where git can do so safely, and a deleted branch's record goes with it (see
   `docs/product/branch-and-worktree-cleanup.md`); a branch that stays keeps its record.
+
+## Handing branches to a session the caller starts
+
+A project session that can own sessions — an unbound project session or a lead session (see "The unbound project
+session's tools" in `docs/product/hub-orchestration.md`) — can pass `branches` to `new_session`: local branches of its
+own project's repository that **the caller itself** is responsible for. The rules are `request_session`'s (see
+"Handing branches over" in `docs/product/session-requests.md`): the same input checks; the same refusal for a branch
+the caller is not responsible for, made before anything is started, so a refused call starts no session; the move made
+right after the new session has started, and only for a branch the caller is still responsible for at that moment;
+and a move that cannot be recorded does not fail the call, leaving the caller responsible for every branch it named.
+What differs is that the new session is owned by the caller and no user approval is involved.
+
+- **The opening prompt says so.** The brief is preceded by a paragraph naming the caller by id and title, saying that
+  it started the new session and handed it those branches, naming each, and that the new session is now responsible
+  for them and is to carry on the work on them. The paragraph is written before the move, so it names every branch the
+  call named, whatever the move then finds.
+- **The result says what became of them.** Where `branches` names at least one branch, the answer adds `branches`, the
+  names of the branches moved (none when the move could not be recorded), and a `note`: those handed over, now the new
+  session's responsibility and no longer the caller's; those not handed over because by then the caller was no longer
+  responsible for them or they were gone, staying as they were; or that the move could not be recorded and the caller
+  is still responsible for them.
+- **Not for a console session.** A console session is responsible for no branch (see "Project sessions only" below):
+  its `new_session` does not offer `branches`, and a call that names a branch in it anyway is refused before anything
+  is started.
+
+## Handing branches between sessions of an owner
+
+The `handover_branches` tool, offered to every session that can own sessions, moves the responsibility for branches
+without replacing any session (a handoff, by contrast, replaces a session with one of another agent). It takes
+`branches` (local branches of the repository, at least one), `from` and `to`; either of `from` and `to` left out is
+the caller itself, and the two must differ. No approval is asked: the caller owns the sessions concerned.
+
+- **Who can give and who can take.** `from` is the caller or a session the caller owns directly, an archived one
+  included, so that the branches an archived session left behind (named in `branches_left` when it was archived) can
+  be recovered. `to` is the caller or a session the caller owns directly that is not archived; an interrupted one can
+  take branches. A session owned by anyone else, or the user's own, is refused as in any tool that acts on a session.
+  A console session is responsible for no branch, so a console session must name both `from` and `to`, each a project
+  session it owns; leaving either out names the console session itself, which is refused.
+- **What is checked.** The input is checked as for `request_session`: a list of strings with no blank name, each name
+  trimmed and taken once. Each branch must have `from` as its responsible session in the repository, with the same
+  refusal as `request_session` gives (naming `from` where it is not the caller). Both sessions' projects must be in the
+  repository the branches are in. A refusal changes nothing.
+- **A session at work cannot give branches up.** A `from` that is another session is refused while it is working,
+  still starting or waiting for the user, because it would go on writing to the worktrees of branches that are no
+  longer its own. Both its recorded status and what its agent is showing count, so a prompt the agent has put up is
+  refused even before the session's status has caught up with it. Idle, interrupted and archived sessions can give
+  branches up. The caller itself is always in a turn when it calls, and may give its own branches away.
+- **Nothing else happens to the sessions meanwhile.** While a session other than the caller is being started,
+  resumed, handed off, switched to another account or having its owner changed, a handover from or to it is refused,
+  changing nothing; and none of that can begin on either of them while the handover is carried out. Messages for a
+  `from` other than the caller are queued meanwhile, and delivered once the branches have moved. The checks above are
+  made under that protection, so they still hold when the branches move.
+- **Nothing in git or on disk changes.** A branch stays checked out wherever it is, with whatever uncommitted changes
+  its worktree holds; uncommitted changes do not stop the move. The result carries `from`, `to`, and per branch moved,
+  in `branches`: `branch`; `worktree`, the path of the worktree it is checked out in, or `null` when there is none or
+  the worktrees could not be read; `worktree_status`, one of `checked_out`, `gone` (git still records a worktree for
+  the branch but its directory is gone; `worktree` is that path), `none` (no worktree has it) and `unknown` (the
+  worktrees could not be read); and `uncommitted_changes`, `true` or `false` for a checked-out worktree whose changes
+  could be read, else `null`. A branch not moved because by then `from` was no longer responsible for it, or it was
+  gone, is named in `not_handed_over`. The `note` says what was handed over and that cleanup follows the new
+  responsible session. If no branch could be moved, or the move could not be recorded, the call is refused.
+- **The sessions concerned are told.** `from` and `to`, each unless it is the caller, are sent a message naming the
+  caller as their owner and listing each branch with where it is checked out and whether that worktree holds
+  uncommitted changes. `from`'s says it is no longer responsible for the branches, must not touch them or their
+  worktrees, and must leave any uncommitted changes there as they are. `to`'s says it is now the session responsible
+  for them, the previous one no longer is, and its owner will tell it what to do with them. A session that is
+  interrupted or archived, or that a message could not be written to, is not told; the `note` names it and asks the
+  caller to tell it once it can take a message.
+- **Cleanup follows the new responsible session.** Archiving or deleting a session removes the branches it is
+  responsible for (see `docs/product/branch-and-worktree-cleanup.md`), so after the move the branches go with `to` and
+  no longer with `from`.
 
 ## When a branch gets a responsible session
 

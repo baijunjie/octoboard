@@ -365,11 +365,11 @@ async fn tell(state: &Arc<AppState>, original: &Session, moved: &Moved, asked_by
     match &moved.branches {
         Ok(branches) if branches.is_empty() => {}
         Ok(branches) => {
-            let (noun, them) = crate::session_request::branch_noun_and_pronoun(branches);
+            let (noun, them) = crate::branch_origin::handover::branch_noun_and_pronoun(branches);
             held.push_str(&format!(
                 "\n- You are now the session responsible for the {noun} {}; the original no \
                  longer is, so carry on the work on {them}.",
-                crate::session_request::named_branches(branches)
+                crate::branch_origin::handover::named_branches(branches)
             ));
         }
         Err(reason) => held.push_str(&format!(

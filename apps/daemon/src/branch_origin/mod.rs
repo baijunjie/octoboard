@@ -45,6 +45,7 @@ mod gate;
 pub mod git;
 mod git_files;
 pub mod git_hooks;
+pub mod handover;
 pub mod session_branches;
 #[cfg(test)]
 mod tests;

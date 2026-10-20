@@ -1,7 +1,8 @@
 //! Where the branches a session is responsible for stand in git, read for a handoff package: the
 //! worktree each is checked out in, its head, what it has committed against the branch it was cut
 //! from, and whether its worktree holds uncommitted changes. Reading only; nothing is checked out,
-//! fetched or written.
+//! fetched or written. The worktree of named branches can also be read alone ([`worktrees_of`]), as
+//! a branch handover reports it.
 //!
 //! What a branch is compared with follows the project pane's Git mode ("Committed changes" in
 //! `docs/product/project-pane-git-change-list.md`): any branch but the main working copy's has the
@@ -74,36 +75,96 @@ pub fn of_session(state: &AppState, session: &Session) -> Result<Vec<BranchState
     let git = (state.host_tools.get().git)()?;
     let mut states = Vec::new();
     for repo in &bound {
-        let listed = worktrees(&git, &repo.repo);
         let names: Vec<Vec<u8>> = repo
             .branches
             .iter()
             .map(|branch| wire_path::decode(&branch.branch).unwrap_or_default())
             .collect();
-        let main_branch = listed
-            .as_ref()
-            .ok()
-            .and_then(|listed| listed.iter().find(|worktree| worktree.main))
-            .and_then(|main| main.branch.clone());
-        // Only the main working copy's own branch needs its remote branch looked up.
-        let upstream = match &main_branch {
-            Some(main) if names.contains(main) => main_upstream(&git, &repo.repo, main),
-            _ => Ok(None),
-        };
-        for name in &names {
-            states.push(match &listed {
-                Ok(listed) => read_branch(&git, &repo.repo, listed, name, &upstream),
-                Err(detail) => BranchState {
-                    branch: String::from_utf8_lossy(name).into_owned(),
-                    worktree: Worktree::Unknown(format!(
-                        "the worktrees could not be listed: {detail}"
-                    )),
-                    ..BranchState::default()
-                },
-            });
-        }
+        states.extend(read_branches(&git, &repo.repo, &names));
     }
     Ok(states)
+}
+
+/// Where each of `branches` (wire paths) of the repository `repo` is checked out, and whether that
+/// worktree holds uncommitted changes, in the order given: the worktrees are listed once and only
+/// the checked-out ones are asked for their changes. Blocking. A failure to run `git` at all is the
+/// error; one to list the worktrees leaves every branch [`Worktree::Unknown`].
+pub fn worktrees_of(
+    state: &AppState,
+    repo: &Path,
+    branches: &[String],
+) -> Result<Vec<(String, Worktree)>> {
+    let git = (state.host_tools.get().git)()?;
+    let listed = worktrees(&git, repo);
+    Ok(branches
+        .iter()
+        .map(|wire| {
+            let name = wire_path::decode(wire).unwrap_or_default();
+            let worktree = match &listed {
+                Ok(listed) => worktree_of(&git, listed, &name).0,
+                Err(detail) => {
+                    Worktree::Unknown(format!("the worktrees could not be listed: {detail}"))
+                }
+            };
+            (String::from_utf8_lossy(&name).into_owned(), worktree)
+        })
+        .collect())
+}
+
+/// Where the branch `name` is checked out among `listed`, and why its changes could not be read
+/// when they could not.
+fn worktree_of(git: &Git, listed: &[Listed], name: &[u8]) -> (Worktree, Option<String>) {
+    let Some(worktree) = listed
+        .iter()
+        .find(|worktree| worktree.branch.as_deref() == Some(name))
+    else {
+        return (Worktree::NotCheckedOut, None);
+    };
+    if worktree.prunable {
+        return (Worktree::Gone(worktree.root.clone()), None);
+    }
+    let (uncommitted, problem) = match changes(git, &worktree.root) {
+        Ok(uncommitted) => (Some(uncommitted), None),
+        Err(detail) => (
+            None,
+            Some(format!(
+                "its worktree's changes could not be read: {detail}"
+            )),
+        ),
+    };
+    (
+        Worktree::CheckedOut {
+            path: worktree.root.clone(),
+            uncommitted,
+        },
+        problem,
+    )
+}
+
+/// Reads each of `names`, branches of `repo`, against one listing of its worktrees.
+fn read_branches(git: &Git, repo: &Path, names: &[Vec<u8>]) -> Vec<BranchState> {
+    let listed = worktrees(git, repo);
+    let main_branch = listed
+        .as_ref()
+        .ok()
+        .and_then(|listed| listed.iter().find(|worktree| worktree.main))
+        .and_then(|main| main.branch.clone());
+    // Only the main working copy's own branch needs its remote branch looked up.
+    let upstream = match &main_branch {
+        Some(main) if names.contains(main) => main_upstream(git, repo, main),
+        _ => Ok(None),
+    };
+    names
+        .iter()
+        .map(|name| match &listed {
+            Ok(listed) => read_branch(git, repo, listed, name, &upstream),
+            Err(detail) => BranchState {
+                branch: String::from_utf8_lossy(name).into_owned(),
+                worktree: Worktree::Unknown(format!("the worktrees could not be listed: {detail}")),
+                ..BranchState::default()
+            },
+        })
+        .collect()
 }
 
 /// The remote branch the Git mode compares the main working copy's branch `main` with.
@@ -145,26 +206,9 @@ fn read_branch(
             return state;
         }
     }
-    if let Some(worktree) = listed
-        .iter()
-        .find(|worktree| worktree.branch.as_deref() == Some(name))
-    {
-        state.worktree = if worktree.prunable {
-            Worktree::Gone(worktree.root.clone())
-        } else {
-            let uncommitted = changes(git, &worktree.root)
-                .map_err(|detail| {
-                    state.problems.push(format!(
-                        "its worktree's changes could not be read: {detail}"
-                    ))
-                })
-                .ok();
-            Worktree::CheckedOut {
-                path: worktree.root.clone(),
-                uncommitted,
-            }
-        };
-    }
+    let (worktree, problem) = worktree_of(git, listed, name);
+    state.worktree = worktree;
+    state.problems.extend(problem);
 
     let main_branch = listed
         .iter()

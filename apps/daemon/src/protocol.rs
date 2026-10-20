@@ -3113,8 +3113,8 @@ pub mod error_code {
     /// A switch was asked for an archived session. Reopening one is a resume's job, and a switch
     /// must not do it as a side effect.
     pub const SESSION_ARCHIVED: &str = "session_archived";
-    /// A handoff was asked for a session in the middle of a turn, or still starting. `params`
-    /// names the `session`.
+    /// A handoff, or a handover of a session's branches, was asked for a session in the middle of a
+    /// turn, or still starting. `params` names the `session`.
     pub const SESSION_WORKING: &str = "session_working";
     /// A handoff was asked to the agent the session already runs on. `params` names the `session`
     /// and the `agent`.

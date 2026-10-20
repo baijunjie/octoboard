@@ -41,7 +41,6 @@ mod tests;
 
 use std::collections::{HashSet, VecDeque};
 use std::future::Future;
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -50,8 +49,9 @@ use serde_json::{json, Value};
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
-use crate::branch_origin;
-use crate::browse::wire_path;
+use crate::branch_origin::handover::{
+    branch_noun_and_pronoun, move_branches, named_branches, Handed, Handover,
+};
 use crate::coordinator::{self, OpenRequest};
 use crate::mcp::{qualified_tool_name, tool_by_name};
 use crate::protocol::{
@@ -60,7 +60,6 @@ use crate::protocol::{
 use crate::reporting::{self, WhenBlocked};
 use crate::sharing::{one_line, place_of};
 use crate::state::AppState;
-use crate::store::BranchMove;
 
 /// How long a call waits for the user's answer. Octoboard's own value, for every agent alike, and
 /// kept below `mcp::stdio`'s `CALL_TIMEOUT` with room left for an approval given at the last
@@ -113,17 +112,6 @@ struct Ended {
     request_id: String,
     session: String,
     how: SessionRequestEnding,
-}
-
-/// The branches of one repository a request hands to the session it asks for, checked to be the
-/// requester's to give when the request was made.
-#[derive(Debug, Clone)]
-pub struct Handover {
-    /// The canonical common directory of the repository, as `branch_origin::repository_of` gives
-    /// it.
-    pub repository: PathBuf,
-    /// Names below `refs/heads/`, as wire paths. Never empty.
-    pub branches: Vec<String>,
 }
 
 /// One request: what the dialog is told of it, and the session an approval opens.
@@ -649,15 +637,6 @@ where
     })
 }
 
-/// What became of the branches a request named, once its session was started.
-enum Handed {
-    /// The compare-and-set ran: some branches moved, the rest were no longer the caller's, or were
-    /// gone.
-    Moved(BranchMove),
-    /// The move could not be recorded, so every branch is still the caller's.
-    Failed(Vec<String>),
-}
-
 /// Moves the branches the request names to the session it started, each only if the caller is
 /// still its responsible session. The session is running by now, so a failure to move is not one
 /// of the approval: it is told to the caller instead.
@@ -668,49 +647,7 @@ async fn hand_over_branches(
     started: &Session,
 ) -> Option<Handed> {
     let handover = request.handover.as_ref()?;
-    let moving = {
-        let state = state.clone();
-        let repository = handover.repository.clone();
-        let branches = handover.branches.clone();
-        let (from, to) = (caller.id.clone(), started.id.clone());
-        let to_title = started.title.clone();
-        tokio::task::spawn_blocking(move || {
-            branch_origin::hand_over(&state, &repository, &branches, &from, &to, &to_title)
-        })
-    };
-    let moved = match moving.await {
-        Ok(Ok(moved)) => Handed::Moved(moved),
-        Ok(Err(err)) => {
-            tracing::warn!(session = %caller.id, %err, "handing the branches over failed");
-            Handed::Failed(handover.branches.clone())
-        }
-        Err(err) => {
-            tracing::warn!(session = %caller.id, %err, "handing the branches over did not finish");
-            Handed::Failed(handover.branches.clone())
-        }
-    };
-    Some(moved)
-}
-
-/// Branch names, as wire paths, set in backticks and separated by commas, for prose.
-pub fn named_branches(branches: &[String]) -> String {
-    branches
-        .iter()
-        .map(|branch| {
-            let name = wire_path::decode(branch).unwrap_or_default();
-            format!("`{}`", String::from_utf8_lossy(&name))
-        })
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
-/// The noun and the pronoun that stand for `branches` in a sentence: "branch" and "it" for one,
-/// "branches" and "them" for several.
-pub fn branch_noun_and_pronoun(branches: &[String]) -> (&'static str, &'static str) {
-    match branches {
-        [_] => ("branch", "it"),
-        _ => ("branches", "them"),
-    }
+    Some(move_branches(state, handover, caller, started).await)
 }
 
 /// What a session is told of the session it asked for, in the call's result and in the message
@@ -767,7 +704,7 @@ fn outcome_note(
 
 /// What became of the branches a request handed over, as a sentence or two for the outcome note,
 /// each opening with a space.
-fn branch_outcome(handed: &Handed) -> String {
+pub(crate) fn branch_outcome(handed: &Handed) -> String {
     let mut text = String::new();
     match handed {
         Handed::Moved(handed) => {

@@ -198,8 +198,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   branch's row in the Git mode's branch selector list: the title it names the session by (the session's own while it
   exists, the recorded one once it is gone) and the filled ring a branch of the selected session takes; the
   responsible session, which starts as the session whose own git reported creating the branch through git's
-  reference-transaction hook and moves only by an approved handover, a branch no session's git reported staying
-  unmarked; what counts as a creation (renames keep the record, forced updates and copies do not, a report from an
+  reference-transaction hook and moves only by an approved handover, a project session's `new_session` (and what the
+  new session's opening prompt says), an owner's `handover_branches` (who may give and take, the refusal while the
+  giver is at work, what is reported per worktree, who is told), or a handoff, a branch no session's git reported
+  staying unmarked; what counts as a creation (renames keep the record, forced updates and copies do not, a report from an
   ended session's background job counts); what attribution needs (git 2.36 or later); the hook dispatchers a
   session's git runs, which still run the user's own hooks, and their visible effects and cost; how a record is
   scoped to a repository, when it changes or goes and the 1,000 cap; that nothing is written to the repository; and

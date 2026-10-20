@@ -27,6 +27,7 @@ mod bindings;
 pub mod console_instructions;
 pub mod exec;
 mod handoff;
+mod handover;
 pub mod role;
 mod settings;
 pub mod stdio;
@@ -327,9 +328,10 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                       and reopen it with `reopen_session` when it has another task. Needs no \
                       approval. Returns the new session's id. The brief is rendered into the \
                       session's opening prompt. Use this when you should keep directing the \
-                      session and receiving its reports. To hand your own work to a peer in the next \
-                      session, use `request_session`; if the user only wants handover notes and \
-                      an end, leave the notes and end. Ask the user if their intent is unclear.",
+                      session and receiving its reports. To hand your own work to a peer in the \
+                      next session, use `request_session`; if the user only wants handover notes \
+                      and an end, leave the notes and end. Ask the user if their intent is \
+                      unclear.",
         schema: || new_session_schema(true),
     },
     SEND_MESSAGE,
@@ -379,6 +381,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     },
     REOPEN_SESSION,
     HANDOFF_SESSION,
+    HANDOVER_BRANCHES,
     SWITCH_SESSION_ACCOUNT,
     TRANSFER_SESSION,
     REQUEST_SESSION,
@@ -519,6 +522,54 @@ const REOPEN_SESSION: ToolDef = ToolDef {
                 },
             }),
             &["session"],
+        )
+    },
+};
+
+/// How an owner moves the responsibility for git branches between sessions, without the user: the
+/// branch records change hands, and no session is replaced.
+const HANDOVER_BRANCHES: ToolDef = ToolDef {
+    name: "handover_branches",
+    description: "Move the responsibility for git branches from one session to another; it only \
+                  changes which session is responsible for the branches and replaces no \
+                  session (to move a whole session to another agent, use `handoff_session`). \
+                  `from` and `to` are each this session or a session of yours (`yours: true`); \
+                  leave either out for this session (a console session is responsible for no \
+                  branch, so it names both). `from` may be archived, to recover the branches an \
+                  archived session left behind (`branches_left`); `to` may not. Use \
+                  it to take over a branch a session of yours developed, to give a branch of yours \
+                  to one of your sessions, or to give one session's branch to another. Needs no \
+                  approval. Each branch must be one `from` is responsible for, and `from` and `to` \
+                  must be in projects of the same repository. Refused, changing nothing, while \
+                  `from` is another session that is working, starting or waiting for the user; \
+                  an interrupted or archived one can give branches up. Nothing changes in git or \
+                  on disk: the answer lists, per branch, the worktree it is checked out in \
+                  (`worktree_status` says `checked_out`, `gone`, `none` or `unknown` when it \
+                  could not be read) and whether that holds uncommitted changes, which stay for \
+                  the new session to deal with. The sessions concerned other than this one are \
+                  told. When a session is archived, the cleanup of its branches follows whoever \
+                  is responsible for them by then.",
+    schema: || {
+        object_schema(
+            json!({
+                "branches": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Local branches of the repository, by name. Each must be a \
+                                    branch `from` is responsible for.",
+                },
+                "from": {
+                    "type": "string",
+                    "description": "The session handing the branches over: this session (the \
+                                    default) or a session of yours, archived or not.",
+                },
+                "to": {
+                    "type": "string",
+                    "description": "The session taking the branches: this session (the \
+                                    default) or a session of yours that is not archived.",
+                },
+            }),
+            &["branches"],
         )
     },
 };
@@ -816,11 +867,13 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
                       id. The brief is rendered into the session's opening prompt. A session \
                       started this way cannot start sessions of its own, and only this project is \
                       available; a session elsewhere, or one that should not report to you, is \
-                      one `request_session` asks the user for. Use this only when you should keep \
-                      directing the session and receiving its reports. To hand your own work to \
-                      a peer in the next session, use `request_session`; if the user only wants \
-                      handover notes and an end, leave the notes and end. Ask the user if their \
-                      intent is unclear.",
+                      one `request_session` asks the user for. To give the new session a branch \
+                      you are responsible for, pass it in `branches`; `handover_branches` moves \
+                      the branches of any session of yours later. Use this only when you should \
+                      keep directing the session and receiving its reports. To hand your own \
+                      work to a peer in the next session, use `request_session`; if the user only \
+                      wants handover notes and an end, leave the notes and end. Ask the user if \
+                      their intent is unclear.",
         schema: || new_session_schema(false),
     },
     SEND_MESSAGE,
@@ -849,6 +902,7 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     RENAME_SESSION,
     SET_SESSION_PINNED,
     HANDOFF_SESSION,
+    HANDOVER_BRANCHES,
     SWITCH_SESSION_ACCOUNT,
     TRANSFER_SESSION,
     BIND_TO_SESSION,
@@ -936,6 +990,17 @@ fn new_session_schema(with_project: bool) -> Value {
         },
     });
     if !with_project {
+        // Only a project session is ever responsible for a branch; a console session has none to
+        // give.
+        properties["branches"] = json!({
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Local branches of this project's repository to hand over to the new \
+                            session, by name. Each must be a branch you are responsible for: one \
+                            you created or were handed. They move to it right after it starts, \
+                            and it becomes responsible for them in your place. Leave this out \
+                            when there is nothing to hand over.",
+        });
         return object_schema(properties, &["brief"]);
     }
     properties["project"] = json!({
@@ -1055,6 +1120,7 @@ mod tests {
                 "rename_session",
                 "set_session_pinned",
                 "handoff_session",
+                "handover_branches",
                 "switch_session_account",
                 "transfer_session",
                 "bind_to_session",
@@ -1085,6 +1151,7 @@ mod tests {
                 "list_archived",
                 "reopen_session",
                 "handoff_session",
+                "handover_branches",
                 "switch_session_account",
                 "transfer_session",
                 "request_session",

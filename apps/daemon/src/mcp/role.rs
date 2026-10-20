@@ -90,8 +90,9 @@ pub(super) fn handover_guidance(agent: Option<Agent>) -> String {
 
 /// The ways a session relates to another, in the words every project session's role text gives
 /// them: which tool makes a session one's own, the ones that move a session to another agent,
-/// another account or another owner or bind this one to an owner, which one makes a session
-/// nobody's, then information, which needs none.
+/// another account or another owner, the one that moves branches between sessions, the one that
+/// binds this session to an owner, which one makes a session nobody's, then information, which
+/// needs none.
 fn relationships(agent: Agent, owns: bool) -> String {
     let tool = |name: &str| qualified_tool_name(agent, name);
     let mut lines = Vec::new();
@@ -99,9 +100,18 @@ fn relationships(agent: Agent, owns: bool) -> String {
         lines.push(format!(
             "- `{new_session}` starts a session that is yours for its whole life: you instruct \
              it, archive it when it is done, and reopen it with `{reopen_session}` when it has \
-             another task. No approval is needed.",
+             another task. Pass `branches` to hand it branches you are responsible for. No \
+             approval is needed.",
             new_session = tool("new_session"),
             reopen_session = tool("reopen_session"),
+        ));
+        lines.push(format!(
+            "- `{handover_branches}` moves the responsibility for git branches between you and a \
+             session of yours, or from one session of yours to another — to take over a branch \
+             one of them developed, or to give one to another. It replaces no session, and a \
+             session of yours that is working or waiting for the user cannot give branches up. \
+             No approval is needed.",
+            handover_branches = tool("handover_branches"),
         ));
         lines.push(format!(
             "- `{handoff_session}` hands a session of yours off to a new session of another agent \

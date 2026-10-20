@@ -222,7 +222,9 @@ A request for a project session can hand the new session branches the requester 
 the work on them. Only the branches named in `branches` are handed over; nothing is inferred, so a request without
 them hands over none, whichever branch the requester has checked out. The tool's description tells the agent to pass
 `branches` when it is handing over the work on a branch it is responsible for, and to leave it out when it is only
-working on whatever branch is checked out.
+working on whatever branch is checked out. A project session's `new_session` takes the same `branches`, for a session
+the caller owns, without the user's approval (see "Handing branches to a session the caller starts" in
+`docs/product/branch-responsible-session.md`).
 
 **What is refused before the user is asked**, with the reason in prose and no dialog shown, as any other refusal:
 
