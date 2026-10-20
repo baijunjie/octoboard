@@ -8,6 +8,7 @@ import { errorAlerts } from "../errorAlerts";
 import { DaemonRequestError } from "../daemon-client";
 import { Failure } from "../viewer/viewerStates";
 import { ErrorAlert } from "./ErrorAlert";
+import { TintedAlert } from "./TintedAlert";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -38,6 +39,19 @@ it("uses stock danger parts and only adds the status fill and outer layout class
   expect([...wrapped.classList].filter((name) => !stock.classList.contains(name))).toEqual(["alert-fill-danger"]);
   expect(wrapped.querySelector("h1,h2,h3")).toBeNull();
   expect(wrapped.querySelector('[role="alert"]')).toBeNull();
+});
+
+it.each(["default", "accent", "success", "warning", "danger"] as const)("keeps every stock part for %s status", (status) => {
+  const parts = <><Alert.Indicator /><Alert.Content><Alert.Title>Account unavailable</Alert.Title><Alert.Description>Quota used up.</Alert.Description></Alert.Content></>;
+  const { container } = mount(<><Alert status={status}>{parts}</Alert><TintedAlert status={status}>{parts}</TintedAlert></>);
+  const [stock, wrapped] = Array.from(container.children);
+  expect(wrapped.classList.contains(`alert-fill-${status}`)).toBe(true);
+  expect(wrapped.className.split(" ").filter((name) => name !== `alert-fill-${status}`).join(" ").trim()).toBe(stock.className);
+  expect(wrapped.innerHTML).toBe(stock.innerHTML);
+  expect(wrapped.getAttribute("style")).toBe(stock.getAttribute("style"));
+  for (const slot of ["indicator", "content", "title", "description"]) {
+    expect(wrapped.querySelector(`[data-slot="alert-${slot}"]`)).not.toBeNull();
+  }
 });
 
 it("keeps the late announcement on the stock content, with title and reason together", () => {

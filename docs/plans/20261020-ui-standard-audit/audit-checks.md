@@ -133,3 +133,10 @@ Local main then added only unrelated plan documentation at `0ae28459f`; rebasing
 UI tree. On that rebased source, the explicit 23-file regression command passed all 458 tests again; workspace
 typecheck, repository format checks and UI-only build passed again. Build output retains large-chunk and plugin
 timing advisories. No whole-suite, website-build or native-listening pass is inferred.
+
+The v2 Alert background check retained a failed concurrent run: 1,884 loads, 1,883 clean, one English/light
+`focus-agent-tooltip-removed-account` failure, exit 1, despite passing its isolated retry. A serial English/light
+run on unchanged runtime source subsequently passed 471/471; the remaining 1,413 language/theme cases were clean
+in the original run. All 1,884 cases therefore have a clean latest condition result, but the initial concurrent
+failure remains failed. Independent baseline comparisons did not reproduce it; its cause is unresolved, not a
+proven baseline defect.

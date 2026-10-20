@@ -21,8 +21,28 @@ as it is, and do not add a new exception without the user's say.
 
 ### Confirmed visual choices
 
-An Alert's only custom visual treatment is a background fill corresponding to its status. All other styles and
-component structure stay stock HeroUI, as specified under "Standalone errors use the shared Alert".
+An Alert's only custom visual treatment is its status background, using the default `flat` fills from
+[HeroUI v2 Alert](https://v2.heroui.com/docs/components/alert), verified against the published
+`@heroui/theme@2.4.26` Alert styles and semantic palettes. Accent maps to primary; no secondary status is added.
+All other styles and component structure stay stock HeroUI 3, as specified under "Standalone errors use the shared
+Alert".
+
+| Current status | Light background | Dark background, at 50% opacity over the actual surface |
+|---|---|---|
+| default | `#f4f4f5` (`default-100`) | `#18181b` (`default-50` in the reversed dark palette) |
+| accent | `#e6f1fe` (`primary-50`) | `#001731` (`primary-50` in the reversed dark palette) |
+| success | `#e8faf0` (`success-50`) | `#052814` (`success-50` in the reversed dark palette) |
+| warning | `#fefce8` (`warning-50`) | `#312107` (`warning-50` in the reversed dark palette) |
+| danger | `#fee7ef` (`danger-50`) | `#310413` (`danger-50` in the reversed dark palette) |
+
+The user explicitly accepts a contrast exception only for the unchanged stock `Alert.Description` text in light
+Alerts with default, accent, success or danger status. Its current `oklch(0.5517 0.0138 285.94)` colour measures
+approximately 4.397:1, 4.229:1, 4.456:1 and 4.117:1 respectively on those exact fills; the actual Work quota danger
+Alert has the same 4.117:1 result. Warning descriptions pass at approximately 4.673:1. This is a deliberate exception
+for those four descriptions on the custom backgrounds, not an exemption for custom surfaces generally. Titles,
+indicators, inline chips, controls and other custom content on these fills retain their applicable thresholds, and
+dark-mode contrast must still be verified after compositing over the actual surrounding surface. Do not recolour
+the description or dilute the reference fills to remove the accepted shortfalls.
 
 Tabs in Settings, the project pane's Files / Changes switch, the session dialog's New / Resume conversation switch
 and the agent tabs in the console dialog's Advanced section keep their labels fully opaque on hover and use the

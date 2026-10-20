@@ -65,7 +65,7 @@ contracts have one owner at a time. Only the complete plan is rebased onto curre
 into main. The closed audit changed no production UI; fix milestones implement its findings.
 
 - 03 Restore stock Alerts (closed)
-- [03a Match the HeroUI v2 Alert background reference](03a-heroui-v2-alert-backgrounds.md)
+- 03a Match the HeroUI v2 Alert background reference (closed)
 - 04 Render structured error names and diagnostics (closed)
 - [05 Use rich name chips and tooltip content](05-rich-names-and-tooltips.md)
 - [06 Separate choice status and direction](06-choice-status-and-direction.md)
@@ -77,8 +77,7 @@ into main. The closed audit changed no production UI; fix milestones implement i
 - 12 Hand focus off when report pages are replaced (closed)
 - [13 Use the shared button primitive for tree chevrons](13-collection-button-primitives.md)
 
-The user subsequently chose HeroUI v2 Alert as the background reference. Complete 03a before the rich-copy work;
-13 remains independent. Milestones 03a, 05–11 and 13 remain open. The open milestones carry their current-source handoffs; the original audit
+Milestones 05–11 and 13 remain open. The open milestones carry their current-source handoffs; the original audit
 inventories remain historical evidence, with check limitations in [the check record](audit-checks.md).
 
 ## Evidence baseline and concurrent integration
