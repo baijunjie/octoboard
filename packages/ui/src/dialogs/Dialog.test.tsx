@@ -27,7 +27,7 @@ function fakeDaemon(): Daemon {
  * type. Unmounts whatever the check does, so a failure cannot leave a dialog behind for the next
  * test to read. */
 function withFooter(
-  props: { busy?: boolean; submitDisabled?: boolean },
+  props: { busy?: boolean; submitDisabled?: boolean; autoFocusSubmit?: boolean },
   check: (buttons: { submit: HTMLButtonElement; cancel: HTMLButtonElement }) => void,
 ): void {
   const container = document.body.appendChild(document.createElement("div"));
@@ -48,6 +48,32 @@ function withFooter(
     const cancel = named("Cancel");
     if (!submit || !cancel) throw new Error("the frame's own footer did not render both of its buttons");
     check({ submit, cancel });
+  } finally {
+    act(() => root.unmount());
+    container.remove();
+  }
+}
+
+/** Renders a dialog that opens on its submit button and hands `check` a `show`, which renders it again with
+ * `submitDisabled` as given, and `named`, which finds a footer button by its label. Unmounts whatever the
+ * check does. */
+function withTogglableSubmit(
+  check: (dialog: { show: (submitDisabled: boolean) => void; named: (label: string) => HTMLButtonElement }) => void,
+): void {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  const show = (submitDisabled: boolean) => act(() => {
+    root.render(
+      <DaemonProvider value={fakeDaemon()}>
+        <Dialog title="Hand off" onClose={() => {}} submitLabel="Save" submitDisabled={submitDisabled} autoFocusSubmit onSubmit={() => {}}>
+          <span>body</span>
+        </Dialog>
+      </DaemonProvider>,
+    );
+  });
+  const named = (label: string) => [...document.querySelectorAll("button")].find((button) => button.textContent === label)!;
+  try {
+    check({ show, named });
   } finally {
     act(() => root.unmount());
     container.remove();
@@ -86,6 +112,61 @@ it("disables the submit button outright when the dialog has nothing to submit", 
     expect(submit.hasAttribute("disabled")).toBe(true);
     expect(submit.type).toBe("submit");
     expect(cancel.hasAttribute("disabled")).toBe(false);
+  });
+});
+
+// A natively disabled button cannot keep focus, and focus off the dialog takes its Escape and Tab with it.
+it("opens on Cancel rather than on a submit button that has nothing to submit", () => {
+  withFooter({ autoFocusSubmit: true, submitDisabled: true }, ({ submit, cancel }) => {
+    expect(document.activeElement).toBe(cancel);
+    expect(submit.disabled).toBe(true);
+  });
+  withFooter({ autoFocusSubmit: true }, ({ submit }) => expect(document.activeElement).toBe(submit));
+});
+
+it("moves focus from the submit button to Cancel when the submit becomes disabled under it", () => {
+  withTogglableSubmit(({ show, named }) => {
+    show(false);
+    expect(document.activeElement).toBe(named("Save"));
+    show(true);
+    expect(document.activeElement).toBe(named("Cancel"));
+  });
+});
+
+it("moves focus to Cancel when the browser has already blurred the disabled submit button to the body", () => {
+  withTogglableSubmit(({ show, named }) => {
+    show(false);
+    const submit = named("Save");
+    expect(document.activeElement).toBe(submit);
+    // WebKit blurs a button to <body> as it becomes disabled, before the layout effect runs. jsdom will not
+    // blur a disabled element, so the blur is raised by hand right after the attribute is set, and the button
+    // hidden as the active element.
+    const active = Object.getOwnPropertyDescriptor(Document.prototype, "activeElement")!.get!;
+    let blurred = false;
+    Object.defineProperty(document, "activeElement", { configurable: true, get: () => (blurred && active.call(document) === submit ? document.body : active.call(document)) });
+    const setAttribute = Element.prototype.setAttribute;
+    const spy = vi.spyOn(Element.prototype, "setAttribute").mockImplementation(function (this: Element, name: string, value: string) {
+      setAttribute.call(this, name, value);
+      if (this !== submit || name !== "disabled") return;
+      blurred = true;
+      submit.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+    onTestFinished(() => {
+      spy.mockRestore();
+      delete (document as { activeElement?: unknown }).activeElement;
+    });
+    show(true);
+    expect(submit.disabled).toBe(true);
+    expect(document.activeElement).toBe(named("Cancel"));
+  });
+});
+
+it("leaves focus alone when the submit button is disabled while the user is elsewhere", () => {
+  withTogglableSubmit(({ show, named }) => {
+    show(false);
+    act(() => named("Save").blur());
+    show(true);
+    expect(document.activeElement).toBe(document.body);
   });
 });
 

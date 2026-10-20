@@ -6,7 +6,8 @@ every account the user owns (see `docs/product/agent-accounts.md`) — for Claud
 Build alike. It is shown in Settings' **Agent accounts** section, in the rail's account quota panel (see "The
 account quota panel on the rail" below), in a single-window indicator for the selected session (see "The selected
 session's quota indicator" below) and, in the macOS application, on the menu bar icon and in its quota submenus
-(see "The icon's menu" in `docs/product/menu-bar-icon.md`).
+(see "The icon's menu" in `docs/product/menu-bar-icon.md`). An account whose quota is used up cannot open a session or
+have one switched onto it (see "A used-up account" below).
 
 ## Which accounts have a quota
 
@@ -98,10 +99,35 @@ owns" in `docs/product/agent-accounts.md`). Beneath the account each window has:
   blue for Codex, and the text colour for Grok Build, each set off against the bar's track in both light and dark
   appearance.
 
-In Settings the windows sit two to a row, and one to a row in a window narrower than 640 px; in the rail's account
-quota panel they are always one to a row. For assistive technology each bar
-is named by its window and carries the remaining percent and the countdown as its value, and the drawn line above it
-is not read separately.
+An account with both a **5-hour** and an account-wide **Weekly** window shows the two as **one meter**: the 5-hour
+line and its bar, directly beneath it a thinner bar for the Weekly window, and beneath that the Weekly window's line,
+in the muted text colour. Every other window — Grok Build's credit pool, a model-specific weekly limit, a Weekly
+window with no 5-hour window beside it — keeps a meter of its own.
+
+In Settings the meters sit two to a row, and one to a row in a window narrower than 640 px; in the rail's account
+quota panel they are always one to a row. For assistive technology each bar, the thin Weekly one included,
+is named by its window and carries the remaining percent and the countdown as its value, and the drawn lines are not
+read separately.
+
+### In an account picker
+
+In the account picker of the session dialog and the handoff dialog (see the **Agent** field in "Opening a session" in
+`docs/product/sessions.md`), each account carries a compact, wordless usage bar before its name, in the agent's
+colour: what remains of the 5-hour window, with the Weekly window's thin bar beneath it, or, for an account without a
+5-hour window, one bar for its Weekly window or its credit pool. An account with nothing to draw — not read yet, not
+logged in, unavailable, or whose latest reading failed so that its windows are out of date — shows an empty track. Each
+track has a faint edge, so an empty one still shows on any surface; the thin Weekly track's edge is drawn around its
+outside, and the track is inset so that this edge ends where the main track's ends do. The bar is not read by
+assistive technology; the account's option states what remains of those windows in words instead, or, for a used-up
+account, why it cannot be chosen (see "A used-up account" below).
+
+A session row's **Switch account** submenu shows its accounts the same way: the same bar before each account's name,
+and the same words for assistive technology as the item's description, while its name stays the account's name (see
+"Session rows" in `docs/product/sidebar.md`).
+
+The two dialogs show the account picker even for an agent with only its default account (see the **Agent** field in
+"Opening a session" in `docs/product/sessions.md`), so that account carries its usage bar, and its note when used up,
+in the picker like any other.
 
 ## Quota states
 
@@ -131,6 +157,45 @@ The reason is one of these, in the UI's language:
   tried less often the way a failed reading is (see "When quotas are read" above), but windows read before stay, out
   of date, as they do after a failed reading.
 
+## A used-up account
+
+An account is **used up** while the reading held for it has a **5-hour**, account-wide **Weekly** or credit-pool window
+that is 100% used or more and whose reset time is still to come or not given. The daemon and the window judge it the
+same way:
+
+- A **model-specific weekly limit** never makes an account used up: the account still serves the other models.
+- A window whose reset time has passed no longer counts, even before a newer reading arrives.
+- An account with **no windows** — never read, still being read, not logged in, or unavailable with nothing read
+  before — is never used up.
+- Windows kept **out of date** after a failed reading (see "Quota states" above) still count, by what they say.
+- It is judged on the reading already held, at the moment it matters: nothing reads the quota afresh for it or waits
+  for a reading.
+- With several windows used up, the one named is the one that resets last, since the account cannot be used until
+  then; one with no reset time counts as resetting last.
+
+A used-up account cannot have a session opened on it, by anyone, the user included (see "Opening a session" in
+`docs/product/sessions.md`), and a session cannot be switched onto it (see "When a switch fails" in
+`docs/product/switching-session-accounts.md`). A session already running on it keeps running, and resuming,
+restarting or reopening a session is never refused for this; Octoboard never moves a session off it on its own.
+
+The window does not offer what the daemon would refuse:
+
+- the session and handoff dialogs list a used-up account but do not let it be picked, open on another account instead,
+  and refuse to submit when no account of the chosen agent is left (see the **Agent** field in "Opening a session" in
+  `docs/product/sessions.md`);
+- opening a session with defaults uses another account of the agent, or is unavailable when none is left (see "Opening
+  a session with defaults" in `docs/product/sessions.md`);
+- a session row's **Switch account** submenu disables a used-up account (see "Session rows" in
+  `docs/product/sidebar.md`), and the switch confirmation refuses one (see "Confirming a switch" in
+  `docs/product/switching-session-accounts.md`).
+
+Where it is said in short, under an account's name in a picker or a menu, it is shown on two lines: "Used up", and
+beneath it the countdown to the window's reset as in "How an account's quota is shown" above ("resets in 1h 57m"),
+with "Used up" alone when the agent gives no reset time. The short form is only drawn; assistive technology reads the
+full form, as the account's description. Said in full, it names the account, the window used up (its 5-hour
+quota, weekly quota, monthly quota or credits) and when it resets. In an open dialog the judgement follows the clock,
+so an account becomes usable again within 30 seconds of its reset time passing, without waiting for a newer reading.
+
 ## What reading a quota leaves behind
 
 Each reading starts one process of the agent, which is ended once it has replied or timed out; no conversation is
@@ -148,34 +213,47 @@ Some writes into the account's directory cannot be avoided:
 
 ## The selected session's quota indicator
 
-The rail's Account quota button carries one **18 × 5 px** outlined capsule beneath its gauge, inside the same
-32 px button. The capsule's top sits 21 px from the button's top; while it is present the gauge moves up 2 px to
-leave a visible gap. Its outline and fill use the gauge's text colour, with a transparent, visibly hollow unfilled
-portion. The fill shows the **remaining** quota of the selected session's own agent and account, including the
-default account. It follows session selection, a session's account switch and new quota readings; the console's
-or project's account preference does not choose this reading.
+The rail's Account quota button shows the **remaining** quota of the selected session's own agent and account,
+including the default account, as a compact indicator beneath its gauge, inside the same 32 px button. The gauge is
+16 px with or without an indicator. With one, the gauge is raised from the button's centre — 2 px above one capsule,
+4 px above two — and the indicator sits beneath it, so that the two stay together near the button's middle.
+
+The indicator is drawn in the button's text colour, as one or two outlined capsules 18 px wide, centred, each with
+fully round ends. What remains of a window is a solid fill from the reading direction's start (the right under a
+right-to-left language), its end square where it stops short of the capsule's round end; the rest of the capsule is
+hollow inside its outline:
+
+- **Two layers** when the account has both a **5-hour** and an account-wide **Weekly** window: a capsule 4 px tall for
+  the 5-hour window and, 1 px beneath it, one 3 px tall for the Weekly window.
+- **One capsule** otherwise, 5 px tall.
+
+It follows session selection, a session's account switch and new quota readings; the console's or project's account
+preference does not choose this reading.
 
 The macOS menu bar icon shows the same session's quota using the same window selection and hiding rules below.
 Its appearance and update timing are described in "The icon's look" in `docs/product/menu-bar-icon.md`.
 
-Only one window is shown, in this priority: **5-hour**, then **Weekly**, then the agent's credit pool, labelled as
-in "Quota windows" above. A model-specific weekly limit is never used. The button's tooltip and accessible name
-identify the agent, account name, window and whole remaining percent; the bar is not read separately.
+The windows drawn are those of an account picker's usage bar (see "In an account picker" above): the 5-hour window,
+with the Weekly window beneath it when the account has one; for an account without a 5-hour window, one bar for its
+Weekly window, or else its credit pool, labelled as in "Quota windows" above. A model-specific weekly limit is never
+used. The button's accessible name identifies the agent and account name and, for each window drawn, the window and
+its whole remaining percent; the bars are not read separately. The button has no tooltip (see "Tooltips on icon-only
+controls" in `docs/product/labels-and-tooltips.md`).
 
-The bar is absent when no session is selected, its agent is unavailable or its availability is not yet determined,
-the account has no reading or no eligible window, or the latest reading failed. A failed reading hides it even
-when Settings and the quota panel retain the last good windows as out of date. Without a bar the button keeps its
-Account quota label. Whether the session's agent is added plays no part: a session whose agent has been removed from
-the added agents (see "Reordering and removing an agent" in `docs/product/agent-accounts.md`) keeps its bar.
+The indicator is absent when no session is selected, its agent is unavailable or its availability is not yet
+determined, the account has no reading or no eligible window, or the latest reading failed. A failed reading hides it
+even when Settings and the quota panel retain the last good windows as out of date. Without an indicator the button's
+accessible name is plain "Account quota". Whether the session's agent is added plays no part: a session whose agent has been removed from
+the added agents (see "Reordering and removing an agent" in `docs/product/agent-accounts.md`) keeps its indicator.
 
 An account removed from Settings or belonging to another agent cannot supply the indicator. Sessions retain their
 launch configuration directory: if it differs from the named account's current directory, or a session refers to
-the default account but retains an explicit directory, the bar is hidden. An older session without a recorded
+the default account but retains an explicit directory, the indicator is hidden. An older session without a recorded
 launch directory can still show an existing named account's quota.
 
-The button opens the account quota panel as described below; the selected session does not choose the panel's tab.
-Selecting a session does not itself request a fresh quota reading; the indicator uses the readings described in
-"When quotas are read" above.
+The button opens the account quota panel as described below, on the tab of the agent whose quota the indicator shows
+(see "What the panel shows" below). Selecting a session does not itself request a fresh quota reading; the indicator uses
+the readings described in "When quotas are read" above.
 
 ## The account quota panel on the rail
 
@@ -189,7 +267,9 @@ the accounts' quotas without opening Settings.
   `docs/product/agent-accounts.md`), each showing the agent's icon and name, as wide as its content, the tabs
   starting at the strip's start. An agent that is not added, or that has
   been determined unavailable, has no tab; an added agent whose availability is not yet determined has one. Each
-  opening starts on the first agent's tab.
+  opening starts on the tab of the selected session's agent while the button shows that session's indicator (see "The
+  selected session's quota indicator" above) and the agent has a tab, otherwise on the first agent's tab; a tab
+  chosen in the panel lasts only until it closes.
 - **The selected agent's accounts**: its default account, under the name the user gave it or else "Default" (see "The
   default account" in `docs/product/agent-accounts.md`), then the accounts the user owns. Each shows
   its name, its plan chip and its quota beneath, in the states of "Quota states" above, as "How an account's quota is
@@ -248,5 +328,4 @@ The panel does not take the window around it the way a menu or popover does (see
 popover covers" in `docs/product/window-layout.md`): while it is open the rest of the window stays usable, and the
 window's keyboard shortcuts, Back and Forward, `F6` and the floating panes go on working. It is no stop of its own in
 the `F6` cycle. Assistive technology is told it is a non-modal dialog named "Account quota", and the button says
-whether the panel is expanded and which panel it controls. The button's tooltip is held back while the panel is open
-(see "Tooltips on icon-only controls" in `docs/product/labels-and-tooltips.md`).
+whether the panel is expanded and which panel it controls.

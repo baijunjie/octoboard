@@ -7,8 +7,8 @@ import { useCurrentLanguage, useT } from "../i18n/react";
 import type { QuotaUnavailable } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
 import { useNow } from "../useNow";
-import { QuotaMeter } from "./QuotaMeter";
-import { isLoggedIn, isNotLoggedIn, orderedQuotaWindows, planLabel } from "./quotaFormat";
+import { QuotaMeter, QuotaMeterPair } from "./QuotaMeter";
+import { isLoggedIn, isNotLoggedIn, orderedQuotaWindows, planLabel, twoLayerWindows } from "./quotaFormat";
 import type { QuotaReading } from "./useAccountQuota";
 
 const NO_RECORDS = { consoles: new Map(), projects: new Map(), sessions: new Map() };
@@ -62,7 +62,9 @@ export function AccountNameLine({ name, quota, help, showLoginState = false, chi
  * - `"loading"`: the first reading is still on its way;
  * - an entry with no windows: the reason it is unavailable;
  * - windows and a failure: the last good readings stay, marked as out of date with when they were
- *   taken and why the newer attempt failed. */
+ *   taken and why the newer attempt failed.
+ *
+ * The 5-hour and weekly windows share one two-layer meter. */
 export function AccountQuotaSummary({ quota, single }: {
   quota: QuotaReading;
   /** One window to a row whatever the viewport, for a surface narrower than the window. */
@@ -86,6 +88,9 @@ export function AccountQuotaSummary({ quota, single }: {
       </div>
     );
   }
+  // An account with a 5-hour window shows it with the weekly window as one two-layer meter; the
+  // other windows (a model's weekly limit) keep a meter of their own.
+  const layers = twoLayerWindows(windows);
   return (
     <div className="flex flex-col gap-3">
       {unavailable && (
@@ -95,9 +100,13 @@ export function AccountQuotaSummary({ quota, single }: {
         </div>
       )}
       <div className={`grid grid-cols-1 gap-x-6 gap-y-3 ${single ? "" : "sm:grid-cols-2"}`}>
-        {orderedQuotaWindows(windows).map((window) => (
-          <QuotaMeter key={`${window.kind}:${window.label ?? ""}`} agent={quota.agent} window={window} />
-        ))}
+        {orderedQuotaWindows(windows).map((window) => {
+          if (layers?.weekly && window === layers.weekly) return null;
+          const key = `${window.kind}:${window.label ?? ""}`;
+          return layers?.weekly && window === layers.session
+            ? <QuotaMeterPair key={key} agent={quota.agent} session={window} weekly={layers.weekly} />
+            : <QuotaMeter key={key} agent={quota.agent} window={window} />;
+        })}
       </div>
     </div>
   );

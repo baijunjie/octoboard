@@ -91,7 +91,7 @@ const quotaState: Scenario["state"] = {
     quotaOf("codex", null, "plus", [quotaWindow("session", 64, 140), quotaWindow("weekly", 31, 5 * 24 * 60 + 2 * 60)]),
     quotaOf("codex", "a-codex", "pro", [quotaWindow("session", 12, 285), quotaWindow("weekly", 40, 24 * 60 + 90)]),
     quotaOf("codex", "a-codex-auto", null, [quotaWindow("session", 3, 295), quotaWindow("weekly", 9, 6 * 24 * 60)]),
-    quotaOf("codex", "a-codex-user", "plus", [quotaWindow("session", 91, 25), quotaWindow("weekly", 78, 2 * 24 * 60 + 11 * 60)]),
+    quotaOf("codex", "a-codex-user", "plus", [quotaWindow("session", 97, 25), quotaWindow("weekly", 91, 2 * 24 * 60 + 11 * 60)]),
     quotaOf("grok", null, "SuperGrok", [quotaWindow("credit_period", 23, 4 * 24 * 60 + 11 * 60)]),
   ],
 };
@@ -367,7 +367,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Claude Code tab",
-    description: "The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each as wide as its icon and name and the strip starting at the left edge, and Claude Code is open. The default account's name line ends with a small muted \"?\" after Default and its plan chip, with only its config directory beneath. Each account's plan sits beside its name, with its quota windows beneath: a headline with what remains, the countdown at the end of its line and a bar of the same remainder in the agent's colour; the default account lists five-hour quota first, weekly next and Fable last, with no countdown on the model window. Work is spent: 0% remaining, also where use went past 100%. Client has no quota yet and says it is being read. Add agent stays above the tab strip; Add account begins the selected tab on the same row as the vertically centered Permission approval column heading, with a help button for its explanation: the default account is set to Automatic, Work to Approve everything and Client follows its account configuration. The heading and selectors align with the start of the right-hand quota column, and account actions stay at the far right. Remove Work or Client: the account fades out while sliding to the right while the remaining accounts slide into place.",
+    description: "The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each as wide as its icon and name and the strip starting at the left edge, and Claude Code is open. The default account's name line ends with a small muted \"?\" after Default and its plan chip, with only its config directory beneath. Each account's plan sits beside its name, with its quota beneath: the five-hour window's headline with what remains and the countdown at the end of its line, a thick bar of that remainder in the agent's colour, and the weekly window's thin bar directly under it with its own headline, so the two read as one two-layer bar; the default account lists that pair first and Fable last, in a row of its own with no countdown. Work is spent: 0% remaining, also where use went past 100%. Client has no quota yet and says it is being read. Add agent stays above the tab strip; Add account begins the selected tab on the same row as the vertically centered Permission approval column heading, with a help button for its explanation: the default account is set to Automatic, Work to Approve everything and Client follows its account configuration. The heading and selectors align with the start of the right-hand quota column, and account actions stay at the far right. Remove Work or Client: the account fades out while sliding to the right while the remaining accounts slide into place.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -418,7 +418,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Codex tab",
-    description: "Add account and the vertically centered Permission approval column heading share one row, with its explanation behind the adjacent help button. The heading and selectors align with the start of the right-hand quota column, and account actions stay at the far right. Each account has a plan, two quota windows and an approval selector; Automation has no plan, so no plan label. The default account and Personal follow their account configuration, Automation uses automatic review and Production asks you; change any approval mode to save it independently.",
+    description: "Add account and the vertically centered Permission approval column heading share one row, with its explanation behind the adjacent help button. The heading and selectors align with the start of the right-hand quota column, and account actions stay at the far right. Each account has a plan, a two-layer quota bar (five-hour over weekly) and an approval selector; Automation has no plan, so no plan label; Production, further down, is nearly spent: its bars are almost empty. The default account and Personal follow their account configuration, Automation uses automatic review and Production asks you; change any approval mode to save it independently.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -445,7 +445,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Grok Build tab",
-    description: "Add account begins the Grok Build tab, above the account list. Grok's one credit pool is a weekly window, with no approval selector or Permission approval heading.",
+    description: "Add account begins the Grok Build tab, above the account list. Grok's one credit pool is a weekly window and keeps a single bar, not the two-layer pair, with no approval selector or Permission approval heading.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),

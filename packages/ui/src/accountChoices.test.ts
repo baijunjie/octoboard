@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { choiceGroups, choiceKey, consoleAccount, currentChoice, inheritedAccount, initialChoice, projectAccount, switchEntries } from "./accountChoices";
+import { avoidExhaustedAccount, choiceExhaustion, choiceGroups, choiceKey, consoleAccount, currentChoice, inheritedAccount, projectAccount, settledInitialChoice, switchEntries, type QuotaReadings } from "./accountChoices";
 import { consoleOf, projectOf, sessionOf } from "./gallery/fixtures/builders";
 import { format } from "./i18n/catalog";
 import type { Translate } from "./i18n/catalog";
-import type { Account, Agent, AgentAvailability } from "./protocol";
+import type { Account, AccountQuota, Agent, AgentAvailability, Console, Project } from "./protocol";
 
 const availability = (entries: Partial<Record<Agent, AgentAvailability["availability"]>>): Map<Agent, AgentAvailability> =>
   new Map(
@@ -49,7 +49,14 @@ describe("choiceGroups and the added agents", () => {
   });
 });
 
-describe("initialChoice", () => {
+/** The state `settledInitialChoice` is given for `accounts`, `states` and `added` (quotas judged by `readings`). */
+const settle = (owner: Console, project: Project | undefined, accounts: Account[], agents: ReturnType<typeof availability>, added: Agent[] | null, readings?: QuotaReadings) =>
+  settledInitialChoice(owner, project, accounts, agents, added, choiceGroups(accounts, agents, added, () => "", readings));
+
+/** The agent and account the dialog opens on. */
+const initialChoice = (...args: Parameters<typeof settle>) => settle(...args).choice;
+
+describe("settledInitialChoice", () => {
   const owner = consoleOf("c-1", "Main", { codex_account_id: "c" });
   const project = (agent?: Agent) => projectOf("p-1", "c-1", "App", { default_agent: agent });
 
@@ -87,6 +94,51 @@ describe("initialChoice", () => {
     const moved = projectOf("p-1", "c-1", "App", { codex_account_id: { kind: "account", id: "c2" } });
     const stored = [...accounts, account("c2", "codex", "Codex 2")];
     expect(initialChoice(owner, moved, stored, availability({ claude: "unavailable" }), null)).toEqual({ agent: "codex", account: "c2" });
+  });
+});
+
+const NOW = 1_000_000;
+const usedUp = (agent: Agent, account: string | null): AccountQuota => ({
+  agent, account, fetched_at: NOW, plan: null, unavailable: null,
+  windows: [{ kind: "session", label: null, used_percent: 100, resets_at: NOW + 60_000, window_minutes: 300 }],
+});
+
+describe("an account whose quota is used up", () => {
+  const owner = consoleOf("c-1", "Main", { claude_account_id: "w" });
+  const stored = [...accounts, account("w2", "claude", "Work 2")];
+  const open = (quotas: AccountQuota[]) => settle(owner, undefined, stored, availability({}), null, { quotas, now: NOW });
+
+  it("marks its entry with the window that used it up", () => {
+    const groups = choiceGroups(stored, availability({}), null, () => "Default", { quotas: [usedUp("claude", "w")], now: NOW });
+    const claude = groups.find((group) => group.agent === "claude")!;
+    expect(claude.entries.map((entry) => entry.exhaustedBy?.kind)).toEqual([undefined, "session", undefined]);
+    expect(choiceExhaustion({ agent: "claude", account: "w" }, groups)?.kind).toBe("session");
+  });
+
+  it("moves the opening choice to the first other account of the agent, the default account first", () => {
+    expect(open([usedUp("claude", "w")])).toEqual({ choice: { agent: "claude", account: null }, exhaustedBy: undefined });
+    expect(open([usedUp("claude", "w"), usedUp("claude", null)]).choice).toEqual({ agent: "claude", account: "w2" });
+  });
+
+  it("keeps the choice, and says what used it up, when every account of the agent is used up", () => {
+    const settled = open([usedUp("claude", "w"), usedUp("claude", null), usedUp("claude", "w2")]);
+    expect(settled.choice).toEqual({ agent: "claude", account: "w" });
+    expect(settled.exhaustedBy?.kind).toBe("session");
+  });
+
+  it("never moves to another agent", () => {
+    const groups = choiceGroups(stored, availability({}), null, () => "Default", { quotas: [usedUp("claude", "w"), usedUp("claude", null), usedUp("claude", "w2")], now: NOW });
+    expect(avoidExhaustedAccount({ agent: "claude", account: "w" }, groups).agent).toBe("claude");
+  });
+
+  it("does not move a choice whose agent may not be picked", () => {
+    const groups = choiceGroups(stored, availability({ claude: "unavailable" }), null, () => "Default", { quotas: [usedUp("claude", "w")], now: NOW });
+    expect(avoidExhaustedAccount({ agent: "claude", account: "w" }, groups)).toEqual({ agent: "claude", account: "w" });
+  });
+
+  it("is not avoided once the window has reset", () => {
+    expect(open([usedUp("claude", "w")]).choice.account).toBeNull();
+    expect(settle(owner, undefined, stored, availability({}), null, { quotas: [usedUp("claude", "w")], now: NOW + 120_000 }).choice.account).toBe("w");
   });
 });
 
@@ -183,5 +235,11 @@ describe("switchEntries", () => {
     ["only the session's own agent's accounts", { agent: "grok" }, ["Default (current)"]],
   ] as const)("lists %s", (_, extra, expected) => {
     expect(summary(switchEntries(session(extra), accounts, t, undefined))).toEqual(expected);
+  });
+
+  it("marks an account whose quota is used up at the time given, and not once it has reset", () => {
+    const exhausted = (now: number) => switchEntries(session(), accounts, t, undefined, { quotas: [usedUp("claude", "w")], now }).map((entry) => entry.exhaustedBy?.kind);
+    expect(exhausted(NOW)).toEqual([undefined, "session"]);
+    expect(exhausted(NOW + 120_000)).toEqual([undefined, undefined]);
   });
 });

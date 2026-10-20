@@ -20,18 +20,26 @@ The icon has two attention states. In both, the octopus is monochrome, and macOS
   its own. The sessions that count are exactly those the menu lists under **Waiting for you** (see "The icon's menu"
   below), across every console.
 
-When the selected session has a readable account quota, an **outlined capsule** below the octopus shows the
-remaining percentage, with a hollow unfilled portion and a gap above it. The capsule uses the octopus's monochrome
-tint and spans the icon's width, covering its lower tentacles while keeping the octopus at its original scale.
-The icon keeps its **18 pt** footprint; the capsule is about **18 × 4.9 pt** within it. The attention dot stays at
-the upper right, clear of the capsule. Without a readable quota the capsule disappears; without attention or a
-quota the original octopus returns.
+When the selected session has a readable account quota, bars below the octopus show the remaining percentage, with
+a gap above them. They use the octopus's monochrome tint and span the icon's width, covering its lower tentacles while
+keeping the octopus at its original scale; the icon keeps its **18 pt** footprint. As on the rail, they come in two
+looks:
 
-The account, window priority and hiding rules are the same as "The selected session's quota indicator" in
-`docs/product/account-quotas.md`. With a quota, the icon's tooltip and accessible name identify the agent, account,
-window and whole remaining percent in the UI's language; without one they name only Octoboard. Selecting another
-session updates the indicator even if no session data changed, and a session's account switch, account edits,
-availability changes and new readings update it too.
+- **Two layers**, when the account has both a 5-hour and an account-wide Weekly window: two **outlined capsules**,
+  each with a hollow unfilled portion — about **18 × 2.9 pt** for the 5-hour window and, about 0.4 pt beneath it,
+  about **18 × 2.5 pt** for the Weekly window.
+- **One bar** otherwise: an **outlined capsule** of about **18 × 4.9 pt**, with a hollow unfilled portion.
+
+The attention dot stays at the upper right, clear of the bars. Without a readable quota the bars disappear; without
+attention or a quota the original octopus returns.
+
+The account, the windows drawn and the hiding rules are the same as "The selected session's quota indicator" in
+`docs/product/account-quotas.md`. The icon has **no tooltip**. With a quota, its accessible name identifies the agent
+and account and, for each window drawn, the window and its whole remaining percent, in the UI's language; without one
+it names only Octoboard. Selecting another session updates the indicator even if no session data changed, and a
+session's account switch, account edits, availability changes and new readings update it too. The bars fill from the
+left in every UI language: the menu bar belongs to the system, not to the window, whose layout is what a right-to-left
+language mirrors (see "Right-to-left layout" in `docs/product/window-layout.md`).
 
 The look changes together with the menu: a change that has to wait for an open menu to close (see the end of "The
 icon's menu" below) changes the look and its label only when it reaches the menu, so the icon and the menu always

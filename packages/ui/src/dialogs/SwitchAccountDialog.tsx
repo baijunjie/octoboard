@@ -2,6 +2,7 @@ import { Checkbox, Description, Label, ProgressBar } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
 import { AGENT_LABEL } from "../agents";
+import { ErrorAlert } from "../components/ErrorAlert";
 import { InlineChip } from "../components/InlineChip";
 import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
@@ -11,8 +12,11 @@ import { errorPresentation, type ErrorPresentation } from "../errorPresentation"
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { Session } from "../protocol";
+import { accountQuotaOf } from "../quota/accountQuotaOf";
+import { exhaustedQuotaWindow, quotaUsedUpSentence } from "../quota/quotaFormat";
 import { sessionDisplayTitle } from "../sessionLabel";
 import { useDaemon, useDaemonStore } from "../store";
+import { useNow } from "../useNow";
 import { ConfirmDialog } from "./ConfirmDialog";
 
 interface SwitchFailure {
@@ -36,6 +40,10 @@ export function SwitchAccountDialog({
   const t = useT();
   const { store } = useDaemon();
   const sessions = useDaemonStore((s) => s.sessions);
+  const quotas = useDaemonStore((s) => s.accountQuotas);
+  const now = useNow();
+  // The account being switched to may have no quota left: the daemon refuses the switch, so Confirm is held.
+  const exhaustedBy = exhaustedQuotaWindow(accountQuotaOf(quotas, session.agent, account), now);
   const [all, setAll] = useState(false);
   const [snapshot, setSnapshot] = useState<Session[]>();
   const [progress, setProgress] = useState<{ completed: number; total: number; current?: Session }>();
@@ -91,9 +99,13 @@ export function SwitchAccountDialog({
   return (
     <ConfirmDialog
       title={<Message id="dialog.switchAccount.title" params={{ title: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, session)}</InlineChip>, account: <InlineChip dir="auto" wrap size="inherit">{accountName}</InlineChip> }} />}
-      message={t(all ? "dialog.switchAccount.messageAll" : session.has_conversation ? "dialog.switchAccount.message" : "dialog.switchAccount.messageFresh")}
+      message={<>
+        {exhaustedBy && <ErrorAlert announce>{quotaUsedUpSentence(t, accountName, exhaustedBy, now)}</ErrorAlert>}
+        <p>{t(all ? "dialog.switchAccount.messageAll" : session.has_conversation ? "dialog.switchAccount.message" : "dialog.switchAccount.messageFresh")}</p>
+      </>}
       confirmLabel={t(failures.length ? "connection.retry" : "dialog.switchAccount.confirm")}
       pendingLabel={t("dialog.switchAccount.pending")}
+      confirmDisabled={exhaustedBy !== undefined}
       onCancel={onClose}
       onConfirm={() => {
         pending.current ??= switchSessions().finally(() => { pending.current = undefined; });

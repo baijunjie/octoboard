@@ -11,7 +11,7 @@ agent, and optionally the receiving session's account, model and reasoning effor
 session's **Hand off** menu item (see "Handing off from the window" below). An owner hands off a session of its own
 with the `handoff_session` tool (see "Handing off from an owner's tool" below). All of them run the same handoff,
 described in the rest of this document. A handoff is made only when the user or an owner asks for one: Octoboard never
-hands a session off on its own, and reads no sign that an account's usage has run out.
+hands a session off on its own, not even off an account whose quota is used up.
 
 ## What can be handed off
 
@@ -29,7 +29,9 @@ background" in `docs/product/sessions.md`). A handoff is refused, with nothing c
 - the receiving agent is the session's own (`handoff_to_same_agent`, which points to switching its account);
 - the receiving agent is not available (`agent_not_available`), is not added (`agent_not_added`; see "Opening a
   session" in `docs/product/sessions.md` for when that applies), the account named is not one of that agent's
-  (`unknown_account`), or the model or reasoning effort is not one the agent offers (`invalid_launch_setting`);
+  (`unknown_account`), the receiving session's account, once resolved, is used up (`account_quota_exhausted`; see
+  "Opening a session" in `docs/product/sessions.md`), or the model or reasoning effort is not one the agent offers
+  (`invalid_launch_setting`);
 - for a session bound to an owner, opening a session bound to that owner would be refused.
 
 The account, model and reasoning effort follow the rules for opening a session (see "Which account a session uses" and
@@ -47,7 +49,7 @@ session is *working* or *starting*, and while the session is locked, as Archive 
 session's own can be picked (see "Which agents the agent pickers list" in `docs/product/consoles.md`).
 
 It opens the **handoff dialog**, titled with the session's name, which opens with keyboard focus on its **Hand off**
-button. It says that a new session of another agent takes over this session's place and this one is archived, and that
+button, or on **Cancel** while Hand off cannot be pressed. It says that a new session of another agent takes over this session's place and this one is archived, and that
 the conversation does not carry over: the new session starts by reading a record of it. Then, under the heading
 **Moves to the new session**, it lists what moves:
 
@@ -68,7 +70,10 @@ Then come the fields:
   the agent a new session of the project (or, for a console session, of the console) would use by default (see "Which
   agent a session uses" in `docs/product/sessions.md`) when that is another agent and can be picked (see "Which agents
   the agent pickers list" in `docs/product/consoles.md`), otherwise on the first other agent that can, in the order of
-  the added agents, with the account resolved for that agent as for a new session.
+  the added agents, with the account resolved for that agent as for a new session. Used-up accounts are treated as in
+  the session dialog's field: listed with a usage bar but not pickable, passed over when the field opens, and, when the
+  chosen account is used up all the same, a danger callout at the top of the dialog says why and **Hand off** cannot
+  be pressed.
 - The collapsed **Advanced** section — the receiving session's model and reasoning effort, showing what a new session of
   the chosen agent and account would inherit, as in the session dialog (see "The Advanced section" in
   `docs/product/model-and-reasoning-effort.md`). Only values the user changed are sent with the request; the rest are

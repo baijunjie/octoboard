@@ -6,8 +6,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 
 - [Account quotas](product/account-quotas.md) — each agent account's plan quota: which accounts have one, how it is
   read through the agent's own CLI and when, the windows per agent and their labels, how a quota is shown, the
-  reading / unavailable / out-of-date states and their reasons, what a reading leaves in the account's directory, and
-  the rail's quota panel.
+  reading / unavailable / out-of-date states and their reasons, the two-layer 5-hour / weekly meter and the account
+  picker's usage bar, what a reading leaves in the account's directory, the rail's quota panel, and when an account
+  counts as used up and what that refuses.
 - [Collection motion](product/collection-motion.md) — entry, exit and position transitions for dynamic collections, including
   horizontal and wrapping items, virtualized rows, keyboard focus and reduced motion.
 - [Consoles](product/consoles.md) — consoles: their fields and working directory, the two default agents, agents

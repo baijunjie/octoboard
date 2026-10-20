@@ -94,8 +94,8 @@ What follows the current language:
 - in the macOS application, the menu bar icon's menu: its group headings, its session lines' wording, its quota
   submenus' titles and lines, Open and Quit (see "The icon's menu" in `docs/product/menu-bar-icon.md`). Like the
   application menu, it is relabelled at once on a change of language and is English until the window's UI has
-  loaded. The icon's quota tooltip and accessible name follow the language too (see "The icon's look" in
-  `docs/product/menu-bar-icon.md`); without a quota they show the product name alone. The product name and the
+  loaded. The icon's accessible name follows the language too (see "The icon's look" in
+  `docs/product/menu-bar-icon.md`); without a quota it is the product name alone. The product name and the
   agents' names are never translated;
 - the document's language and writing direction. Arabic (`ar`) is the one right-to-left language, and choosing it
   mirrors the window (see "Right-to-left layout" in `docs/product/window-layout.md`).

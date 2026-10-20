@@ -1,9 +1,9 @@
 import { Lock, LockOpen, Pin, PinOff, type LucideIcon } from "lucide-react";
-import React, { type RefObject, useRef } from "react";
+import React, { type RefObject, useId, useRef } from "react";
 import type { PressEvent } from "react-aria-components";
 
 import { Button } from "../components/Button";
-import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../components/RowControls";
+import { ROW_ICON_BUTTON_BASE_CLASS, ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../components/RowControls";
 import { handFocusOff } from "../components/handFocusOff";
 import { TitledControl } from "../components/TitledControl";
 import { useFocusVisibleProps } from "../components/useFocusVisibleProps";
@@ -122,6 +122,7 @@ export function RowIconButton({
   ariaLabel = label,
   onPress,
   isDisabled,
+  unavailable,
   iconClassName,
   ref,
 }: {
@@ -131,24 +132,34 @@ export function RowIconButton({
   ariaLabel?: string;
   onPress: (event: PressEvent) => void;
   isDisabled?: boolean;
+  /** Why the action cannot be done now, for a button that looks disabled but stays focusable and under
+   * the pointer so that the reason is reachable: it is the tooltip and the button's description, while
+   * the name stays the action. HeroUI's disabled style turns pointer events off for `aria-disabled`, so
+   * they are turned back on, and the hover tint and press shrink are left off. A press still reaches
+   * `onPress`, which answers it. */
+  unavailable?: string;
   /** Extra classes on the glyph itself, such as a right-to-left mirror. */
   iconClassName?: string;
   /** The element around the button, for focus to be handed to. */
   ref?: React.Ref<HTMLDivElement>;
 }): React.ReactElement {
+  const reasonId = useId();
   return (
     <div ref={ref} className="flex" onClick={(e) => e.stopPropagation()}>
-      <TitledControl title={label}>
+      <TitledControl title={unavailable ?? label}>
         <Button
           isIconOnly
           size="xs"
           variant="ghost"
           aria-label={ariaLabel}
+          aria-describedby={unavailable ? reasonId : undefined}
+          aria-disabled={unavailable ? true : undefined}
           preventFocusOnPress
           onPress={onPress}
           isDisabled={isDisabled}
-          className={ROW_ICON_BUTTON_CLASS}
+          className={unavailable ? `${ROW_ICON_BUTTON_BASE_CLASS} pointer-events-auto data-[pressed=true]:[transform:none] active:[transform:none]` : ROW_ICON_BUTTON_CLASS}
         >
+          {unavailable && <span id={reasonId} className="sr-only">{unavailable}</span>}
           <Icon aria-hidden="true" className={iconClassName ? `size-4 ${iconClassName}` : "size-4"} />
         </Button>
       </TitledControl>

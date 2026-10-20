@@ -2325,7 +2325,8 @@ struct ResolvedOpen {
 }
 
 /// Resolves what [`open_session`] opens from `request`, refusing an unknown console, project or
-/// owner, an agent that is not available or not added, and an account of another agent.
+/// owner, an agent that is not available or not added, an account of another agent, and an account
+/// whose plan quota is used up.
 fn resolve_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<ResolvedOpen> {
     let console = state
         .store
@@ -2377,6 +2378,7 @@ fn resolve_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<Resolved
         project.as_ref(),
         request.account.clone(),
     )?;
+    refuse_if_account_quota_exhausted(state, agent, account_id.as_deref(), config_dir.as_deref())?;
     Ok(ResolvedOpen {
         role,
         cwd,
@@ -2675,10 +2677,10 @@ async fn check_launch_settings(
 
 /// Refuses a session that [`open_session`] would refuse for what `request` asks, a console session
 /// included, before anything is launched or recorded: an unknown console, project or owner, an
-/// agent that is not available or not added, an account of another agent, a model or effort the
-/// agent does not offer. For a session whose opening waits on the user's answer, so that a request
-/// which could never be carried out is refused to the asker rather than put to the user. Returns
-/// the agent the session would be of.
+/// agent that is not available or not added, an account of another agent, an account whose plan
+/// quota is used up, a model or effort the agent does not offer. For a session whose opening waits
+/// on the user's answer, so that a request which could never be carried out is refused to the
+/// asker rather than put to the user. Returns the agent the session would be of.
 pub async fn check_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<Agent> {
     let ResolvedOpen {
         project,
@@ -3841,11 +3843,11 @@ fn prepare_switch(
 /// `account` is the target by id, `None` for the default account. Refused, with nothing recorded
 /// and (where it can be told beforehand) the process left running: a launch, resume or switch of
 /// the session under way, an archived session, the account it is on already, an account that is
-/// not one of the session's agent, a Grok target that is not an initialized home, and a
-/// conversation record that is not where it is expected. Once the process has been ended, a
-/// relocation that does not complete or a relaunch that is refused or does not come up leaves
-/// the session interrupted on the account it had, with the conversation still in both
-/// directories.
+/// not one of the session's agent, an account whose plan quota is used up, a Grok target that is
+/// not an initialized home, and a conversation record that is not where it is expected. Once the
+/// process has been ended, a relocation that does not complete or a relaunch that is refused or
+/// does not come up leaves the session interrupted on the account it had, with the conversation
+/// still in both directories.
 ///
 /// Two windows break "always back on the account it had", neither harmful. A daemon that dies
 /// between recording the new account and the relaunch leaves the session on the new account, which
@@ -3900,6 +3902,12 @@ pub(crate) async fn switch_session_account_with(
         ));
     }
     let target_dir = state.store.account_dir(&target_account)?;
+    refuse_if_account_quota_exhausted(
+        state,
+        before.agent,
+        target_account.as_deref(),
+        target_dir.as_deref(),
+    )?;
 
     let plan = {
         let (agent, resume_id) = (before.agent, resumable_agent_session_id(&before));
@@ -4380,6 +4388,61 @@ fn refuse_if_agent_unavailable(state: &Arc<AppState>, agent: Agent) -> Result<()
         ),
         &[("agent", agent.label())],
     ))
+}
+
+/// Refuses to put a session on an account whose plan quota is used up, going by the reading held
+/// at this moment (see [`account_quotas::AccountQuotas::exhausted`]): an account not read yet, or
+/// of an agent that is not probed, is not refused, and nothing waits for a fresh reading. Applies
+/// to every origin, the user's own request included. `config_dir` is the account's directory as
+/// [`Store::account_dir`] resolves it, so a reading taken under another directory is ignored.
+fn refuse_if_account_quota_exhausted(
+    state: &Arc<AppState>,
+    agent: Agent,
+    account_id: Option<&str>,
+    config_dir: Option<&str>,
+) -> Result<()> {
+    let now = now_millis();
+    let Some(exhausted) = state
+        .account_quotas
+        .exhausted(agent, account_id, config_dir, now)
+    else {
+        return Ok(());
+    };
+    let account = state.store.account_display_name(agent, account_id)?;
+    let resets = exhausted.resets_at.map(|at| at.to_string());
+    let mut params = vec![
+        ("agent", agent.label()),
+        ("account", account.as_str()),
+        ("window", exhausted.window.as_str()),
+    ];
+    if let Some(resets) = resets.as_deref() {
+        params.push(("resets_at", resets));
+    }
+    let resets_in = exhausted
+        .resets_at
+        .map(|at| format!(", which resets in about {}", duration_label(at - now)))
+        .unwrap_or_default();
+    Err(CodedError::raised(
+        error_code::ACCOUNT_QUOTA_EXHAUSTED,
+        format!(
+            "{account} has used up its {} quota ({}){resets_in}. Choose another account, or wait \
+             for the quota to reset.",
+            agent.label(),
+            exhausted.window
+        ),
+        &params,
+    ))
+}
+
+/// A span of milliseconds in the rough terms of a message to read: `3d 4h`, `5h 20m` or `7m`.
+fn duration_label(millis: i64) -> String {
+    let minutes = millis.max(0) / 60_000;
+    let (days, hours, minutes) = (minutes / (24 * 60), minutes / 60 % 24, minutes % 60);
+    match (days, hours) {
+        (0, 0) => format!("{}m", minutes.max(1)),
+        (0, _) => format!("{hours}h {minutes}m"),
+        _ => format!("{days}d {hours}h"),
+    }
 }
 
 /// Refuses to open a session of an agent that is not on the added list; see "Opening a session" in
@@ -6003,6 +6066,90 @@ mod tests {
             assert_eq!(coded.params["agent"], expected.label());
             assert!(state.store.list_sessions().unwrap().is_empty());
         }
+    }
+
+    /// An account whose held quota reading has a window used up is refused with the window and
+    /// its reset time when known, for the default account and a stored one alike; an account with
+    /// no reading is not.
+    #[test]
+    fn opening_a_session_is_refused_on_an_account_whose_quota_is_used_up() {
+        use crate::protocol::{AccountQuota, Params, QuotaWindow, QuotaWindowKind};
+
+        let (state, dir) = crate::test_support::app_state("coordinator-open-quota-exhausted");
+        let workdir = console_workdir(&dir);
+        state
+            .store
+            .insert_console(&console(Agent::Claude, &workdir))
+            .unwrap();
+        state
+            .store
+            .insert_account(&Account {
+                id: "claude-acct".to_string(),
+                agent: Agent::Claude,
+                name: "Claude work".to_string(),
+                config_dir: "/home/u/.claude-alt".to_string(),
+                approval_reviewer: None,
+                approval_mode: None,
+            })
+            .unwrap();
+        let reset = now_millis() + 60_000;
+        let used_up = |account: Option<&str>, resets_at| AccountQuota {
+            agent: Agent::Claude,
+            account: account.map(str::to_string),
+            fetched_at: 1,
+            plan: None,
+            windows: vec![QuotaWindow {
+                kind: QuotaWindowKind::Weekly,
+                label: None,
+                used_percent: 100.0,
+                resets_at,
+                window_minutes: None,
+            }],
+            unavailable: None,
+        };
+        let request = |account: Option<String>| OpenRequest {
+            console_id: "console-1".to_string(),
+            project_id: None,
+            agent: None,
+            account: Some(account),
+            task: None,
+            title: None,
+            model: None,
+            effort: None,
+            origin: Origin::User,
+            bound_to: None,
+            resume_agent_session_id: None,
+            session_id: None,
+        };
+        let refusal = |account: Option<&str>| {
+            resolve_open(&state, &request(account.map(str::to_string))).err()
+        };
+        let coded = |err: &anyhow::Error| -> (&'static str, Params) {
+            let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+            (coded.code, coded.params.clone())
+        };
+
+        // Nothing read yet: usable.
+        assert!(refusal(Some("claude-acct")).is_none());
+        assert!(refusal(None).is_none());
+
+        state.account_quotas.hold_in_dir_for_test(
+            &used_up(Some("claude-acct"), Some(reset)),
+            "/home/u/.claude-alt",
+        );
+        let (code, params) = coded(&refusal(Some("claude-acct")).expect("refused"));
+        assert_eq!(code, error_code::ACCOUNT_QUOTA_EXHAUSTED);
+        assert_eq!(params["agent"], Agent::Claude.label());
+        assert_eq!(params["account"], "Claude work");
+        assert_eq!(params["window"], "Weekly");
+        assert_eq!(params["resets_at"], reset.to_string());
+
+        // The default account, whose reading does not say when it resets.
+        state.account_quotas.hold_for_test(&used_up(None, None));
+        let (code, params) = coded(&refusal(None).expect("refused"));
+        assert_eq!(code, error_code::ACCOUNT_QUOTA_EXHAUSTED);
+        assert_eq!(params["account"], crate::protocol::DEFAULT_ACCOUNT_NAME);
+        assert!(!params.contains_key("resets_at"));
     }
 
     /// While availability has not yet been determined — the state every run begins in — nothing is

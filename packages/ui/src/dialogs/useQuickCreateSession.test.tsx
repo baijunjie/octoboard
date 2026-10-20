@@ -29,7 +29,7 @@ function mount(initial: Partial<State> = {}) {
     terminalUrl: () => "",
   };
   const onOpened = vi.fn();
-  let quickCreate!: (target: NewSessionRequest) => void;
+  let quickCreate!: (target: NewSessionRequest, action: string) => void;
   function Host({ consoleId }: { consoleId: string }) {
     quickCreate = useQuickCreateSession(onOpened, consoleId);
     return null;
@@ -42,7 +42,7 @@ function mount(initial: Partial<State> = {}) {
     act(() => root.unmount());
     container.remove();
   });
-  const run = (target: NewSessionRequest) => act(async () => quickCreate(target));
+  const run = (target: NewSessionRequest) => act(async () => quickCreate(target, "New session with defaults"));
   return { daemon, onOpened, run, showConsole };
 }
 
@@ -82,6 +82,19 @@ it("reports a refusal as a toast and selects nothing", async () => {
   await run({ kind: "new-console-session", console: parent });
   expect(daemon.toastError).toHaveBeenCalledTimes(1);
   expect(onOpened).not.toHaveBeenCalled();
+});
+
+it("refuses with every account of the agent used up, naming the action that was pressed and pointing to another agent", async () => {
+  const spent = {
+    agent: "claude" as const, account: null, fetched_at: 0, plan: null, unavailable: null,
+    windows: [{ kind: "session" as const, label: null, used_percent: 100, resets_at: Date.now() + 3_600_000, window_minutes: 300 }],
+  };
+  const { daemon, run } = mount({ accountQuotas: [spent] });
+  await run({ kind: "new-console-session", console: parent });
+  expect(daemon.request).not.toHaveBeenCalled();
+  const [error] = vi.mocked(daemon.toastError).mock.calls[0];
+  expect((error as Error).message).toBe("New session with defaults is unavailable because the default agent's accounts have all used up their quota.");
+  expect((error as { recovery?: string }).recovery).toBe("quotaUsedUpAgent");
 });
 
 it("refuses an owner that is no longer live, as the dialog does, and sends nothing", async () => {

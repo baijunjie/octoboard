@@ -3,6 +3,7 @@ import { format, isMessageKey } from "./i18n/catalog";
 import { joinPhrases } from "./i18n/joinPhrases";
 import { isolate } from "./i18n/isolate";
 import { abbreviateHome } from "./pathDisplay";
+import { countdown } from "./quota/quotaFormat";
 import type { Language } from "./i18n/languages";
 import { DEFAULT_ACCOUNT_NAME, type MessageParams, type SessionBranchState } from "./protocol";
 import type { State } from "./store";
@@ -77,6 +78,8 @@ export const NAME_PARAMS: Record<string, readonly string[]> = {
   session_did_not_stop: ["session"],
   project_branches_not_determined: ["name"],
   switch_did_not_come_up: ["session"],
+  account_quota_exhausted: ["account"],
+  "account_quota_exhausted.resets": ["account"],
 };
 
 /** A structured list never infers boundaries from user-provided names or punctuation. */
@@ -173,9 +176,11 @@ export const UI_PARAMS: Record<string, MessageParams> = {
 
 /** The code a message is worded under: the daemon's, except where one code has a message of its own
  * for a variant its params name (`unsupported_file_type` of an `unmerged` file, worded as
- * `daemon.unsupported_file_type.unmerged`, like `daemon.trust_reason.<code>`). */
+ * `daemon.unsupported_file_type.unmerged`, like `daemon.trust_reason.<code>`; `account_quota_exhausted`
+ * with a `resets_at` time, worded as `daemon.account_quota_exhausted.resets`). */
 export function messageCode(code: string, params: MessageParams): string {
   if (code === "field_too_long" && (params.field === "name" || params.field === "description")) return `${code}.${params.field}`;
+  if (code === "account_quota_exhausted" && /^\d+$/.test(params.resets_at ?? "")) return "account_quota_exhausted.resets";
   return code === "unsupported_file_type" && params.file_type === "unmerged" ? "unsupported_file_type.unmerged" : code;
 }
 
@@ -184,9 +189,21 @@ export function withUiParams(code: string, params: MessageParams): MessageParams
   return { ...UI_PARAMS[messageCode(code, params)], ...params };
 }
 
-/** The codes whose `name` may be the default account's, which the daemon names by its fixed English
- * `DEFAULT_ACCOUNT_NAME`. */
-const DEFAULT_ACCOUNT_NAME_CODES = new Set(["account_name_taken", "config_dir_taken"]);
+/** The English window names `account_quota_exhausted` carries, and the messages that word them. */
+const QUOTA_WINDOW_KEYS: Record<string, "quota.windowPhrase.session" | "quota.windowPhrase.weekly" | "quota.windowPhrase.monthly" | "quota.windowPhrase.credits"> = {
+  "5-hour": "quota.windowPhrase.session",
+  Weekly: "quota.windowPhrase.weekly",
+  Monthly: "quota.windowPhrase.monthly",
+  Credits: "quota.windowPhrase.credits",
+};
+
+/** The codes whose account name param may be the default account's, which the daemon names by its fixed
+ * English `DEFAULT_ACCOUNT_NAME`, and the param that holds it. */
+const DEFAULT_ACCOUNT_NAME_PARAMS: Record<string, string> = {
+  account_name_taken: "name",
+  config_dir_taken: "name",
+  account_quota_exhausted: "account",
+};
 
 /** A param as plain text: a record id as that record's name, anything else as it came, isolated. */
 function paramText(records: RecordNames, name: string, value: string): string {
@@ -211,8 +228,9 @@ export function daemonParams<V = never>(
   // A failed launch carries its failure's params, which take the UI's own for the failure's code.
   const all = code === "launch_failed" && params.reason_code ? withUiParams(params.reason_code, params) : withUiParams(code, params);
   // The default account is shown by its name in the current language, as the accounts section does.
-  if (DEFAULT_ACCOUNT_NAME_CODES.has(code) && all.name === DEFAULT_ACCOUNT_NAME) {
-    all.name = format(language, "settings.accounts.defaultName", {});
+  const accountParam = DEFAULT_ACCOUNT_NAME_PARAMS[code];
+  if (accountParam && all[accountParam] === DEFAULT_ACCOUNT_NAME) {
+    all[accountParam] = format(language, "settings.accounts.defaultName", {});
   }
   const shown: Record<string, string | number> = Object.fromEntries(
     Object.entries(all).map(([name, value]) => [name, paramText(records, name, value)]),
@@ -234,6 +252,17 @@ export function daemonParams<V = never>(
   // A count arrives as text; as a number it selects the singular or plural wording.
   if (/^\d+$/.test(all.count ?? "")) shown.count = Number(all.count);
   if (code === "field_too_long" && /^\d+$/.test(all.limit ?? "")) shown.limit = Number(all.limit);
+  // The daemon names the window in English; the standard names are worded in the UI's language, any other
+  // (a window's own label) as a quota of that name.
+  if (code === "account_quota_exhausted") {
+    shown.quota = Object.hasOwn(QUOTA_WINDOW_KEYS, all.window)
+      ? format(language, QUOTA_WINDOW_KEYS[all.window], {})
+      : format(language, "quota.windowPhrase.named", { window: shown.window });
+  }
+  // The time left until the account's quota resets, counted from when the message is worded.
+  if (messageCode(code, all) === "account_quota_exhausted.resets") {
+    shown.time = countdown((key, ...args) => format(language, key, args[0]), Number(all.resets_at), Date.now());
+  }
   const reasonKey = `daemon.trust_reason.${all.reason_code}`;
   if (isMessageKey(reasonKey)) shown.reason = format(language, reasonKey, shown);
   const failureKey = `daemon.${messageCode(all.reason_code ?? "", all)}`;

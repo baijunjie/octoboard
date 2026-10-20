@@ -12,7 +12,10 @@ moves, a selection that does not follow).
 
 So feed a render only from props, state, context and hooks: pass `useNow()` (`packages/ui/src/useNow.ts`) as the
 `now` of anything that formats a time, read the daemon store through a `useDaemonStore` selector, and move state that
-changes in place behind a store or `useSyncExternalStore`. Where module state has to stay as it is, put
+changes in place behind a store or `useSyncExternalStore`. A value only a menu's items need (a row's menu judging
+quotas against the clock) is not worth a `useNow()` that re-renders every row: give `ActionMenu` its `items` as a
+function, which it calls when the menu opens and mounts its content, so that function may read `Date.now()` and
+`store.getState()` itself. Where module state has to stay as it is, put
 `"use no memo"` at the top of the component or hook, with a comment saying what it reads.
 
 ## A lint-clean component can still be left uncompiled: check the compiler's own log

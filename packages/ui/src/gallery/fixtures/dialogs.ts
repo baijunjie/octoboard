@@ -375,6 +375,13 @@ const submitConsoleSwitch = [
   (ui: Ui) => ui.confirm(),
 ];
 
+/** The daemon's refusal of a switch to Work, whose weekly quota is used up and has no reset time. */
+const quotaRefusal = {
+  code: "account_quota_exhausted",
+  params: { agent: "Claude Code", account: accountsState.settings!.accounts[0].name, window: "Weekly" },
+  message: `${accountsState.settings!.accounts[0].name} has used up its Claude Code quota (Weekly)`,
+};
+
 const removeProjectTrash: Scenario = {
   ...dialogFixture,
   id: "dialog-remove-project-trash",
@@ -492,6 +499,16 @@ export const dialogScenarios: Scenario[] = [
       "s-switch-bound": { code: "unknown_account", params: { account: "a-removed" }, message: "unknown account a-removed" },
       "s-switch-work": { code: "unknown_account", params: { account: "a-removed" }, message: "unknown account a-removed" },
     },
+    steps: submitConsoleSwitch,
+  },
+  {
+    id: "dialog-switch-account-quota-refused",
+    group: "Sidebar sessions",
+    category: "exceptional",
+    title: "Console account switch refused, the quota is used up",
+    description: "The daemon holds a newer reading than the window and refuses two sessions' switch to the Work account. Both failure rows say the account's weekly quota is used up, with no reset time, and advise another account or waiting. The window name is in the app's language.",
+    state: switchAccountState,
+    sessionAccountSwitches: { "s-switch-bound": quotaRefusal, "s-switch-work": quotaRefusal },
     steps: submitConsoleSwitch,
   },
   {
@@ -737,7 +754,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "New session without named agent accounts",
-    description: "Codex has no named accounts, so the agent picker fills the whole field. Advanced shows its project model and xhigh reasoning effort; choosing Claude Code reveals its joined account picker.",
+    description: "Codex has no named accounts, so its account picker, beside the agent select, offers only Default. Advanced shows its project model and xhigh reasoning effort; choosing Claude Code lists its named accounts in that picker.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.openSession")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),

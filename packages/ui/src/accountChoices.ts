@@ -1,6 +1,8 @@
 import { accountsByAgent, AGENT_ACCOUNT_FIELD, defaultAccountName, isAgentPickable, projectSessionAgent, selectableAgent } from "./agents";
 import type { Translate } from "./i18n/catalog";
-import type { Account, Agent, AgentAvailability, Console, Project, ProjectAccount, Session, Settings } from "./protocol";
+import type { Account, AccountQuota, Agent, AgentAvailability, Console, Project, ProjectAccount, QuotaWindow, Session, Settings } from "./protocol";
+import { accountQuotaOf } from "./quota/accountQuotaOf";
+import { exhaustedQuotaWindow } from "./quota/quotaFormat";
 import { sessionAccountName } from "./sessionLabel";
 
 /** An account of one agent as a picker settles it; `null` is the agent's default account, the
@@ -13,8 +15,14 @@ export interface AccountChoice {
 export interface ChoiceEntry {
   /** Unique across agents, so one control can hold every agent's entries. */
   key: string;
+  agent: Agent;
   account: string | null;
   name: string;
+  /** What the daemon last read of the account's quota, if it has. */
+  quota: AccountQuota | undefined;
+  /** The window that keeps the account from running a session right now (see `exhaustedQuotaWindow`);
+   * the entry may still be shown, but not chosen. */
+  exhaustedBy: QuotaWindow | undefined;
 }
 
 /** One agent's entries, the default account first. `selectable` is false only once the agent is
@@ -29,15 +37,23 @@ export function choiceKey({ agent, account }: AccountChoice): string {
   return `${agent}:${account ?? ""}`;
 }
 
+/** What the accounts' quotas are judged by: the daemon's readings and the time they are judged at. Passed
+ * as one value so that the readings are never judged against a time that was left out. */
+export interface QuotaReadings {
+  quotas: AccountQuota[];
+  now: number;
+}
+
 /** Every agent's group, built from the stored accounts (`added` is the user's added agents, `null` while
  * the daemon has not decided them). With none stored an agent's group holds its
  * default account alone, which needs no discovery to exist. `defaultName` is the default account's
- * name in the current language. */
+ * name in the current language. Without `readings` no entry is used up. */
 export function choiceGroups(
   accounts: Account[],
   agentAvailability: Map<Agent, AgentAvailability>,
   added: Agent[] | null,
   defaultName: (agent: Agent) => string,
+  readings?: QuotaReadings,
 ): ChoiceGroup[] {
   return accountsByAgent(accounts).map(({ agent, accounts: owned }) => ({
     agent,
@@ -45,15 +61,18 @@ export function choiceGroups(
     entries: [
       { account: null, name: defaultName(agent) },
       ...owned.map((account) => ({ account: account.id, name: account.name })),
-    ].map((entry) => ({ ...entry, key: choiceKey({ agent, account: entry.account }) })),
+    ].map((entry) => {
+      const quota = readings && accountQuotaOf(readings.quotas, agent, entry.account);
+      return { ...entry, agent, key: choiceKey({ agent, account: entry.account }), quota, exhaustedBy: readings && exhaustedQuotaWindow(quota, readings.now) };
+    }),
   }));
 }
 
 /** The entry `key` names, with its agent, or `undefined` when there is none. */
-export function findEntry(groups: ChoiceGroup[], key: string): (ChoiceEntry & { agent: Agent; selectable: boolean }) | undefined {
+export function findEntry(groups: ChoiceGroup[], key: string): (ChoiceEntry & { selectable: boolean }) | undefined {
   for (const group of groups) {
     const entry = group.entries.find((candidate) => candidate.key === key);
-    if (entry) return { ...entry, agent: group.agent, selectable: group.selectable };
+    if (entry) return { ...entry, selectable: group.selectable };
   }
   return undefined;
 }
@@ -96,21 +115,41 @@ export function inheritedAccount(owner: Console, project: Project | undefined, a
   return project ? resolveProjectAccount(projectAccount(project, agent, accounts), account) : account;
 }
 
+/** The window that keeps `choice`'s account from running a session right now, if it is used up. */
+export function choiceExhaustion(choice: AccountChoice, groups: ChoiceGroup[]): QuotaWindow | undefined {
+  return findEntry(groups, choiceKey(choice))?.exhaustedBy;
+}
+
+/** `choice`, or when its account is used up and its agent may be picked, the first account of the same
+ * agent that is not, in the order of the agent's group (the default account first). With every account
+ * of the agent used up `choice` stays, for the caller to refuse. */
+export function avoidExhaustedAccount(choice: AccountChoice, groups: ChoiceGroup[]): AccountChoice {
+  const group = groups.find((candidate) => candidate.agent === choice.agent);
+  if (!group?.selectable || !choiceExhaustion(choice, groups)) return choice;
+  const usable = group.entries.find((entry) => !entry.exhaustedBy);
+  return usable ? { agent: choice.agent, account: usable.account } : choice;
+}
+
 /** Where the session dialog's control opens: the agent the dialog already resolves — a project
  * session's: the project's default, else the console's project session default; a console
  * session's: the console's default — moved to one that may be picked when that one is known
  * to be missing or is not added, with the account that agent resolves to when none is chosen: the project's
- * setting for it, else the console `owner`'s. The choice made in the dialog sits above this, as
- * the daemon's own chain puts a session's choice above both. */
-export function initialChoice(
+ * setting for it, else the console `owner`'s, moved to another account of the agent when that one's quota is
+ * used up (`avoidExhaustedAccount`). The choice made in the dialog sits above this, as the daemon's own chain
+ * puts a session's choice above both. `groups` are the agents' entries with their quotas judged (`choiceGroups`).
+ * `exhaustedBy` is the window that still keeps the account from running a session when every account of the
+ * agent is used up. */
+export function settledInitialChoice(
   owner: Console,
   project: Project | undefined,
   accounts: Account[],
   agentAvailability: Map<Agent, AgentAvailability>,
   added: Agent[] | null,
-): AccountChoice {
+  groups: ChoiceGroup[],
+): { choice: AccountChoice; exhaustedBy: QuotaWindow | undefined } {
   const agent = selectableAgent(agentAvailability, added, project ? project.default_agent ?? projectSessionAgent(owner) : owner.default_agent);
-  return { agent, account: inheritedAccount(owner, project, agent, accounts) };
+  const choice = avoidExhaustedAccount({ agent, account: inheritedAccount(owner, project, agent, accounts) }, groups);
+  return { choice, exhaustedBy: choiceExhaustion(choice, groups) };
 }
 
 /** What the control currently shows: the user's pick while it is still an entry that may be
@@ -131,6 +170,11 @@ export interface SwitchEntry {
   current: boolean;
   /** `name` is the directory of an account that has been removed, not a name the user typed. */
   isPath: boolean;
+  /** The window that keeps the account from taking the session over (see `exhaustedQuotaWindow`); the
+   * entry is listed, but not offered. */
+  exhaustedBy: QuotaWindow | undefined;
+  /** What the daemon last read of the account's quota, if it has; none for a removed account's directory. */
+  quota: AccountQuota | undefined;
 }
 
 /** The accounts of the session's own agent, the default account first, with the one the session is
@@ -139,8 +183,14 @@ export interface SwitchEntry {
  * everywhere else a session's account is (`sessionAccountName`: the directory the session
  * recorded), so the menu still says where the session is; with no directory recorded there is
  * nothing to name it by and it is left out. The submenu is offered only when there is somewhere to
- * go, that is with more than one entry. */
-export function switchEntries(session: Session, accounts: Account[], t: Translate, defaultNames: Settings["default_account_names"]): SwitchEntry[] {
+ * go, that is with more than one entry. Without `readings` no entry is used up. */
+export function switchEntries(
+  session: Session,
+  accounts: Account[],
+  t: Translate,
+  defaultNames: Settings["default_account_names"],
+  readings?: QuotaReadings,
+): SwitchEntry[] {
   const owned = accountsByAgent(accounts).find((group) => group.agent === session.agent)?.accounts ?? [];
   const entries = [
     { account: null, name: defaultAccountName(t, defaultNames, session.agent), isPath: false },
@@ -151,5 +201,13 @@ export function switchEntries(session: Session, accounts: Account[], t: Translat
   if (session.account_id && removedName !== undefined) {
     entries.push({ account: session.account_id, name: removedName, isPath: true });
   }
-  return entries.map((entry) => ({ ...entry, current: entry.account === (session.account_id ?? null) }));
+  return entries.map((entry) => {
+    const quota = entry.isPath || !readings ? undefined : accountQuotaOf(readings.quotas, session.agent, entry.account);
+    return {
+      ...entry,
+      current: entry.account === (session.account_id ?? null),
+      exhaustedBy: readings ? exhaustedQuotaWindow(quota, readings.now) : undefined,
+      quota,
+    };
+  });
 }

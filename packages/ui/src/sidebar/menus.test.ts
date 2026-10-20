@@ -1,3 +1,5 @@
+import { KeyRound } from "lucide-react";
+import React from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ActionMenuEntry, ActionMenuSubmenu } from "../components/ActionMenu";
@@ -45,6 +47,41 @@ describe("the Switch account entry", () => {
     expect(handlers.onOpenDialog).toHaveBeenCalledWith(expect.objectContaining({ kind: "switch-account", account: "w", accountName: "w" }));
     (manage as { onClick: () => void }).onClick();
     expect(handlers.onOpenSettings).toHaveBeenCalledWith("accounts");
+  });
+
+  it("disables an account whose quota is used up at the time given, with why, and never the current one", () => {
+    const spent = (accountId: string | null) => ({
+      agent: "claude" as const, account: accountId, fetched_at: 0, plan: null, unavailable: null,
+      windows: [{ kind: "session" as const, label: null, used_percent: 100, resets_at: 7_200_000, window_minutes: 300 }],
+    });
+    const menu = (quotas: ReturnType<typeof spent>[], now: number) => {
+      const entry = sessionMenu(t, {} as SidebarHandlers, project(), [account("w", "claude")], undefined, { quota: { quotas, now } })
+        .find((candidate) => typeof candidate === "object" && "items" in candidate) as ActionMenuSubmenu;
+      return entry.items.slice(0, 2) as { reason?: { state: string; detail?: string } }[];
+    };
+    const [current, other] = menu([spent("w"), spent(null)], 0);
+    expect(current.reason).toBeUndefined();
+    expect(other.reason).toEqual({ state: "Used up", detail: "resets in 2h 0m" });
+    expect(menu([spent("w")], 7_200_000)[1].reason).toBeUndefined();
+  });
+
+  it("states what remains of an account's quota as its description, and has no reason for it", () => {
+    const quota = {
+      agent: "claude" as const, account: "w", fetched_at: 0, plan: null, unavailable: null,
+      windows: [{ kind: "session" as const, label: null, used_percent: 40, resets_at: 7_200_000, window_minutes: 300 }],
+    };
+    const entry = sessionMenu(t, {} as SidebarHandlers, project(), [account("w", "claude")], undefined, { quota: { quotas: [quota], now: 0 } })
+      .find((candidate) => typeof candidate === "object" && "items" in candidate) as ActionMenuSubmenu;
+    const other = entry.items[1] as { reason?: unknown; description?: string };
+    expect(other.reason).toBeUndefined();
+    expect(other.description).toMatch(/60%/);
+  });
+
+  it("keeps a key for a removed account's directory, in the width of a usage bar", () => {
+    const items = submenu(project({ account_id: "gone", config_dir: "/x" }), [])!.items;
+    const icon = (items.find((item) => typeof item === "object" && "selected" in item && item.selected) as { icon: React.ReactElement<{ className: string; children: React.ReactElement }> }).icon;
+    expect(icon.props.className).toContain("w-8");
+    expect(icon.props.children.type).toBe(KeyRound);
   });
 });
 

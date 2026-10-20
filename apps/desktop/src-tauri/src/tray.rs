@@ -5,14 +5,16 @@
 //! also tells the UI which one. Quit goes through the same exit flow as Cmd+Q, so it still asks
 //! while a session is running.
 //!
-//! The icon itself has two looks: the octopus, and the octopus with an orange dot in its
-//! corner, which shows while the menu's `attention` flag is set (a session is waiting for the
-//! user). Like the rest of the menu, the UI decides when, and the look changes together with the
-//! menu it came with. A readable selected-account quota adds a capsule over the lower tentacles
-//! (`tray_icon.rs`); the UI supplies its remaining percent and localized label. The octopus and
-//! capsule are always one template image, so macOS keeps drawing them for the menu bar's light or
-//! dark look; a template image cannot carry a colour, so the dot is a view of
-//! its own laid over the button, in place of the octopus's cut-out corner (`show_dot`).
+//! The icon itself has two looks: the octopus, and the octopus with an orange dot in its corner,
+//! which shows while the menu's `attention` flag is set (a session is waiting for the user). Like
+//! the rest of the menu, the UI decides when, and the look changes together with the menu it came
+//! with. A readable selected-account quota adds a capsule over the lower tentacles
+//! (`tray_icon.rs`), with a thinner one beneath for the weekly window when the account has a 5-hour
+//! one too; the UI supplies the remaining percents and the localized label, which is the icon's
+//! accessible name (the icon has no tooltip). The octopus and capsule are always one template
+//! image, so macOS keeps drawing them for the menu bar's light or dark look; a template image
+//! cannot carry a colour, so the dot is a view of its own laid over the button, in place of the
+//! octopus's cut-out corner (`show_dot`).
 //!
 //! Replacing the menu closes it if it is open, so a menu the UI sends while a menu is open is held
 //! back and applied once it closes (`MenuTracking`). The UI is told when this menu begins to open
@@ -87,10 +89,15 @@ pub struct TrayMenu {
     /// Whether the icon shows the attention dot, which asks for the user's attention.
     #[serde(default)]
     attention: bool,
-    /// The selected session account's remaining quota, already chosen and rounded by the UI.
+    /// The selected session account's remaining quota, already chosen and rounded by the UI: the
+    /// 5-hour window's when the account has a weekly one too, else its one window's.
     #[serde(default)]
     quota_remaining: Option<u8>,
-    /// The UI's localized account, window and remainder for the icon's tooltip.
+    /// The weekly window's remainder, drawn as a thinner capsule beneath when the account has a
+    /// 5-hour window as well.
+    #[serde(default)]
+    quota_weekly_remaining: Option<u8>,
+    /// The UI's localized account, window and remainder for the icon's accessible name.
     #[serde(default)]
     quota_label: Option<String>,
 }
@@ -192,6 +199,7 @@ impl Default for TrayMenu {
             quit: format!("Quit {APP_NAME}"),
             attention: false,
             quota_remaining: None,
+            quota_weekly_remaining: None,
             quota_label: None,
         }
     }
@@ -282,21 +290,25 @@ fn unfinished(app: &AppHandle) -> std::sync::MutexGuard<'_, Option<MenuFinish>> 
 #[derive(Default, PartialEq, Eq)]
 struct IconState {
     attention: bool,
-    quota: Option<u8>,
+    quota: Option<icon::Quota>,
 }
 
 /// Puts the icon in the menu bar. It is a template image, so macOS tints it for a light or dark
 /// menu bar itself.
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
-    TrayIconBuilder::with_id(TRAY_ID)
+    let tray = TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon::octopus(false, None))
         .icon_as_template(true)
-        .tooltip(APP_NAME)
         .menu(&build_menu(app, &TrayMenu::default())?)
         .show_menu_on_left_click(true)
         .build(app)?;
+    #[cfg(not(target_os = "macos"))]
+    let _ = tray;
     #[cfg(target_os = "macos")]
-    follow_menu_tracking(app);
+    {
+        set_icon_label(&tray, APP_NAME);
+        follow_menu_tracking(app);
+    }
     Ok(())
 }
 
@@ -458,16 +470,17 @@ fn apply(app: &AppHandle, menu: &TrayMenu) -> Result<(), String> {
             submenus: menu.submenus.clone(),
         });
     }
-    let quota = menu.quota_remaining.map(|remaining| remaining.min(100));
+    let quota = menu.quota_remaining.map(|remaining| icon::Quota {
+        main: remaining.min(100),
+        thin: menu.quota_weekly_remaining.map(|weekly| weekly.min(100)),
+    });
     let label = quota.and(menu.quota_label.as_deref()).unwrap_or(APP_NAME);
-    tray.set_tooltip(Some(label))
-        .map_err(|err| err.to_string())?;
     #[cfg(target_os = "macos")]
     set_icon_label(&tray, label);
     show_icon(app, &tray, menu.attention, quota)
 }
 
-/// The whole quota phrase is the status button's accessible name as well as its tooltip.
+/// The whole quota phrase is the status button's accessible name; the icon has no tooltip.
 #[cfg(target_os = "macos")]
 fn set_icon_label(tray: &tauri::tray::TrayIcon, label: &str) {
     use objc2::MainThreadMarker;
@@ -495,7 +508,7 @@ fn show_icon(
     app: &AppHandle,
     tray: &tauri::tray::TrayIcon,
     attention: bool,
-    quota: Option<u8>,
+    quota: Option<icon::Quota>,
 ) -> Result<(), String> {
     let state = app.state::<TrayState>();
     let mut shown = state
@@ -780,7 +793,13 @@ mod tests {
     fn selected_quota_is_optional_and_keeps_both_endpoints() {
         let bare = parsed(r#"{"sections": [], "open": "Open", "quit": "Quit"}"#);
         assert_eq!(bare.quota_remaining, None);
+        assert_eq!(bare.quota_weekly_remaining, None);
         assert_eq!(bare.quota_label, None);
+        let layered = parsed(
+            r#"{"sections": [], "open": "Open", "quit": "Quit", "quota_remaining": 80, "quota_weekly_remaining": 30}"#,
+        );
+        assert_eq!(layered.quota_remaining, Some(80));
+        assert_eq!(layered.quota_weekly_remaining, Some(30));
         for remaining in [0, 100] {
             let menu = parsed(&format!(
                 r#"{{"sections": [], "open": "Open", "quit": "Quit", "quota_remaining": {remaining}, "quota_label": "Work quota"}}"#

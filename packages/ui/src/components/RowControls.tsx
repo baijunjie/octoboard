@@ -1,7 +1,12 @@
 import React from "react";
 
 /** Shared shape and tints for icon controls in either side pane and the file viewer. */
-export const ROW_ICON_BUTTON_CLASS = "sidebar-fills shrink-0 rounded-md bg-transparent text-app-muted hover:bg-default hover:text-foreground";
+export const ROW_ICON_BUTTON_BASE_CLASS = "sidebar-fills shrink-0 rounded-md bg-transparent text-app-muted";
+
+/** The hover tint of an icon control, left off one that cannot act. */
+const ROW_ICON_BUTTON_HOVER_CLASS = "hover:bg-default hover:text-foreground";
+
+export const ROW_ICON_BUTTON_CLASS = `${ROW_ICON_BUTTON_BASE_CLASS} ${ROW_ICON_BUTTON_HOVER_CLASS}`;
 
 /** Shared spacing for the icons at a row or header's end. */
 export function RowIconGroup({ children, className = "" }: { children: React.ReactNode; className?: string }): React.ReactElement {

@@ -33,7 +33,7 @@ export function ChromeButton({
   selected,
   onBlur,
   buttonRef,
-  tooltipDisabled,
+  noTooltip,
   tooltipPlacement,
   className = "",
 }: {
@@ -63,8 +63,9 @@ export function ChromeButton({
   selected?: boolean;
   onBlur?: () => void;
   buttonRef?: React.Ref<HTMLButtonElement>;
-  /** Holds the tooltip back while the button shows what it says some other way (its panel is open). */
-  tooltipDisabled?: boolean;
+  /** The button has no tooltip, for one that shows what it says some other way (hovering it floats its
+   * panel in); `label` is still its accessible name. */
+  noTooltip?: boolean;
   /** Called as a mouse pointer enters or leaves the button; touch and pen are ignored. */
   onMouseHoverChange?: (hovered: boolean) => void;
   tooltipPlacement?: "end";
@@ -72,7 +73,7 @@ export function ChromeButton({
   className?: string;
 }): React.ReactElement {
   return (
-    <TitledControl title={label} placement={tooltipPlacement} isDisabled={tooltipDisabled}>
+    <TitledControl title={noTooltip ? "" : label} placement={tooltipPlacement}>
       <Button
         id={id}
         ref={buttonRef}

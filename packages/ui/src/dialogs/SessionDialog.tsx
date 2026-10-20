@@ -98,7 +98,7 @@ export function SessionDialog({
   const [refusal, setRefusal] = useState<{ error: DaemonRequestError; asked: string }>();
   const { error, busy, run } = useDialogAction();
 
-  const { choice, blocked, overrides, agentOptions, setPickedAgent, account: accountField, launch } = useLaunchChoice(parentConsole, project);
+  const { choice, blocked, usedUp, overrides, agentOptions, setPickedAgent, account: accountField, launch } = useLaunchChoice(parentConsole, project);
   // Nothing to open a session with (an agent was removed or uninstalled while this was open).
   useCloseWhenBlocked(blocked, t("dialog.session.noAgent"), onClose);
 
@@ -227,9 +227,10 @@ export function SessionDialog({
       onClose={onClose}
       submitLabel={t("dialog.session.open")}
       busy={busy}
-      submitDisabled={blocked || fixedOwnerGone}
+      submitDisabled={blocked || fixedOwnerGone || usedUp !== undefined}
       onSubmit={submit}
     >
+      {usedUp && <ErrorAlert announce>{usedUp}</ErrorAlert>}
       {fixedOwner && fixedOwnerGone && <ErrorAlert>{t("dialog.session.ownerGone", { name: isolate(sessionDisplayTitle(t, fixedOwner)) })}</ErrorAlert>}
       {resumable && (
         <Tabs selectedKey={conversation} onSelectionChange={(key) => {

@@ -1,6 +1,6 @@
 import { Archive, ArrowLeftRight, Copy, Download, Focus, Forward, Folder, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Lock, LockOpen, Palette, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Upload, SquareArrowOutUpRight } from "lucide-react";
 
-import { switchEntries } from "../accountChoices";
+import { switchEntries, type QuotaReadings } from "../accountChoices";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanel, ActionMenuSubmenu } from "../components/ActionMenu";
 import { ExternalLinkIcon } from "../components/ExternalLinkIcon";
 import { RepositoryIcon } from "../components/RepositoryIcon";
@@ -9,6 +9,7 @@ import { AgentIcon } from "../components/AgentIcon";
 import { PathText } from "../components/PathText";
 import type { Translate } from "../i18n/catalog";
 import type { Account, Console, Project, Session, Settings } from "../protocol";
+import { accountUsage } from "../quota/accountUsage";
 import { sessionDisplayTitle } from "../sessionLabel";
 import { FocusShortcutKbd } from "./focusShortcut";
 import { archivePreviewSessions, isUnusedSession } from "./order";
@@ -138,33 +139,43 @@ export function projectMenu(
 }
 
 /** "Switch account": the session's agent's accounts, the one the session is on marked as current
- * and doing nothing, and last a way into Settings' Agent accounts section. Absent when the agent
- * has no other account to go to — hidden rather than disabled, as there is nothing the user could
- * do with it. */
+ * and doing nothing, and last a way into Settings' Agent accounts section. An account whose quota
+ * is used up is disabled, with why under its name. Absent when the agent has no other account to go
+ * to — hidden rather than disabled, as there is nothing the user could do with it. */
 function switchAccountSubmenu(
   t: Translate,
   handlers: SidebarHandlers,
   session: Session,
   accounts: Account[],
   defaultNames: Settings["default_account_names"],
+  readings: QuotaReadings | undefined,
 ): ActionMenuSubmenu | undefined {
-  const entries = switchEntries(session, accounts, t, defaultNames);
+  const entries = switchEntries(session, accounts, t, defaultNames, readings);
   if (entries.length < 2) return undefined;
   return {
     label: t("sidebar.session.switchAccount"),
     icon: ArrowLeftRight,
     items: [
-      ...entries.map(({ account, name, current, isPath }) => ({
-        label: name,
-        // A directory is a path, so it reads left to right and shows its end, as it does elsewhere.
-        // `block` gives the span the label's width to clip against; inline, it never overflows.
-        ...(isPath ? { content: <PathText path={name} as="span" className="block" />, ariaLabel: name } : {}),
-        icon: KeyRound,
-        selected: current,
-        onClick: current
-          ? () => {}
-          : () => handlers.onOpenDialog({ kind: "switch-account", session, account, accountName: name }),
-      })),
+      ...entries.map(({ account, name, current, isPath, exhaustedBy, quota }) => {
+        // A usage bar as the icon, the remainder said to assistive technology, and for one
+        // used up the short reason under its name. The current account is never offered, so it is
+        // not marked used up; a removed account's directory has no quota.
+        const { icon, detail, reason } = accountUsage(t, session.agent, quota, current ? undefined : exhaustedBy, readings?.now ?? 0);
+        return {
+          label: name,
+          // A directory is a path, so it reads left to right and shows its end, as it does elsewhere.
+          // `block` gives the span the label's width to clip against; inline, it never overflows.
+          ...(isPath ? { content: <PathText path={name} as="span" className="block" />, ariaLabel: name } : {}),
+          // The key sits in the bar's width, so that the labels line up.
+          icon: isPath ? <span aria-hidden="true" className="flex w-8 shrink-0 justify-center"><KeyRound className="size-4 text-app-muted" /></span> : icon,
+          reason,
+          description: detail,
+          selected: current,
+          onClick: current
+            ? () => {}
+            : () => handlers.onOpenDialog({ kind: "switch-account", session, account, accountName: name }),
+        };
+      }),
       "separator" as const,
       { label: t("sidebar.session.manageAccounts"), icon: Settings2, onClick: () => handlers.onOpenSettings("accounts") },
     ],
@@ -219,19 +230,25 @@ function colourSubmenu(t: Translate, handlers: SidebarHandlers, session: Session
  * this is the user's only way to archive a console session (see "A session archiving itself" in
  * `docs/product/hub-orchestration.md`), and the only place to switch its account. Focus mode is
  * offered for a console session alone; its own card in its focus mode (`placement` `focused`)
- * leaves out Focus mode and Pin / Unpin. `canHandOff` is whether another agent could take a session over. */
+ * leaves out Focus mode and Pin / Unpin. `canHandOff` is whether another agent could take a session over.
+ * `quota` is what the Switch account entries are judged against, for the accounts used up. */
 export function sessionMenu(
   t: Translate,
   handlers: SidebarHandlers,
   session: Session,
   accounts: Account[],
   defaultNames: Settings["default_account_names"],
-  { placement = "list", hasBoundSessions = false, canHandOff = true }: { placement?: MenuPlacement; hasBoundSessions?: boolean; canHandOff?: boolean } = {},
+  { placement = "list", hasBoundSessions = false, canHandOff = true, quota }: {
+    placement?: MenuPlacement;
+    hasBoundSessions?: boolean;
+    canHandOff?: boolean;
+    quota?: QuotaReadings;
+  } = {},
 ): ActionMenuEntry[] {
   const focused = placement === "focused";
   const archived = session.status === "archived";
   // The daemon refuses to switch the account of a session that is still starting.
-  const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts, defaultNames);
+  const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts, defaultNames, quota);
   const focusable = session.role === "console" && !archived && !focused;
   return [
     ...(!archived ? [{ label: t(session.locked ? "sidebar.session.unlock" : "sidebar.session.lock"), icon: session.locked ? LockOpen : Lock, onClick: () => handlers.onSetLocked(session, !session.locked) }] : []),

@@ -1,5 +1,6 @@
 import React, { useId, useState } from "react";
 
+import { ErrorAlert } from "../components/ErrorAlert";
 import { InlineChip } from "../components/InlineChip";
 import { Message, useT } from "../i18n/react";
 import { isolate } from "../i18n/isolate";
@@ -43,7 +44,7 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
   const t = useT();
   const { request } = useDaemon();
   const { error, busy, run } = useDialogAction();
-  const { choice, blocked, overrides, agentOptions, setPickedAgent, account, launch } = useLaunchChoice(parentConsole, project, session.agent);
+  const { choice, blocked, usedUp, overrides, agentOptions, setPickedAgent, account, launch } = useLaunchChoice(parentConsole, project, session.agent);
 
   // No other agent could take the session over (one was removed or uninstalled while this was open).
   useCloseWhenBlocked(blocked, t("dialog.handOff.noOtherAgent"), onClose);
@@ -68,10 +69,11 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
       onClose={onClose}
       submitLabel={t("dialog.handOff.confirm")}
       busy={busy}
-      submitDisabled={blocked}
+      submitDisabled={blocked || usedUp !== undefined}
       autoFocusSubmit
       onSubmit={submit}
     >
+      {usedUp && <ErrorAlert announce>{usedUp}</ErrorAlert>}
       <p className="text-sm">{t("dialog.handOff.message")}</p>
       <HandoffMoves session={session} busy={busy} />
       <AgentAccountField

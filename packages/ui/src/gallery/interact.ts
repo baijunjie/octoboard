@@ -3,11 +3,12 @@ import { gitBadgeAriaLabel } from "../gitStatusLabel";
 import { format, type MessageArgs, type MessageKey } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
 import { panelId, type PanelKind } from "../panels/stackState";
-import { DORMANT_STATUSES, LIVE_STATUSES, type Agent, type AgentAvailability, type GitStatus } from "../protocol";
+import { DORMANT_STATUSES, LIVE_STATUSES, type AccountQuota, type Agent, type AgentAvailability, type GitStatus } from "../protocol";
 import { activityLabel, statusLabel } from "../sessionLabel";
 import { ACTIVITIES } from "../sidebar/order";
 import type { Daemon } from "../store";
 import type { TerminalElement } from "../terminal/TerminalController";
+import { IS_MAC } from "../useWindowShortcut";
 import { STATUS_LABELS, type StatusKey } from "../viewer/statusMarks";
 
 /** Everything a pressable thing is looked up among. A hand-built row is a `role="button"`, a tag
@@ -98,6 +99,10 @@ export interface Ui {
    * on the sidebar's heading row (earlier in the DOM) and in the filter picker, so pressing it
    * again to unpick it would hit the sidebar row. */
   press: (matcher: Matcher) => Promise<void>;
+  /** `press` with the platform's shortcut modifier (⌘, or Ctrl elsewhere) down for the press alone, as a user
+   * pressing a control with the key held does: for what the modifier changes when the page has not seen it held
+   * (a new-session "+", whose quick form a press with the modifier runs). */
+  pressWithModifier: (matcher: Matcher) => Promise<void>;
   /** Presses the control named `matcher` inside the card of the `kind` panel, for a name two panels
    * share (each has its own close), where `press` would take the first in the stack. */
   pressInPanel: (kind: PanelKind, matcher: Matcher) => Promise<void>;
@@ -278,6 +283,10 @@ export interface Ui {
    * dialog reaches (a console session archived from a second window while a new session was being set up to report
    * to it). Fails if the window has no such session. */
   archiveSession: (id: string) => Promise<void>;
+  /** Replaces the readings of the accounts' quotas while the window shows something, for what only a reading that
+   * lands under an open dialog reaches (the account being switched to turns out to be used up after the menu that
+   * offered it was read). */
+  setAccountQuotas: (accountQuotas: AccountQuota[]) => Promise<void>;
 }
 
 /** The icon the git badge draws for `status`, by the name lucide gives its class (`GitBadge.tsx`
@@ -343,10 +352,13 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     throw new Error(missing);
   };
 
-  /** Clicks what `look` finds once it is there. */
-  const clickWhenFound = async (look: () => HTMLElement | undefined, missing: string): Promise<void> => {
+  /** Clicks what `look` finds once it is there; with `modifier` the click carries the shortcut modifier, whether
+   * or not the page has seen it held. */
+  const clickWhenFound = async (look: () => HTMLElement | undefined, missing: string, modifier = false): Promise<void> => {
     const element = await waitFor(look, missing);
-    element.click();
+    if (modifier) {
+      element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 0, metaKey: IS_MAC, ctrlKey: !IS_MAC }));
+    } else element.click();
     // A submenu a click opens closes again shortly unless the pointer is on its trigger, which a
     // click never places. Put it there afterwards — before the click, the same events do not hold
     // it open — so the submenu stays to be seen or pressed, as it does for a pointer.
@@ -480,6 +492,11 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       const session = daemon.store.getState().sessions.get(id);
       if (!session) throw new Error(`The window has no session ${id} to archive`);
       daemon.store.setState({ sessions: new Map(daemon.store.getState().sessions).set(id, { ...session, status: "archived", ended_at: Date.now() }) });
+      await wait(300);
+    },
+    async setAccountQuotas(accountQuotas) {
+      if (!daemon) throw new Error("This scenario has no daemon behind it to change the quota readings of");
+      daemon.store.setState({ accountQuotas });
       await wait(300);
     },
     async key(key) {
@@ -804,6 +821,9 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     },
     async press(matcher) {
       await clickWhenFound(() => find(matcher), `Nothing to press matching ${String(matcher)}`);
+    },
+    async pressWithModifier(matcher) {
+      await clickWhenFound(() => find(matcher), `Nothing to press matching ${String(matcher)}`, true);
     },
     async pressInPanel(kind, matcher) {
       await clickWhenFound(() => {

@@ -2,7 +2,7 @@ import type { Translate } from "../i18n/catalog";
 import type { StatusItemEntry, StatusItemMenu, StatusItemSection } from "../platform";
 import type { Console, Project, Session } from "../protocol";
 import { remainingPercent } from "../quota/quotaFormat";
-import { accountQuotaLabel, sessionQuotaWindowOf } from "../quota/sessionQuota";
+import { accountQuotaLabel, sessionQuotaBarOf } from "../quota/sessionQuota";
 import { sessionStatusKind, sessionWithLocation, statusLabel, type StatusKind } from "../sessionLabel";
 import { sessionsInTreeOrder } from "../sidebar/order";
 import { agentIconKey, statusIconKey } from "./statusItemIconKeys";
@@ -51,12 +51,13 @@ export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource):
     return [{ heading: t("statusItem.section", { status: statusLabel(t, status), count: listed.length }), icon: statusIconKey(status), items }];
   });
   const selected = sessions.find((session) => session.id === source.selectedSessionId);
-  const window = sessionQuotaWindowOf(selected, quota);
+  const bar = sessionQuotaBarOf(selected, quota);
   const accountName = quota.accounts.find((account) => account.id === selected?.account_id)?.name;
   return {
-    ...(selected && window ? {
-      quota_remaining: remainingPercent(window),
-      quota_label: accountQuotaLabel(t, selected.agent, accountName, window, quota.defaultAccountNames),
+    ...(selected && bar ? {
+      quota_remaining: remainingPercent(bar.main),
+      ...(bar.thin ? { quota_weekly_remaining: remainingPercent(bar.thin) } : {}),
+      quota_label: accountQuotaLabel(t, selected.agent, accountName, bar, quota.defaultAccountNames),
     } : {}),
     sections: sections.length > 0 ? sections : [{ heading: t("statusItem.noSessions"), items: [] }],
     submenus: buildQuotaSubmenus(t, quota, consoleMap.get(source.currentConsoleId ?? "")),

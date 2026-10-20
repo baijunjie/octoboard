@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { createUi, stuckExit, type Matcher } from "./interact";
 import { format } from "../i18n/catalog";
+import { IS_MAC } from "../useWindowShortcut";
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
@@ -186,4 +187,18 @@ it("pressInPanel presses the control of the panel it names and leaves the same n
   await vi.advanceTimersByTimeAsync(500);
   await done;
   expect(pressed).toEqual(["panel-terminal"]);
+});
+
+it("pressWithModifier presses with the platform's shortcut modifier down and press without it", async () => {
+  document.body.innerHTML = "<button>New session</button>";
+  const seen: { meta: boolean; ctrl: boolean }[] = [];
+  document.querySelector("button")!.addEventListener("click", (event) => seen.push({ meta: event.metaKey, ctrl: event.ctrlKey }));
+  const ui = createUi(document, "en");
+  const modified = ui.pressWithModifier("New session");
+  await vi.advanceTimersByTimeAsync(200);
+  await modified;
+  const plain = ui.press("New session");
+  await vi.advanceTimersByTimeAsync(200);
+  await plain;
+  expect(seen).toEqual([IS_MAC ? { meta: true, ctrl: false } : { meta: false, ctrl: true }, { meta: false, ctrl: false }]);
 });

@@ -103,6 +103,10 @@ function mount(
 
 const panel = () => document.querySelector<HTMLElement>('[role="dialog"]');
 const tabs = () => Array.from(document.querySelectorAll<HTMLElement>('[role="tab"]'));
+/** The rail button's quota capsules, and the remaining percent each one's fill spans of its 18 px. */
+const CAPSULE = '[data-slot="quota-capsule"]';
+const remaining = (button: Element) => Array.from(button.querySelectorAll(CAPSULE), (capsule) =>
+  `${Math.round((Number(capsule.querySelector('rect[fill="currentColor"]')?.getAttribute("width") ?? 0) / 18) * 100)}%`);
 
 /** A press the way a mouse makes it. */
 function click(element: Element) {
@@ -132,9 +136,6 @@ it("floats the panel in after a short rest on the button, and out once the point
   advance(1);
   expect(panel()).not.toBeNull();
   expect(button.getAttribute("aria-expanded")).toBe("true");
-  // The tooltip is held back while the panel says more.
-  advance(1000);
-  expect(openTooltip()).toBeNull();
 
   leave(button);
   advance(CLOSE_DELAY - 1);
@@ -158,6 +159,26 @@ it("keeps the panel while the pointer crosses from the button to it, and closes 
   act(() => void panel()!.dispatchEvent(pointer("pointerout")));
   advance(CLOSE_DELAY);
   expect(panel()).toBeNull();
+});
+
+it("has no tooltip, on hover or on keyboard focus, while its name stays", () => {
+  withFakeTimers();
+  const { button, outside } = mount();
+  enter(button);
+  advance(OPEN_DELAY);
+  click(button);
+  click(button);
+  leave(button);
+  advance(CLOSE_DELAY);
+  expect(panel()).toBeNull();
+  act(() => {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    outside.focus();
+  });
+  act(() => button.focus());
+  advance(1000);
+  expect(openTooltip()).toBeNull();
+  expect(button.getAttribute("aria-label")).toBe("Account quota");
 });
 
 it("shows nothing for a pointer that only crosses the button", () => {
@@ -435,25 +456,6 @@ it("points the button at the panel it opens", () => {
   expect(button.hasAttribute("data-pane-toggle")).toBe(false);
 });
 
-it("holds the tooltip back after Escape returns focus to the button, until focus leaves it", () => {
-  withFakeTimers();
-  const { button, outside } = mount();
-  act(() => {
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
-    button.focus();
-  });
-  press(button, "Enter");
-  press(document.activeElement as HTMLElement, "Escape");
-  advance(1000);
-  expect(document.activeElement).toBe(button);
-  expect(openTooltip()).toBeNull();
-
-  act(() => outside.focus());
-  act(() => button.focus());
-  advance(1000);
-  expect(openTooltip()?.textContent).toBe("Account quota");
-});
-
 it("closes when a modal opens without a press on the entry", async () => {
   withFakeTimers();
   const { button } = mount();
@@ -482,41 +484,6 @@ it("marks itself the topmost Escape taker only while open", () => {
   expect(document.querySelector("[data-escape-topmost]")).not.toBeNull();
   click(button);
   expect(document.querySelector("[data-escape-topmost]")).toBeNull();
-});
-
-it("does not hold the tooltip back when the panel closes with focus and pointer elsewhere", () => {
-  withFakeTimers();
-  const { button, outside } = mount();
-  click(button);
-  act(() => void outside.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })));
-  expect(panel()).toBeNull();
-  act(() => {
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
-    outside.focus();
-  });
-  act(() => button.focus());
-  advance(1000);
-  expect(openTooltip()?.textContent).toBe("Account quota");
-});
-
-it("does not hold the tooltip back after a keyboard pin is closed by a press outside", () => {
-  withFakeTimers();
-  const { button, outside } = mount();
-  act(() => {
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
-    button.focus();
-  });
-  press(button, "Enter");
-  expect(panel()!.contains(document.activeElement)).toBe(true);
-  act(() => void outside.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })));
-  // The press lands on something that takes focus, so none returns to the button.
-  act(() => outside.focus());
-  advance(100);
-  // The key is its own event, rendered before focus lands, as a real Tab is.
-  act(() => void document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true })));
-  act(() => button.focus());
-  advance(1000);
-  expect(openTooltip()?.textContent).toBe("Account quota");
 });
 
 it("closes when Tab takes focus out of a keyboard-pinned panel, leaving focus where Tab put it", () => {
@@ -573,10 +540,10 @@ it("follows the selected session's actual agent and account, account switches an
     </DaemonProvider>,
   ));
   const button = () => host.querySelector("button")!;
-  const fill = () => button().querySelector<HTMLElement>("span[style]");
+  const fill = () => button().querySelector(CAPSULE);
   select(session.id);
   expect(button().getAttribute("aria-label")).toContain("Claude Code, ⁨Work⁩, 5-hour 82% remaining");
-  expect(fill()?.style.width).toBe("82%");
+  expect(remaining(button())).toEqual(["82%"]);
   act(() => store.setState({ settings: { ...store.getState().settings, accounts: [{ ...accounts[0]!, config_dir: "/home/dev/.claude-other" }] } }));
   expect(fill()).toBeNull();
   act(() => store.setState({ settings: { ...store.getState().settings, accounts: [] } }));
@@ -590,10 +557,53 @@ it("follows the selected session's actual agent and account, account switches an
   weekly.windows = [{ ...weekly.windows[0]!, kind: "weekly", used_percent: 64 }];
   act(() => store.setState({ accountQuotas: [weekly] }));
   expect(button().getAttribute("aria-label")).toContain("Weekly 36% remaining");
-  expect(fill()?.style.width).toBe("36%");
+  expect(remaining(button())).toEqual(["36%"]);
+  const both = quota("codex", null, "plus");
+  both.windows = [{ ...both.windows[0]!, used_percent: 18 }, { ...both.windows[0]!, kind: "weekly", used_percent: 64 }];
+  act(() => store.setState({ accountQuotas: [both] }));
+  expect(button().getAttribute("aria-label")).toContain("5-hour 82% remaining, Weekly 36% remaining");
+  expect(remaining(button())).toEqual(["82%", "36%"]);
   select();
   expect(fill()).toBeNull();
   expect(button().getAttribute("aria-label")).toBe("Account quota");
+});
+
+it("opens on the tab of the agent whose quota the button shows, each time, and on the first tab with none", () => {
+  withFakeTimers();
+  const { store, container } = mount();
+  const host = container.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  onTestFinished(() => act(() => root.unmount()));
+  const session: Session = {
+    id: "selected", agent: "codex", account_id: null, config_dir: null, console_id: "console", host_id: "local",
+    role: "console", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    pinned: false, locked: false, started_at: NOW,
+  };
+  act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
+  const select = (id?: string) => act(() => root.render(
+    <DaemonProvider value={{ store, request } as unknown as Daemon}>
+      <RailQuotaEntry selectedSessionId={id} onOpenSettingsAt={onOpenSettingsAt} />
+    </DaemonProvider>,
+  ));
+  const selectedTab = () => tabs().find((tab) => tab.getAttribute("aria-selected") === "true")?.textContent;
+  const entry = () => host.querySelector("button")!;
+  select(session.id);
+  click(entry());
+  expect(selectedTab()).toBe("Codex");
+  // Free to switch within one opening, and the next opening starts from the shown agent again.
+  click(tabs()[0]!);
+  expect(selectedTab()).toBe("Claude Code");
+  click(entry());
+  advance(1000);
+  expect(panel()).toBeNull();
+  click(entry());
+  expect(selectedTab()).toBe("Codex");
+  click(entry());
+  advance(1000);
+
+  select();
+  click(entry());
+  expect(selectedTab()).toBe("Claude Code");
 });
 
 it("hides the mini bar for unread, failed, stale or unavailable quota instead of showing another account", () => {
@@ -611,7 +621,7 @@ it("hides the mini bar for unread, failed, stale or unavailable quota instead of
   act(() => root.render(<DaemonProvider value={{ store, request } as unknown as Daemon}>
     <RailQuotaEntry selectedSessionId={session.id} onOpenSettingsAt={onOpenSettingsAt} />
   </DaemonProvider>));
-  const fill = () => host.querySelector("span[style]");
+  const fill = () => host.querySelector(CAPSULE);
   expect(fill()).toBeNull();
   const reading = quota("claude", "claude-work", "max");
   act(() => store.setState({ accountQuotas: [reading] }));
@@ -639,7 +649,7 @@ it("keeps the mini bar of a session whose agent was removed", () => {
   act(() => root.render(<DaemonProvider value={{ store, request } as unknown as Daemon}>
     <RailQuotaEntry selectedSessionId={session.id} onOpenSettingsAt={onOpenSettingsAt} />
   </DaemonProvider>));
-  const fill = () => host.querySelector("span[style]");
+  const fill = () => host.querySelector(CAPSULE);
   expect(fill()).not.toBeNull();
   act(() => store.setState({ settings: { ...store.getState().settings, added_agents: ["codex"] } }));
   expect(fill()).not.toBeNull();

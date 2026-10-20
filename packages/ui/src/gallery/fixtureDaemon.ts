@@ -5,7 +5,9 @@ import { daemonMessage } from "../daemonMessage";
 import { errorPresentation, noticeErrorPresentation } from "../errorPresentation";
 import { errorText } from "../errorText";
 import { currentLanguage } from "../i18n/language";
-import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, type AccountLogin, type Agent, type ConsoleSessionColour, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type Project, type RequestBody, type Session, type SessionRecordsPresence, type ShellTerminal } from "../protocol";
+import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, type Account, type AccountLogin, type Agent, type ConsoleSessionColour, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type Project, type QuotaWindow, type RequestBody, type Session, type SessionRecordsPresence, type ShellTerminal } from "../protocol";
+import { accountQuotaOf } from "../quota/accountQuotaOf";
+import { exhaustedQuotaWindow } from "../quota/quotaFormat";
 import { createStateStore, type Daemon, type ToastRequest } from "../store";
 import type { Scenario } from "./scenario";
 import { terminalFixtureUrl } from "./fakeTerminal";
@@ -122,6 +124,16 @@ function entriesUnder(files: FixtureFiles, dir: string): BrowseEntry[] {
     .sort((a, b) => (a.name < b.name ? -1 : 1));
 }
 
+/** The window's name in a quota refusal; mirrors the daemon's English `window_name`. */
+function quotaWindowName(window: QuotaWindow): string {
+  if (window.label) return window.label;
+  if (window.kind === "session") return "5-hour";
+  if (window.kind !== "credit_period") return "Weekly";
+  const periodDays = (window.window_minutes ?? 0) / (24 * 60);
+  if (periodDays >= 6 && periodDays <= 8) return "Weekly";
+  return periodDays >= 28 && periodDays <= 31 ? "Monthly" : "Credits";
+}
+
 /**
  * A `Daemon` with no connection behind it, for the gallery: the store holds the scenario's state as
  * it is, requests are answered from the scenario (`list_dir`, `list_pages`, the browse requests) or
@@ -180,6 +192,22 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
       ? project ? inheritedAccount(owner, project, agent, current.settings.accounts) : consoleAccount(owner, agent, current.settings.accounts)
       : account;
     return current.settings.accounts.find((candidate) => candidate.id === accountId && candidate.agent === agent);
+  };
+  /** Refuses a session on, or a switch to, an account whose last reading in the store has a session, weekly or
+   * credit-period window used up (100% or more) that has not reset, as the daemon does with the reading it holds:
+   * a model's weekly window never counts, an account not read yet is never refused, and of several used-up
+   * windows the one that resets last (one with no reset time after all) is named, in English. */
+  const refuseIfQuotaExhausted = (agent: Agent, account: Account | undefined) => {
+    const current = store.getState();
+    const blocking = exhaustedQuotaWindow(accountQuotaOf(current.accountQuotas, agent, account?.id ?? null), Date.now());
+    if (!blocking) return;
+    const windowName = quotaWindowName(blocking);
+    const name = account?.name ?? current.settings.default_account_names?.[agent] ?? DEFAULT_ACCOUNT_NAME;
+    return fail({
+      code: "account_quota_exhausted",
+      params: { agent: AGENT_LABEL[agent], account: name, window: windowName, ...(blocking.resets_at != null && { resets_at: String(blocking.resets_at) }) },
+      message: `${name} has used up its ${AGENT_LABEL[agent]} quota (${windowName})`,
+    });
   };
   /** A console session's colour as the daemon assigns one: the first of the palette that no session of
    * the console that is not archived wears (an interrupted one still holds its colour), else the first. */
@@ -292,6 +320,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           const account = body.account === null ? undefined : current.settings.accounts.find((account) => account.id === body.account && account.agent === session.agent);
           if (body.account !== null && !account) return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });
           if ((session.account_id ?? null) === body.account) return fail({ code: "session_already_on_account", params: { session: body.session }, message: "this session is on that account already" });
+          refuseIfQuotaExhausted(session.agent, account);
           const reply = scenario.sessionAccountSwitches?.[body.session];
           if (reply === "pending") return new Promise<Event>(() => {});
           if (reply) return fail(reply);
@@ -318,6 +347,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           if (!owner) return fail({ code: "unknown_console", params: { console: session.console_id }, message: `unknown console ${session.console_id}` });
           const project = session.project_id ? current.projects.get(session.project_id) : undefined;
           const account = launchAccount(owner, project, body.agent, body.account);
+          refuseIfQuotaExhausted(body.agent, account);
           const ordinal = nextConsoleOrdinals.get(owner.id) ?? 1;
           if (!project) nextConsoleOrdinals.set(owner.id, ordinal + 1);
           // The receiving session takes the original's place; the original is archived and what it
@@ -402,6 +432,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           const agent = body.agent ?? (project ? project.default_agent ?? projectSessionAgent(owner) : owner.default_agent);
           if (!isAgentAdded(current.settings.added_agents, agent)) return fail(agentNotAdded(agent));
           const account = launchAccount(owner, project, agent, body.account);
+          refuseIfQuotaExhausted(agent, account);
           const ordinal = nextConsoleOrdinals.get(owner.id) ?? 1;
           if (!project) nextConsoleOrdinals.set(owner.id, ordinal + 1);
           const session: Session = {

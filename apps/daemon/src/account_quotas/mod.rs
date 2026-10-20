@@ -20,6 +20,9 @@
 //! that is not signed in or has no quota to report, and holds no windows, once
 //! [`MIN_REREAD_INTERVAL`] has passed since its last attempt. A missing configuration directory
 //! is not read early: only a login or the ordinary interval brings it back.
+//!
+//! The module also decides whether a reading means the account is used up
+//! ([`AccountQuotas::exhausted`]).
 
 mod probe;
 
@@ -33,7 +36,7 @@ use tokio::task::JoinSet;
 
 use crate::protocol::{
     now_millis, quota_unavailable_code as code, AccountQuota, Agent, Availability, Event,
-    QuotaUnavailable,
+    QuotaUnavailable, QuotaWindow, QuotaWindowKind,
 };
 use crate::state::AppState;
 pub(crate) use probe::CODEX_APP_SERVER_ARGS;
@@ -150,6 +153,19 @@ impl AccountQuotas {
     /// Every reading held, by agent and then account with the default account first.
     pub fn list(&self) -> Vec<AccountQuota> {
         self.lock().list()
+    }
+
+    /// Whether the held reading of the account says its plan quota is used up at `now`; see
+    /// [`exhausted_in`]. Reads what is held and never asks the CLI, so an account not read yet
+    /// is usable.
+    pub fn exhausted(
+        &self,
+        agent: Agent,
+        account: Option<&str>,
+        config_dir: Option<&str>,
+        now: i64,
+    ) -> Option<Exhausted> {
+        exhausted_in(&self.lock().entries, agent, account, config_dir, now)
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
@@ -272,10 +288,21 @@ impl AccountQuotas {
     /// Puts `quota` in as a reading of its own account, as a finished probe would.
     #[cfg(test)]
     pub fn hold_for_test(&self, quota: &AccountQuota) {
+        self.hold_under_for_test(quota, None);
+    }
+
+    /// [`AccountQuotas::hold_for_test`] for an account read under the directory `config_dir`.
+    #[cfg(test)]
+    pub fn hold_in_dir_for_test(&self, quota: &AccountQuota, config_dir: &str) {
+        self.hold_under_for_test(quota, Some(config_dir));
+    }
+
+    #[cfg(test)]
+    fn hold_under_for_test(&self, quota: &AccountQuota, config_dir: Option<&str>) {
         let key = Key {
             agent: quota.agent,
             account: quota.account.clone(),
-            config_dir: None,
+            config_dir: config_dir.map(str::to_string),
         };
         self.lock().entries.insert(
             key,
@@ -354,6 +381,79 @@ impl AccountQuotas {
             inner.entries.len() != before
         });
     }
+}
+
+/// The window that keeps an account from opening a session.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Exhausted {
+    /// The window's name in English: `5-hour`, `Weekly`, `Monthly` or `Credits`, or the window's own
+    /// label when it carries one.
+    pub window: String,
+    /// When it resets, in milliseconds since the epoch; `None` when the agent does not say.
+    pub resets_at: Option<i64>,
+}
+
+/// The window of the account's reading that keeps it from opening a session at `now`, if any: a
+/// session, weekly or credit-period window used up (100% or more) that has not reset yet or says
+/// nothing of when it does. A model's own weekly window never counts, as the account still serves
+/// the other models. A window whose reset time has passed is stale rather than exhausted. With
+/// several, the one that resets last is reported, since the account is unusable until then (one
+/// without a reset time counts as last). No reading, or one without windows, passes: an unknown
+/// quota never refuses. A reading kept over a failed re-read is judged by the windows it kept.
+/// The reading must be the account's under `config_dir`, as `Key` has it.
+fn exhausted_in(
+    entries: &HashMap<Key, Entry>,
+    agent: Agent,
+    account: Option<&str>,
+    config_dir: Option<&str>,
+    now: i64,
+) -> Option<Exhausted> {
+    let key = Key {
+        agent,
+        account: account.map(str::to_string),
+        config_dir: config_dir.map(str::to_string),
+    };
+    entries
+        .get(&key)?
+        .quota
+        .windows
+        .iter()
+        .filter(|window| {
+            window.kind != QuotaWindowKind::WeeklyModel
+                && window.used_percent >= 100.0
+                && window.resets_at.is_none_or(|at| at > now)
+        })
+        .reduce(|latest, window| {
+            let last = |window: &QuotaWindow| window.resets_at.unwrap_or(i64::MAX);
+            if last(window) > last(latest) {
+                window
+            } else {
+                latest
+            }
+        })
+        .map(|window| Exhausted {
+            window: window_name(window),
+            resets_at: window.resets_at,
+        })
+}
+
+/// What a window is called: by kind, with a credit pool named after its period (about a week,
+/// about a month, or just credits). A window that carries its own label is named by it; the windows
+/// that count today carry none, so that branch is a fallback.
+fn window_name(window: &QuotaWindow) -> String {
+    if let Some(label) = window.label.as_ref().filter(|label| !label.is_empty()) {
+        return label.clone();
+    }
+    match window.kind {
+        QuotaWindowKind::Session => "5-hour",
+        QuotaWindowKind::Weekly | QuotaWindowKind::WeeklyModel => "Weekly",
+        QuotaWindowKind::CreditPeriod => match window.window_minutes {
+            Some(minutes) if (6 * 24 * 60..=8 * 24 * 60).contains(&minutes) => "Weekly",
+            Some(minutes) if (28 * 24 * 60..=31 * 24 * 60).contains(&minutes) => "Monthly",
+            _ => "Credits",
+        },
+    }
+    .to_string()
 }
 
 /// Whether `code` is one of an account's states rather than a failure to read it.
@@ -564,7 +664,6 @@ fn unavailable_quota(key: &Key, unavailable: QuotaUnavailable) -> AccountQuota {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::{QuotaWindow, QuotaWindowKind};
 
     #[test]
     fn an_account_made_due_is_claimed_at_once_whatever_the_clock_says() {
@@ -1110,5 +1209,156 @@ mod tests {
             .list()
             .iter()
             .all(|quota| quota.unavailable.is_none()));
+    }
+
+    const NOW: i64 = 1_000_000;
+
+    fn window(kind: QuotaWindowKind, used_percent: f64, resets_at: Option<i64>) -> QuotaWindow {
+        QuotaWindow {
+            kind,
+            label: None,
+            used_percent,
+            resets_at,
+            window_minutes: None,
+        }
+    }
+
+    /// The readings of one Codex account `a` read under `/accounts/a`, holding `windows`.
+    fn readings(windows: Vec<QuotaWindow>) -> HashMap<Key, Entry> {
+        let key = key(Agent::Codex, Some("a"));
+        let mut quota = quota_of(&key, false);
+        quota.windows = windows;
+        HashMap::from([(
+            key,
+            Entry {
+                quota,
+                attempted: Instant::now(),
+                failures: 0,
+                due: false,
+            },
+        )])
+    }
+
+    fn exhausted_of(windows: Vec<QuotaWindow>) -> Option<Exhausted> {
+        exhausted_in(
+            &readings(windows),
+            Agent::Codex,
+            Some("a"),
+            Some("/accounts/a"),
+            NOW,
+        )
+    }
+
+    #[test]
+    fn a_used_up_window_that_has_not_reset_keeps_the_account_from_opening_a_session() {
+        let blocked = exhausted_of(vec![window(QuotaWindowKind::Session, 100.0, Some(NOW + 1))]);
+        assert_eq!(
+            blocked,
+            Some(Exhausted {
+                window: "5-hour".to_string(),
+                resets_at: Some(NOW + 1)
+            })
+        );
+        assert!(
+            exhausted_of(vec![window(QuotaWindowKind::Weekly, 130.0, Some(NOW + 1))]).is_some()
+        );
+        assert!(
+            exhausted_of(vec![window(QuotaWindowKind::Session, 99.9, Some(NOW + 1))]).is_none()
+        );
+    }
+
+    #[test]
+    fn a_window_that_has_reset_is_stale_and_one_with_no_reset_time_still_counts() {
+        assert!(exhausted_of(vec![window(QuotaWindowKind::Session, 100.0, Some(NOW))]).is_none());
+        assert!(
+            exhausted_of(vec![window(QuotaWindowKind::Session, 100.0, Some(NOW - 1))]).is_none()
+        );
+        let blocked = exhausted_of(vec![window(QuotaWindowKind::Weekly, 100.0, None)]);
+        assert_eq!(blocked.map(|b| b.resets_at), Some(None));
+    }
+
+    #[test]
+    fn a_model_window_never_counts_and_a_credit_pool_does() {
+        let model = QuotaWindow {
+            label: Some("Fable".to_string()),
+            ..window(QuotaWindowKind::WeeklyModel, 100.0, Some(NOW + 1))
+        };
+        assert!(exhausted_of(vec![model]).is_none());
+        let pool = QuotaWindow {
+            window_minutes: Some(30 * 24 * 60),
+            ..window(QuotaWindowKind::CreditPeriod, 100.0, Some(NOW + 1))
+        };
+        assert!(exhausted_of(vec![pool]).is_some());
+    }
+
+    #[test]
+    fn the_window_that_resets_last_is_the_one_reported() {
+        let blocked = exhausted_of(vec![
+            window(QuotaWindowKind::Session, 100.0, Some(NOW + 10)),
+            window(QuotaWindowKind::Weekly, 100.0, Some(NOW + 20)),
+            window(QuotaWindowKind::CreditPeriod, 50.0, Some(NOW + 30)),
+        ]);
+        assert_eq!(
+            blocked,
+            Some(Exhausted {
+                window: "Weekly".to_string(),
+                resets_at: Some(NOW + 20)
+            })
+        );
+        // No reset time counts as last, whatever the order.
+        for windows in [
+            vec![
+                window(QuotaWindowKind::Session, 100.0, None),
+                window(QuotaWindowKind::Weekly, 100.0, Some(NOW + 20)),
+            ],
+            vec![
+                window(QuotaWindowKind::Weekly, 100.0, Some(NOW + 20)),
+                window(QuotaWindowKind::Session, 100.0, None),
+            ],
+        ] {
+            assert_eq!(
+                exhausted_of(windows),
+                Some(Exhausted {
+                    window: "5-hour".to_string(),
+                    resets_at: None
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn an_unknown_quota_or_one_of_another_directory_passes() {
+        let held = readings(vec![window(QuotaWindowKind::Session, 100.0, None)]);
+        let asked = |agent, account, dir| exhausted_in(&held, agent, account, dir, NOW);
+        assert!(asked(Agent::Codex, Some("a"), Some("/accounts/a")).is_some());
+        // No reading for the account, and one taken under another directory.
+        assert!(asked(Agent::Codex, Some("b"), Some("/accounts/b")).is_none());
+        assert!(asked(Agent::Codex, Some("a"), Some("/accounts/other")).is_none());
+        // A reading without windows.
+        assert!(exhausted_of(Vec::new()).is_none());
+    }
+
+    #[test]
+    fn windows_kept_over_a_failed_re_read_still_count() {
+        let mut held = readings(vec![window(QuotaWindowKind::Session, 100.0, Some(NOW + 1))]);
+        for entry in held.values_mut() {
+            entry.quota.unavailable = Some(QuotaUnavailable::new(code::TIMED_OUT, "no", &[]));
+        }
+        let asked = exhausted_in(&held, Agent::Codex, Some("a"), Some("/accounts/a"), NOW);
+        assert!(asked.is_some());
+    }
+
+    #[test]
+    fn credit_pools_are_named_after_their_period() {
+        let named = |minutes| {
+            window_name(&QuotaWindow {
+                window_minutes: minutes,
+                ..window(QuotaWindowKind::CreditPeriod, 100.0, None)
+            })
+        };
+        assert_eq!(named(Some(7 * 24 * 60)), "Weekly");
+        assert_eq!(named(Some(30 * 24 * 60)), "Monthly");
+        assert_eq!(named(Some(10 * 24 * 60)), "Credits");
+        assert_eq!(named(None), "Credits");
     }
 }

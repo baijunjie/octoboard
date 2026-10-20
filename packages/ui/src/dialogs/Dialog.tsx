@@ -1,5 +1,5 @@
 import { AlertDialog, Modal } from "@heroui/react";
-import React, { useEffect, useId, useRef, useState } from "react";
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "../components/Button";
 import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
@@ -71,6 +71,40 @@ export function useRefocusIfLost(target: () => HTMLElement | null | undefined, d
   useEffect(() => {
     if (document.activeElement === document.body) target()?.focus();
   }, deps);
+}
+
+/** Moves keyboard focus from `button` to `fallback` when `disabled` turns true while the button holds it: a
+ * natively disabled button cannot keep focus, and the dialog's Escape and Tab containment hang off focus
+ * being inside it. WebKit blurs the button to `<body>` as it becomes disabled, before this runs, so the
+ * button counts as having held focus when `<body>` has it and the button had it last. A layout effect, so
+ * focus has moved before the change is painted. */
+export function useFocusLeavingWhenDisabled(
+  button: React.RefObject<HTMLElement | null>,
+  disabled: boolean,
+  fallback: React.RefObject<HTMLElement | null>,
+): void {
+  const held = useRef(false);
+  useLayoutEffect(() => {
+    held.current = document.activeElement === button.current;
+    const track = (event: FocusEvent) => {
+      if (event.target !== button.current) return;
+      // A blur that arrives once the button is disabled is the browser's doing, not the user moving on.
+      if (event.type === "focusin") held.current = true;
+      else if (!(event.target as HTMLButtonElement).disabled) held.current = false;
+    };
+    document.addEventListener("focusin", track);
+    document.addEventListener("focusout", track);
+    return () => {
+      document.removeEventListener("focusin", track);
+      document.removeEventListener("focusout", track);
+    };
+  }, []);
+  useLayoutEffect(() => {
+    if (!disabled) return;
+    const active = document.activeElement;
+    if (button.current && (active === button.current || ((active === document.body || !active) && held.current))) fallback.current?.focus();
+    held.current = false;
+  }, [disabled]);
 }
 
 /** Holds back what a dialog's own checks found until the user has tried to submit, so a field is
@@ -169,10 +203,11 @@ let openDialogs = 0;
  * focusable and announces itself. Cancel is disabled instead, which costs nothing because focus
  * cannot be on it at the moment the request starts. `submitDisabled` disables the submit button
  * alone, before any action, Cancel stays pressable, and since it is the form's only submit control
- * this also suppresses implicit submission from Enter in a text field. A form dialog puts
- * `autoFocus` on its first text field, so Enter submits at once; one with no text field passes
- * `autoFocusSubmit` to open on the submit button instead (a dialog with its own `footer` puts
- * `autoFocus` on its own button).
+ * this also suppresses implicit submission from Enter in a text field. Focus is never left on a button that
+ * has become disabled: it moves to Cancel. A form dialog puts `autoFocus` on its first text field, so Enter
+ * submits at once; one with no text field passes `autoFocusSubmit` to open on the submit button instead, or on
+ * Cancel when there is nothing to submit yet (a dialog with its own `footer` puts `autoFocus` on its own
+ * button).
  */
 export function Dialog({
   title,
@@ -241,6 +276,9 @@ export function Dialog({
   }, []);
 
   const markerRef = useRef<HTMLSpanElement>(null);
+  const submitRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  useFocusLeavingWhenDisabled(submitRef, submitDisabled === true, cancelRef);
   useRefocusIfLost(() => dialogAround(markerRef), [resetKey]);
   useToastClearance(markerRef, footer !== null);
   useHeightMotion(markerRef);
@@ -283,10 +321,10 @@ export function Dialog({
         <Frame.Footer className="flex-wrap">
           {footer ?? (
             <>
-              <Button type="button" variant="secondary" onPress={onClose} isDisabled={busy}>
+              <Button ref={cancelRef} type="button" variant="secondary" onPress={onClose} isDisabled={busy} autoFocus={autoFocusSubmit && submitDisabled}>
                 {t("common.cancel")}
               </Button>
-              <Button type="submit" isPending={busy} isDisabled={submitDisabled} autoFocus={autoFocusSubmit}>
+              <Button ref={submitRef} type="submit" isPending={busy} isDisabled={submitDisabled} autoFocus={autoFocusSubmit && !submitDisabled}>
                 {submitLabel}
               </Button>
             </>

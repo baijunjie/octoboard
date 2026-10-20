@@ -68,14 +68,14 @@ it("opens the dialog on a plain press and quick-creates on a press while held", 
   expect(onQuickCreate).not.toHaveBeenCalled();
   key("keydown", true);
   click();
-  expect(onQuickCreate).toHaveBeenCalledWith(request);
+  expect(onQuickCreate).toHaveBeenCalledWith(request, "New session with defaults");
   expect(onOpen).toHaveBeenCalledTimes(1);
 });
 
 it("quick-creates on a press carrying the modifier even when the key state was missed", () => {
   const { click, onOpen, onQuickCreate } = mount();
   click(MODIFIER);
-  expect(onQuickCreate).toHaveBeenCalledWith(request);
+  expect(onQuickCreate).toHaveBeenCalledWith(request, "New session with defaults");
   expect(onOpen).not.toHaveBeenCalled();
 });
 
@@ -87,4 +87,29 @@ it("is a disabled \"+\" that opens nothing, even on a modified press, with no ag
   click(MODIFIER);
   expect(onOpen).not.toHaveBeenCalled();
   expect(onQuickCreate).not.toHaveBeenCalled();
+});
+
+const available = new Map(AGENT_OPTIONS.map(({ value }) => [value, { agent: value, availability: "available" as const }]));
+const spent = AGENT_OPTIONS.map(({ value }) => ({
+  agent: value, account: null, fetched_at: 0, plan: null, unavailable: null,
+  windows: [{ kind: "weekly" as const, label: null, used_percent: 100, resets_at: null, window_minutes: null }],
+}));
+
+it("keeps the quick form focusable, named for the action and described by why it cannot create, when every account is used up", () => {
+  const { button, key, click, onOpen, onQuickCreate } = mount({ agentAvailability: available, accountQuotas: spent });
+  button().focus();
+  key("keydown", true);
+  expect(document.activeElement).toBe(button());
+  expect(button().disabled).toBe(false);
+  expect(button().getAttribute("aria-disabled")).toBe("true");
+  expect(button().getAttribute("aria-label")).toBe("New session with defaults");
+  const reason = document.getElementById(button().getAttribute("aria-describedby")!);
+  expect(reason?.textContent).toBe("Default agent's quota used up");
+  // The press goes to the quick create, which refuses with the reason; it does not open a session.
+  click();
+  expect(onQuickCreate).toHaveBeenCalledWith(request, "New session with defaults");
+  expect(onOpen).not.toHaveBeenCalled();
+  key("keyup", false);
+  expect(button().getAttribute("aria-disabled")).toBeNull();
+  expect(document.activeElement).toBe(button());
 });

@@ -1,11 +1,12 @@
 import { reportError } from "../reportError";
-import { Dropdown, Label, Separator } from "@heroui/react";
+import { Description, Dropdown, Label, Separator } from "@heroui/react";
 import { EllipsisVertical, LoaderCircle, RefreshCw, TriangleAlert, type LucideIcon } from "lucide-react";
 import { MenuContext, useSlottedContext } from "react-aria-components";
 import React, { useEffect, useId, useRef, useState } from "react";
 
 import { IS_MAC } from "../useWindowShortcut";
 import { isolate } from "../i18n/isolate";
+import { ReasonText, reasonText, type Reason } from "./ReasonText";
 import { StatusAnnouncer } from "./StatusAnnouncer";
 import { useT } from "../i18n/react";
 import { FadeOverflow } from "./FadeOverflow";
@@ -56,6 +57,14 @@ export interface ActionMenuItem {
   ariaLabel?: string;
   /** Drawn after the label, at the item's end edge (a status marker). */
   end?: React.ReactNode;
+  /** Why the item cannot be chosen: it is disabled and the reason is drawn under the label in place of
+   * `end`. The accessible name is the label (`ariaLabel` if set) followed by the reason, unless the
+   * item has a `description`, which then carries the reason in full and leaves the name the label. */
+  reason?: Reason;
+  /** A note that assistive technology reads as the item's description and that is not drawn (what
+   * remains of an account's quota, which the usage bar in `icon` shows only to the eye; for an item
+   * with a `reason`, the reason in full). */
+  description?: string;
   /** Makes the item one of a single-selection group (consecutive items that set it): HeroUI marks
    * the chosen one (`true`) with its check and announces it as checked. */
   selected?: boolean;
@@ -155,6 +164,7 @@ function PanelBody({ entry }: { entry: ActionMenuPanel }): React.ReactElement {
 }
 
 function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElement {
+  const t = useT();
   const prefix = useId();
   const itemId = (index: number) => `${prefix}:${index}`;
   // Each menu owns its keys, including actions bubbling from a deeper submenu.
@@ -164,31 +174,49 @@ function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElem
     if (entry && isLeaf(entry)) entry.onClick();
   };
 
+  // The disabled style fades the whole item, which would take the reason below the contrast the text
+  // needs; so an item with a reason stays at full opacity and only its icon and label fade.
   const renderItem = (entry: ActionMenuItem, index: number) => (
     <Dropdown.Item
       key={index}
       id={itemId(index)}
       textValue={entry.label}
       data-marquee-scope
-      aria-label={entry.ariaLabel}
+      aria-label={entry.reason && !entry.description ? t("menu.nameWithReason", { name: isolate(entry.ariaLabel ?? entry.label), reason: reasonText(entry.reason) }) : entry.ariaLabel}
+      className={entry.reason ? "data-[disabled=true]:opacity-100" : undefined}
       variant={entry.destructive ? "danger" : "default"}
-      isDisabled={entry.disabled}
+      isDisabled={entry.disabled || Boolean(entry.reason)}
       shouldCloseOnSelect={entry.closeOnSelect}
     >
-      <ItemIcon icon={entry.icon} destructive={entry.destructive} className={entry.iconClassName} />
+      {entry.reason ? (
+        <span aria-hidden="true" className="flex shrink-0 opacity-(--disabled-opacity)">
+          <ItemIcon icon={entry.icon} destructive={entry.destructive} className={entry.iconClassName} />
+        </span>
+      ) : (
+        <ItemIcon icon={entry.icon} destructive={entry.destructive} className={entry.iconClassName} />
+      )}
       {/* A label is often a name the user typed, so it reads in its own direction; `content` sets
           its own. */}
-      <Label className="min-w-0 flex-1 text-clip">
-        {entry.content ?? <FadeOverflow as="span" className="block" dir="auto" titleWhenClipped={entry.label}>{entry.label}</FadeOverflow>}
-      </Label>
-      {entry.end}
+      <span className="flex min-w-0 flex-1 flex-col">
+        <Label className={entry.reason ? "min-w-0 text-clip opacity-(--disabled-opacity)" : "min-w-0 text-clip"}>
+          {entry.content ?? <FadeOverflow as="span" className="block" dir="auto" titleWhenClipped={entry.label}>{entry.label}</FadeOverflow>}
+        </Label>
+        {entry.description && <Description className="sr-only">{entry.description}</Description>}
+        {entry.reason && <span aria-hidden="true" className="text-xs text-app-muted"><ReasonText reason={entry.reason} /></span>}
+      </span>
+      {!entry.reason && entry.end}
       {entry.selected !== undefined && <Dropdown.ItemIndicator />}
     </Dropdown.Item>
   );
 
+  // A disabled item stays in the arrow-key walk (the default skips it), so the reason under it (a quota
+  // used up) can be reached and read from the keyboard while the item still refuses to run. react-stately
+  // reads `disabledBehavior` from the menu's tree state and from a single-selection section's own
+  // selection state, but neither one's props declare it, hence the casts.
+  const keepDisabled = { disabledBehavior: "selection" };
+  const nodes: React.ReactNode[] = [];
   // A run of consecutive `selected` items is a section of its own with single selection, so the
   // menu's other items stay plain menu items rather than becoming radios.
-  const nodes: React.ReactNode[] = [];
   for (let index = 0; index < entries.length; index++) {
     const entry = entries[index];
     if (isChoice(entry)) {
@@ -201,6 +229,7 @@ function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElem
           key={group[0]}
           selectionMode="single"
           selectedKeys={group.filter((i) => (entries[i] as ActionMenuItem).selected).map(itemId)}
+          {...(keepDisabled as React.ComponentProps<typeof Dropdown.Section>)}
         >
           {group.map((i) => renderItem(entries[i] as ActionMenuItem, i))}
         </Dropdown.Section>,
@@ -230,7 +259,11 @@ function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElem
       nodes.push(renderItem(entry, index));
     }
   }
-  return <Dropdown.Menu onAction={run}>{nodes}</Dropdown.Menu>;
+  return (
+    <Dropdown.Menu onAction={run} {...(keepDisabled as React.ComponentProps<typeof Dropdown.Menu>)}>
+      {nodes}
+    </Dropdown.Menu>
+  );
 }
 
 function LoadedMenuItems({ load }: { load: () => Promise<ActionMenuEntry[]> }): React.ReactElement {
@@ -260,6 +293,12 @@ function LoadedMenuItems({ load }: { load: () => Promise<ActionMenuEntry[]> }): 
   </>;
 }
 
+/** The entries of a menu given as a function, read when the menu opens (the popover mounts its content
+ * then), so that what they judge against the clock is the time they are looked at. */
+function ResolvedMenuItems({ source }: { source: ActionMenuEntry[] | (() => ActionMenuEntry[]) }): React.ReactElement {
+  return <MenuItems entries={typeof source === "function" ? source() : source} />;
+}
+
 export function ActionMenu({
   label,
   items,
@@ -271,7 +310,8 @@ export function ActionMenu({
   onContextOpen,
 }: {
   label: string;
-  items: ActionMenuEntry[];
+  /** The entries, or a function that makes them when the menu opens. */
+  items: ActionMenuEntry[] | (() => ActionMenuEntry[]);
   /** What the trigger shows; a vertical ellipsis by default. */
   trigger?: React.ReactNode;
   className?: string;
@@ -432,7 +472,7 @@ export function ActionMenu({
             departure from the ARIA rule that a dialog has a name: it only wraps the named menu, so a
             name would just repeat it. The empty value wins over react-aria's and refers to nothing. */}
         <Dropdown.Popover aria-labelledby="" className="min-w-48 max-w-72" getTargetRect={pointerAt ? () => new DOMRect(pointerAt.x, pointerAt.y, 0, 0) : undefined}>
-          <MenuItems entries={items} />
+          <ResolvedMenuItems source={items} />
         </Dropdown.Popover>
       </Dropdown>
     </div>

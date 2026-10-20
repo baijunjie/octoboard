@@ -1005,6 +1005,17 @@ impl Store {
         )
     }
 
+    /// What an account is called: the stored account's name (its id when it is gone), or for
+    /// `None`, the default account's name.
+    pub fn account_display_name(&self, agent: Agent, account_id: Option<&str>) -> Result<String> {
+        match account_id {
+            Some(id) => Ok(self
+                .get_account(id)?
+                .map_or_else(|| id.to_string(), |account| account.name)),
+            None => self.default_account_name(agent),
+        }
+    }
+
     /// Names the agent's default account, or clears the name with `None`. The read and the write
     /// are one step under the store's lock. Whether the stored names changed.
     pub fn set_default_account_name(&self, agent: Agent, name: Option<&str>) -> Result<bool> {

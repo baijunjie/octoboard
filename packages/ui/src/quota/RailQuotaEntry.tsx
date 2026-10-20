@@ -1,7 +1,7 @@
 import { Popover, Tabs } from "@heroui/react";
 import { Bot, Gauge, KeyRound } from "lucide-react";
-import React, { useEffect, useId, useRef, useState } from "react";
-import { useFocusVisible, type PressEvent } from "react-aria";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
+import { type PressEvent } from "react-aria";
 
 import { Button } from "../components/Button";
 import { accountsByAgent, defaultAccountName, noAgentState, pickableAgents } from "../agents";
@@ -13,17 +13,16 @@ import { EmptyPanel } from "../components/EmptyPanel";
 import { FadedScroller, useFadeRegion } from "../components/scrollFade";
 import { useStableHandler } from "../components/useLatest";
 import { Message, useT } from "../i18n/react";
-import type { Account, Agent } from "../protocol";
+import type { Account, Agent, QuotaWindow } from "../protocol";
 import type { SettingsSectionId } from "../settings/SettingsDialog";
 import { useDaemon, useDaemonStore } from "../store";
 import { AccountNameLine, AccountQuotaSummary } from "./AccountQuotaSummary";
 import { MODAL_OPEN } from "../layout/useRegionCycle";
 import { useAccountQuota } from "./useAccountQuota";
-import { remainingPercent } from "./quotaFormat";
-import { accountQuotaLabel, sessionQuotaWindowOf } from "./sessionQuota";
+import { remainingPercent, type QuotaBar } from "./quotaFormat";
+import { accountQuotaLabel, sessionQuotaBarOf } from "./sessionQuota";
 
-/** How long the pointer rests on the button before the panel floats in. It is shorter than the
- * tooltip's wait, so the panel is what a resting pointer meets and the tooltip is held back. */
+/** How long the pointer rests on the button before the panel floats in. */
 const HOVER_OPEN_DELAY_MS = 250;
 /** How long the pointer may be off both the button and the panel before the panel goes, so that
  * crossing the gap between them does not close it. */
@@ -32,6 +31,50 @@ const HOVER_CLOSE_DELAY_MS = 150;
 /** Whether `target` is inside either of `elements`. */
 function insideAny(target: EventTarget | null, ...elements: Array<Element | null>): boolean {
   return target instanceof Node && elements.some((element) => element?.contains(target));
+}
+
+/** The rail button's compact indicator under its gauge: an outlined capsule 18 × 5 px filled by what
+ * remains of the main window. With a weekly window too, the main capsule is 4 px tall and one 3 px tall
+ * sits a pixel beneath it for that; the gauge rises 2 px further and the pair's bottom sits a pixel
+ * lower, so the group stays near the button's middle. Decorative; the button's name states the numbers.
+ * They draw in the button's text colour, so they suit a light and a dark rail. */
+function RailQuotaBars({ bar }: { bar: QuotaBar }): React.ReactElement {
+  if (!bar.thin) {
+    return (
+      <span aria-hidden="true" className="absolute inset-x-[7px] bottom-1.5">
+        <QuotaCapsule window={bar.main} height={5} />
+      </span>
+    );
+  }
+  return (
+    <span aria-hidden="true" className="absolute inset-x-[7px] bottom-[5px] flex flex-col gap-px">
+      <QuotaCapsule window={bar.main} height={4} />
+      <QuotaCapsule window={bar.thin} height={3} />
+    </span>
+  );
+}
+
+/** The width every capsule spans, in pixels: the 32 px button less 7 on each side. Centred in its
+ * row, so it stays centred where the button is wider. */
+const CAPSULE_WIDTH = 18;
+
+/** One outlined capsule, `height` pixels tall, with fully round ends, filling from the reading
+ * direction's start. It is drawn as a vector, a square-ended fill clipped to the capsule and the
+ * outline stroked over it: an HTML border beside a filled box leaves a pale antialiased seam between
+ * them wherever the button sits at a fractional offset, as it does while scaled down on a press. */
+function QuotaCapsule({ window, height }: { window: QuotaWindow; height: number }): React.ReactElement {
+  const radius = height / 2;
+  const clipId = useId();
+  const fill = (CAPSULE_WIDTH * remainingPercent(window)) / 100;
+  return (
+    <svg data-slot="quota-capsule" viewBox={`0 0 ${CAPSULE_WIDTH} ${height}`} className="mx-auto my-0 block rtl:-scale-x-100" style={{ width: CAPSULE_WIDTH, height }}>
+      <clipPath id={clipId}>
+        <rect width={CAPSULE_WIDTH} height={height} rx={radius} />
+      </clipPath>
+      {fill > 0 && <rect width={fill} height={height} clipPath={`url(#${clipId})`} fill="currentColor" />}
+      <rect x={0.5} y={0.5} width={CAPSULE_WIDTH - 1} height={height - 1} rx={radius - 0.5} fill="none" stroke="currentColor" />
+    </svg>
+  );
 }
 
 /** The rail's quota button and the floating panel it anchors, which lists the accounts of each
@@ -52,41 +95,34 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
   const t = useT();
   const { request } = useDaemon();
   const session = useDaemonStore((s) => s.sessions.get(selectedSessionId ?? ""));
-  const window = useDaemonStore((s) => sessionQuotaWindowOf(session, {
-    accounts: s.settings.accounts, agentAvailability: s.agentAvailability, accountQuotas: s.accountQuotas,
-  }));
-  const account = useDaemonStore((s) => s.settings.accounts.find((account) => account.id === session?.account_id));
+  const accounts = useDaemonStore((s) => s.settings.accounts);
+  const agentAvailability = useDaemonStore((s) => s.agentAvailability);
+  const accountQuotas = useDaemonStore((s) => s.accountQuotas);
+  // Memoized rather than computed in a store selector, since its result is a new object on each call.
+  const bar = useMemo(() => sessionQuotaBarOf(session, { accounts, agentAvailability, accountQuotas }), [session, accounts, agentAvailability, accountQuotas]);
+  const account = accounts.find((account) => account.id === session?.account_id);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const [hovered, setHovered] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [keyboardPinned, setKeyboardPinned] = useState(false);
-  // Set when the panel closes over a button the pointer or focus is on, and cleared when they leave,
-  // so that the tooltip does not pop up on a button the panel has just closed over.
-  const [justClosed, setJustClosed] = useState(false);
-  const [onButton, setOnButton] = useState(false);
-  const { isFocusVisible } = useFocusVisible();
   const button = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const panelId = useId();
   const openTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const closeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const label = session && window ? accountQuotaLabel(t, session.agent, account?.name, window, defaultNames) : t("rail.quota");
+  const label = session && bar ? accountQuotaLabel(t, session.agent, account?.name, bar, defaultNames) : t("rail.quota");
 
   const clearTimers = () => {
     clearTimeout(openTimer.current);
     clearTimeout(closeTimer.current);
   };
   // Stable, since the document listeners below are subscribed once per opening.
-  const close = useStableHandler((holdTooltip = true) => {
+  const close = useStableHandler(() => {
     clearTimers();
     setHovered(false);
     setPinned(false);
     setKeyboardPinned(false);
-    // With `holdTooltip`, only where the tooltip would reopen at once: the pointer is on the
-    // button, or focus is on it or about to be returned to it from the panel (a keyboard pin).
-    const focus = document.activeElement;
-    if (holdTooltip && (onButton || focus === button.current || (keyboardPinned && insideAny(focus, panel.current)))) setJustClosed(true);
   });
   const open = hovered || pinned;
   useEffect(() => clearTimers, []);
@@ -101,10 +137,7 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
     if (!open) return;
     const onPointerDown = (event: PointerEvent) => {
       if (insideAny(event.target, button.current, panel.current)) return;
-      // The press moves focus to what it lands on, so none comes back to the button to hold the
-      // tooltip for. A target that takes no focus on a press (`preventFocusOnPress`) gets focus
-      // returned to the button under pointer modality, where its tooltip does not open either.
-      close(false);
+      close();
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -132,8 +165,6 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
   }, [open]);
 
   const onHoverChange = (isHovered: boolean) => {
-    setOnButton(isHovered);
-    if (!isHovered) setJustClosed(false);
     clearTimeout(openTimer.current);
     clearTimeout(closeTimer.current);
     if (isHovered) {
@@ -149,7 +180,6 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
       return;
     }
     clearTimers();
-    setJustClosed(false);
     setKeyboardPinned(event.pointerType === "keyboard" || event.pointerType === "virtual");
     setPinned(true);
   };
@@ -163,22 +193,13 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
         className="relative"
         buttonRef={button}
         expanded={open}
-        tooltipDisabled={open || (justClosed && (onButton || isFocusVisible))}
+        noTooltip
         popupId={panelId}
-        onBlur={() => setJustClosed(false)}
         onPress={onPress}
         onMouseHoverChange={onHoverChange}
-        tooltipPlacement="end"
       >
-        <Gauge aria-hidden="true" className={session && window ? "size-4 -translate-y-0.5" : "size-4"} />
-        {session && window && (
-          <span
-            aria-hidden="true"
-            className="absolute inset-x-[7px] bottom-1.5 h-[5px] overflow-hidden rounded-full border border-current"
-          >
-            <span className="block h-full rounded-full bg-current" style={{ width: `${remainingPercent(window)}%` }} />
-          </span>
-        )}
+        <Gauge aria-hidden="true" className={!session || !bar ? "size-4" : bar.thin ? "size-4 -translate-y-1" : "size-4 -translate-y-0.5"} />
+        {session && bar && <RailQuotaBars bar={bar} />}
       </ChromeButton>
       <Popover.Content
         isOpen={open}
@@ -213,6 +234,8 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
           }}
         >
           <QuotaPanel
+            // The tab it opens on: the agent whose quota the button shows, if any.
+            shownAgent={session && bar ? session.agent : undefined}
             // A keyboard user pins a panel that floats outside the rail's tab order, so focus is
             // brought to it; a pointer's pin leaves focus where it was.
             focusSelectedTab={keyboardPinned}
@@ -232,13 +255,14 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
 }
 
 /** The panel's contents: one tab per agent that is added and installed, in the order they were added, each listing the agent's accounts, and the
- * way into Settings' accounts section. */
-function QuotaPanel({ focusSelectedTab, onOpenAccounts, onAddAgent }: { focusSelectedTab: boolean; onOpenAccounts: () => void; onAddAgent: () => void }): React.ReactElement {
+ * way into Settings' accounts section. The panel mounts afresh on each opening, so the tab starts on `shownAgent`
+ * (the first tab if it is not listed or none is given) and the user's own choice lasts only until it closes. */
+function QuotaPanel({ shownAgent, focusSelectedTab, onOpenAccounts, onAddAgent }: { shownAgent?: Agent; focusSelectedTab: boolean; onOpenAccounts: () => void; onAddAgent: () => void }): React.ReactElement {
   const t = useT();
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   const availability = useDaemonStore((s) => s.agentAvailability);
-  const [chosen, setChosen] = useState<Agent>();
+  const [chosen, setChosen] = useState<Agent | undefined>(shownAgent);
   // The tab elements exist only after the tabs have built their collection, so focus is given as
   // the selected one mounts, once.
   const focused = useRef(false);

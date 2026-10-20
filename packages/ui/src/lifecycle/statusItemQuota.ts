@@ -5,7 +5,7 @@ import { isolate } from "../i18n/isolate";
 import type { Language } from "../i18n/languages";
 import type { StatusItemSubmenu, StatusItemSubmenuItem } from "../platform";
 import type { Account, AccountQuota, Agent, AgentAvailability, Console, Settings } from "../protocol";
-import { isNotLoggedIn, orderedQuotaWindows, primaryQuotaWindow, planLabel, quotaResetsIn, quotaWindowLabel, remainingPercent } from "../quota/quotaFormat";
+import { isNotLoggedIn, orderedQuotaWindows, planLabel, quotaResetsIn, quotaWindowLabel, remainingPercent, usageBarWindows } from "../quota/quotaFormat";
 import { formatRelativeTime } from "../relativeTime";
 import { accountQuotaLabel } from "../quota/sessionQuota";
 import { accountQuotaOf } from "../quota/accountQuotaOf";
@@ -70,14 +70,14 @@ export function buildQuotaSubmenus(t: Translate, source: StatusItemQuotaSource, 
     ]);
     const accountId = currentConsole ? consoleAccount(currentConsole, agent, source.accounts) : undefined;
     const reading = accountId !== undefined ? accountQuotaOf(source.accountQuotas, agent, accountId) : undefined;
-    const window = reading && !reading.unavailable ? primaryQuotaWindow(reading.windows) : undefined;
+    const window = reading && !reading.unavailable ? usageBarWindows(reading.windows)?.main : undefined;
     const accountName = source.accounts.find((account) => account.id === accountId)?.name;
     return [{
       title: t("statusItem.quota", { agent: AGENT_SHORT_NAME[agent] }),
       icon: agentIconKey(agent),
       ...(window ? {
         quota_remaining: remainingPercent(window),
-        quota_label: accountQuotaLabel(t, agent, accountName, window, source.defaultAccountNames),
+        quota_label: accountQuotaLabel(t, agent, accountName, { main: window }, source.defaultAccountNames),
       } : {}),
       items,
     }];

@@ -4,7 +4,7 @@ import React, { useLayoutEffect, useRef, useState } from "react";
 import { Button } from "../components/Button";
 import { InlineChip } from "../components/InlineChip";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
-import { Dialog, DialogError, useDialogAction } from "./Dialog";
+import { Dialog, DialogError, useDialogAction, useFocusLeavingWhenDisabled } from "./Dialog";
 import { dialogAround } from "./dialogElement";
 import { useTrimmedField } from "./useTrimmedField";
 
@@ -31,6 +31,8 @@ export interface ConfirmDialogProps {
   warning?: React.ReactNode;
   /** Holds Confirm, shown as pending, while what it would act on is still being found out. */
   waiting?: boolean;
+  /** Disables Confirm while what it would do is refused, with the reason shown in the dialog. */
+  confirmDisabled?: boolean;
   /** Names what the dialog currently asks about, for one reused across subjects: a change clears
    * the failure shown for the previous one. */
   resetKey?: string;
@@ -54,6 +56,7 @@ export function ConfirmDialog({
   extraControl,
   warning,
   waiting = false,
+  confirmDisabled = false,
   destructive,
   unprompted,
   resetKey,
@@ -68,7 +71,7 @@ export function ConfirmDialog({
   const [typed, setTyped] = useState("");
   const typedField = useTrimmedField(typed, setTyped);
   const word = typeToConfirm?.toLocaleUpperCase(language);
-  const confirmed = word === undefined || typed.toLocaleUpperCase(language) === word;
+  const confirmed = !confirmDisabled && (word === undefined || typed.toLocaleUpperCase(language) === word);
 
   // On mount react-aria would put focus on the dialog anyway, so this matters for each new subject. A
   // layout effect, so focus has moved before the new subject is painted and before a repeated Enter
@@ -78,9 +81,14 @@ export function ConfirmDialog({
     if (unprompted) dialogAround(confirmRef)?.focus();
   }, [resetKey]);
 
+  // Confirm held while the dialog is open (a refusal that arrives under it) hands its focus to Cancel.
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  useFocusLeavingWhenDisabled(confirmRef, !confirmed, cancelRef);
+  const opensOnConfirm = !destructive && !unprompted && word === undefined;
+
   const footer = (
     <>
-      <Button type="button" variant="secondary" onPress={onCancel} isDisabled={busy}>
+      <Button ref={cancelRef} type="button" variant="secondary" onPress={onCancel} isDisabled={busy} autoFocus={opensOnConfirm && !confirmed}>
         {cancelLabel ?? t("common.cancel")}
       </Button>
       {/* Pending rather than disabled while it runs: a natively disabled button drops the focus the
@@ -89,7 +97,7 @@ export function ConfirmDialog({
           there Enter must not be the way in, and focus stays on the dialog until the user moves it.
           A typed word takes focus for its field instead. */}
       <Button ref={confirmRef} type="submit" variant={destructive ? "danger" : "primary"} isPending={busy || waiting}
-        isDisabled={!confirmed} autoFocus={!destructive && !unprompted && word === undefined}>
+        isDisabled={!confirmed} autoFocus={opensOnConfirm && confirmed}>
         {busy && pendingLabel ? pendingLabel : (confirmLabel ?? t("common.confirm"))}
       </Button>
     </>

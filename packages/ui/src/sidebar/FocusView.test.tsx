@@ -170,7 +170,7 @@ it("with the modifier held, a project group's new-session button quick-creates i
   ), sessions);
   hold();
   act(() => container.querySelector<HTMLElement>(`button[aria-label="New session in ${isolate("Website")} with defaults"]`)?.click());
-  expect(handlers.onQuickCreateSession).toHaveBeenCalledWith({ kind: "new-session", console: main, project: web, binding: bound });
+  expect(handlers.onQuickCreateSession).toHaveBeenCalledWith({ kind: "new-session", console: main, project: web, binding: bound }, `New session in ${isolate("Website")} with defaults`);
   expect(handlers.onOpenDialog).not.toHaveBeenCalled();
   unmount();
 });
@@ -183,7 +183,7 @@ it("with the modifier held, the header's project menu quick-creates for the chos
   act(() => container.querySelector<HTMLElement>('button[aria-label="New session with defaults"]')?.click());
   const item = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find((el) => el.textContent === "Website");
   act(() => item?.click());
-  expect(handlers.onQuickCreateSession).toHaveBeenCalledWith({ kind: "new-session", console: main, project: web, binding: bound });
+  expect(handlers.onQuickCreateSession).toHaveBeenCalledWith({ kind: "new-session", console: main, project: web, binding: bound }, "New session with defaults");
   expect(handlers.onOpenDialog).not.toHaveBeenCalled();
   unmount();
 });
@@ -206,7 +206,7 @@ it("a project's focus mode header quick-creates an unbound session while the mod
   ));
   hold();
   act(() => container.querySelector<HTMLElement>('button[aria-label="New session with defaults"]')?.click());
-  expect(handlers.onQuickCreateSession).toHaveBeenCalledWith({ kind: "new-session", console: main, project: web, binding: { kind: "unbound" } });
+  expect(handlers.onQuickCreateSession).toHaveBeenCalledWith({ kind: "new-session", console: main, project: web, binding: { kind: "unbound" } }, "New session with defaults");
   unmount();
 });
 

@@ -85,9 +85,23 @@ it("updates the native icon on session selection, quota changes and cleared sele
   await settle();
   expect(last().quota_remaining).toBe(0);
   expect(last().quota_label).toContain("5-hour 0% remaining");
+  expect(last().quota_weekly_remaining).toBeUndefined();
+  act(() => store.setState({
+    accountQuotas: [{ ...reading("codex", null, 20), windows: [
+      { kind: "weekly", label: null, used_percent: 70, resets_at: null, window_minutes: null },
+      { kind: "session", label: null, used_percent: 20, resets_at: null, window_minutes: null },
+    ] }, reading("claude", "work", 35)],
+  }));
+  await settle();
+  expect(last().quota_remaining).toBe(80);
+  expect(last().quota_weekly_remaining).toBe(30);
+  expect(last().quota_label).toContain("5-hour 80% remaining, Weekly 30% remaining");
+  act(() => store.setState({ accountQuotas: [reading("codex", null, 100), reading("claude", "work", 35)] }));
+  await settle();
   select(claude.id);
   await settle();
   expect(last().quota_remaining).toBe(65);
+  expect(last().quota_weekly_remaining).toBeUndefined();
   expect(last().quota_label).toContain("Work");
   expect(last().quota_label).toContain("Weekly 65% remaining");
   act(() => store.setState({ accountQuotas: [reading("claude", "work", 50)] }));

@@ -286,7 +286,7 @@ The rail runs from under the top bar to the window's bottom (or the connection b
     `docs/product/sessions.md`);
   - **Turn on notifications**, a bell with a small dot on it, shown only in a browser whose answer to notifications is
     still undecided; pressing it asks the browser (see "Notifications" in `docs/product/settings.md`);
-  - **Account quota**, a gauge with a small bar for the selected session's account (see "The selected session's quota
+  - **Account quota**, a gauge with a small quota indicator for the selected session's account (see "The selected session's quota
     indicator" in `docs/product/account-quotas.md`), whose floating panel shows the available agents' accounts and
     their quotas (see "The account quota panel on the rail" in `docs/product/account-quotas.md`);
   - **Settings**, which opens the settings dialog.
@@ -295,8 +295,8 @@ The rail is the same at every width; below 1168 px it stays beside the sidebar's
 
 ### Pressing the chrome's controls
 
-Every control in the top bar and on the rail has a tooltip (see "Tooltips on icon-only controls" in
-`docs/product/labels-and-tooltips.md`); the rail's open toward the content panel. Pressing any of them leaves keyboard
+Every control in the top bar and on the rail has a tooltip, except the rail's Account quota button (see "Tooltips on
+icon-only controls" in `docs/product/labels-and-tooltips.md`); the rail's open toward the content panel. Pressing any of them leaves keyboard
 focus where it was, so after a mouse press the terminal keeps receiving keystrokes. Account quota pressed from the
 keyboard is the exception: it moves focus into the panel it pins (see "Opening and pinning the panel" in
 `docs/product/account-quotas.md`). Turn on notifications pressed from
@@ -597,6 +597,8 @@ parts of the window:
 - The rail's waiting count carries its badge at the hand glyph's top left rather than its top right, so the badge
   points into the content panel and the overflow pill stays clear of the window's edge, the rail being down the
   window's right edge (see "The rail" above).
+- The rail's Account quota indicator fills its capsules from the right (see "The selected session's quota indicator"
+  in `docs/product/account-quotas.md`).
 - Icons that point a direction or show a side are mirrored: Back and Forward, the sidebar toggle, whose pane is drawn
   on its own side, the breadcrumb's separators, the report panel's previous-page and next-page buttons, the file
   viewer's Previous file and Next file buttons and its wrap control, focus mode's back button, the directory browser's

@@ -9,7 +9,7 @@ import { useT } from "../i18n/react";
 import type { Account, Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessionLabel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
-import { useDaemonStore } from "../store";
+import { useDaemon, useDaemonStore } from "../store";
 import { type MenuPlacement, offersDelete, sessionMenu } from "./menus";
 import { archiveNeedsConfirmation, isUnusedSession } from "./order";
 import { RowIconButton } from "./rows";
@@ -37,6 +37,7 @@ export function SessionActions({
   placement?: MenuPlacement;
 }): React.ReactElement {
   const t = useT();
+  const { store } = useDaemon();
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   // Only what is bound to the session can ask for more than its status does, and that is all in its
   // console, so a row reads its console's sessions alone, and none when nothing is bound to it.
@@ -64,7 +65,7 @@ export function SessionActions({
           />
         </div>
       )}
-      <ActionMenu label={t("sidebar.session.actions", { title: isolate(title) })} items={sessionMenu(t, handlers, session, accounts, defaultNames, { placement, hasBoundSessions, canHandOff })} contextTargetRef={rowRef} />
+      <ActionMenu label={t("sidebar.session.actions", { title: isolate(title) })} items={() => sessionMenu(t, handlers, session, accounts, defaultNames, { placement, hasBoundSessions, canHandOff, quota: { quotas: store.getState().accountQuotas, now: Date.now() } })} contextTargetRef={rowRef} />
     </>
   );
 }

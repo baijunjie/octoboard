@@ -9,6 +9,7 @@ import { exportedDocument } from "./fixtureConfiguration";
 import { createFixtureDaemon } from "./fixtureDaemon";
 import { terminalFixtureUrl } from "./fakeTerminal";
 import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./fixtures/restore";
+import { quotaOf, quotaWindow } from "./fixtures/quotas";
 import { branchItemOf, consoleOf, gitStatusOf, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./fixtures/builders";
 
 describe("the fixture daemon's session archiving", () => {
@@ -1012,5 +1013,62 @@ describe("the fixture daemon's shell terminals", () => {
     expect(daemon.terminalUrl("running")).toBe(terminalFixtureUrl("refuse", "running"));
     expect(daemon.terminalUrl("done")).toBe(terminalFixtureUrl("exited", "done"));
     expect(daemon.terminalUrl("session")).toBe(terminalFixtureUrl("paths", "session"));
+  });
+});
+
+describe("the fixture daemon's quota gate", () => {
+  const accounts = [
+    { id: "a-spent", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" },
+    { id: "a-free", agent: "claude" as const, name: "Personal", config_dir: "/Users/dev/.claude-personal" },
+    { id: "a-unread", agent: "claude" as const, name: "Client", config_dir: "/Users/dev/.claude-client" },
+    { id: "a-model", agent: "claude" as const, name: "Model", config_dir: "/Users/dev/.claude-model" },
+    { id: "a-stale", agent: "claude" as const, name: "Stale", config_dir: "/Users/dev/.claude-stale" },
+  ];
+  const readings = [
+    quotaOf("claude", "a-spent", "pro", [quotaWindow("session", 100, 30), quotaWindow("weekly", 100, 90)]),
+    quotaOf("claude", "a-free", "pro", [quotaWindow("session", 99, 30)]),
+    quotaOf("claude", "a-model", "pro", [quotaWindow("weekly_model", 100, 30, "Fable")]),
+    quotaOf("claude", "a-stale", "pro", [quotaWindow("session", 100, -5)]),
+    quotaOf("claude", null, "max", [quotaWindow("session", 100, null)]),
+  ];
+  const daemon = (withAccounts = accounts, withReadings = readings) => createFixtureDaemon({
+    id: "quota-gate", group: "Sidebar sessions", category: "exceptional", title: "",
+    state: snapshotState({
+      consoles: [consoleOf("c", "Main")],
+      projects: [projectOf("p", "c", "Website")],
+      sessions: [sessionOf("s", "c", "p", "Work", "idle")],
+      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex", "grok"], default_clone_dir: "/Users/dev/Projects", accounts: withAccounts },
+      accountQuotas: withReadings,
+    }),
+  });
+
+  it("refuses a session on an account whose window is used up, naming the window that resets last and when", async () => {
+    const reading = readings[0].windows[1];
+    await expect(daemon().request({ type: "open_session", console_id: "c", project_id: "p", account: "a-spent" })).rejects.toMatchObject({
+      code: "account_quota_exhausted",
+      params: { agent: "Claude Code", account: "Work", window: "Weekly", resets_at: String(reading.resets_at) },
+    });
+  });
+
+  it("names the default account, and leaves out a reset time the agent did not give", async () => {
+    const refused = await daemon().request({ type: "open_session", console_id: "c", project_id: "p", account: null }).catch((error) => error);
+    expect(refused).toMatchObject({
+      code: "account_quota_exhausted",
+      params: { agent: "Claude Code", account: "Default", window: "5-hour" },
+    });
+    expect(refused.params).not.toHaveProperty("resets_at");
+  });
+
+  it("lets through an account nearly spent, one never read, one with only a model's window used up, and one whose window has reset", async () => {
+    for (const account of ["a-free", "a-unread", "a-model", "a-stale"]) {
+      await expect(daemon().request({ type: "open_session", console_id: "c", project_id: "p", account })).resolves.toMatchObject({ type: "session_opened" });
+    }
+  });
+
+  it("refuses a switch to a used-up account and a handoff onto one, with the same code", async () => {
+    await expect(daemon().request({ type: "switch_session_account", session: "s", account: "a-spent" })).rejects.toMatchObject({ code: "account_quota_exhausted" });
+    await expect(daemon().request({ type: "switch_session_account", session: "s", account: "a-free" })).resolves.toEqual({ type: "ack" });
+    const grok = [quotaOf("grok", null, "SuperGrok", [quotaWindow("credit_period", 100, 60)])];
+    await expect(daemon([], grok).request({ type: "hand_off_session", session: "s", agent: "grok" })).rejects.toMatchObject({ code: "account_quota_exhausted", params: { window: "Weekly" } });
   });
 });

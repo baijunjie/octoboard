@@ -116,6 +116,11 @@ export interface Scenario {
    * window that fits the page. For a scenario that rests on a window too short for its dialog,
    * whose body then scrolls: that cannot be left to the height of whatever browser opens it. */
   height?: number;
+  /** The shortcut modifier (⌘ / Ctrl) is held down when it opens, for a view that exists only while it is: the
+   * quick-create form of the new-session buttons. Not a copy of another scenario made to see it held: the
+   * shell's Modifier control holds it for any scenario. The page's own choice (`held` in the URL) stands over
+   * it, and like a width stays on scenarios that carry none and is dropped on picking one that does. */
+  held?: boolean;
   /** Shown in place of the app; without it the real `App` is rendered over `state`. */
   startup?: Startup;
   /** Shows the real code wrappers against the alert tones instead of the application. */

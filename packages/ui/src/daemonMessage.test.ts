@@ -6,7 +6,7 @@ import { daemonMessage } from "./daemonMessage";
 import { CATALOGS } from "./i18n/catalog";
 import { isolate } from "./i18n/isolate";
 import type { Language } from "./i18n/languages";
-import type { Console, Project, Session, ShellTerminal } from "./protocol";
+import { DEFAULT_ACCOUNT_NAME, type Console, type Project, type Session, type ShellTerminal } from "./protocol";
 
 const records = {
   consoles: new Map([["c1", { id: "c1", name: "Work" } as Console]]),
@@ -129,4 +129,27 @@ it.each([
 ])("localizes the field and limit for an overlong %s", (field, limit, english, chinese) => {
   expect(daemonMessage("en", "field_too_long", { field, limit }, "x", records)).toBe(english);
   expect(daemonMessage("zh-Hans", "field_too_long", { field, limit }, "x", records)).toBe(chinese);
+});
+
+it("words an exhausted account's quota, with the time left when the reset is known and the window in the UI's language", () => {
+  const params = { agent: "Claude Code", account: "Work", window: "5-hour" };
+  expect(daemonMessage("en", "account_quota_exhausted", params, "x", records)).toBe(
+    `${isolate("Work")} (${isolate("Claude Code")}) cannot run a session because it has used up its 5-hour quota.`,
+  );
+  const resetsAt = String(Date.now() + 2 * 60 * 60_000 + 30_000);
+  expect(daemonMessage("zh-Hans", "account_quota_exhausted", { ...params, resets_at: resetsAt }, "x", records)).toContain("5 小时额度已用完");
+  expect(daemonMessage("en", "account_quota_exhausted", { ...params, resets_at: resetsAt }, "x", records)).toContain("It resets in 2h");
+});
+
+it("words an exhausted credit pool as credits and any other window as a quota of its own name", () => {
+  const params = { agent: "Codex", account: "Work" };
+  expect(daemonMessage("en", "account_quota_exhausted", { ...params, window: "Credits" }, "x", records)).toContain("has used up its credits.");
+  expect(daemonMessage("zh-Hans", "account_quota_exhausted", { ...params, window: "Credits" }, "x", records)).toContain("：额度已用完。");
+  expect(daemonMessage("en", "account_quota_exhausted", { ...params, window: "Opus weekly" }, "x", records)).toContain(`its ${isolate("Opus weekly")} quota.`);
+});
+
+it("shows the default account of an exhausted quota by its name in the UI's language", () => {
+  const params = { agent: "Claude Code", account: DEFAULT_ACCOUNT_NAME, window: "Weekly" };
+  expect(daemonMessage("en", "account_quota_exhausted", params, "x", records)).toContain(isolate("Default"));
+  expect(daemonMessage("zh-Hans", "account_quota_exhausted", params, "x", records)).toContain(isolate("默认"));
 });

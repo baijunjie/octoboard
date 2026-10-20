@@ -5,7 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import { isolate } from "../i18n/isolate";
-import type { Agent, AgentAvailability, Session, SessionBranchItem } from "../protocol";
+import type { AccountQuota, Agent, AgentAvailability, Session, SessionBranchItem } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
 import { HandoffDialog } from "./HandoffDialog";
 
@@ -18,7 +18,7 @@ const branch = (name: string): SessionBranchItem => ({
   kind: "branch", repository: "/r", branch: name, path: null, uncommitted: false, project: project.id, session: "s-1", state: "removable", detail: null,
 });
 
-function mount(session: Session, others: Session[] = [], branches: SessionBranchItem[] | "fail" = [], availability: Partial<Record<Agent, AgentAvailability["availability"]>> = {}, added: Agent[] | null = null) {
+function mount(session: Session, others: Session[] = [], branches: SessionBranchItem[] | "fail" = [], availability: Partial<Record<Agent, AgentAvailability["availability"]>> = {}, added: Agent[] | null = null, accountQuotas: AccountQuota[] = []) {
   const sessions = new Map([session, ...others].map((s) => [s.id, s]));
   const initial: Partial<State> = {
     consoles: new Map([[parentConsole.id, parentConsole]]),
@@ -28,6 +28,7 @@ function mount(session: Session, others: Session[] = [], branches: SessionBranch
   const store = createStateStore(initial);
   store.setState({
     settings: { ...store.getState().settings, added_agents: added },
+    accountQuotas,
     agentAvailability: new Map((Object.entries(availability) as [Agent, AgentAvailability["availability"]][]).map(([agent, state]) => [agent, { agent, availability: state } as AgentAvailability])),
   });
   const request = vi.fn(async (body: { type: string }) => {
@@ -100,4 +101,19 @@ it("also closes when the only other agents are not added", async () => {
   await settle();
   expect(onClose).toHaveBeenCalled();
   expect(toastError).toHaveBeenCalledOnce();
+});
+
+it("shows the receiving agent's only account in an account picker, its usage drawn in the option", async () => {
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle");
+  const quota: AccountQuota = {
+    agent: "codex", account: null, fetched_at: Date.now(), plan: null, unavailable: null,
+    windows: [{ kind: "session", label: null, used_percent: 30, resets_at: Date.now() + 3_600_000, window_minutes: 300 }],
+  };
+  mount(session, [], [], { claude: "available", codex: "available", grok: "unavailable" }, null, [quota]);
+  await settle();
+  const triggers = [...document.body.querySelectorAll('[data-slot="select-trigger"]')];
+  const accountPicker = triggers.find((trigger) => trigger.getAttribute("aria-label")?.includes("Codex account"));
+  expect(accountPicker?.textContent).toContain("Default");
+  expect(triggers[0].getAttribute("aria-describedby")).toBeNull();
+  expect(document.body.querySelectorAll('[class*="quota-meter--"]')).toHaveLength(1);
 });

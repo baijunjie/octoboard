@@ -33,7 +33,8 @@ document.documentElement.setAttribute("data-theme", theme);
 
 installFakeTerminal();
 // The shell's Held control: the new-session "+" buttons as they are while the shortcut modifier is down.
-const heldModifier = params.get("held") === "1" ? holdPrimaryModifier() : undefined;
+// A scenario that asks for it opens with the modifier held; `held=0` is the shell's Released over that.
+const heldModifier = (params.get("held") ?? (scenario?.held ? "1" : "0")) === "1" ? holdPrimaryModifier() : undefined;
 
 const [{ App }, { Toasts }, { ErrorAlerts }, { ErrorBoundary }, { LanguageProvider }, { selectPlatform }, { PlatformProvider }, startup, store, { ThemeProvider }] =
   await Promise.all([

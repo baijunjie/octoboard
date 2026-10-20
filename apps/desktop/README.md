@@ -96,7 +96,7 @@ shell open, Dock badge, window theme, window show and window drag/zoom commands 
 | `src-tauri/src/exit.rs` | The exit-confirmation flow: `ExitState`, the two exit-flow commands, `request_quit` and `request_quit_from_window`, and the `applicationShouldTerminate:` override for Dock Quit and system shutdown |
 | `src-tauri/src/background.rs` | Running in the background: `set_run_in_background`, the close button hiding the window when chosen, and `bring_to_front` |
 | `src-tauri/src/tray.rs` | The menu bar icon: its menu rebuilt from `set_tray_menu`, its template image and orange attention-dot overlay, selected-session quota label and icon updates, and the `tray-session-chosen` and `tray-menu-opened` events |
-| `src-tauri/src/tray_icon.rs` | Composes the menu bar icon's template image and attention-dot layer with an optional quota capsule |
+| `src-tauri/src/tray_icon.rs` | Composes the menu bar icon's template image and attention-dot layer with an optional two-layer quota capsule (a main bar and, when given, a thinner weekly bar) |
 | `src-tauri/src/tray_lines.rs` | The menu bar icon's custom menu rows (session headings, account headers, notes and quota windows), plus `dress_quota_openers`, which attaches quota bars to native submenu titles while preserving AppKit's submenu handling |
 | `src-tauri/src/menu.rs` | The native macOS menu bar built from the UI's labels, including the Settings… item |
 | `src-tauri/src/sidecar.rs` | Spawns `octoboardd`, parses its startup port line, reports how it terminated, and keeps `DaemonState` |

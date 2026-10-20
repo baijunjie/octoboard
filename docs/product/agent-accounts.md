@@ -142,7 +142,8 @@ The accounts the user owns follow the default account, each with its name, its d
 directory are shown as in "How paths are shown" in `docs/product/settings.md`.
 
 Every account of an available agent, the default account included, also shows its plan quota: the plan beside its
-name, and beneath the account's row, across its whole width, one line and bar per quota window — or, in its place,
+name, and beneath the account's row, across its whole width, a line and bar per quota window, the 5-hour and Weekly
+windows sharing one meter — or, in its place,
 that the quota is still being read, is unavailable, or is out of date. Opening the section asks for a fresh reading,
 covering the accounts of every agent and not only of the tab in view; the readings already held are shown at once. What is read, when, and how each state looks are in `docs/product/account-quotas.md`.
 

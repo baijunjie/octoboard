@@ -48,11 +48,7 @@ application buttons below. These are:
 - the rail's buttons — each console's avatar, whose tooltip is the console's name with what is going on in it folded
   in, the same text as the name announced for it (see "The console switcher" in `docs/product/sidebar.md`), New
   console, the waiting count, whose tooltip says how many sessions are waiting and that pressing it goes to the next
-  one, Turn on notifications, Account quota and Settings. Account quota's floating panel opens sooner than its
-  tooltip would (see "Opening and pinning the panel" in `docs/product/account-quotas.md`), so a resting mouse meets
-  the panel; the tooltip is held back while the panel is open. When the panel closes with the pointer resting on the
-  button or keyboard focus on it — Escape after a keyboard pin returns focus there — the tooltip stays shut until
-  focus or the pointer leaves the button; closed by a press elsewhere, nothing is held back;
+  one, Turn on notifications and Settings (the rail's Account quota button has none, as said below this list);
 - the ⋮ button that opens an action menu — a sidebar row's, the console's in the sidebar's header, the project's in
   focus mode, a file or folder's in the Files mode's tree or a file's in the Git mode's change list (see "A
   row's actions" in `docs/product/project-pane.md`), and, in Settings' Agent accounts section, an account's and the
@@ -102,6 +98,11 @@ application buttons below. These are:
   stays shut until focus or the pointer leaves the "?", so it does not reopen at once; closed by an outside press with
   the pointer elsewhere, nothing is held back, and the next rest on the "?" shows the tooltip;
 - the close button of every dismissable dialog, of Settings and of each toast ("Close").
+
+The rail's **Account quota** button is an exception: it has **no tooltip**, on hover or on keyboard focus. Resting
+the mouse on it floats its panel in instead (see "Opening and pinning the panel" in `docs/product/account-quotas.md`),
+and its accessible name, which states the selected session's quota when the button shows one, is described in "The
+selected session's quota indicator" in `docs/product/account-quotas.md`.
 
 The right pane's resize grips — its width handle and the handles between its panels — have a tooltip too, a short
 "Resize" shown beside the grip only while a mouse pointer rests on the handle, not on keyboard focus; the name

@@ -3,6 +3,7 @@ import React, { useId } from "react";
 
 import { FadeOverflow } from "../components/FadeOverflow";
 import { MotionListBox } from "../components/MotionListBox";
+import { ReasonText, type Reason } from "../components/ReasonText";
 import { StatusBadge } from "../components/StatusBadge";
 
 /** One choice of an `OptionSelect`. */
@@ -14,15 +15,29 @@ export type Option<T extends string> = {
   /** A status badge after the label ("Not added"), which never shrinks: the label gives way first. */
   badge?: string;
   isDisabled?: boolean;
-};
+} & (
+  | { detail?: undefined; reason?: undefined }
+  | {
+    /** A note about the option, which assistive technology reads as its description and which is not drawn. */
+    detail: string;
+    /** A short note drawn under the label (why a disabled option cannot be chosen), hidden from assistive
+     * technology, which has `detail`, so a `reason` always comes with one. On a disabled option it is not
+     * faded with the rest of the row, so it stays readable. */
+    reason?: Reason;
+  }
+);
 
-/** A single-choice dropdown over a fixed list of options. An option's `lang` marks its text as
- * being in a language other than the UI's; its `icon` is drawn before its text, in the list and
- * in the trigger while it is the chosen one. An option with `isDisabled` is shown, named, but
- * cannot be chosen — the current `value` may still be one, so the reason it cannot be changed
- * away *to* is on screen without taking away what is already picked. `isDisabled` locks it, and
- * `description` is a note under it. A label too long for the control fades at its clipped edge
- * and runs as a marquee on hover.
+/** The fade of a disabled option's name and icon, which the row itself keeps off when it has a reason to show. */
+const FADED = "opacity-(--disabled-opacity)";
+
+/** A single-choice dropdown over a fixed list of options. An option's `lang` marks its text as being
+ * in a language other than the UI's; its `icon` is drawn before its text, in the list and in the
+ * trigger while it is the chosen one. An option with `isDisabled` is shown, named, but cannot be
+ * chosen — the current `value` may still be one, so the reason it cannot be changed away *to* is on
+ * screen without taking away what is already picked. An option's `detail` is its description for
+ * assistive technology and its `reason` the short note drawn under its label (why an option is
+ * disabled). `isDisabled` locks the whole select, and `description` is a note under it. A label too
+ * long for the control fades at its clipped edge and runs as a marquee on hover.
  *
  * With `inline` it is only as wide as its value and `label` is its accessible name alone, for a
  * control whose own row already shows the name (a setting). With `joined` it is one part of an
@@ -73,6 +88,7 @@ export function OptionSelect<T extends string>({
 )): React.ReactElement {
   const descriptionId = useId();
   const current = options.find((option) => option.value === value);
+  const hasReason = options.some((option) => option.reason);
   return (
     // HeroUI's variant for a field on a surface: every one of these sits in a dialog.
     <Select
@@ -135,18 +151,42 @@ export function OptionSelect<T extends string>({
         {placeholder !== undefined && <Select.ClearButton />}
         <Select.Indicator />
       </Select.Trigger>
-      <Select.Popover className="w-(--trigger-width) max-w-[calc(100vw-2rem)]">
+      <Select.Popover
+        // Options with a reason widen the popover to fit it; the others keep the trigger's width.
+        placement={hasReason ? "bottom start" : undefined}
+        className={hasReason ? "w-max max-w-[min(20rem,calc(100vw-2rem))]" : "w-(--trigger-width) max-w-[calc(100vw-2rem)]"}
+      >
         <MotionListBox className="relative">
           {options.map((option) => (
-            <ListBox.Item data-list-motion={option.value} data-marquee-scope className="pe-7" key={option.value} id={option.value} textValue={option.label} isDisabled={option.isDisabled}>
+            <ListBox.Item
+              data-list-motion={option.value}
+              data-marquee-scope
+              // A disabled option with a reason is not faded as a whole: the name and icon are, and the
+              // reason keeps the secondary text colour.
+              className={option.isDisabled && option.reason ? "pe-7 data-[disabled=true]:opacity-100" : "pe-7"}
+              key={option.value}
+              id={option.value}
+              textValue={option.label}
+              isDisabled={option.isDisabled}
+            >
               {option.icon && (
-                <span aria-hidden="true" className="flex shrink-0">
+                <span aria-hidden="true" className={`flex shrink-0 ${option.isDisabled && option.reason ? FADED : ""}`}>
                   {option.icon}
                 </span>
               )}
-              <FadeOverflow lang={option.lang} dir="auto" className={option.badge ? "min-w-0" : "min-w-0 flex-1"} titleWhenClipped={option.label}>
-                {option.label}
-              </FadeOverflow>
+              {option.detail ? (
+                <span className={`flex min-w-0 flex-col ${option.badge ? "" : "flex-1"}`}>
+                  <FadeOverflow lang={option.lang} dir="auto" className={option.isDisabled && option.reason ? `min-w-0 ${FADED}` : "min-w-0"} titleWhenClipped={option.label}>
+                    {option.label}
+                  </FadeOverflow>
+                  <Description className="sr-only">{option.detail}</Description>
+                  {option.reason && <span aria-hidden="true" className="text-xs text-app-muted"><ReasonText reason={option.reason} /></span>}
+                </span>
+              ) : (
+                <FadeOverflow lang={option.lang} dir="auto" className={option.badge ? "min-w-0" : "min-w-0 flex-1"} titleWhenClipped={option.label}>
+                  {option.label}
+                </FadeOverflow>
+              )}
               {option.badge && <StatusBadge>{option.badge}</StatusBadge>}
               <ListBox.ItemIndicator />
             </ListBox.Item>

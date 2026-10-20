@@ -31,6 +31,10 @@ hairline ring, its text at 80% foreground so it keeps at least 4.5:1 on fields, 
 screen-reader-only comma between name and status. An agent row that cannot be picked is dimmed by its name taking the
 secondary text colour (still at least 4.5:1) and its icon fading; the text is never faded below AA by opacity.
 
+A select option or menu item that cannot be chosen and says why (an account whose quota is used up) keeps the reason
+line under its name at full opacity and fades only its name and icon with HeroUI's `--disabled-opacity`, instead of
+letting HeroUI fade the whole row: the reason is the text that explains the disabled state, so it must stay readable.
+
 A notice toast (HeroUI's accent variant) tints its indicator with the title's `--accent-soft-foreground`, as HeroUI
 does itself for its success, warning and danger toasts, instead of leaving it in the plain foreground under an accent
 title.
@@ -119,6 +123,17 @@ Every button is HeroUI's `Button`. A native `<button>` is allowed only where a c
 cannot be, with the reason in a comment there. A hand-built `role="button"` element needs `tabIndex={0}` and its own
 Enter / Space handling.
 
+A button that is unavailable for a reason the user needs to learn (the quick-create "+" while every account of its agent
+is used up) is not natively disabled, which would take it out of the Tab order and keep its tooltip from ever opening:
+it carries `aria-disabled`, keeps focus and its hover tooltip but takes no hover tint or press shrink, looks faded,
+gives the reason as its tooltip and as an `aria-describedby` description while its name stays the action, and a press
+explains instead of acting. HeroUI's disabled style turns off pointer events on `aria-disabled`, so such a button puts
+them back (`pointer-events-auto`), or its tooltip never opens on hover.
+
+A disabled select option or menu item that carries a reason stays in the arrow-key walk (`disabledBehavior:
+"selection"` on the menu and on any single-selection section inside it), so a keyboard user reaches it and hears why;
+it still cannot be activated or selected.
+
 ### A control inside a rendering library's shadow root
 
 The diff viewer's separators of collapsed lines are drawn by `@pierre/diffs` into a shadow root, where no React tree
@@ -170,8 +185,8 @@ a region: it is reached through its button, the way a menu is.
   whatever held it when it opened.
 - Escape closes the topmost floating thing first: while open, the panel marks itself `data-escape-topmost`, and the
   drawer and floating-pane Escape handling stands aside while such an element exists.
-- Its button's tooltip is held back while the panel is open and right after it closes, as a help tip's is (below),
-  but not after a press outside, which leaves focus elsewhere.
+- Its button has no tooltip: hovering it opens the panel, which shows everything a tooltip would, so the button
+  carries only its accessible name (the selected session's remaining quota, every window it draws included).
 
 ## Input placeholders
 
@@ -257,6 +272,10 @@ to the actions. The console dialog's Settings (`packages/ui/src/dialogs/ConsoleD
 that opened it, so closing Settings by its backdrop returns focus there even when Manage accounts was activated without
 taking focus. Both wait a frame past React Aria's restore and leave a restore that landed right alone; they act where
 focus is on `<body>`, and the login hand-off also where it is on its going button.
+
+A dialog's submit or confirm button that becomes disabled while it holds focus (a quota reading landing under an
+open dialog) hands focus to Cancel, also when WebKit has already blurred the button to `<body>`; a dialog that opens
+with its submit refused puts its autofocus on Cancel instead of the disabled button.
 
 ### Focus scrolled to the edge of a scroller that fades there
 
@@ -346,7 +365,8 @@ menu trigger — carries both a tooltip and an accessible name. The name is what
 has to tell the control apart from its neighbours even where the tooltip's text cannot, so the two are not always the
 same text. Which control's tooltip repeats its name and which one's is the shorter of the two is settled per control in
 the "Tooltips on icon-only controls" section of `docs/product/labels-and-tooltips.md`; `ActionMenu` gives its trigger a
-name of that shape by default.
+name of that shape by default. The one exception is a button whose hover opens a floating panel that shows what
+its tooltip would say (the rail's account quota button, above): it carries only its accessible name.
 
 A copy button (`CopyButton`) takes its accessible name from its tooltip, which changes to "Copied" once the text is on
 the clipboard. A control that keeps focus is not reliably re-read when its name changes, so the button also announces
@@ -828,6 +848,12 @@ the palette is tuned to keep those names distinct in every offered language and 
 the hues cannot reach: react-aria's Arabic names give violet and fuchsia one name, and its Korean names give one word
 to green-cyan, cyan and cyan-blue (teal and cyan collide in light, teal and sky in dark). `sessionColours.test.ts`
 lists them and fails on any other.
+
+A compact usage bar in front of an account option is decorative in the same way: it is hidden from assistive
+technology, and the option's description carries the remaining quota in words. Its fill still keeps 3:1 against its
+track and against a hovered option, since it is the only visible cue to the remaining quota in the picker. Its track
+(`.quota-bar-track`) is a step darker than a field's fill so it can be seen in a select's closed trigger, but not
+held to 3:1 against it: a darker track would take the fill below 3:1 against the track.
 
 ### Row action menu buttons
 

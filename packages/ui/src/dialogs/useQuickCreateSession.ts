@@ -17,20 +17,22 @@ import { defaultOpenSessionRequest } from "./openSessionRequest";
  * dialog opens on untouched (`defaultOpenSessionRequest`), and hands the new session's id to
  * `onOpened`, unless the window moved to another console (`currentConsoleId`) while the daemon was
  * answering: there is no dialog holding the window still, and the session is not on that screen.
- * A refusal has no dialog to show it in, so it uses the shared error alert. A press while the previous one is still
- * being answered is ignored, so one gesture cannot open two sessions.
+ * With every account of the agent it would open on used up it opens nothing and says so, naming the `action`
+ * of the control that asked. A refusal has no dialog to show it in, so it uses the shared error alert. A press
+ * while the previous one is still being answered is ignored, so one gesture cannot open two sessions.
  */
 export function useQuickCreateSession(
   onOpened: (sessionId: string) => void,
   currentConsoleId: string | undefined,
-): (target: NewSessionRequest) => void {
+): (target: NewSessionRequest, action: string) => void {
   const t = useT();
   const { request, store, toastError } = useDaemon();
   const pending = useRef(false);
   const latestConsoleId = useLatest(currentConsoleId);
-  return (target) => {
+  return (target, action) => {
     if (pending.current) return;
-    const { sessions, settings, agentAvailability } = store.getState();
+    const state = store.getState();
+    const { sessions, settings, agentAvailability } = state;
     const project = target.kind === "new-session" ? target.project : undefined;
     const binding = target.kind === "new-session" ? target.binding : { kind: "unbound" as const };
     if (noAgentState(agentAvailability, settings.added_agents)) return;
@@ -42,9 +44,14 @@ export function useQuickCreateSession(
         return;
       }
     }
+    const opening = defaultOpenSessionRequest(t, target.console, project, binding, state, Date.now());
+    if ("usedUp" in opening) {
+      toastError(new ActionableError(t("sidebar.project.openSessionQuickUsedUp", { action }), "quotaUsedUpAgent"));
+      return;
+    }
     const startedIn = latestConsoleId.current;
     pending.current = true;
-    request(defaultOpenSessionRequest(t, target.console, project, binding, settings.accounts, agentAvailability, settings.added_agents))
+    request(opening.request)
       .then((reply) => {
         if (reply.type === "session_opened" && latestConsoleId.current === startedIn) onOpened(reply.session.id);
       })

@@ -30,8 +30,8 @@ interface View {
   width?: number;
   /** Likewise; otherwise the scenario's own, and otherwise the window fits the page. */
   height?: number;
-  /** The shortcut modifier is held down, as the page's viewing condition, whatever the scenario. */
-  held: boolean;
+  /** Likewise; otherwise the scenario's own, and otherwise released. */
+  held?: boolean;
 }
 
 function readView(): View {
@@ -45,15 +45,15 @@ function readView(): View {
     language: isLanguage(language) ? language : "en",
     width: Number.isFinite(width) && width > 0 ? width : undefined,
     height: Number.isFinite(height) && height > 0 ? height : undefined,
-    held: params.get("held") === "1",
+    held: params.has("held") ? params.get("held") === "1" : undefined,
   };
 }
 
 /** The parameters the shell page and the frame both take from a view: its scenario, theme and
- * language, and the shortcut modifier while held. */
+ * language, and the shortcut modifier when the viewer chose it (the frame otherwise follows the scenario). */
 function sharedParams(view: View): URLSearchParams {
   const params = new URLSearchParams({ scenario: view.scenario, theme: view.theme, lang: view.language });
-  if (view.held) params.set("held", "1");
+  if (view.held !== undefined) params.set("held", view.held ? "1" : "0");
   return params;
 }
 
@@ -103,8 +103,8 @@ function SizeBox({
   );
 }
 
-/** The view that picking `scenario` reaches: a scenario carrying its own width or height opens at it,
- * dropping whatever was chosen for an earlier one. Each is otherwise sticky across the list, and a
+/** The view that picking `scenario` reaches: a scenario carrying its own width, height or held modifier opens
+ * at it, dropping whatever was chosen for an earlier one. Each is otherwise sticky across the list, and a
  * scenario whose steps open the drawer that exists only below the breakpoint cannot run in a wide
  * window — the press finds nothing and the page paints its failure overlay. */
 function viewOf(view: View, scenario: Scenario): View {
@@ -113,6 +113,7 @@ function viewOf(view: View, scenario: Scenario): View {
     scenario: scenario.id,
     width: scenario.width ? undefined : view.width,
     height: scenario.height ? undefined : view.height,
+    held: scenario.held ? undefined : view.held,
   };
 }
 
@@ -213,7 +214,7 @@ function Gallery(): React.ReactElement {
           <div className="group">
             Modifier (⌘ / Ctrl)
             {([false, true] as const).map((held) => (
-              <button key={String(held)} aria-pressed={view.held === held} onClick={() => update({ held })}>
+              <button key={String(held)} aria-pressed={(view.held ?? scenario.held ?? false) === held} onClick={() => update({ held })}>
                 {held ? "Held" : "Released"}
               </button>
             ))}

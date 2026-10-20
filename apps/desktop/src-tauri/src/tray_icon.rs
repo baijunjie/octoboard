@@ -1,5 +1,7 @@
 //! Template canvases for the menu bar icon. A quota keeps the original canvas size, with a
 //! full-size octopus behind an outlined capsule and an orange attention dot at the upper right.
+//! An account with a 5-hour and a weekly window gets a slimmer outlined capsule for the 5-hour
+//! window with a thinner outlined one beneath it for the weekly one.
 
 use image::{ImageFormat, Rgba, RgbaImage};
 use tauri::image::Image;
@@ -10,14 +12,28 @@ const PILL_Y: f64 = 32.0;
 const PILL_WIDTH: f64 = 44.0;
 const PILL_HEIGHT: f64 = 12.0;
 const GAP: u32 = 2;
+/// The two-layer look: the capsule for the main window, then the thinner one for the other, a
+/// pixel apart; together they fill the single capsule's rows and the gap above it.
+const MAIN_Y: f64 = 30.0;
+const MAIN_HEIGHT: f64 = 7.0;
+const THIN_Y: f64 = 38.0;
+const THIN_HEIGHT: f64 = 6.0;
 const DOT_X: f64 = 35.0;
 const DOT_Y: f64 = 9.0;
 const DOT_RADIUS: f64 = 8.0;
 const DOT_CLEARANCE: f64 = 2.0;
 const BORDER: f64 = 2.0;
 
+/// What the quota bars show, in percent remaining: the main window's, and the weekly window's
+/// beneath it when the account has both.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct Quota {
+    pub main: u8,
+    pub thin: Option<u8>,
+}
+
 /// Keep the original octopus scale, clearing space only for visible overlays.
-pub(super) fn octopus(attention: bool, quota: Option<u8>) -> Image<'static> {
+pub(super) fn octopus(attention: bool, quota: Option<Quota>) -> Image<'static> {
     let original = tauri::include_image!("icons/tray-template.png");
     if !attention && quota.is_none() {
         return original;
@@ -26,14 +42,21 @@ pub(super) fn octopus(attention: bool, quota: Option<u8>) -> Image<'static> {
     if attention {
         clear_dot(&mut canvas);
     }
-    if let Some(remaining) = quota {
-        // The pill covers the lower tentacles, keeping the octopus at its original scale.
-        for y in PILL_Y as u32 - GAP..SIDE {
+    if let Some(quota) = quota {
+        // The bars cover the lower tentacles, keeping the octopus at its original scale.
+        let top = if quota.thin.is_some() { MAIN_Y } else { PILL_Y };
+        for y in top as u32 - GAP..SIDE {
             for x in 0..SIDE {
                 canvas.put_pixel(x, y, Rgba([0, 0, 0, 0]));
             }
         }
-        draw_pill(&mut canvas, remaining.min(100));
+        match quota.thin {
+            Some(thin) => {
+                draw_pill(&mut canvas, MAIN_Y, MAIN_HEIGHT, quota.main.min(100));
+                draw_pill(&mut canvas, THIN_Y, THIN_HEIGHT, thin.min(100));
+            }
+            None => draw_pill(&mut canvas, PILL_Y, PILL_HEIGHT, quota.main.min(100)),
+        }
     }
     Image::new_owned(canvas.into_raw(), SIDE, SIDE)
 }
@@ -77,34 +100,31 @@ fn clear_dot(canvas: &mut RgbaImage) {
 
 /// The capsule's signed distance; negative inside, positive outside. Its straight portion runs
 /// horizontally between the two semicircle centres.
-fn capsule_distance(x: f64, y: f64) -> f64 {
-    let radius = PILL_HEIGHT / 2.0;
+fn capsule_distance(x: f64, y: f64, top: f64, height: f64) -> f64 {
+    let radius = height / 2.0;
     let nearest_x = x.clamp(PILL_X + radius, PILL_X + PILL_WIDTH - radius);
-    (x - nearest_x).hypot(y - (PILL_Y + radius)) - radius
+    (x - nearest_x).hypot(y - (top + radius)) - radius
 }
 
-fn draw_pill(canvas: &mut RgbaImage, remaining: u8) {
+/// Draws an outlined capsule at `top`, filled inside the outline to `remaining` percent.
+fn draw_pill(canvas: &mut RgbaImage, top: f64, height: f64, remaining: u8) {
     let end = PILL_X + BORDER + (PILL_WIDTH - BORDER * 2.0) * f64::from(remaining) / 100.0;
     // Four samples per axis keep the two rounded ends smooth at the menu bar's small size.
     const SAMPLES: u32 = 4;
-    for y in PILL_Y as u32..SIDE {
+    for y in top as u32..(top + height) as u32 {
         for x in PILL_X as u32..(PILL_X + PILL_WIDTH) as u32 {
             let mut covered = 0;
             for sy in 0..SAMPLES {
                 for sx in 0..SAMPLES {
                     let px = f64::from(x) + (f64::from(sx) + 0.5) / f64::from(SAMPLES);
                     let py = f64::from(y) + (f64::from(sy) + 0.5) / f64::from(SAMPLES);
-                    let distance = capsule_distance(px, py);
+                    let distance = capsule_distance(px, py, top, height);
                     if distance <= 0.0 && (distance >= -BORDER || px <= end) {
-                        covered += 1;
+                        covered += 255;
                     }
                 }
             }
-            canvas.put_pixel(
-                x,
-                y,
-                Rgba([0, 0, 0, (covered * 255 / (SAMPLES * SAMPLES)) as u8]),
-            );
+            canvas.put_pixel(x, y, Rgba([0, 0, 0, (covered / (SAMPLES * SAMPLES)) as u8]));
         }
     }
 }
@@ -117,11 +137,22 @@ mod tests {
         image.rgba()[((y * image.width() + x) * 4 + 3) as usize]
     }
 
+    fn single(main: u8) -> Option<Quota> {
+        Some(Quota { main, thin: None })
+    }
+
+    fn layered(main: u8, thin: u8) -> Option<Quota> {
+        Some(Quota {
+            main,
+            thin: Some(thin),
+        })
+    }
+
     #[test]
     fn quota_endpoints_keep_the_outline_and_fill_only_the_remainder() {
-        let empty = octopus(false, Some(0));
-        let full = octopus(false, Some(100));
-        let half = octopus(false, Some(50));
+        let empty = octopus(false, single(0));
+        let full = octopus(false, single(100));
+        let half = octopus(false, single(50));
         for icon in [&empty, &half, &full] {
             assert_eq!((icon.width(), icon.height()), (SIDE, SIDE));
             assert!(icon.rgba().chunks(4).all(|pixel| pixel[..3] == [0, 0, 0]));
@@ -139,7 +170,41 @@ mod tests {
         assert_eq!(alpha(&full, 22, 38), 255);
         assert_eq!(alpha(&half, 16, 38), 255);
         assert_eq!(alpha(&half, 28, 38), 0);
-        assert_eq!(octopus(false, Some(255)).rgba(), full.rgba());
+        assert_eq!(octopus(false, single(255)).rgba(), full.rgba());
+    }
+
+    #[test]
+    fn two_layers_draw_the_main_capsule_over_a_thinner_one() {
+        let original = octopus(false, None);
+        let icon = octopus(false, layered(50, 25));
+        assert_eq!((icon.width(), icon.height()), (SIDE, SIDE));
+        assert!(icon.rgba().chunks(4).all(|pixel| pixel[..3] == [0, 0, 0]));
+        for y in 0..28 {
+            for x in 0..SIDE {
+                assert_eq!(alpha(&icon, x, y), alpha(&original, x, y));
+            }
+        }
+        // The main capsule: outlined, filled to half inside.
+        assert_eq!(alpha(&icon, 22, 30), 255);
+        assert_eq!(alpha(&icon, 22, 36), 255);
+        assert_eq!(alpha(&icon, 12, 33), 255);
+        assert_eq!(alpha(&icon, 32, 33), 0);
+        // Nothing in the pixel between the two.
+        assert!((0..SIDE).all(|x| alpha(&icon, x, 37) == 0));
+        // The thinner capsule: outlined too, filled to a quarter inside.
+        assert_eq!(alpha(&icon, 22, 38), 255);
+        assert_eq!(alpha(&icon, 22, 43), 255);
+        assert_eq!(alpha(&icon, 6, 40), 255);
+        assert_eq!(alpha(&icon, 30, 40), 0);
+        // The main bar at 0 leaves its capsule's interior empty; the other at 100 fills its own.
+        let drained = octopus(false, layered(0, 100));
+        assert_eq!(alpha(&drained, 22, 33), 0);
+        assert_eq!(alpha(&drained, 30, 40), 255);
+        assert_ne!(octopus(false, layered(50, 100)).rgba(), icon.rgba());
+        assert_eq!(
+            octopus(false, layered(255, 255)).rgba(),
+            octopus(false, layered(100, 100)).rgba()
+        );
     }
 
     #[test]
@@ -148,7 +213,7 @@ mod tests {
         assert_eq!(alpha(&dot, 35, 9), 255);
         assert!((0..SIDE).all(|y| (0..27).all(|x| alpha(&dot, x, y) == 0)));
         assert!((18..SIDE).all(|y| (0..SIDE).all(|x| alpha(&dot, x, y) == 0)));
-        for quota in [None, Some(0), Some(50), Some(100)] {
+        for quota in [None, single(0), single(50), single(100), layered(50, 20)] {
             let normal = octopus(false, quota);
             let attention = octopus(true, quota);
             assert_ne!(normal.rgba(), attention.rgba());

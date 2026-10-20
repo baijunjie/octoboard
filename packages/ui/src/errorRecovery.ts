@@ -6,7 +6,7 @@ export type ErrorRecovery =
   | "configuration" | "image" | "clipboard" | "file" | "git" | "gitHistory" | "branch"
   | "refresh" | "scope" | "limit" | "openExternal" | "issueLink"
   | "contentSyntax" | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
-  | "sessionBranches" | "projectBranches" | "lostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded"
+  | "sessionBranches" | "projectBranches" | "lostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "quotaUsedUpAgent"
   | "none";
 
 /** A local failure whose user remedy is known without inspecting its translated message. */
@@ -39,6 +39,7 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   availability: ["agent_availability_pending", "added_agents_undecided"],
   addedAgents: ["agent_already_added", "agent_order_invalid"],
   agentNotAdded: ["agent_not_added"],
+  quotaUsedUp: ["account_quota_exhausted"],
   shell: ["shell_environment_timeout"],
   account: ["unknown_account", "grok_home_not_initialized"],
   unresumable: ["conversation_unresumable"],

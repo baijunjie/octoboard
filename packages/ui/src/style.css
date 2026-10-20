@@ -335,6 +335,34 @@ html {
   background-color: var(--session-colour-dark);
 }
 
+/* The track of the compact `AccountUsageBar`, a step darker than `--default`: the bar sits on a select
+   trigger filled with `--default` itself, where a track of that colour would be invisible. Measured
+   fill against track, light / dark, on the trigger: Claude 3.07 / 5.87, Codex 3.16 / 6.25, Grok
+   12.10 / 15.72; in the popover: Claude 3.25 / 6.54, Codex 3.35 / 6.94, Grok 12.86 / 17.45. Claude's
+   fill against the trigger is 3.55:1 in light and 4.46:1 in dark, and the track against the trigger
+   1.15:1 and 1.31:1 (the track is darker still in dark). */
+.quota-bar-track {
+  background-color: color-mix(in oklab, var(--default) 95%, black);
+}
+
+.dark .quota-bar-track,
+[data-theme="dark"] .quota-bar-track {
+  background-color: color-mix(in oklab, var(--default) 75%, black);
+}
+
+/* The main bar's track also has a hairline edge of the foreground: in dark a popover's own surface is as
+   dark as the track, which would leave an account with no reading as no mark at all. The thin bar is
+   only 2px tall, so an inset edge would be all of it and the fill would cover it; its edge is drawn
+   outside the track instead, where it leaves the fill's contrast against the track as measured above, and
+   a step stronger (30%), since a 1px ring around a 2px bar reads fainter than the same ring inside a 6px one. */
+.quota-bar-track--edge {
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 25%, transparent);
+}
+
+.quota-bar-track--outer-edge {
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 30%, transparent);
+}
+
 /* The fill of an account quota bar (`QuotaMeter`): one colour per agent. Claude's is its brand
    orange darkened to keep 3:1 against the meter's track, lightened on the dark track; Codex's is a
    blue; Grok's is the foreground, as its mark is. Measured against Settings' track, `--control-fill`

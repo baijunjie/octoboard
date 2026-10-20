@@ -3082,6 +3082,11 @@ pub mod error_code {
     /// the login shell's `PATH`) — never raised while that determination is still pending.
     /// `params` names `agent`.
     pub const AGENT_NOT_AVAILABLE: &str = "agent_not_available";
+    /// A session cannot be opened on, or moved to, an account whose plan quota is used up: its
+    /// last reading has a session, weekly or credit-period window at 100% or more that has not
+    /// reset yet. `params` names the `agent`, the `account` (by name) and the `window` (as the
+    /// quota shows it), and `resets_at` (milliseconds since the epoch) when the agent said when.
+    pub const ACCOUNT_QUOTA_EXHAUSTED: &str = "account_quota_exhausted";
     /// A session's resolved agent is not on `Settings.added_agents`, so a new session or a handoff
     /// to it is refused; never raised while that list is undecided. `params` names `agent`.
     pub const AGENT_NOT_ADDED: &str = "agent_not_added";

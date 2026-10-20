@@ -45,19 +45,13 @@ pub(super) async fn switch_session_account(
     )
     .await?;
     let moved = state.session_record(&target.id)?;
-    let (account, name) = match moved.account_id {
-        Some(id) => {
-            let name = state
-                .store
-                .get_account(&id)?
-                .map_or_else(|| id.clone(), |account| account.name);
-            (id, name)
-        }
-        None => (
-            "default".to_string(),
-            state.store.default_account_name(moved.agent)?,
-        ),
-    };
+    let name = state
+        .store
+        .account_display_name(moved.agent, moved.account_id.as_deref())?;
+    let account = moved
+        .account_id
+        .clone()
+        .unwrap_or_else(|| "default".to_string());
     let mut note = format!(
         "`{}` is now on the {} account `{name}`. It is back awaiting instructions: a turn it was \
          in the middle of is cut off, so send it the next step with `send_message`.",

@@ -505,7 +505,7 @@ it("queries the selected account and keeps overrides separate when changing agen
   expect(pickerNamed("Agent")).toBe(agentTrigger);
   expect(daemon.request).toHaveBeenCalledWith({ type: "list_agent_models", agent: "codex" });
   expect(pickerNamed("Model").textContent).toContain("codex-project");
-  expect(buttons().some((button) => button.getAttribute("aria-label") === "Codex account")).toBe(false);
+  expect(pickerNamed("Codex account").textContent).toContain("Default");
   await act(async () => pickerNamed("Agent").click());
   await act(async () => optionElements().find((option) => option.getAttribute("data-key") === "claude")!.click());
   expect(pickerNamed("Model").textContent).toContain("Sonnet");
@@ -516,7 +516,7 @@ it("queries the selected account and keeps overrides separate when changing agen
 });
 
 
-it.each(["trigger", "popover"] as const)("keeps the selected agent and hands focus back when the last named account is removed from %s", async (focused) => {
+it("keeps the selected agent and the account picker when the last named account is removed", async () => {
   const { container, root, daemon, pastMountRefocus } = renderDialog([], {
     settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", accounts: [
       { id: "a-work", agent: "claude", name: "Work", config_dir: "/accounts/work" },
@@ -529,17 +529,10 @@ it.each(["trigger", "popover"] as const)("keeps the selected agent and hands foc
   await act(async () => pickerNamed("Claude Code account").click());
   await act(async () => optionElements().find((option) => option.textContent === "Work")!.click());
   const agentTrigger = pickerNamed("Agent");
-  act(() => pickerNamed("Claude Code account").focus());
-  if (focused === "popover") {
-    await act(async () => pickerNamed("Claude Code account").click());
-    await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
-    expect(document.activeElement?.getAttribute("role")).toBe("option");
-  }
   act(() => daemon.store.setState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", accounts: [] } }));
   expect(pickerNamed("Agent")).toBe(agentTrigger);
   expect(agentTrigger.textContent).toContain("Claude Code");
-  await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
-  expect(document.activeElement).toBe(agentTrigger);
+  expect(pickerNamed("Claude Code account").textContent).toContain("Default");
 });
 
 
@@ -673,4 +666,19 @@ it("keeps the Name hint visible", () => {
   const { container, root } = renderDialog([], {}, {}, undefined, null);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
   expect(document.body.textContent).toContain("Leave this empty to use the default session name.");
+});
+
+it("shows the account picker with the agent's only account, its usage drawn in the option", () => {
+  const { container, root } = renderDialog([], {
+    accountQuotas: [{
+      agent: "claude", account: null, fetched_at: Date.now(), plan: null, unavailable: null,
+      windows: [{ kind: "session", label: null, used_percent: 30, resets_at: Date.now() + 3_600_000, window_minutes: 300 }],
+    }],
+  });
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  const account = pickerNamed("Claude Code account");
+  expect(account).toBeDefined();
+  expect(pickerNamed("Agent").getAttribute("aria-describedby")).toBeNull();
+  // The only bar is the one in the account picker's own trigger.
+  expect(document.body.querySelectorAll('[class*="quota-meter--"]')).toHaveLength(1);
 });

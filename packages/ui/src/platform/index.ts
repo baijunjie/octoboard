@@ -150,9 +150,13 @@ export interface StatusItemMenu {
   quit: string;
   /** Whether the icon shows its attention dot: a live session is waiting for the user. */
   attention: boolean;
-  /** Remaining quota of the selected session's account, 0–100; absent hides the icon's bar. */
+  /** Remaining quota of the selected session's account, 0–100: its 5-hour window's when it has a weekly
+   * one too, else its one window's. Absent hides the icon's bar. */
   quota_remaining?: number;
-  /** Localized account, window and remaining quota for the icon's tooltip and accessible name. */
+  /** The weekly window's remaining quota, 0–100, drawn as a thin bar beneath the main one; present only
+   * with a 5-hour window in `quota_remaining`. */
+  quota_weekly_remaining?: number;
+  /** Localized account, window and remaining quota for the icon's accessible name. */
   quota_label?: string;
 }
 

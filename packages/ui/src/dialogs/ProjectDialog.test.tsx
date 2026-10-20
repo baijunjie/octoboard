@@ -61,7 +61,7 @@ function render(
       </DaemonProvider>,
     ),
   );
-  return pending;
+  return Object.assign(pending, { store: daemon.store });
 }
 
 const input = (label: string) =>
@@ -380,7 +380,7 @@ it("follows the console's agent for Inherit from console", async () => {
   await click(buttons().find((b) => b.textContent?.includes("Inherit from console (Claude Code)")));
   await choose("Codex");
   expect(accountPicker()).toBeUndefined();
-  expect(pending).toEqual([]);
+  expect(pending).toHaveLength(0);
 });
 
 it("names the console's project session agent on Inherit from console, not its console session agent", async () => {
@@ -678,4 +678,19 @@ it("shows the name counter only near the limit and leaves hidden parent fields o
   await chooseSource("A parent directory");
   await click(buttonText("Add"));
   expect(sentOf(pending, "add_project")).toMatchObject({ source: "parent" });
+});
+
+it.each(["trigger", "popover"] as const)("hands focus back to the agent picker when the last named account is removed from %s", async (focused) => {
+  const { store } = render(projectOf("p-2", "c-1", "Site", { default_agent: "claude" }), [work]);
+  const agentTrigger = pickerNamed("Default agent");
+  act(() => accountPicker()!.focus());
+  if (focused === "popover") {
+    await click(accountPicker());
+    await settle(50);
+    expect(document.activeElement?.getAttribute("role")).toBe("option");
+  }
+  act(() => store.setState({ settings: { ...store.getState().settings!, accounts: [] } }));
+  expect(accountPicker()).toBeUndefined();
+  await settle(50);
+  expect(document.activeElement).toBe(agentTrigger);
 });

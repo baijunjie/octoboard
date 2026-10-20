@@ -216,3 +216,80 @@ describe("a panel entry", () => {
     expect(document.activeElement).toBe(button("first"));
   });
 });
+
+describe("a disabled item", () => {
+  const key = (target: Element, name: string) =>
+    act(async () => {
+      target.dispatchEvent(new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true }));
+      target.dispatchEvent(new KeyboardEvent("keyup", { key: name, bubbles: true, cancelable: true }));
+    });
+
+  it("stays reachable with the arrow keys but does not run", async () => {
+    const onClick = vi.fn();
+    const onOther = vi.fn();
+    await openMenu([
+      { label: "Off", icon: Trash2, disabled: true, onClick },
+      { label: "On", icon: Trash2, onClick: onOther },
+    ]);
+    const menu = document.querySelector<HTMLElement>("[role=menu]")!;
+    await key(menu, "ArrowDown");
+    const off = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((el) => el.textContent === "Off")!;
+    expect(document.activeElement).toBe(off);
+    expect(off.getAttribute("aria-disabled")).toBe("true");
+    await key(off, "Enter");
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("stays reachable inside a group of selectable items, and Enter on it neither runs nor selects", async () => {
+    const onOff = vi.fn();
+    await openMenu([
+      { label: "Current", icon: Trash2, selected: true, onClick: () => {} },
+      { label: "Off", icon: Trash2, selected: false, disabled: true, onClick: onOff },
+      { label: "Next", icon: Trash2, selected: false, onClick: () => {} },
+    ]);
+    const menu = document.querySelector<HTMLElement>("[role=menu]")!;
+    const radio = (label: string) => [...document.querySelectorAll<HTMLElement>("[role=menuitemradio]")].find((el) => el.textContent === label)!;
+    await key(menu, "ArrowDown");
+    expect(document.activeElement).toBe(radio("Current"));
+    await key(document.activeElement!, "ArrowDown");
+    expect(document.activeElement).toBe(radio("Off"));
+    await key(radio("Off"), "Enter");
+    await key(document.activeElement!, "ArrowDown");
+    expect(document.activeElement).toBe(radio("Next"));
+    expect(onOff).not.toHaveBeenCalled();
+    expect(radio("Off").getAttribute("aria-checked")).toBe("false");
+    expect(radio("Current").getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("with a reason is disabled, shows the reason under its label and is named with it", async () => {
+    await openMenu([{ label: "Work", icon: Trash2, reason: { state: "used up" }, onClick: () => {} }]);
+    const item = document.querySelector<HTMLElement>("[role=menuitem]")!;
+    expect(item.getAttribute("aria-disabled")).toBe("true");
+    expect(item.getAttribute("aria-label")).toContain("used up");
+    expect(item.getAttribute("aria-label")).toContain("Work");
+    expect(item.querySelector("[aria-hidden=true].text-xs")?.textContent).toBe("used up");
+  });
+
+  it("sets a reason with a detail on two lines and names the item with both", async () => {
+    await openMenu([{ label: "Work", icon: Trash2, reason: { state: "Used up", detail: "resets in 2h" }, onClick: () => {} }]);
+    const item = document.querySelector<HTMLElement>("[role=menuitem]")!;
+    expect(item.getAttribute("aria-label")).toContain("Used up · resets in 2h");
+    const lines = Array.from(item.querySelectorAll("[aria-hidden=true].text-xs span"), (line) => line.textContent);
+    expect(lines).toEqual(["Used up", "resets in 2h"]);
+  });
+
+  it("names an item with a description and a reason by its label alone, the description carrying the reason", async () => {
+    await openMenu([{ label: "Work", icon: Trash2, reason: { state: "Used up" }, description: "Used up: weekly", onClick: () => {} }]);
+    const item = document.querySelector<HTMLElement>("[role=menuitem]")!;
+    expect(item.getAttribute("aria-label")).toBeNull();
+    expect(document.getElementById(item.getAttribute("aria-describedby")!)?.textContent).toBe("Used up: weekly");
+  });
+
+  it("gives an item's description to assistive technology without drawing it", async () => {
+    await openMenu([{ label: "Work", icon: Trash2, description: "60% left", onClick: () => {} }]);
+    const item = document.querySelector<HTMLElement>("[role=menuitem]")!;
+    const description = document.getElementById(item.getAttribute("aria-describedby")!);
+    expect(description?.textContent).toBe("60% left");
+    expect(description?.classList.contains("sr-only")).toBe(true);
+  });
+});

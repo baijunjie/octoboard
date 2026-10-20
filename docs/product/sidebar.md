@@ -410,7 +410,14 @@ action menu offers:
   at the Agent accounts section. A session whose account has since been removed still shows it, checked and named by
   the directory the session recorded. The entry is present for a console session's row as well as a project session's,
   and only when the session's agent has more than one account to be on; with just the default account it is left out
-  rather than shown disabled. A session in the archive has no such entry, and neither has one still starting.
+  rather than shown disabled. A session in the archive has no such entry, and neither has one still starting. Each
+  account shows its compact usage bar before its name, as in the account picker, and assistive technology reads what
+  remains of its quota as the item's description (see "In an account picker" in `docs/product/account-quotas.md`). An
+  account other than the session's own that is used up (see "A used-up account" in `docs/product/account-quotas.md`),
+  as judged when the menu opens, is disabled, with the short reason under its name on two lines, saying it is used up
+  and when it resets; it stays reachable with the arrow keys, its accessible name is just the account's name, and the
+  full reason is its description. A removed account named by its directory shows a key icon in the bar's place, lined
+  up with the bars, and is never marked used up.
 - **Hand off** — opens the handoff dialog, which moves the session's place to a new session of another agent (see
   "Handing off from the window" in `docs/product/handing-off-sessions.md`). Present for a project session's and a
   console session's row; an archived session has no such entry. Disabled while the session is *working* or

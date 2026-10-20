@@ -136,3 +136,16 @@ it("shows the plan the agent names", () => {
 it("shows no plan when the agent names none", () => {
   expect(mount(<QuotaPlan quota={quota({ plan: null })} />).textContent).toBe("");
 });
+
+it("draws the 5-hour and weekly windows as one two-layer meter, each bar keeping its own label", () => {
+  const container = mount(<AccountQuotaSummary quota={quota()} />);
+  const pairs = container.querySelectorAll(".grid > div");
+  expect(pairs).toHaveLength(2);
+  expect(Array.from(pairs[0]!.querySelectorAll('[data-slot="meter"]'), (meter) => meter.getAttribute("aria-label"))).toEqual(["5-hour", "Weekly"]);
+});
+
+it("keeps a single bar for an account without a 5-hour window", () => {
+  const credits: QuotaWindow = { kind: "credit_period", label: null, used_percent: 10, resets_at: null, window_minutes: 10_080 };
+  const container = mount(<AccountQuotaSummary quota={quota({ agent: "grok", windows: [credits] })} />);
+  expect(container.querySelectorAll('[data-slot="meter"]')).toHaveLength(1);
+});

@@ -15,6 +15,7 @@ import { layoutScenarios } from "./layout";
 import { projectFilesScenarios } from "./projectFiles";
 import { projectGitScenarios } from "./projectGit";
 import { noticeScenarios } from "./notices";
+import { quotaGatingScenarios } from "./quotaGating";
 import { railQuotaScenarios } from "./railQuota";
 import { reportScenarios } from "./report";
 import { settingsScenarios } from "./settings";
@@ -51,6 +52,7 @@ export const SCENARIOS: Scenario[] = [
   ...settingsScenarios,
   ...dialogScenarios,
   ...handoffScenarios,
+  ...quotaGatingScenarios,
   ...configurationScenarios,
   ...viewerScenarios,
   ...layoutScenarios,

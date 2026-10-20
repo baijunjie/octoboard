@@ -104,15 +104,24 @@ Both dialogs offer these fields in this order:
   it holds (see "Which agents the agent pickers list" in `docs/product/consoles.md`). The field opens on the default
   resolved in "Which agent a session uses" below when that agent can be picked, otherwise on the first agent that can,
   whenever there is one.
-  The account picker offers only that agent's accounts, with its default account first, and is omitted when the agent
-  has no named accounts. It opens on the account resolved from the project and console for that agent (see "Which
-  account a session uses" below); a console session starts from its console's account for the selected agent.
+  The account picker offers only that agent's accounts, with its default account first, and is shown even when the
+  default account is the agent's only one, offering that account alone. It opens on the account resolved from the
+  project and console for that agent (see "Which account a session uses" below); a console session starts from its
+  console's account for the selected agent.
   There is no inheritance entry: both pickers settle concrete choices for this session.
+  Each account in the picker carries a compact usage bar (see "In an account picker" in
+  `docs/product/account-quotas.md`). A used-up account (see "A used-up account" in `docs/product/account-quotas.md`)
+  is listed but cannot be picked, with a short note under its name saying it is used up and when it resets. When the
+  account the field would open on, or would fall to when the user turns to another agent without having picked one
+  of its accounts, is used up, the field takes the first account of the same agent that is not, in the picker's order.
+  When the chosen account is used up all the same — every account of the agent is, the agent's only account among
+  them, or a reading arrives while the dialog is open — a danger callout at the top of the
+  dialog's body names the account, the quota it has used up and when it resets, and the dialog cannot be submitted
+  until another agent or account is chosen or the account is no longer used up.
   Switching agents retains each agent's account choice separately. If a remembered account is removed while the dialog
   is open, that agent stays selected and its account falls back to its project's and console's current resolution,
-  or its console's alone for a console session.
-  Switching agents returns focus to the Agent picker even when the account picker appears or disappears. If the last
-  named account is removed while focus is on the account picker or one of its open options, focus returns to Agent.
+  or its console's alone for a console session; with its last named account removed, the picker stays, offering the
+  default account. Switching agents returns focus to the Agent picker.
 - **Report to** (project sessions only; a choice, "No console session" by default) — one of the console's console
   sessions that are neither archived nor still *starting*, the most recently started first, each shown beside its colour, the same one the session's binding badge
   will carry (see "The binding badge" in `docs/product/sidebar.md`), or none. A chosen console session receives this
@@ -145,7 +154,7 @@ explicitly when no custom name was entered.
 behind it (see "The launch environment" in `docs/product/launching-agents.md`). The dialog does not wait for the
 launch: it closes as soon as the session is recorded, and the session's terminal says it is starting until the agent
 is up (see "Loading" in `docs/product/session-terminal.md`). A refusal that can be known before anything is recorded —
-an unknown owner, an unavailable agent or one that is not added, a model the agent does not offer, the refusals about a conversation to resume
+an unknown owner, an unavailable agent or one that is not added, a used-up account, a model the agent does not offer, the refusals about a conversation to resume
 below — is still shown in the dialog, which stays open. A session an agent opens with `new_session`, and the session
 an approved request for one starts (see "On approval" in `docs/product/session-requests.md`), are listed as *starting*
 the same way, but the agent's call, or the approval, is answered only once the launch has settled, with the launch's
@@ -214,6 +223,22 @@ that has been determined unavailable is refused as unavailable (`agent_not_avail
 a session being opened is checked: a session of an agent removed since keeps running, and resuming, reopening or
 restarting it is never refused for this.
 
+**The daemon refuses to open a session on a used-up account.** Whatever opens it — the dialog, a session opened with
+defaults, `open_session`, a console or project session's `new_session` (with `resume_agent_session_id` too), a
+handoff's receiving session, or an approved session request — a new session whose account, once resolved (see "Which
+account a session uses" below), is used up by the reading the daemon holds at that moment (see "A used-up account" in
+`docs/product/account-quotas.md`) is refused with `account_quota_exhausted`, and nothing is recorded; the user's own
+request is refused too. The refusal carries `agent`, `account` (the account's name), `window` (the used-up window's
+name: `5-hour`, `Weekly`, `Monthly` or `Credits`) and, when the agent gives a reset time, `resets_at` in milliseconds
+since the epoch. In the window it is shown in an error alert, in the UI's language, saying the account cannot run a
+session because it has used up that quota and, when known, how long until it resets, counted from when the alert is
+shown; the next step is to choose another account that still has quota, or to try again once the quota resets. An
+agent's tool call is refused with a reason in English naming the account, the agent and the window, about how long
+until it resets when known, and saying to choose another account or wait for the reset. A session request is refused
+that way before the user is asked, and again on approval should the account be used up by then (see
+`docs/product/session-requests.md`). Only a session being opened is checked: a session already on the account keeps
+running, and resuming, reopening or restarting it is never refused for this.
+
 With every agent determined unavailable, a console session's `new_session` tool is refused as well, with a reason it
 can report that says the same (see "The console session's tools" in `docs/product/hub-orchestration.md`). Nothing is
 refused for an agent being unavailable while availability is still being determined: a session then opens or fails
@@ -259,6 +284,23 @@ the answer arrives, the session is still opened but not selected.
 
 When no agent is both added and installed, no **+** shows its quick form, and every one of them is disabled (see
 "Opening a session" above).
+
+When the account the dialog would open on is used up, the session opened with defaults takes another account of the
+same agent, as the dialog does (see **Agent** above). When every account of that agent is used up, there is nothing
+to open with defaults:
+
+- the **+** in its quick form looks disabled but stays focusable and under the pointer; its accessible name stays its
+  action, while its tooltip, and its description for assistive technology, say in short that the default agent's
+  quota is used up, without naming the agent;
+- pressing it — or pressing a **+** with the modifier before the hold was noticed — opens nothing and shows an error
+  alert that names the button's action and says it is unavailable because the default agent's accounts have all used
+  up their quota, with the advice to choose another agent in the new session dialog, or to try again once the quota
+  resets;
+- in the **+** menu of projects in a console session's focus mode, held in its quick form, each such project is
+  disabled, with a short note under its name saying the default agent's quota is used up; it stays reachable with
+  the arrow keys, and its accessible name ends with that note.
+
+Without the modifier, the same **+** opens the dialog as usual.
 
 ### Which agent a session uses
 

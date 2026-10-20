@@ -88,6 +88,12 @@ the duration of its own action — the obvious way to keep a slow request from b
 `<body>` and takes the dialog's Escape and Tab with it until the action ends. Mark it `isPending` instead: that blocks
 press and hover, keeps the control focusable, and announces the pending state. Keep `isDisabled` for a control
 that is unavailable for a reason outside the action itself (a field not filled in yet), where focus is not on it.
+When such an outside change can still land while focus is on the control (a quota reading arriving under an open
+dialog), hand focus on with `useFocusLeavingWhenDisabled` from `packages/ui/src/dialogs/Dialog.tsx`, as the shared
+dialog footer and `ConfirmDialog` do, rather than testing `document.activeElement` against the control in an effect:
+WebKit has already blurred it to `<body>` by then. jsdom never blurs a disabled element, so the suite passes that
+test; a test reaches the WebKit case only by dispatching the `focusout` and reporting `<body>` as the active element
+by hand.
 
 ## Escape is taken above the React tree: a pane's listener, and react-aria's while a tooltip is open
 
