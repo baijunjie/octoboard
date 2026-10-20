@@ -6,6 +6,8 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
 import { errorAlerts } from "../errorAlerts";
+import { hasCodeParams } from "../errorPresentation";
+import { ActionableError } from "../errorRecovery";
 import { isolate } from "../i18n/isolate";
 import type { Agent, AgentAvailability, Session } from "../protocol";
 import type { NewSessionBinding } from "./dialogRequest";
@@ -48,11 +50,11 @@ function renderDialog(
   consoleOverride: Partial<typeof parentConsole> = {},
   binding: NewSessionBinding = { kind: "choose" },
   projectOverride: Partial<typeof project> | null = {},
-): { container: HTMLElement; root: ReturnType<typeof createRoot>; daemon: Daemon; onClose: () => void; onOpened: (sessionId: string) => void; onResume: ReturnType<typeof vi.fn>; pastMountRefocus: () => Promise<void> } {
+): { container: HTMLElement; root: ReturnType<typeof createRoot>; daemon: Daemon; onClose: () => void; onOpened: (sessionId: string) => void; onResume: ReturnType<typeof vi.fn<(sessionId: string) => Promise<void>>>; pastMountRefocus: () => Promise<void> } {
   const daemon = fakeDaemon(initial);
   const onClose = vi.fn();
   const onOpened = vi.fn();
-  const onResume = vi.fn(async () => {});
+  const onResume = vi.fn<(sessionId: string) => Promise<void>>(async () => {});
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() =>
@@ -131,16 +133,56 @@ it.each([
   if (fixedLine) expect(result.text).toContain(fixedLine);
 });
 
-it("cannot open a session for a fixed owner that is no longer live", () => {
-  const { container, root } = renderDialog([{ ...hub1, status: "archived" }], {}, {}, { kind: "bound", to: hub1 });
-  expect(buttons().find((b) => b.textContent === "Open")?.hasAttribute("disabled")).toBe(true);
-  expect(document.body.textContent).toContain("Hub is no longer available");
-  act(() => root.unmount());
-  container.remove();
+it.each(["archived", "removed"])("closes a fixed-owner form with a structured acknowledgement when its owner is %s", async (change) => {
+  const { container, root, daemon, onClose, onOpened, onResume } = renderDialog([hub1], {}, {}, { kind: "bound", to: hub1 });
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  expect(onClose).not.toHaveBeenCalled();
+  expect(daemon.toastError).not.toHaveBeenCalled();
+  act(() => root.render(
+    <DaemonProvider value={daemon}>
+      <SessionDialog
+        console={parentConsole}
+        project={project}
+        binding={{ kind: "bound", to: hub1 }}
+        sessions={change === "archived" ? [{ ...hub1, status: "archived" }] : []}
+        onClose={onClose}
+        onOpened={onOpened}
+        onResume={onResume}
+      />
+    </DaemonProvider>,
+  ));
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(daemon.toastError).toHaveBeenCalledTimes(1);
+  const error = vi.mocked(daemon.toastError).mock.calls[0][0];
+  expect(error).toBeInstanceOf(ActionableError);
+  expect(error).toMatchObject({
+    message: `${isolate("Hub")} is no longer available, so a session cannot be opened for it.`,
+    recovery: "none",
+    code: "quick_create_owner_gone",
+    params: { name: "Hub" },
+  });
+  expect(hasCodeParams(error as ActionableError)).toBe(true);
+  // Even a stale submit event must not open a session after the immutable owner goes away.
+  await act(async () => document.body.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+  expect(daemon.request).not.toHaveBeenCalled();
+});
+
+it("reports only one acknowledgement when both the fixed owner and every agent are unavailable", () => {
+  const { container, root, daemon, onClose } = renderDialog([], { agentAvailability: everyAgentUnavailable() }, {}, { kind: "bound", to: hub1 });
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(daemon.toastError).toHaveBeenCalledTimes(1);
+  expect(daemon.toastError).toHaveBeenCalledWith(expect.objectContaining({ recovery: "none", code: "quick_create_owner_gone", params: { name: "Hub" } }));
 });
 
 it("keeps the owner select, back on none, when the chosen console session is archived under it", async () => {
-  const { container, root, daemon } = renderDialog([hub1]);
+  const { container, root, daemon, onClose } = renderDialog([hub1]);
   vi.mocked(daemon.request).mockResolvedValue({ type: "ack" } as never);
   await act(async () => buttons().find((b) => b.textContent?.includes("No console session"))?.click());
   await act(async () => optionElements().find((o) => o.textContent === "Hub")?.click());
@@ -154,13 +196,15 @@ it("keeps the owner select, back on none, when the chosen console session is arc
           project={project}
           binding={choose}
           sessions={[{ ...hub1, status: "archived" }]}
-          onClose={() => {}}
+          onClose={onClose}
           onResume={async () => {}}
           onOpened={() => {}}
         />
       </DaemonProvider>,
     ),
   );
+  expect(onClose).not.toHaveBeenCalled();
+  expect(daemon.toastError).not.toHaveBeenCalled();
   const ownerTrigger = buttons().find((b) => b.textContent?.includes("No console session"));
   expect(ownerTrigger).toBeDefined();
   await act(async () => ownerTrigger?.click());
@@ -573,6 +617,8 @@ it("prefills an archived session's own name, not its terminal title, and shows i
   await settle();
   expect(resumeStatusText()).toContain("Fixing tests");
   expect(nameInput()!.value).toBe("Old work");
+  expect(nameInput()!.placeholder).toBe("Old work");
+  typeName("");
   expect(nameInput()!.placeholder).toBe("Old work");
   await submit("Reopen");
   expect(requestsOf(daemon, "rename_session")).toEqual([]);

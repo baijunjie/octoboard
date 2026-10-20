@@ -7,7 +7,7 @@ import { TextFieldDescription, TextLengthHint } from "./TextFieldDescription";
 
 /** A labelled single-line text field, in HeroUI's variant for a field on a surface, since it is
  * always in a dialog. `ltr` lays out a value that always reads left to right (a
- * path, a URL) whatever the UI's direction. The placeholder is an example; `description` carries
+ * path, a URL) whatever the UI's direction. The placeholder is a required example or optional default; `description` carries
  * anything else the field has to say, and `errorMessage` marks the field invalid and says what is
  * wrong with it, right under the field — HeroUI hides the description for as long as that lasts.
  * `trailing` is a control that belongs to the field, such as a browse button, and sits beside the

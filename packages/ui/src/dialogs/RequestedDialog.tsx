@@ -382,6 +382,7 @@ export function RequestedDialog({
           title={t("dialog.renameProject.title")}
           label={t("common.name")}
           initialValue={dialog.project.name}
+          placeholder={t("dialog.project.nameExample")}
           requiredMessage={t("dialog.renameProject.nameRequired")}
           characterLimit={PROJECT_NAME_LIMIT}
           tooLongMessage={t("daemon.field_too_long.name", { limit: PROJECT_NAME_LIMIT })}
@@ -397,6 +398,7 @@ export function RequestedDialog({
           title={t("dialog.rename.title")}
           label={t("dialog.rename.field")}
           initialValue={dialog.session.title}
+          placeholder={t("dialog.rename.nameExample")}
           requiredMessage={t("dialog.rename.titleRequired")}
           onSubmit={async (title) => {
             await request({ type: "rename_session", session: dialog.session.id, title });

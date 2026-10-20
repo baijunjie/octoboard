@@ -136,9 +136,12 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
   `docs/product/hub-orchestration.md`. The choice is offered from the project list and the terminal's **New session** offer outside focus
   mode. Opened from a project's focus mode the dialog has no such field and the session is always unbound; opened from a console session's focus mode it
   has none either, and shows a line saying the session reports to that console session instead, which is the binding
-  it gets (see `docs/product/focus-mode.md`). Should that console session be no longer available — archived or gone —
-  the dialog says so in an error callout at the top of its body and cannot be submitted. The **Resume conversation** tab has no such field, since a resumed
-  session is never bound (see "Resuming a conversation by its session ID" below).
+  it gets (see `docs/product/focus-mode.md`). Should that fixed console session become unavailable — archived or gone —
+  the dialog closes without opening a session. An error acknowledgement identifies the unavailable owner, with its
+  name set apart as a chip, and offers only OK; dismissing it returns focus to an available control. A console session
+  chosen in the optional Report to picker becoming unavailable instead returns that choice to no console session,
+  keeping the form open. The **Resume conversation** tab has no such field, since a resumed session is never bound
+  (see "Resuming a conversation by its session ID" below).
 
 After these fields, the collapsed **Advanced** section offers the model and reasoning effort for this session. It
 initially shows what the session would inherit for the selected agent (see "Which model and reasoning effort a session
@@ -413,8 +416,8 @@ reopened, one interrupted meanwhile is resumed, and one whose process starts mea
 | Nowhere | none; an error under the field says no conversation with that ID was found in any account | disabled |
 
 A lookup that fails shows its failure under the field, with no fields after it, and the submit button stays disabled.
-The locked Agent field holds that agent alone; its account half is shown only when that agent has more than one account
-offered, and for a session only when its account has a name to show.
+The locked Agent field holds that agent alone; its account half shows the account that holds the conversation whenever
+it has a name to show, including when it is the agent's sole default account.
 
 **Which records are searched.** Every agent that is available and added, in its default account and in every stored
 account of it, each in the config directory a launch of that account would use: the account's own directory, or for

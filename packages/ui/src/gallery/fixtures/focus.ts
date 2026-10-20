@@ -574,7 +574,7 @@ export const focusScenarios: Scenario[] = [
     title: "New session from console focus, the console session archived meanwhile",
     state: { ...state, sessions: new Map([...state.sessions!].map(([id, session]) => [id, id === hub1.id ? { ...session, title: "Release coordinator مرحبا 東京 UnbrokenOwnerNameForProductionCompatibilityReview", terminal_title: "Review release readiness مرحبا 東京" } : session])) },
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
-    description: "Reached only when the console session ends under the open dialog (archived from a second window). A danger alert at the top of the dialog body says it is no longer available, so a session cannot be opened for it; the fixed owner line stays and Open is disabled.",
+    description: "The fixed console session was archived from another window while New session was open. The unusable form closes, and the danger acknowledgement names the unavailable owner. Only OK is offered; dismissing it returns focus to the available sidebar controls.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.focus.newSession")),
       (ui) => ui.press(third.name),

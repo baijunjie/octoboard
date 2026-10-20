@@ -62,7 +62,8 @@ The **default clone directory** is where a clone lands when no parent directory 
 to the home directory) until the user sets one in Settings' General section (see "General" in
 `docs/product/settings.md`), and follows the same path rules as any other path here. The form starts its "Clone into"
 field with it, and the console session's `add_project` falls back to it when it gives no `path` for a clone; a path is
-still required for the other two sources. The directory is created if it does not exist.
+still required for the other two sources. The form keeps the local directory and clone parent directory separately:
+changing sources and returning retains each entered value. The directory is created if it does not exist.
 
 For a git association:
 
@@ -85,6 +86,13 @@ A name can be given only when a single project is being associated — a single 
 directory beneath which exactly one git repository is found; it then overrides the derived name. A blank name counts as
 none given. Otherwise, and for every project a parent-directory association produces when it finds more than one
 repository, the name is the directory's own name.
+
+In a new project's dialog, the empty Name field previews the name derived from the current directory or repository
+URL. For a directory, the preview follows the host's home expansion and lexical path normalization, including the
+filesystem root; for a repository, it follows the clone's directory name. If a usable name cannot yet be derived, it
+identifies the directory or repository name as the default instead. Changing the source, path or URL updates the hint
+without replacing a name the user has typed. The hint never fills the field: submitting it empty still asks for the
+derived name. An existing project's Name is required and shows an example when cleared.
 
 An explicit name is trimmed and limited to 100 characters, counted as Unicode scalar values: a Chinese character or
 an ordinary emoji counts as one; a sequence of several code points counts as several. Directory-derived names keep

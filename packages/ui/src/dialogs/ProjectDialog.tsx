@@ -31,6 +31,7 @@ import { TagsInput } from "./TagsInput";
 import { TextAreaInput } from "./TextAreaInput";
 import { TextInput } from "./TextInput";
 import { useDetectedAgent } from "./useDetectedAgent";
+import { projectNameDefault } from "./projectNameDefault";
 import { exceedsTextLimit, PROJECT_DESCRIPTION_LIMIT, PROJECT_NAME_LIMIT } from "./textLength";
 
 const SOURCE_OPTIONS: { value: ProjectSource; label: PlainMessageKey }[] = [
@@ -82,6 +83,7 @@ export function ProjectDialog({
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const [source, setSource] = useState<ProjectSource>(editing?.source ?? "local");
   const defaultCloneDir = useDaemonStore((s) => s.settings.default_clone_dir);
+  const home = useDaemonStore((s) => s.homeDir);
   // The clone directory is kept apart from the other sources' directory, so switching the source
   // back and forth loses neither; it starts at the default clone directory, which the user may change.
   const [directory, setDirectory] = useState(editing?.path ?? "");
@@ -279,7 +281,7 @@ export function ProjectDialog({
             value={name}
             onChange={setName}
             autoFocus={!!editing}
-            placeholder={editing ? undefined : t("dialog.project.nameExample")}
+            placeholder={editing ? t("dialog.project.nameExample") : projectNameDefault(source, path, remoteUrl, home) ?? t(source === "git" ? "dialog.project.repositoryNameDefault" : "dialog.project.directoryNameDefault")}
             description={editing ? undefined : t("dialog.project.nameHint")}
             errorMessage={shown(nameError)}
             characterLimit={PROJECT_NAME_LIMIT}
@@ -304,7 +306,7 @@ export function ProjectDialog({
           value={tags}
           onChange={setTags}
           suggestions={knownTags}
-          placeholder={t("dialog.project.tagsExample")}
+          placeholder={t(tags.length ? "dialog.project.noAdditionalTags" : "dialog.project.noTags")}
           isDisabled={locked}
         />
         <AgentAccountField

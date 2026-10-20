@@ -1170,6 +1170,18 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
+    id: "dialog-rename-project",
+    group: "Projects",
+    category: "normal",
+    title: "Rename an existing project",
+    description: "The required Name retains the current project name and its example remains available when cleared.",
+    steps: [
+      (ui) => projectActions(ui, tagged[0].name),
+      (ui) => ui.press(ui.t("sidebar.project.rename")),
+    ],
+  },
+  {
+    ...dialogFixture,
     id: "dialog-rename-project-text-too-long",
     group: "Projects",
     category: "exceptional",
@@ -1406,6 +1418,23 @@ export const dialogScenarios: Scenario[] = [
       (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.parent"))),
       (ui) => ui.press(ui.t("dialog.project.defaultAgent")),
       (ui) => ui.press("Claude Code"),
+    ],
+  },
+  {
+    ...dialogFixture,
+    id: "dialog-add-project-git",
+    group: "Projects",
+    category: "normal",
+    title: "Git repository with a derived project name",
+    description: "The repository URL is populated and Clone into retains the configured directory. Name stays empty, showing the actual repository-derived default; clearing the URL exposes its required example.",
+    steps: [
+      consoleActions,
+      (ui) => ui.press(ui.t("sidebar.console.addProject")),
+      (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.local"))),
+      (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.git"))),
+      (ui) => ui.focus(ui.t("dialog.project.repositoryUrl")),
+      (ui) => ui.type("https://example.com/team/release-console.git"),
+      (ui) => ui.wait(1100),
     ],
   },
   {

@@ -6,6 +6,8 @@ import { FadeOverflow } from "../components/FadeOverflow";
 import { useTabScrollLabels } from "../components/tabScrollLabels";
 import { DaemonRequestError } from "../daemon-client";
 import { errorPresentation } from "../errorPresentation";
+import { ActionableError } from "../errorRecovery";
+import { isolate } from "../i18n/isolate";
 import type { MessageKey } from "../i18n/catalog";
 import { InlineChip } from "../components/InlineChip";
 import { Message, useT } from "../i18n/react";
@@ -136,8 +138,6 @@ export function SessionDialog({
   const { choice, blocked, usedUp, overrides, agentOptions, setPickedAgent, account: accountField, launch } = useLaunchChoice(parentConsole, project, undefined, record);
   // A used-up account only matters for a session about to be opened on it, not for resuming one that has its own.
   const quotaUsedUp = !resuming || record ? usedUp : undefined;
-  // Nothing to open a session with (an agent was removed or uninstalled while this was open).
-  useCloseWhenBlocked(blocked, t("dialog.session.noAgent"), onClose);
 
   // The select is shown from the moment there is a console session to offer and stays mounted
   // for the rest of the dialog's life, even if the list later empties, leaving "none" alone: it is
@@ -161,6 +161,11 @@ export function SessionDialog({
     ? storedFixedOwner ?? sessions.find((s) => s.id === sessionBinding.to.id) ?? sessionBinding.to
     : undefined;
   const fixedOwnerGone = fixedOwner !== undefined && !owners.some((s) => s.id === fixedOwner.id);
+  useCloseWhenBlocked(blocked || fixedOwnerGone, fixedOwnerGone && fixedOwner ? new ActionableError(
+    t("dialog.session.ownerGone", { name: isolate(sessionDisplayTitle(t, fixedOwner)) }),
+    "none",
+    { code: "quick_create_owner_gone", params: { name: sessionDisplayTitle(t, fixedOwner) } },
+  ) : t("dialog.session.noAgent"), onClose);
   const owner = fixedOwner ?? (sessionBinding.kind === "choose" && !resuming ? owners.find((s) => s.id === pickedOwner) : undefined);
   const [ownerOffered, setOwnerOffered] = useState(owners.length > 0);
   if (owners.length > 0 && !ownerOffered) setOwnerOffered(true);
@@ -182,6 +187,7 @@ export function SessionDialog({
   const refused = resuming && refusal?.id === resumeId && (resume.looking || recordKey === refusal.record) ? refusal.error : undefined;
 
   const submit = () => {
+    if (fixedOwnerGone) return;
     if (!attempt(resume.idProblem)) {
       resumeFieldRef.current?.querySelector("input")?.focus();
       return;
@@ -283,7 +289,6 @@ export function SessionDialog({
       onSubmit={submit}
     >
       {quotaUsedUp && <ErrorAlert title={quotaUsedUp.title} announce>{quotaUsedUp.description}</ErrorAlert>}
-      {fixedOwner && fixedOwnerGone && <ErrorAlert>{<Message id="dialog.session.ownerGone" params={{ name: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, fixedOwner)}</InlineChip> }} />}</ErrorAlert>}
       {resumable && (
         <Tabs selectedKey={conversation} onSelectionChange={(key) => {
           setSwitched(true);

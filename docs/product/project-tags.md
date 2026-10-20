@@ -8,6 +8,9 @@ tags offered are simply the distinct ones the console's projects carry, so a tag
 from the choices. A project can carry as many tags as the user likes. A tag is trimmed, an empty one is dropped, and one
 that matches another of the project's tags ignoring case is dropped, the first spelling staying.
 
+The optional Tags field's empty text input distinguishes a project with no tags from one with no additional tag being
+entered. Leaving that input empty adds nothing and keeps any tags already picked.
+
 ## Picked tags
 
 A tag the user has picked and can remove, in a project's Tags field, looks and behaves as follows. The sidebar's

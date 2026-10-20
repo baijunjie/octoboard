@@ -302,3 +302,91 @@ map changes were needed and all seven code-tree READMEs remain reachable. The pr
 port and service record cleared, and no scratch scenario remains. The source freeze and bulk slot were released after
 final captures. Raw logs, commands and captures remain in task outputs outside Git. No real login, live daemon,
 website build, packaged WKWebView or native VoiceOver listening was performed; prior native/listening limits remain.
+
+
+## Form defaults and fixed-owner validity verification
+
+The form correction covers I-01/I-02/I-06 and S04 on aggregate base
+`d2ebaeffb1fe9cd5ffe9f1ef235c7a4e5c5f2855`. The refreshed editable-input inventory includes all 26 render/caller
+classifications, including current Resume fields. The English catalog now has 507 parameterized messages /
+708 message-parameter pairs, against 506/707 at that base; historical inventories do not certify this source.
+Required examples retain localized prefixes even while values hide them. Optional project-name hints mirror the
+daemon's host-home, lexical path/root and repository-basename rules without populating or changing submitted values;
+local/clone paths, agent-specific defaults and empty tag semantics retain their contracts.
+
+Fixed-owner disappearance or archival closes the unusable form and uses a single recovery-none acknowledgement,
+retaining semantic name metadata and rich chips. Optional picked-owner fallback remains separate. All current
+Resume field, refusal/details, pending, stale-answer, announcement and focus-handoff paths retain their behavior.
+The independent reviews explicitly preserved 04 rich/plain routing, 05 name references including fixed agent/product
+references, 06 raw/native/matching and direction, 12 focus behavior, and stock Alert treatment. No palette or stock
+foreground override was introduced.
+
+The final global source freeze covers all 734 UI/control files, including new files, tests and build configuration,
+with SHA-256 `3fb210bd1567520aed71606069d601605f679e79eace08de4377c7ebbd770707`. Every hash, the file set and base HEAD
+match across the completed final captures. Dependencies resolve inside this aggregate checkout. The earlier 733-file
+capture window ended before gallery repairs and deliberate test mutations; its failed results below are intermediate.
+The final read-only bootstrap supplement confirms `scripts/env.mjs` and tracked `.env`, outside that primary file
+set, match the initially clean base; `.env.local` is absent. These are repository-source proofs, not
+claims that every process/environment or installed-dependency input was fingerprinted.
+
+- The final explicit 72-path Vitest command passed 1,335/1,335 tests. Coverage includes affected fields/dialogs,
+  project defaults and raw empty requests, owner loss/fallback, all current Resume contracts, gallery reply fidelity,
+  catalogs, retained rich/plain/native/matching and stock Alert contracts, and report/viewer focus. This is a focused
+  result, not a whole-suite pass; the complete argument list remains in task outputs outside Git.
+- UI-only build passed typecheck, five i18n files / 30 tests and Vite, retaining the existing chunk-size/plugin-timing
+  advisories. Repository format checks passed ESLint with zero warnings and Cargo format.
+- Canonical gallery verification passed 1,080/1,080 loads with the unchanged assertions and `--jobs 1`:
+  the full 476-scenario English/Chinese light sweep passed 952/952 in 1,517.7s; the 32 affected scenarios in
+  English/Chinese dark passed 64/64 in 116.8s; those 32 in Arabic English fallback, both appearances, passed
+  64/64 in 118.6s. Runner elapsed times were 1,518.24s, 117.34s and 119.26s respectively.
+- Actual Chromium checks passed 240/240 across English/Chinese/Arabic English fallback and both appearances. They
+  cover populated and cleared placeholders, source/path changes, derived-name and empty submission, all rename
+  classes, directory navigation, exact tag defaults/removal, and all 13 Resume scenes. Console deletion's Enter check
+  verifies the expected running-session refusal and retained typed value, not successful deletion.
+- A further six Chromium checks and 78 bounded Playwright WebKit checks passed. With the sole OK button focused,
+  repeated Enter and Space plus keyup leave acknowledgement open; fresh Enter acknowledges. After the 400ms fallback
+  window, all six language/appearance conditions put visible, connected keyboard focus on New console session.
+  The WebKit checks also cover rename, directory, typed-refusal and archived/record-account Resume behavior.
+- Chromium measurements cover 126 unique settled conditions with actual .SF NS / PingFang SC glyph-font proof.
+  The 168 computed chip placements / 198 text samples include 18 wholly clipped directory-chip samples; the on-screen
+  subset is 150 placements / 180 text samples. Its text contrast minima are 5.464:1 light / 5.507:1 dark. All sampled
+  chip ancestors have opacity 1, no filter/background image and normal blending; no on-screen text intersects a fade.
+  Stock placeholder minima of 3.811:1 / 4.652:1 are measurements under the existing stock-colour rule, not custom-style
+  threshold passes or new overrides. The four accepted light stock Alert.Description exceptions remain unchanged.
+  WebKit records CSS font availability only, with no platform-glyph API claim.
+- The unchanged chip-geometry check passed both language groups / ten loads: 12/14/16px baseline, 390px wrapping/RTL,
+  import path equality and trust-sentence containment. It used the supported explicit installed Chromium executable.
+
+Earlier attempts remain failed or qualified. Initial new owner assertions and an in-progress mock callback type
+failed before catalog-correct expectations and explicit callback typing passed. The first actual run passed 18/41
+English/light checks and failed 23: wrong settings/field targets, direction checked on the input instead of its LTR
+group, missing fixture state updates for project/default/rename results, editing a locked clone field, an expected
+running-session deletion refusal, and focus sampled before the existing 400ms fallback. Captures and the owned preview
+were stopped before repairing the fixture replies. The following English/light run passed 38/40 and failed two:
+account-popup exit selection and an exact session-title expectation missing its direction isolates. A bounded
+three-check correction passed before the final 240-check matrix. Root-target repeated-key events in that matrix
+alone do not prove actionable suppression; the focused-OK Enter/Space supplements supply that proof.
+
+The initial geometry attempt failed before any assertions because Playwright's default Chromium executable was not
+installed. Supplying the check's supported executable setting passed without dependency changes. An initial preview
+start failed with sandbox EPERM; the authorized local listener succeeded. An unavailable optional formatter, ignored
+Markdown lint and a Python bytecode-cache permission attempt are tooling failures, not production-check passes.
+Ten targeted source mutations failed their intended regressions and were restored before capture. Independent
+review corrected host-path expansion parity, legacy description preservation in fixture replies and a stale
+fixed-account documentation statement; no failed result was relabeled as a baseline pass.
+
+Independent final source and evidence reviews passed all form/default, fixed-owner and Resume criteria, including
+preservation of 04/05/06/12 and visible InlineChip references versus plain accessibility/native/matching surfaces.
+Sequential map, product and memory workflows completed: the UI module map identifies the shared helper contracts;
+product docs describe live defaults, tag semantics and fixed-owner closure; existing memory already points at the
+project placeholder standard. All seven code-tree READMEs remain reachable. The standard retains structured name
+metadata in acknowledgement-only errors and keeps derived placeholders separate from submitted values.
+
+The owned preview and browsers stopped after final captures, port 5199 is closed, and process checks found no owned
+gallery/browser checks left running. The ignored service record and empty preview scratch directory were removed;
+the aggregate checkout and its independently installed dependencies remain intact. The final 734-file freeze still
+matched at capture completion. The source freeze and exclusive bulk slot were released after cleanup.
+
+All generated logs, raw results and captures remain outside Git. No real login, live daemon mutation, website build,
+packaged WKWebView or VoiceOver listening was performed. Chromium and Playwright WebKit are not native speech proof;
+all earlier failure, decorative-overhang and native-verification qualifications above remain in effect.

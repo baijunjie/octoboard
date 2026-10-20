@@ -329,6 +329,7 @@ export function ShellTerminalPanel({
           title={t("shellTerminal.renameDialog.title")}
           label={t("shellTerminal.renameDialog.field")}
           initialValue={terminals.find((terminal) => terminal.id === renaming)!.title}
+          placeholder={t("shellTerminal.renameDialog.nameExample")}
           requiredMessage={t("shellTerminal.renameDialog.required")}
           onSubmit={async (title) => {
             await daemon.request({ type: "rename_shell_terminal", shell_terminal: renaming, title: title.trim() });

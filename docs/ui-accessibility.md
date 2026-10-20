@@ -237,6 +237,8 @@ Every editable text input has a non-empty placeholder, including fields whose cu
 
 The placeholder is a hint, never an initial input value or a substitute for the field's label, accessible name,
 description or validation. Leaving a field empty retains its existing requiredness and default behavior.
+Derive a name hint using the submission's host-home, lexical path and repository naming rules; keep the entered
+value and raw submission unchanged.
 
 ## Visible focus
 
@@ -636,6 +638,7 @@ contain them. Do not replace `Alert.Title` with a heading element or rebuild the
 A state that must not happen is prevented rather than shown as a screen: disable an entry whose action cannot
 succeed, such as New session when there is no agent to pick. If that state arises while its dialog is open, close
 the dialog and show a plain error alert dialog explaining why, with only acknowledgement and no recovery action.
+This acknowledgement-only presentation retains structured error metadata and rich name references.
 
 Inline labels and technical literals use the shared `InlineChip`, backed by HeroUI Chip. Technical literals use
 its monospace, left-to-right and wrapping options. A technical literal — a path, a file name, a URL, a branch,

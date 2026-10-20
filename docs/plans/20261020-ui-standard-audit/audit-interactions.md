@@ -77,28 +77,46 @@ This table supplies the interaction scope of each relevant section. The full aud
 
 ## Editable input inventory
 
-| Render site | Placeholder / classification | Outcome |
-| --- | --- | --- |
-| `ConsoleDialog.tsx:169` console name | Required; no placeholder at create or edit | I-01 |
-| `RenameDialog.tsx:47` | Required; no placeholder; callers `RequestedDialog.tsx:376` (project), `:391` (session), `ShellTerminalPanel.tsx:328` (shell) | I-01 |
-| `DirectoryPicker.tsx:121` | Editable required navigation path; initialized value but no placeholder | I-01 |
-| `ConfirmDialog.tsx:119` | Required typed word; no placeholder | I-01 and I-06 |
-| `ProjectDialog.tsx:243` repository URL | Required; `dialog.project.urlExample` is bare URL | I-02 |
-| `ProjectDialog.tsx:254` local path / clone directory | Required local path uses bare `~/code`; optional clone uses current `defaultCloneDir` | I-02 local prefix; clone context-derived placeholder present |
-| `ProjectDialog.tsx:274` project name | New optional name uses fixed Ex. Website; edited required name has undefined | I-02 new default and I-01 edit omission |
-| `ProjectDialog.tsx:287` description | Optional, No description | Nonempty accurate empty default |
-| `ProjectDialog.tsx:300` → `TagsInput.tsx:125` | Optional tags, Ex. frontend | I-02; empty submission adds no tag |
-| `SessionDialog.tsx:180` title | Optional; live project/console-derived session.defaultName | Context-derived default present |
-| `SessionDialog.tsx:261` conversation ID | Required; localized Ex. ID | Example prefix present |
-| `ConsoleDialog.tsx:223` instructions | Optional; No additional instructions | Accurate empty default |
-| `AccountDialog.tsx:116` account name | New named account required Ex. Work; rename default account optional Default account | Required/default distinction present |
-| `AccountDialog.tsx:127` configuration directory | Optional; per-agent AGENT_DEFAULT_CONFIG_DIR | Current agent default present |
-| `CloneDirSetting.tsx:81` | Optional; ~/Projects default | Nonempty default present; InputGroup LTR |
-| `ImportReview.tsx:158` explicit directory | Required; bare ~/code/website | I-02 |
-| `ProjectFilter.tsx:148` | Optional search condition; Filter projects | Nonempty semantic filter hint; no field absence |
-| `FileFilterField.tsx:73` | Optional file/change search; localized filter hint | Nonempty semantic filter hint; no field absence |
+Fresh source inventory for the form correction on aggregate base `d2ebaeffb`, including current resume-by-ID fields.
+Every production `TextInput`, `TextAreaInput`, `Input`, `InputGroup.Input`, `SearchField.Input`, editable ComboBox and
+native input/textarea site was searched, and shared rename callers were checked separately. The findings below
+retain the original audit observations; this table describes the corrected current contracts.
 
-Hidden avatar file input is a file-picker implementation detail activated through a named Button; xterm's internal input and agent-authored report HTML are renderer content, not application-authored metadata fields. Select placeholders are not editable text inputs; no placeholder requirement is invented for a static selected choice.
+| Render site / caller | Requiredness and empty semantics | Placeholder after changes |
+| --- | --- | --- |
+| ConsoleDialog Name, new and edit | Required; submission validation unchanged | localized Ex. Work, including prefilled edit |
+| RenameDialog via RequestedDialog rename-project | Required; old name is not an empty default | localized Ex. Website |
+| RenameDialog via RequestedDialog rename-session | Required | localized Ex. Review changes |
+| RenameDialog via ShellTerminalPanel rename | Required; shell trims as before | localized Ex. Build |
+| DirectoryPicker editable navigation path | Required navigation target; Go lists typed path, never implicitly selects an unresolved one | localized Ex. ~/code/website, even while resolved populated path is present |
+| ConfirmDialog typed word | Required for heavy deletion; same localized case-insensitive comparison and raw value/composition | localized Ex. {UPPERCASE localized word}; chip + Input explicit LTR, approved ordinary italic chip retained |
+| ProjectDialog Repository URL | Required git source, pending/refusal locks dependent fields | localized Ex. https://github.com/owner/website |
+| ProjectDialog Directory | Required local/parent source | localized Ex. ~/code |
+| ProjectDialog Clone into | Optional git parent; blank uses settings.default_clone_dir | current defaultCloneDir retained; initial clone value and independent local/clone states unchanged |
+| ProjectDialog Name, new | Optional; daemon derives normalized directory basename or repository clone basename | projectNameDefault mirrors hostfs.expand/lexically_normalise + coordinator basename/root fallback and hostfs.repo_name URL/scp extraction; updates from current path/source/URL, never changes input value or submitted name |
+| ProjectDialog Name, edit | Required; blank must not silently retain old name | localized Ex. Website, populated and cleared |
+| ProjectDialog Description | Optional; blank clears/no description | existing No description |
+| ProjectDialog Tags → TagsInput | Optional list; blank draft adds no tag, existing chips remain | No tags when list empty; No additional tags when list nonempty |
+| SessionDialog Name, New and recordName Resume branch | Optional new-session name, context derived | existing session.defaultName(project/console name) |
+| ResumeConversationFields Session ID | Required, only initially editable Resume field | existing localized Ex. canonical conversation ID; LTR and stable InputGroup spinner retained |
+| ResumeConversationFields archived Name | Optional; empty retains stored title | existing target.session.title |
+| ResumeConversationFields interrupted/live Name | Disabled, not editable | stored title placeholder retained; focus handoff to Session ID if disabled/disappears remains unchanged |
+| ConsoleDialog advanced instructions | Optional, blank no additional instructions | existing No additional instructions |
+| AccountDialog Name new/named edit | Required | existing localized Ex. Work |
+| AccountDialog default-account Name | Optional, blank clears custom name to standard default | existing localized Default account |
+| AccountDialog configuration directory | Optional; agent-specific actual default | existing AGENT_DEFAULT_CONFIG_DIR[agent], dynamically follows agent; no change |
+| CloneDirSetting | Optional setting; blank restores built-in ~/Projects | existing ~/Projects; LTR input group; no change |
+| ImportReview explicit directory | Required when choice=directory; per-project destination | localized Ex. ~/code/website; rich project-name label and plain accessible label retained |
+| ProjectFilter text search | Optional search condition, no content to create | existing Filter projects search hint; excluded from example/default metadata rule |
+| ProjectBrowser → FileFilterField Files mode | Optional search condition | existing Which file are you looking for? |
+| ProjectBrowser → FileFilterField Changes mode | Optional search condition | existing Filter changes |
+
+
+Static selected options are selection machinery. Hidden avatar file input is activated through a named button;
+xterm input, disabled Markdown task inputs, agent-authored report fields and gallery/website controls are renderer
+or fixture content. Search fields retain their semantic filter hints. None substitutes for a required/default
+metadata hint. The name hint mirrors the daemon's lexical path/home/root and clone-basename rules without filesystem
+resolution; when a valid source is not yet known it names the directory/repository default rather than inventing one.
 
 ## Confirmed findings and fix handoffs
 
