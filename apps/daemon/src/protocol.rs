@@ -638,6 +638,12 @@ pub struct Session {
     /// The reasoning effort the agent's records show the session running with.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub observed_effort: Option<String>,
+    /// The reasoning effort the agent runs `observed_model` at by itself, where the records name
+    /// that model but no effort and the agent's catalogue gives it a default
+    /// (`crate::default_effort`). Never stored: it is filled in on the record a client receives
+    /// (`AppState::wire_session`), and absent otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_effort: Option<String>,
     pub status: SessionStatus,
     /// The work the agent has left running in the background while the session is `Idle`: the
     /// session is then waiting for instructions and, at the same time, not finished. Never stored:

@@ -40,6 +40,13 @@ describe("sessionModelEffort", () => {
   it("takes a null override as the agent's default rather than inheriting", () => {
     expect(sessionModelEffort({ ...sessionOf("s", "c", "p", "T", "idle"), model: null, effort: null }, inherited)).toEqual({ model: null, effort: null });
   });
+
+  it("takes the agent's default level where the records leave the effort unset, before any launch value", () => {
+    const base = { ...sessionOf("s", "c", "p", "T", "idle"), observed_model: "gpt-6.1-sol", default_effort: "xhigh" };
+    expect(sessionModelEffort({ ...base, effort: "low" }, inherited)).toEqual({ model: "gpt-6.1-sol", effort: "xhigh" });
+    expect(sessionModelEffort(base, inherited).effort).toBe("xhigh");
+    expect(sessionModelEffort({ ...base, observed_effort: "high" }, inherited).effort).toBe("high");
+  });
 });
 
 describe("inheritedLaunch", () => {

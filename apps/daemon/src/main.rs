@@ -18,6 +18,7 @@ mod config_import;
 mod config_upgrade;
 mod coordinator;
 mod crash_cleanup;
+mod default_effort;
 mod env_shell;
 mod git_env;
 mod git_push;

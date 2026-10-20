@@ -13,6 +13,10 @@ use std::time::SystemTime;
 /// A file's length and modification time, which together say whether it changed.
 pub type Signature = (u64, Option<SystemTime>);
 
+/// The largest JSON file the daemon reads whole: an agent's small state files beside or above
+/// its records (Grok's summary and usage ledger, Codex's catalogue cache), all far below it.
+pub const JSON_FILE_LIMIT: u64 = 8 * 1024 * 1024;
+
 #[derive(Default)]
 pub struct LineFile {
     identity: Option<(u64, u64)>,

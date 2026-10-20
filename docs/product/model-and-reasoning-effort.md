@@ -143,12 +143,20 @@ views show" in `docs/product/focus-mode.md`) — each of the two is decided on i
 gives a value:
 
 1. what the agent's own records show the session running with (below);
-2. the session's own choice when it was opened: a chosen value, or the agent's own default when it cleared the value;
-3. for a value the session inherits, what the defaults at the top of this doc give at that moment — a project
+2. for the effort only, where the records show the model the session runs but no effort, the level the agent runs that
+   model at by itself, where Octoboard can tell it (below, under "The agent's own default level");
+3. a value the session chose when it was opened;
+4. for a value the session inherits, what the defaults at the top of this doc give at that moment — a project
    session's project, else its console's project session pair; a console session's console session pair.
 
-An item none of these knows, the agent's own default included, reads **Default**; a session knowing neither reads
-**Default model** instead of the pair.
+Step 2 comes before the session's own choice and its inherited default because the records show the session running with
+no effort set: a console or project default set after the session was opened does not reach it, so only the agent's own
+level says what it runs at. A level from step 2 is shown as a plain level, like one the records show — "gpt-6.1-sol ·
+medium" — with nothing marking it as a default. A value the session cleared to the agent's own default gives nothing at
+steps 3 and 4.
+
+An item none of these gives — the agent's own default where Octoboard cannot tell its level, included — reads
+**Default**; a session knowing neither reads **Default model** instead of the pair.
 
 **Names.** A Claude Code model id is shortened to its family and version, its release date dropped: `claude-opus-5-5`
 reads "Opus 5.5". Claude Code's aliases are capitalised — Opus, Sonnet, Haiku — and the `best` alias is named "Best
@@ -164,7 +172,25 @@ effort is shown as the agent spells it.
 | Grok Build | The model and effort the session's summary records as configured, not the model a request was served by. |
 
 The last record that names a model, or an effort, wins; a record that names neither leaves the last one known in place.
-They are collected alongside native usage and as often (see "Native session usage" in `docs/product/session-usage.md`),
-kept through archiving and restarting Octoboard, and cleared when the session moves to a different native
-conversation, until the new one shows its own. They are reported on the session as `observed_model` and
-`observed_effort`, separate from the session's launch choices `model` and `effort`.
+Codex's turn context is the exception for the effort: it carries the effort its whole configuration resolved to and
+leaves it out when none sets one, so a turn context that names a model and no effort unsets an effort an earlier turn
+named. They are collected alongside native usage and as often (see "Native session usage" in
+`docs/product/session-usage.md`), kept through archiving and restarting Octoboard, and cleared when the session moves to
+a different native conversation, until the new one shows its own. They are reported on the session as `observed_model`
+and `observed_effort`, separate from the session's launch choices `model` and `effort`.
+
+**The agent's own default level.** Where the records name the model a session runs but no effort, the level that model
+runs at by itself is worked out per agent:
+
+| Agent | Where the level comes from |
+|---|---|
+| Claude Code | Not worked out, and not needed: every reply in the main conversation records its effort, so the records give it from the session's first reply on. |
+| Codex | The default level that the session's account's catalogue cache — `models_cache.json` in the account's Codex home — gives the model the records name. Codex leaves the effort out of a turn's context record exactly when no layer of its configuration sets one, and then runs the model at that catalogue default. The catalogue is the account's, so the same model can default to different levels on two accounts. A model the catalogue does not list, or a catalogue that is missing, gives no level; a catalogue or an account directory that cannot be read leaves the level last worked out. |
+| Grok Build | Not worked out: the session's summary records the configured effort, and whether Grok's own default effort setting applies to a model chosen at launch is not established, so a session whose summary has not been written yet reads Default. |
+
+Before a Codex session's first turn there is no context record, so no level is worked out, and an effort steps 3 and 4
+leave unset reads Default; Codex's configuration files are not read in its place. The level is not stored: it is worked
+out again on each pass that collects the records, from the model and effort that pass records and the catalogue as it
+then stands, so it reaches clients together with the record that makes it apply, and a changed catalogue reaches
+archived sessions too. It is reported on the session as `default_effort`, separate from `observed_effort`, which keeps
+meaning what the records show.

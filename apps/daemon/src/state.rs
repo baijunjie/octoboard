@@ -248,6 +248,10 @@ pub struct AppState {
     /// and goes with it, so nothing is worth keeping across a daemon restart. Dropped with the
     /// session's other bookkeeping.
     background_tasks: Mutex<HashMap<String, BackgroundWork>>,
+    /// The effort each session's agent runs it at by itself (`Session::default_effort`), kept by
+    /// the record collector for the sessions that have one. Held in memory only: it is read off
+    /// the agent's own files again within a pass of the collector after a restart.
+    default_efforts: Mutex<HashMap<String, String>>,
     /// Numbers the emptyings of a session's background task list that wait out
     /// [`EMPTY_TASKS_DELAY`], so one that was taken back is told from the one that replaced it.
     next_tasks_ticket: std::sync::atomic::AtomicU64,
@@ -457,6 +461,7 @@ impl AppState {
             turns: Mutex::new(HashMap::new()),
             request_hands: Mutex::new(HashMap::new()),
             background_tasks: Mutex::new(HashMap::new()),
+            default_efforts: Mutex::new(HashMap::new()),
             next_tasks_ticket: std::sync::atomic::AtomicU64::new(0),
             record_watch_generations: Mutex::new(HashMap::new()),
             next_record_watch_generation: std::sync::atomic::AtomicU64::new(0),
@@ -794,6 +799,12 @@ impl AppState {
             session.status = SessionStatus::WaitingUser;
         }
         session.background_tasks = self.shown_background_tasks(&session);
+        session.default_effort = self
+            .default_efforts
+            .lock()
+            .expect("default efforts lock poisoned")
+            .get(&session.id)
+            .cloned();
         session.terminal_title = self.resolved_title(&session, &std::cell::OnceCell::new());
         session
     }
@@ -891,6 +902,29 @@ impl AppState {
                 tracing::debug!(session = %id, %err, "reading the session for its background tasks failed")
             }
         }
+    }
+
+    /// Records the effort the session's agent runs it at by itself, and says whether that changed
+    /// what a client is shown; the caller publishes the session when it did.
+    pub fn set_default_effort(&self, id: &str, effort: Option<String>) -> bool {
+        let mut all = self
+            .default_efforts
+            .lock()
+            .expect("default efforts lock poisoned");
+        let changed = all.get(id) != effort.as_ref();
+        match effort {
+            Some(effort) => all.insert(id.to_string(), effort),
+            None => all.remove(id),
+        };
+        changed
+    }
+
+    /// Forgets the default effort of every session not in `ids`, the sessions that exist.
+    pub fn retain_default_efforts(&self, ids: &HashSet<&str>) {
+        self.default_efforts
+            .lock()
+            .expect("default efforts lock poisoned")
+            .retain(|id, _| ids.contains(id.as_str()));
     }
 
     /// The background tasks a client is shown for the session: its list while it is idle, where
@@ -2226,6 +2260,7 @@ mod tests {
             terminal_title: None,
             record_titles: Default::default(),
             background_tasks: Vec::new(),
+            default_effort: None,
             usage: None,
             observed_model: None,
             observed_effort: None,

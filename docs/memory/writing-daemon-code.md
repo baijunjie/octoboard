@@ -1,23 +1,30 @@
 # Writing daemon code
 
-## Live state the daemon derives goes on `AppState`, never as a field on a stored record
+## Live state the daemon derives goes on `AppState`, never into a stored record
 
 A piece of per-entity state the daemon reads off the outside world and does not persist — a project's git status, a
 repository's branch, anything recomputed rather than written by the user — is held in its own map on `AppState`
-(`apps/daemon/src/state.rs`), broadcast by an event of its own carrying the whole derived record, and replayed inside
-`snapshot` so a reconnecting client never has to ask for it separately. Do not add it as a field on `Console`,
-`Project` or `Session`.
+(`apps/daemon/src/state.rs`), never in a column of the `Console`, `Project` or `Session` row. It reaches clients in
+one of two shapes:
 
-Those three are SQLite rows, and every `*_upserted` event carries the whole record (`apps/daemon/PROTOCOL.md`,
-section "Daemon to client"), so a field that is not in the row has to be refilled on every path that writes that
-record, and is blanked in the client the moment any unrelated upsert is applied. For state that changes on a schedule
-of its own, that is every write path in the coordinator.
+- An event of its own carrying the whole derived record, replayed inside `snapshot` so a reconnecting client never has
+  to ask for it separately. This is the shape for anything about a console or a project; the git statuses are the
+  worked example, and the trust prompts are the same idea with the repeat sent after each `snapshot` rather than
+  inside it.
+- For state about one session, a field on `Session` that the store never reads or writes, filled in by
+  `AppState::wire_session`, through which every session record a client receives passes: `AppState::publish_session`
+  (the only sender of `session_upserted`, which re-reads the stored row first), the coordinator's `session_opened`
+  responses, and `snapshot`. `background_tasks` and `default_effort` are this shape: change the map, then publish the
+  session. Any new path that hands a client a `Session` goes through `wire_session` as well.
 
-Keeping it off the record costs two cleanups that both have to be written, because the derived state gets no deletion
-event of its own: the daemon drops its entry wherever the record itself is removed, and the client's reducer drops it
-on that record's `*_deleted` event, cascading from a console down to each of its projects. The git statuses are the
-worked example of the whole shape; the trust prompts are the same idea with the repeat sent after each `snapshot`
-rather than inside it.
+What is wrong is a field the record carries but some write path has to fill. Every `*_upserted` event carries the
+whole record (`apps/daemon/PROTOCOL.md`, section "Daemon to client"), so such a field is blanked in the client the
+moment an upsert built without it is applied — for state that changes on a schedule of its own, that means every write
+path in the coordinator. `Console` and `Project` have no `wire_session` counterpart, so they get the event shape.
+
+Neither shape gets a deletion of its own, so the cleanups are written by hand: the daemon drops its map entry wherever
+the record itself is removed, and with the event shape the client's reducer also drops it on that record's
+`*_deleted` event, cascading from a console down to each of its projects.
 
 ## A store write outside a transaction is a journalled pair of fsyncs under the one lock
 

@@ -4,7 +4,8 @@
 //! unknown. Cache and reasoning counts are subsets, never added to a native total twice. Where the
 //! records live is `agent_records.rs`'s business; this module scans and sums them, and hands each
 //! line to `record_titles.rs` and `record_observed.rs` on the way, which keep the titles and the
-//! model and effort the records give.
+//! model and effort the records give, and asks `default_effort.rs` for the effort a session's
+//! agent runs it at where the records give the model alone.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -15,7 +16,8 @@ use serde_json::Value;
 
 use crate::adapter::adapter_for;
 use crate::agent_records::Locator;
-use crate::line_file::{Change, LineFile, Signature};
+use crate::default_effort::DefaultEfforts;
+use crate::line_file::{Change, LineFile, Signature, JSON_FILE_LIMIT};
 use crate::protocol::{Agent, Session, SessionUsage};
 use crate::record_observed::Observed;
 use crate::record_titles::{SharedTitles, Titles};
@@ -49,7 +51,7 @@ impl SummaryFile {
     fn read(&mut self, path: &Path) -> Option<Value> {
         let metadata = std::fs::metadata(path).ok()?;
         let signature = (metadata.len(), metadata.modified().ok());
-        if self.0 == Some(signature) || metadata.len() > 8 * 1024 * 1024 {
+        if self.0 == Some(signature) || metadata.len() > JSON_FILE_LIMIT {
             return None;
         }
         let summary = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
@@ -63,6 +65,7 @@ struct Cursors {
     sessions: HashMap<String, Cursor>,
     /// Each account's shared title file, by agent and account directory.
     shared_titles: HashMap<(Agent, PathBuf), SharedTitles>,
+    default_efforts: DefaultEfforts,
 }
 
 /// One bounded blocking job owns all cursors, rather than starting a task per historical session.
@@ -91,6 +94,8 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
     };
     let ids: HashSet<_> = sessions.iter().map(|session| session.id.as_str()).collect();
     cursors.sessions.retain(|id, _| ids.contains(id.as_str()));
+    state.retain_default_efforts(&ids);
+    cursors.default_efforts.begin_pass();
     let hints = state.record_hints.retain(&ids);
     // Default homes resolve through the same login-shell snapshot as agent launches.
     let mut locator = Locator::default();
@@ -131,6 +136,8 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
         }
     }
     let mut updates = Vec::new();
+    // Sessions whose default effort changed, to publish unless their record update does.
+    let mut republish = Vec::new();
     for session in sessions {
         let identity = (
             session.agent,
@@ -154,11 +161,28 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
                 };
             }
         }
+        // A session whose records are not read this pass takes its default effort from the stored
+        // record, since an account's catalogue can change after the session stops.
+        let stored = |defaults: &mut DefaultEfforts, republish: &mut Vec<Session>| {
+            settle_default_effort(
+                state,
+                defaults,
+                &locator,
+                &session,
+                (
+                    session.observed_model.as_deref(),
+                    session.observed_effort.as_deref(),
+                ),
+                republish,
+            )
+        };
         if cursor.dormant && !live {
+            stored(&mut cursors.default_efforts, &mut republish);
             continue;
         }
         if cursor.path.is_none() {
             let Some(root) = locator.root(session.agent, session.config_dir.as_deref()) else {
+                stored(&mut cursors.default_efforts, &mut republish);
                 continue;
             };
             cursor.path = session
@@ -189,11 +213,30 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
             .model
             .clone()
             .filter(|model| session.observed_model.as_ref() != Some(model));
-        let observed_effort = cursor
-            .observed
-            .effort
-            .clone()
-            .filter(|effort| session.observed_effort.as_ref() != Some(effort));
+        let observed_effort = if cursor.observed.effort_unset {
+            Some(None)
+        } else {
+            cursor.observed.effort.clone().map(Some)
+        }
+        .filter(|effort| &session.observed_effort != effort);
+        // From the values about to be stored, so the default reaches clients with the record that
+        // makes it apply rather than a pass later.
+        settle_default_effort(
+            state,
+            &mut cursors.default_efforts,
+            &locator,
+            &session,
+            (
+                observed_model
+                    .as_deref()
+                    .or(session.observed_model.as_deref()),
+                match &observed_effort {
+                    Some(effort) => effort.as_deref(),
+                    None => session.observed_effort.as_deref(),
+                },
+            ),
+            &mut republish,
+        );
         let shared = shared_keys
             .get(&session.id)
             .zip(session.agent_session_id.as_deref())
@@ -218,12 +261,44 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
             });
         }
     }
+    let mut published = HashSet::new();
     if !updates.is_empty() {
         if let Ok(changed) = state.store.set_record_data(&updates) {
             for session in changed {
                 state.publish_session(&session);
+                published.insert(session.id);
             }
         }
+    }
+    for session in republish {
+        if !published.contains(&session.id) {
+            state.publish_session(&session);
+        }
+    }
+}
+
+/// Records the effort `session`'s agent runs it at by default, given the model and effort its records
+/// show, and queues the session for publication when that changed what clients are shown. A default
+/// that could not be looked up leaves the one recorded before.
+fn settle_default_effort(
+    state: &AppState,
+    defaults: &mut DefaultEfforts,
+    locator: &Locator,
+    session: &Session,
+    (model, effort): (Option<&str>, Option<&str>),
+    republish: &mut Vec<Session>,
+) {
+    let Some(default) = defaults.of(
+        session.agent,
+        session.config_dir.as_deref(),
+        model,
+        effort,
+        locator,
+    ) else {
+        return;
+    };
+    if state.set_default_effort(&session.id, default) {
+        republish.push(session.clone());
     }
 }
 
@@ -265,7 +340,7 @@ fn scan(agent: Agent, path: &Path, cursor: &mut Cursor) -> std::io::Result<()> {
         if agent == Agent::Grok {
             // An atomic JSON ledger is small and rewritten as native totals change. Guard its size
             // before reading; malformed/transient writes leave the last valid native total intact.
-            if std::fs::metadata(path)?.len() <= 8 * 1024 * 1024 {
+            if std::fs::metadata(path)?.len() <= JSON_FILE_LIMIT {
                 if let Ok(value) = serde_json::from_slice::<Value>(&std::fs::read(path)?) {
                     cursor.total = grok_usage(&value).or_else(|| cursor.total.clone());
                 }
@@ -612,6 +687,63 @@ mod tests {
                 .unwrap()
                 .total_tokens,
             18_829
+        );
+    }
+
+    /// A Codex turn that names its model and no effort unsets the effort an earlier turn named,
+    /// and the session reaches clients in the same upsert with the model's default from the
+    /// account's catalogue, published only when it changes.
+    #[test]
+    fn a_codex_turn_that_names_no_effort_is_published_with_the_catalogue_default() {
+        const ID: &str = "019a0000-0000-7000-8000-000000000001";
+        let (state, directory) = crate::test_support::app_state("usage-collector-default-effort");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&directory))
+            .unwrap();
+        let console_id = state.store.list_consoles().unwrap()[0].id.clone();
+        let root = directory.join("account");
+        let rollout = root
+            .join("sessions/2026/10/01")
+            .join(format!("rollout-2026-10-01T00-00-00-{ID}.jsonl"));
+        std::fs::create_dir_all(rollout.parent().unwrap()).unwrap();
+        let named = include_str!("../testdata/observed_codex_0.162.1.jsonl");
+        std::fs::write(&rollout, named).unwrap();
+        std::fs::write(
+            root.join("models_cache.json"),
+            include_str!("../testdata/codex_models_cache_0.162.1.json"),
+        )
+        .unwrap();
+        let session: crate::protocol::Session = serde_json::from_value(json!({
+            "id":"s","agent":"codex","agent_session_id":ID,"console_id":console_id,
+            "host_id":"local","role":"console","origin":"user","title":"Session",
+            "status":"idle","has_conversation":true,"pinned":false,"started_at":0,
+            "config_dir":root.to_string_lossy()}))
+        .unwrap();
+        state.store.insert_session(&session).unwrap();
+        let live = crate::test_support::idle_stand_in("s");
+        state.register_live(live.clone());
+        let mut events = state.subscribe();
+        let mut cursors = Cursors::default();
+        let mut published = || {
+            let mut sessions = Vec::new();
+            while let Ok(crate::protocol::Event::SessionUpserted { session }) = events.try_recv() {
+                sessions.push((session.observed_effort, session.default_effort));
+            }
+            sessions
+        };
+
+        collect(&state, &mut cursors);
+        assert_eq!(published(), [(Some("low".to_owned()), None)]);
+        let unset = include_str!("../testdata/observed_codex_unset_effort_0.162.1.jsonl");
+        std::fs::write(&rollout, format!("{named}{unset}")).unwrap();
+        collect(&state, &mut cursors);
+        assert_eq!(published(), [(None, Some("medium".to_owned()))]);
+        assert!(state.session_record("s").unwrap().observed_effort.is_none());
+        collect(&state, &mut cursors);
+        assert!(
+            published().is_empty(),
+            "an unchanged default is not published again"
         );
     }
 

@@ -1457,7 +1457,7 @@ impl Store {
             let observed_effort = update
                 .observed_effort
                 .as_ref()
-                .filter(|effort| session.observed_effort.as_ref() != Some(*effort));
+                .filter(|effort| &session.observed_effort != *effort);
             if usage.is_none()
                 && titles.is_none()
                 && observed_model.is_none()
@@ -1491,7 +1491,7 @@ impl Store {
                     "UPDATE sessions SET observed_effort = ?2 WHERE id = ?1",
                     params![source.id, effort],
                 )?;
-                session.observed_effort = Some(effort.clone());
+                session.observed_effort = effort.clone();
             }
             changed.push(session);
         }
@@ -2102,9 +2102,9 @@ pub struct RecordUpdate {
     pub usage: Option<crate::protocol::SessionUsage>,
     pub titles: Option<RecordTitles>,
     /// The model and effort the records show, where they show one; an absent value keeps what is
-    /// stored.
+    /// stored. The effort can also be cleared, `Some(None)`, where the records say none is set.
     pub observed_model: Option<String>,
-    pub observed_effort: Option<String>,
+    pub observed_effort: Option<Option<String>>,
 }
 
 const SESSION_COLUMNS: &str = "id, agent, agent_session_id, console_id, project_id, host_id,
@@ -2350,6 +2350,7 @@ fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         title: row.get(8)?,
         status: enum_from_row::<SessionStatus>(row, 9)?,
         background_tasks: Vec::new(),
+        default_effort: None,
         has_conversation: row.get(10)?,
         bound_to: row.get(11)?,
         colour: enum_from_row_opt::<ConsoleSessionColour>(row, 12)?,
@@ -2533,6 +2534,7 @@ mod tests {
             terminal_title: None,
             record_titles: Default::default(),
             background_tasks: Vec::new(),
+            default_effort: None,
             usage: None,
             observed_model: None,
             observed_effort: None,
@@ -4670,7 +4672,7 @@ mod tests {
             session: source.clone(),
             usage: None,
             observed_model: Some("claude-opus-5-5".to_owned()),
-            observed_effort: Some("high".to_owned()),
+            observed_effort: Some(Some("high".to_owned())),
             titles: None,
         }];
         assert_eq!(store.set_record_data(&updates).unwrap().len(), 1);
@@ -4682,6 +4684,18 @@ mod tests {
         let stored = store.get_session("session-1").unwrap().unwrap();
         assert_eq!(stored.observed_model.as_deref(), Some("claude-opus-5-5"));
         assert_eq!(stored.observed_effort.as_deref(), Some("high"));
+        let unset = [RecordUpdate {
+            session: stored,
+            usage: None,
+            observed_model: None,
+            observed_effort: Some(None),
+            titles: None,
+        }];
+        assert_eq!(store.set_record_data(&unset).unwrap().len(), 1);
+        let stored = store.get_session("session-1").unwrap().unwrap();
+        assert_eq!(stored.observed_model.as_deref(), Some("claude-opus-5-5"));
+        assert_eq!(stored.observed_effort, None);
+        assert!(store.set_record_data(&unset).unwrap().is_empty());
         source.agent_session_id = Some("another".to_owned());
         store.update_session(&source).unwrap();
         let stored = store.get_session("session-1").unwrap().unwrap();

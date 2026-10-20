@@ -33,11 +33,16 @@ export function inheritedLaunch(session: Session, consoles: Map<string, Console>
 }
 
 /** The model and effort a session is shown running with, each from what the daemon observed in the
- * agent's records, else the session's launch override, else `inherited`. `null` is the agent's own
- * default. */
+ * agent's records, else the session's launch override, else `inherited`. The effort the records
+ * leave unset is, before those two, the level the daemon found the agent runs the observed model at
+ * by itself, since the records show the session running without one. `null` is the agent's own
+ * default where nothing says which it is. */
 export function sessionModelEffort(session: Session, inherited: LaunchPair): LaunchPair {
   const launched = launchWithOverrides(inherited, session);
-  return { model: session.observed_model ?? launched.model, effort: session.observed_effort ?? launched.effort };
+  return {
+    model: session.observed_model ?? launched.model,
+    effort: session.observed_effort ?? session.default_effort ?? launched.effort ?? null,
+  };
 }
 
 /** "Opus 5.5 · high" for the line beside a session's agent mark. An item not known reads as the

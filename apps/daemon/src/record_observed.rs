@@ -5,11 +5,15 @@
 use serde_json::Value;
 
 /// What the records have shown so far, as the agent spells it. The last record that names a value
-/// wins, and a record that names none leaves the last one in place.
+/// wins, and a record that names none leaves the last one in place, except where `effort_unset`
+/// says otherwise.
 #[derive(Default)]
 pub struct Observed {
     pub model: Option<String>,
     pub effort: Option<String>,
+    /// The last record named the model and, by naming no effort, said that none is set, so an
+    /// effort shown earlier no longer holds. Only Codex's records say this.
+    pub effort_unset: bool,
 }
 
 impl Observed {
@@ -30,7 +34,10 @@ impl Observed {
         }
     }
 
-    /// Takes a line of a Codex rollout, which names the model and effort a turn started with.
+    /// Takes a line of a Codex rollout, which names the model and effort a turn started with. A turn
+    /// context carries the effort its whole configuration resolved to and leaves it out when no
+    /// layer sets one, so the latest one is the whole truth about the effort: one that names a
+    /// model and no effort unsets an effort an earlier turn named.
     pub fn fold_codex(&mut self, line: &str) {
         if !line.contains("\"turn_context\"") {
             return;
@@ -42,7 +49,14 @@ impl Observed {
             return;
         }
         if let Some(payload) = value.get("payload") {
-            self.fold(text(payload, "model"), text(payload, "effort"));
+            let (model, effort) = (text(payload, "model"), text(payload, "effort"));
+            if model.is_some() && effort.is_none() {
+                self.model = model;
+                self.effort = None;
+                self.effort_unset = true;
+            } else {
+                self.fold(model, effort);
+            }
         }
     }
 
@@ -57,7 +71,10 @@ impl Observed {
 
     fn fold(&mut self, model: Option<String>, effort: Option<String>) {
         self.model = model.or(self.model.take());
-        self.effort = effort.or(self.effort.take());
+        if effort.is_some() {
+            self.effort = effort;
+            self.effort_unset = false;
+        }
     }
 }
 

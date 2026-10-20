@@ -215,6 +215,9 @@ and of prompt-cache replay.
 `--resume`. They sit at the end of the flag list, after `--append-system-prompt`, so nothing non-flag follows a
 list-valued flag such as `--mcp-config`. On a model that does not support `max` or `xhigh`, Claude Code **silently
 lowers the level to `high`** rather than refusing it.
+The level a reply ran at is always on record: each main-transcript assistant line carries it as a top-level `effort`,
+also when nothing sets one — every such line of 155 transcripts written by 2.1.286 to 2.1.304, on a `settings.json`
+with no `effortLevel`.
 
 **Discovering models** (Claude Code 2.1.296): there is **no `models` subcommand**, but there is a real alias layer.
 `opus`, `sonnet` and `haiku` resolve to the newest member of each family through the catalogue Claude Code fetches from
@@ -399,6 +402,21 @@ not** (it was observed in an unrelated order), so sort it yourself. The command 
 that account's. **An unknown slug is not rejected at launch**: the session boots and fails only at its first turn, which
 is why a list that is wrong cannot be left to the launch to catch.
 
+**The effort a turn runs at when nothing sets one** (Codex 0.162.1, read off existing records on 2026-10-20, no turn
+spent): a rollout's `turn_context` payload carries the effort the configuration resolved to, and **leaves the `effort`
+key out** when no layer sets `model_reasoning_effort` — 335 such records on the account measured, none carrying `null`.
+Codex then runs the model at its catalogue entry's `default_reasoning_level`. The catalogue is cached per account as
+`models_cache.json` in `CODEX_HOME`, in the `{"models": [...]}` shape `codex debug models` prints, next to
+`fetched_at`, `client_version`, `etag` and `identity`. The default is the account's, not the model's alone: the same
+day, `gpt-6.1-sol` defaulted to `medium` on one account and to `low` on another. That this is the level actually run is
+corroborated rather than read off a request: in 35 sessions whose turn contexts left the effort out, each subagent Codex
+spawned was recorded in a `SubAgentActivity` item with `reasoning_effort` `medium`, that account's default, and not
+with the entry's `multi_agent_reasoning_effort` (`xhigh`). Which configuration layers a turn context reflects was
+measured with `codex doctor --json`, whose `config.load` check names the effective `model` but not the effort: a
+`.codex/config.toml` in the working directory is layered over `CODEX_HOME/config.toml` once the project is trusted and
+ignored before that, and a top-level `profile` key in `config.toml` makes the configuration fail to load (`invalid
+data`) — `--profile <name>` on this version layers `$CODEX_HOME/<name>.config.toml` instead.
+
 ## Grok Build
 
 16 hook events, payload as JSON on stdin, with **every field present in both camelCase and snake_case**. The hook
@@ -509,6 +527,13 @@ cache is per account (its `identity` differs). **An unknown id is refused loudly
 `config.toml` default — `grok-4.7` on the account measured — while its own session record and usage file name the
 served model `grok-4.7-build`. So the id to match a turn against the list Octoboard offers is the configured one, not
 the one the records carry.
+
+The effort is on record as well: the session directory's `summary.json` carried `reasoning_effort` in each of the 114
+summaries on the account measured (installed build 1.0.62 on 2026-10-20; a summary names no version), including
+sessions that ran a level other than the `config.toml` `[models] default_reasoning_effort`. A catalogue entry's
+`reasoning_effort` and the `default: true` level of its `reasoning_efforts` name the model's default; Grok's own
+configuration reference says `default_reasoning_effort` applies to "the default model", and whether it also applies to
+a model chosen with `--model` was not measured.
 
 ## Across the three agents
 

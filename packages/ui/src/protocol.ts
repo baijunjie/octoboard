@@ -318,6 +318,9 @@ export interface Session {
    * agent spells them; unlike `model` and `effort`, which are the launch overrides. */
   observed_model?: string;
   observed_effort?: string;
+  /** The reasoning effort the agent runs `observed_model` at by itself, where the records name that
+   * model but no effort and the agent's catalogue gives it a default. */
+  default_effort?: string;
 }
 
 /** One page a console session pushed to its report panel; it belongs to that console session, not to its

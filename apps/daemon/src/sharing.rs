@@ -186,6 +186,7 @@ mod tests {
             terminal_title: None,
             record_titles: Default::default(),
             background_tasks: Vec::new(),
+            default_effort: None,
             usage: None,
             observed_model: None,
             observed_effort: None,

@@ -386,7 +386,7 @@ Project { id, console_id, host_id, name, path, default_agent?, source, remote_ur
           trust_consent, pinned, tags: string[], description? }
 Session { id, agent, agent_session_id?, console_id, project_id?, host_id,
           role: "console"|"project", origin: "console"|"user", title, terminal_title?, usage?: SessionUsage,
-          observed_model?: string, observed_effort?: string,
+          observed_model?: string, observed_effort?: string, default_effort?: string,
           status: "starting"|"working"|"waiting_user"|"idle"|"interrupted"|"archived",
           background_tasks?: BackgroundTask[],   // only with status "idle"; absent when none
           has_conversation, bound_to?, colour?: "<family>", ordinal?,
@@ -445,14 +445,26 @@ ledger's `session` totals (the same ledger exposed by `grok usage`). These are u
 billing estimates. Inherited usage follows each agent's own resume/fork records. A change of native conversation id clears
 the old usage; switching accounts with the same conversation preserves it.
 
-`Session.observed_model` and `Session.observed_effort` are the model and reasoning effort the agent's own records show the
-session running with, in the agent's spelling; they are not `model` and `effort`, which are the launch overrides. The last
-record that names one wins, and a value the records do not show stays unknown rather than being cleared. Claude reads the
-`message.model` and the top-level `effort` of the main transcript's assistant lines, skipping sidechain lines and the
-`<synthetic>` model, and never the subagent transcripts, which run other models. Codex reads `payload.model` and
-`payload.effort` of `turn_context` records. Grok reads the summary file's `current_model_id` and `reasoning_effort`, the
-configured ids rather than the ones a request was served by. They are stored and collected like `usage`, retained when
-archived, and cleared with it when the native conversation id changes.
+`Session.observed_model` and `Session.observed_effort` are the model and reasoning effort the agent's own records show
+the session running with, in the agent's spelling; they are not `model` and `effort`, which are the launch overrides.
+The last record that names one wins, and a value the records do not show stays unknown rather than being cleared, except
+that a Codex `turn_context` naming a model and no effort clears `observed_effort` (see `Session.default_effort` below).
+Claude reads the `message.model` and the top-level `effort` of the main transcript's assistant lines, skipping sidechain
+lines and the `<synthetic>` model, and never the subagent transcripts, which run other models. Codex reads
+`payload.model` and `payload.effort` of `turn_context` records. Grok reads the summary file's `current_model_id` and
+`reasoning_effort`, the configured ids rather than the ones a request was served by. They are stored and collected like
+`usage`, retained when archived, and cleared with it when the native conversation id changes.
+
+`Session.default_effort` is the reasoning effort the agent runs `observed_model` at by itself, present only where the
+records name that model but no effort and the agent's own catalogue gives the model a default. Only Codex produces it: a
+`turn_context` with no `effort` means no layer of Codex's configuration set one, so the model runs at the
+`default_reasoning_level` its entry in the account's `models_cache.json` gives; such a `turn_context` also clears an
+`observed_effort` an earlier turn named. It is never stored: the collector works it out again on each pass, from the
+`observed_model` and `observed_effort` that pass records and the catalogue file as it is then (a catalogue or account
+directory that cannot be read keeps the value worked out before), and a change is announced with `session_upserted`,
+together with the observed values that make it apply. A client shows it in place of `observed_effort` where that is
+absent, ahead of the session's launch override and its inherited default, since the records show the session running
+with no effort set.
 
 `Session.background_tasks` lists the work a Claude Code session has left running in the background, including its
 named subagents (`type` `"subagent"`); it is `BackgroundTask { id, type?, description? }` as the agent's hooks name each
