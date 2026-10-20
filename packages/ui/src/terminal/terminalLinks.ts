@@ -6,15 +6,16 @@ import { IS_MAC } from "../useWindowShortcut";
  * Returns the handler xterm calls for a click on a link, for both detected plain-text addresses
  * and OSC 8 hyperlinks. xterm activates on mouseup even after a drag within a link, so an active
  * selection must suppress opening. Secondary buttons and macOS Control-click belong to the menu.
- * `open` is the platform's link capability, which a missing one leaves out.
+ * `open` is the platform's link capability, which a missing one leaves out; it gets the click too,
+ * for the modifiers held.
  */
 export function terminalLinkHandler(
-  open: ((url: string) => Promise<void>) | undefined,
+  open: ((url: string, event: MouseEvent) => Promise<void>) | undefined,
   hasSelection: () => boolean,
 ): (event: MouseEvent, uri: string) => void {
   return (event, uri) => {
     if (!open || event.button !== 0 || (IS_MAC && event.ctrlKey) || hasSelection()) return;
-    open(uri).catch((error: unknown) => {
+    open(uri, event).catch((error: unknown) => {
       console.warn("Terminal: cannot open the link", error);
     });
   };

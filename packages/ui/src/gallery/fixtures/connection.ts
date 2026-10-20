@@ -26,6 +26,7 @@ const PATH_LINK_SCENARIO = {
     "/Users/dev/code/website/src/summary/Summary.tsx": { view: { path: "src/summary/Summary.tsx" } },
     "/Users/dev/code/website/docs/summary-notes.md": { view: { path: "docs/summary-notes.md" } },
     "/Users/dev/code/website/bin/helper": { view: { path: "bin/helper" }, viewerOnly: true },
+    "/Users/dev/code/website/docs/plans/summary-layout": { kind: "directory", view: { path: "docs/plans/summary-layout/README.md" } },
     "/Users/dev/code/search-api-experiments/src/ui.ts": { view: { worktree: "wt-side", path: "src/ui.ts" } },
     "/private/tmp/octoboard/scratchpad/icon/sheet3.png": "file",
   },
@@ -174,7 +175,7 @@ export const connectionScenarios: Scenario[] = [
     category: "normal",
     title: "File paths in terminal output",
     description:
-      "The paths the daemon finds are in the same blue as the address on the last line, without hovering: the one in Read(...), the absolute project path, src/summary/Summary.tsx:42:7, docs/summary-notes.md:13, the side worktree's src/ui.ts:7, bin/helper, the temp-folder path and the one after @, where the colour starts at src, not at the @. " +
+      "The paths the daemon finds are in the same blue as the address on the last line, without hovering: the one in Read(...), the absolute project path, src/summary/Summary.tsx:42:7, docs/summary-notes.md:13, the side worktree's src/ui.ts:7, bin/helper, the folder docs/plans/summary-layout, the temp-folder path and the one after @, where the colour starts at src, not at the @. " +
       "The closing parenthesis, the full stop after :42:7, the commas after :13 and after the temp path and the semicolon after the @ mention stay in the output's own colour. " +
       "Three paths stay plain: src/summary/Draft.ts, which does not exist, src/shared/index.ts, which the daemon answers none for as it would one that more than one of the project's folders holds, and app/[id]/page.tsx, a route that is not looked up at all. " +
       "The pointer is on src/summary/Summary.tsx:42:7, which is underlined from its first character to the 7, not the full stop.",
@@ -211,6 +212,17 @@ export const connectionScenarios: Scenario[] = [
       "The project's own folder has no src/ui.ts.",
     ...PATH_LINK_SCENARIO,
     steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("src/ui.ts:7")],
+  },
+  {
+    id: "terminal-path-link-directory",
+    group: TERMINAL,
+    category: "normal",
+    title: "A folder with a README opens the README in the viewer",
+    description:
+      "Clicking docs/plans/summary-layout, a folder, opened its README.md in the file viewer rather than the file manager: the plan's heading and milestones, rendered as a document. " +
+      "Clicking the same link with Command (Control off macOS) held opens the folder on the host instead, which the gallery cannot show.",
+    ...PATH_LINK_SCENARIO,
+    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("docs/plans/summary-layout")],
   },
   {
     id: "terminal-path-link-launchable",

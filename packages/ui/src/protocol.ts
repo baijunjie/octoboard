@@ -251,9 +251,9 @@ export interface BackgroundTask {
  * would open (missing, outside the project and the temp roots, ambiguous, or launchable). */
 export type PathLinkKind = "file" | "directory" | "none";
 
-/** Where `read_project_file` reads a file a path link names, for one inside the project or one of
- * its worktrees. Whether the viewer can show it is found by reading it. `path` is a wire path below
- * that directory. */
+/** Where `read_project_file` reads the file a path link shows: the file it names inside the project
+ * or one of its worktrees, or for a directory there its README or index file. Whether the viewer can
+ * show it is found by reading it. `path` is a wire path below that directory. */
 export interface PathLinkView {
   worktree?: string;
   path: string;

@@ -2153,8 +2153,9 @@ pub struct PathLink {
     pub path: String,
     pub kind: PathLinkKind,
     /// Where the client reads the file with `read_project_file`, for a file inside the project or
-    /// one of its worktrees; absent for anything else. Whether the viewer can show it is for the
-    /// client to find out by reading it.
+    /// one of its worktrees, or for a directory there, its README or index file when it has one;
+    /// absent for anything else. Whether the viewer can show it is for the client to find out by
+    /// reading it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub view: Option<PathLinkView>,
     /// A file the system could launch: it is for the viewer to show, and `open_path_link` refuses it.
@@ -2162,7 +2163,8 @@ pub struct PathLink {
     pub viewer_only: bool,
 }
 
-/// A file in the project, as `read_project_file` names it.
+/// A file in the project, as `read_project_file` names it: the file a path link names, or the one
+/// a directory link shows.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PathLinkView {
     /// The worktree it is in; absent for the project's own directory.

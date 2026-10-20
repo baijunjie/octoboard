@@ -110,12 +110,12 @@ const sample = (cols: number) => [
 
 /** Output that names files: each kind of path a terminal turns into a link once the daemon finds it
  * (absolute, relative with a line and column, a document with a line, one in a side worktree, a
- * program the system could launch, in a temp folder, inside parentheses, after an `@` mention), the
- * same shapes the daemon does not find (a path that does not exist, one that more than one of the
- * project's folders holds, and a route whose folder name is in brackets, which is not looked up),
- * a sentence's full stop right after a path, and an address beside them for the link colour to be
- * compared with. The scenario using it says which of these exist. Each line fits the docked pane's
- * 53 columns. */
+ * program the system could launch, a folder with a README, in a temp folder, inside parentheses,
+ * after an `@` mention), the same shapes the daemon does not find (a path that does not exist, one
+ * that more than one of the project's folders holds, and a route whose folder name is in brackets,
+ * which is not looked up), a sentence's full stop right after a path, and an address beside them for
+ * the link colour to be compared with. The scenario using it says which of these exist. Each line
+ * fits the docked pane's 53 columns. */
 const pathsSample = () => [
   `${ESC}1;38;5;208m ✻ Welcome to Claude Code${ESC}0m`,
   "",
@@ -135,6 +135,8 @@ const pathsSample = () => [
   "  /Users/dev/code/search-api-experiments/src/ui.ts:7",
   "",
   `${ESC}32m●${ESC}0m The helper is built at bin/helper.`,
+  "",
+  `${ESC}32m●${ESC}0m The plan is in docs/plans/summary-layout.`,
   "",
   `${ESC}32m●${ESC}0m Context was added from @src/summary/Summary.tsx;`,
   "  the route app/[id]/page.tsx and src/shared/index.ts",

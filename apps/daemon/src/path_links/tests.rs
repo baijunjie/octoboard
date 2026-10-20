@@ -173,6 +173,56 @@ fn what_could_be_launched_is_never_opened_and_only_a_project_file_is_kept_to_be_
 }
 
 #[test]
+fn a_directory_shows_its_readme_else_its_index_file() {
+    let entry = |names: &[&str]| {
+        let dir = ScratchDir::new("path-links-entry");
+        for name in names {
+            std::fs::write(dir.join(name), "x").unwrap();
+        }
+        entry_file(&dir).map(|path| path.file_name().unwrap().to_string_lossy().into_owned())
+    };
+    assert_eq!(entry(&[]), None);
+    assert_eq!(entry(&["a.md", "READMEFIRST.md", "indexer.js"]), None);
+    // A README beats an index, and case does not matter.
+    assert_eq!(
+        entry(&["index.md", "readme.TXT"]).as_deref(),
+        Some("readme.TXT")
+    );
+    // `.md` first, then `.markdown`, then by name, ignoring case.
+    assert_eq!(
+        entry(&["README.txt", "README", "README.markdown", "Readme.MD"]).as_deref(),
+        Some("Readme.MD")
+    );
+    assert_eq!(
+        entry(&["README.txt", "README", "README.markdown"]).as_deref(),
+        Some("README.markdown")
+    );
+    assert_eq!(entry(&["README.txt", "README"]).as_deref(), Some("README"));
+    assert_eq!(
+        entry(&["index.ts", "index.html", "INDEX.md", "index.css"]).as_deref(),
+        Some("INDEX.md")
+    );
+    assert_eq!(
+        entry(&["index.ts", "index.html", "index.css"]).as_deref(),
+        Some("index.css")
+    );
+    // `index.` alone names nothing.
+    assert_eq!(entry(&["index."]), None);
+}
+
+#[test]
+fn only_a_regular_file_directly_in_the_directory_is_its_entry() {
+    let dir = ScratchDir::new("path-links-entry-kinds");
+    std::fs::create_dir(dir.join("README.md")).unwrap();
+    std::fs::create_dir(dir.join("sub")).unwrap();
+    std::fs::write(dir.join("sub/README.md"), "x").unwrap();
+    std::fs::write(dir.join("outside.md"), "x").unwrap();
+    std::os::unix::fs::symlink(dir.join("outside.md"), dir.join("index.md")).unwrap();
+    assert_eq!(entry_file(&dir), None);
+    assert_eq!(entry_file(&dir.join("missing")), None);
+}
+
+#[test]
 fn an_absolute_path_must_start_with_a_root_as_written_not_only_resolve_into_one() {
     let project = ScratchDir::new("path-links-spelled");
     let elsewhere = ScratchDir::new("path-links-spelled-link");
@@ -523,6 +573,35 @@ mod with_state {
         let viewer_only: Vec<_> = links.iter().map(|link| link.viewer_only).collect();
         assert_eq!(viewer_only, [false, false, true, false, false]);
         assert_eq!(links[3].kind, PathLinkKind::Directory);
+    }
+
+    #[test]
+    fn a_project_directory_is_viewed_through_its_entry_file() {
+        let fixture = Fixture::new();
+        let directory = ScratchDir::new("path-links-dir-view");
+        std::fs::create_dir_all(directory.join("docs/guide")).unwrap();
+        std::fs::write(directory.join("docs/readme.md"), "x").unwrap();
+        std::fs::write(directory.join("docs/index.html"), "x").unwrap();
+        std::fs::write(directory.join("docs/guide/index.html"), "x").unwrap();
+        std::fs::create_dir(directory.join("empty")).unwrap();
+        let project = fixture.project("dir-view-project", &directory);
+        let links = probe(
+            &fixture.state,
+            Some(&project),
+            ["docs", "docs/guide", "empty"].map(String::from).to_vec(),
+        )
+        .unwrap();
+        let views: Vec<_> = links
+            .iter()
+            .map(|link| link.view.as_ref().map(|view| view.path.as_str()))
+            .collect();
+        assert_eq!(
+            views,
+            [Some("docs/readme.md"), Some("docs/guide/index.html"), None]
+        );
+        assert!(links
+            .iter()
+            .all(|link| link.kind == PathLinkKind::Directory && !link.viewer_only));
     }
 
     #[test]

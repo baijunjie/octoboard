@@ -64,3 +64,34 @@ it("opens a path with no view on the host, and says when that fails", async () =
   await openPathTarget({ target: { path: "/tmp/b.png" }, project: undefined, request, viewFile: undefined, toastError });
   expect(toastError).toHaveBeenCalledOnce();
 });
+
+const folder = { path: "/r/docs", kind: "directory" as const, line: 4, view: { worktree: "w", path: "docs/README.md" } };
+
+it("shows a folder's entry file in the viewer without a line", async () => {
+  const { done, request, viewFile } = click(folder, async () => readReply());
+  await done;
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "read_project_file", project: "p", worktree: "w", path: "docs/README.md", slot: "viewer" });
+  expect(viewFile).toHaveBeenCalledExactlyOnceWith({ project: "p", worktree: "w", path: "docs/README.md", line: undefined, read: readReply() });
+});
+
+it("opens the folder itself on the host when its entry file cannot be shown or read", async () => {
+  const binary = click(folder, async () => readReply({ kind: "binary", media_type: null, text: null, data: "AA" }));
+  await binary.done;
+  expect(binary.viewFile).not.toHaveBeenCalled();
+  expect(binary.request).toHaveBeenLastCalledWith({ type: "open_path_link", project: "p", path: "/r/docs" });
+  const failed = click(folder, () => Promise.reject(new DaemonRequestError("gone", "file_not_found", {})));
+  await failed.done;
+  expect(failed.viewFile).not.toHaveBeenCalled();
+  expect(failed.toastError).not.toHaveBeenCalled();
+  expect(failed.request).toHaveBeenLastCalledWith({ type: "open_path_link", project: "p", path: "/r/docs" });
+});
+
+it("opens a folder on the host without reading its entry file when asked to, but not a file", async () => {
+  const request = vi.fn(async (body: { type: string }) => (body.type === "read_project_file" ? readReply() : { type: "ack" })) as never;
+  const viewFile = vi.fn();
+  await openPathTarget({ target: folder, onHost: true, project: "p", request, viewFile, toastError: vi.fn() });
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "open_path_link", project: "p", path: "/r/docs" });
+  expect(viewFile).not.toHaveBeenCalled();
+  await openPathTarget({ target: { ...target, kind: "file" }, onHost: true, project: "p", request, viewFile, toastError: vi.fn() });
+  expect(viewFile).toHaveBeenCalledOnce();
+});

@@ -14,7 +14,9 @@
 //! exactly one of them has it.
 //!
 //! A path found in a project root also says where the file viewer reads it from (`view`); whether
-//! the viewer can show it is for the client to find out by reading it, so nothing is read here.
+//! the viewer can show it is for the client to find out by reading it, so no file is read here. For
+//! a directory the view is its entry file, if it has one (found by listing it): a README, else an
+//! `index.*`.
 
 use std::collections::HashMap;
 use std::os::unix::ffi::OsStrExt;
@@ -401,20 +403,59 @@ pub fn probe(
         .collect())
 }
 
-/// Where the viewer reads `resolved` from, when it is a file in a project root.
+/// Where the viewer reads `resolved` from, when it is a file in a project root, or a directory
+/// there that has an entry file (see [`entry_file`]).
 fn view_of(resolved: &Resolved, roots: &ProjectRoots) -> Option<PathLinkView> {
     let index = resolved.project_root?;
-    if resolved.kind != PathLinkKind::File {
-        return None;
-    }
-    let relative = resolved
-        .path
-        .strip_prefix(roots.canonical.get(index)?)
-        .ok()?;
+    let target = match resolved.kind {
+        PathLinkKind::File => resolved.path.clone(),
+        PathLinkKind::Directory => entry_file(&resolved.path)?,
+        PathLinkKind::None => return None,
+    };
+    let relative = target.strip_prefix(roots.canonical.get(index)?).ok()?;
     Some(PathLinkView {
         worktree: roots.worktrees.get(index)?.clone(),
         path: crate::browse::wire_path::encode(relative.as_os_str().as_bytes()),
     })
+}
+
+/// The file a click on a directory shows instead of opening it: a regular file directly in it
+/// (a link is not followed) named `README` or `README.*`, else one named `index.*`, ignoring case.
+/// Among several, `.md` comes first, then `.markdown`, then any other name, each group by lowercase
+/// name.
+fn entry_file(directory: &Path) -> Option<PathBuf> {
+    let mut readmes = Vec::new();
+    let mut indexes = Vec::new();
+    for entry in std::fs::read_dir(directory).ok()?.flatten() {
+        if !entry.file_type().is_ok_and(|kind| kind.is_file()) {
+            continue;
+        }
+        let Ok(name) = entry.file_name().into_string() else {
+            continue;
+        };
+        let lower = name.to_ascii_lowercase();
+        let rank = |lower: String, name: String| {
+            // Lower sorts first: `.md`, then `.markdown`, then any other name.
+            let markdown = if lower.ends_with(".md") {
+                0
+            } else if lower.ends_with(".markdown") {
+                1
+            } else {
+                2
+            };
+            (markdown, lower, name)
+        };
+        if lower == "readme" || lower.starts_with("readme.") {
+            readmes.push(rank(lower, name));
+        } else if lower.len() > "index.".len() && lower.starts_with("index.") {
+            indexes.push(rank(lower, name));
+        }
+    }
+    let best = readmes
+        .into_iter()
+        .min()
+        .or_else(|| indexes.into_iter().min());
+    best.map(|(_, _, name)| directory.join(name))
 }
 
 /// Opens `path` with the host's default application (a directory in its file manager), after

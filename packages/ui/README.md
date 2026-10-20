@@ -83,7 +83,7 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   `sessionBranches` / `projectRemovalBranches` (the branches and worktrees bound to sessions, and those a project's
   removal with its folder in the Trash takes along, that the fixture daemon's inspections find; built with `branchItemOf` /
   `worktreeItemOf`),
-  `pathLinks` / `worktreeFiles` (the paths the fixture daemon's `probe_path_links` finds, each file the viewer shows with where it is read from, and the files `read_project_file` finds in a worktree; with `terminal: "paths"`),
+  `pathLinks` / `worktreeFiles` (the paths the fixture daemon's `probe_path_links` finds, each file the viewer shows (or folder with a README or index file) with where it is read from, and the files `read_project_file` finds in a worktree; with `terminal: "paths"`),
   `agentModels` (what the fixture daemon lists per agent, default `SAMPLE_CLAUDE_MODELS`), `files` / `filesByProject` /
   `git` (replace the project browser's fixtures; a `null` `git` is no repository) and `viewer` (renders the file
   viewer alone, in the "File viewer" group).

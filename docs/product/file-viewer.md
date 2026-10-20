@@ -7,9 +7,8 @@ one change, at a time. It is opened from three places:
   `docs/product/project-pane.md`);
 - **a change in the project pane's Git mode**; what the viewer shows of a change, how it moves through the change list,
   closes and follows a change is in `docs/product/project-pane-git-change-viewer.md`;
-- **a file path link in a session's terminal or a shell terminal** (see "File paths" in
-  `docs/product/session-terminal.md`); how that
-  differs is in "Opened from the terminal" below.
+- **a file or folder path link in a session's terminal or a shell terminal** (see "File paths" in
+  `docs/product/session-terminal.md`); how that differs is in "Opened from the terminal" below.
 
 Nothing can be edited or saved in it.
 
@@ -413,6 +412,23 @@ the file, from the directory it was found in:
 **A file the system could launch** (which files those are is in "File paths" in `docs/product/session-terminal.md`)
 is not read first: it always opens in the viewer, which reads and shows it as any file, saying it cannot be displayed
 where it is not text or an image, and it is never opened on the host by the click.
+
+**A folder** inside the same project or worktree place opens its **entry file** in the viewer, when it has one: a
+regular file directly in the folder named `README` or `README.<anything>`, or, when there is none, one named
+`index.<extension>`, the names compared without regard to case. Among several candidates of the same kind, a name
+ending in `.md` comes first, then one ending in `.markdown`, then any other, each group in alphabetical order without
+regard to case. A symbolic link is not taken for an entry file, and nothing below the folder's own files is looked at.
+The entry file is read first like a file link, with these differences:
+
+- it is shown without a line — a `:line` written after the folder's path plays no part;
+- when the folder has no entry file, or its entry file is binary and not an image the viewer draws, is larger than the
+  4 MiB a read delivers, or cannot be read for any other reason, the folder itself opens in the file manager on the
+  machine the daemon runs on, as a folder outside the project does; an entry file that cannot be read raises no error
+  alert;
+- **Cmd+click** (Ctrl+click on other systems) opens the folder in the file manager straight away, without looking at
+  its entry file. On a file link the modifier changes nothing.
+
+A folder inside a temporary directory always opens in the file manager.
 
 **The viewer is shown over the window and leaves the right pane as it is**: no Files panel is opened and no tree row is
 selected. It shows only the file it was opened on: it has no Previous file or Next file, and the arrow keys do not

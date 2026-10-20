@@ -74,8 +74,23 @@ Whether the compact summary keeps its title is left to the design review.
 - Long titles wrap rather than truncate.
 `;
 
+const PLAN_README = `# Summary layout plan
+
+Rework how the summary lays out its rows at each window width.
+
+## Milestones
+
+1. Stack the rows under the title in a narrow window.
+2. Keep the folded count visible below 480px.
+3. Share a line between the title and the first row in the compact summary.
+
+## Status
+
+Milestone 1 is done; the others are open.
+`;
+
 /** The project folder's files: a component long enough to scroll to line 42, a document with a
- * heading above the line a link names, and a stylesheet. */
+ * heading above the line a link names, a stylesheet, and a plan folder with a README. */
 export const PATH_LINK_FILES: FixtureFiles = {
   "": { dir: true },
   src: { dir: true },
@@ -94,6 +109,9 @@ export const PATH_LINK_FILES: FixtureFiles = {
   "bin/helper": { binary: { size: 48_213 } },
   docs: { dir: true },
   "docs/summary-notes.md": { text: SUMMARY_NOTES },
+  "docs/plans": { dir: true },
+  "docs/plans/summary-layout": { dir: true },
+  "docs/plans/summary-layout/README.md": { text: PLAN_README },
 };
 
 /** What the side worktree holds: a file the project's own folder does not have. */

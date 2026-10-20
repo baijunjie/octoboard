@@ -198,9 +198,10 @@ export function TerminalPane({
             const reply = await requestRef.current({ type: "probe_path_links", project: projectIdRef.current ?? undefined, paths });
             return reply.type === "path_links" ? reply.links.map(({ kind, view, viewer_only }) => ({ kind, view, viewerOnly: viewer_only })) : [];
           },
-          open: (target) =>
+          open: (target, onHost) =>
             openPathTarget({
               target,
+              onHost,
               project: projectIdRef.current ?? undefined,
               request: requestRef.current,
               viewFile: onViewFileRef.current,

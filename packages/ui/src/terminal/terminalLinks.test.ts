@@ -8,8 +8,9 @@ import { brokenUrlsAt, linkBox, linkSegmentsIn, type TerminalRow, TERMINAL_URL_R
 it("opens a link with a plain click", () => {
   const open = vi.fn(async () => {});
   const onClick = terminalLinkHandler(open, () => false);
-  onClick(new MouseEvent("click"), "https://example.com");
-  expect(open).toHaveBeenCalledWith("https://example.com");
+  const event = new MouseEvent("click");
+  onClick(event, "https://example.com");
+  expect(open).toHaveBeenCalledWith("https://example.com", event);
 });
 
 it.each<[string, MouseEventInit, boolean]>([

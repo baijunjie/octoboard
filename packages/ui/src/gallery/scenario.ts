@@ -143,8 +143,10 @@ export interface Scenario {
    * shows, in whatever form, is resolved against the home directory `/Users/dev` or the asking
    * project's folder first. A file in the project or a worktree carries its `view`, where
    * `read_project_file` reads it (a worktree's files are `worktreeFiles`), and `viewerOnly` when the
-   * system could launch it; every other path is answered as `none`. */
-  pathLinks?: Record<string, Exclude<PathLinkKind, "none"> | { view: PathLinkView; viewerOnly?: true }>;
+   * system could launch it. A folder in the project is a bare `"directory"`, or `{ kind:
+   * "directory", view }` when it has a README or index file, which `view` names; every other path
+   * is answered as `none`. */
+  pathLinks?: Record<string, Exclude<PathLinkKind, "none"> | { view: PathLinkView; viewerOnly?: true } | { kind: "directory"; view: PathLinkView }>;
   /** What `read_project_file` answers for a request that names a worktree, by the worktree's id and
    * then as `files` does by wire path; a worktree not listed has no file. */
   worktreeFiles?: Record<string, FixtureFiles>;

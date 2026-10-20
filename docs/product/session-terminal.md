@@ -253,9 +253,11 @@ the session may open. Until then — for a moment after it appears — and whene
   and by others.
 - **A click** on a file inside the project — its directory or a worktree's place — opens it in Octoboard's file
   viewer, at the path's line, when the viewer can show it; what decides that, and how the viewer then behaves, is in
-  "Opened from the terminal" in `docs/product/file-viewer.md`. Anything else opens on the machine the daemon runs on —
-  not on the machine a browser client happens to be open on: a file with its default application, a folder in the
-  file manager. A line given with the path plays no part there, so such a file opens as it would from the file
+  "Opened from the terminal" in `docs/product/file-viewer.md`. A click on a folder there opens the folder's README or
+  index file in the file viewer instead, when it has one the viewer can show; which file that is, and when and how the
+  folder opens in the file manager instead, is in the same section. Anything else opens on the machine the daemon
+  runs on — not on the machine a browser client happens to be open on: a file with its default application, a folder
+  in the file manager. A line given with the path plays no part there, so such a file opens as it would from the file
   manager. The path is checked again by the rules above as it is opened on the host; one that no longer passes them —
   removed since, say — is not opened, and an error alert says so, as it does when the system fails to open it. A path
   link has no tooltip.

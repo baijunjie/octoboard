@@ -99,6 +99,14 @@ it("keeps the view the daemon gave a path beside its kind", async () => {
   expect(links.answerFor("/b").view).toBeUndefined();
 });
 
+it("gives a click the kind of the path beside its view", async () => {
+  const view = { path: "docs/README.md" };
+  const { cache: links, onChange } = cache(() => [{ kind: "directory", view }]);
+  links.want(["/docs"]);
+  await vi.waitFor(() => expect(onChange).toHaveBeenCalledOnce());
+  expect(links.answerFor("/docs")).toEqual({ kind: "directory", view, viewerOnly: undefined });
+});
+
 it("asks again only once the answer is old, and says nothing when it did not change", async () => {
   let time = 0;
   const { cache: links, probe, onChange } = cache(() => [{ kind: "none" }], () => time);

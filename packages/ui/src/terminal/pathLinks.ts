@@ -1,6 +1,7 @@
 import type { IBufferRange, ILink, ILinkProvider, Terminal } from "@xterm/xterm";
 
 import type { PathLinkKind, PathLinkView } from "../protocol";
+import { isPrimaryModifier } from "../useWindowShortcut";
 import {
   cachedRows,
   type ExtraLinkSegments,
@@ -37,8 +38,8 @@ const PATH_TOKEN = new RegExp(`${PATH_START}${PATH_CHAR}+`, "g");
 const TRAILING_PUNCTUATION = /[.,;:!?]+$/;
 const LINE_SUFFIX = /:\d+(?::\d+)?$/;
 
-/** What the daemon answered for a path: what it names and, for a file the file viewer can show,
- * where to read it from. */
+/** What the daemon answered for a path: what it names and, for a file the file viewer can show (or a
+ * folder's README or index file), where to read it from. */
 export interface PathAnswer {
   kind: PathLinkKind;
   view?: PathLinkView;
@@ -46,9 +47,11 @@ export interface PathAnswer {
   viewerOnly?: boolean;
 }
 
-/** A path as the user clicked it: its line, if the text gave one, and its view, if it has one. */
+/** A path as the user clicked it: whether it is a file or a folder, its line, if the text gave one,
+ * and its view, if it has one. */
 export interface PathLinkTarget {
   path: string;
+  kind?: Exclude<PathLinkKind, "none">;
   line?: number;
   view?: PathLinkView;
   viewerOnly?: boolean;
@@ -185,15 +188,15 @@ export class PathLinkCache {
   ) {}
 
   /** The kind of a path the daemon found, or `undefined` for one it did not or has not answered for. */
-  kind(path: string): "file" | "directory" | undefined {
+  kind(path: string): Exclude<PathLinkKind, "none"> | undefined {
     const kind = this.entries.get(path)?.kind;
     return kind === "file" || kind === "directory" ? kind : undefined;
   }
 
   /** What the daemon answered for a path, as far as a click needs it. */
-  answerFor(path: string): Pick<PathAnswer, "view" | "viewerOnly"> {
+  answerFor(path: string): Pick<PathLinkTarget, "kind" | "view" | "viewerOnly"> {
     const { view, viewerOnly } = this.entries.get(path) ?? {};
-    return { view, viewerOnly };
+    return { kind: this.kind(path), view, viewerOnly };
   }
 
   /** Records which paths are on screen now, so that a queued one that has left it is dropped. */
@@ -302,7 +305,7 @@ function pathSegmentsIn(
 function pathLinkProvider(
   term: Terminal,
   cache: PathLinkCache,
-  open: (target: PathLinkTarget) => Promise<void>,
+  open: (target: PathLinkTarget, onHost: boolean) => Promise<void>,
   hasSelection: () => boolean,
 ): ILinkProvider {
   const rowAt = terminalRowReader(term);
@@ -314,7 +317,7 @@ function pathLinkProvider(
         .filter((match) => cache.kind(match.path))
         .map((match) => {
           const target: PathLinkTarget = { path: match.path, line: match.line, ...cache.answerFor(match.path) };
-          const activate = terminalLinkHandler(() => open(target), hasSelection);
+          const activate = terminalLinkHandler((_, event) => open(target, isPrimaryModifier(event)), hasSelection);
           return { range: match.range, text: match.path, activate };
         });
       callback(links.length > 0 ? links : undefined);
@@ -330,7 +333,10 @@ function pathLinkProvider(
  */
 export function installPathLinks(
   term: Terminal,
-  handlers: { probe: (paths: string[]) => Promise<PathAnswer[]>; open: (target: PathLinkTarget) => Promise<void> },
+  handlers: {
+    probe: (paths: string[]) => Promise<PathAnswer[]>;
+    open: (target: PathLinkTarget, onHost: boolean) => Promise<void>;
+  },
   hasSelection: () => boolean,
   onChange: () => void,
 ): { cache: PathLinkCache; segments: ExtraLinkSegments } {

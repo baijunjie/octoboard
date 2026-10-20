@@ -589,6 +589,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
             const found = existing.get(normalizedPath(absolute));
             if (found === undefined) return { path, kind: "none" };
             if (typeof found === "string") return { path, kind: found };
+            if ("kind" in found) return { path, kind: found.kind, view: found.view };
             return { path, kind: "file", view: found.view, ...(found.viewerOnly && { viewer_only: true }) };
           });
           return { type: "path_links", links };

@@ -118,10 +118,11 @@ export function ShellTerminalView({
             const reply = await latest.current.request({ type: "probe_path_links", project: latest.current.project, paths });
             return reply.type === "path_links" ? reply.links.map(({ kind, view, viewer_only }) => ({ kind, view, viewerOnly: viewer_only })) : [];
           },
-          open: (target) => {
+          open: (target, onHost) => {
             const onViewFile = latest.current.onViewFile;
             return openPathTarget({
               target,
+              onHost,
               project: latest.current.project,
               request: latest.current.request,
               viewFile: onViewFile && ((file) => onViewFile(file, focus)),

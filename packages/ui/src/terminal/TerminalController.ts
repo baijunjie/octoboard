@@ -142,9 +142,10 @@ export interface TerminalControllerHandlers {
   pathLinks?: {
     /** What each of `paths` names, in order. */
     probe: (paths: string[]) => Promise<PathAnswer[]>;
-    /** Opens a path that was found: in the file viewer when it has a view, otherwise a file with its
-     * default application and a folder in the file manager. */
-    open: (target: PathLinkTarget) => Promise<void>;
+    /** Opens a path that was found: in the file viewer when it has a view (a folder's is its README
+     * or index file), otherwise a file with its default application and a folder in the file
+     * manager. `onHost` asks for a folder to go to the file manager even when it has a view. */
+    open: (target: PathLinkTarget, onHost: boolean) => Promise<void>;
   };
 }
 

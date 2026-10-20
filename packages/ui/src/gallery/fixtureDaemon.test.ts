@@ -808,7 +808,7 @@ describe("the fixture daemon's path link probe", () => {
     await expect(daemon.request({ type: "open_path_link", project: project.id, path: "src/a.ts" })).resolves.toEqual({ type: "ack" });
   });
 
-  it("sends where a file the viewer shows is read from, and reads a worktree's files from the worktree", async () => {
+  it("sends where a file the viewer shows (or a folder's README) is read from, and reads a worktree's files from the worktree", async () => {
     const owner = consoleOf("c", "Main");
     const project = projectOf("p", owner.id, "Website");
     const daemon = createFixtureDaemon({
@@ -824,9 +824,10 @@ describe("the fixture daemon's path link probe", () => {
         "/Users/dev/side/a.ts": { view: { worktree: "wt-side", path: "a.ts" } },
         "/tmp/b.png": "file",
         [`${project.path}/bin/tool`]: { view: { path: "bin/tool" }, viewerOnly: true },
+        [`${project.path}/docs/plan`]: { kind: "directory", view: { path: "docs/plan/README.md" } },
       },
     });
-    await expect(daemon.request({ type: "probe_path_links", project: project.id, paths: ["a.ts", "/Users/dev/side/a.ts", "/tmp/b.png", "c.ts", "bin/tool"] })).resolves.toEqual({
+    await expect(daemon.request({ type: "probe_path_links", project: project.id, paths: ["a.ts", "/Users/dev/side/a.ts", "/tmp/b.png", "c.ts", "bin/tool", "docs/plan"] })).resolves.toEqual({
       type: "path_links",
       links: [
         { path: "a.ts", kind: "file", view: { path: "a.ts" } },
@@ -834,6 +835,7 @@ describe("the fixture daemon's path link probe", () => {
         { path: "/tmp/b.png", kind: "file" },
         { path: "c.ts", kind: "none" },
         { path: "bin/tool", kind: "file", view: { path: "bin/tool" }, viewer_only: true },
+        { path: "docs/plan", kind: "directory", view: { path: "docs/plan/README.md" } },
       ],
     });
     await expect(daemon.request({ type: "read_project_file", project: project.id, path: "a.ts" })).resolves.toMatchObject({ worktree: null, file: { text: "const a = 1;\n" } });
