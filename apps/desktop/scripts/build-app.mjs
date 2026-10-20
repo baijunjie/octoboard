@@ -11,10 +11,10 @@
 //
 // It then *asserts* the outcome instead of trusting the stripping: a bundle that carries a
 // Developer ID authority fails the script.
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { statSync } from "node:fs";
 import path from "node:path";
-import { appDir, bundleDir, findBundle, tauriBin } from "./bundle.mjs";
+import { assertLayeredIcon, bundleDir, findBundle, tauriBuild } from "./bundle.mjs";
 
 // Arguments that move the output away from `target/release/bundle` (or produce none) are refused up
 // front, for a fast and actionable failure; the check on the bundle's age below is what catches the
@@ -36,10 +36,16 @@ const env = Object.fromEntries(
 );
 
 const startedAt = Date.now();
-execFileSync(tauriBin, ["build", ...args], { cwd: appDir, env, stdio: "inherit" });
+tauriBuild(args, env);
 
 const app = findBundle(path.join(bundleDir, "macos"), ".app");
 assertProducedSince(app, startedAt);
+// Only a warning: a local verification build is still useful without the layered icon.
+try {
+  assertLayeredIcon(app);
+} catch (error) {
+  console.warn(`warning: ${error.message}`);
+}
 assertNoDeveloperId(app, spawnSync("codesign", ["-dv", "--verbose=4", app], { encoding: "utf8" }));
 console.log(`${app} carries no Developer ID authority and is for local verification only.`);
 

@@ -1,0 +1,26 @@
+#!/bin/sh
+# Stands in for `actool` on the Tauri CLI's PATH (the desktop build scripts put it first there) and
+# runs the real one with stdin on /dev/null.
+#
+# The bundler compiles the `.icon` in `bundle.icon` into `Assets.car` by running `actool` with stdin
+# inherited, and under the Node CLI that descriptor is close-on-exec (Node marks every inherited
+# descriptor so at startup), so `actool` starts with fd 0 closed. Its `ibtoold` helper then throws
+# "attempt to insert nil object" and no `Assets.car` is produced; worse, a helper started that way
+# stays running and fails every later `actool` call, from any caller, until `killall ibtoold`.
+#
+# TODO: remove once the Tauri CLI no longer inherits stdin for the commands it captures
+# (tauri-apps/tauri pull request 15991).
+
+# Without Xcode's `actool` in the active developer directory, `xcrun` falls back to searching PATH
+# and would find this shim again, so it is taken off PATH first, wherever it sits in it.
+shim_dir=$(cd "$(dirname "$0")" && pwd -P)
+clean_path=
+set -f
+IFS=:
+for entry in $PATH; do
+  [ "$(cd "$entry" 2>/dev/null && pwd -P)" = "$shim_dir" ] && continue
+  clean_path=${clean_path:+$clean_path:}$entry
+done
+PATH=$clean_path
+export PATH
+exec /usr/bin/xcrun actool "$@" </dev/null

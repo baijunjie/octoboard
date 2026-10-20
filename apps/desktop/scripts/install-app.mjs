@@ -3,7 +3,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import { loadEnv } from "../../../scripts/env.mjs";
-import { appDir, bundleDir, findBundle, tauriBin } from "./bundle.mjs";
+import { appDir, assertLayeredIcon, bundleDir, findBundle, tauriBuild } from "./bundle.mjs";
 
 if (process.platform !== "darwin") throw new Error("build:install requires macOS.");
 if (process.argv.length > 2) throw new Error("build:install takes no arguments; configure .env.install.local.");
@@ -25,9 +25,10 @@ const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !n
 env.APPLE_SIGNING_IDENTITY = identity;
 const config = JSON.parse(readFileSync(path.join(appDir, "src-tauri", "tauri.conf.json"), "utf8"));
 const startedAt = Date.now();
-execFileSync(tauriBin, ["build", "--bundles", "app"], { cwd: appDir, env, stdio: "inherit" });
+tauriBuild(["--bundles", "app"], env);
 const app = findBundle(path.join(bundleDir, "macos"), ".app");
 if (statSync(app).mtimeMs < startedAt) throw new Error(`${app} predates this build.`);
+assertLayeredIcon(app);
 verify(app);
 
 // Replacing a running shell also replaces its sidecar; leave quitting and ending sessions to the user.

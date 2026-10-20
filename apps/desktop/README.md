@@ -41,6 +41,9 @@ the `.app`:
 It builds only the `.app`, never notarizes, and replaces the installed application only after verifying the built
 signature, keeping the previous bundle for rollback if replacement fails.
 
+It needs Xcode 26's `actool` as the selected developer directory (`xcode-select` or `DEVELOPER_DIR`), and fails when the
+built `.app` lacks the layered app icon (`Assets.car` and `CFBundleIconName`).
+
 ### Release builds
 
 `pnpm release` (`scripts/release.mjs`) runs `tauri build` (which builds the daemon sidecar and frontend first), producing
@@ -54,9 +57,13 @@ API key only, so `APPLE_ID` / `APPLE_PASSWORD` in the environment is refused.
   `APPLE_API_KEY_PATH`: signed, notarized and stapled.
 - `APPLE_SIGNING_IDENTITY` without the full API key trio: refused.
 
+Like `pnpm build:install`, it needs Xcode 26's `actool` as the selected developer directory and fails when the `.app` lacks
+the layered app icon.
+
 `pnpm build:app` (`scripts/build-app.mjs`) runs the same `tauri build` with every `APPLE_*` variable removed from the
 child's environment, so it can neither sign nor notarize, and fails if the `.app` carries a Developer ID authority.
 Extra arguments go to `tauri build` (for example `pnpm build:app --bundles app` to skip the `.dmg`).
+A missing layered app icon only produces a warning there.
 
 ## External interfaces
 
@@ -100,6 +107,8 @@ shell open, Dock badge, window theme, window show and window drag/zoom commands 
 | `src-tauri/capabilities/default.json`, `src-tauri/permissions/` | The IPC allowlist and the app-defined permission files it names |
 | `src-tauri/tauri.conf.json` | Where the window's UI comes from, the `octoboardd` `externalBin`, and the bundle targets |
 | `src-tauri/Info.plist` | Merged into the bundle's `Info.plist`; declares the UI languages as `CFBundleLocalizations` |
+| `src-tauri/icons/AppIcon.icon/` | The macOS 26 layered app icon (an Icon Composer package: `icon.json` and `Assets/octopus.png`), listed in `bundle.icon` of `tauri.conf.json`; the bundler compiles it with Xcode 26's `actool` into the `.app`'s `Assets.car`. `Assets/octopus.png` is derived by hand from `assets/branding/logo.png` (trimmed to its alpha bounds, centered on a 1024 px canvas); no script regenerates it. `icons/icon.icns` stays as the fallback for earlier macOS |
 | `src-tauri/icons/tray-template.png` | The menu bar icon's monochrome template image, derived by hand from the app icon; no script regenerates it |
 | `scripts/build-daemon.mjs`, `scripts/build-app.mjs`, `scripts/install-app.mjs`, `scripts/release.mjs` | The build, local-verification, local-install and release scripts above |
-| `scripts/bundle.mjs` | Where `tauri build` puts its output, and the lookup for the bundle it produced; shared by the build scripts |
+| `scripts/bundle.mjs` | Shared by the build scripts: `tauriBuild` (runs `tauri build` in this directory with `scripts/actool/` first on the `PATH`), where its output lands, the lookup for the bundle it produced, and `assertLayeredIcon` (checks the `.app` for the compiled layered icon) |
+| `scripts/actool/actool` | A shim for Xcode's `actool` that runs it with stdin on `/dev/null`, working around the Node-hosted Tauri CLI starting it with stdin closed; temporary, to be removed once the upstream fix ships |

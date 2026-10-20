@@ -72,6 +72,15 @@ first signs with whatever `APPLE_*` the calling shell carries, and the second lo
 repo-root `.env.secret` itself, so wherever that file is filled in, a shell carrying no `APPLE_*` is not a build that
 cannot sign.
 
+Never run a bare `pnpm tauri build` or `pnpm tauri bundle` at all, for any purpose, on macOS: only the scripts
+(`pnpm build:app`, `pnpm build:install`, `pnpm release`) put the `actool` shim in `apps/desktop/scripts/actool/` on the
+CLI's `PATH`. Without it, compiling the layered icon crashes `actool`'s `ibtoold` helper ("attempt to insert nil
+object"), and the helper left running keeps failing every later `actool` call on the machine — the scripts' builds in
+every worktree included — until `killall ibtoold`. So when a build reports that error, or a script reports the layered
+icon missing although Xcode 26 is the selected developer directory, run `killall ibtoold` and rebuild through a script
+rather than chasing the Xcode install the message suggests; killing the helper beforehand does not make a bare build
+safe.
+
 ## Launch a built app with `open`, never by exec'ing its binary
 
 An app exec'd from a shell is registered with the system but never activated, and WebKit leaves its page quiescent

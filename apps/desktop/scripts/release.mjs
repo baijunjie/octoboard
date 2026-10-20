@@ -14,7 +14,7 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { loadEnv } from "../../../scripts/env.mjs";
-import { appDir, bundleDir, findBundle, tauriBin } from "./bundle.mjs";
+import { assertLayeredIcon, bundleDir, findBundle, tauriBuild } from "./bundle.mjs";
 
 // Read only `.env.secret`: a `VITE_` entry in `.env` would reach the bundle `tauri build` makes.
 // The variables are then in the Tauri CLI's inherited environment.
@@ -85,7 +85,7 @@ if (!signingIdentity) {
   mode = "notarized";
 }
 
-execFileSync(tauriBin, ["build"], { cwd: appDir, stdio: "inherit" });
+tauriBuild([], process.env);
 
 verify();
 
@@ -93,6 +93,7 @@ verify();
 // variables that went in — those only say what the Tauri CLI was *told* to do, not what it did.
 function verify() {
   const app = findBundle(path.join(bundleDir, "macos"), ".app");
+  assertLayeredIcon(app);
   const dmg = findBundle(path.join(bundleDir, "dmg"), ".dmg");
   console.log(`found app bundle: ${app}`);
   console.log(`found disk image: ${dmg}`);
