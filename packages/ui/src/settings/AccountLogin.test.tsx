@@ -7,7 +7,9 @@ import type { PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import type { AccountLogin } from "../protocol";
 import { createStateStore, DaemonProvider, trackAccountLogin, type Daemon } from "../store";
-import { AccountLoginAnnouncement, useOpenLoginPages } from "./AccountLogin";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
+import { windowAttention } from "../components/windowTestSupport";
+import { AccountLoginAnnouncer, useOpenLoginPages } from "./AccountLogin";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -70,19 +72,87 @@ it("opens nothing for a login whose own CLI opens the page, and does not keep wa
   expect(store.getState().loginsStartedHere).toEqual([]);
 });
 
-it("announces a login that succeeded with the account's name, and says nothing for any other state", () => {
+function announcer() {
+  const attend = windowAttention();
+  vi.useFakeTimers();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
+    try {
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
-  const show = (value: AccountLogin | undefined) => act(() => root.render(<AccountLoginAnnouncement login={value} name="Work" />));
-  show(login({ status: "waiting" }));
-  expect(container.textContent).toBe("");
+  const show = (value: AccountLogin | undefined) => act(() => root.render(<AccountLoginAnnouncer login={value} name="Work" />));
+  const advance = (ms: number) => act(() => vi.advanceTimersByTime(ms));
+  const said = () => container.querySelector('[role="status"]')?.textContent?.replace(/[\u2068\u2069]/g, "");
+  return { container, show, advance, said, attend };
+}
+
+it("keeps one empty status region through a login, and says nothing for a state other than success", () => {
+  const { container, show, advance, said } = announcer();
+  show(undefined);
+  const region = container.querySelector('[role="status"]');
   show(login({ status: "failed" }));
-  expect(container.textContent).toBe("");
+  advance(10_000);
+  expect(said()).toBe("");
+  expect(container.querySelector('[role="status"]')).toBe(region);
+});
+
+it("stays silent for a success already there when it mounts, and names the next one", () => {
+  const { show, advance, said } = announcer();
   show(login({ status: "succeeded" }));
-  expect(container.textContent?.replace(/[\u2066-\u2069]/g, "")).toBe("Work: logged in.");
-  expect([...container.querySelectorAll("[data-inline-chip]")].map((chip) => chip.textContent?.replace(/[\u2066-\u2069]/g, ""))).toEqual(["Work"]);
+  advance(10_000);
+  expect(said()).toBe("");
+  show(undefined);
+  show(login({ status: "succeeded" }));
+  advance(AFTER_FOCUS_MOVE_DELAY_MS);
+  expect(said()).toBe("Work: logged in.");
+});
+
+it("names the account a focus move's delay after the login succeeded, once, and clears with the record", () => {
+  const { container, show, advance, said } = announcer();
+  show(undefined);
+  const region = container.querySelector('[role="status"]');
+  advance(1000);
+  show(login({ status: "succeeded" }));
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  expect(said()).toBe("");
+  // A new record object for the same success neither restarts the wait nor says it again.
+  show(login({ status: "succeeded" }));
+  advance(1);
+  expect(said()).toBe("Work: logged in.");
+  const text = region!.firstChild;
+  show(login({ status: "succeeded" }));
+  advance(AFTER_FOCUS_MOVE_DELAY_MS);
+  expect(region!.firstChild).toBe(text);
+  show(undefined);
+  expect(said()).toBe("");
+  expect(container.querySelector('[role="status"]')).toBe(region);
+});
+
+it("holds a success that came while the window was not attended until the user is back, then says it once", () => {
+  const { container, show, advance, said, attend } = announcer();
+  show(undefined);
+  attend(false);
+  show(login({ status: "succeeded" }));
+  advance(10_000);
+  expect(said()).toBe("");
+  attend(true);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  // Leaving again before it is due starts the wait over on the way back.
+  attend(false);
+  attend(true);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  expect(said()).toBe("");
+  advance(1);
+  expect(said()).toBe("Work: logged in.");
+  const text = container.querySelector('[role="status"]')!.firstChild;
+  attend(false);
+  attend(true);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS);
+  expect(container.querySelector('[role="status"]')!.firstChild).toBe(text);
 });

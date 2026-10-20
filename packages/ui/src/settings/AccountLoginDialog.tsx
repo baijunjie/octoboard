@@ -6,9 +6,11 @@ import { AGENT_LABEL, defaultAccountName } from "../agents";
 import { codedMessageNode } from "../components/DaemonErrorMessage";
 import { ExternalLink } from "../components/ExternalLink";
 import { InlineChip } from "../components/InlineChip";
+import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/StatusAnnouncer";
 import { DaemonRequestError } from "../daemon-client";
 import { daemonMessage } from "../daemonMessage";
 import { Dialog, useRefocusIfLost } from "../dialogs/Dialog";
+import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { AccountLogin, Agent, MessageParams } from "../protocol";
 import { dismissAccountLogin, trackAccountLogin, useDaemon, useDaemonStore } from "../store";
@@ -33,7 +35,9 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
   agent: Agent;
   account: string | null;
   start: boolean;
-  onClose: () => void;
+  /** Told whether the dialog closed because the login succeeded and, when closing it cancels a login still running,
+   * given that cancel, which settles once the daemon has answered it. */
+  onClose: (succeeded: boolean, cancelling?: Promise<void>) => void;
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
@@ -91,27 +95,30 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
   // A login that succeeded, or that another window cancelled, or that has vanished, has nothing more to show.
   useEffect(() => {
     if (refusal) return;
-    if (login?.status === "succeeded" || login?.status === "cancelled" || (current === undefined && loginIsActive(lastSeen))) onClose();
+    if (login?.status === "succeeded" || login?.status === "cancelled" || (current === undefined && loginIsActive(lastSeen))) onClose(login?.status === "succeeded");
   }, [login, current, lastSeen, refusal]);
   useRefocusIfLost(() => primaryRef.current, [ended]);
 
   const close = () => {
     const pending = pendingStart.current;
+    let cancelling: Promise<void> | undefined;
     if (pending) {
       // The login is not this window's to open the page of any more, and is cancelled once the daemon has it.
       trackAccountLogin(store, agent, account, false);
-      void pending.then(cancel);
+      cancelling = pending.then(cancel);
     } else if (active) {
-      void cancel();
+      cancelling = cancel();
     } else if (login && (login.status === "failed" || login.status === "timed_out")) {
       dismissAccountLogin(store, login);
     }
-    onClose();
+    onClose(false, cancelling);
   };
 
   const who = <InlineChip dir="auto" wrap size="inherit">{name}</InlineChip>;
   const failure: Failure | undefined = refusal ?? (login?.failure ?? undefined);
   const reason = failure && daemonMessage(language, failure.code, failure.params, failure.message, NO_RECORDS);
+  const code = login?.status === "waiting" ? login.device_code : null;
+  const progress = t(login?.status === "waiting" ? "settings.accounts.login.waiting" : "settings.accounts.login.starting");
   return (
     <Dialog
       title={<Message id="settings.accounts.login.dialogTitle" params={{ name: who, agent: AGENT_LABEL[agent] }} />}
@@ -140,16 +147,19 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
           {failure && reason !== undefined && <p>{codedMessageNode(failure, reason)}</p>}
         </div>
       ) : (
-        // Mounted from the start, so the text that arrives in it is announced.
-        <div role="status" className="flex items-center gap-2 text-sm">
+        <div className="flex items-center gap-2 text-sm">
           <Spinner size="sm" aria-hidden />
-          <span>
-            {login?.status === "waiting"
-              ? login.device_code
-                ? <Message id="settings.accounts.login.waitingCode" params={{ code: <InlineChip monospace size="inherit">{login.device_code}</InlineChip> }} />
-                : t("settings.accounts.login.waiting")
-              : t("settings.accounts.login.starting")}
+          <span aria-hidden>
+            {code
+              ? <Message id="settings.accounts.login.waitingCode" params={{ code: <InlineChip monospace size="inherit">{code}</InlineChip> }} />
+              : progress}
           </span>
+          {/* It comes with a focus move — the dialog opening, or Log in again handing focus to Cancel login — so its first
+              text waits for that to be announced. */}
+          <StatusAnnouncer
+            firstWriteDelayMs={AFTER_FOCUS_MOVE_DELAY_MS}
+            text={!active ? undefined : code ? t("settings.accounts.login.waitingCode", { code: isolate(code) }) : progress}
+          />
         </div>
       )}
     </Dialog>

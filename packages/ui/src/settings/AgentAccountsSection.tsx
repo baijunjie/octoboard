@@ -2,6 +2,7 @@ import { Button } from "../components/Button";
 import { Tabs } from "@heroui/react";
 import { Bot, LogIn, Pencil, Trash2, UserPlus } from "lucide-react";
 import React, { useContext, useEffect, useRef, useState } from "react";
+import { setInteractionModality } from "react-aria";
 
 import { AGENT_LABEL, defaultAccountName, isAgentUnavailable } from "../agents";
 import { ActionMenu, type ActionMenuEntry } from "../components/ActionMenu";
@@ -26,7 +27,7 @@ import { useAccountQuota } from "../quota/useAccountQuota";
 import { useDaemon, useDaemonStore } from "../store";
 import { ApprovalReviewerSelect, ClaudeApprovalModeSelect } from "./AccountApprovalSelect";
 import { AccountDialog } from "./AccountDialog";
-import { AccountLoginAnnouncement, accountLoginOf, loginIsActive, useClearSucceededLogin } from "./AccountLogin";
+import { AccountLoginAnnouncer, accountLoginOf, loginIsActive, useClearSucceededLogin } from "./AccountLogin";
 import { AccountLoginDialog } from "./AccountLoginDialog";
 import { AddAgentDialog } from "./AddAgentDialog";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
@@ -59,8 +60,8 @@ export function AgentAccountsSection(): React.ReactElement {
   const [renamingDefault, setRenamingDefault] = useState<Agent>();
   const [removingAgent, setRemovingAgent] = useState<Agent>();
   // The account whose login is in the modal; `start` is whether opening it starts the login, which it does not for one
-  // found running when the section opened.
-  const [loggingIn, setLoggingIn] = useState<{ agent: Agent; account: string | null; start: boolean }>();
+  // found running when the section opened. `returnFocus` is the row's, when its own Log in button opened it.
+  const [loggingIn, setLoggingIn] = useState<{ agent: Agent; account: string | null; start: boolean; returnFocus?: ReturnLoginFocus }>();
   // The Add agent dialog is open when Settings was asked to put it in front, on opening or by a later request,
   // which the section takes up once; closing that one then puts focus on the button that opens it, as no
   // control had it before.
@@ -172,7 +173,7 @@ export function AgentAccountsSection(): React.ReactElement {
               onEdit={setEditing}
               onRemove={setRemoving}
               onRenameDefault={setRenamingDefault}
-              onLogin={(agent, account) => setLoggingIn({ agent, account, start: true })}
+              onLogin={(agent, account, returnFocus) => setLoggingIn({ agent, account, start: true, returnFocus })}
             />
           ))}
         </Tabs>
@@ -190,7 +191,17 @@ export function AgentAccountsSection(): React.ReactElement {
       ))}
       {editing !== undefined && <AccountDialog account={editing ?? undefined} agent={selected ?? "claude"} onClose={() => setEditing(undefined)} />}
       {renamingDefault && <AccountDialog agent={renamingDefault} renameDefault onClose={() => setRenamingDefault(undefined)} />}
-      {loggingIn && <AccountLoginDialog {...loggingIn} onClose={() => setLoggingIn(undefined)} />}
+      {loggingIn && (
+        <AccountLoginDialog
+          agent={loggingIn.agent}
+          account={loggingIn.account}
+          start={loggingIn.start}
+          onClose={(succeeded, cancelling) => {
+            loggingIn.returnFocus?.(succeeded, cancelling);
+            setLoggingIn(undefined);
+          }}
+        />
+      )}
       {addingAgent && <AddAgentDialog onClose={closeAddAgent} />}
       {removingAgent && (
         <RemoveAgentDialog
@@ -229,7 +240,7 @@ function AgentAccountsPanel({ agent, owned, onEdit, onRemove, onRenameDefault, o
   onEdit: (account: Account) => void;
   onRemove: (account: Account) => void;
   onRenameDefault: (agent: Agent) => void;
-  onLogin: (agent: Agent, account: string | null) => void;
+  onLogin: (agent: Agent, account: string | null, returnFocus?: ReturnLoginFocus) => void;
 }): React.ReactElement {
   const t = useT();
   const logins = useDaemonStore((s) => s.accountLogins);
@@ -264,7 +275,7 @@ function AgentAccountsPanel({ agent, owned, onEdit, onRemove, onRenameDefault, o
     return {
       login: login?.status === "succeeded" ? login : undefined,
       loginName: account?.name ?? defaultName,
-      onLogin: () => onLogin(agent, account?.id ?? null),
+      onLogin: (returnFocus: ReturnLoginFocus) => onLogin(agent, account?.id ?? null, returnFocus),
       loginActive: loginIsActive(login),
     };
   };
@@ -331,6 +342,55 @@ function AgentAccountsPanel({ agent, owned, onEdit, onRemove, onRenameDefault, o
   );
 }
 
+/** Told, as the login dialog a row's own Log in button opened closes, whether the login succeeded, and the cancel
+ * closing it sent, if any. */
+type ReturnLoginFocus = (succeeded: boolean, cancelling?: Promise<void>) => void;
+
+/**
+ * Where focus goes once the login dialog the row's own Log in button opened has closed, which React Aria's restore
+ * alone does not settle: it puts focus back on that button, and the button is not always there to take it. A login
+ * that succeeded takes the button away (it is shown only while the account reads as signed out), before or after the
+ * restore, so focus goes to the row's actions instead; so it does when a cancelled login turns out to have succeeded
+ * first. Closing the dialog otherwise cancels a login still running, and the button is disabled while the daemon has a
+ * login running — including one it registers only after the dialog has gone — so the restore finds nothing to focus,
+ * or focus drops off the button as it turns disabled. Focus goes to the button once the cancel has been answered and
+ * the button is enabled again, or to the actions if it has gone. Either way focus would otherwise end on `<body>`,
+ * where VoiceOver reads the whole web area and does not speak the row's status.
+ *
+ * The move waits a frame past the restore, which runs in the frame after the dialog unmounts, and acts only where the
+ * restore left focus on `<body>` or on a button that is going: a restore that landed right, or on another control,
+ * is left alone. A restore React Aria defers further for a screen reader's virtual cursor acts only while focus is
+ * still on `<body>`, so it does not undo this move.
+ */
+function useLoginFocusReturn(
+  button: React.RefObject<HTMLElement | null>,
+  actions: React.RefObject<HTMLElement | null>,
+  { active, succeeded }: { active: boolean; succeeded: boolean },
+): ReturnLoginFocus {
+  const [returning, setReturning] = useState<{ to: "button" | "actions"; cancelling: boolean }>();
+  useEffect(() => {
+    if (!returning || returning.cancelling || (returning.to === "button" && active)) return;
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        setReturning(undefined);
+        const opener = button.current;
+        const target = returning.to === "button" && !succeeded && opener ? opener : actions.current?.querySelector<HTMLElement>("button");
+        const focused = document.activeElement;
+        if (!target || focused === target || (focused !== document.body && !opener?.contains(focused))) return;
+        // The user did not ask for this move, so the destination shows its ring.
+        setInteractionModality("keyboard");
+        target.focus();
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [returning, active, succeeded]);
+  return (closedOnSuccess, cancelling) => {
+    const next = { to: closedOnSuccess ? "actions" : "button", cancelling: cancelling !== undefined } as const;
+    setReturning(next);
+    void cancelling?.then(() => setReturning((current) => (current === next ? { ...next, cancelling: false } : current)));
+  };
+}
+
 /** Subgrid shares control widths across accounts.
  * The account's quota takes the row's full width beneath its controls. */
 function AccountRow({ agent, account, label, help, description, approval, children, motionKey, login, loginName, onLogin, loginActive }: {
@@ -347,18 +407,22 @@ function AccountRow({ agent, account, label, help, description, approval, childr
    * account in what it says. */
   login?: Login;
   loginName: string;
-  onLogin: () => void;
+  /** Starts the login from the row's own Log in button. */
+  onLogin: (returnFocus: ReturnLoginFocus) => void;
   loginActive: boolean;
 }): React.ReactElement {
   const t = useT();
   const quota = useAccountQuota(agent, account);
   const notLoggedIn = typeof quota === "object" && isNotLoggedIn(quota.unavailable);
   useClearSucceededLogin(login);
+  const actionsRef = useRef<HTMLDivElement>(null);
+  const loginRef = useRef<HTMLButtonElement>(null);
+  const returnLoginFocus = useLoginFocusReturn(loginRef, actionsRef, { active: loginActive, succeeded: login !== undefined });
   return (
     <div data-list-motion={motionKey} className="col-span-full grid grid-cols-subgrid items-center gap-x-4 gap-y-3 groove-b py-4 last:border-b-0">
       <div className="min-w-0">
         <AccountNameLine name={label} quota={quota} help={help} showLoginState>
-          {notLoggedIn && <Button size="xs" variant="secondary" preventFocusOnPress isDisabled={loginActive} onPress={onLogin}>
+          {notLoggedIn && <Button ref={loginRef} size="xs" variant="secondary" preventFocusOnPress isDisabled={loginActive} onPress={() => onLogin(returnLoginFocus)}>
             {t("settings.accounts.login")}
             <ExternalLinkIcon />
           </Button>}
@@ -366,13 +430,9 @@ function AccountRow({ agent, account, label, help, description, approval, childr
         <div className="text-sm text-app-muted">{description}</div>
       </div>
       {approval && <div className="min-w-0">{approval}</div>}
-      <div className="flex flex-wrap items-center gap-2">{children}</div>
+      <div ref={actionsRef} className="flex flex-wrap items-center gap-2">{children}</div>
       {quota && !(typeof quota === "object" && isNotLoggedIn(quota.unavailable)) && <div className="col-span-full"><AccountQuotaSummary quota={quota} /></div>}
-      {/* The status region is mounted empty, visually hidden and in the accessibility tree, so the text that arrives in
-          it when a login succeeds is announced; the account's badge shows the result. */}
-      <div className="sr-only">
-        <div role="status"><AccountLoginAnnouncement login={login} name={loginName} /></div>
-      </div>
+      <AccountLoginAnnouncer login={login} name={loginName} />
     </div>
   );
 }

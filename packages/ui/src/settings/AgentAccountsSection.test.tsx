@@ -10,6 +10,8 @@ import { DaemonRequestError } from "../daemon-client";
 import { errorAlerts } from "../errorAlerts";
 import { ErrorAlerts } from "../dialogs/ErrorAlerts";
 import { trackMountRefocus } from "../dialogs/dialogTestSupport";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
+import { windowAttention } from "../components/windowTestSupport";
 import { SettingsDialog } from "./SettingsDialog";
 import { registerSettingsLauncher } from "./settingsLauncher";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
@@ -137,6 +139,22 @@ function selectTab(container: HTMLElement, name: string) {
     }
   });
 }
+
+/** Fakes the timers for one test, checking once its root is unmounted that it left none running. Call it before
+ * `mount`, so that its check runs after the unmount. */
+function fakeTimers() {
+  vi.useFakeTimers();
+  onTestFinished(() => {
+    try {
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+}
+
+/** Waits out React Aria's focus restore after a dialog closes and what runs in the frames after it. */
+const frames = () => act(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 0)))));
 
 function mount(tab?: string, strict = false) {
   const container = document.body.appendChild(document.createElement("div"));
@@ -361,6 +379,156 @@ it("logs in a signed-out account from the button after its badge", async () => {
   expect(login.dataset.size).toBe("xs");
   await act(async () => login.click());
   expect(request).toHaveBeenLastCalledWith({ type: "start_account_login", agent: "claude", account: "claude-work" });
+});
+
+it.each([
+  ["before", true], ["after", false],
+] as const)("puts focus on the account's actions once a login from its own button succeeds, the button going %s the dialog closes", async (_when, quotaFirst) => {
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  const signedOut = quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } });
+  accountQuotas.push(signedOut);
+  const { container, render } = mount();
+  const row = container.querySelector('[data-list-motion="claude-work"]')!;
+  const login = buttonNamed(row, "Log in")!;
+  act(() => login.focus());
+  await act(async () => login.click());
+  const settled = trackMountRefocus();
+  accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  await settled();
+  expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  const signIn = () => accountQuotas.splice(accountQuotas.indexOf(signedOut), 1, quotaOf("claude", "claude-work"));
+  if (quotaFirst) signIn();
+  accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "succeeded", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  // While the button is still there, React Aria's restore may put focus back on it before the hand-off runs.
+  if (!quotaFirst) act(() => login.focus());
+  await frames();
+  if (!quotaFirst) {
+    signIn();
+    render();
+    await frames();
+  }
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(buttonNamed(row, "Log in")).toBeUndefined();
+  expect(document.activeElement?.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, "")).toBe("Actions for claude-work (Claude Code)");
+  // The success is said after that focus move, not with it.
+  expect(row.querySelector('[role="status"]')!.textContent).toBe("");
+});
+
+it("leaves focus where React Aria puts it back after a login its own button opened by a press that did not focus it", async () => {
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  const signedOut = quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } });
+  accountQuotas.push(signedOut);
+  const { container, render } = mount();
+  const before = buttonNamed(container, "Add account")!;
+  act(() => before.focus());
+  await act(async () => buttonNamed(container.querySelector('[data-list-motion="claude-work"]')!, "Log in")!.click());
+  const settled = trackMountRefocus();
+  accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  await settled();
+  accountQuotas.splice(accountQuotas.indexOf(signedOut), 1, quotaOf("claude", "claude-work"));
+  accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "succeeded", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  await frames();
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.activeElement).toBe(before);
+});
+
+it.each([
+  ["its own Log in button", false], ["its actions, the button having gone", true],
+] as const)("puts focus on %s once a login the button opened has been cancelled", async (_where, buttonGoes) => {
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  const signedOut = quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } });
+  accountQuotas.push(signedOut);
+  const { container, render } = mount();
+  const row = container.querySelector('[data-list-motion="claude-work"]')!;
+  const login = buttonNamed(row, "Log in")!;
+  act(() => login.focus());
+  await act(async () => login.click());
+  const settled = trackMountRefocus();
+  accountLogins.push({ agent: "claude", account: "claude-work", status: "starting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  await settled();
+  // The button stays disabled until the daemon reports the login cancelled, after the dialog has gone.
+  await act(async () => buttonNamed(document.querySelector('[role="dialog"]')!, "Cancel login")!.click());
+  await frames();
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(login.disabled).toBe(true);
+  if (buttonGoes) accountQuotas.splice(accountQuotas.indexOf(signedOut), 1, quotaOf("claude", "claude-work", { unavailable: { code: "quota_timed_out", params: {}, message: "x" } }));
+  accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "cancelled", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  await frames();
+  if (buttonGoes) expect(document.activeElement?.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, "")).toBe("Actions for claude-work (Claude Code)");
+  else expect(document.activeElement).toBe(login);
+});
+
+it("gives focus back to the row's own Log in button once a login cancelled before the daemon had it has ended", async () => {
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }));
+  let registered!: () => void;
+  request.mockImplementation(((message: { type: string }) => message.type === "start_account_login"
+    ? new Promise((resolve) => { registered = () => resolve({}); })
+    : Promise.resolve({})) as never);
+  const { container, render } = mount();
+  const login = buttonNamed(container.querySelector('[data-list-motion="claude-work"]')!, "Log in")!;
+  act(() => login.focus());
+  await act(async () => login.click());
+  const settled = trackMountRefocus();
+  await settled();
+  await act(async () => buttonNamed(document.querySelector('[role="dialog"]')!, "Cancel login")!.click());
+  await frames();
+  expect(document.activeElement).toBe(login);
+  // The daemon registers the login after the dialog has gone, and only then is it cancelled. The button turns disabled
+  // meanwhile, which in a browser takes focus off it; jsdom leaves it there, so the test takes it off first.
+  act(() => login.blur());
+  accountLogins.push({ agent: "claude", account: "claude-work", status: "starting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  expect(login.disabled).toBe(true);
+  await act(async () => registered());
+  expect(request).toHaveBeenLastCalledWith({ type: "cancel_account_login", agent: "claude", account: "claude-work" });
+  accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "cancelled", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  await frames();
+  expect(document.activeElement).toBe(login);
+});
+
+it("puts focus on the account's actions when a login its own button opened succeeds after all once cancelled", async () => {
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }));
+  const { container, render } = mount();
+  const login = buttonNamed(container.querySelector('[data-list-motion="claude-work"]')!, "Log in")!;
+  act(() => login.focus());
+  await act(async () => login.click());
+  const settled = trackMountRefocus();
+  accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  await settled();
+  await act(async () => buttonNamed(document.querySelector('[role="dialog"]')!, "Cancel login")!.click());
+  // The login had already succeeded when the cancel reached the daemon; the button stays until the quota is read again.
+  accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "succeeded", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  await frames();
+  expect(document.activeElement?.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, "")).toBe("Actions for claude-work (Claude Code)");
+});
+
+it("gives focus back to the row's own Log in button when the login it opened is closed without success", async () => {
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }));
+  const { container, render } = mount();
+  const login = buttonNamed(container.querySelector('[data-list-motion="claude-work"]')!, "Log in")!;
+  act(() => login.focus());
+  await act(async () => login.click());
+  const settled = trackMountRefocus();
+  accountLogins.push({ agent: "claude", account: "claude-work", status: "failed", authorization_url: null, device_code: null, opened_by_agent: false,
+    failure: { code: "login_failed", params: { agent: "Claude Code", detail: "Login failed: 400" }, message: "x" } });
+  render();
+  await settled();
+  await act(async () => buttonNamed(document.querySelector('[role="dialog"]')!, "Close")!.click());
+  await frames();
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.activeElement).toBe(login);
 });
 
 it("waits for the first reading of an account of an available agent that has no entry yet", () => {
@@ -978,6 +1146,33 @@ describe("an account's actions menu", () => {
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Confirm this code in your browser: ABCD-1234");
   });
 
+  it("announces the login's progress from one region whose first text waits for the modal's own focus move", () => {
+    vi.useFakeTimers();
+    onTestFinished(() => void vi.useRealTimers());
+    accountLogins.push({ agent: "claude", account: "claude-work", status: "starting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    const { render } = mount();
+    const dialog = document.querySelector('[role="dialog"]')!;
+    expect(document.activeElement).toBe(buttonNamed(dialog, "Cancel login"));
+    // The spinner carries a role of its own, hidden.
+    const region = dialog.querySelector<HTMLElement>('[role="status"]:not([aria-hidden])')!;
+    const said = () => region.textContent?.replace(/[\u2068\u2069]/g, "");
+    // Seen only: the visible line is not a second voice.
+    expect(dialog.textContent).toContain("Logging in…");
+    expect(region.previousElementSibling?.getAttribute("aria-hidden")).toBe("true");
+    expect(said()).toBe("");
+    act(() => vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS - 1));
+    expect(said()).toBe("");
+    act(() => vi.advanceTimersByTime(1));
+    expect(said()).toBe("Logging in…");
+    accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    render();
+    expect(said()).toBe("Waiting for you to authorize in your browser…");
+    accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: "ABCD-1234", opened_by_agent: false, failure: null });
+    render();
+    expect(said()).toBe("Confirm this code in your browser: ABCD-1234");
+    expect([...dialog.querySelectorAll('[role="status"]:not([aria-hidden])')]).toEqual([region]);
+  });
+
   it("closes the modal when the login succeeds", async () => {
     accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
     const { render } = mount();
@@ -1015,14 +1210,60 @@ describe("an account's actions menu", () => {
     expect(container.textContent).not.toContain("Login failed: 400");
   });
 
-  it("leaves no visible line for a login that succeeded, and says so in the hidden status region", () => {
+  it("leaves no visible line for a login that succeeded, and keeps one already there when the row mounts unsaid", () => {
+    fakeTimers();
     accountLogins.push({ agent: "claude", account: "claude-work", status: "succeeded", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
     const { container } = mount();
-    const status = container.querySelector<HTMLElement>('[role="status"]:not(:empty)')!;
-    expect(status.textContent?.replace(/[\u2068\u2069]/g, "")).toBe("claude-work: logged in.");
-    expect(status.parentElement?.classList.contains("sr-only")).toBe(true);
+    act(() => vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+    expect([...container.querySelectorAll('[role="status"]')].map((el) => el.textContent).join("")).toBe("");
     expect(buttonNamed(container, "Dismiss")).toBeUndefined();
     expect(buttonNamed(container, "Cancel login")).toBeUndefined();
+  });
+
+  it("announces a login that succeeded only once the modal has closed and given focus back, and clears it after", () => {
+    fakeTimers();
+    windowAttention();
+    accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    const { container, render } = mount();
+    const row = container.querySelector('[data-list-motion="claude-work"]')!;
+    const region = row.querySelector<HTMLElement>('[role="status"]')!;
+    // The open modal hides the row from assistive technology.
+    expect(region.closest('[aria-hidden="true"], [inert]')).not.toBeNull();
+    accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "succeeded", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    render();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(region.closest('[aria-hidden="true"], [inert]')).toBeNull();
+    expect(region.textContent).toBe("");
+    act(() => vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+    expect(row.querySelector('[role="status"]')).toBe(region);
+    expect(region.classList.contains("sr-only")).toBe(true);
+    expect(region.textContent?.replace(/[\u2068\u2069]/g, "")).toBe("claude-work: logged in.");
+    expect([...container.querySelectorAll('[role="status"]:not(:empty)')]).toEqual([region]);
+    act(() => vi.advanceTimersByTime(6000));
+    expect(dismissAccountLogin).toHaveBeenCalledOnce();
+    render();
+    expect(region.textContent).toBe("");
+  });
+
+  it("holds the announcement and the clearing of a login that succeeded while the window was not attended until the user is back", () => {
+    fakeTimers();
+    const attend = windowAttention();
+    accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    const { container, render } = mount();
+    const region = container.querySelector('[data-list-motion="claude-work"] [role="status"]')!;
+    attend(false);
+    accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "succeeded", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    render();
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(region.textContent).toBe("");
+    expect(dismissAccountLogin).not.toHaveBeenCalled();
+    attend(true);
+    act(() => vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS - 1));
+    expect(region.textContent).toBe("");
+    act(() => vi.advanceTimersByTime(1));
+    expect(region.textContent?.replace(/[\u2068\u2069]/g, "")).toBe("claude-work: logged in.");
+    act(() => vi.advanceTimersByTime(6000));
+    expect(dismissAccountLogin).toHaveBeenCalledOnce();
   });
 
   it("starts the login once under StrictMode, and shows how the login really ended, not a refusal of a second start", async () => {
@@ -1123,7 +1364,7 @@ describe("an account's actions menu", () => {
     expect(status.textContent).toBe("");
     expect(status.closest(".hidden")).toBeNull();
     // Out of the grid's flow, so it takes no row of its own.
-    expect(status.parentElement!.className).toBe("sr-only");
+    expect(status.classList.contains("sr-only")).toBe(true);
   });
 
   it("opens the account form from Edit and the confirmation from Remove", async () => {

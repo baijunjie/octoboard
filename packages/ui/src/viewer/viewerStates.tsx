@@ -11,7 +11,7 @@ import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
 import type { ErrorRecovery } from "../errorRecovery";
-import { StatusAnnouncer } from "../components/StatusAnnouncer";
+import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/StatusAnnouncer";
 import { TintedAlert } from "../components/TintedAlert";
 import type { ErrorPresentation } from "../errorPresentation";
 import type { PlainMessageKey } from "../i18n/catalog";
@@ -19,11 +19,9 @@ import { textDirection } from "../i18n/languages";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { formatFileSize, formatSideSize } from "./format";
 
-/** How long the viewer's status regions wait before their first text. The dialog takes focus as it
- * opens and VoiceOver announces that, replacing a status written within about 300 ms of it; a
- * write 1.5 s later is spoken after it (verified). Moving to another file in an open viewer has
- * no such focus move and is announced at once. */
-export const FIRST_ANNOUNCEMENT_DELAY_MS = 1500;
+/** How long the viewer's status regions wait before their first text: the dialog takes focus as it
+ * opens. Moving to another file in an open viewer has no such focus move and is announced at once. */
+export const FIRST_ANNOUNCEMENT_DELAY_MS = AFTER_FOCUS_MOVE_DELAY_MS;
 
 /**
  * What kind of thing a notice is saying, which is what tells them apart on screen.

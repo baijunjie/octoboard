@@ -4,6 +4,11 @@ import React, { useEffect, useState } from "react";
  * in a region that already exists. */
 const FIRST_WRITE_DELAY_MS = 100;
 
+/** How long a status that comes with a focus move (a dialog opening or closing) waits before it is
+ * written. VoiceOver announces the focus move and replaces a status written within about 300 ms of
+ * it; a write 1.5 s after a dialog opened is spoken after it (verified). */
+export const AFTER_FOCUS_MOVE_DELAY_MS = 1500;
+
 /**
  * Speaks `text` to assistive technology without showing it: the status region for a state whose
  * visible form comes and goes (a loading placeholder). WebKit and VoiceOver stay silent for a
