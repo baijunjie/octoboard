@@ -64,19 +64,21 @@ accumulates on the dedicated UI audit integration branch. Each milestone is inde
 contracts have one owner at a time. Only the complete plan is rebased onto current main, verified and integrated
 into main. The closed audit changed no production UI; fix milestones implement its findings.
 
-3. Restore stock Alerts (closed)
-4. Render structured error names and diagnostics (closed)
-5. [Use rich name chips and tooltip content](05-rich-names-and-tooltips.md)
-6. [Separate choice status and direction](06-choice-status-and-direction.md)
-7. [Correct form defaults and blocked validity](07-form-defaults-and-validity.md)
-8. [Keep horizontal tab strips at content width](08-content-width-tabs.md)
-9. [Use consistent neutral empty states](09-consistent-empty-states.md)
-10. [Apply shared collection and reduced-motion behavior](10-collection-and-reduced-motion.md)
-11. [Defer initial terminal status announcements](11-terminal-status-announcements.md)
-12. Hand focus off when report pages are replaced (closed)
-13. [Use the shared button primitive for tree chevrons](13-collection-button-primitives.md)
+- 03 Restore stock Alerts (closed)
+- [03a Match the HeroUI v2 Alert background reference](03a-heroui-v2-alert-backgrounds.md)
+- 04 Render structured error names and diagnostics (closed)
+- [05 Use rich name chips and tooltip content](05-rich-names-and-tooltips.md)
+- [06 Separate choice status and direction](06-choice-status-and-direction.md)
+- [07 Correct form defaults and blocked validity](07-form-defaults-and-validity.md)
+- [08 Keep horizontal tab strips at content width](08-content-width-tabs.md)
+- [09 Use consistent neutral empty states](09-consistent-empty-states.md)
+- [10 Apply shared collection and reduced-motion behavior](10-collection-and-reduced-motion.md)
+- [11 Defer initial terminal status announcements](11-terminal-status-announcements.md)
+- 12 Hand focus off when report pages are replaced (closed)
+- [13 Use the shared button primitive for tree chevrons](13-collection-button-primitives.md)
 
-Milestones 05–11 and 13 remain open. The open milestones carry their current-source handoffs; the original audit
+The user subsequently chose HeroUI v2 Alert as the background reference. Complete 03a before the rich-copy work;
+13 remains independent. Milestones 03a, 05–11 and 13 remain open. The open milestones carry their current-source handoffs; the original audit
 inventories remain historical evidence, with check limitations in [the check record](audit-checks.md).
 
 ## Evidence baseline and concurrent integration
