@@ -31,8 +31,31 @@ region lands focus where `F6` would (see "Moving focus between regions with F6" 
 
 A failed page, pane or viewer may also retain its explanation, fallback content and recovery controls after the error
 alert is acknowledged. That durable state remains useful for retrying or inspecting the failure; it does not replace
-the alert. Background states that are not reported as errors, such as the daemon's reconnecting banner, keep their
-own status and recovery presentation.
+the alert. Its inline notice keeps a short explanation; diagnostic blocks, lists, remedy paragraphs and recovery
+controls appear outside that notice, without repeating the explanation. The acknowledgement dialog announces the
+failure; the retained notice does not announce it a second time. Background states that are not reported as errors,
+such as the daemon's reconnecting banner, keep their own status and recovery presentation.
+
+## Names and diagnostic details
+
+An error that references a console, project, session, shell terminal or account by its record uses the current name
+when that record is available. The name appears as an inline name chip. If the record is missing, the supplied ID
+remains visible as a technical code chip; a report page, which has no display name, is identified by its ID. Names
+supplied directly by the operation remain names, even when their text happens to match another record's ID. Agent
+and product names referenced in the explanation use name chips too. Each name keeps its own text direction;
+technical values keep left-to-right order. Accessible labels, system notifications and other text-only surfaces
+retain usable plain wording with the same names or fallback IDs.
+
+Known raw output from Git and agent commands appears separately from the short explanation as selectable code,
+including when it is the cause of a launch or trust-confirmation failure, an import failure, or a model or quota
+reading failure. The output retains its line breaks, indentation and left-to-right order. Long lines scroll
+horizontally, with a labelled region reachable from the keyboard. A short ordinary reason remains part of the
+explanation; it is not turned into a diagnostic block simply because it accompanies an error. Unrecognized daemon
+messages retain the daemon's own readable wording.
+
+A failure attached to one field stays there, with its short reason under the field and any diagnostic or recovery
+content following separately. This includes project detection, the Model field's unavailable list, and conversation
+lookup or refusal on Session ID. These field-bound reasons do not open an additional acknowledgement dialog.
 
 ## Recovery and unexpected errors
 

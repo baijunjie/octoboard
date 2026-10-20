@@ -4,7 +4,7 @@ import React from "react";
 import { CodeBlock } from "../components/CodeBlock";
 import { InlineChip, type InlineChipSize } from "../components/InlineChip";
 import { TintedAlert } from "../components/TintedAlert";
-import type { CodeColor } from "../components/codeTone";
+import { CodeToneContext, type CodeColor } from "../components/codeTone";
 import { FadedScroller, useFadeRegion } from "../components/scrollFade";
 
 const COLORS: CodeColor[] = ["default", "primary", "secondary", "success", "warning", "danger"];
@@ -61,29 +61,41 @@ export function CodeGallery(): React.ReactElement {
           <section className="flex flex-col gap-3" aria-labelledby="alert-tones-title">
             <h2 id="alert-tones-title" className="font-semibold">Alert tone overrides each requested chip color</h2>
             {STATUSES.map((status) => (
-              <TintedAlert key={status} status={status} data-alert-sample={status}>
-                <Alert.Indicator aria-hidden="true" />
-                <Alert.Content className="min-w-0">
-                  <h3 className="mb-3 font-semibold">{status}</h3>
-                  <div className="flex flex-wrap gap-3">
-                    {COLORS.map((color) => <span key={color} className="text-sm">{color}: <InlineChip monospace wrap size="inherit" color={color}>CLAUDE.md</InlineChip></span>)}
-                  </div>
+              <CodeToneContext.Provider key={status} value={status === "accent" ? "primary" : status}>
+                <div className="flex flex-col gap-3" data-alert-tone-sample={status}>
+                  <TintedAlert status={status} data-alert-sample={status}>
+                    <Alert.Indicator aria-hidden="true" />
+                    <Alert.Content>
+                      <Alert.Title>{status}</Alert.Title>
+                      <Alert.Description>
+                        {COLORS.map((color, index) => <React.Fragment key={color}>{index > 0 && "; "}{color}: <InlineChip monospace wrap size="inherit" color={color}>CLAUDE.md</InlineChip></React.Fragment>)}
+                      </Alert.Description>
+                    </Alert.Content>
+                  </TintedAlert>
                   <CodeBlock>{"env -0 && printf '%s' 'OCTOBOARD-ENV-SNAPSHOT-END-12345678-1234-1234-1234-123456789abc'"}</CodeBlock>
-                </Alert.Content>
-              </TintedAlert>
+                </div>
+              </CodeToneContext.Provider>
             ))}
           </section>
           <section className="flex flex-col gap-3" aria-labelledby="nested-tones-title">
             <h2 id="nested-tones-title" className="font-semibold">Nearest alert wins; outside chips keep their own tone</h2>
-            <TintedAlert status="warning" data-nested-sample="outer">
-              <Alert.Content className="flex min-w-0 flex-col gap-3">
-                <p>Outer warning: <InlineChip monospace wrap size="inherit" color="danger">AGENTS.md</InlineChip></p>
-                <TintedAlert status="success" data-nested-sample="inner">
-                  <Alert.Content>Inner success: <InlineChip monospace wrap size="inherit" color="danger">.claude</InlineChip></Alert.Content>
-                </TintedAlert>
-                <p>Outer warning again: <InlineChip monospace wrap size="inherit" color="primary">.codex</InlineChip></p>
-              </Alert.Content>
-            </TintedAlert>
+            <CodeToneContext.Provider value="warning">
+              <TintedAlert status="warning" data-nested-sample="outer">
+                <Alert.Indicator aria-hidden="true" />
+                <Alert.Content>
+                  <Alert.Title>Outer warning</Alert.Title>
+                  <Alert.Description>Outer warning: <InlineChip monospace wrap size="inherit" color="danger">AGENTS.md</InlineChip></Alert.Description>
+                </Alert.Content>
+              </TintedAlert>
+              <TintedAlert status="success" data-nested-sample="inner">
+                <Alert.Indicator aria-hidden="true" />
+                <Alert.Content>
+                  <Alert.Title>Inner success</Alert.Title>
+                  <Alert.Description>Inner success: <InlineChip monospace wrap size="inherit" color="danger">.claude</InlineChip></Alert.Description>
+                </Alert.Content>
+              </TintedAlert>
+              <p>Outer warning again: <InlineChip monospace wrap size="inherit" color="primary">.codex</InlineChip></p>
+            </CodeToneContext.Provider>
             <p>After both alerts: <InlineChip monospace wrap size="inherit" color="secondary">~/Projects</InlineChip></p>
           </section>
         </div>

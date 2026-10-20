@@ -135,7 +135,7 @@ export function ProjectDialog({
   // Whatever the form asks the daemon about locks the fields below it until the answer for what is
   // entered now has arrived: a failure keeps them locked, and a git URL is asked about from the
   // first character, so it stays locked while empty too.
-  const detectionError = detection.status === "failed" ? <DaemonErrorMessage error={detection.error} showTitle={false} /> : undefined;
+  const detectionError = detection.status === "failed" ? <DaemonErrorMessage error={detection.error} showTitle={false} part="summary" /> : undefined;
   const locked = !editing && (source === "git" ? detection.status !== "ready" : detection.status === "checking" || detection.status === "failed");
 
   // `path` is required for the `local` and `parent` sources; `git` needs no check here, since its
@@ -249,6 +249,7 @@ export function ProjectDialog({
             placeholder={t("dialog.project.urlExample")}
             description={detection.status === "checking" ? t("dialog.project.urlChecking") : undefined}
             errorMessage={detectionError}
+            errorDetails={detection.status === "failed" && <DaemonErrorMessage error={detection.error} part="details" />}
           />
         )}
         {!editing && (
@@ -263,6 +264,7 @@ export function ProjectDialog({
             placeholder={source === "git" ? defaultCloneDir : t("dialog.project.directoryExample")}
             description={source === "local" && detection.status === "checking" ? t("dialog.project.pathChecking") : undefined}
             errorMessage={shown(pathError) ?? (source === "local" ? detectionError : undefined)}
+            errorDetails={source === "local" && !shown(pathError) && detection.status === "failed" && <DaemonErrorMessage error={detection.error} part="details" />}
             isDisabled={source === "git" && locked}
             trailing={
               <Button type="button" variant="secondary" isDisabled={source === "git" && locked} onPress={() => setPickingDirectory(true)}>

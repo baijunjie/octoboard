@@ -20,6 +20,7 @@ import { railQuotaScenarios } from "./railQuota";
 import { reportScenarios } from "./report";
 import { sessionHistoryScenarios } from "./sessionHistory";
 import { settingsScenarios } from "./settings";
+import { structuredErrorScenarios } from "./structuredErrors";
 import { startupScenarios } from "./startup";
 import { terminalPanelScenarios } from "./terminalPanel";
 import { viewerScenarios } from "./viewer";
@@ -47,6 +48,7 @@ export const SCENARIOS: Scenario[] = [
   ...sessionHistoryScenarios,
   ...terminalPanelScenarios,
   ...noticeScenarios,
+  ...structuredErrorScenarios,
   ...archiveScenarios,
   ...reportScenarios,
   ...projectFilesScenarios,

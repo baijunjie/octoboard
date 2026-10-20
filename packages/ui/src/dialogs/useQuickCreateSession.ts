@@ -46,7 +46,7 @@ export function useQuickCreateSession(
     }
     const opening = defaultOpenSessionRequest(t, target.console, project, binding, state, Date.now());
     if ("usedUp" in opening) {
-      toastError(new ActionableError(t("sidebar.project.openSessionQuickUsedUp", { action }), "quotaUsedUpAgent"));
+      toastError(new ActionableError(t("sidebar.project.openSessionQuickUsedUp", { action: isolate(action) }), "quotaUsedUpAgent", { code: "quick_create_quota_refused", params: { action } }));
       return;
     }
     const startedIn = latestConsoleId.current;

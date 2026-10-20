@@ -619,6 +619,14 @@ const DaemonContext = createContext<Daemon | undefined>(undefined);
 
 export const DaemonProvider = DaemonContext.Provider;
 
+const EMPTY_ERROR_STORE = createStateStore({});
+
+/** Error acknowledgements also render before a daemon provider is available. */
+export function useErrorRecords<T>(selector: (state: State) => T): T {
+  const daemon = useContext(DaemonContext);
+  return useStore(daemon?.store ?? EMPTY_ERROR_STORE, selector);
+}
+
 /** The requests and actions; they never change, so using this never re-renders. */
 export function useDaemon(): Daemon {
   const daemon = useContext(DaemonContext);

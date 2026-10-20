@@ -620,6 +620,41 @@ html {
   --app-danger-soft: color-mix(in oklab, var(--app-danger) 15%, transparent);
 }
 
+/* Alerts retain HeroUI's original text colours. Its light muted description needs an almost-white
+   surface to stay above 4.5:1, so these fills use a pale status tint over the opaque library surface.
+   An opaque mixture also keeps the result independent of a panel, sidebar or dialog underneath.
+   Keep this palette local to Alerts: the app's other soft fills serve different foregrounds. */
+:root {
+  --alert-status-tint: 4%;
+  --alert-neutral-tint: 2%;
+}
+
+.dark,
+[data-theme="dark"] {
+  --alert-status-tint: 12%;
+  --alert-neutral-tint: 8%;
+}
+
+.alert-fill-default {
+  background-color: color-mix(in oklab, var(--foreground) var(--alert-neutral-tint), var(--surface));
+}
+
+.alert-fill-accent {
+  background-color: color-mix(in oklab, var(--accent) var(--alert-status-tint), var(--surface));
+}
+
+.alert-fill-success {
+  background-color: color-mix(in oklab, var(--success) var(--alert-status-tint), var(--surface));
+}
+
+.alert-fill-warning {
+  background-color: color-mix(in oklab, var(--warning) var(--alert-status-tint), var(--surface));
+}
+
+.alert-fill-danger {
+  background-color: color-mix(in oklab, var(--danger) var(--alert-status-tint), var(--surface));
+}
+
 /* A selected button of a toggle group takes a solid accent fill and a label colour of its own. The
    only group left is the appearance setting in the settings dialog; the two-state view controls are
    `.icon-toggle`s, which carry their state in the icon instead. HeroUI's soft accent tint

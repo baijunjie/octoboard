@@ -184,9 +184,9 @@ export interface Scenario {
   sessionRecords?: Record<string, SessionRecordsPresence>;
   /** What `read_session_history` answers per archived session: the messages its record holds (none
    * for an empty history), `"unavailable"` for a record that is missing or unreadable, or `"pending"`
-   * for a read that is never answered, so the history view stays loading. A session not listed has
+   * for a read that is never answered, or a daemon error refusing the request. A session not listed has
    * an empty history. */
-  sessionHistory?: Record<string, HistoryMessage[] | "unavailable" | "pending">;
+  sessionHistory?: Record<string, HistoryMessage[] | "unavailable" | "pending" | FixtureError>;
   /** Sessions whose `resume_session` is never answered, so a Reopen stays in flight and the terminal
    * keeps its "Resuming session…" cover. Other sessions reopen at once. */
   sessionResumes?: Record<string, "pending">;

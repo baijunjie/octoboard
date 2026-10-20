@@ -100,7 +100,11 @@ it("tells an account that is not signed in, or whose directory is missing, to lo
   for (const code of ["quota_not_signed_in", "quota_config_dir_missing"]) {
     const unavailable = { code, params: { agent: "Claude Code", dir: "/home/dev/.claude-work" }, message: "raw text" };
     const container = mount(<AccountQuotaSummary quota={quota({ windows: [], unavailable })} />);
-    expect(container.textContent).toBe("Not logged in yet. Log in to use this account.");
+    const recovery = container.querySelector("p")!;
+    expect(recovery.textContent).toBe("Log in to use this account.");
+    expect(container.querySelector("span")?.textContent).toBe("Not logged in yet.");
+    expect(recovery.previousElementSibling?.textContent).toBe("Not logged in yet.");
+    expect(container.textContent).not.toContain("Quota unavailable");
   }
 });
 
@@ -114,7 +118,17 @@ it("keeps the last good windows as out of date, with when they were read and why
   const unavailable = { code: "quota_command_failed", params: { agent: "Claude Code", detail: "exit 1" }, message: "failed" };
   const container = mount(<AccountQuotaSummary quota={quota({ unavailable })} />);
   expect(container.textContent).toContain("Out of date: last read 5 minutes ago");
-  expect(plain(container)).toContain("Claude Code could not report its quota: exit 1");
+  const summary = Array.from(container.querySelectorAll("span")).find((node) => node.textContent === "Claude Code could not report its quota.")!;
+  expect(summary).toBeDefined();
+  const agent = summary.querySelector("[data-inline-chip]")!;
+  expect(agent.textContent).toBe("Claude Code");
+  expect(agent.getAttribute("dir")).toBe("auto");
+  expect(agent.textContent).not.toMatch(/[\u2066-\u2069]/);
+  const diagnostic = container.querySelector("pre")!;
+  expect(diagnostic.textContent).toBe("exit 1");
+  expect(diagnostic.getAttribute("dir")).toBe("ltr");
+  expect(container.querySelectorAll("pre")).toHaveLength(1);
+  expect(summary.contains(diagnostic)).toBe(false);
   expect(container.querySelectorAll('[data-slot="meter"]')).toHaveLength(3);
 });
 

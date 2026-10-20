@@ -95,8 +95,9 @@ export function ResumeConversationFields({
   };
   const heldElsewhere = useHeldElsewhere();
   // The open-time refusal names the holder as the lookup does, when the store knows it.
-  const refusalProblem = refusal && ((refusal.code === "conversation_outside_project" ? heldElsewhere(refusal.params.session) : undefined) ?? <DaemonErrorMessage error={errorPresentation(refusal)} />);
-  const lookupProblem = typeof problem === "string" ? problem : problem && <DaemonErrorMessage error={problem} />;
+  const refusalReason = refusal && ((refusal.code === "conversation_outside_project" ? heldElsewhere(refusal.params.session) : undefined) ?? errorPresentation(refusal));
+  const refusalProblem = refusalReason && <DaemonErrorMessage error={refusalReason} part="summary" />;
+  const lookupProblem = typeof problem === "string" ? problem : problem && <DaemonErrorMessage error={problem} part="summary" />;
   return (
     <>
       <div ref={idFieldRef}>
@@ -106,6 +107,7 @@ export function ResumeConversationFields({
           onChange={onResumeIdChange}
           placeholder={t("dialog.session.resumeExample", { example: EXAMPLE_CONVERSATION_ID })}
           errorMessage={shownProblem ? idProblems[shownProblem] : refusalProblem ?? lookupProblem}
+          errorDetails={!shownProblem && (refusalReason ? <DaemonErrorMessage error={refusalReason} part="details" /> : problem && typeof problem !== "string" ? <DaemonErrorMessage error={problem} part="details" /> : undefined)}
           endAdornment={looking ? <Spinner size="sm" aria-hidden /> : null}
           dir="ltr"
           isDisabled={blocked}

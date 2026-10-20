@@ -8,6 +8,7 @@ import { useLatest } from "../components/useLatest";
 import { AGENT_LABEL } from "../agents";
 import { InlineChip } from "../components/InlineChip";
 import { ErrorAlert } from "../components/ErrorAlert";
+import { CodeToneContext } from "../components/codeTone";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
 import type { Event, ImportChoiceKind, ImportedProject, ImportFailure } from "../protocol";
@@ -75,9 +76,9 @@ function Cell({
       <span aria-hidden="true" className="w-20 shrink-0 text-app-muted [overflow-wrap:anywhere] @xl:hidden">
         {label}
       </span>
-      <span className="min-w-0 [overflow-wrap:anywhere]" dir="auto">
+      <div className="min-w-0 [overflow-wrap:anywhere]" dir="auto">
         {children}
-      </span>
+      </div>
     </td>
   );
 }
@@ -154,7 +155,7 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
       content: <div className="flex flex-col gap-3">
         {failures > 0 && <p>{t("configuration.import.result.failedCount", { count: failures })}</p>}
         {failed.length > 0 && <ul className="flex flex-col gap-2">{failed.map((line, index) => <li key={index}><p dir="auto" className="font-semibold">{[line.console, line.project].filter(Boolean).join(" / ")}</p>{line.detail}<ErrorGuidance error={diagnostics[index]} /></li>)}</ul>}
-        {result.settings_error && <div><p><Message id="configuration.import.result.settings.failed" params={{ reason: failureNode(result.settings_error) }} /></p><ErrorGuidance error={settingsError} /></div>}
+        {result.settings_error && <div><div><Message id="configuration.import.result.settings.failed" params={{ reason: failureNode(result.settings_error, "summary") }} /></div>{failureNode(result.settings_error, "details")}<ErrorGuidance error={settingsError} /></div>}
       </div>,
     });
   }, [result, failureContent]);
@@ -181,9 +182,14 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
       {typeof result.settings_applied?.auto_delete_unresumable_archives === "boolean" &&
         settingLine(t("settings.archiveCleanup.label"), result.settings_applied.auto_delete_unresumable_archives)}
       {result.settings_error && (
-        <ErrorAlert>
-          <Message id="configuration.import.result.settings.failed" params={{ reason: failureNode(result.settings_error) }} />
-        </ErrorAlert>
+        <CodeToneContext value="danger">
+          <div className="flex min-w-0 flex-col gap-3">
+            <ErrorAlert title={t("configuration.import.result.settings.failedTitle")}>
+              <Message id="configuration.import.result.settings.failed" params={{ reason: failureNode(result.settings_error, "summary") }} />
+            </ErrorAlert>
+            {failureNode(result.settings_error, "details")}
+          </div>
+        </CodeToneContext>
       )}
       {lines.length > 0 && (
         <div className="@container">

@@ -723,7 +723,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Account login failed",
-    description: "Log in was chosen for Work and the CLI gave up: the modal stays open, now saying \"Could not log in to\" the name as a chip, with the CLI's reason on its own line, and Log in again as its main button beside Close.",
+    description: "Log in was chosen for Work and the CLI gave up: the modal stays open, now saying \"Could not log in to\" the name as a chip, with the named agent in the short explanation and the CLI's multiline reason in an external selectable code block, and Log in again as its main button beside Close.",
     state: notSignedInState,
     loginOutcome: "failed",
     steps: loginFromInline(),

@@ -58,10 +58,10 @@ function TrustPromptMessage({
       {prompt.agent === "codex" && <p>{t("dialog.trust.codexRoot", { agent })}</p>}
       {/* HeroUI's own warning tint rather than its default surface, which is the dialog's own fill and
           leaves the callout unmarked. */}
-      <TintedAlert status="warning" className="shadow-none">
+      <TintedAlert status="warning">
         <Alert.Indicator />
         <Alert.Content>
-          <Alert.Description className="text-foreground">
+          <Alert.Description>
             {/* The icon is presentational, so the word that makes this a caution is spoken instead. */}
             <span className="sr-only">{t("dialog.trust.cautionLabel")} </span>
             <Caution agent={prompt.agent} />

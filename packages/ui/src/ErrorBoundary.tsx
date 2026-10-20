@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 
 import { errorAlerts } from "./errorAlerts";
 import { ErrorAlert } from "./components/ErrorAlert";
+import { CodeToneContext } from "./components/codeTone";
 import { CodeBlock } from "./components/CodeBlock";
 import { FadedScroller, useFadeRegion } from "./components/scrollFade";
 import { useT } from "./i18n/react";
@@ -50,21 +51,25 @@ function ErrorScreen({ error, onRetry }: { error: Error; onRetry: () => void }):
   return (
     <StartupScreen
       message={
-        <ErrorAlert title={t("error.crashed")} headingLevel={1} announce={false}>
-          {/* The stack is taller than the screen more often than not, so it fades at the edge it
-              hides the rest behind. The ring goes on this wrapper, which draws it outside its own box, so
-              it needs no room of its own. `overflow-auto` beside the fade's own `overflow-y`: a long
-              frame scrolls sideways too, and only the vertical edge fades. */}
-          <div className={`mt-4 max-w-[70ch] rounded-lg ${region.focused ? "ring-2 ring-app-focus" : ""}`}>
-            <FadedScroller region={region} dir="ltr" className="max-h-[40vh] overflow-auto rounded-lg">
-              {/* A stack trace is program text: its indentation and its frames read left to right in
-                  any interface language. */}
-              <CodeBlock dir="ltr" wrap={false} className="text-xs">
-                {error.stack ?? error.message}
-              </CodeBlock>
-            </FadedScroller>
+        <CodeToneContext value="danger">
+          <div className="flex min-w-0 flex-col gap-4">
+            <h1 className="text-xl font-semibold text-foreground">{t("error.crashed")}</h1>
+            <ErrorAlert announce={false}>{error.message}</ErrorAlert>
+            {/* The stack is taller than the screen more often than not, so it fades at the edge it
+                hides the rest behind. The ring goes on this wrapper, which draws it outside its own box, so
+                it needs no room of its own. `overflow-auto` beside the fade's own `overflow-y`: a long
+                frame scrolls sideways too, and only the vertical edge fades. */}
+            <div className={`max-w-[70ch] rounded-lg ${region.focused ? "ring-2 ring-app-focus" : ""}`}>
+              <FadedScroller region={region} dir="ltr" className="max-h-[40vh] overflow-auto rounded-lg">
+                {/* A stack trace is program text: its indentation and its frames read left to right in
+                    any interface language. */}
+                <CodeBlock dir="ltr" wrap={false} className="text-xs">
+                  {error.stack ?? error.message}
+                </CodeBlock>
+              </FadedScroller>
+            </div>
           </div>
-        </ErrorAlert>
+        </CodeToneContext>
       }
       action={{ label: t("error.tryAgain"), onSelect: onRetry }}
     />

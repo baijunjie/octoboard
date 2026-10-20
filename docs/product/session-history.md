@@ -67,12 +67,15 @@ The record is looked for as the handoff package's conversation is (see "The hand
   in the session — nothing was said in it, including a session that never had a conversation.
 - **Unavailable**: a full empty panel with a warning glyph saying the history is unavailable: the agent's record of the
   session could not be found or read. Its line suggests reopening the session to see its terminal.
-- **Failed**: the request for the history itself failed — the connection to the daemon dropped, say. An error alert
-  says the history could not be loaded, with **Try again**. A failed history is also read again by itself when the
-  connection to the daemon comes back.
+- **Failed**: the request for the history itself failed — the connection to the daemon dropped, or the daemon
+  refused it. The failure enters the error-alert queue for acknowledgement, preserving the actual reason and any
+  diagnostic details (see "Error alerts" and "Names and diagnostic details" in `docs/product/error-alerts.md`).
+  Acknowledgement leaves the failed pane visible with that reason and **Try again**; it does not retry the read.
+  A failed history is also read again by itself when the connection to the daemon comes back. Reopen remains
+  available on the floating bar.
 
-Assistive technology is told the loading, empty and unavailable states as they begin; the failed state's alert
-announces itself.
+Assistive technology is told the loading, empty and unavailable states as they begin. The failed request is announced
+by its acknowledgement dialog; the retained pane does not announce the same failure again.
 
 ## Keyboard focus
 

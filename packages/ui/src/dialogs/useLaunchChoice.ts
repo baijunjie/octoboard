@@ -5,7 +5,7 @@ import { AGENT_LABEL, agentsInListingOrder, defaultAccountName, inheritedSession
 import { agentIconPickerOptions } from "../components/AgentIcon";
 import { useT } from "../i18n/react";
 import type { Agent, Console, Project } from "../protocol";
-import { quotaUsedUpSentence } from "../quota/quotaFormat";
+import { quotaUsedUpAlert } from "../quota/quotaFormat";
 import { useDaemonStore } from "../store";
 import { useNow } from "../useNow";
 import { accountOption } from "./accountOptions";
@@ -86,7 +86,7 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
     blocked,
     /** Why the chosen account cannot run a session, when its quota is used up. */
     usedUp: exhaustedBy && chosenEntry
-      ? quotaUsedUpSentence(t, chosenEntry.name, exhaustedBy, now)
+      ? quotaUsedUpAlert(t, chosenEntry.name, exhaustedBy, now)
       : undefined,
     overrides,
     agentOptions: agentIconPickerOptions(t, agentAvailability, addedAgents, choice.agent).filter((option) => option.value !== exclude),

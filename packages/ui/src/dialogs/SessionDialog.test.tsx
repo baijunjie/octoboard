@@ -499,6 +499,57 @@ const archived = sessionOf("s-old", parentConsole.id, project.id, "Old work", "a
 const running = sessionOf("s-run", parentConsole.id, project.id, "Busy", "working");
 const interrupted = sessionOf("s-int", parentConsole.id, project.id, "Paused", "interrupted", { account_id: "a-work" });
 
+it("announces exhausted quota only when the selected conversation requires a new launch", async () => {
+  const { daemon, onResume, onOpened } = renderForResume(
+    { claude_account_id: { kind: "account", id: "a-work" } },
+    heldBy("live_session", interrupted.id),
+    { ...claudeAccounts, sessions: new Map([[interrupted.id, interrupted]]) },
+  );
+  const quotaAlert = () => document.body.querySelector('[data-slot="alert-content"][role="alert"]');
+  expect(quotaAlert()).toBeNull();
+  expect(openDisabled()).toBe(false);
+  // The quota arrives after the form opened, so its title and reason must announce together.
+  act(() => daemon.store.setState({ accountQuotas: [null, "a-work"].map((account) => ({
+    agent: "claude" as const, account, fetched_at: Date.now(), plan: null, unavailable: null,
+    windows: [{ kind: "session" as const, label: null, used_percent: 100, resets_at: Date.now() + 3_600_000, window_minutes: 300 }],
+  })) }));
+  const assertQuotaAlert = () => {
+    const alert = quotaAlert();
+    expect(alert?.querySelector('[data-slot="alert-title"]')?.textContent).toBe(`${isolate("Work")} cannot be used for now`);
+    expect(alert?.querySelector('[data-slot="alert-description"]')?.textContent).toContain("It has used up its 5-hour quota.");
+    expect(alert?.querySelector('[data-slot="alert-description"]')?.querySelector("div,p,ul,pre,h1,h2,h3")).toBeNull();
+    expect(openDisabled()).toBe(true);
+  };
+  assertQuotaAlert();
+  await submit();
+  expect(sentOpenSession(daemon)).toBeUndefined();
+
+  await chooseResume();
+  expect(quotaAlert()).toBeNull();
+  typeResumeId(UUID);
+  expect(quotaAlert()).toBeNull();
+  expect(openDisabled()).toBe(true);
+  await settle();
+  expect(quotaAlert()).toBeNull();
+  expect(resumeStatusText()).toContain("Found interrupted session");
+  expect(buttons().find((button) => button.textContent === "Resume")?.hasAttribute("disabled")).toBe(false);
+  await submit("Resume");
+  expect(onResume).toHaveBeenCalledExactlyOnceWith(interrupted.id);
+  expect(onOpened).toHaveBeenCalledExactlyOnceWith(interrupted.id);
+  expect(sentOpenSession(daemon)).toBeUndefined();
+
+  answerRequests(daemon, record("claude", "a-work"));
+  typeResumeId("11111111-2222-3333-4444-555555555556");
+  expect(quotaAlert()).toBeNull();
+  await settle();
+  expect(resumeStatusText()).toBe(`Found a record on Claude Code · ${isolate("Work")}`);
+  assertQuotaAlert();
+  await submit();
+  expect(sentOpenSession(daemon)).toBeUndefined();
+  expect(onResume).toHaveBeenCalledTimes(1);
+  expect(onOpened).toHaveBeenCalledTimes(1);
+});
+
 it("keeps focus in the Session ID field while the lookup comes and goes", async () => {
   act(() => setInteractionModality("pointer"));
   renderForResume({}, record("claude", null));
@@ -797,15 +848,18 @@ const elsewhere = sessionOf("s-else", parentConsole.id, otherProject.id, "Invoic
 const consoleHeld = sessionOf("s-cons", parentConsole.id, undefined, "Hub work", "idle");
 
 it.each([
-  { name: "a session of another project", holder: elsewhere, message: `This conversation is already held by the session ${isolate("Invoices")} in ${isolate("Billing")}.` },
-  { name: "a console session", holder: consoleHeld, message: `This conversation is already held by the console session ${isolate("Hub work")} in ${isolate("Main")}.` },
-])("names $name that holds the conversation, and where", async ({ holder, message }) => {
+  { name: "a session of another project", holder: elsewhere, message: "This conversation is already held by the session Invoices in Billing.", names: ["Invoices", "Billing"] },
+  { name: "a console session", holder: consoleHeld, message: "This conversation is already held by the console session Hub work in Main.", names: ["Hub work", "Main"] },
+])("names $name that holds the conversation, and where", async ({ holder, message, names }) => {
   const initial = { sessions: new Map([[holder.id, holder]]), projects: new Map([[otherProject.id, otherProject]]), consoles: new Map([[parentConsole.id, parentConsole]]) };
   renderForResume({}, heldBy("outside_project", holder.id), initial);
   await chooseResume();
   typeResumeId(UUID);
   await settle();
-  expect(resumeField()!.closest('[data-slot="textfield"], [role="group"]')?.textContent).toContain(message);
+  const reason = resumeField()!.closest('[data-slot="textfield"], [role="group"]')!;
+  expect(reason.textContent).toContain(message);
+  expect(Array.from(reason.querySelectorAll("[data-inline-chip]"), (chip) => [chip.textContent, chip.getAttribute("dir")])).toEqual(names.map((name) => [name, "auto"]));
+  expect(reason.textContent).not.toMatch(/[\u2066-\u2069]/);
   expect(openDisabled()).toBe(true);
   expect(nameInput()).toBeUndefined();
 });
@@ -818,7 +872,9 @@ it("names the holder in the open-time refusal too, when the store knows the sess
   typeResumeId(UUID);
   await settle();
   await submit();
-  expect(resumeField()!.closest('[data-slot="textfield"], [role="group"]')?.textContent).toContain(`held by the session ${isolate("Invoices")} in ${isolate("Billing")}`);
+  const reason = resumeField()!.closest('[data-slot="textfield"], [role="group"]')!;
+  expect(reason.textContent).toContain("held by the session Invoices in Billing");
+  expect(Array.from(reason.querySelectorAll("[data-inline-chip]"), (chip) => [chip.textContent, chip.getAttribute("dir")])).toEqual([["Invoices", "auto"], ["Billing", "auto"]]);
 });
 
 it("shows a failed lookup under the field with the daemon's reason, and holds Open back", async () => {

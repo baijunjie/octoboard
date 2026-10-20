@@ -67,6 +67,7 @@ export function OptionSelect<T extends string>({
   hideLabel,
   isDisabled,
   description,
+  descriptionDetails,
   describedBy,
   labelledBy,
 }: {
@@ -79,6 +80,7 @@ export function OptionSelect<T extends string>({
   isDisabled?: boolean;
   /** Extra explanation shown under the field. */
   description?: React.ReactNode;
+  descriptionDetails?: React.ReactNode;
   /** The id of an element elsewhere on the page that also describes the field. */
   describedBy?: string;
   /** With `hideLabel`, the ids of elements elsewhere on the page that name the field. */
@@ -203,6 +205,7 @@ export function OptionSelect<T extends string>({
         </MotionListBox>
       </Select.Popover>
       {description && <Description id={descriptionId}>{description}</Description>}
+      {descriptionDetails}
     </Select>
   );
 }

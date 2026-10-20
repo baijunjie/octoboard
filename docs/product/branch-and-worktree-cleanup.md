@@ -77,11 +77,12 @@ worktree is named by its path, with the home directory written as `~`, and the b
   removed past the lock (`git worktree remove` forced twice); the branch one had checked out then follows the branch
   rules above.
 - Neither block is shown while it has nothing to cover.
-- **What a ticked option does is said in the confirmation's one warning.** A confirmation shows at most one warning,
-  below its options and above its buttons. It holds what the confirmation warned of already — the sessions archived or
-  deleted along with the session, or how many are deleted along with all the archived sessions — and one more line
-  for each option ticked: that it also permanently deletes that many worktrees and branches Git keeps, or that many
-  locked worktrees, uncommitted changes included. A confirmation that had no warning gets one at the first tick.
+- **What a ticked option does is said below the confirmation's one warning alert.** The warning and its details sit
+  below its options and above its buttons. The alert summarizes the sessions archived or deleted along with the
+  session, or how many are deleted along with all the archived sessions; any session list follows outside the alert.
+  Each option ticked adds a line below it: that it also permanently deletes that many worktrees and branches Git keeps,
+  or that many locked worktrees, uncommitted changes included. A confirmation that had no warning gets one at the first
+  tick, saying that the action has additional consequences.
 - **How a ticked option changes the confirm button** — its label, and for archiving its danger colour — is set in
   "What a confirmation's confirm button names" in `docs/product/window-layout.md`.
 - **A choice holds for the list it was made over.** A list that changes while the confirmation is open — a session
@@ -206,9 +207,9 @@ worktrees) and deleted permanently (the branches). Locked worktrees come after i
 despite their locks and can be recovered from the Trash, and a Details disclosure over them. A branch a locked worktree
 has checked out is counted among what goes only while that box is checked.
 
-The confirmation's one warning, below the options (see `docs/product/removing-projects.md` for the running sessions it
-lists), gains a line while the Trash option is ticked for each kind of item that goes — that it also moves that many
-worktrees outside the folder to the Trash, and that it also permanently deletes that many branches of the project's
+Below the confirmation's one warning alert, after the options (see `docs/product/removing-projects.md` for the running
+sessions listed there), a line appears while the Trash option is ticked for each kind of item that goes — that it also
+moves that many worktrees outside the folder to the Trash, and that it also permanently deletes that many branches of the project's
 sessions — and, while the locked box is checked, that it also moves that many locked worktrees to the Trash, uncommitted
 changes included. When the lookup fails, the line instead says that worktrees of the repository outside the project
 folder may be moved to the Trash, and its branches deleted permanently. A removal that would be refused (see "Moving the

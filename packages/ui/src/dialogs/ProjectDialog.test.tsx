@@ -546,7 +546,15 @@ it("offers the stored model alone and the reason when the agent cannot list its 
   await click(buttonText("Advanced"));
   expect(document.body.textContent).toContain("Loading the models this agent offers");
   await answerModels(pending, { code: "models_timed_out", params: { agent: "claude" }, message: "" });
-  expect(document.body.textContent).toContain(`${isolate("claude")} took too long to list its models.`);
+  const description = pickerNamed("Model").getAttribute("aria-describedby")?.split(" ").map((id) => document.getElementById(id)).find((node) => node?.textContent === "claude took too long to list its models.");
+  expect(description).toBeDefined();
+  const agent = description!.querySelector("[data-inline-chip]")!;
+  expect(agent.textContent).toBe("claude");
+  expect(agent.getAttribute("dir")).toBe("auto");
+  expect(agent.querySelector("code")).toBeNull();
+  expect(agent.textContent).not.toMatch(/[\u2066-\u2069]/);
+  await settle(200);
+  expect(document.body.querySelector('[role="status"]')?.textContent).toBe(`${isolate("claude")} took too long to list its models.`);
   await click(pickerNamed("Model"));
   expect(optionTexts()).toEqual(["retired, Not in the list"]);
 });

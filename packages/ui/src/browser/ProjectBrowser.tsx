@@ -7,6 +7,7 @@ import { Button } from "../components/Button";
 import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { ErrorAlert } from "../components/ErrorAlert";
+import { CodeToneContext } from "../components/codeTone";
 import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
 import { handFocusOff } from "../components/handFocusOff";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
@@ -364,9 +365,14 @@ function RootError({ message, onRetry, title }: { title?: string; message: Error
   useErrorAcknowledgement(message, title ?? t("browser.error.root"));
   return (
     <div ref={ref} className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-sm">
-      <ErrorAlert title={title ?? t("browser.error.root")} className="w-full max-w-lg">
-        <DaemonErrorMessage error={message} showTitle={false} />
-      </ErrorAlert>
+      <CodeToneContext value="danger">
+        <div className="flex w-full min-w-0 max-w-lg flex-col gap-3">
+          <ErrorAlert title={title ?? t("browser.error.root")}>
+            <DaemonErrorMessage error={message} part="summary" />
+          </ErrorAlert>
+          <DaemonErrorMessage error={message} part="details" />
+        </div>
+      </CodeToneContext>
       <Button size="sm" variant="secondary" preventFocusOnPress onPress={() => onRetry(ref.current)}>
         {t("error.tryAgain")}
       </Button>

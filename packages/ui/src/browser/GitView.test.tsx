@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { act, useState } from "react";
-import { expect, it, vi } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
+import { errorAlerts } from "../errorAlerts";
 import type { ProjectSourceInfo } from "../protocol";
 import { changeViewFixture, mountRows } from "./browserTestSupport";
 import { GitView, type ChangesViewProps } from "./GitView";
@@ -54,7 +55,7 @@ function mountWorktreeNotice(worktreeRoot: string, project: ProjectSourceInfo) {
   }
   const container = mountRows(<Host />, { clipboard: { writeText } });
   const button = container.querySelector<HTMLButtonElement>('p button[aria-label="Copy worktree path"]');
-  return { button, writeText, uncheck: () => uncheck(), selector: props.selectorsRef };
+  return { container, button, writeText, uncheck: () => uncheck(), selector: props.selectorsRef };
 }
 
 async function copied(button: HTMLButtonElement | null): Promise<void> {
@@ -87,4 +88,18 @@ it("returns keyboard focus to the branch selector when its worktree row disappea
   act(() => uncheck());
   expect(button!.isConnected).toBe(false);
   expect(document.activeElement).toBe(selector.current?.querySelector("button"));
+});
+
+
+it("retains source Git stderr as structured diagnostics in both acknowledgement and the durable pane", () => {
+  const report = vi.spyOn(errorAlerts, "report").mockImplementation(() => {});
+  onTestFinished(() => report.mockRestore());
+  const detail = "fatal: unable to read /tmp/مراجعة\n    indented reason";
+  const { container } = mountWorktreeNotice("/r", { ...source("/r", "/r"), git: null, git_error: detail });
+  expect(report).toHaveBeenCalledWith(expect.objectContaining({ message: detail, error: expect.objectContaining({ code: "git_unavailable", params: { detail } }) }));
+  expect(container.querySelector("pre")?.textContent).toBe(detail);
+  expect(container.querySelector("pre")?.getAttribute("dir")).toBe("ltr");
+  expect(container.querySelectorAll("pre")).toHaveLength(1);
+  expect(container.querySelector("[data-slot=alert-description] pre")).toBeNull();
+  expect(container.querySelector("[role=alert]")).toBeNull();
 });

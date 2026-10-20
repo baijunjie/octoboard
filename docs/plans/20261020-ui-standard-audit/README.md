@@ -12,8 +12,8 @@ Each was fixed where it was found, but nobody has checked the rest of the UI. Th
 
 1. Write the rules the user set during that preview into the UI standard, so the audit has them to check against.
 2. Audit the whole UI against the whole standard and record every place that does not conform.
-3. Fix what the audit found, in milestones split from its findings; moving every Alert onto HeroUI's stock Alert is
-   one of them.
+3. Fix what the audit found, in milestones split from its findings; moving every Alert onto HeroUI's stock structure
+   and styles with only a status background fill is one of them.
 
 ## Key design decisions
 
@@ -40,24 +40,69 @@ Each was fixed where it was found, but nobody has checked the rest of the UI. Th
     after the Alert in the surrounding content's ordinary text style, not inside it.
   - A standalone error, warning or blocking reason is never bare coloured text (already written into "Standalone
     errors use the shared Alert" during the added-agents work).
-- **The Alert loses its custom styling** (user decision): the shared error/tinted wrappers' own fills, text sizes,
-  shadow overrides and custom content structure are removed, and every Alert uses HeroUI's Alert with its original
-  styles and structure (status, indicator, content, title, description). The custom content structure is why the
-  indicator keeps landing out of line with the text and had to be patched per call site. HeroUI's description cannot
-  hold paragraphs, lists or diagnostic blocks; with the recovery moved out of the Alert, what stays inside is a
-  title and a short description, so the stock structure suffices. The standard's sentences that describe the custom
-  wrapper (the danger-soft fill, a heading-element title, block content inside the callout) are rewritten to match.
+- **The Alert's only custom visual treatment is a status background fill** (user decision). Every Alert otherwise
+  uses HeroUI's original styles and component structure (status, indicator, content, title, description). The title
+  retains its original status colour and the description its default colour; indicator, typography, spacing, radius
+  and shadow remain unchanged. Remove text-colour overrides such as `text-foreground`, text-size and shadow overrides,
+  and custom content structure. HeroUI's description cannot hold paragraphs, lists or diagnostic blocks; with the
+  recovery moved out of the Alert, what stays inside is a title and a short description, so the stock structure
+  suffices. The standard preserves the status background fill and replaces the heading-element title and block
+  content inside the callout with that stock structure.
 - **Fixes are split after the audit**, by area or by rule as the findings suggest, so each fix milestone stays
   independently reviewable in the gallery.
 
 ## Milestones
 
-1. [Write the preview's rules into the UI standard](01-write-preview-rules-into-the-standard.md)
-2. [Audit the UI against the standard](02-audit-the-ui.md)
+1. 01 Write the preview's rules into the UI standard (closed)
+2. 02 Audit the UI against the standard (closed)
 
-## Open
+### Accepted fix milestones
 
-- How the fix milestones are split (by area or by rule) is decided from the audit's findings.
-- Whether to add an automated guard (a test or lint over the message catalogs and their render sites) for names
-  interpolated into copy as plain text.
-- Whether the change check should name the "names in copy use the inline chip" rule explicitly.
+The [coverage and delivery record](audit-coverage.md) maps every standard section, confirmed finding and evidence
+artifact. The user accepted the exact 03–13 split and independent work on 04, 12 and 13. Completed work now
+accumulates on the dedicated UI audit integration branch. Each milestone is independently verified; shared
+contracts have one owner at a time. Only the complete plan is rebased onto current main, verified and integrated
+into main. The closed audit changed no production UI; fix milestones implement its findings.
+
+3. Restore stock Alerts (closed)
+4. Render structured error names and diagnostics (closed)
+5. [Use rich name chips and tooltip content](05-rich-names-and-tooltips.md)
+6. [Separate choice status and direction](06-choice-status-and-direction.md)
+7. [Correct form defaults and blocked validity](07-form-defaults-and-validity.md)
+8. [Keep horizontal tab strips at content width](08-content-width-tabs.md)
+9. [Use consistent neutral empty states](09-consistent-empty-states.md)
+10. [Apply shared collection and reduced-motion behavior](10-collection-and-reduced-motion.md)
+11. [Defer initial terminal status announcements](11-terminal-status-announcements.md)
+12. Hand focus off when report pages are replaced (closed)
+13. [Use the shared button primitive for tree chevrons](13-collection-button-primitives.md)
+
+Milestones 05–11 and 13 remain open. The open milestones carry their current-source handoffs; the original audit
+inventories remain historical evidence, with check limitations in [the check record](audit-checks.md).
+
+## Evidence baseline and concurrent integration
+
+Evidence and the interpolation inventory describe `3a65c903`, even after this documentation is rebased onto local
+main's quota integration `7a7a2f34e`. Open rich-copy work must re-inventory its Alert, account-name, ReasonText
+and recovery routes and validate the five named exhausted/refused quota scenarios. Original counts and
+captures do not certify the later 95-file change. Resume-by-ID subsequently integrated locally at `368a1f1f3`, followed by archived history (`501bd872d`) and
+MCP defaults (`d6b69d18a`). The shared Alert and error router now include those current callers; their source
+provenance stays separate from the original audit. Open rich-copy work must re-inventory the current source.
+
+## Coordination
+
+- Keep generated validation outputs in a task-specific `/tmp` directory. Do not commit additions or modifications
+  under `evidence/`. Historical captures and probes are archived outside Git; evidence names in these records are
+  archive identifiers. Recreate current-source measurements rather than treating those captures as current validation.
+- Independent work may proceed before unrelated milestones close. Coordinate changes to shared useFocusHandoff,
+  Button and collection contracts through the parent before editing them. Each worker writes only its assigned
+  worktree and cleans only its own services. Milestone closure does not authorize integration into main.
+- The accepted 03–13 split has no pending user confirmation. The shared Alert, semantic
+  error map, rich/plain option contract and AgentTabList each need coordinated ownership; integrated quota and resume-by-ID
+  callers are handed off through the coordinating session, not edited by this audit.
+
+## Implementation decisions
+
+- Do not introduce a broad lint/static-scanner framework. Use the full source inventory for manual closure and
+  focused, meaningful regression tests at shared rich/plain parameter and Alert component contracts during fixes.
+- Change-check briefs for 04–06 explicitly name the rule that names referenced in visible copy use InlineChip;
+  no global skill/agent configuration change is needed.

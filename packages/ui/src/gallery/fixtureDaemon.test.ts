@@ -1105,6 +1105,17 @@ describe("the fixture daemon's session history", () => {
     await expect(createFixtureDaemon(base).request({ type: "read_session_history", session: "missing" })).rejects.toMatchObject({ code: "unknown_session" });
   });
 
+  it("rejects a refused history read and answers a later retry with the current fixture result", async () => {
+    const error = { code: "store_io_failed", params: { detail: "Resource temporarily unavailable" }, message: "Resource temporarily unavailable" };
+    const sessionHistory: NonNullable<Parameters<typeof createFixtureDaemon>[0]["sessionHistory"]> = { [archived.id]: error };
+    const daemon = createFixtureDaemon({ ...base, sessionHistory });
+    const request = { type: "read_session_history" as const, session: archived.id };
+    await expect(daemon.request(request)).rejects.toMatchObject(error);
+    expect(daemon.store.getState().sessions.get(archived.id)?.status).toBe("archived");
+    sessionHistory[archived.id] = messages;
+    await expect(daemon.request(request)).resolves.toEqual({ type: "session_history", session: archived.id, messages });
+  });
+
   it("can leave a read, and a reopen, unanswered", async () => {
     const daemon = createFixtureDaemon({ ...base, sessionHistory: { [archived.id]: "pending" }, sessionResumes: { [archived.id]: "pending" } });
     const answered = vi.fn();

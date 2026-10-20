@@ -433,7 +433,7 @@ const removeProjectTrash: Scenario = {
   group: "Projects",
   category: "normal",
   title: "Remove project and move its folder to the Trash",
-  description: "The Trash option is checked: the message and the hint under the option say the folder goes too, while the confirming button still reads \"Remove\". Under the option, the disclosure \"What goes with it (4)\" is closed, and the locked-worktree option \"Also move the locked worktrees to the Trash (4)\" follows as a plain block, unchecked, with its own closed Details. Under the options, the dialog's one warning has appeared because the Trash option is checked, with a line each for the worktrees moved to the Trash and the branches deleted permanently.",
+  description: "The Trash option is checked: the message and the hint under the option say the folder goes too, while the confirming button still reads \"Remove\". Under the option, the disclosure \"What goes with it (4)\" is closed, and the locked-worktree option \"Also move the locked worktrees to the Trash (4)\" follows as a plain block, unchecked, with its own closed Details. Under the options, the dialog's one stock warning has appeared because the Trash option is checked; separate consequence lines follow it for the worktrees moved to the Trash and the branches deleted permanently.",
   state: removalState,
   projectRemovalBranches: {
     [tagged[0].id]: [
@@ -457,7 +457,7 @@ const archiveConsoleSession: Scenario = {
   group: "Archive view",
   category: "normal",
   title: "Archive console session and its bound sessions",
-  description: "The confirmation offers two plain options, unchecked, each a checkbox with its count in the label, a short note and a closed Details disclosure: \"Also force-remove the worktrees and branches Git keeps (5)\" and \"Also delete the locked worktree\". Under them, the one warning lists the running manually bound session, the waiting lead and its interrupted child; nothing but the sessions is in it. Confirming stops and archives all of them together. The confirming button reads \"Archive\" in the normal colour until a deletion option is ticked.",
+  description: "The confirmation offers two plain options, unchecked, each a checkbox with its count in the label, a short note and a closed Details disclosure: \"Also force-remove the worktrees and branches Git keeps (5)\" and \"Also delete the locked worktree\". Under them, the one stock warning is followed by a separate list of the running manually bound session, the waiting lead and its interrupted child. Confirming stops and archives all of them together. The confirming button reads \"Archive\" in the normal colour until a deletion option is ticked.",
   sessionBranches: [
     worktreeItemOf(web, hubSessions.web, "feat/changelog-tidy", "/Users/dev/worktrees/website-changelog-tidy"),
     worktreeItemOf(web, hubSessions.web, null, "/Users/dev/worktrees/website-changelog-scratch"),
@@ -1005,7 +1005,7 @@ export const dialogScenarios: Scenario[] = [
     ...removeProjectTrash,
     id: "dialog-remove-project-trash-expanded",
     title: "Remove project to the Trash, lists opened",
-    description: "Both disclosures are open (What goes with it, Details), and the locked-worktree option is ticked: under the Trash option, the worktrees moved to the Trash with the folder (one on a detached HEAD) and the branches deleted permanently; under the locked option, the four locked worktrees in each wording, those with uncommitted changes ending \"uncommitted changes\". The one warning, under the options, gains a line for the locked worktrees moved to the Trash, and the locked worktree's branch, now going with it, joins the branches.",
+    description: "Both disclosures are open (What goes with it, Details), and the locked-worktree option is ticked: under the Trash option, the worktrees moved to the Trash with the folder (one on a detached HEAD) and the branches deleted permanently; under the locked option, the four locked worktrees in each wording, those with uncommitted changes ending \"uncommitted changes\". The stock warning under the options is followed by consequence lines, including one for the locked worktrees moved to the Trash; the locked worktree's branch, now going with it, joins the branches.",
     steps: [...removeDocsSite, (ui) => ui.press(ui.t("branchCleanup.along", { count: 4 })), (ui) => ui.pressEach(ui.t("branchCleanup.details")), (ui) => ui.press(ui.t("dialog.removeProject.alongLockedRemove", { count: 4 }))],
   },
   {
@@ -1017,7 +1017,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Remove project to the Trash, what goes along unknown",
-    description: "The Trash option is checked but the daemon could not say what else goes: the dialog's one warning, under the option, appears with the single line that outside worktrees may be moved to the Trash with the project and its branches deleted permanently, with no disclosure or locked-worktree option. Confirm stays available.",
+    description: "The Trash option is checked but the daemon could not say what else goes: the dialog's stock warning under the option is followed by a separate consequence line that outside worktrees may be moved to the Trash with the project and its branches deleted permanently, with no disclosure or locked-worktree option. Confirm stays available.",
     steps: removeDocsSite,
   },
   {
@@ -1074,7 +1074,7 @@ export const dialogScenarios: Scenario[] = [
     ...archiveConsoleSession,
     id: "dialog-archive-console-session-expanded",
     title: "Archive console session, lists opened",
-    description: "Both Details disclosures are open and both options ticked: under the force-remove option, the worktrees with uncommitted changes and with initialized submodules (each with its branch chip, or plain detached HEAD text) and the unmerged branch, each group under its lead line; under the locked option, the locked worktree with its row ending \"uncommitted changes\". The one warning, under the options and still holding the sessions, gains a line for each ticked option saying it also permanently deletes them. The confirming button reads \"Archive and delete\" in the danger colour because deletion options are ticked.",
+    description: "Both Details disclosures are open and both options ticked: under the force-remove option, the worktrees with uncommitted changes and with initialized submodules (each with its branch chip, or plain detached HEAD text) and the unmerged branch, each group under its lead line; under the locked option, the locked worktree with its row ending \"uncommitted changes\". The stock warning under the options is followed by the affected sessions and a separate consequence line for each ticked option saying it also permanently deletes them. The confirming button reads \"Archive and delete\" in the danger colour because deletion options are ticked.",
     steps: [
       ...archiveConsoleSession.steps!,
       (ui) => ui.pressEach(ui.t("branchCleanup.details")),
@@ -1445,4 +1445,19 @@ export const dialogScenarios: Scenario[] = [
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
     ],
   },
+  {
+    id: "dialog-edit-console-models-command-failed",
+    group: "Consoles",
+    category: "exceptional",
+    title: "Model command failed with raw diagnostics",
+    description: "The model picker retains its stored choice and presents the named agent's failure with multiline diagnostics below the short reason.",
+    state: dialogState,
+    agentModels: { claude: { models: [], unavailable: {
+      code: "models_command_failed",
+      params: { agent: "Claude Code", detail: "Error: failed to load models\n    /Users/dev/.claude/مرحبا/settings.json: permission denied" },
+      message: "Claude Code could not list its models",
+    } } },
+    steps: [consoleActions, (ui) => ui.press(ui.t("sidebar.console.edit")), (ui) => ui.press(ui.t("dialog.agentSettings.advanced"))],
+  },
+
 ];

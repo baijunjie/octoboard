@@ -73,6 +73,14 @@ under a condition (a `ViewerSubject`'s `source`, which only the change reader se
 unset in every fixture that does not meet that condition, read off the hook that builds the subject rather than off
 what the header happens to draw. So open the group's pages for any change to the viewer or to what it depends on.
 
+## Freeze tests as well as application source during final gallery verification
+
+Finish edits to the gallery checkout before a final sweep or capture, including test files. The UI's Tailwind Vite
+plugin scans source files independently of JavaScript imports, so a test-only edit can trigger a stylesheet hot
+update in the running gallery. Record which source tree the result covers and keep that tree unchanged until the run
+ends. If source changes during verification, retain the run as intermediate evidence and verify the final tree after
+it is stable; do not certify it from a sweep that spanned edits.
+
 ## Only `zh-Hans` shows translated copy; the other 15 languages render English
 
 Applies to any check whose subject is translated text: reading a screen under another language, a gallery scenario's

@@ -54,6 +54,10 @@ started over from its markup, with anything typed into its form and not submitte
   saying there are no pages yet (see "The full panel" in `docs/product/empty-states.md`). While the console session's
   pages are first being listed, the card shows its header alone.
 
+When the page holding keyboard focus is replaced — by following a new page or paging through history — focus moves
+to the report panel's first enabled header control, with a visible focus ring. If a modal dialog is open, focus
+stays within it instead. Replacing a page leaves focus elsewhere in the window where it is.
+
 ## History pages are read-only
 
 Only a console session's **newest** page can be submitted from. On every older page:

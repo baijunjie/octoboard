@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { expect, it } from "vitest";
 
-import { errorPresentation, noticeErrorPresentation } from "./errorPresentation";
+import { errorPresentation, hasCodeParams, noticeErrorPresentation } from "./errorPresentation";
 
 const timeout = { shell: "/bin/zsh", command: "env -0", timeout: "10s" };
 
@@ -22,4 +22,10 @@ it("preserves rejected strings, primitives and foreign Error diagnostics", () =>
   }
   const foreign = { message: "foreign denial", stack: "foreign stack", code: "EACCES" };
   expect(errorPresentation(foreign)).toMatchObject({ message: foreign.message, stack: foreign.stack, cause: foreign });
+});
+
+it("retains a usable fallback when a recognized rich error lacks a required parameter", () => {
+  expect(hasCodeParams({ code: "account_name_taken", params: { name: "Work" } })).toBe(false);
+  expect(hasCodeParams({ code: "path_not_absolute", params: {} })).toBe(false);
+  expect(hasCodeParams({ code: "models_command_failed", params: { detail: "denied" } })).toBe(false);
 });

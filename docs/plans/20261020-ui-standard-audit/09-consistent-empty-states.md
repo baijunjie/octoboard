@@ -1,0 +1,44 @@
+# 09 Use shared neutral empty presentations
+
+> Goal: use shared neutral empty presentations.
+> Completion criteria: The directory-picker empty listing uses the shared compact presentation and ordinary unavailable-agent empty states use a neutral/purpose glyph. All listed validation passes, and the independently reviewed result is accepted.
+
+Status: **accepted; implementation not started**. Implementation begins only after the audit passes and the preceding required work is closed.
+
+## Scope
+
+S03 and S05 in [the state audit](audit-states.md), G03 in [the gallery audit](audit-gallery.md).
+
+## Implementation contract
+
+- [ ] Give the empty directory listing the shared compact glyph/message shape within valid collection markup; preserve disabled option semantics and parent navigation.
+- [ ] Replace warning imagery only in ordinary terminal/sidebar no-installed-agent absence; retain PATH explanations and disabled creation actions.
+- [ ] Preserve intentional warning glyph on AgentTabList, true failed-load error states, shared full-panel headings and silent/action exclusivity.
+
+## Validation requirements
+
+- [ ] Add or settle an empty-directory fixture and compare populated/parent/root/failed-list states. Review empty-console-no-agent against empty-console-no-agent-added in both themes and Chinese/ar. Verify no empty row action, keyboard skipping, valid list semantics, no duplicate creation entry and matching sidebar/main shapes. Run affected gallery and dialog/empty-panel tests and static checks.
+- [ ] Complete the project gallery/static/change-check/documentation gates; preserve failed or unresolved checks explicitly. Do not skip scenarios or weaken assertions.
+
+## Dependencies and handoff
+
+None; no token redesign or unrelated empty-state copy changes.
+
+## Test invocation
+
+Use `pnpm --filter @octoboard/ui exec vitest run <explicit paths>` for focused UI tests. Passing a path after
+`pnpm ... test --` did not constrain the audit's run and launched the wider suite. Record the actual command,
+selected files and outcome; do not infer a whole-suite pass from a focused check.
+
+## Notes for the developer
+
+Reuse the existing shared components and mechanisms named in the linked finding record. Follow `docs/ui-accessibility.md`, `packages/ui/README.md` “The UI state gallery”, `docs/voiceover-cases.md`, and project gallery/change-check workflows. Only gallery fixtures may stage data. Read the exact baseline evidence and recheck caller inventory after rebasing; other owners’ pending changes are not certified by this audit.
+
+## Integrated archived-history handoff
+
+Local main added history states at `501bd872d`, after the historical audit. Re-inventory `SessionHistoryView`'s
+unavailable-record EmptyPanel and `history-unavailable`: it currently uses a warning glyph and recovery description.
+Keep that state distinct from a rejected request (`history-failed`): request failures retain their structured
+reason, require acknowledgement, then keep a silent stock summary with external details and retry. Preserve retry
+and reconnect re-reading, and use `history-failed-acknowledgement` for the pending dialog. Refresh
+normal-absence severity and recovery-content decisions here without treating the earlier audit as certification.

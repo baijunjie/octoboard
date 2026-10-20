@@ -25,7 +25,11 @@ const TOAST_DELAY_MS = 300;
 const HOME = "/Users/dev";
 
 /** What the CLI said when a login the scenario ends as `failed` did not go through. */
-const LOGIN_FAILURE_DETAIL = "Login failed: Request failed with status code 400";
+const LOGIN_FAILURE_DETAIL = [
+  "Login failed: Request failed with status code 400",
+  "    authorization endpoint rejected the device code",
+  "    /Users/dev/.claude-work/مرحبا/credentials.json: permission denied",
+].join("\n");
 
 /** The names the real daemon's file name search skips at every depth, with everything beneath them:
  * Git's metadata and the files an operating system leaves in a folder, matched ignoring ASCII case
@@ -732,6 +736,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           const history = scenario.sessionHistory?.[body.session] ?? [];
           if (history === "pending") return new Promise<Event>(() => {});
           if (history === "unavailable") return { type: "session_history", session: body.session, messages: [], unavailable: true };
+          if (!Array.isArray(history)) return fail(history);
           return { type: "session_history", session: body.session, messages: history };
         }
         case "inspect_session_records":

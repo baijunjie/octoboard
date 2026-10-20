@@ -13,7 +13,7 @@ import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { Session } from "../protocol";
 import { accountQuotaOf } from "../quota/accountQuotaOf";
-import { exhaustedQuotaWindow, quotaUsedUpSentence } from "../quota/quotaFormat";
+import { exhaustedQuotaWindow, quotaUsedUpAlert } from "../quota/quotaFormat";
 import { sessionDisplayTitle } from "../sessionLabel";
 import { useDaemon, useDaemonStore } from "../store";
 import { useNow } from "../useNow";
@@ -96,11 +96,12 @@ export function SwitchAccountDialog({
     if (failed.length === 0) onClose();
   };
 
+  const usedUp = exhaustedBy && quotaUsedUpAlert(t, accountName, exhaustedBy, now);
   return (
     <ConfirmDialog
       title={<Message id="dialog.switchAccount.title" params={{ title: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, session)}</InlineChip>, account: <InlineChip dir="auto" wrap size="inherit">{accountName}</InlineChip> }} />}
       message={<>
-        {exhaustedBy && <ErrorAlert announce>{quotaUsedUpSentence(t, accountName, exhaustedBy, now)}</ErrorAlert>}
+        {usedUp && <ErrorAlert title={usedUp.title} announce>{usedUp.description}</ErrorAlert>}
         <p>{t(all ? "dialog.switchAccount.messageAll" : session.has_conversation ? "dialog.switchAccount.message" : "dialog.switchAccount.messageFresh")}</p>
       </>}
       confirmLabel={t(failures.length ? "connection.retry" : "dialog.switchAccount.confirm")}

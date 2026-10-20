@@ -22,6 +22,7 @@ export function TextInput({
   placeholder,
   description,
   errorMessage,
+  errorDetails,
   trailing,
   endAdornment,
   autoFocus,
@@ -35,6 +36,7 @@ export function TextInput({
   placeholder?: string;
   description?: string;
   errorMessage?: React.ReactNode;
+  errorDetails?: React.ReactNode;
   trailing?: React.ReactNode;
   endAdornment?: React.ReactNode;
   autoFocus?: boolean;
@@ -94,6 +96,7 @@ export function TextInput({
           </span>
         </CodeToneContext.Provider>
       </FieldError>
+      {invalid && errorDetails}
     </TextField>
   );
 }

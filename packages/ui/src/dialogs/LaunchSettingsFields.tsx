@@ -3,9 +3,11 @@ import React, { useState } from "react";
 
 import type { LaunchPair } from "../agents";
 import { effortLevels, launchSettingOptions } from "../agentLaunchSettings";
-import { codedMessageNode } from "../components/DaemonErrorMessage";
+import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { daemonMessage } from "../daemonMessage";
+import { DaemonRequestError } from "../daemon-client";
+import { errorText } from "../errorText";
 import type { Translate } from "../i18n/catalog";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Agent, AgentModel } from "../protocol";
@@ -35,10 +37,12 @@ export function useLaunchModels(agent: Agent, account: string | null, enabled: b
   const unavailableText = useDaemonStore((s) =>
     unavailable ? daemonMessage(language, unavailable.code, unavailable.params, unavailable.message, s) : undefined,
   );
-  const modelText = loading ? t("dialog.agentSettings.modelsLoading") : (unavailableText ?? error);
+  const modelText = loading ? t("dialog.agentSettings.modelsLoading") : (unavailableText ?? (error !== undefined ? errorText(error) : undefined));
   // Why there are no models, with what it names set as code where the message has such params.
-  const modelDescription = !loading && unavailable ? codedMessageNode(unavailable, unavailableText ?? unavailable.message) : modelText;
-  return { loading, models, modelText, modelDescription };
+  const reason = unavailable ? new DaemonRequestError(unavailableText ?? unavailable.message, unavailable.code, unavailable.params) : error;
+  const modelDescription = !loading && reason !== undefined ? <DaemonErrorMessage error={reason} part="summary" /> : modelText;
+  const modelDetails = !loading && reason !== undefined ? <DaemonErrorMessage error={reason} part="details" /> : undefined;
+  return { loading, models, modelText, modelDescription, modelDetails };
 }
 
 export type LaunchModels = ReturnType<typeof useLaunchModels>;
@@ -102,6 +106,7 @@ export function ModelPicker({
       placeholderBadge={inheritedText?.placeholderBadge}
       isDisabled={isDisabled || launch.loading}
       description={launch.modelDescription}
+      descriptionDetails={launch.modelDetails}
       describedBy={describedBy}
     />
   );

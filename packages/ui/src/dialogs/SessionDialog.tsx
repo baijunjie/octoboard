@@ -282,7 +282,7 @@ export function SessionDialog({
       submitDisabled={blocked || fixedOwnerGone || quotaUsedUp !== undefined || (resuming && resume.idProblem === undefined && target === undefined)}
       onSubmit={submit}
     >
-      {quotaUsedUp && <ErrorAlert announce>{quotaUsedUp}</ErrorAlert>}
+      {quotaUsedUp && <ErrorAlert title={quotaUsedUp.title} announce>{quotaUsedUp.description}</ErrorAlert>}
       {fixedOwner && fixedOwnerGone && <ErrorAlert>{t("dialog.session.ownerGone", { name: isolate(sessionDisplayTitle(t, fixedOwner)) })}</ErrorAlert>}
       {resumable && (
         <Tabs selectedKey={conversation} onSelectionChange={(key) => {

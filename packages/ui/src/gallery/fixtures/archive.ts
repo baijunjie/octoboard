@@ -148,7 +148,7 @@ const deleteBoundSessions: Scenario = {
   state: archiveState,
   sessionRecords: Object.fromEntries([...archiveState.sessions.keys()].map((id) => [id, id === underArchivedLead[0].id ? "present" as const : "absent" as const])),
   preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
-  description: "Native files exist for a child, so the confirmation keeps the agent-records Trash option, unchecked, with a short note. Above it, two plain options with closed Details: \"Also force-remove the worktrees and branches Git keeps (2)\" for an uncommitted worktree and an unmerged branch, and \"Also delete the locked worktrees (4)\", each unchecked. Under the options, the one warning lists both archived children deleted with the session. The confirming button reads \"Delete\" until an option is ticked.",
+  description: "Native files exist for a child, so the confirmation keeps the agent-records Trash option, unchecked, with a short note. Above it, two plain options with closed Details: \"Also force-remove the worktrees and branches Git keeps (2)\" for an uncommitted worktree and an unmerged branch, and \"Also delete the locked worktrees (4)\", each unchecked. Under the options, the stock warning summary is followed by a separate list of both archived children deleted with the session. The confirming button reads \"Delete\" until an option is ticked.",
   sessionBranches: [
     worktreeItemOf(boundProject, underArchivedLead[0], "feat/pagination", "/Users/dev/worktrees/search-api-pagination"),
     branchItemOf(boundProject, archivedLead, "release/retry-policy"),
@@ -168,7 +168,7 @@ const deleteAll: Scenario = {
   group: GROUP,
   category: "normal",
   title: "Delete all archived console sessions",
-  description: "The confirmation counts the archived console sessions. Plain options come first: the force-remove option counting the worktree with uncommitted changes and the unmerged branch left by the sessions deleted (Details closed, unchecked), then the unchecked option to also move the agents' own session records to the Trash with its short note. Under them, the one warning says the archived session deleted along with them goes too. The confirming button reads \"Delete all\".",
+  description: "The confirmation counts the archived console sessions. Plain options come first: the force-remove option counting the worktree with uncommitted changes and the unmerged branch left by the sessions deleted (Details closed, unchecked), then the unchecked option to also move the agents' own session records to the Trash with its short note. Under them, the stock warning summary counts the archived session deleted along with them. The confirming button reads \"Delete all\".",
   sessionBranches: [
     worktreeItemOf(project, deleteAllState.sessions.get("s-under-hub")!, "feat/hub-handoff", "/Users/dev/worktrees/search-api-hub-handoff"),
     branchItemOf(project, deleteAllState.sessions.get("s-under-hub")!, "fix/stale-cache"),
@@ -280,7 +280,7 @@ export const archiveScenarios: Scenario[] = [
     ...deleteBoundSessions,
     id: "archive-delete-bound-sessions-ticked",
     title: "Delete an archived lead session, every option ticked",
-    description: "All three options are ticked and the two Details disclosures opened: the force-remove list (the uncommitted worktree and the unmerged branch), the locked worktrees in each wording, and the agent-records Trash option. The one warning, under the options, lists both archived children deleted with the session and gains a line for each ticked option, among them that the agent's records of this session and of the sessions deleted with it are moved to the Trash. The confirming button reads \"Delete all\" because options are ticked.",
+    description: "All three options are ticked and the two Details disclosures opened: the force-remove list (the uncommitted worktree and the unmerged branch), the locked worktrees in each wording, and the agent-records Trash option. The stock warning summary under the options is followed by a separate list of both archived children deleted with the session and consequence lines for each ticked option, among them that the agent's records of this session and of the sessions deleted with it are moved to the Trash. The confirming button reads \"Delete all\" because options are ticked.",
     steps: [
       ...deleteBoundSessions.steps!,
       (ui) => ui.pressEach(ui.t("branchCleanup.details")),
@@ -297,7 +297,7 @@ export const archiveScenarios: Scenario[] = [
     state: archiveState,
     sessionRecords: Object.fromEntries([...archiveState.sessions.keys()].map((id) => [id, "absent" as const])),
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
-    description: "The used archived lead still requires confirmation and lists its two archived children. No native files exist for any of them, so the Trash checkbox and hint are absent.",
+    description: "The used archived lead still requires confirmation, with the stock warning summary followed by a separate list of its two archived children. No native files exist for any of them, so the Trash checkbox and hint are absent.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
       (ui) => ui.press((name) => name === ui.t("archive.delete", { title: archivedLead.title })),
@@ -308,7 +308,7 @@ export const archiveScenarios: Scenario[] = [
     ...deleteAll,
     id: "archive-delete-all-trash",
     title: "Delete all archived console sessions, Trash option ticked",
-    description: "Only the agents' records Trash option is ticked; the force-remove option stays unchecked. The confirming button still reads \"Delete all\", and the warning gains the line about the records going to the Trash.",
+    description: "Only the agents' records Trash option is ticked; the force-remove option stays unchecked. The confirming button still reads \"Delete all\", and a separate consequence line after the stock warning says the records go to the Trash.",
     steps: [
       ...deleteAll.steps!,
       (ui) => ui.press(ui.t("dialog.deleteArchived.trashRecords")),

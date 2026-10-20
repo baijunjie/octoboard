@@ -73,7 +73,7 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
       autoFocusSubmit
       onSubmit={submit}
     >
-      {usedUp && <ErrorAlert announce>{usedUp}</ErrorAlert>}
+      {usedUp && <ErrorAlert title={usedUp.title} announce>{usedUp.description}</ErrorAlert>}
       <p className="text-sm">{t("dialog.handOff.message")}</p>
       <HandoffMoves session={session} busy={busy} />
       <AgentAccountField

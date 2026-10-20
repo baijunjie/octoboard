@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { useLatest } from "../components/useLatest";
+import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
 import { useT } from "../i18n/react";
 import type { Agent, AgentModel, Event, ModelsUnavailable, RequestBody } from "../protocol";
 
@@ -13,7 +14,7 @@ export interface AgentModels {
   status: AgentModelsStatus;
   models: AgentModel[];
   unavailable: ModelsUnavailable | null;
-  error?: string;
+  error?: ErrorPresentation;
 }
 
 type Answer = Pick<AgentModels, "models" | "unavailable" | "error"> & { key: string };
@@ -52,7 +53,7 @@ export function useAgentModels(
             : { key, ...NONE, error: t("dialog.agentSettings.modelsUnexpected") },
         );
       },
-      (err: Error) => current && setAnswered({ key, ...NONE, error: err.message }),
+      (err: unknown) => current && setAnswered({ key, ...NONE, error: errorPresentation(err) }),
     );
     return () => {
       current = false;

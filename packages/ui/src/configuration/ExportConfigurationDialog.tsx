@@ -105,9 +105,9 @@ export function ExportConfigurationDialog({
       )}
       {/* HeroUI's own warning tint rather than its default surface, which is the dialog's own fill and
           leaves the callout unmarked. */}
-      <TintedAlert status="warning" className="shadow-none">
+      <TintedAlert status="warning">
         <Alert.Indicator />
-        <Alert.Content className="min-w-0">
+        <Alert.Content>
           <Alert.Title>{t("configuration.export.paths.title")}</Alert.Title>
           <Alert.Description>{t("configuration.export.paths.description")}</Alert.Description>
         </Alert.Content>

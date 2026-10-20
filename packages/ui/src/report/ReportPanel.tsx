@@ -1,9 +1,11 @@
 import { Button } from "../components/Button";
 import { errorPresentation } from "../errorPresentation";
 import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
-import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { InlineChip } from "../components/InlineChip";
+import { HandOffOnUnmount } from "../components/HandOffOnUnmount";
+import { focusAfterLoss, focusFirstIn } from "../components/regionFocus";
 import { PanelHeader } from "../components/PanelHeader";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
@@ -210,6 +212,14 @@ function newNonce(): string {
   ).join("");
 }
 
+function handFocusToReport(): void {
+  // React suspends focus events during removal; wait until the surviving Button can observe
+  // its focus and draw its ring. Another hand-off in this commit takes precedence.
+  queueMicrotask(() => {
+    if (document.activeElement === document.body) focusAfterLoss(() => focusFirstIn("panel-report"));
+  });
+}
+
 /**
  * The sandboxed render of one page. Keyed by `page.id` at the call site so React remounts this
  * (and so the iframe) rather than mutating it across a page change, which also gives each page its
@@ -239,6 +249,7 @@ function PageFrame({
   const t = useT();
   const platform = usePlatform();
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const frameId = useId();
   const transformDocument = useContext(PageDocumentTransform);
   // State rather than a memo: React may drop a memo's cache, and a new nonce reloads the frame,
   // losing whatever the user has typed into the page.
@@ -294,14 +305,18 @@ function PageFrame({
   }, [page, isHistory, onSubmit, onEscape, onCycleRegion, onMoveHistory, onMoveConsoleSession]);
 
   return (
-    <iframe
-      ref={iframeRef}
-      className="min-h-0 flex-1 border-0 bg-white"
-      title={t("report.frameTitle")}
-      sandbox="allow-scripts allow-forms"
-      onPointerEnter={onPointerEnter}
-      onPointerLeave={onPointerLeave}
-      srcDoc={srcDoc}
-    />
+    <>
+      <HandOffOnUnmount from={`[id="${frameId}"]`} to={handFocusToReport} />
+      <iframe
+        id={frameId}
+        ref={iframeRef}
+        className="min-h-0 flex-1 border-0 bg-white"
+        title={t("report.frameTitle")}
+        sandbox="allow-scripts allow-forms"
+        onPointerEnter={onPointerEnter}
+        onPointerLeave={onPointerLeave}
+        srcDoc={srcDoc}
+      />
+    </>
   );
 }

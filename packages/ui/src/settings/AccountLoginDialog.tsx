@@ -144,7 +144,7 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
               ? <Message id="settings.accounts.login.timedOut" params={{ name: who }} />
               : <Message id="settings.accounts.login.failed" params={{ name: who }} />}
           </p>
-          {failure && reason !== undefined && <p>{codedMessageNode(failure, reason)}</p>}
+          {failure && reason !== undefined && <><p>{codedMessageNode(failure, reason, "summary")}</p>{codedMessageNode(failure, reason, "details")}</>}
         </div>
       ) : (
         <div className="flex items-center gap-2 text-sm">
