@@ -78,7 +78,7 @@ property escape (`\p{Extended_Pictographic}`, `\p{Script=…}`) resolves against
 Node's need not be the version Claude Code's runtime carries, so before generating a table from Node's answers check
 which way the two versions differ and that the table errs on the side the reimplementation can afford.
 
-## Settle it without spending a model turn, and ask before redirecting traffic
+## Settle it without spending a model turn, and ask before redirecting a logged-in client's traffic
 
 Before running a real session to find out what an agent does, try the free routes. The CLIs' own inspection
 subcommands answer most discovery questions outright and cost nothing: `grok inspect --json` lists every instruction
@@ -88,14 +88,16 @@ returns an error (`ANTHROPIC_BASE_URL` for Claude Code; each CLI has its own) ma
 prompt, instruction-file blocks, tool definitions — readable with nothing reaching the vendor, and provokes error
 paths that are otherwise unreachable.
 
-**That second route redirects an authenticated client's traffic to a listener you control, so it needs the user's
-explicit authorisation every time.** Ask first and leave the probe undone if the answer is no; being cheap is not a
-reason to set it up quietly.
+**A stand-in endpoint or stub that carries a real login or real credentials — a signed-in config directory, a linked
+or copied `auth.json`, the real Keychain login — redirects an authenticated client's traffic to a listener you
+control, so it needs the user's explicit authorisation every time.** Ask first and leave the probe undone if the
+answer is no; being cheap is not a reason to set it up quietly. A stub run from a scratch config directory with a fake
+key and no login redirects no authenticated client's traffic and needs no authorisation.
 
-With that authorisation, to provoke Grok's `StopFailure` hook (Grok Build 1.0.46), point `endpoints.models_base_url`
-at a local stand-in for the chat endpoint that answers HTTP 400. Set it in a throw-away `GROK_HOME` so the user's own
-config is untouched, and link the user's `auth.json` into it so Grok starts logged in. An HTTP 500 makes Grok retry
-for minutes and never end the turn, so no `StopFailure` fires.
+With authorisation, since it carries the user's login, to provoke Grok's `StopFailure` hook (Grok Build 1.0.46),
+point `endpoints.models_base_url` at a local stand-in for the chat endpoint that answers HTTP 400. Set it in a
+throw-away `GROK_HOME` so the user's own config is untouched, and link the user's `auth.json` into it so Grok starts
+logged in. An HTTP 500 makes Grok retry for minutes and never end the turn, so no `StopFailure` fires.
 
 **Where the question is what the agent *does* rather than what it assembled — that it calls an injected MCP tool, what
 it does with the result, what the daemon sees around it — a stub that answers in the model's place carries the whole
@@ -107,8 +109,9 @@ turn that calls the tool. Two things decide whether such a stub works at all. It
 asks, which for a CLI that always streams means a server-sent event stream and not a plain JSON body. And a script of
 canned turns has to survive the extra, tool-less requests the CLI makes around a turn of its own — a title, a summary
 line, a guess at the next user line — by serving them without letting them consume script entries; otherwise the script
-runs ahead and the turn under test is answered with something meant for another request. It redirects an
-authenticated client's traffic like any other stand-in endpoint, so it needs the same authorisation.
+runs ahead and the turn under test is answered with something meant for another request. Whether it needs
+authorisation follows the rule above: none from a scratch directory with a fake key, the same as any stand-in endpoint
+once a real login is carried into it.
 
 ## Prove an injection, and an MCP tool, out of band rather than through the model
 
@@ -220,6 +223,17 @@ file or directory of its own for each entry the CLI writes: its config file, its
 place of the symlinked session store, or the probe's own session records land in the user's home. What stays symlinked
 still collects the run's residue, a live-session index, logs and caches among it, so include it in what you tell the
 user the probe left.
+
+**A throwaway `HOME` does not contain everything either**: some residue lands machine-wide whatever `HOME` and `TMPDIR`
+say, and one piece has to be prevented before the run rather than cleaned up after it. On macOS, Claude Code's first
+TUI run registers the throwaway `HOME`'s own `Applications/Claude Code URL Handler.app` with LaunchServices as the
+system-wide `claude-cli://` handler, and it stays registered after the scratch directory is deleted; so write
+`"disableDeepLinkRegistration": "disable"` into the scratch config directory's `settings.json` before the first
+launch, and remove a handler already registered with `lsregister -u <app path>`. A Codex TUI start in a scratch home
+launches a managed `codex app-server` daemon from that home (parent pid 1) that keeps running after the TUI exits and
+fills the home's `packages/` with a few hundred megabytes; find it with `ps` by the home's path and kill it when the
+probe ends. The rest, with versions, is in the "Residue the probes leave outside the scratch directory" paragraph of
+`docs/agent-cli-reference.md`'s "Sharing a configuration directory between accounts" section.
 
 Use a dedicated scratch directory as cwd, never a shared one such as `/tmp`: each CLI records a per-directory trust
 decision in the user's own config (Claude Code in the `.claude.json` of the config directory in effect, under
