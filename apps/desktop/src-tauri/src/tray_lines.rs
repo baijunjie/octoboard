@@ -1,11 +1,12 @@
 //! The rows of the menu bar icon's menus. A line that cannot be chosen is a disabled menu item,
 //! which AppKit draws in the disabled grey and which a title colour cannot change; a menu item
 //! with a view of its own is not dimmed and never highlights. So once muda has built the menu
-//! (`finish_menu` in `tray.rs`, after every rebuild), the lines that cannot be chosen become
-//! views: a session section's heading (`heading_row`) is its picture and its text in the
-//! secondary colour; in a submenu (`dress_submenu`) an account's header is one line of the same in
-//! the small size of a section header, a note one line at the menu's size, and a window's row
-//! is its name and its detail (right-aligned, secondary colour) over a bar the shell draws.
+//! (`finish_menu` in `tray.rs`, the first time it opens after each rebuild), the lines that
+//! cannot be chosen become views: a session section's heading (`heading_row`) is its picture and
+//! its text in the secondary colour; in a submenu (`dress_submenu`) an account's header is one
+//! line of the same in the small size of a section header, a note one line at the menu's size,
+//! and a window's row is its name and its detail (right-aligned, secondary colour) over a bar
+//! the shell draws.
 //!
 //! A row is read by assistive technology as its menu item alone: the item keeps the whole phrase
 //! as its title, and nothing inside the row is an accessibility element. The texts are therefore

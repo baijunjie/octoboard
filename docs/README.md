@@ -459,7 +459,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   code on the test's own thread.
 - [Writing desktop shell code](memory/writing-desktop-shell-code.md) — rules for the Tauri shell in
   `apps/desktop/src-tauri/`: why work meant to run after the current AppKit callback returns is queued on the main
-  `NSOperationQueue`, since `run_on_main_thread` runs it at once when called on the main thread.
+  `NSOperationQueue`, since `run_on_main_thread` runs it at once when called on the main thread, and why every
+  native hook into Tauri, tray-icon or muda internals is re-checked in the running app after raising them, since such
+  hooks fail silently.
 - [Running git from the daemon](memory/running-git-from-the-daemon.md) — why every `git` the daemon spawns is built
   from the one shared base in `git_env.rs` and bounded in time there (a `git` that can prompt hangs the daemon with
   nothing naming the stuck call, and a read that rewrites the index fails an agent's `git add` on `index.lock`); why a

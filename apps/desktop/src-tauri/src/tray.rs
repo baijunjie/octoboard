@@ -19,11 +19,13 @@
 //! (`MENU_OPENED_EVENT`) so it can ask for fresh quotas, which reach the menu on its next update.
 //!
 //! Muda gives a menu item's picture no template flag, which is what makes a monochrome one follow
-//! the menu's light or dark look. So once the menu is on the status item (`NSStatusItem::menu`,
-//! reached through `TrayIcon::with_inner_tray_icon`), the pictures flagged template get it set on
-//! their `NSMenuItem`s, line by line (`finish_menu`). The same pass gives the headings of the
-//! sessions' sections and the lines of each submenu their rows (`tray_lines.rs`), as a line that
-//! cannot be chosen is drawn in a grey that nothing but a view of its own can darken.
+//! the menu's light or dark look. So the pictures flagged template get it set on their
+//! `NSMenuItem`s, line by line (`finish_menu`). Tauri does not hand out a menu's `NSMenu`, and
+//! tray-icon puts it on the status item (`NSStatusItem::menu`) only while it is open, so the
+//! pass waits for the menu to begin tracking, whose notification carries it, and runs once for
+//! each menu built (`TrayState::unfinished`). The same pass gives the headings of the sessions'
+//! sections and the lines of each submenu their rows (`tray_lines.rs`), as a line that cannot be
+//! chosen is drawn in a grey that nothing but a view of its own can darken.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -239,17 +241,39 @@ impl MenuTracking {
     }
 }
 
-/// The menu tracking and the icon currently drawn, so repeated menu updates keep its picture.
+/// The menu tracking, the icon currently drawn, so repeated menu updates keep its picture, and
+/// what is left to finish of the menu last set.
 #[derive(Default)]
 pub struct TrayState {
     tracking: Mutex<MenuTracking>,
     icon_shown: Mutex<IconState>,
+    /// What `finish_menu` is to do to the menu last set, until the menu first opens. It is replaced
+    /// in the same pass as the menu, and taken only for a menu `is_tray_menu` matched, so it never
+    /// finishes a menu other than the one it was made for.
+    #[cfg(target_os = "macos")]
+    unfinished: Mutex<Option<MenuFinish>>,
+}
+
+/// What `finish_menu` does to a menu `build_menu` made.
+#[cfg(target_os = "macos")]
+struct MenuFinish {
+    lines: Vec<LineFinish>,
+    submenus: Vec<TraySubmenu>,
 }
 
 fn tracking(app: &AppHandle) -> std::sync::MutexGuard<'_, MenuTracking> {
     app.state::<TrayState>()
         .inner()
         .tracking
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+}
+
+#[cfg(target_os = "macos")]
+fn unfinished(app: &AppHandle) -> std::sync::MutexGuard<'_, Option<MenuFinish>> {
+    app.state::<TrayState>()
+        .inner()
+        .unfinished
         .lock()
         .unwrap_or_else(|e| e.into_inner())
 }
@@ -288,7 +312,9 @@ fn follow_menu_tracking(app: &AppHandle) {
         block2::RcBlock::new(move |notification: std::ptr::NonNull<NSNotification>| {
             tracking(&app).opened();
             // SAFETY: the notification is alive for the duration of its delivery.
-            if is_tray_menu(&app, unsafe { notification.as_ref() }) {
+            let notification = unsafe { notification.as_ref() };
+            if is_tray_menu(&app, notification) {
+                finish_opening_menu(&app, notification);
                 let _ = app.emit(MENU_OPENED_EVENT, ());
             }
         })
@@ -359,48 +385,55 @@ fn is_tray_menu(app: &AppHandle, notification: &objc2_foundation::NSNotification
     .unwrap_or(false)
 }
 
-/// Finishes the menu on the tray's status item after muda has built it: sets the template flag
-/// on the pictures of its lines that have it, whose items (separators aside) are the lines
-/// `build_menu` made, in the order `finish_order` gives; gives the lines that are a section's
-/// heading their row, with the picture just made a template where it is one; then dresses each
-/// submenu's lines as the rows they stand for (`dress_submenu`). Opening lines keep their native
-/// menu item and receive title attachments for available console-account quotas. A replaced menu is never touched
-/// by mistake, as this runs right after it is set.
+/// Finishes the tray's menu as it begins to open, when it is the first time since it was built:
+/// `notification` is the one that it began tracking, and carries the menu.
 #[cfg(target_os = "macos")]
-fn finish_menu(
-    tray: &tauri::tray::TrayIcon,
-    finishes: Vec<LineFinish>,
-    submenus: Vec<TraySubmenu>,
-) {
+fn finish_opening_menu(app: &AppHandle, notification: &objc2_foundation::NSNotification) {
     use objc2::MainThreadMarker;
+    use objc2_app_kit::NSMenu;
 
-    let _ = tray.with_inner_tray_icon(move |inner| {
-        let Some(mtm) = MainThreadMarker::new() else {
-            return;
-        };
-        let Some(menu) = inner.ns_status_item().and_then(|item| item.menu(mtm)) else {
-            return;
-        };
-        let items = menu.itemArray();
-        let lines: Vec<_> = items
-            .iter()
-            .filter(|item| !item.isSeparatorItem())
-            .collect();
-        for (item, finish) in lines.iter().zip(&finishes) {
-            let image = item.image();
-            if let Some(image) = image.as_ref().filter(|_| finish.template) {
-                image.setTemplate(true);
-            }
-            if let Some(heading) = &finish.heading {
-                item.setView(Some(&heading_row(heading, image.as_deref(), mtm)));
-            }
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let Some(menu) = notification
+        .object()
+        .and_then(|object| object.downcast::<NSMenu>().ok())
+    else {
+        return;
+    };
+    let finish = unfinished(app).take();
+    if let Some(finish) = finish {
+        finish_menu(&menu, &finish, mtm);
+    }
+}
+
+/// Finishes `menu`, the tray's menu as muda built it: sets the template flag on the pictures of
+/// its lines that have it, whose items (separators aside) are the lines `build_menu` made, in the
+/// order `finish_order` gives; gives the lines that are a section's heading their row, with the
+/// picture just made a template where it is one; then dresses each submenu's lines as the rows
+/// they stand for (`dress_submenu`). Opening lines keep their native menu item and receive title
+/// attachments for available console-account quotas.
+#[cfg(target_os = "macos")]
+fn finish_menu(menu: &objc2_app_kit::NSMenu, finish: &MenuFinish, mtm: objc2::MainThreadMarker) {
+    let items = menu.itemArray();
+    let lines: Vec<_> = items
+        .iter()
+        .filter(|item| !item.isSeparatorItem())
+        .collect();
+    for (item, line) in lines.iter().zip(&finish.lines) {
+        let image = item.image();
+        if let Some(image) = image.as_ref().filter(|_| line.template) {
+            image.setTemplate(true);
         }
-        dress_quota_openers(&menu, &submenus, mtm);
-        let opened = lines.iter().filter_map(|item| item.submenu());
-        for (submenu, model) in opened.zip(&submenus) {
-            dress_submenu(&submenu, &model.items, mtm);
+        if let Some(heading) = &line.heading {
+            item.setView(Some(&heading_row(heading, image.as_deref(), mtm)));
         }
-    });
+    }
+    dress_quota_openers(menu, &finish.submenus, mtm);
+    let opened = lines.iter().filter_map(|item| item.submenu());
+    for (submenu, model) in opened.zip(&finish.submenus) {
+        dress_submenu(&submenu, &model.items, mtm);
+    }
 }
 
 /// Rebuilds the tray menu from what the UI sent, or holds it until the open menu closes.
@@ -419,7 +452,12 @@ fn apply(app: &AppHandle, menu: &TrayMenu) -> Result<(), String> {
     let built = build_menu(app, menu).map_err(|err| err.to_string())?;
     tray.set_menu(Some(built)).map_err(|err| err.to_string())?;
     #[cfg(target_os = "macos")]
-    finish_menu(&tray, finish_order(menu), menu.submenus.clone());
+    {
+        *unfinished(app) = Some(MenuFinish {
+            lines: finish_order(menu),
+            submenus: menu.submenus.clone(),
+        });
+    }
     let quota = menu.quota_remaining.map(|remaining| remaining.min(100));
     let label = quota.and(menu.quota_label.as_deref()).unwrap_or(APP_NAME);
     tray.set_tooltip(Some(label))
