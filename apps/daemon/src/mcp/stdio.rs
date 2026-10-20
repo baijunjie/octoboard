@@ -24,8 +24,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use rmcp::model::{
-    CallToolRequestParam, CallToolResult, Content, Implementation, ListToolsResult,
-    PaginatedRequestParam, ProtocolVersion, ServerCapabilities, ServerInfo, Tool,
+    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
+    ListToolsResult, PaginatedRequestParams, ProtocolVersion, ServerCapabilities, ServerConfig,
+    Tool,
 };
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData, RoleServer, ServerHandler, ServiceExt};
@@ -80,58 +81,54 @@ struct OctoboardMcp {
 }
 
 impl ServerHandler for OctoboardMcp {
-    fn get_info(&self) -> ServerInfo {
-        ServerInfo {
-            protocol_version: ProtocolVersion::default(),
-            capabilities: ServerCapabilities::builder()
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(
+            ServerCapabilities::builder()
                 .enable_tools()
                 .enable_tool_list_changed()
                 .build(),
-            server_info: Implementation {
-                name: super::SERVER_KEY.to_string(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-                title: Some("Octoboard".to_string()),
-                icons: None,
-                website_url: None,
-            },
-            instructions: None,
-        }
+        )
+        .with_server_info(
+            Implementation::new(super::SERVER_KEY, env!("CARGO_PKG_VERSION"))
+                .with_title("Octoboard"),
+        )
+    }
+
+    /// Up to the last version with an `initialize` handshake. A newer client then falls back to
+    /// it, rather than taking the stateless lifecycle, where the tool-list-changed notice above
+    /// would have to travel over `subscriptions/listen`, which this server does not serve.
+    fn supported_protocol_versions(&self) -> Cow<'static, [ProtocolVersion]> {
+        Cow::Borrowed(ProtocolVersion::known_up_to(
+            &ProtocolVersion::LATEST_WITH_INITIALIZE,
+        ))
     }
 
     async fn list_tools(
         &self,
-        _request: Option<PaginatedRequestParam>,
+        _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, ErrorData> {
         let tools = super::tools_for(self.role, self.bound.load(Ordering::Relaxed))
             .iter()
-            .map(|tool| Tool {
-                name: Cow::Borrowed(tool.name),
-                title: None,
-                description: Some(Cow::Borrowed(tool.description)),
-                input_schema: Arc::new(
+            .map(|tool| {
+                Tool::new(
+                    tool.name,
+                    tool.description,
                     (tool.schema)()
                         .as_object()
                         .cloned()
                         .expect("every tool schema is a JSON object"),
-                ),
-                output_schema: None,
-                annotations: None,
-                icons: None,
-                meta: None,
+                )
             })
             .collect();
-        Ok(ListToolsResult {
-            tools,
-            next_cursor: None,
-        })
+        Ok(ListToolsResult::with_all_items(tools))
     }
 
     async fn call_tool(
         &self,
-        request: CallToolRequestParam,
+        request: CallToolRequestParams,
         context: RequestContext<RoleServer>,
-    ) -> Result<CallToolResult, ErrorData> {
+    ) -> Result<CallToolResponse, ErrorData> {
         // A name outside this role's catalogue is a protocol-level mistake rather than a tool
         // that failed, so it does not come back as a tool result the model is invited to retry.
         if super::tool_by_name(self.role, self.bound.load(Ordering::Relaxed), &request.name)
@@ -162,13 +159,14 @@ impl ServerHandler for OctoboardMcp {
         let response = match forward_until(self.port, path, body, cancelled).await {
             Forwarded::Answered(response) => response,
             Forwarded::Cancelled => {
-                return Ok(CallToolResult::error(vec![Content::text(
+                return Ok(CallToolResult::error(vec![ContentBlock::text(
                     "The call was cancelled.",
-                )]))
+                )])
+                .into())
             }
         };
 
-        Ok(match response {
+        let result = match response {
             Ok(body) => {
                 if self.follow_binding(&body) {
                     // Best effort: an agent that ignores it still has every call checked by the
@@ -180,10 +178,12 @@ impl ServerHandler for OctoboardMcp {
             // Octoboard itself being unreachable is the model's problem to work around, not a
             // protocol error: it should be able to say so to the user rather than have the call
             // fail opaquely.
-            Err(err) => {
-                CallToolResult::error(vec![Content::text(failure_message(&self.session, &err))])
-            }
-        })
+            Err(err) => CallToolResult::error(vec![ContentBlock::text(failure_message(
+                &self.session,
+                &err,
+            ))]),
+        };
+        Ok(result.into())
     }
 }
 
@@ -271,7 +271,7 @@ fn read_outcome(body: &[u8]) -> CallToolResult {
     let outcome: Value = match serde_json::from_slice(body) {
         Ok(value) => value,
         Err(err) => {
-            return CallToolResult::error(vec![Content::text(format!(
+            return CallToolResult::error(vec![ContentBlock::text(format!(
                 "Octoboard returned something unreadable: {err}"
             ))])
         }
@@ -280,14 +280,14 @@ fn read_outcome(body: &[u8]) -> CallToolResult {
         match outcome.get("result") {
             Some(result) if result.is_object() => CallToolResult::structured(result.clone()),
             // A tool with nothing to return still has to say it worked.
-            _ => CallToolResult::success(vec![Content::text("Done.")]),
+            _ => CallToolResult::success(vec![ContentBlock::text("Done.")]),
         }
     } else {
         let message = outcome
             .get("error")
             .and_then(Value::as_str)
             .unwrap_or("Octoboard refused the call without saying why");
-        CallToolResult::error(vec![Content::text(message.to_string())])
+        CallToolResult::error(vec![ContentBlock::text(message.to_string())])
     }
 }
 

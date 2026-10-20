@@ -236,11 +236,13 @@ Each has an established solution unless noted; any outstanding manual verificati
 - **Sidecar signing.** The bundled daemon must be signed and notarized with the application or Gatekeeper blocks it.
   Credential access is not a concern: an agent launched from the bundle reaches the user's Keychain login normally,
   because a Keychain ACL is evaluated against the agent binary's own signature rather than its parent's.
-- **Rust toolchain floor.** The dependency graph, not Tauri, sets it, and a crate's declared `rust-version` is advisory
-  and often wrong in both directions: find a usable version by compiling candidates downward. `reqwest` cannot be used
-  below Rust 1.88 (its `idna`/ICU chain), so loopback traffic uses a small hand-rolled HTTP client; Tauri 2 builds on
-  older toolchains only with exact pins on a chain of transitive crates. Carry the pins deliberately or raise the
-  toolchain; drifting into it by accident costs a day.
+- **The Rust toolchain is pinned, and moves with the stable release.** `rust-toolchain.toml` names the exact version
+  every machine and CI builds with, and `rust-version` matches it. Building on one version while users install with a
+  newer stable lets a lint that newer Rust denies by default break their build unseen. Raise the pin to the latest
+  stable rather than holding a floor: an old floor forces exact pins on whole chains of transitive crates (a crate's
+  declared `rust-version` is advisory and often wrong in both directions), and the Tauri crates and their
+  `@tauri-apps/*` packages in the UI must move together, since the Tauri CLI refuses to build when the two differ in
+  major or minor version.
 - **Full-width punctuation from a CJK input method needs a workaround.** A mark such as `？`, which an input method
   emits without a candidate window, is swallowed on the first press by unmodified `xterm.js` 6.0.0 in WKWebView. The library arms
   a "key down seen" flag on every keydown, a bare `Shift` included, and drops the commit while it is set, but WebKit

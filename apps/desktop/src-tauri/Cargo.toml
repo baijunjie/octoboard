@@ -16,8 +16,8 @@ name = "app_lib"
 crate-type = ["cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "=2.6.3", features = [] }
-serde_json = "=1.0.151"
+tauri-build = { version = "2.7", features = [] }
+serde_json = "1"
 
 [dependencies]
 # `macos-private-api` is what lets the window be transparent on macOS, which the native sidebar
@@ -25,63 +25,29 @@ serde_json = "=1.0.151"
 # `tauri.conf.json` has to say the same, or `tauri-build` refuses the pair. The private API rules out
 # Mac App Store distribution; the app ships as a notarized DMG. `image-png` is what lets `Image::from_bytes`
 # decode the PNG icons the UI hands over for the tray menu's lines (`tray.rs`).
-tauri = { version = "=2.11.6", features = ["tray-icon", "macos-private-api", "image-png"] }
-# Same release as the `@tauri-apps/plugin-shell` the UI pins (`~2.3.3`): the UI opens a Markdown link
-# through its `open` command (`links` in `packages/ui/src/platform/tauri.ts`), and a platform whose
-# command does not resolve silently shows links as plain text. Newer releases (2.4 on) need rustc 1.90.
-tauri-plugin-shell = "=2.3.3"
-tauri-plugin-notification = "=2.4.0"
-tauri-plugin-clipboard-manager = "=2.3.3"
+#
+# The tilde requirement holds the release line to the `@tauri-apps/api` the UI pins: the
+# Tauri CLI refuses to build when a crate and its NPM package differ in major or minor version. The
+# plugins below that have an NPM package in the UI are held the same way.
+tauri = { version = "~2.12.4", features = ["tray-icon", "macos-private-api", "image-png"] }
+# Held to the UI's `@tauri-apps/plugin-shell` release line like `tauri` above. The UI opens a Markdown
+# link through its `open` command (`links` in `packages/ui/src/platform/tauri.ts`), and a platform
+# whose command does not resolve silently shows links as plain text.
+tauri-plugin-shell = "~2.5.0"
+tauri-plugin-notification = "~2.7.0"
+tauri-plugin-clipboard-manager = "~2.5.0"
 # The system's save and open dialogs, raised from `configuration_file.rs` for the configuration export and import.
-# The last release whose rust-version is within the floor (2.8 on needs rustc 1.90).
-tauri-plugin-dialog = "=2.7.3"
+tauri-plugin-dialog = "2.8"
 anyhow = "1"
-# Decodes the tray menu's icons, which the UI sends as base64 PNGs (`tray.rs`). The release `tauri` already
-# resolves to, pinned for the same MSRV reason as the rest of this list.
-base64 = "=0.22.1"
-# For the saved window state in `window_state.rs`. Pinned to the versions already resolved
-# transitively through `tauri`, so promoting them to direct dependencies shifts nothing else.
-serde = { version = "=1.0.229", features = ["derive"] }
-serde_json = "=1.0.151"
-# Pinned explicitly, not just transitively through `tauri`/`tauri-build`/`tauri-plugin-shell`
-# above: left unpinned, cargo resolves each of these to its newest 2.x/3.x release regardless
-# of the pins above, and recent releases need a newer rustc than the workspace's Rust floor
-# allows (see "Known pitfalls of the Tauri / Rust approach" in docs/architecture.md). These are
-# each that crate's own last release whose declared rust-version is within the floor.
-tauri-runtime = "=2.11.3"
-tauri-utils = "=2.9.3"
-tauri-macros = "=2.6.3"
-tauri-codegen = "=2.6.3"
-tauri-plugin = "=2.6.3"
-tauri-runtime-wry = "=2.11.4"
-# Same story one layer further down: these crates' own rust-version bumped past the floor in the
-# versions cargo would otherwise pick.
-darling = "=0.21.3"
-encoding_rs = "=0.8.35"
-icu_collections = "=2.2.0"
-icu_locale_core = "=2.2.0"
-icu_normalizer = "=2.2.0"
-icu_normalizer_data = "=2.2.0"
-icu_properties = "=2.2.0"
-icu_properties_data = "=2.2.0"
-icu_provider = "=2.2.0"
-plist = "=1.8.0"
-serde_with = "=3.17.0"
-time = "=0.3.45"
-# Pulled in transitively at a version requiring rustc 1.89 even though none of the pins above name
-# it; same MSRV-drift story as the rest of this list.
-uuid = "=1.26.1"
-# Reached only through `tauri-plugin-notification`, and on macOS it is the delivery path itself:
-# `notify_rust::set_application` hands `mac-notification-sys` the bundle identifier the system
-# attributes a notification to, which is what decides the icon macOS shows on it. Pinned for the
-# same MSRV reason as the rest of this list — its current release requires rustc 1.89.
-notify-rust = "=4.11.7"
-# Reached only through `tauri-plugin-clipboard-manager` (by way of `arboard`), whose newest release
-# requires rustc 1.88; this is the last one within the floor. `default-features = false` because its
-# defaults pull a whole codec set (AV1 encoding among it) that feature unification would then apply
-# to this crate's build, while `arboard` asks for one format; without the flag the pin would shift
-# far more than the version.
-image = { version = "=0.25.8", default-features = false }
+# Decodes the tray menu's icons, which the UI sends as base64 PNGs (`tray.rs`). The release line
+# `tauri` and the daemon already resolve, so the workspace builds it once.
+base64 = "0.22"
+# For the saved window state in `window_state.rs`.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Draws the menu bar icon's canvases and encodes them as PNG (`tray_icon.rs`). Only the PNG codec:
+# the crate's defaults pull a whole codec set (AV1 encoding among it) the icon never uses.
+image = { version = "0.25", default-features = false, features = ["png"] }
 # For the `applicationShouldTerminate:` override in `exit.rs` that catches the Dock icon's own Quit
 # (see the comment there), in `background.rs` for hiding and unhiding the app, the Dock badge, the
 # window's Cmd+H and the notification that the app became active, in `permissions.rs` for the System
@@ -91,7 +57,7 @@ image = { version = "=0.25.8", default-features = false }
 # menu's rows (`NSImageView` for a section heading's picture). Pinned to the exact versions already
 # resolved transitively through `tauri-runtime-wry`, so promoting them to direct dependencies does
 # not shift anything else this crate depends on.
-objc2 = "=0.6.4"
+objc2 = "=0.6.5"
 objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["NSAccessibilityProtocols", "NSApplication", "NSAttributedString", "NSBezierPath", "NSButton", "NSColor", "NSCell", "NSControl", "NSDockTile", "NSFont", "NSGraphics", "NSImage", "NSImageView", "NSMenu", "NSMenuItem", "NSResponder", "NSStatusBarButton", "NSStatusItem", "NSStringDrawing", "NSTextAttachment", "block2", "NSView", "NSWindow", "NSWorkspace", "objc2-core-foundation"] }
 # For the system's preferred languages in `lib.rs`, the notification observers in `background.rs`
 # and `tray.rs` (and the main queue the latter applies a held menu on, and the bytes of the raised

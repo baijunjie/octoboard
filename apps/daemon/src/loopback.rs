@@ -2,9 +2,7 @@
 //! have to call the running daemon from a separate process: the hook forwarder and the MCP server.
 //!
 //! Hand-rolled rather than taken from a client crate. The traffic only ever goes to `127.0.0.1`,
-//! so a TLS stack and URL normalisation would be weight with no purpose, and the IDNA chain a
-//! general client pulls in raises the Rust toolchain floor past this project's (see "Rust
-//! toolchain floor" under "Known pitfalls of the Tauri / Rust approach" in `docs/architecture.md`).
+//! so a TLS stack and URL normalisation would be weight with no purpose.
 
 use std::io::{Read, Write};
 use std::net::TcpStream;

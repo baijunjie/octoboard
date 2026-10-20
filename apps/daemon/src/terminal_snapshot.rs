@@ -61,10 +61,10 @@ impl TerminalSnapshot {
         };
         Self {
             terminal: Term::new(
-                // `kitty_keyboard` stays off: in alacritty_terminal 0.25.0, `push_keyboard_mode`
-                // panics once the stack reaches 4096 entries, which a run of `CSI > 1 u` in agent
-                // output reaches, and the panic would land under the session's output lock. The
-                // client, xterm.js, has no kitty keyboard support to restore the flags into.
+                // `kitty_keyboard` stays off: in alacritty_terminal, `push_keyboard_mode` panics
+                // once the stack reaches 4096 entries, which a run of `CSI > 1 u` in agent output
+                // reaches, and the panic would land under the session's output lock. The client,
+                // xterm.js, has no kitty keyboard support to restore the flags into.
                 Config {
                     scrolling_history: SCROLLBACK_LINES,
                     ..Config::default()
@@ -78,9 +78,7 @@ impl TerminalSnapshot {
     }
 
     pub fn process(&mut self, bytes: &[u8]) {
-        for &byte in bytes {
-            self.parser.advance(&mut self.terminal, byte);
-        }
+        self.parser.advance(&mut self.terminal, bytes);
     }
 
     pub fn resize(&mut self, rows: u16, cols: u16) {

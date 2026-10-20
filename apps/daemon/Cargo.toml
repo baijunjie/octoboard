@@ -14,8 +14,7 @@ name = "octoboardd"
 path = "src/main.rs"
 
 [build-dependencies]
-# The same exact pin as the desktop crate's build script, for the one shared workspace resolution.
-serde_json = "=1.0.151"
+serde_json = "1"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
@@ -26,15 +25,11 @@ serde = { version = "1", features = ["derive"] }
 # `render_page_submission` renders a submitted object's fields in iteration order straight into
 # the console session's prose — without this, `serde_json::Map` is a `BTreeMap` and the fields would arrive
 # alphabetised instead.
-# The exact version is the Tauri crate's: both crates are members of one Cargo workspace, and that
-# one pins `serde_json` exactly to stay within the project's Rust floor.
 serde_json = { version = "1", features = ["preserve_order"] }
-uuid = { version = "=1.26.1", features = ["v4", "serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
 bytes = "1"
-# A continuously parsed screen for archived previews; compatible with the Rust floor.
-alacritty_terminal = { version = "=0.25.0", default-features = false }
-# Alacritty accepts newer `home` releases, which require Rust 1.88.
-home = "=0.5.11"
+# A continuously parsed screen for archived previews.
+alacritty_terminal = { version = "0.26", default-features = false }
 # Encodes a binary file body for the JSON control socket; the version the lockfile already
 # resolves for other dependencies.
 base64 = "0.22"
@@ -45,11 +40,7 @@ anyhow = "1"
 libc = "0.2"
 futures-util = { version = "0.3", default-features = false }
 rusqlite = { version = "0.32", features = ["bundled"] }
-# Pinned exactly, and low: every release above this one fails to compile on the project's Rust
-# floor — 1.x and 2.x use let-chains, and 2.x pulls `darling` 0.23, which needs 1.88. A declared
-# `rust-version` is no guide either way: 2.2.0 claims 1.86 and does not build on it. The usable
-# version is found by compiling, not by reading manifests.
-rmcp = { version = "=0.9.1", features = ["server", "transport-io"] }
+rmcp = { version = "3.5", features = ["server", "transport-io"] }
 toml = { version = "1.1.6", default-features = false, features = ["parse", "display", "serde"] }
 trash = "5"
 # Reads a Codex rollout it has compressed (`rollout-….jsonl.zst`). The bindings to the C library
@@ -58,11 +49,6 @@ trash = "5"
 zstd = { version = "0.13", default-features = false }
 # Watches each repository's refs for a commit made outside the daemon (`crate::git_watch`).
 notify = "8.2"
-
-# Alacritty's Unix PTY module needs std descriptor conversions from rustix-openpty's
-# rustix 0.38 dependency; that crate disables std by default.
-[target.'cfg(unix)'.dependencies]
-rustix = { version = "0.38", features = ["std"] }
 
 [dev-dependencies]
 # Paused time for tests that would otherwise wait out a real timeout.

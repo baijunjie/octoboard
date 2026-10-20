@@ -7,12 +7,11 @@
 resolver = "2"
 members = ["apps/daemon", "apps/desktop/src-tauri"]
 
-# `rust-version` is the project's Rust floor, and several exact dependency pins in the members
-# exist only to stay within it — see "Known pitfalls of the Tauri / Rust approach" in
-# docs/architecture.md before raising it.
+# `rust-version` matches the toolchain pinned in `rust-toolchain.toml`: the project is built and
+# checked on that one release only, so it claims no older one.
 [workspace.package]
 authors = ["BaiJunjie"]
 license = "MIT"
 repository = "https://github.com/baijunjie/octoboard"
 edition = "2021"
-rust-version = "1.86"
+rust-version = "1.99"

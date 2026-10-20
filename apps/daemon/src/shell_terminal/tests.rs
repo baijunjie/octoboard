@@ -320,7 +320,7 @@ async fn removing_a_project_or_its_console_ends_its_terminals_and_no_other() {
         .into_iter()
         .map(|record| record.id)
         .collect();
-    assert_eq!(left, [kept.id.clone()]);
+    assert_eq!(left, std::slice::from_ref(&kept.id));
     assert_gone_by(removed_pid as i32, Instant::now() + PATIENCE);
 
     request(&state, r#"{"type":"delete_console","console":"console-2"}"#)

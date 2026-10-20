@@ -69,8 +69,8 @@ pnpm typecheck
 
 ESLint checks source code and scripts across the workspace. ESLint Stylistic uses two-space indentation,
 double quotes and semicolons; Vue template rules handle the website's single-file components. Rust formatting
-uses the root `rustfmt.toml`; CI runs rustfmt from Rust 1.86.0. Generated files, dependencies and build output
-are excluded. CSS, JSON, Markdown and other file types are outside the ESLint formatting scope.
+uses the root `rustfmt.toml`; CI runs rustfmt from the Rust version pinned in `rust-toolchain.toml`. Generated
+files, dependencies and build output are excluded. CSS, JSON, Markdown and other file types are outside the ESLint formatting scope.
 
 Use `pnpm lint:fix` separately to apply available lint fixes, then inspect the changes and run the relevant
 tests. For routine edits, format only the files or Rust packages involved in the task:

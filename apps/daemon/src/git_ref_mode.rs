@@ -49,10 +49,12 @@ pub fn report_of(
         cwd: wire_path::encode(cwd.as_os_str().as_bytes()),
         git_dir: git_dir.map(|dir| wire_path::encode(dir.as_bytes())),
         refs: refs
-            .chunks_exact(2)
-            .map(|pair| CreatedRef {
-                name: wire_path::encode(pair[0].as_bytes()),
-                oid: pair[1].to_string_lossy().into_owned(),
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|[name, oid]| CreatedRef {
+                name: wire_path::encode(name.as_bytes()),
+                oid: oid.to_string_lossy().into_owned(),
             })
             .collect(),
         unix_time,

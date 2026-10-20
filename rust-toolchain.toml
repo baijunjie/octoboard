@@ -1,0 +1,6 @@
+# The toolchain every Rust build in the repository uses, locally and in CI; it matches the
+# workspace's `rust-version` in the root `Cargo.toml`.
+[toolchain]
+channel = "1.99.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

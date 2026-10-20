@@ -158,7 +158,7 @@ fn for_each_process(mut visit: impl FnMut(libc::pid_t)) {
         )
     };
     // SAFETY: as above; the call filled `filled` entries.
-    let pids = unsafe { &(*pids)[..(filled.max(0) as usize).min(65536)] };
+    let pids = unsafe { &(&*pids)[..(filled.max(0) as usize).min(65536)] };
     // Pid 0 is the kernel, which `getsid(0)` would answer for the caller instead.
     pids.iter()
         .filter(|&&pid| pid > 0)
@@ -192,7 +192,7 @@ fn for_each_process(mut visit: impl FnMut(libc::pid_t)) {
             break;
         }
         // SAFETY: as above; the call filled `filled` bytes.
-        let bytes = unsafe { &(*buf).0[..filled as usize] };
+        let bytes = unsafe { &(&(*buf).0)[..filled as usize] };
         let mut at = 0;
         while at + NAME < bytes.len() {
             let reclen = u16::from_ne_bytes([bytes[at + RECLEN], bytes[at + RECLEN + 1]]) as usize;
