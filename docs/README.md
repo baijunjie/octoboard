@@ -301,13 +301,14 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   uses CSS `:focus-visible` in the app's WKWebView and which moves made by script have to set the modality themselves,
   and the hand-off for a dialog opener that never took focus, is disabled or is gone, accessible names, including the
   one an icon-only control needs beside its tooltip, roles and states — the status region that has to stay mounted, the
-  durable visible copy that carries its own instead, a status whose region sits under an open modal being written after
-  the close and the focus move, a status waiting until the window is attended, a visual heading being a heading element,
-  and the one `main` the content panel always holds — contrast (thresholds, shared row action menu button states,
-  preserving HeroUI's default colours and the confirmed Tabs hover treatment, where a custom-style fix belongs, auditing
-  a token or surface change, a region with a surface of its own and a glyph on the window material), independent hover
-  marquees and their permitted single-label control scopes, colour never the only carrier, motion, and the shortfalls
-  the user has kept on purpose.
+  durable visible copy announced from a status region of the surface's own, a disclosure's status region mounted with
+  each opening outside the folded body, a focus restore after a press deciding by whether the pressed control had focus,
+  a status whose region sits under an open modal being written after the close and the focus move, a status waiting
+  until the window is attended, a visual heading being a heading element, and the one `main` the content panel always
+  holds — contrast (thresholds, shared row action menu button states, preserving HeroUI's default colours and the
+  confirmed Tabs hover treatment, where a custom-style fix belongs, auditing a token or surface change, a region with a
+  surface of its own and a glyph on the window material), independent hover marquees and their permitted single-label
+  control scopes, colour never the only carrier, motion, and the shortfalls the user has kept on purpose.
 - [VoiceOver verification cases](voiceover-cases.md) — real-device VoiceOver results kept as reusable cases: the rules
   for when a new announcement needs a listening pass (what it takes to match a passing case and the checks a caller must
   still pass), the evidence limits, each case's UI location, mechanism, rendered ARIA wiring, spoken result, environment

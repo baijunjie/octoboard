@@ -281,10 +281,10 @@ A login ends in one of these:
 - **Logged in**: the agent confirms the account is signed in. The dialog closes by itself, the account's quota is read
   again at once, and the account's badge then shows the result (see "The accounts the user owns" above). Assistive
   technology is told once, by the account's row and naming the account, that it is logged in, about 1.5 seconds after
-  the dialog has closed and focus has returned to Settings. While the user is away from the window — it is minimized
-  or hidden, or another application, such as the browser they authorized in, is in front — the announcement waits, and
-  comes about 1.5 seconds after they are back in it. A success that had already happened when the section or the
-  agent's tab is shown again is not announced.
+  the success; the dialog closes and focus returns to Settings right after the success, so by then both have
+  happened. While the user is away from the window — it is minimized or hidden, or another application, such as the
+  browser they authorized in, is in front — the announcement waits, and comes about 1.5 seconds after they are back in
+  it. A success that had already happened when the section or the agent's tab is shown again is not announced.
 - **Could not log in**: the dialog stays open, says the login to the account did not go through and gives the agent's
   reason. When the CLI said it succeeded but the agent still reports the account not signed in, the reason says so.
 - **Timed out**, after 10 minutes of waiting for the user to authorize: the dialog stays open and says the login timed

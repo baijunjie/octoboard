@@ -236,7 +236,15 @@ itself — knowingly: focus lands on a control the user did not aim it at either
 A separator of collapsed lines taken off the screen is such a move: the bar for the run past a diff's last hunk goes
 once the daemon's reply says that hunk reaches the end of the file, and the hand-off to the code frame sets the
 modality itself. `handFocusOff` cannot be used there, since it looks at `document.activeElement` and cannot see into a
-shadow root.
+shadow root. The redraw after an expansion that takes the pressed control away, with no separator control left to take
+focus, hands focus to the code frame the same way (`handFocusToCode` in `packages/ui/src/viewer/rendererDom.ts`), so
+focus never falls to the page.
+
+A focus restore after a press decides by whether the pressed control had focus, not by whether the press was a key:
+VoiceOver presses with a click (an accessibility press), so a restore keyed to Enter or Space misses the screen reader's
+press and leaves focus on the page when the control goes. The instance is `Expansion.activate` in
+`packages/ui/src/viewer/expansion.ts`, which is told whether the control used was the focused one; a mouse press on a
+control that did not have focus still takes none.
 
 A dialog opened from a control that never took focus, is disabled, or is gone by the time it closes cannot always hand
 focus back to it: React Aria restores focus to what held it when the dialog opened, which is not the control after an
@@ -720,13 +728,21 @@ element, an error from `role="alert"`.
   said. The instance is `AccountLoginAnnouncer` with `useClearSucceededLogin` in
   `packages/ui/src/settings/AccountLogin.tsx`.
 - A state whose visible form is durable copy rather than a placeholder — the sentence saying where a macOS permission
-  stands, in `packages/ui/src/settings/PermissionsSection.tsx` — announces from a `role="status"` on that copy itself
-  instead. `StatusAnnouncer` is `sr-only` and expects the visible form to be `aria-hidden`, which this cannot be: it
-  is the row's own description, and a reader going through the row statically has to reach it. Only the first text is
-  lost that way, and that is the state as the surface opened, which the user is reading anyway; every later change —
-  the one that matters here, made in System Settings and picked up on the way back — lands in a region that has been
-  mounted all along. Put the subject inside the region when several of them can change independently: `role="status"`
-  is atomic, so a bare "Granted." names nothing.
+  stands, in `packages/ui/src/settings/PermissionsSection.tsx` — stays readable in place, not `aria-hidden`, and is
+  announced from a `StatusAnnouncer` of the surface's own (`PermissionsAnnouncer`), `sr-only`, beside the rows. A
+  `role="status"` on the copy itself is not enough: the copy is present at the region's first render, as focus moves
+  onto the tab, and that text is not said. So every text, the first included, is written `AFTER_FOCUS_MOVE_DELAY_MS` of
+  attended time after it arrives, the wait started over each time the user comes back (a change made in System Settings
+  is picked up on the way back, when VoiceOver is speaking the focused control), and a text replaced while it waits is
+  never said. Put the subject in the text when several states can change independently: `role="status"` is atomic, so
+  a bare "Granted." names nothing. Reading the rows statically meets each state twice, once in place and once in the
+  status; that is accepted.
+- A status region for content that a disclosure folds away is mounted outside the folded body, and only while the
+  disclosure is open. The body stays mounted while folded, so a region inside it would be past its first write delay
+  when the disclosure opens again, and the text kept from before would be written in the very render that shows the
+  body: text that appears with its region, which VoiceOver does not say. Mounted with each opening, the region writes
+  after its delay with the trigger still focused. The instance is `AdvancedSection` in
+  `packages/ui/src/dialogs/LaunchSettingsFields.tsx`.
 - A dialog step whose title says what happened announces it by moving focus to the dialog, wherever focus was, so the
   dialog is read out by its new name; it adds no `StatusAnnouncer`, which would say the same thing again. The import's
   result step is the instance: its title becomes "Import finished" and the step focuses the dialog itself
@@ -739,9 +755,10 @@ element, an error from `role="alert"`.
   `packages/ui/src/settings/AgentAccountsSection.tsx`): a `StatusAnnouncer` that lives as long as the row and says once
   that the account is logged in, while the row's login badge shows the same result visibly; it names the account, since
   nothing around it does. It follows the modal rule and the unattended-window rule above: it is written
-  `AFTER_FOCUS_MOVE_DELAY_MS` after the login's dialog has closed and focus has returned, and only while the window is
-  attended. A region that was written under the closing modal, or while the window was unattended, was not spoken in the
-  real-device checks; see the failing patterns in [VoiceOver verification cases](voiceover-cases.md).
+  `AFTER_FOCUS_MOVE_DELAY_MS` after the success, a wait that outlasts the dialog closing and focus returning to the row,
+  and only while the window is attended. A region that was written under the closing modal, or while the window was
+  unattended, was not spoken in the real-device checks; see the failing patterns in [VoiceOver verification
+  cases](voiceover-cases.md).
 - A dialog whose footer changes with its state puts focus on the state's main action each time the state changes.
   The login dialog is the instance (`packages/ui/src/settings/AccountLoginDialog.tsx`): focus is on Cancel login while
   the login runs and on Log in again once it ends or is refused. Its progress text is a `StatusAnnouncer` with

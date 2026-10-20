@@ -59,10 +59,11 @@ element is what it shows then.
 
 jsdom (30) has no window focus to report: its `hasFocus()` answers whether anything in the document has been focused,
 so it is `false` in a test that never focuses anything and `true` from the first focus on, whatever the test means the
-window to be doing. A test of a rule gated on it therefore sets the answer itself — spy on `document.hasFocus`, and
-dispatch the window's `focus` / `blur` as well for a rule that listens for them — or a gated rule looks dead in a test
-that focuses nothing. Only such a test of the window-left case catches the ungated rule; no gallery scenario leaves
-the window for another application.
+window to be doing. A test of a rule gated on it therefore sets the answer itself through `windowAttention()` in
+`packages/ui/src/components/windowTestSupport.ts`, which starts the window attended and returns a setter that moves
+`hasFocus()` and dispatches the window's `focus` / `blur` together — not a hand-rolled spy — or a gated rule looks dead
+in a test that focuses nothing. Only such a test of the window-left case catches the ungated rule; no gallery scenario
+leaves the window for another application.
 
 ## Inside a dialog, a focused control that unmounts or turns disabled takes Escape and Tab with it
 

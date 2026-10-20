@@ -38,11 +38,12 @@
 
 The isolated packaged clone was first rebuilt from local main `9f4e53ca2`, including the merged focus fixes in
 `0d95add46`, then rebuilt from the reviewed Settings opener fix described below and finally from a code tree equal to
-main `429be4556`. Its signature verified; the live sidecar's executable, open database, lock and snapshot home were
-clone-owned. Its hash matched a fresh build signed with the same clone identifier. The first plist-only launch ignored
-the isolated environment and was refused by the original instance's occupied lock before starting. Subsequent launches
-explicitly passed every clone environment value through `open --env` and connected correctly. Machine-specific source,
-PID, launch, ownership and evidence records remain outside the repository with the clone.
+main `429be4556` (E4), and later from the branch of the three defect fixes (E5). Its signature verified; the live
+sidecar's executable, open database, lock and snapshot home were clone-owned. Its hash matched a fresh build signed with
+the same clone identifier. The first plist-only launch ignored the isolated environment and was refused by the original
+instance's occupied lock before starting. Subsequent launches explicitly passed every clone environment value through
+`open --env` and connected correctly. Machine-specific source, PID, launch, ownership and evidence records remain
+outside the repository with the clone.
 
 The owner could not capture this display through computer-use either. Reopening the clone by its bundle identifier,
 then raising and making its AX window main, restored the missing WebKit tree. All input thereafter targeted only
@@ -97,7 +98,8 @@ Only clone-owned main-window and native-popup window IDs were captured. An AX st
       fix was installed and the exact failing sequence passed, as did pure-pointer, close-button and Escape paths.
 
 The native-menu, combined nested-focus and Move later checks are complete. Move later was confirmed in the earlier
-baseline run. The user confirms UI focus behavior themselves; login-focus checks are removed from this checklist.
+baseline run. The user confirms UI focus behavior themselves, so this checklist has no login-focus item; the focus
+after a login was nevertheless recorded with the VoiceOver cases (FOCUS-1).
 No real login or browser authorization was performed. Native VoiceOver results are recorded below.
 
 ### Additional defect fixed on main
@@ -124,32 +126,35 @@ states or mocks changed: this restores an existing interaction contract. The ear
 
 ### Clone state and next action
 
-The rebuilt clone and all evidence remain installed and recorded externally. The build now installed is E4 of the
-[VoiceOver verification cases](../../voiceover-cases.md), whose code tree equals main `429be4556` (fixes `39c1ec3f3` and
-`429be4556`); the hashes of the earlier local builds are unmerged and not durable references. Temporary credential-free
-Codex/Claude CLIs and a sidecar proxy have been used only inside the clone to stage native quotas, live sessions and
-real error replies; they validate rendering and recovery, not real login. Test sessions and named accounts were removed.
-The proxy is no longer installed in the active bundle, the original clone CLI paths are restored, all three agents are
-available and their added order is restored to Claude Code, Codex, Grok Build. The clone is running the E4 build with
-its confirmation console, no sessions or named accounts, no dialog open, and no login in progress. Its live sidecar
-path, clone database/lock and equally signed fresh-build hash were verified again, and the built source fingerprint was
-checked against its source before recording it. Do not launch the retained baseline bundle and current bundle together:
-they share the clone identifier. Do not merge, push, close the milestone or delete plan documents; the owner and user
-retain those decisions.
+The rebuilt clone and all evidence remain installed and recorded externally. The last build installed is E5 of the
+[VoiceOver verification cases](../../voiceover-cases.md), the branch build of the three defect fixes, with E4 (whose
+code tree equals main `429be4556`, fixes `39c1ec3f3` and `429be4556`) kept as an inactive backup; the hashes of the
+earlier local builds are unmerged and not durable references. Temporary credential-free Codex/Claude CLIs and a sidecar
+proxy have been used only inside the clone to stage native quotas, live sessions and real error replies; they validate
+rendering and recovery, not real login. Test sessions and named accounts were removed. The proxy is no longer installed
+in the active bundle, the original clone CLI paths are restored, all three agents are available and their added order is
+restored to Claude Code, Codex, Grok Build. The clone was stopped after the E5 recordings, with its confirmation
+console, no sessions or named accounts, no dialog open, and no login in progress. Its live sidecar path, clone
+database/lock and equally signed fresh-build hash were verified again, and the built source fingerprint was checked
+against its source before recording it. Do not launch the retained baseline bundle and current bundle together: they
+share the clone identifier. Do not merge, push, close the milestone or delete plan documents; the owner and user retain
+those decisions.
 
 ### Testing-only handoff boundary
 
 The scope changed to testing and defect reporting after the Settings opener fix had already been committed and installed
 in the clone. No further implementation or builds are part of this session's work. The passing packaged comparison is
 retained as evidence; it is not approval or a merge. Both fixes are now on main (`39c1ec3f3` and `429be4556`), and the
-evidence is for a build whose code tree equals main `429be4556`. The owner and user-directed agents decide any further
-implementation.
+evidence is for a build whose code tree equals main `429be4556` (E4) and, for the later defect fixes, the E5 branch
+build. The owner and user-directed agents decide any further implementation.
 
 ### Native VoiceOver verification, 2026-10-20
 
-Installed builds: a first-round comparison build and builds integrating main with the two fixes named below, in their
-intermediate and final forms (rechecks); only the final one, E4, equals a main commit (`429be4556`). Cases, mechanisms,
-ARIA wiring, exact speech and limits are in [VoiceOver verification cases](../../voiceover-cases.md).
+Installed builds, all unmerged local builds except where stated: E1, a first-round comparison build; E2 and E3, builds
+integrating main with earlier forms of the two fixes named below; E4, the final form, whose code tree equals main
+`429be4556`; and E5, the branch build of the three defect fixes found in the later recordings (branch commits
+`42b9984f8`, `e1191fc7c` and `42d775745`). Cases,
+mechanisms, ARIA wiring, exact speech and limits are in [VoiceOver verification cases](../../voiceover-cases.md).
 
 - **Sixth checkbox: PASS.** See the retained picker trigger, opened picker option, console account row and Advanced tab
   cases.
@@ -159,11 +164,16 @@ ARIA wiring, exact speech and limits are in [VoiceOver verification cases](../..
   known-not-to-work patterns. See the login cases. Fixture success does not verify real authorization or quota, which
   stay in the first checkbox.
 - **Settings backdrop focus: PASS** on the same build (focus only, no speech claim).
-- **Restoration: PASS.** Original CLI PATH and console settings restored; Claude Code / Codex / Grok Build order;
-  no named accounts, sessions or active logins. VoiceOver off; no preference or volume setting changed.
+- **Defects found while recording the other status callers: PASS on E5.** The diff expansion no longer drops focus to
+  the web area, the Permissions states are spoken when the section opens, and the Advanced section announces its model
+  note on each opening (see FOCUS-2, SA-L and SA-M). Settings opened directly onto Permissions is unreachable from
+  production controls and untested.
+- **Restoration: PASS for the E4 recordings.** Original CLI PATH and console settings restored; Claude Code / Codex /
+  Grok Build order; no named accounts, sessions or active logins. VoiceOver off; no preference or volume setting
+  changed. After the E5 recordings VoiceOver's final manual off was still the user's to press, and the restoration
+  record for them is kept outside the repository.
 
-Login-focus checks are removed; the user confirms UI focus themselves. Only real login and quota remain user-only. The
-milestone remains open.
+Only real login and quota remain user-only. The milestone remains open.
 
 ### User-only work
 
