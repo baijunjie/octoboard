@@ -128,6 +128,9 @@ pub struct TraySubmenu {
     /// The current console's account quota for this agent, selected by the UI.
     #[serde(default)]
     pub quota_remaining: Option<u8>,
+    /// Weekly remainder beneath the 5-hour bar, absent for single-window accounts.
+    #[serde(default)]
+    pub quota_weekly_remaining: Option<u8>,
     #[serde(default)]
     pub quota_label: Option<String>,
 }
@@ -912,16 +915,19 @@ mod tests {
     fn submenu_quota_is_optional_and_preserves_zero_remaining() {
         let legacy = parsed(WITH_SUBMENUS);
         assert_eq!(legacy.submenus[0].quota_remaining, None);
+        assert_eq!(legacy.submenus[0].quota_weekly_remaining, None);
         assert_eq!(legacy.submenus[0].quota_label, None);
         let menu = parsed(
             r#"{
             "sections": [], "open": "Open", "quit": "Quit",
             "submenus": [{"title": "Claude quota", "items": [],
                 "quota_remaining": 0,
+                "quota_weekly_remaining": 100,
                 "quota_label": "Claude · Work · 5-hour · 0% remaining"}]
         }"#,
         );
         assert_eq!(menu.submenus[0].quota_remaining, Some(0));
+        assert_eq!(menu.submenus[0].quota_weekly_remaining, Some(100));
         assert_eq!(
             menu.submenus[0].quota_label.as_deref(),
             Some("Claude · Work · 5-hour · 0% remaining")

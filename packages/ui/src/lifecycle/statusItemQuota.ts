@@ -70,14 +70,15 @@ export function buildQuotaSubmenus(t: Translate, source: StatusItemQuotaSource, 
     ]);
     const accountId = currentConsole ? consoleAccount(currentConsole, agent, source.accounts) : undefined;
     const reading = accountId !== undefined ? accountQuotaOf(source.accountQuotas, agent, accountId) : undefined;
-    const window = reading && !reading.unavailable ? usageBarWindows(reading.windows)?.main : undefined;
+    const bar = reading && !reading.unavailable ? usageBarWindows(reading.windows) : undefined;
     const accountName = source.accounts.find((account) => account.id === accountId)?.name;
     return [{
       title: t("statusItem.quota", { agent: AGENT_SHORT_NAME[agent] }),
       icon: agentIconKey(agent),
-      ...(window ? {
-        quota_remaining: remainingPercent(window),
-        quota_label: accountQuotaLabel(t, agent, accountName, { main: window }, source.defaultAccountNames),
+      ...(bar ? {
+        quota_remaining: remainingPercent(bar.main),
+        ...(bar.thin ? { quota_weekly_remaining: remainingPercent(bar.thin) } : {}),
+        quota_label: accountQuotaLabel(t, agent, accountName, bar, source.defaultAccountNames),
       } : {}),
       items,
     }];

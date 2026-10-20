@@ -4,7 +4,7 @@ How much of an account's plan quota is left: the plan an account is on, and for 
 much remains and when it resets. Octoboard shows it for every account of an agent — the agent's default account and
 every account the user owns (see `docs/product/agent-accounts.md`) — for Claude Code, Codex and Grok
 Build alike. It is shown in Settings' **Agent accounts** section, in the rail's account quota panel (see "The
-account quota panel on the rail" below), in a single-window indicator for the selected session (see "The selected
+account quota panel on the rail" below), in a compact indicator for the selected session (see "The selected
 session's quota indicator" below) and, in the macOS application, on the menu bar icon and in its quota submenus
 (see "The icon's menu" in `docs/product/menu-bar-icon.md`). An account whose quota is used up cannot open a session or
 have one switched onto it (see "A used-up account" below).

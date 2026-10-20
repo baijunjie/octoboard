@@ -7,7 +7,7 @@ import { isolate } from "../i18n/isolate";
 import type { Account, AccountQuota, Agent, QuotaWindow, Session, SessionStatus } from "../protocol";
 import { iconKeysOf } from "./statusItemIcons";
 import { buildStatusItemMenu, MAX_PER_SECTION } from "./statusItemMenu";
-import type { StatusItemQuotaSource } from "./statusItemQuota";
+import { buildQuotaSubmenus, type StatusItemQuotaSource } from "./statusItemQuota";
 
 const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as never, args[0] as never)) as Translate;
 
@@ -127,6 +127,20 @@ describe("buildStatusItemMenu quota submenus", () => {
           return "---";
       }
     });
+
+  it.each([
+    { kinds: ["weekly"], main: 95 },
+    { kinds: ["credit_period"], main: 95 },
+    { kinds: ["session", "weekly_model"], main: 82 },
+  ] as const)("keeps a single opener bar for $kinds", ({ kinds, main }) => {
+    const windows = kinds.map((kind) => window({ kind, used_percent: kind === "session" ? 18 : 5 }));
+    const [submenu] = buildQuotaSubmenus(t, source({
+      agentAvailability: available("claude"),
+      accountQuotas: [quotaOf("claude", null, { windows })],
+    }), consoles[0]);
+    expect(submenu!.quota_remaining).toBe(main);
+    expect(submenu!.quota_weekly_remaining).toBeUndefined();
+  });
 
   it("has no submenu for an agent that is not available", () => {
     expect(menuOf([], source({ agentAvailability: new Map([["codex", { agent: "codex", availability: "unavailable" } as never]]) })).submenus).toEqual([]);

@@ -119,19 +119,23 @@ From top to bottom:
      note **Not logged in** instead. One whose latest reading failed after a good one keeps its last windows under a
      note "Out of date: last read 12 minutes ago", without the reason either.
 
-   Each submenu's opening line can show an **outlined remaining-quota bar** at its right, before the submenu arrow.
+   Each submenu's opening line can show **remaining-quota bars** at its right, before the submenu arrow.
    It uses that agent's account configured for the **current console**, independently of the selected session that
    supplies the menu bar icon's capsule. A missing, deleted or wrong-agent account reference falls back to the
-   agent's default account. With no current console there is no opener bar. Its window priority is 5-hour, then
-   Weekly, then the credit pool; model-specific weekly limits are excluded. An unread account, a reading without
-   an eligible window or a failed latest reading has no opener bar, including when the submenu retains stale
-   windows. Switching consoles or editing their account choices updates the bars.
+   agent's default account. With no current console there are no opener bars. When the account has both a 5-hour
+   and an account-wide Weekly window, the 5-hour bar has a thinner Weekly bar beneath it. Otherwise there is one
+   bar, with window priority 5-hour, then Weekly, then the credit pool; model-specific weekly limits are excluded.
+   An unread account, a reading without an eligible window or a failed latest reading has no opener bars,
+   including when the submenu retains stale windows. Switching consoles or editing their account choices updates
+   the bars.
 
-   These opener bars are monochrome outlined capsules with a hollow unfilled portion, aligned at the right across
-   the opening lines. Their tint follows the native row in light and dark menus and while highlighted. The row
-   keeps the system's pointer, highlight and keyboard submenu behavior, including Right Arrow to open it. Its
-   accessible name identifies the agent, account, window and whole remaining percent; the bar is not read
-   separately. The row has no tooltip, which would float over the submenu it opens and repeat what that shows.
+   These opener bars are solid rounded tracks in a muted tint, with the remaining share filled at full strength,
+   aligned at the right across the opening lines. Their tint follows the native row in light and dark menus and
+   while highlighted. The row keeps the system's pointer, highlight and keyboard submenu behavior, including
+   Right Arrow to open it. Its
+   accessible name identifies the agent and account and, for each window drawn, the window and whole remaining
+   percent; the bars are not read separately. The row has no tooltip, which would float over the submenu it opens
+   and repeat what that shows.
 
    Countdowns and the age of an out-of-date reading are as of the last time the menu was updated, which a change of
    the selected session, current console, sessions, consoles, projects, accounts, added agents, agents' availability, quotas or the UI's language causes, not the

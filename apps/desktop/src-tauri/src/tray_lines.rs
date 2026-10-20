@@ -358,7 +358,13 @@ pub fn dress_quota_openers(
         .collect();
     for ((item, title), model) in openers.iter().zip(models) {
         if let Some(remaining) = model.quota_remaining {
-            item.setAttributedTitle(Some(&opener_title(item, title, remaining, GAP)));
+            item.setAttributedTitle(Some(&opener_title(
+                item,
+                title,
+                remaining,
+                model.quota_weekly_remaining,
+                GAP,
+            )));
             if let Some(label) = &model.quota_label {
                 let label = NSString::from_str(label);
                 // The row's accessible name only, not a tooltip: AppKit's help tag would float over
@@ -379,7 +385,13 @@ pub fn dress_quota_openers(
                 .image()
                 .map_or(INSET, |image| PICTURE_X + image.size().width + PICTURE_GAP);
             let gap = opener_gap(width, text_x, text_width);
-            item.setAttributedTitle(Some(&opener_title(item, title, remaining, gap)));
+            item.setAttributedTitle(Some(&opener_title(
+                item,
+                title,
+                remaining,
+                model.quota_weekly_remaining,
+                gap,
+            )));
         }
     }
 }
@@ -388,6 +400,7 @@ fn opener_title(
     item: &objc2_app_kit::NSMenuItem,
     title: &NSString,
     remaining: u8,
+    weekly_remaining: Option<u8>,
     gap: f64,
 ) -> Retained<objc2_foundation::NSMutableAttributedString> {
     use objc2::{rc::Weak, runtime::Bool, AnyThread};
@@ -398,27 +411,38 @@ fn opener_title(
 
     let item = Weak::new(item);
     let drawing = block2::RcBlock::new(move |bounds: NSRect| -> Bool {
-        let outline = rect(
-            bounds.origin.x + 0.75,
-            bounds.origin.y + 0.75,
-            bounds.size.width - 1.5,
-            bounds.size.height - 1.5,
-        );
         let colour = if item.load().is_some_and(|item| item.isHighlighted()) {
             NSColor::selectedMenuItemTextColor()
         } else {
             NSColor::labelColor()
         };
-        colour.set();
-        let edge = NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(outline, 4.0, 4.0);
-        edge.setLineWidth(1.5);
-        edge.stroke();
-        let fraction = f64::from(remaining.min(100)) / 100.0;
-        let width = (bounds.size.width - 5.0) * fraction;
-        if width > 0.0 {
-            let fill = rect(bounds.origin.x + 2.5, bounds.origin.y + 2.5, width, 4.0);
-            let radius = 2.0_f64.min(width / 2.0);
-            NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(fill, radius, radius).fill();
+        if let Some(weekly) = weekly_remaining {
+            draw_opener_capsule(
+                rect(
+                    bounds.origin.x,
+                    bounds.origin.y + 4.0,
+                    bounds.size.width,
+                    5.0,
+                ),
+                remaining,
+                &colour,
+            );
+            draw_opener_capsule(
+                rect(bounds.origin.x, bounds.origin.y, bounds.size.width, 3.0),
+                weekly,
+                &colour,
+            );
+        } else {
+            draw_opener_capsule(
+                rect(
+                    bounds.origin.x,
+                    bounds.origin.y + 2.0,
+                    bounds.size.width,
+                    5.0,
+                ),
+                remaining,
+                &colour,
+            );
         }
         Bool::YES
     });
@@ -456,6 +480,19 @@ fn opener_title(
         let kern = NSNumber::new_f64(gap - space);
         attributed.addAttribute_value_range(NSKernAttributeName, &kern, NSRange::new(end - 2, 1));
         attributed
+    }
+}
+
+fn draw_opener_capsule(bounds: NSRect, remaining: u8, colour: &NSColor) {
+    let radius = bounds.size.height / 2.0;
+    colour.colorWithAlphaComponent(0.22).set();
+    NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(bounds, radius, radius).fill();
+    let width = bounds.size.width * f64::from(remaining.min(100)) / 100.0;
+    if width > 0.0 {
+        colour.set();
+        let fill = NSRect::new(bounds.origin, NSSize::new(width, bounds.size.height));
+        let radius = radius.min(width / 2.0);
+        NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(fill, radius, radius).fill();
     }
 }
 

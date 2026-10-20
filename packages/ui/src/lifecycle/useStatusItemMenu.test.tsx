@@ -129,6 +129,8 @@ it("shows each submenu's current-console default account and follows console swi
     windows: [{ kind: "session", label: null, used_percent: used, resets_at: null, window_minutes: 300 }],
   });
   const quotas = [reading("claude", "work-account", 35), reading("claude", null, 0), reading("codex", null, 100)];
+  quotas[0]!.windows.push({ kind: "weekly", label: null, used_percent: 70, resets_at: null, window_minutes: 10080 });
+  quotas[2]!.windows.push({ kind: "weekly", label: null, used_percent: 100, resets_at: null, window_minutes: 10080 });
   const { store, select } = mount(statusItem, vi.fn(), {
     consoles: new Map([[work.id, work], [personal.id, personal]]),
     settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "", accounts: [{ id: "work-account", agent: "claude", name: "Team", config_dir: "/team" }] },
@@ -139,13 +141,17 @@ it("shows each submenu's current-console default account and follows console swi
   const rows = () => setMenu.mock.lastCall![0].submenus;
   await settle();
   expect(rows().map((row) => row.quota_remaining)).toEqual([undefined, undefined]);
+  expect(rows().map((row) => row.quota_weekly_remaining)).toEqual([undefined, undefined]);
   select(undefined, work.id);
   await settle();
   expect(rows().map((row) => row.quota_remaining)).toEqual([65, 0]);
+  expect(rows().map((row) => row.quota_weekly_remaining)).toEqual([30, 0]);
+  expect(rows()[0]!.quota_label).toContain("Weekly 30% remaining");
   expect(rows()[0]!.quota_label).toContain("Team");
   select(undefined, personal.id);
   await settle();
   expect(rows().map((row) => row.quota_remaining)).toEqual([100, 0]);
+  expect(rows().map((row) => row.quota_weekly_remaining)).toEqual([undefined, 0]);
   expect(rows()[0]!.quota_label).toContain("Default");
   act(() => store.setState({ consoles: new Map([[work.id, work], [personal.id, { ...personal, claude_account_id: "work-account" }]]) }));
   await settle();
@@ -153,8 +159,10 @@ it("shows each submenu's current-console default account and follows console swi
   act(() => store.setState({ accountQuotas: [{ ...quotas[0]!, unavailable: { code: "quota_timed_out", params: {}, message: "timeout" } }, ...quotas.slice(1)] }));
   await settle();
   expect(rows()[0]!.quota_remaining).toBeUndefined();
+  expect(rows()[0]!.quota_weekly_remaining).toBeUndefined();
   expect(rows()[0]!.quota_label).toBeUndefined();
   select();
   await settle();
   expect(rows().map((row) => row.quota_remaining)).toEqual([undefined, undefined]);
+  expect(rows().map((row) => row.quota_weekly_remaining)).toEqual([undefined, undefined]);
 });

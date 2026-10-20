@@ -188,8 +188,10 @@ export interface StatusItemSubmenu {
   /** The key of the picture beside the title, such as the agent's mark; none for no picture. It is
    * decoration: the title is what is read. */
   icon?: string;
-  /** Remaining quota of this agent's default account in the current console, 0–100. */
+  /** Remaining quota of this agent's configured account in the current console, 0–100. */
   quota_remaining?: number;
+  /** Weekly remainder, drawn beneath the 5-hour bar when both windows are available. */
+  quota_weekly_remaining?: number;
   /** Account, quota window and remainder announced with the submenu's opening row. */
   quota_label?: string;
   items: StatusItemSubmenuItem[];
