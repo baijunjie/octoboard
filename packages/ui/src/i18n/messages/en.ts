@@ -490,7 +490,7 @@ export const en = {
   "session.status.working": "Working",
   "session.status.waitingUser": "Waiting for you",
   "session.status.idle": "Awaiting instructions",
-  "session.status.background": "Running in background",
+  "session.status.background": "Working in background",
   "session.status.interrupted": "Interrupted",
   "session.status.archived": "Archived",
 

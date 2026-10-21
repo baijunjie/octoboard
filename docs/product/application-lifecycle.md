@@ -132,7 +132,7 @@ closed** switch in Settings' General section, which is **off to begin with** (se
 `docs/product/settings.md`).
 
 **With the switch off, closing the window quits.** It is an ordinary quit gesture, taking exactly the path `Cmd+Q` takes
-(see "Quitting" below): with a session starting, working, waiting for the user or running in background, or a busy
+(see "Quitting" below): with a session starting, working, waiting for the user or working in background, or a busy
 shell terminal, it asks the same confirmation, where Cancel leaves the window open and everything running, and otherwise it quits at once. The
 sessions a confirmed close ends are left *interrupted* and resumable, just as any confirmed quit leaves them (see "Archiving, interruption and
 resuming" in `docs/product/archiving-and-resuming-sessions.md`).
@@ -233,9 +233,9 @@ system logout were not tried by hand; an AppleEvent quit, which goes through the
 path, was, and asked the same way. A quit by closing the window was seen to ask while a session ran, and to end the
 application on confirmation (see "Closing the window" above).
 
-- **While any session is *starting*, *working*, *waiting for the user* or *running in background*, quitting asks for
-  confirmation.** One running in background counts because the quit would also end the work it left running (see
-  "Running in background" in `docs/product/sessions.md`). A session *awaiting instructions* does not count: it is in
+- **While any session is *starting*, *working*, *waiting for the user* or *working in background*, quitting asks for
+  confirmation.** One working in background counts because the quit would also end the work it left running (see
+  "Working in background" in `docs/product/sessions.md`). A session *awaiting instructions* does not count: it is in
   the middle of nothing that is reported, and the quit still leaves it interrupted and resumable like the others. The message says that quitting interrupts those sessions and
   that each stays resumable next time.
 - **While any shell terminal is busy, quitting asks for confirmation too** (see "Busy shells" in
@@ -252,7 +252,7 @@ application on confirmation (see "Closing the window" above).
   archived. Clicking one next time resumes it (see "Archiving, interruption and resuming" in
   `docs/product/archiving-and-resuming-sessions.md`). Every shell terminal ends too (see "Closing a shell terminal" in
   `docs/product/shell-terminals.md`).
-- With no session *starting*, *working*, *waiting for the user* or *running in background* — none at all, or only
+- With no session *starting*, *working*, *waiting for the user* or *working in background* — none at all, or only
   ones *awaiting instructions* — and no busy shell terminal, quitting is immediate and asks nothing, and a window closed into the background is not brought back
   for it. Seen with the menu bar icon's Quit and no session at all; with only sessions *awaiting instructions* not yet
   tried by hand.

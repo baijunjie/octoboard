@@ -13,7 +13,7 @@ const STATUS_TEXT: Array<[StatusKind, string]> = [
   ["working", "Working"],
   ["waiting_user", "Waiting for you"],
   ["idle", "Awaiting instructions"],
-  ["background", "Running in background"],
+  ["background", "Working in background"],
   ["interrupted", "Interrupted"],
   ["archived", "Archived"],
 ];

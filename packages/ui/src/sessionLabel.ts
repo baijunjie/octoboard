@@ -59,7 +59,7 @@ export function sessionWithLocation(
   return t("session.withLocation", { session: isolate(title), location });
 }
 
-/** What a status glyph and label stand for: the wire statuses, and *running in background*, which
+/** What a status glyph and label stand for: the wire statuses, and *working in background*, which
  * is `idle` with work left running (`Session.background_tasks`) and has a glyph and a name of its
  * own. It is not a status of the daemon's: the session is as ready for a message as any idle one. */
 export type StatusKind = SessionStatus | "background";

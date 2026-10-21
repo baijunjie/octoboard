@@ -16,8 +16,8 @@ hands a session off on its own, not even off an account whose quota is used up.
 ## What can be handed off
 
 A project session or a console session, of any role — unbound, lead or bound — can be handed off while it is waiting
-for instructions, waiting for the user or interrupted. One running in background counts as waiting for instructions:
-it can be handed off, and the work it left running in the background ends with its process (see "Running in
+for instructions, waiting for the user or interrupted. One working in background counts as waiting for instructions:
+it can be handed off, and the work it left running in the background ends with its process (see "Working in
 background" in `docs/product/sessions.md`). A handoff is refused, with nothing changed, when:
 
 - the session does not exist (`unknown_session`), is archived (`session_archived`; reopen it first), or is in the middle

@@ -32,7 +32,7 @@ describe("sessionStatusKind", () => {
 
   it("puts the name into the row's accessible name", () => {
     const session = sessionOf("s", "c", "p", "T", "idle", { background_tasks: [{ id: "b1" }] });
-    expect(sessionAriaLabel(t, "en", session, accounts, undefined, undefined)).toContain("Running in background");
+    expect(sessionAriaLabel(t, "en", session, accounts, undefined, undefined)).toContain("Working in background");
   });
 });
 

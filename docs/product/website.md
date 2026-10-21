@@ -144,7 +144,7 @@ the repository, the license, the GitHub privacy statement, and email — stay on
 
 The Markdown carries the page's localized wording. It includes the visible text, including the license caption, the
 preview scene names and sample-data explanation, and every workflow node's task, report, and Working, Awaiting
-instructions and Running in background labels. It does not include the embedded application's sample screens. Download
+instructions and Working in background labels. It does not include the embedded application's sample screens. Download
 links are the releases links in "Homepage and navigation" and sit beside the statement that the macOS app is an early
 prototype still in development. The workflow is identified as an illustration. The copies omit the header, the footer,
 decorative art, the labels and numbers that mark a section, the scroll cue, the MIT badge, and interactive controls. The
@@ -255,7 +255,7 @@ scene. All three scenes follow the restaurant meal deal promotion across the eig
 named in "Homepage and navigation", using the same concrete project names. They show the coordinating and project
 sessions, a delivery report, and a selected order-validation diff. In every scene, Restaurant order API's
 order-validation review session awaits instructions while a test watcher (`pnpm test --watch`) runs in the
-background, so it shows as running in background. Choosing a scene resets the demonstration to that
+background, so it shows as working in background. Choosing a scene resets the demonstration to that
 scene's prepared state.
 
 Each of the eight projects has its own sample repository, with a distinct root, feature branch, business files and
@@ -373,10 +373,10 @@ unless the visitor has paused them. The workflow's signals repeat along the conn
 task's progress; selecting a project remains available while motion is paused.
 
 The illustration's legend has three entries: Working with the application's dark-theme blue pulse, the
-awaiting-instructions speech bubble, and Running in background, a hollow ring in the awaiting-instructions green that
-pulses like Working. The Running in background pulse pauses with the other motion and stands still under a
+awaiting-instructions speech bubble, and Working in background, a hollow ring in the awaiting-instructions green that
+pulses like Working. The Working in background pulse pauses with the other motion and stands still under a
 reduced-motion preference. All three have visible labels and accessible names. They retain the meanings of Working,
-Awaiting instructions and Running in background in `docs/product/sessions.md`, "Session statuses"; awaiting instructions
+Awaiting instructions and Working in background in `docs/product/sessions.md`, "Session statuses"; awaiting instructions
 is not a task-completion indicator. The sample reports and shared delivery describe the outcome separately. Question
 expansion and control state changes also have visual transitions.
 

@@ -101,9 +101,9 @@ session that is waiting for the user carries a note saying so.
 
 Every session record these tools give — `list_projects`' sessions, `get_session`, `list_sessions`, `list_archived`,
 and the record `rename_session` and `set_session_pinned` answer with — carries `background_tasks`: for a Claude Code
-session running in background, the work it left running, each entry with `id` and, where Claude Code gives them,
+session working in background, the work it left running, each entry with `id` and, where Claude Code gives them,
 `type` and `description`; an empty list for every other session. Such a session's `status` is `idle`: it takes a
-message like any session awaiting instructions, but its work is not over (see "Running in background" in
+message like any session awaiting instructions, but its work is not over (see "Working in background" in
 `docs/product/sessions.md`).
 
 **Reads are wide, writes are the caller's own.** `list_projects` and `list_archived` cover the sessions of the

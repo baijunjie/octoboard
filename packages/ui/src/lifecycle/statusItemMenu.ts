@@ -31,7 +31,7 @@ export interface StatusItemMenuSource {
   currentConsoleId?: string;
 }
 
-/** The live sessions — waiting for the user, working, running in background, awaiting
+/** The live sessions — waiting for the user, working, working in background, awaiting
  * instructions — in the sidebar's order, each status under its own heading, then a quota submenu
  * per available agent. The icon shows its attention dot (`attention`) while any session waits for
  * the user. */

@@ -65,7 +65,7 @@ describe("buildStatusItemMenu", () => {
     const { sections } = menuOf([inProject("i", "idle"), inProject("w", "working"), background]);
     expect(sections.map((s) => [s.heading, s.icon, s.items.map((item) => item.session)])).toEqual([
       ["Working (1)", "status:working", ["w"]],
-      ["Running in background (1)", "status:background", ["b"]],
+      ["Working in background (1)", "status:background", ["b"]],
       ["Awaiting instructions (1)", "status:idle", ["i"]],
     ]);
   });

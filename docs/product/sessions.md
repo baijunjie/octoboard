@@ -576,20 +576,20 @@ found. The request only reads what is stored and on disk.
 | Working | `working` | an accent-coloured dot pulsing a fading copy of itself outward | The agent is executing a turn. |
 | Waiting for the user | `waiting_user` | a raised hand that waves now and then | The agent is waiting on a permission decision, including its folder-trust confirmation, or has asked the user a question through its own ask-the-user tool; or Octoboard is asking the user on the agent's behalf while the agent's call waits, which is a session request (see "Waiting for the answer" in `docs/product/session-requests.md`). |
 | Awaiting instructions | `idle` | a green speech bubble | The process is running and sitting at its prompt. |
-| Running in background | `idle`, with a non-empty `background_tasks` | the *working* glyph as a hollow green ring: a green ring pulsing a fading copy of itself outward | The process is sitting at its prompt, but its last turn ended with work still running in the background. Claude Code sessions only; see "Running in background" below. |
+| Working in background | `idle`, with a non-empty `background_tasks` | the *working* glyph as a hollow green ring: a green ring pulsing a fading copy of itself outward | The process is sitting at its prompt, but its last turn ended with work still running in the background. Claude Code sessions only; see "Working in background" below. |
 | Interrupted | `interrupted` | a pause sign | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in the console sessions section) and can be resumed. |
 | Archived | `archived` | an archive box | Ended by being archived (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`). No longer listed among its project's sessions (a console session, no longer in the console sessions section); reached through the archive (see "Archived sessions" in `docs/product/archiving-and-resuming-sessions.md`) and can be reopened. |
 
-*Working*, *waiting for the user*, *awaiting instructions* and *running in background* mean a process is running, and
+*Working*, *waiting for the user*, *awaiting instructions* and *working in background* mean a process is running, and
 *starting* means one is about to be; the last two mean none is, and both can be resumed.
 
 The glyph stands for the status wherever one is shown — the sidebar's rows, focus mode's cards, the top bar's
 breadcrumb and a confirmation's list of the sessions it affects. In a confirmation, archived sessions omit the
 status glyph; the warning identifies them as archived. The waving hand and the outward pulse stand still
-where the system asks for reduced motion, leaving the working glyph a plain accent-coloured dot and the *running in
+where the system asks for reduced motion, leaving the working glyph a plain accent-coloured dot and the *working in
 background* glyph a plain hollow green ring; working and awaiting instructions still differ by shape as well as by
 colour. The starting arc stands still there too and differs from the rest by shape.
-*Running in background* is the *working* glyph drawn as a hollow ring in *awaiting instructions*' green: it is told
+*Working in background* is the *working* glyph drawn as a hollow ring in *awaiting instructions*' green: it is told
 apart from *working*'s filled dot by shape as well as by colour, and from *awaiting instructions* by shape.
 
 **How the status reaches a user who does not read the glyph** differs by placement:
@@ -612,7 +612,7 @@ Transitions:
 - While the process runs, reports from the agent move the session between *working*, *waiting for the user* and
   *awaiting instructions* — except while a folder-trust confirmation, Codex action prompt or session request holds
   it at *waiting for the user* (see "What the statuses are derived from" below). A Claude Code session that would be
-  *awaiting instructions* reads as *running in background* while it has work left running there (see "Running in
+  *awaiting instructions* reads as *working in background* while it has work left running there (see "Working in
   background" below).
 - The process ending for any reason other than archiving — the agent exiting on its own, a crash, the application
   quitting — leaves the session *interrupted*.
@@ -667,7 +667,7 @@ limitations of what the agents expose rather than of this one:
   Build but not by Codex, which has no such event; a Codex session asking that way reads as *working* unless its
   terminal title signals `Action Required`.
 - Work left running in the background is followed for **Claude Code only**. A Grok Build or Codex session whose turn
-  ends with work still running reads as *awaiting instructions*, never *running in background*.
+  ends with work still running reads as *awaiting instructions*, never *working in background*.
 
 Part of the Grok Build case above is Octoboard's own attribution rule rather than a limit of what the agent exposes.
 Grok Build's turn-end backstop carries no turn id, so the daemon attributes it by clock. An ending that names its own
@@ -677,12 +677,12 @@ whose only ending is its backstop would have that backstop discarded: the sessio
 if it is bound to an owner, no report would be synthesized for that turn. Whether Grok produces that sequence in
 practice was not checked (in one run an ending followed within a second by a new prompt got no backstop).
 
-### Running in background
+### Working in background
 
 A Claude Code turn can end while work it started is still running in the background — a shell command sent there
 (by the user, or by Claude Code when it runs past the tool's time limit), a Monitor, an MCP tool call still waiting, or
 a background agent. Claude Code lists that work as the turn ends, and as its background subagents start and stop
-between turns, and the session then reads as *running in background* instead of *awaiting instructions* until none of
+between turns, and the session then reads as *working in background* instead of *awaiting instructions* until none of
 it is left. On the wire it is still `idle`; what sets it apart is the session's `background_tasks`, one entry per piece
 of work: `id`, and `type` and `description` where Claude Code gives them.
 
@@ -696,7 +696,7 @@ of work: `id`, and `type` and `description` where Claude Code gives them.
   current, since a subagent can wake to its own background work without the session taking a turn. A subagent that
   starts or resumes joins the list; one that stops leaves it, and the rest of the list becomes everything Claude Code
   reports as still running across the whole session at that moment. A subagent's activity never changes the
-  session's status: while one works between turns the session keeps reading as *running in background*, not
+  session's status: while one works between turns the session keeps reading as *working in background*, not
   *working*. Inside a turn these starts and stops change nothing, the turn's end listing everything. Only a named
   subagent counts; Claude Code's internal helper agents are never listed. A subagent listed because it started
   carries its description only if an earlier report had named it.
@@ -709,7 +709,7 @@ of work: `id`, and `type` and `description` where Claude Code gives them.
 - It is given only while the session is at its prompt: in any other status the session shows that status and no
   list, and what was last listed shows again if it comes back to its prompt without a new turn end.
 - Clearing the conversation with `/clear` does not end work running in the background (measured on Claude Code
-  2.1.303), so the session keeps reading as *running in background*.
+  2.1.303), so the session keeps reading as *working in background*.
 
 **In every other respect it is a session awaiting instructions.** It takes a message straight away (see "Messages held
 until a session can take them" in `docs/product/message-delivery.md`), and it can be handed off (see "What can be

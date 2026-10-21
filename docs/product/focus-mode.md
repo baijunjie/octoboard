@@ -183,7 +183,7 @@ console session's focus mode, and only while the console has at least two consol
 - **A chip** shows the console session's colour (see "The binding badge" in `docs/product/sidebar.md`), its title,
   faded out when too long with the full title then its tooltip, and what is going on in that console session and the
   sessions bound to it: a waving hand while any of them is waiting for the user, otherwise the *working* glyph while
-  any of them is working or running in background, otherwise nothing — a session merely running is not given a chip's room, so only those two
+  any of them is working or working in background, otherwise nothing — a session merely running is not given a chip's room, so only those two
   markers can be seen here. The marker carries a **tooltip** saying which of the two it is, in the same words the
   chip's own name folds in beside the title (see "Tooltips on indicators" in
   `docs/product/labels-and-tooltips.md`).

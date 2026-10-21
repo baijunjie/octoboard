@@ -5,7 +5,7 @@ information shared by another session, a report panel form submission — and wh
 
 ## Messages held until a session can take them
 
-A session that is working, awaiting instructions or running in background takes a message straight away, unless it is
+A session that is working, awaiting instructions or working in background takes a message straight away, unless it is
 a Claude Code session held behind a message its agent did not send (see "A message written but not sent" below); every
 agent queues one written mid-turn and consumes it when the turn ends.
 
@@ -107,7 +107,7 @@ starts. Invisible characters are one cause, which their removal above is there t
 message unsent is caught the same way.
 
 **The check.** When Octoboard writes a message into a Claude Code session whose agent is at its prompt — awaiting
-instructions or running in background, not mid-turn — it waits up to about three seconds for the agent's hooks to report
+instructions or working in background, not mid-turn — it waits up to about three seconds for the agent's hooks to report
 a prompt sent (`UserPromptSubmit`). This applies to every message Octoboard writes: an owner's instruction, a report,
 shared information, a report panel form submission, the instruction `reopen_session` hands over, the messages of a
 handover or a handoff, and a client's own `send_message`. A message that was queued is checked the same way when it is

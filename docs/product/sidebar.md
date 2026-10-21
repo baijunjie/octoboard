@@ -38,7 +38,7 @@ sessions, its console sessions included, so a raised hand in a console that is n
 | A green speech bubble | otherwise, at least one session is running and awaiting instructions, or still starting |
 | none | no session has a running process or is starting |
 
-A session *running in background* counts as working here (see "Running in background" in `docs/product/sessions.md`).
+A session *working in background* counts as working here (see "Working in background" in `docs/product/sessions.md`).
 The centre and ripple use the same blue as a working session's glyph. The ripple stands still where the system asks
 for reduced motion, leaving the theme background disc, green rim and blue centre.
 
@@ -554,7 +554,7 @@ and a project session has no colour to choose.
 1. projects with at least one unarchived session first, including interrupted sessions;
 2. within each group, pinned projects first;
 3. then a project with a session waiting for the user;
-4. then a project with a session working, a session running in background included;
+4. then a project with a session working, a session working in background included;
 5. then a project with a session running and awaiting instructions, or still starting;
 6. then a project whose unarchived sessions are all interrupted;
 7. within each of those, by name, case-insensitively and in natural order, so that "item 2" comes before "item 10".
@@ -569,7 +569,7 @@ keyboard focus inside one, or an open menu in one brings the whole inactive grou
 **Sessions** within a project are listed, by the same scheme:
 
 1. pinned sessions first;
-2. then by status: waiting for the user, then awaiting instructions and starting alike, then running in background,
+2. then by status: waiting for the user, then awaiting instructions and starting alike, then working in background,
    then working, then interrupted;
 3. then the most recently started first.
 

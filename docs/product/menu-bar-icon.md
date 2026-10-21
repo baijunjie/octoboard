@@ -57,9 +57,9 @@ comes back through the menu's **Open Octoboard** or one of its sessions.
 From top to bottom:
 
 1. **The running sessions**, one group per status, each group under a heading that cannot be chosen and that names the
-   status with the number of sessions in it: **Waiting for you (n)**, then **Working (n)**, then **Running in
+   status with the number of sessions in it: **Waiting for you (n)**, then **Working (n)**, then **Working in
    background (n)**, then **Awaiting instructions (n)**. A group with no session is left out. Sessions still
-   starting, interrupted and archived sessions are never listed. A session running in background (see "Running in
+   starting, interrupted and archived sessions are never listed. A session working in background (see "Working in
    background" in `docs/product/sessions.md`) is listed in its own group, not under **Working** or **Awaiting
    instructions**.
    - **Headings.** A heading is system text at the menu font's size, regular weight, in the secondary text
@@ -69,7 +69,7 @@ From top to bottom:
      is not dimmed the way a menu line that cannot be chosen is, never highlights under the pointer, and is read by
      assistive technology once, as its menu item, the heading's words.
    - **Pictures.** Each heading has a still glyph for its status — the accent dot for working, the waving hand for
-     waiting for you, the green hollow ring for running in background, the speech bubble for awaiting instructions —
+     waiting for you, the green hollow ring for working in background, the speech bubble for awaiting instructions —
      and each session line has the mark of its agent (Claude Code, Codex, Grok), as the sidebar draws them. The menu
      cannot animate, so the working dot and the ring do not pulse.
      The marks the sidebar draws in the text colour (Codex, Grok) are template images here, which macOS tints to suit a
