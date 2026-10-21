@@ -14,11 +14,12 @@
 //! [`QuotaUnavailable`] for that account and nothing else. An account that is not signed in is
 //! told from each agent's own structured signal and reported as its own state rather than as a
 //! failure: Claude Code's `initialize` reply says its `account.tokenSource` is `none` (its usage
-//! reply alone cannot say, an account without a subscription answers the same), and Codex's and
-//! Grok Build's quota requests are refused with an "authentication required" error. A probe runs
-//! in the login-shell snapshot with the agent's configuration-directory variable pointed at the
-//! account's directory, and with the CLI told to load as little of the user's setup as it can
-//! without losing its sign-in.
+//! reply alone cannot say, an account without a subscription answers the same), Codex's and Grok
+//! Build's quota requests are refused with an "authentication required" error, and Grok Build's is
+//! refused with an error whose `data` says its credentials are invalid or expired once a stored
+//! sign-in has expired. A probe runs in the login-shell snapshot with the agent's
+//! configuration-directory variable pointed at the account's directory, and with the CLI told to
+//! load as little of the user's setup as it can without losing its sign-in.
 
 use std::cell::Cell;
 use std::collections::HashMap;
@@ -413,20 +414,39 @@ fn claude_fallback(limits: &Value) -> Vec<QuotaWindow> {
     windows
 }
 
-/// A JSON-RPC error response's message, if the reply is one. Codex ("codex account authentication
+/// A JSON-RPC error response's problem, if the reply is one. Codex ("codex account authentication
 /// required to read rate limits") and Grok Build ("Authentication required", code -32000) both
 /// refuse the quota request of an account that is not signed in with that message; the code alone
-/// is generic for Codex, so it is the message that marks the case.
+/// is generic for Codex, so it is the message that marks the case. Grok Build refuses an account
+/// whose stored credentials have expired with a bare "Internal error" (code -32603) and the cause
+/// only in `data` ("Billing service error: Invalid or expired credentials (...)"), so `data` is
+/// read too: it is searched for the sign-in marks along with the message, and joined to the
+/// message as the detail of any other error.
 fn rpc_error(reply: &Value) -> Option<ReplyProblem> {
     let error = reply.get("error")?;
-    let detail = error
+    let message = error
         .get("message")
         .and_then(Value::as_str)
-        .unwrap_or("the request was refused");
-    if detail.to_lowercase().contains("authentication required") {
+        .map(str::trim)
+        .filter(|message| !message.is_empty());
+    let data = error
+        .get("data")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|data| !data.is_empty() && Some(*data) != message);
+    let detail = match (message, data) {
+        (Some(message), Some(data)) => format!("{message}: {data}"),
+        (Some(text), None) | (None, Some(text)) => text.to_string(),
+        (None, None) => "the request was refused".to_string(),
+    };
+    let lowered = detail.to_lowercase();
+    if ["authentication required", "invalid or expired credentials"]
+        .iter()
+        .any(|mark| lowered.contains(mark))
+    {
         return Some(ReplyProblem::NotSignedIn);
     }
-    Some(ReplyProblem::Error(detail.to_string()))
+    Some(ReplyProblem::Error(detail))
 }
 
 fn read_codex(reply: &Value) -> Result<Reading, ReplyProblem> {
@@ -687,6 +707,12 @@ mod tests {
             "message": "Authentication required",
             "data": "Authentication required to fetch billing data"}});
         assert_eq!(read_grok(&grok), Err(ReplyProblem::NotSignedIn));
+        let expired = json!({"jsonrpc": "2.0", "id": 2, "error": {"code": -32603,
+            "message": "Internal error",
+            "data": "Billing service error: Invalid or expired credentials (auth_kind=bearer, \
+                     x_xai_token_auth=xai-grok-cli, upstream=PermissionDenied, \
+                     reason=no auth context)"}});
+        assert_eq!(read_grok(&expired), Err(ReplyProblem::NotSignedIn));
 
         let dir = ScratchDir::new("quota-grok-signed-out");
         let env = answering_agent(&dir, Agent::Grok, &format!("{grok}\n"));
@@ -750,6 +776,24 @@ mod tests {
         assert_eq!(
             read_codex(&json!({"id": 2, "error": {"code": -32600, "message": "not signed in"}})),
             Err(ReplyProblem::Error("not signed in".to_string()))
+        );
+    }
+
+    #[test]
+    fn an_error_reply_carries_its_data_into_the_detail() {
+        assert_eq!(
+            read_grok(
+                &json!({"id": 2, "error": {"code": -32603, "message": "Internal error",
+                "data": "Billing service error: upstream unavailable"}})
+            ),
+            Err(ReplyProblem::Error(
+                "Internal error: Billing service error: upstream unavailable".to_string()
+            ))
+        );
+        assert_eq!(
+            read_grok(&json!({"id": 2, "error": {"message": "Internal error",
+                "data": "Internal error"}})),
+            Err(ReplyProblem::Error("Internal error".to_string()))
         );
     }
 

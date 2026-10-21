@@ -950,14 +950,18 @@ exist and one created empty:
   required","data":"Authentication required to fetch billing data"}}`. The `initialize` reply in a home with no login
   has `agentCapabilities.auth` `{}`, `authMethods` `[{"id":"grok.com","name":"Grok","description":"Sign in with
   Grok"}]` and `_meta.defaultAuthMethodId` `null`. What those fields hold once signed in was not measured, so they are
-  not yet a signal.
+  not yet a signal. A home whose stored sign-in has expired (grok 1.0.62) answers `_x.ai/billing` with a generic
+  error and the cause only in `data`: `{"jsonrpc":"2.0","id":2,"error":{"code":-32603,"message":"Internal
+  error","data":"Billing service error: Invalid or expired credentials (auth_kind=bearer,
+  x_xai_token_auth=xai-grok-cli, upstream=PermissionDenied, reason=no auth context)"}}`.
 
-So "the directory is missing" can only be told reliably by looking for the directory before the probe runs. Codex is
-the only one that refuses a missing directory; Claude Code and Grok Build quietly recreate it, empty, and then report
-it as not signed in. "Not signed in" has a stable marker for each: Claude Code's `account.tokenSource` of `"none"` in the
+So "the directory is missing" can only be told reliably by looking for the directory before the probe runs. Codex is the
+only one that refuses a missing directory; Claude Code and Grok Build quietly recreate it, empty, and then report it as
+not signed in. "Not signed in" has a stable marker for each: Claude Code's `account.tokenSource` of `"none"` in the
 `initialize` reply, or `claude auth status` exiting 1 with `loggedIn: false`; Codex's `account/read` with `account:
-null`, or the `authentication required` message; Grok Build's `-32000` `Authentication required` error. Each of these
-markers comes from one build, so a reply that matches none of them should still be shown as a plain failure.
+null`, or the `authentication required` message; Grok Build's `-32000` `Authentication required` error, or for expired
+credentials the `-32603` error whose `data` says `Invalid or expired credentials`. Each of these markers comes from one
+build, so a reply that matches none of them should still be shown as a plain failure.
 
 ## Sharing a session directory between accounts
 
