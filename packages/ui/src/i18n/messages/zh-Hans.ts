@@ -445,7 +445,7 @@ export const zhHans: Translation<"other"> = {
   "session.status.working": "工作中",
   "session.status.waitingUser": "等你回应",
   "session.status.idle": "等待指示",
-  "session.status.background": "后台运行中",
+  "session.status.background": "后台工作中",
   "session.status.interrupted": "已中断",
   "session.status.archived": "已归档",
 
