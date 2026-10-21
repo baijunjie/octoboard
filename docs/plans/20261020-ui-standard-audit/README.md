@@ -88,6 +88,27 @@ resume, history or MCP integrations. Completed milestones refreshed their assign
 history empty state described in its brief, and every remaining milestone must re-inventory its affected current
 source before changing it. Historical counts are not current coverage claims.
 
+## Handoff after the 08 integration
+
+The user asked to hand off the unfinished work here and merge the completed audit through milestone 08 into
+main. Once that merge lands, continue from the then-current main and re-inventory affected callers; do not resume
+from the historical audit baseline or replay the aggregate branch again.
+
+- **09** is next: finish the directory-picker and ordinary no-installed-agent empty states, including the later
+  history-unavailable caller described in its brief.
+- **10** follows with shared collection motion and reduced-motion behavior. Preserve 08's Shell single-row,
+  conditional title and pane-minimum contract recorded in its brief and product docs.
+- **11** covers initial terminal status announcements. Its native acceptance remains item-by-item matching to a
+  passing VoiceOver case or fixture-backed packaged listening; browser snapshots do not satisfy it.
+- **13** remains paused on `refactor/collection-chevron-buttons` at `b18eed49468509dd416e742dacf00cf126a4671b`.
+  Its button migration and initial checks are separate from this merge. The user still needs to decide whether
+  that milestone includes the baseline keyboard-menu focus-return defect or tracks it separately. If resumed,
+  transplant only its own change onto current main and revalidate; do not merge its old fork wholesale.
+
+The 08 report and its machine-readable evidence remain under `/tmp/octoboard-08/`; `audit-checks.md` keeps the
+concise historical outcomes and qualifications required for continuation. Do not push as part of this local
+integration.
+
 ## Coordination
 
 - Keep generated validation outputs in a task-specific `/tmp` directory. Do not commit additions or modifications
