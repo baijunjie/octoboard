@@ -7,7 +7,14 @@
       "layers" : [
         {
           "image-name" : "octopus.png",
-          "name" : "octopus"
+          "name" : "octopus",
+          "position" : {
+            "scale" : 1.28,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
         }
       ],
       "shadow" : {
