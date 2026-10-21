@@ -90,16 +90,17 @@ export interface DockedPanes {
  * rendered width. A pane that is not docked is not limited by the viewport (it overlays the
  * terminal). At 1168px with both docked: rail 48, sidebar 280, terminal 520, aside 320.
  */
-function maxWidthFor(side: PaneSide, docked: DockedPanes, narrow: boolean, chosenSidebar: number | undefined, railWidth: number): number {
-  const { min, max } = PANES[side];
+function maxWidthFor(side: PaneSide, docked: DockedPanes, narrow: boolean, chosenSidebar: number | undefined, railWidth: number, asideMin: number): number {
+  const { max } = PANES[side];
+  const min = side === "aside" ? asideMin : PANES.sidebar.min;
   if (!docked[side]) return max;
   if (side === "sidebar") {
-    const asideReserve = docked.aside ? PANES.aside.min : 0;
+    const asideReserve = docked.aside ? asideMin : 0;
     return clamp(viewportWidth - railWidth - terminalFloor(narrow) - asideReserve, min, max);
   }
   const sidebar = PANES.sidebar;
   const sidebarWidth = docked.sidebar
-    ? clamp(chosenSidebar ?? sidebar.default, sidebar.min, maxWidthFor("sidebar", docked, narrow, chosenSidebar, railWidth))
+    ? clamp(chosenSidebar ?? sidebar.default, sidebar.min, maxWidthFor("sidebar", docked, narrow, chosenSidebar, railWidth, asideMin))
     : 0;
   return clamp(viewportWidth - railWidth - terminalFloor(narrow) - sidebarWidth, min, max);
 }
@@ -126,16 +127,19 @@ export interface PaneWidth {
  * One pane's docked-mode width: the user's persisted choice (a separate `localStorage` entry per
  * side, every access guarded) clamped at render time by the rule at `maxWidthFor`, never below the
  * pane's minimum. `narrow` is whether the window is below the `docked` breakpoint (`useIsNarrow`).
+ * `asideMin` is the column's effective floor; both panes must receive the same value. It changes
+ * allocation only, leaving the persisted choice available when the column's contents change.
  * State is shared module-wide, so every caller sees the same value.
  */
-export function usePaneWidth(side: PaneSide, docked: DockedPanes, narrow: boolean): PaneWidth {
+export function usePaneWidth(side: PaneSide, docked: DockedPanes, narrow: boolean, asideMin = PANES.aside.min): PaneWidth {
   const chosen = chosenWidths[side].useValue();
   const chosenSidebar = chosenWidths.sidebar.useValue();
   // Subscribing to the answer rather than to the viewport itself is what keeps a window resize
   // from re-rendering the caller while the answer is unchanged.
   const [railWidth] = useState(railWidthPx);
-  const max = useSyncExternalStore(subscribeToViewport, () => maxWidthFor(side, docked, narrow, chosenSidebar, railWidth));
-  const { min, default: defaultWidth } = PANES[side];
+  const max = useSyncExternalStore(subscribeToViewport, () => maxWidthFor(side, docked, narrow, chosenSidebar, railWidth, asideMin));
+  const { default: defaultWidth } = PANES[side];
+  const min = side === "aside" ? asideMin : PANES.sidebar.min;
   const preference = chosenWidths[side];
   return {
     width: clamp(chosen ?? defaultWidth, min, max),

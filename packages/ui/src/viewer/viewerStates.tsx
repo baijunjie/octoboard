@@ -6,6 +6,8 @@ import { Alert, Spinner } from "@heroui/react";
 import { Equal, FileQuestion, FolderGit2, Link, Unplug } from "lucide-react";
 import React from "react";
 
+import { CodeToneContext } from "../components/codeTone";
+import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
@@ -56,8 +58,8 @@ const TONES: Record<NoticeTone, "default" | "warning" | "danger"> = {
 
 /**
  * What is said above content the viewer is still showing: why it is shown this way, what to know
- * about it first, or what part of it could not be shown. Above a reading surface they stack as one
- * filled strip; inside a Markdown document they remain filled alerts with compact icon spacing.
+ * about it first, or what part of it could not be shown. Above a reading surface they stack;
+ * inside a Markdown document they retain the same stock Alert parts.
  *
  * A notice that can appear after the surface has been drawn would otherwise never reach a reader,
  * so it is spoken as well as shown: pass it as `speak`, which is the sentence and, unless
@@ -91,19 +93,18 @@ export function Notice({
   const hidden = speak !== undefined || announced === true;
   return (
     <>
-      {/* A text line as tall as the indicator's box centres the glyph on the first line; the document
-          variant removes that inset and drops the bare glyph onto the line instead. */}
-      <TintedAlert
-        aria-hidden={hidden || undefined}
-        dir={inDocument ? direction : undefined}
-        status={status}
-        className={`shrink-0 px-3 py-2 shadow-none ${inDocument ? "gap-2 rounded-xl" : "gap-3"}`}
-      >
-        <Alert.Indicator className={inDocument ? "mt-1 shrink-0 p-0" : undefined} />
-        <Alert.Content>
-          <Alert.Description className={`text-foreground leading-6 ${inDocument ? "break-words" : ""}`}>{children}</Alert.Description>
-        </Alert.Content>
-      </TintedAlert>
+      <div className="shrink-0">
+        <TintedAlert
+          aria-hidden={hidden || undefined}
+          dir={inDocument ? direction : undefined}
+          status={status}
+        >
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Description>{children}</Alert.Description>
+          </Alert.Content>
+        </TintedAlert>
+      </div>
       {speak !== undefined && tone !== "failed" && <StatusAnnouncer text={speak} firstWriteDelayMs={FIRST_ANNOUNCEMENT_DELAY_MS} />}
     </>
   );
@@ -214,9 +215,12 @@ export function Disconnected({ what }: { what: "file" | "change" }): React.React
 export function Failure({ message, title, path }: { message: ErrorPresentation; title: string; path: string }): React.ReactElement {
   useErrorAcknowledgement(message, title);
   return (
-    <ErrorAlert title={title} className="min-w-0 shrink-0">
-      <ViewerErrorMessage error={message} path={path} />
-    </ErrorAlert>
+    <CodeToneContext.Provider value="danger">
+      <div className="flex min-w-0 shrink-0 flex-col gap-3">
+        <ErrorAlert title={title}><ViewerErrorMessage error={message} path={path} /></ErrorAlert>
+        <DaemonErrorMessage error={message} part="details" />
+      </div>
+    </CodeToneContext.Provider>
   );
 }
 

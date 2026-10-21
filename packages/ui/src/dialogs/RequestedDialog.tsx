@@ -10,7 +10,6 @@ import { FadeOverflow } from "../components/FadeOverflow";
 import { StatusIcon } from "../components/StatusIcon";
 import { TintedAlert } from "../components/TintedAlert";
 import { ImportConfigurationDialog } from "../configuration/ImportConfigurationDialog";
-import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import { isLive, type Project, type Session, type SessionBranchItem } from "../protocol";
 import { sessionAgentLabel, sessionDisplayTitle, sessionStatusKind } from "../sessionLabel";
@@ -51,32 +50,32 @@ function ConfirmWarning({ title, sessions, lines = [] }: { title?: string; sessi
   const linesRef = useListMotion<HTMLDivElement>();
   if (!title && lines.length === 0) return null;
   return (
-    <TintedAlert status="warning" className="shadow-none">
-      <Alert.Indicator />
-      <Alert.Content className="min-w-0">
-        {title && <Alert.Title>{title}</Alert.Title>}
-        {/* The list is a sibling of the description rather than inside it: the description is a
-            `<span>`, which cannot hold a list. */}
-        {sessions && (
-          <ul ref={sessionsRef} className="relative mt-1 flex min-w-0 flex-col gap-1 self-stretch text-sm text-foreground">
-            {sessions.map((session) => (
-              <li key={session.id} data-list-motion={session.id} className="flex min-w-0 items-center gap-2">
-                {session.status !== "archived" && <StatusIcon status={sessionStatusKind(session)} withTooltip />}
-                <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} />
-                {/* The icon is decorative, and nothing else here names the agent. */}
-                <span className="sr-only">{sessionAgentLabel(t, session, accounts, defaultNames)}</span>
-                <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={sessionDisplayTitle(t, session)}>
-                  {sessionDisplayTitle(t, session)}
-                </FadeOverflow>
-              </li>
-            ))}
-          </ul>
-        )}
-        <div ref={linesRef} className={`relative flex min-w-0 flex-col gap-1 self-stretch text-sm text-foreground ${title && lines.length > 0 ? "mt-2" : ""}`}>
-          {lines.map((line) => <p key={line.key} id={line.id} data-list-motion={line.key}>{line.text}</p>)}
-        </div>
-      </Alert.Content>
-    </TintedAlert>
+    <div className="flex min-w-0 flex-col gap-3">
+      <TintedAlert status="warning">
+        <Alert.Indicator />
+        <Alert.Content>
+          {title ? <Alert.Title>{title}</Alert.Title> : <Alert.Description>{t("dialog.confirm.consequences")}</Alert.Description>}
+        </Alert.Content>
+      </TintedAlert>
+      {sessions && (
+        <ul ref={sessionsRef} className="relative mt-1 flex min-w-0 flex-col gap-1 self-stretch text-sm text-foreground">
+          {sessions.map((session) => (
+            <li key={session.id} data-list-motion={session.id} className="flex min-w-0 items-center gap-2">
+              {session.status !== "archived" && <StatusIcon status={sessionStatusKind(session)} withTooltip />}
+              <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} />
+              {/* The icon is decorative, and nothing else here names the agent. */}
+              <span className="sr-only">{sessionAgentLabel(t, session, accounts, defaultNames)}</span>
+              <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={sessionDisplayTitle(t, session)}>
+                {sessionDisplayTitle(t, session)}
+              </FadeOverflow>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div ref={linesRef} className={`relative flex min-w-0 flex-col gap-1 self-stretch text-sm text-foreground ${title && lines.length > 0 ? "mt-2" : ""}`}>
+        {lines.map((line) => <p key={line.key} id={line.id} data-list-motion={line.key}>{line.text}</p>)}
+      </div>
+    </div>
   );
 }
 
@@ -335,7 +334,7 @@ export function RequestedDialog({
     case "restore-project-changes":
       return (
         <ConfirmDialog
-          title={t("dialog.restoreProjectChanges.title", { name: isolate(dialog.project.name) })}
+          title={<Message id="dialog.restoreProjectChanges.title" params={{ name: <InlineChip dir="auto" wrap size="inherit">{dialog.project.name}</InlineChip> }} />}
           message={t("dialog.restoreProjectChanges.message")}
           confirmLabel={t("dialog.restoreProjectChanges.confirm")}
           pendingLabel={t("dialog.restoreProjectChanges.pending")}
@@ -383,6 +382,7 @@ export function RequestedDialog({
           title={t("dialog.renameProject.title")}
           label={t("common.name")}
           initialValue={dialog.project.name}
+          placeholder={t("dialog.project.nameExample")}
           requiredMessage={t("dialog.renameProject.nameRequired")}
           characterLimit={PROJECT_NAME_LIMIT}
           tooLongMessage={t("daemon.field_too_long.name", { limit: PROJECT_NAME_LIMIT })}
@@ -398,6 +398,7 @@ export function RequestedDialog({
           title={t("dialog.rename.title")}
           label={t("dialog.rename.field")}
           initialValue={dialog.session.title}
+          placeholder={t("dialog.rename.nameExample")}
           requiredMessage={t("dialog.rename.titleRequired")}
           onSubmit={async (title) => {
             await request({ type: "rename_session", session: dialog.session.id, title });

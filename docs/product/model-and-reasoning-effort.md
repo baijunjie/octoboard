@@ -134,6 +134,9 @@ could not be captured (see "The launch environment" in `docs/product/launching-a
 not finish in time, or what it printed held no model that could be read. None of those is an error on the dialog — the
 Model field says which it was, and offers the stored value alone, marked as not in the list, or nothing at all when
 there is none; the effort picker has no list to offer but stays operable, so a stored level can still be cleared.
+A refusal of the model-list request also keeps its actual reason under the Model field, including named records or
+technical values supplied with it. The field shows a short explanation and any raw diagnostic output separately,
+under "Names and diagnostic details" in `docs/product/error-alerts.md`, without an acknowledgement dialog.
 Neither a missing list nor one still being fetched stops the dialog from being saved.
 
 ## The model and effort a session is shown running with

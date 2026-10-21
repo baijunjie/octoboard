@@ -5,6 +5,7 @@ import { useT } from "../i18n/react";
 import type { Account, Session, Settings } from "../protocol";
 import { sessionAccount } from "../sessionLabel";
 import { AgentIcon } from "./AgentIcon";
+import { InlineChip } from "./InlineChip";
 import { StatusBadge } from "./StatusBadge";
 
 /** The tooltip of a session's agent mark: the agent's name, then the account it runs under as a
@@ -20,8 +21,8 @@ export function SessionAgentTooltip({ session, accounts, defaultNames }: {
   const account = sessionAccount(t, session, accounts, defaultNames);
   return (
     <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-      {AGENT_LABEL[session.agent]}
-      {account !== undefined && <StatusBadge overflow="wrap" dir={account.isPath ? "ltr" : "auto"}>{account.name}</StatusBadge>}
+      <InlineChip size="inherit" dir="auto" wrap>{AGENT_LABEL[session.agent]}</InlineChip>
+      {account !== undefined && <StatusBadge overflow="wrap" dir={account.isPath ? "ltr" : "auto"}>{account.isPath ? <code dir="ltr">{account.name}</code> : account.name}</StatusBadge>}
     </span>
   );
 }

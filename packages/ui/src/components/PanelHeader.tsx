@@ -29,12 +29,15 @@ export const PanelFrameProvider = PanelFrameContext.Provider;
  * never the title or the controls at the end. A header outside a stack (a test)
  * has neither of the stack's controls. `prioritizeChildren` keeps a mode switch whole instead:
  * the title gives way first, then the kind's actions scroll, with close always outside the clip.
+ * `hideTitleWhenNarrow` keeps the heading accessible but only draws it in a docked-width window
+ * when the header's content box has at least 352px for the title, tabs and actions.
  */
 export function PanelHeader({
   title,
   actions,
   children,
   prioritizeChildren = false,
+  hideTitleWhenNarrow = false,
 }: {
   title: string;
   /** The kind's own icon controls. */
@@ -42,16 +45,18 @@ export function PanelHeader({
   children?: React.ReactNode;
   /** Keep the mode switch and close visible, giving up the title before the scrollable actions. */
   prioritizeChildren?: boolean;
+  /** Hide the visual title below docked width or 352px of header content, retaining its heading. */
+  hideTitleWhenNarrow?: boolean;
 }): React.ReactElement {
   const t = useT();
   const frame = useContext(PanelFrameContext);
   const heading = (
-    <h2 className={`flex min-w-0 max-w-40 ${prioritizeChildren ? "overflow-hidden" : "shrink-0"} text-base font-semibold`}>
+    <h2 className={`${hideTitleWhenNarrow ? "sr-only docked:@min-[352px]/panel-header:not-sr-only docked:@min-[352px]/panel-header:flex" : "flex"} min-w-0 max-w-40 ${prioritizeChildren ? "overflow-hidden" : "shrink-0"} text-base font-semibold`}>
       <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={title}>{title}</FadeOverflow>
     </h2>
   );
   return (
-    <div className={`${prioritizeChildren ? "grid min-w-0 grid-cols-[minmax(min-content,1fr)_minmax(0,max-content)_max-content]" : "flex"} h-(--pane-header-height-floating) shrink-0 items-center gap-2 groove-b px-(--pane-inset)`}>
+    <div className={`${hideTitleWhenNarrow ? "@container/panel-header " : ""}${prioritizeChildren ? "grid min-w-0 grid-cols-[minmax(min-content,1fr)_minmax(0,max-content)_max-content]" : "flex"} h-(--pane-header-height-floating) shrink-0 items-center gap-2 groove-b px-(--pane-inset)`}>
       {prioritizeChildren ? (
         <div className="grid grid-cols-[minmax(0,max-content)_max-content] items-center gap-2">
           {heading}

@@ -120,11 +120,11 @@ export function ConfirmDialog({
           autoFocus
         >
           <Label>
-            <Message id="dialog.typeToConfirm.label" params={{ word: <InlineChip size="inherit" className="italic">{word}</InlineChip> }} />
+            <Message id="dialog.typeToConfirm.label" params={{ word: <InlineChip size="inherit" dir="ltr" className="italic">{word}</InlineChip> }} />
           </Label>
           {/* Capitals by styling rather than by rewriting the value: rewriting a controlled value
               mid-composition breaks an input method's composition. */}
-          <Input className="uppercase" autoComplete="off" spellCheck={false} />
+          <Input dir="ltr" placeholder={t("dialog.typeToConfirm.example", { word })} className="uppercase" autoComplete="off" spellCheck={false} />
         </TextField>
       )}
       <DialogError message={error} />

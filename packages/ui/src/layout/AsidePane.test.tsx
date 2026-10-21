@@ -24,9 +24,9 @@ function mount(reduce = false) {
   }
   const peek = { active: false, reveal: vi.fn(), keep: vi.fn(), leave: vi.fn() } satisfies PanePeek;
   /** `docked` is the pane with a panel open; otherwise it floats while `active`. */
-  const render = (docked: boolean, active = false) =>
+  const render = (docked: boolean, active = false, minWidth?: number) =>
     act(() => root.render(
-      <AsidePane layout={{ width: 300, peek: docked ? undefined : { ...peek, active } }}>
+      <AsidePane layout={{ width: 300, minWidth, peek: docked ? undefined : { ...peek, active } }}>
         <Content />
       </AsidePane>,
     ));
@@ -56,9 +56,27 @@ it("docks as a row sibling that takes its room from the terminal, at any width",
   const test = mount();
   const pane = test.pane()!;
   expect(pane.className).toContain("w-(--aside-width)");
-  expect(pane.className).toContain("min-w-[320px]");
+  expect(pane.style.getPropertyValue("--aside-min-width")).toBe("320px");
   expect(pane.className).not.toMatch(/fixed|docked:|drawer/);
   expect(pane.style.getPropertyValue("--aside-width")).toBe("300px");
+});
+
+it("updates the column floor without replacing its content or rewriting its chosen width", () => {
+  const test = mount();
+  const pane = test.pane()!;
+  const input = pane.querySelector("input")!;
+  act(() => input.focus());
+  test.advance(32);
+  for (const min of [336, 320]) {
+    test.render(true, false, min);
+    expect(test.pane()).toBe(pane);
+    expect(pane.style.getPropertyValue("--aside-min-width")).toBe(`${min}px`);
+    expect(pane.style.getPropertyValue("--aside-width")).toBe("300px");
+    expect(pane.querySelector("input")).toBe(input);
+    expect(document.activeElement).toBe(input);
+  }
+  expect(test.mounted).toHaveBeenCalledTimes(1);
+  expect(test.unmounted).not.toHaveBeenCalled();
 });
 
 it("pads the cards by the panel gap on all four sides and paints nothing in it, in every form", () => {

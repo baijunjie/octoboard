@@ -42,13 +42,13 @@ export function useQuickCreateSession(
       // An owner that is no longer live cannot take a session, and there is no dialog to say so.
       const owner = sessions.get(binding.to.id) ?? binding.to;
       if (!liveConsoleSessions([...sessions.values()], target.console.id).some((s) => s.id === owner.id)) {
-        toastError(new ActionableError(t("dialog.session.ownerGone", { name: isolate(sessionDisplayTitle(t, owner)) }), "session"));
+        toastError(new ActionableError(t("dialog.session.ownerGone", { name: isolate(sessionDisplayTitle(t, owner)) }), "session", { code: "quick_create_owner_gone", params: { name: sessionDisplayTitle(t, owner) } }));
         return;
       }
     }
     const opening = defaultOpenSessionRequest(t, target.console, project, binding, state, Date.now(), appearance);
     if ("usedUp" in opening) {
-      toastError(new ActionableError(t("sidebar.project.openSessionQuickUsedUp", { action }), "quotaUsedUpAgent"));
+      toastError(new ActionableError(t("sidebar.project.openSessionQuickUsedUp", { action: isolate(action) }), "quotaUsedUpAgent", { code: "quick_create_quota_refused", params: { action } }));
       return;
     }
     const startedIn = latestConsoleId.current;

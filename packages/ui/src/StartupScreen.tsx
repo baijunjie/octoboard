@@ -4,6 +4,7 @@ import { Button } from "./components/Button";
 import { errorAlerts } from "./errorAlerts";
 import { ContentPanel } from "./components/ContentPanel";
 import { ErrorAlert } from "./components/ErrorAlert";
+import { CodeToneContext } from "./components/codeTone";
 import { CodeBlock } from "./components/CodeBlock";
 import { InlineChip } from "./components/InlineChip";
 import { BareTitleBar } from "./components/TitleBar";
@@ -43,7 +44,7 @@ export function StartupScreen({ message, action }: StartupScreenProps): React.Re
             title bar; `m-auto` centres it while it fits, where `justify-center` would clip its top.
             The ring is drawn on the wrapper around the scroller, inset because the scroller spans the
             window. */}
-        <div className={`flex min-h-0 flex-1 flex-col ${region.focused ? "ring-2 ring-app-focus ring-inset" : ""}`}>
+        <main className={`flex min-h-0 flex-1 flex-col ${region.focused ? "ring-2 ring-app-focus ring-inset" : ""}`}>
           <FadedScroller region={region} className="flex min-h-0 flex-1 flex-col">
             <div className="m-auto flex w-full min-w-0 flex-col items-center gap-4 p-8 text-center">
               <div className="w-full min-w-0 max-w-xl">{message}</div>
@@ -53,7 +54,7 @@ export function StartupScreen({ message, action }: StartupScreenProps): React.Re
               </div>
             </div>
           </FadedScroller>
-        </div>
+        </main>
       </ContentPanel>
     </div>
   );
@@ -64,9 +65,13 @@ export function DaemonFailedMessage({ error }: { error: string }): React.ReactEl
   const t = useT();
   useEffect(() => { errorAlerts.report({ message: error, title: t("startup.daemonFailed.title") }); }, [error, t]);
   return (
-    <ErrorAlert title={t("startup.daemonFailed.title")} headingLevel={1} announce={false}>
-      <CodeBlock>{error}</CodeBlock>
-    </ErrorAlert>
+    <CodeToneContext value="danger">
+      <div className="flex min-w-0 flex-col gap-4">
+        <h1 className="text-xl font-semibold text-foreground">{t("startup.daemonFailed.title")}</h1>
+        <ErrorAlert announce={false}>{t("startup.daemonFailed.description")}</ErrorAlert>
+        <CodeBlock>{error}</CodeBlock>
+      </div>
+    </CodeToneContext>
   );
 }
 
@@ -75,24 +80,28 @@ export function NoAddressMessage(): React.ReactElement {
   const t = useT();
   const code = (text: string) => <InlineChip monospace wrap size="inherit">{text}</InlineChip>;
   return (
-    <ErrorAlert title={t("startup.noAddress.title")} headingLevel={1} announce={false}>
-      <p>
-        <Message id="startup.noAddress.shell" params={{ port: code("?port=") }} />
-      </p>
-      <p>
-        <Message id="startup.noAddress.dev" params={{ dev: code("vite dev") }} />
-      </p>
-      <ul className="list-disc space-y-3 ps-5">
-        <li>
-          <Message id="startup.noAddress.query" params={{ port: code("?port=") }} />
-        </li>
-        <li>
-          <Message id="startup.noAddress.env" params={{ portVar: code("VITE_DAEMON_PORT") }} />
-        </li>
-        <li>
-          <Message id="startup.noAddress.proxy" params={{ proxyVar: code("OCTOBOARD_DAEMON_PORT") }} />
-        </li>
-      </ul>
-    </ErrorAlert>
+    <CodeToneContext value="danger">
+      <div className="flex min-w-0 flex-col gap-4">
+        <h1 className="text-xl font-semibold text-foreground">{t("startup.noAddress.title")}</h1>
+        <ErrorAlert announce={false}>{t("startup.noAddress.description")}</ErrorAlert>
+        <p>
+          <Message id="startup.noAddress.shell" params={{ port: code("?port=") }} />
+        </p>
+        <p>
+          <Message id="startup.noAddress.dev" params={{ dev: code("vite dev") }} />
+        </p>
+        <ul className="list-disc space-y-3 ps-5">
+          <li>
+            <Message id="startup.noAddress.query" params={{ port: code("?port=") }} />
+          </li>
+          <li>
+            <Message id="startup.noAddress.env" params={{ portVar: code("VITE_DAEMON_PORT") }} />
+          </li>
+          <li>
+            <Message id="startup.noAddress.proxy" params={{ proxyVar: code("OCTOBOARD_DAEMON_PORT") }} />
+          </li>
+        </ul>
+      </div>
+    </CodeToneContext>
   );
 }

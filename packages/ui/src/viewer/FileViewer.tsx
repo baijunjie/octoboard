@@ -243,7 +243,7 @@ export function FileViewer({
             <FadeOverflow
               as="span"
               className="min-w-0"
-              titleWhenClipped={subject.sourceText ?? (typeof subject.source === "string" ? subject.source : undefined)}
+              titleWhenClipped={subject.source}
             >
               {subject.source}
             </FadeOverflow>

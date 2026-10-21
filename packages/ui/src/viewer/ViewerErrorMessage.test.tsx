@@ -84,7 +84,7 @@ it("leaves plain, unknown and incomplete failures intact", () => {
     ["clean_filtered", { path: "src/gone.ts" }],
   ] as const) {
     expect(render(new DaemonRequestError("Read failed", code, params)).textContent).toBe(
-      renderContent(<DaemonErrorMessage error={new DaemonRequestError("Read failed", code, params)} showTitle={false} />).textContent,
+      renderContent(<DaemonErrorMessage error={new DaemonRequestError("Read failed", code, params)} part="summary" />).textContent,
     );
   }
 });

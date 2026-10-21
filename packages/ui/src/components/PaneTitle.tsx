@@ -17,7 +17,7 @@ export function PaneTitle({
 }: {
   heading: string;
   /** What the tooltip of a clipped heading shows, when that is more than the heading itself. */
-  headingTitle?: string;
+  headingTitle?: React.ReactNode;
   overline?: string;
   /** The item's own sizing; the default lets it flex and shrink to nothing. */
   className?: string;

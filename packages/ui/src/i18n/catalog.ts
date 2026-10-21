@@ -22,13 +22,14 @@ export function isMessageKey(key: string): key is MessageKey {
 }
 
 /** The placeholders filled from the app config in every message, so callers never pass them. */
-const GLOBAL_PARAMS = { appName: appConfig.name } as const;
+const GLOBAL_PARAMS = { appName: appConfig.name, claude: "Claude Code", codex: "Codex", grok: "Grok", git: "Git", macOS: "macOS", tauri: "Tauri" } as const;
 
-type GlobalParam = keyof typeof GLOBAL_PARAMS;
+type GlobalParam = keyof typeof GLOBAL_PARAMS | "systemSettings";
 
 /** The value of a global placeholder, or `undefined` when `name` is not one. */
-export function globalParam(name: string): string | undefined {
-  return Object.hasOwn(GLOBAL_PARAMS, name) ? GLOBAL_PARAMS[name as GlobalParam] : undefined;
+export function globalParam(name: string, language: Language = FALLBACK_LANGUAGE): string | undefined {
+  if (name === "systemSettings") return messageText(language, "common.systemSettings");
+  return Object.hasOwn(GLOBAL_PARAMS, name) ? GLOBAL_PARAMS[name as keyof typeof GLOBAL_PARAMS] : undefined;
 }
 
 type Placeholders<S extends string> = S extends `${string}{${infer P}}${infer Rest}` ? Exclude<P, GlobalParam> | Placeholders<Rest> : never;
@@ -105,7 +106,7 @@ export function format(language: Language, key: MessageKey, params?: Record<stri
   return parts
     .map((part, index) => {
       if (index % 2 === 0) return part;
-      const value = params?.[part] ?? globalParam(part);
+      const value = params?.[part] ?? globalParam(part, language);
       if (value === undefined) return `{${part}}`;
       return typeof value === "number" ? value.toLocaleString(language) : value;
     })

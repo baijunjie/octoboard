@@ -37,7 +37,7 @@ import { PendingQuestionDialog, usePendingQuestion } from "./dialogs/PendingQues
 import { RequestedDialog } from "./dialogs/RequestedDialog";
 import { useQuickCreateSession } from "./dialogs/useQuickCreateSession";
 import { forcibleBranches, inspectSessionBranches, lockedWorktrees } from "./dialogs/useSessionBranches";
-import { useT } from "./i18n/react";
+import { Message, useT } from "./i18n/react";
 import { useOctoboardTheme } from "./theme";
 import type { AsideLayout } from "./layout/AsidePane";
 import { liveOwner, ownerAfterMove, ownerForSession, ownerKey, sameOwner, type AsideOwner } from "./layout/asideOwner";
@@ -288,16 +288,19 @@ export function App(): React.ReactElement {
   // widen and reflow on the first frame. The sidebar is a column in the row only at and above the
   // breakpoint, where it is docked; below it, a drawer, which takes no room from the aside that docks
   // at every width.
+  // A narrow Shell header reserves room for a normal tab, its focus ring and every action.
+  const asideMin = isNarrow && stackedPanels.includes("terminal") ? 336 : 320;
   const sidebarWidth = usePaneWidth("sidebar", {
     sidebar: !noConsoles && !isNarrow && (panes.sidebarDocked || sidebarColumnPhase !== "closed"),
     aside: hasAside && columnShown,
-  }, isNarrow);
+  }, isNarrow, asideMin);
   const asideWidth = usePaneWidth("aside", {
     sidebar: !noConsoles && !isNarrow && panes.sidebarDocked,
     aside: hasAside && columnShown,
-  }, isNarrow);
+  }, isNarrow, asideMin);
   const asideLayout: AsideLayout = {
     width: asideWidth.width,
+    minWidth: asideWidth.min,
     peek: paneShown ? undefined : panes.asidePeek,
     folded: paneShown && !columnShown,
   };
@@ -921,9 +924,9 @@ export function App(): React.ReactElement {
               {panes.sidebarDocked && sidebarColumnPhase === "open" && (
                 <PaneResizeHandle side="sidebar" paneWidth={sidebarWidth} />
               )}
-              {/* Below the `docked` breakpoint the terminal is the row's only content and the floor
-                  drops to 398px (see the terminal's wrapper below); `overflow-x-auto` is what makes a
-                  viewport narrower than that scroll instead of clipping. */}
+              {/* Below the `docked` breakpoint the terminal keeps a 398px floor beside the open
+                  aside's own floor; `overflow-x-auto` lets focus reveal either pane when their
+                  combined minimum exceeds the viewport. */}
               <main className="relative flex min-w-0 flex-1 overflow-x-auto docked:overflow-visible">
                 {/* Takes the terminal's place in the row, so the archive covers the terminal alone, not the
                     aside beside it; the terminal fills it. Above the `docked` breakpoint the 520px basis
@@ -932,8 +935,8 @@ export function App(): React.ReactElement {
                     aside clip's shrink factor is never consulted. The open clip can shrink while the
                     sidebar's width eases, keeping the report within the viewport. 520px is about 53 columns at ~9.2px/column
                     off a real agent CLI (the terminal's padding eats the rest). Below the breakpoint the
-                    sidebar and the aside are overlays rather than row siblings (`usePaneToggles`), so
-                    this is the row's only content and takes a much smaller floor: 398px is 40 columns at
+                    sidebar is an overlay, while the open aside stays beside the terminal. The terminal
+                    takes a much smaller floor: 398px is 40 columns at
                     the same ~9.2px/column plus the same padding allowance, under which the terminal stops
                     being usable at all, so `overflow-x-auto` on `main` scrolls rather than squeezing it
                     further. */}
@@ -1055,7 +1058,7 @@ export function App(): React.ReactElement {
       <PendingQuestionDialog />
       {exitConfirmOpen && (
         <ConfirmDialog
-          title={t("app.quit.title")}
+          title={<Message id="app.quit.title" />}
           message={t(exitHolders.terminals ? exitHolders.sessions ? "app.quit.message.both" : "app.quit.message.terminals" : "app.quit.message")}
           confirmLabel={t("common.quit")}
           destructive

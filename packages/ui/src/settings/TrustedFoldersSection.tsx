@@ -34,7 +34,7 @@ export function TrustedFoldersSection(): React.ReactElement {
   return (
     <>
       <p className="pb-2 text-sm text-app-muted">
-        {t("settings.trusted.description")}
+        <Message id="settings.trusted.description" />
       </p>
       {directories.length === 0 ? (
         <div className="groove-t py-2">

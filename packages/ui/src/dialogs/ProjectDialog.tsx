@@ -31,6 +31,7 @@ import { TagsInput } from "./TagsInput";
 import { TextAreaInput } from "./TextAreaInput";
 import { TextInput } from "./TextInput";
 import { useDetectedAgent } from "./useDetectedAgent";
+import { projectNameDefault } from "./projectNameDefault";
 import { exceedsTextLimit, PROJECT_DESCRIPTION_LIMIT, PROJECT_NAME_LIMIT } from "./textLength";
 
 const SOURCE_OPTIONS: { value: ProjectSource; label: PlainMessageKey }[] = [
@@ -82,6 +83,7 @@ export function ProjectDialog({
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const [source, setSource] = useState<ProjectSource>(editing?.source ?? "local");
   const defaultCloneDir = useDaemonStore((s) => s.settings.default_clone_dir);
+  const home = useDaemonStore((s) => s.homeDir);
   // The clone directory is kept apart from the other sources' directory, so switching the source
   // back and forth loses neither; it starts at the default clone directory, which the user may change.
   const [directory, setDirectory] = useState(editing?.path ?? "");
@@ -135,7 +137,7 @@ export function ProjectDialog({
   // Whatever the form asks the daemon about locks the fields below it until the answer for what is
   // entered now has arrived: a failure keeps them locked, and a git URL is asked about from the
   // first character, so it stays locked while empty too.
-  const detectionError = detection.status === "failed" ? <DaemonErrorMessage error={detection.error} showTitle={false} /> : undefined;
+  const detectionError = detection.status === "failed" ? <DaemonErrorMessage error={detection.error} showTitle={false} part="summary" /> : undefined;
   const locked = !editing && (source === "git" ? detection.status !== "ready" : detection.status === "checking" || detection.status === "failed");
 
   // `path` is required for the `local` and `parent` sources; `git` needs no check here, since its
@@ -249,6 +251,7 @@ export function ProjectDialog({
             placeholder={t("dialog.project.urlExample")}
             description={detection.status === "checking" ? t("dialog.project.urlChecking") : undefined}
             errorMessage={detectionError}
+            errorDetails={detection.status === "failed" && <DaemonErrorMessage error={detection.error} part="details" />}
           />
         )}
         {!editing && (
@@ -263,6 +266,7 @@ export function ProjectDialog({
             placeholder={source === "git" ? defaultCloneDir : t("dialog.project.directoryExample")}
             description={source === "local" && detection.status === "checking" ? t("dialog.project.pathChecking") : undefined}
             errorMessage={shown(pathError) ?? (source === "local" ? detectionError : undefined)}
+            errorDetails={source === "local" && !shown(pathError) && detection.status === "failed" && <DaemonErrorMessage error={detection.error} part="details" />}
             isDisabled={source === "git" && locked}
             trailing={
               <Button type="button" variant="secondary" isDisabled={source === "git" && locked} onPress={() => setPickingDirectory(true)}>
@@ -277,7 +281,7 @@ export function ProjectDialog({
             value={name}
             onChange={setName}
             autoFocus={!!editing}
-            placeholder={editing ? undefined : t("dialog.project.nameExample")}
+            placeholder={editing ? t("dialog.project.nameExample") : projectNameDefault(source, path, remoteUrl, home) ?? t(source === "git" ? "dialog.project.repositoryNameDefault" : "dialog.project.directoryNameDefault")}
             description={editing ? undefined : t("dialog.project.nameHint")}
             errorMessage={shown(nameError)}
             characterLimit={PROJECT_NAME_LIMIT}
@@ -302,7 +306,7 @@ export function ProjectDialog({
           value={tags}
           onChange={setTags}
           suggestions={knownTags}
-          placeholder={t("dialog.project.tagsExample")}
+          placeholder={t(tags.length ? "dialog.project.noAdditionalTags" : "dialog.project.noTags")}
           isDisabled={locked}
         />
         <AgentAccountField

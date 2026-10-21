@@ -3,16 +3,20 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import { DaemonRequestError } from "../daemon-client";
+import { errorAlerts } from "../errorAlerts";
 import type { Event, HistoryMessage } from "../protocol";
 import { SessionHistoryView } from "./SessionHistoryView";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const daemon = vi.hoisted(() => ({ request: vi.fn<(body: unknown) => Promise<unknown>>() }));
-const store = vi.hoisted(() => ({ snapshotEpoch: 0 }));
+const store = vi.hoisted(() => ({ snapshotEpoch: 0, consoles: new Map(), projects: new Map(), sessions: new Map(), homeDir: "/home/dev" }));
+vi.mock("../errorAlerts", () => ({ errorAlerts: { report: vi.fn() } }));
 vi.mock("../store", () => ({
   useDaemon: () => daemon,
   useDaemonStore: (select: (state: typeof store) => unknown) => select(store),
+  useErrorRecords: (select: (state: typeof store) => unknown) => select(store),
 }));
 vi.mock("../platform/react", () => ({ usePlatform: () => ({ links: undefined }) }));
 vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "light" }) }));
@@ -24,6 +28,7 @@ const roots: Root[] = [];
 beforeEach(() => {
   daemon.request.mockReset();
   store.snapshotEpoch = 0;
+  vi.mocked(errorAlerts.report).mockClear();
 });
 afterEach(() => {
   for (const root of roots.splice(0)) act(() => root.unmount());
@@ -90,7 +95,10 @@ it("points at reopening when the record is unavailable", async () => {
 
 it("shows a failed request as an error with Try again, and reads again when it is pressed", async () => {
   const container = await mount(new Error("gone"));
-  expect(container.querySelector("[role=alert]")?.textContent).toContain("Could not load the history of this session");
+  expect(container.textContent).toContain("Could not load the history of this session");
+  expect(container.textContent).toContain("gone");
+  expect(container.querySelector("[role=alert]")).toBeNull();
+  expect(errorAlerts.report).toHaveBeenCalledTimes(1);
   expect(container.textContent).not.toContain("History unavailable");
   daemon.request.mockResolvedValue({ type: "session_history", session: "s-1", messages: history });
   const retry = [...container.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
@@ -158,4 +166,20 @@ it("keeps focus in the view when Try again goes away under it, on the switch whi
   await act(async () => answer({ type: "session_history", session: "s-1", messages: history }));
   expect(container.querySelector("[role=region][tabindex]")).not.toBeNull();
   expect(document.activeElement).toBe(container.querySelector("input[role=switch]"));
+});
+
+
+it("retains the daemon reason for rich durable rendering and acknowledgement without a second announcement", async () => {
+  const failure = new DaemonRequestError("Session missing-session was not found.", "unknown_session", { session: "missing-session" });
+  const container = await mount(failure);
+  expect(container.querySelector("code")?.textContent).toBe("missing-session");
+  expect(container.querySelector("[role=alert]")).toBeNull();
+  expect(errorAlerts.report).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+    error: failure,
+    message: failure.message,
+    title: "Could not load the history of this session",
+  }));
+  await act(async () => roots[0]!.render(<SessionHistoryView sessionId="s-1" />));
+  expect(errorAlerts.report).toHaveBeenCalledTimes(1);
+  expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Try again")).toBe(true);
 });

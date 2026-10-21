@@ -109,8 +109,9 @@ from the repository (see "Committed changes" in `docs/product/project-pane-git-c
   taken for gone. A branch whose worktree alone is removed is still there and stays chosen, checked out in no worktree
   (see "Uncommitted changes" in `docs/product/project-pane-git-change-list.md`).
 - **The default branch, as read from the worktrees, that a complete branch list does not have** — a list newer than
-  the worktrees it was read from — is named in the selector as no longer existing (see "A branch that goes away" in
-  `docs/product/project-pane-git-change-list.md`).
+  the worktrees it was read from — keeps its branch name in the selector, followed by a separate status badge saying
+  it no longer exists. When the name is cut, its tooltip gives that status with the complete branch name set apart
+  as a code chip (see "A branch that goes away" in `docs/product/project-pane-git-change-list.md`).
 - A broken branch — its reference names an object the repository does not have, or one that is not a commit — is
   offered with the id its reference names, and comparing it fails (see "What the list says instead" in
   `docs/product/project-pane-git-change-list.md`).

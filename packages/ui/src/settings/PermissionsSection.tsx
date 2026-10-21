@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { Button } from "../components/Button";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useWindowAttended } from "../components/useWindowAttended";
-import { useT } from "../i18n/react";
+import { Message, useT } from "../i18n/react";
 import type { PlainMessageKey } from "../i18n/catalog";
 import type { MacosPermissionKind } from "../platform";
 import { usePlatform } from "../platform/react";
@@ -59,10 +59,8 @@ export function PermissionsSection(): React.ReactElement {
       // Accessibility is never granted in place: its request only shows the system's dialog and
       // lists Octoboard in System Settings, so that row is expected to stay "not granted" until
       // the user flips the switch there, which the refresh on window focus then picks up.
-      let state: string;
-      if (granted) state = t("settings.permissions.granted");
-      else if (refused[permission.kind]) state = t(permission.refused);
-      else state = t("settings.permissions.notGranted");
+      const stateKey: PlainMessageKey = granted ? "settings.permissions.granted" : refused[permission.kind] ? permission.refused : "settings.permissions.notGranted";
+      const state = t(stateKey);
       // Screen Recording reaches a process only at launch, so a grant made since is inert until
       // Octoboard restarts. There is deliberately no restart button: a plain `app.restart()` would
       // cut through the quit flow (daemon shutdown, the quit confirmation) in `exit.rs`. The
@@ -70,7 +68,7 @@ export function PermissionsSection(): React.ReactElement {
       // survives this section unmounting on a tab switch — which is the normal next thing the
       // user does.
       const restart = permission.kind === "screenRecording" && granted && !status.screenRecordingAtLaunch ? t("settings.permissions.restart") : undefined;
-      return { ...permission, granted, state, restart };
+      return { ...permission, granted, state, stateKey, restart };
     })
     : undefined;
   // Each row's state with the permission's name in front, as a bare "Granted." names nothing, glued
@@ -78,7 +76,7 @@ export function PermissionsSection(): React.ReactElement {
   const announcement = rows?.map((row) => [t(row.label), row.state, row.restart].filter(Boolean).join(" ")).join(" ");
 
   const body = (): React.ReactNode => {
-    const line = (message: PlainMessageKey) => <p className="text-sm text-app-muted">{t(message)}</p>;
+    const line = (message: PlainMessageKey) => <p className="text-sm text-app-muted"><Message id={message} /></p>;
     // The same line as the `!status` case below, and not redundant with it: with no capability there
     // is nothing to wait for, so saying it straight away spares a browser the blank frame the macOS
     // app spends waiting for its first read.
@@ -94,12 +92,12 @@ export function PermissionsSection(): React.ReactElement {
 
     return (
       <>
-        <p className="pb-2 text-sm text-app-muted">{t("settings.permissions.lead")}</p>
+        <p className="pb-2 text-sm text-app-muted"><Message id="settings.permissions.lead" /></p>
         {/* `SettingRow` rules between its rows but not above the first, and the lead paragraph above would
             otherwise run straight into a description in the same muted text, here several lines of it.
             The wrapper draws that rule. */}
         <div className="groove-t">
-          {rows.map(({ kind, label, description, granted, state, restart }) => (
+          {rows.map(({ kind, label, description, granted, stateKey, restart }) => (
             <SettingRow
               key={kind}
               label={t(label)}
@@ -111,8 +109,8 @@ export function PermissionsSection(): React.ReactElement {
                       English sentences and nowhere near the full stop a language like Chinese ends
                       its own with. The state is the row's own description, read where it stands; it
                       is announced from the section's status region (`PermissionsAnnouncer`). */}
-                  <span className="block">{state}</span>
-                  {restart && <span className="block">{restart}</span>}
+                  <span className="block"><Message id={stateKey} /></span>
+                  {restart && <span className="block"><Message id="settings.permissions.restart" /></span>}
                 </>
               }
             >

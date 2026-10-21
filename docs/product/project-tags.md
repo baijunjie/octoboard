@@ -8,6 +8,9 @@ tags offered are simply the distinct ones the console's projects carry, so a tag
 from the choices. A project can carry as many tags as the user likes. A tag is trimmed, an empty one is dropped, and one
 that matches another of the project's tags ignoring case is dropped, the first spelling staying.
 
+The optional Tags field's empty text input distinguishes a project with no tags from one with no additional tag being
+entered. Leaving that input empty adds nothing and keeps any tags already picked.
+
 ## Picked tags
 
 A tag the user has picked and can remove, in a project's Tags field, looks and behaves as follows. The sidebar's
@@ -22,6 +25,8 @@ rules below do not apply (see "Filtering the project list" in `docs/product/side
   laid over the tag's end, the label fading out ahead of it. A label whose end the button then covers counts as cut,
   and its marquee scrolls until that end is clear of the button; a label that ends well short of the button does not
   move.
+- The remove button's tooltip names the tag, set apart as a chip. Its accessible name names the removal and tag
+  once; the tooltip adds no repeated description.
 - At rest, the tag fits its content with no minimum width. While the pointer is over it or it has keyboard focus,
   it is at least 3rem wide so the remove button and its fade leave part of a short label visible.
 - The tag takes the direction of its own text, decided by its first letter, whatever the UI language: a tag whose

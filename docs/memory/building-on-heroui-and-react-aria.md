@@ -174,8 +174,9 @@ Choose the tooltip shape by what carries it:
 
 - A control: `TitledControl`, as above. It opens on hover and on keyboard focus, or on keyboard focus alone where
   its `focusOnly` prop is passed, for a control whose hover already does something else. While it is open react-aria
-  links it to the control as its description, except where the tooltip only repeats the control's `aria-label`:
-  `TitledControl` unlinks that one on purpose, so the same words are not announced twice.
+  links it to the control as its description. `TitledControl` unlinks a plain-string title equal to the control's
+  `aria-label`, so the same words are not announced twice. When a rich title repeats that name, the caller passes
+  `aria-describedby=""` explicitly; a tooltip that says more keeps its description link.
 - A HeroUI `Switch` needing both hover and keyboard-focus tooltips outside a collection row: wrap the whole
   `Switch` in `Tooltip.Trigger role="presentation" tabIndex={-1}` inside `Tooltip`, and give `Tooltip.Content`
   `pointer-events-none`, as in `packages/ui/src/sidebar/FocusView.tsx`. Keep the accessible name on `Switch`; when

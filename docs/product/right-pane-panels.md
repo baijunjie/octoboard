@@ -54,9 +54,13 @@ The title is at most 160 px wide; a longer one fades out, with its full text as 
 and Close panel stay fully visible**. As space tightens, the project title shrinks, fades and disappears before the
 other icon buttons lose room. Those buttons scroll horizontally within their own area, fading at edges with more
 beyond them; Close panel stays outside that area. Scrolling and moving keyboard focus through the buttons reveal
-them, and the area's fades disappear while a button has keyboard focus so its focus ring stays visible. In the
-Terminal and report panels, what the kind puts beside the title gives way — a row of tabs scrolls — while the title
-and the buttons at the end keep their width. Pressing a header button with the mouse leaves keyboard focus where it was.
+them, and the area's fades disappear while a button has keyboard focus so its focus ring stays visible.
+
+In the Terminal panel, the header stays on one row. Its visual title appears only when the window is at least
+1168 px wide and the header has at least 352 px of content width, excluding its horizontal padding. Otherwise the
+same title remains available as a level-two heading to assistive technology and gives its space to the tabs. The tabs
+scroll when needed, while the buttons at the end keep their width. In the report panel, the pager gives way while the title
+and trailing buttons keep their width. Pressing a header button with the mouse leaves keyboard focus where it was.
 
 The pane's 16 px horizontal inset (see "The window chrome and the content panel" in `docs/product/window-layout.md`)
 is measured from the card's edge.

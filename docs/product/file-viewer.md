@@ -98,11 +98,10 @@ What the viewer says about the subject on screen — a file or a change — take
 much of the subject it still has to show.
 
 **A notice** sits above content the viewer is still showing. Above the reading surface it is a filled block across
-the body's width; where a subject carries more than one, they stack as a single strip above the content. Inside a
-rendered Markdown document, a diagram's or block formula's notice is a compact filled alert whose outer edge aligns
-with the document's content edge. Its glyph aligns with the first line of text and has the same horizontal inset as
-the source below it. Each notice is in one of three tones, and each tone draws its own fill and its own glyph,
-so a tone never rests on colour alone:
+the body's width; where a subject carries more than one, they stack above the content. Inside a
+rendered Markdown document, a diagram's or block formula's notice is a filled alert whose outer edge aligns with the
+document's content edge. Each notice is in one of three tones, and each tone draws its own fill and its own glyph, so
+a tone never rests on colour alone:
 
 - **neutral**, with a circled `i`, states how the content below is drawn and why, for what this file or change is — a
   size budget, a change read at an older version, lines that stay collapsed because the whole file is not to be had, a

@@ -25,7 +25,11 @@ const TOAST_DELAY_MS = 300;
 const HOME = "/Users/dev";
 
 /** What the CLI said when a login the scenario ends as `failed` did not go through. */
-const LOGIN_FAILURE_DETAIL = "Login failed: Request failed with status code 400";
+const LOGIN_FAILURE_DETAIL = [
+  "Login failed: Request failed with status code 400",
+  "    authorization endpoint rejected the device code",
+  "    /Users/dev/.claude-work/مرحبا/credentials.json: permission denied",
+].join("\n");
 
 /** The names the real daemon's file name search skips at every depth, with everything beneath them:
  * Git's metadata and the files an operating system leaves in a folder, matched ignoring ASCII case
@@ -51,7 +55,8 @@ function isLeftOut(name: string): boolean {
 /** A path as the daemon compares one: `~` and `~/` expanded against the home directory, `.` and
  * `..` and repeated or trailing slashes resolved lexically, symlinks not followed. */
 function normalizedPath(path: string): string {
-  const expanded = path === "~" ? HOME : path.startsWith("~/") ? `${HOME}/${path.slice(2)}` : path;
+  const rest = path.startsWith("~/") ? path.slice(2) : undefined;
+  const expanded = path === "~" ? HOME : rest === undefined ? path : rest.startsWith("/") ? rest : `${HOME}/${rest}`;
   const parts: string[] = [];
   for (const part of expanded.split("/")) {
     if (part === "..") parts.pop();
@@ -95,6 +100,30 @@ function consoleFields(body: Extract<RequestBody, { type: "create_console" | "up
   if (body.icon !== undefined) fields.icon = body.icon;
   if (body.console_session_prompt !== undefined) fields.console_session_prompt = trimmedOrNull(body.console_session_prompt);
   return fields;
+}
+
+/** Mutable project account and launch settings, retaining absent-versus-cleared values. */
+function projectFields(body: Extract<RequestBody, { type: "add_project" | "update_project" }>): Partial<Project> {
+  const fields: Partial<Project> = {};
+  if (body.default_agent !== undefined) fields.default_agent = body.default_agent;
+  for (const agent of ["claude", "codex", "grok"] as const) {
+    const account = body[`${agent}_account_id`];
+    if (account !== undefined) fields[`${agent}_account_id`] = account ?? { kind: "inherit" };
+    const model = body[`${agent}_session_model`];
+    if (model !== undefined) fields[`${agent}_session_model`] = trimmedOrNull(model);
+    const effort = body[`${agent}_session_effort`];
+    if (effort !== undefined) fields[`${agent}_session_effort`] = trimmedOrNull(effort);
+  }
+  return fields;
+}
+
+function normalizeTags(tags: string[]): string[] {
+  const seen = new Set<string>();
+  return tags.map((tag) => tag.trim()).filter((tag) => {
+    if (!tag || seen.has(tag.toLowerCase())) return false;
+    seen.add(tag.toLowerCase());
+    return true;
+  });
 }
 
 /** A listing for a path the scenario gave none for: a few directories, some of them repositories. */
@@ -152,6 +181,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
   let toastsRaised = false;
   let openedSessionCount = 0;
   let createdShellTerminalCount = 0;
+  let createdProjectCount = 0;
   // The daemon remembers its ordinal counter independently of session history. Seed it from
   // fixture ordinals once, so renaming or deleting a session never reuses an ordinal.
   const initial = store.getState();
@@ -720,6 +750,70 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           store.setState({ consoles, projects, sessions, pages, gitStatuses, shellTerminals });
           return { type: "ack" };
         }
+        case "add_project": {
+          const current = store.getState();
+          if (!current.consoles.has(body.console_id)) return fail({ code: "unknown_console", params: { console: body.console_id }, message: `unknown console ${body.console_id}` });
+          const given = body.path ?? (body.source === "git" ? current.settings.default_clone_dir : "");
+          const parent = normalizedPath(given.trim());
+          if (!parent.startsWith("/")) return fail({ code: "path_not_absolute", params: { path: given }, message: `${given} is not an absolute path` });
+          const remote = body.remote_url?.trim().replace(/\/+$/, "");
+          const repository = remote?.split(/[/:]/).at(-1)?.replace(/\.git$/, "");
+          if (body.source === "git" && !repository) return fail({ code: "field_required", params: { field: "remote_url" }, message: "remote_url is required" });
+          const directories = body.source === "parent"
+            ? (scenario.directories?.[parent] ?? genericListing(parent).entries).filter((entry) => entry.is_git_repo).map((entry) => normalizedPath(entry.path))
+            : [body.source === "git" ? normalizedPath(`${parent}/${repository}`) : parent];
+          if (!directories.length) return fail({ code: "no_repositories_found", params: { path: parent }, message: `no repositories found in ${parent}` });
+          const projects = new Map(current.projects);
+          let added = 0;
+          for (const path of directories) {
+            if ([...projects.values()].some((project) => project.console_id === body.console_id && project.path === path)) continue;
+            const detection = scenario.detections?.[body.source === "git" ? body.remote_url! : path] ?? scenario.detections?.[given];
+            const project: Project = {
+              id: `project-gallery-${++createdProjectCount}`,
+              console_id: body.console_id,
+              host_id: "local",
+              source: body.source,
+              path,
+              name: directories.length === 1 && body.name?.trim() || path.split("/").at(-1) || path,
+              default_agent: body.default_agent ?? (body.detect_default_agent !== false && detection && typeof detection === "object" && "agent" in detection ? detection.agent : null),
+              remote_url: body.source === "git" ? body.remote_url : null,
+              trust_consent: false,
+              pinned: false,
+              tags: normalizeTags(body.tags ?? []),
+              description: directories.length === 1 ? trimmedOrNull(body.description) : null,
+              claude_account_id: { kind: "inherit" },
+              codex_account_id: { kind: "inherit" },
+              grok_account_id: { kind: "inherit" },
+              ...projectFields(body),
+            };
+            projects.set(project.id, project);
+            added++;
+          }
+          if (!added) return fail({ code: "all_projects_already_added", params: {}, message: "every directory found is already associated with this console" });
+          store.setState({ projects });
+          return { type: "ack" };
+        }
+        case "update_project": {
+          const current = store.getState().projects.get(body.project);
+          if (!current) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
+          if (body.name !== undefined && !body.name.trim()) return fail({ code: "field_required", params: { field: "name" }, message: "name is required" });
+          const project = { ...current, ...projectFields(body),
+            ...(body.name !== undefined && body.name.trim() !== current.name.trim() && { name: body.name.trim() }),
+            ...(body.description !== undefined && trimmedOrNull(body.description) !== trimmedOrNull(current.description) && { description: trimmedOrNull(body.description) }),
+            ...(body.tags !== undefined && { tags: normalizeTags(body.tags) }),
+            ...(body.pinned !== undefined && { pinned: body.pinned }),
+          };
+          store.setState((state) => ({ projects: new Map(state.projects).set(project.id, project) }));
+          return { type: "ack" };
+        }
+        case "rename_session": {
+          const current = store.getState().sessions.get(body.session);
+          if (!current) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
+          const title = body.title.trim();
+          if (!title) return fail({ code: "field_required", params: { field: "title" }, message: "title is required" });
+          store.setState((state) => ({ sessions: new Map(state.sessions).set(current.id, { ...current, title }) }));
+          return { type: "ack" };
+        }
         case "update_console": {
           // Broadcast before the answer, as the daemon does, so a dialog reopened on the console
           // reads what was saved.
@@ -732,6 +826,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           const history = scenario.sessionHistory?.[body.session] ?? [];
           if (history === "pending") return new Promise<Event>(() => {});
           if (history === "unavailable") return { type: "session_history", session: body.session, messages: [], unavailable: true };
+          if (!Array.isArray(history)) return fail(history);
           return { type: "session_history", session: body.session, messages: history };
         }
         case "inspect_session_records":

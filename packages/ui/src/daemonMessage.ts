@@ -1,8 +1,9 @@
 import { EXAMPLE_CONVERSATION_ID } from "./conversationId";
-import { format, isMessageKey } from "./i18n/catalog";
+import { format, isMessageKey, messageText, globalParam } from "./i18n/catalog";
 import { joinPhrases } from "./i18n/joinPhrases";
 import { isolate } from "./i18n/isolate";
 import { abbreviateHome } from "./pathDisplay";
+import { sessionDisplayTitle } from "./sessionLabel";
 import { countdown } from "./quota/quotaFormat";
 import type { Language } from "./i18n/languages";
 import { DEFAULT_ACCOUNT_NAME, type MessageParams, type SessionBranchState } from "./protocol";
@@ -14,9 +15,10 @@ const RECORD_NAMES: Record<string, (state: RecordNames, id: string) => string | 
   project: (state, id) => state.projects.get(id)?.name,
   session: (state, id) => state.sessions.get(id)?.title,
   shell_terminal: (state, id) => state.shellTerminals?.get(id)?.title,
+  account: (state, id) => (state.accounts ?? state.settings?.accounts)?.find((account) => account.id === id)?.name,
 };
 
-type RecordNames = Pick<State, "consoles" | "projects" | "sessions"> & { homeDir?: State["homeDir"]; shellTerminals?: State["shellTerminals"] };
+type RecordNames = Pick<State, "consoles" | "projects" | "sessions"> & { homeDir?: State["homeDir"]; shellTerminals?: State["shellTerminals"]; accounts?: State["settings"]["accounts"]; settings?: State["settings"] };
 
 /** The params a message shows as code, by message code: a technical literal (an ID, a path) that
  * reads better set apart from the sentence than quoted inside it. The plain text of such a message
@@ -24,6 +26,7 @@ type RecordNames = Pick<State, "consoles" | "projects" | "sessions"> & { homeDir
  * (`browseError.ts`) has its params reshaped first (`shownParams`), so a structured render of it
  * must be given those, never the daemon's raw ones. */
 export const CODE_PARAMS: Record<string, readonly string[]> = {
+  git_clone_failed: ["cloneCommand"],
   conversation_to_resume_not_found: ["path"],
   resume_id_invalid: ["example"],
   conversation_not_found: ["path"],
@@ -51,7 +54,8 @@ export const CODE_PARAMS: Record<string, readonly string[]> = {
   grok_home_not_initialized: ["path"],
   grok_sandbox_unsupported: ["source", "profile"],
   trust_directory_too_broad: ["path"],
-  trust_not_carried_over: ["path"],
+  trust_not_carried_over: ["path", "enter"],
+  trust_answer_failed: ["enter"],
   clean_filtered: ["path", "filter"],
   invalid_branch_name: ["branch"],
   unknown_branch: ["branch"],
@@ -63,17 +67,42 @@ export const CODE_PARAMS: Record<string, readonly string[]> = {
   models_binary_not_found: ["binary", "pathVar"],
   quota_binary_not_found: ["binary", "pathVar"],
   config_dir_not_absolute: ["tilde"],
-  invalid_launch_setting: ["value"],
+  field_too_long: ["field"],
+  field_required: ["field"],
+  conflicting_fields: ["first", "second"],
+  configuration_version_unsupported: ["version", "supported"],
+  invalid_launch_setting: ["field", "value"],
   claude_workspace_untrusted: ["allow", "deny"],
   agent_not_available: ["pathVar"],
 };
 
+/** Record lookup is code-specific: shared-folder errors already carry a project name, while
+ * switch failures carry session IDs. An account quota carries a name, not an account ID. */
+export const RECORD_ID_PARAMS: Record<string, readonly string[]> = {
+  unknown_console: ["console"], unknown_project: ["project"], unknown_session: ["session"],
+  unknown_shell_terminal: ["shell_terminal"], unknown_page: ["page"], unknown_account: ["account"],
+  not_a_git_repository: ["project"], conversation_in_session: ["session"],
+  conversation_held_in_project: ["session", "project"], conversation_held_in_console: ["session", "console"],
+  session_did_not_stop: ["session"], switch_did_not_come_up: ["session"],
+};
+
 /** Names retain the surrounding prose's typeface rather than the monospace used for paths. */
 export const NAME_PARAMS: Record<string, readonly string[]> = {
+  unknown_console: ["console"],
+  unknown_project: ["project"],
+  unknown_session: ["session"],
+  unknown_shell_terminal: ["shell_terminal"],
+  unknown_page: ["page"],
+  unknown_account: ["account"],
+  not_a_git_repository: ["project"],
+  quick_create_quota_refused: ["action"],
+  quick_create_owner_gone: ["name"],
   account_name_taken: ["name"],
   config_dir_taken: ["name"],
   project_directory_shared: ["project"],
   conversation_in_session: ["session"],
+  conversation_held_in_project: ["session", "project"],
+  conversation_held_in_console: ["session", "console"],
   launch_failed: ["title"],
   "launch_failed.title": ["title"],
   session_did_not_stop: ["session"],
@@ -158,21 +187,67 @@ export function leftBranchItems(code: string, params: MessageParams): LeftBranch
   }
 }
 
-/** The codes whose `detail` is raw diagnostic text — git's own message — which is shown under the
- * sentence in a code block, never inside it. */
-export const DETAIL_BLOCK_CODES = new Set(["project_branches_not_determined"]);
+/** Producer-confirmed CLI and shell diagnostics are displayed separately from the explanation. */
+export const DETAIL_BLOCK_CODES = new Set([
+  "project_branches_not_determined", "git_failed", "git_clone_failed", "git_remote_unreachable",
+  "git_push_failed", "git_switch_failed", "git_restore_failed", "git_unavailable",
+  "models_command_failed", "models_shell_environment_failed", "quota_command_failed", "quota_shell_environment_failed", "codex_unarchive_failed", "login_failed", "shell_environment_timeout",
+]);
+
+/** These trust reasons carry an OS write/read diagnostic, not another daemon error code. */
+export function hasTrustDiagnostic(code: string, params: MessageParams): boolean {
+  return (code === "trust_answer_failed" || code === "trust_not_carried_over") && ["terminal_write_failed", "store_io_failed"].includes(params.reason_code) && !!params.detail;
+}
+
+export const RECOVERY_CODES = new Set([
+  "console_has_running_sessions", "project_has_running_sessions", "project_directory_shared", "path_not_absolute", "directory_unreadable",
+  "models_binary_not_found", "quota_binary_not_found", "quota_not_signed_in", "quota_config_dir_missing", "login_codex_busy",
+  "config_dir_unreachable", "grok_home_not_initialized", "session_archived", "conversation_to_resume_not_found", "conversation_in_session",
+  "session_waiting_for_user", "session_trust_pending", "queued_messages_lost", "source_changed", "trust_directory_too_broad",
+  "agent_not_available", "queued_messages_dropped", "trust_answer_failed", "session_lock_busy", "session_locked", "restore_not_on_branch",
+  "session_has_running_sessions",
+]);
+
+/** The rich sentence omits a raw diagnostic that is rendered separately. Plain messages keep the
+ * complete catalog sentence for native notifications and other text-only consumers. */
+export function richMessageCode(code: string, params: MessageParams): string {
+  return RECOVERY_CODES.has(code) || (DETAIL_BLOCK_CODES.has(code) && code !== "project_branches_not_determined" && params.detail) ? `${code}.summary` : messageCode(code, params);
+}
+
+/** Every referenced agent and product uses the same name treatment, including messages whose only
+ * parameter is a global product name. */
+export function referenceNameParams(code: string, params: MessageParams): string[] {
+  const key = `daemon.${messageCode(code, params)}`;
+  if (!isMessageKey(key)) return [];
+  const richKey = `daemon.${richMessageCode(code, params)}`;
+  const text = messageText("en", key, params) + (isMessageKey(richKey) ? messageText("en", richKey, params) : "");
+  return ["agent", "appName", "codex", "claude", "grok", "grokBuild", "git", "macOS"].filter((name) => text.includes(`{${name}}`));
+}
 
 /** The params of a message that the UI supplies itself, by message code, beneath what the daemon
  * sends. */
 export const UI_PARAMS: Record<string, MessageParams> = {
+  trust_answer_failed: { enter: "Enter" },
+  trust_not_carried_over: { enter: "Enter" },
+  directory_unreadable: { macOS: "macOS" },
+  git_failed: { git: "Git" },
+  git_clone_failed: { git: "Git", cloneCommand: "git clone" },
+  git_push_failed: { git: "Git" },
+  git_switch_failed: { git: "Git" },
+  git_restore_failed: { git: "Git" },
+  git_unavailable: { git: "Git" },
+
+  login_codex_busy: { codex: "Codex" },
+  codex_unarchive_failed: { codex: "Codex" },
+  grok_home_not_initialized: { grok: "Grok" },
   resume_id_invalid: { example: EXAMPLE_CONVERSATION_ID },
   path_not_absolute: { tilde: "~/" },
   config_dir_not_absolute: { tilde: "~/" },
   binary_not_found: { pathVar: "PATH" },
   models_binary_not_found: { pathVar: "PATH" },
   quota_binary_not_found: { pathVar: "PATH" },
-  claude_workspace_untrusted: { allow: "allow", deny: "deny" },
-  agent_not_available: { pathVar: "PATH" },
+  claude_workspace_untrusted: { allow: "allow", deny: "deny", claude: "Claude Code" },
+  agent_not_available: { pathVar: "PATH", claude: "Claude Code", codex: "Codex", grokBuild: "Grok Build" },
 };
 
 /** The code a message is worded under: the daemon's, except where one code has a message of its own
@@ -207,8 +282,12 @@ const DEFAULT_ACCOUNT_NAME_PARAMS: Record<string, string> = {
 };
 
 /** A param as plain text: a record id as that record's name, anything else as it came, isolated. */
-function paramText(records: RecordNames, name: string, value: string): string {
-  return isolate(RECORD_NAMES[name]?.(records, value) ?? value);
+function paramText(records: RecordNames, name: string, value: string, code: string, language: Language): string {
+  if (name === "session" && (code === "conversation_held_in_project" || code === "conversation_held_in_console")) {
+    const session = records.sessions.get(value);
+    if (session) return isolate(sessionDisplayTitle((key, ...args) => format(language, key, args[0]), session));
+  }
+  return isolate(RECORD_ID_PARAMS[code]?.includes(name) ? RECORD_NAMES[name]?.(records, value) ?? value : value);
 }
 
 /** The values a message `code` is filled in with: the daemon's `params` over the UI's own
@@ -234,10 +313,10 @@ export function daemonParams<V = never>(
     all[accountParam] = format(language, "settings.accounts.defaultName", {});
   }
   const shown: Record<string, string | number> = Object.fromEntries(
-    Object.entries(all).map(([name, value]) => [name, paramText(records, name, value)]),
+    Object.entries(all).map(([name, value]) => [name, paramText(records, name, value, code, language)]),
   );
   const running = code === "session_has_running_sessions" ? runningSessionIds(all) : undefined;
-  if (running) shown.sessions = joinPhrases(language, running.map((id) => paramText(records, "session", id)));
+  if (running) shown.sessions = joinPhrases(language, running.map((id) => paramText(records, "session", id, "unknown_session", language)));
   const left = leftBranchItems(code, all);
   if (left) {
     // Each group's lead says why once. A name or a detail may hold commas of its own, so the
@@ -267,11 +346,20 @@ export function daemonParams<V = never>(
   const reasonKey = `daemon.trust_reason.${all.reason_code}`;
   if (isMessageKey(reasonKey)) shown.reason = format(language, reasonKey, shown);
   const failureKey = `daemon.${messageCode(all.reason_code ?? "", all)}`;
-  if (code === "launch_failed" && isMessageKey(failureKey)) shown.reason = format(language, failureKey, shown);
+  if (code === "launch_failed" && all.reason_code !== "launch_failed" && isMessageKey(failureKey)) shown.reason = daemonMessage(language, all.reason_code, all, String(shown.reason ?? shown.detail ?? ""), records);
   if (!mark) return shown;
   const marked: Record<string, string | number | V> = { ...shown };
   for (const name of CODE_PARAMS[messageCode(code, all)] ?? []) if (name in all) marked[name] = mark(all[name], true);
-  for (const name of NAME_PARAMS[messageCode(code, all)] ?? []) if (name in all) marked[name] = mark(RECORD_NAMES[name]?.(records, all[name]) ?? all[name], false);
+  for (const name of NAME_PARAMS[messageCode(code, all)] ?? []) {
+    if (!(name in all)) continue;
+    const recordId = RECORD_ID_PARAMS[code]?.includes(name) ?? false;
+    const recordName = recordId ? RECORD_NAMES[name]?.(records, all[name]) : undefined;
+    marked[name] = mark(recordName ?? all[name], recordId && recordName === undefined);
+  }
+  for (const name of referenceNameParams(code, all)) {
+    const value = all[name] ?? globalParam(name);
+    if (value !== undefined) marked[name] = mark(value, false);
+  }
   return marked;
 }
 
@@ -288,11 +376,12 @@ export function daemonMessage(
 ): string {
   const key = `daemon.${messageCode(code, params)}`;
   if (!isMessageKey(key)) return fallback;
+  if (code === "shell_environment_timeout" && !["shell", "command", "timeout"].every((name) => !!params[name])) return fallback;
   const shown = daemonParams(language, code, params, records);
   // A single group of leftovers is said by its own lead, without the line over the groups.
   const left = leftBranchItems(code, params);
   if (left && leftBranchGroups(left).length === 1) return String(shown.items);
   const text = format(language, key, shown);
   // As plain text the diagnostic follows on a line of its own.
-  return DETAIL_BLOCK_CODES.has(code) && params.detail ? `${text}\n${params.detail}` : text;
+  return code === "project_branches_not_determined" && params.detail ? `${text}\n${params.detail}` : text;
 }

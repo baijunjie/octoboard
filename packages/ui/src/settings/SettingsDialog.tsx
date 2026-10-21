@@ -181,18 +181,18 @@ export function SettingsDialog({
                 `self-start` keeps the column at its own height rather than the dialog's, which is
                 what bounds how many sections fit — see `SECTIONS`. */}
             <Tabs.ListContainer
-              className="ms-4 me-12 mt-3 min-w-0 shrink-0 docked:my-6 docked:me-0 docked:w-48 docked:self-start"
+              className="ms-4 me-12 mt-3 min-w-0 shrink-0 max-docked:w-max max-docked:max-w-[calc(100%-4rem)] max-docked:self-start docked:my-6 docked:me-0 docked:w-48 docked:self-start"
               render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}
             >
               {/* HeroUI sizes a vertical list to its widest tab; it fills the column here, and its
                   tabs read from the start like any list of names rather than centred. */}
-              <Tabs.List aria-label={t("settings.sections")} className="docked:w-full">
+              <Tabs.List aria-label={t("settings.sections")} className="max-docked:min-w-0 max-docked:p-1.5 docked:w-full">
                 {/* Keep hovered labels at full opacity and use the foreground colour for clear feedback. */}
                 {SECTIONS.map(({ id, label, Icon }) => (
                   <Tabs.Tab
                     key={id}
                     id={id}
-                    className="justify-start gap-2 whitespace-nowrap hover:text-foreground hover:opacity-100"
+                    className="justify-start gap-2 whitespace-nowrap hover:text-foreground hover:opacity-100 max-docked:w-auto max-docked:flex-none max-docked:scroll-mx-1.5"
                     ref={id === sectionId ? attachSelected : undefined}
                   >
                     <Icon aria-hidden="true" className="size-4 shrink-0" />

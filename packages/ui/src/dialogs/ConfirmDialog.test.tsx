@@ -51,3 +51,20 @@ it.each([
   mount(props);
   expect(document.activeElement?.matches(focused)).toBe(true);
 });
+
+it("shows the localized confirmation example and keeps the literal and editable value LTR", () => {
+  mount({ typeToConfirm: "delete" });
+  const input = document.body.querySelector("input")!;
+  expect(input.placeholder).toBe("Ex. DELETE");
+  expect(input.dir).toBe("ltr");
+  const chip = document.body.querySelector("label [dir=ltr]")!;
+  expect(chip.textContent).toBe("DELETE");
+  expect(chip.classList.contains("italic")).toBe(true);
+  expect(document.body.querySelector<HTMLButtonElement>("button[type=submit]")!.disabled).toBe(true);
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "delete");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(input.value).toBe("delete");
+  expect(document.body.querySelector<HTMLButtonElement>("button[type=submit]")!.disabled).toBe(false);
+});

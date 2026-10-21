@@ -11,6 +11,7 @@ export function RenameDialog({
   title,
   label,
   initialValue,
+  placeholder,
   requiredMessage,
   onSubmit,
   onClose,
@@ -20,6 +21,7 @@ export function RenameDialog({
   title: string;
   label: string;
   initialValue: string;
+  placeholder: string;
   requiredMessage: string;
   /** Sends the new value; the dialog closes when it resolves and shows its rejection otherwise. */
   onSubmit: (value: string) => Promise<void>;
@@ -47,6 +49,7 @@ export function RenameDialog({
       <TextInput
         label={label}
         value={value}
+        placeholder={placeholder}
         onChange={setValue}
         errorMessage={shown(valueError)}
         characterLimit={characterLimit}

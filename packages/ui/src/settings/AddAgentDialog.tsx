@@ -4,6 +4,8 @@ import { Button } from "../components/Button";
 import { AGENT_INSTALL_URL, AGENT_LABEL, AGENT_OPTIONS } from "../agents";
 import { AgentIcon } from "../components/AgentIcon";
 import { ExternalLink } from "../components/ExternalLink";
+import { FadeOverflow } from "../components/FadeOverflow";
+import { StatusBadge } from "../components/StatusBadge";
 import { Dialog, useDialogAction, useRefocusIfLost } from "../dialogs/Dialog";
 import { useT } from "../i18n/react";
 import type { Agent } from "../protocol";
@@ -47,12 +49,13 @@ export function AddAgentDialog({ onClose }: { onClose: () => void }): React.Reac
           const state = availability.get(agent)?.availability;
           const isAdded = added?.includes(agent) ?? false;
           const status = isAdded ? "added" : state === "available" ? "installed" : state === "unavailable" ? "notInstalled" : "checking";
+          const dimmed = status !== "installed";
           return (
             <li key={agent} className="flex items-center gap-3 groove-b py-3 first:pt-0 last:border-b-0 last:pb-0">
-              <AgentIcon agent={agent} className="size-5" />
-              <div className="min-w-0 flex-1">
-                <div>{label}</div>
-                <div className="text-sm text-app-muted">{t(`settings.addAgent.${status}`)}</div>
+              <AgentIcon agent={agent} className={`size-5 shrink-0 ${dimmed ? "opacity-60" : ""}`} />
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <FadeOverflow as="span" dir="auto" className={`min-w-0 ${dimmed ? "text-app-muted" : ""}`} titleWhenClipped={label}>{label}</FadeOverflow>
+                <StatusBadge>{t(`settings.addAgent.${status}`)}</StatusBadge>
               </div>
               {status === "notInstalled" && (
                 <ExternalLink href={AGENT_INSTALL_URL[agent]} aria-label={t("settings.addAgent.installLabel", { agent: AGENT_LABEL[agent] })}>

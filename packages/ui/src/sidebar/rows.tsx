@@ -119,6 +119,7 @@ export const RowLabel = ({
 export function RowIconButton({
   icon: Icon,
   label,
+  title,
   ariaLabel = label,
   onPress,
   isDisabled,
@@ -128,6 +129,8 @@ export function RowIconButton({
 }: {
   icon: LucideIcon;
   label: string;
+  /** Rich visible tooltip; `label` remains the plain action name. */
+  title?: React.ReactNode;
   /** The accessible name, when it says more than the tooltip's bare verb (whose row it acts on). */
   ariaLabel?: string;
   onPress: (event: PressEvent) => void;
@@ -146,13 +149,13 @@ export function RowIconButton({
   const reasonId = useId();
   return (
     <div ref={ref} className="flex" onClick={(e) => e.stopPropagation()}>
-      <TitledControl title={unavailable ?? label}>
+      <TitledControl title={unavailable ?? title ?? label}>
         <Button
           isIconOnly
           size="xs"
           variant="ghost"
           aria-label={ariaLabel}
-          aria-describedby={unavailable ? reasonId : undefined}
+          aria-describedby={unavailable ? reasonId : title && ariaLabel === label ? "" : undefined}
           aria-disabled={unavailable ? true : undefined}
           preventFocusOnPress
           onPress={onPress}

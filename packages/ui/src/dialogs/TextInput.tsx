@@ -7,7 +7,7 @@ import { TextFieldDescription, TextLengthHint } from "./TextFieldDescription";
 
 /** A labelled single-line text field, in HeroUI's variant for a field on a surface, since it is
  * always in a dialog. `ltr` lays out a value that always reads left to right (a
- * path, a URL) whatever the UI's direction. The placeholder is an example; `description` carries
+ * path, a URL) whatever the UI's direction. The placeholder is a required example or optional default; `description` carries
  * anything else the field has to say, and `errorMessage` marks the field invalid and says what is
  * wrong with it, right under the field — HeroUI hides the description for as long as that lasts.
  * `trailing` is a control that belongs to the field, such as a browse button, and sits beside the
@@ -17,11 +17,13 @@ import { TextFieldDescription, TextLengthHint } from "./TextFieldDescription";
  * and goes while the user types does not remount the input and drop its focus. */
 export function TextInput({
   label,
+  labelContent,
   value,
   onChange,
   placeholder,
   description,
   errorMessage,
+  errorDetails,
   trailing,
   endAdornment,
   autoFocus,
@@ -30,11 +32,14 @@ export function TextInput({
   characterLimit,
 }: {
   label: string;
+  /** Rich visible label; the plain label remains the input's accessible name. */
+  labelContent?: React.ReactNode;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  description?: string;
+  description?: React.ReactNode;
   errorMessage?: React.ReactNode;
+  errorDetails?: React.ReactNode;
   trailing?: React.ReactNode;
   endAdornment?: React.ReactNode;
   autoFocus?: boolean;
@@ -57,6 +62,7 @@ export function TextInput({
   return (
     <TextField
       fullWidth
+      aria-label={labelContent ? label : undefined}
       variant="secondary"
       {...field}
       autoFocus={autoFocus}
@@ -67,7 +73,7 @@ export function TextInput({
       // before the dialog's handler — and the mark itself only ever appears from that handler.
       validationBehavior="aria"
     >
-      <Label>{label}</Label>
+      <Label>{labelContent ?? label}</Label>
       {/* The row keeps the trailing control level with the input while the description and the
           error stay under both: HeroUI's text field is a plain flex column whose styling reaches
           its input by descendant selector, so a row of its own around them changes nothing.
@@ -94,6 +100,7 @@ export function TextInput({
           </span>
         </CodeToneContext.Provider>
       </FieldError>
+      {invalid && errorDetails}
     </TextField>
   );
 }

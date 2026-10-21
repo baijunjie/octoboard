@@ -15,5 +15,5 @@ export function ViewerErrorMessage({ error, path }: { error: ErrorPresentation; 
     return <span><Message id={key} params={{ appName: <InlineChip dir="auto" wrap size="inherit">{globalParam("appName")}</InlineChip>, detail: isolate(error.params.detail) } as never} /></span>;
   }
   if (key && key !== "viewer.error.permissionDenied") return <>{t(key)}</>;
-  return <DaemonErrorMessage error={error} showTitle={false} />;
+  return <DaemonErrorMessage error={error} part="summary" />;
 }

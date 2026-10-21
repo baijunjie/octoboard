@@ -1,8 +1,9 @@
 import React from "react";
 
+import { InlineChip } from "../components/InlineChip";
 import { IndicatorTooltip } from "../components/IndicatorTooltip";
 import { isolate } from "../i18n/isolate";
-import { useT } from "../i18n/react";
+import { Message, useT } from "../i18n/react";
 import type { Session } from "../protocol";
 import { sessionColourVars } from "../sessionColours";
 import { sessionDisplayTitle } from "../sessionLabel";
@@ -44,7 +45,7 @@ export function BindingBadge({ owner, decorative }: { owner: Session; decorative
   if (decorative) return dot;
   const label = t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, owner)) });
   return (
-    <IndicatorTooltip tooltip={label} label={label} className="inline-flex">
+    <IndicatorTooltip tooltip={<Message id="sidebar.session.boundTo" params={{ name: <InlineChip size="inherit" dir="auto" wrap>{sessionDisplayTitle(t, owner)}</InlineChip> }} />} label={label} className="inline-flex">
       {dot}
     </IndicatorTooltip>
   );

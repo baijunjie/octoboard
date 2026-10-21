@@ -6,13 +6,16 @@ import { expect, it, onTestFinished } from "vitest";
 
 import { ErrorAlerts } from "../dialogs/ErrorAlerts";
 import { errorAlerts } from "../errorAlerts";
+import { daemonMessage } from "../daemonMessage";
 import { DaemonRequestError } from "../daemon-client";
+import { format } from "../i18n/catalog";
+import { RecoveryGuidance, recoveryParams } from "./ErrorGuidance";
 import { errorPresentation } from "../errorPresentation";
 import { DialogError, useDialogAction } from "../dialogs/Dialog";
-import { isolate } from "../i18n/isolate";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { DaemonErrorMessage } from "./DaemonErrorMessage";
+import { ErrorAlert } from "./ErrorAlert";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -90,7 +93,7 @@ it("sets the path of a conversation that was not found as code, not as quoted te
   expect(Array.from(container.querySelectorAll("code"), (code) => code.textContent)).toEqual(["/Users/dev/.claude"]);
   // One element, so an alert's flex column cannot split the sentence into an item per literal.
   expect(container.children).toHaveLength(1);
-  expect(container.textContent).toBe(`No ${isolate("Claude Code")} conversation with this ID was found in /Users/dev/.claude. Check the ID, and that it was started under this account.`);
+  expect(container.textContent).toBe("No Claude Code conversation with this ID was found in /Users/dev/.claude.Check the ID, and that it was started under this account.");
 });
 
 it("sets resolved project and session names in chips without changing their typeface", () => {
@@ -122,7 +125,7 @@ it("renders structured running-session IDs as distinct live names, preserving co
   expect(errorPresentation(error)).toBe(error);
   const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
   expect(Array.from(container.querySelectorAll("[data-inline-chip]"), (chip) => chip.textContent)).toEqual([...titles, "gone"]);
-  expect(container.querySelector("code")).toBeNull();
+  expect(container.querySelector("code")?.textContent).toBe("gone");
   expect(container.textContent).not.toContain("old fallback");
   act(() => daemon.store.setState({ sessions: new Map([["s0", { id: "s0", title: "Renamed" } as import("../protocol").Session]]) }));
   expect(Array.from(container.querySelectorAll("[data-inline-chip]"), (chip) => chip.textContent)).toEqual(["Renamed", "s1", "gone"]);
@@ -178,4 +181,232 @@ it("leaves the line over the groups out when there is one group, whose lead says
   const container = mount(<DaemonProvider value={{ store: createStateStore({}) } as Daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
   expect(container.textContent).not.toContain("still there");
   expect(container.querySelector("p")?.textContent).toBe("This branch is not merged:");
+});
+
+// The split is a rendering boundary: every summary fits Alert.Description while the rest remains
+// readable exactly once outside it, including a failure nested in another failure's sentence.
+it.each([
+  { name: "a simple structured reason", error: new DaemonRequestError("fallback", "path_not_found", { path: "/missing" }), summary: "/missing does not exist.", detail: undefined },
+  { name: "multiline diagnostics", error: new DaemonRequestError("fallback", "project_branches_not_determined", { name: "Docs", detail: "fatal: one\nhint: two" }), summary: "Docs", detail: "fatal: one\nhint: two" },
+  { name: "nested diagnostics", error: new DaemonRequestError("fallback", "launch_failed", { title: "Draft", reason_code: "project_branches_not_determined", name: "Docs", detail: "fatal: nested\nhint: two" }), summary: "Could not start Draft:", detail: "fatal: nested\nhint: two" },
+  { name: "a shell timeout", error: failure(), summary: "A shell startup file is probably blocked", detail: "/bin/zsh -l -i -c 'env -0'" },
+  { name: "a nested shell timeout", error: new DaemonRequestError("fallback", "launch_failed", { title: "Draft", reason_code: "shell_environment_timeout", ...params }), summary: "Could not start Draft: A shell startup file is probably blocked", detail: "/bin/zsh -l -i -c 'env -0'" },
+  { name: "a branch group", error: new DaemonRequestError("fallback", "session_branches_not_removed", { count: "1", items: JSON.stringify([{ kind: "branch", name: "fix/a", branch: "fix/a", state: "failed", detail: "error: refused" }]) }), summary: "Removing this failed:", detail: "error: refused" },
+])("keeps $name in inline summary and external details without duplication", ({ error, summary, detail }) => {
+  const container = mount(<DaemonProvider value={{ store: createStateStore({}) } as Daemon}>
+    <ErrorAlert><DaemonErrorMessage error={error} part="summary" /></ErrorAlert>
+    <section><DaemonErrorMessage error={error} part="details" /></section>
+  </DaemonProvider>);
+  const description = container.querySelector('[data-slot="alert-description"]')!;
+  const details = container.querySelector("section")!;
+  expect(description.textContent).toContain(summary);
+  expect(description.querySelector("div,p,ul,li,pre,h1,h2,h3")).toBeNull();
+  expect(details.textContent).not.toContain(summary);
+  if (detail) {
+    expect(description.textContent).not.toContain(detail);
+    expect(details.textContent).toContain(detail);
+    expect(container.textContent?.split(detail)).toHaveLength(2);
+  } else expect(details.textContent).toBe("");
+});
+
+it.each([
+  ["console", "consoles", "name"], ["project", "projects", "name"],
+  ["session", "sessions", "title"], ["shell_terminal", "shellTerminals", "title"],
+  ["account", "accounts", "name"],
+])("resolves %s names and missing IDs with distinct rich direction and plain text boundaries", (field, collection, label) => {
+  const title = "مراجعة / Review, 名称";
+  const entries = [{ id: "known", [label]: title }];
+  const state = collection === "accounts" ? { settings: { accounts: entries } } : { [collection]: new Map(entries.map((entry) => [entry.id, entry])) };
+  const store = createStateStore(state as Parameters<typeof createStateStore>[0]);
+  const error = new DaemonRequestError("fallback", `unknown_${field}`, { [field]: "known" });
+  const container = mount(<DaemonProvider value={{ store } as Daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
+  const chip = () => container.querySelector("[data-inline-chip]")!;
+  expect(chip().textContent).toBe(title);
+  expect(chip().getAttribute("dir")).toBe("auto");
+  expect(chip().querySelector("code")).toBeNull();
+  expect(chip().textContent).not.toMatch(/[\u2066-\u2069]/);
+  expect(daemonMessage("en", error.code, error.params, error.message, store.getState())).toContain(`\u2068${title}\u2069`);
+  act(() => store.setState({ ...store.getState(), ...(collection === "accounts" ? { settings: { ...store.getState().settings, accounts: [] } } : { [collection]: new Map() }) }));
+  expect(chip().textContent).toBe("known");
+  expect(chip().getAttribute("dir")).toBe("ltr");
+  expect(chip().querySelector("code")?.textContent).toBe("known");
+  expect(daemonMessage("en", error.code, error.params, error.message, store.getState())).toContain("\u2068known\u2069");
+});
+
+it.each([
+  ["unknown_page", { page: "page-id" }, ["page-id"]],
+  ["field_required", { field: "account_id" }, ["account_id"]],
+  ["field_too_long", { field: "session_id", limit: "100" }, ["session_id"]],
+  ["conflicting_fields", { first: "model", second: "effort" }, ["model", "effort"]],
+  ["invalid_launch_setting", { value: "xhigh", field: "effort", agent: "Codex" }, ["xhigh", "effort", "Codex"]],
+] as const)("marks schema literals and technical fallback in %s without contaminating plain text", (code, params, chips) => {
+  const error = new DaemonRequestError("fallback", code, params);
+  const container = mount(<DaemonErrorMessage error={error} />);
+  expect(Array.from(container.querySelectorAll("[data-inline-chip]"), (chip) => chip.textContent)).toEqual(chips);
+  const plain = daemonMessage("en", code, params, error.message, createStateStore({}).getState());
+  for (const value of chips) expect(plain).toContain(`\u2068${value}\u2069`);
+  expect(plain).not.toMatch(/<\/?(?:span|code)/);
+});
+
+it.each([
+  "project_branches_not_determined", "git_failed", "git_clone_failed", "git_remote_unreachable",
+  "git_push_failed", "git_switch_failed", "git_restore_failed", "git_unavailable",
+  "models_command_failed", "models_shell_environment_failed", "quota_command_failed", "quota_shell_environment_failed",
+  "codex_unarchive_failed", "login_failed",
+])("keeps %s diagnostics byte-for-byte once outside rich summaries and in plain text", (code) => {
+  const detail = "fatal: /tmp/مراجعة/one\n    indented diagnostic\n" + "x".repeat(400);
+  const params = { detail, agent: "Codex", name: "Docs" };
+  const error = new DaemonRequestError("fallback", code, params);
+  const container = mount(<><DaemonErrorMessage error={error} part="summary" /><section><DaemonErrorMessage error={error} part="details" /></section></>);
+  expect(container.querySelector("pre")?.textContent).toBe(detail);
+  expect(container.querySelectorAll("pre")).toHaveLength(1);
+  expect(container.querySelector("pre")?.getAttribute("dir")).toBe("ltr");
+  expect(container.querySelector("section")?.textContent).toBe(detail);
+  expect(container.firstChild?.textContent).not.toContain("fatal");
+  const plain = daemonMessage("en", code, params, error.message, createStateStore({}).getState());
+  expect(plain).toContain(detail);
+  expect(plain.split(detail)).toHaveLength(2);
+});
+
+it("keeps a complete nested diagnostic outside its launch sentence and translates name references", () => {
+  const error = new DaemonRequestError("fallback", "launch_failed", { title: "Draft", reason_code: "quota_command_failed", agent: "Codex", detail: "raw\n    quota failure" });
+  const container = mount(<DaemonErrorMessage error={error} />);
+  expect(container.querySelector("span")?.textContent).toBe("Could not start Draft: Codex could not report its quota.");
+  expect(container.querySelector("span pre")).toBeNull();
+  expect(container.querySelectorAll("pre")).toHaveLength(1);
+  act(() => setLanguage("zh-Hans"));
+  expect(container.textContent).toContain("无法报告额度");
+  expect(container.querySelector("pre")?.textContent).toBe("raw\n    quota failure");
+});
+
+it("uses name chips for fixed agent and product references while leaving plain messages usable", () => {
+  const error = new DaemonRequestError("fallback", "agent_not_available", { agent: "Codex" });
+  const container = mount(<DaemonErrorMessage error={error} />);
+  expect(Array.from(container.querySelectorAll("[data-inline-chip]:not(:has(code))"), (chip) => chip.textContent)).toEqual(["Codex", "Octoboard", "Claude Code", "Codex", "Grok Build"]);
+  const plain = daemonMessage("en", error.code, error.params, error.message, createStateStore({}).getState());
+  expect(plain.replace(/[\u2066-\u2069]/g, "")).toContain("supports Claude Code, Codex and Grok Build");
+});
+
+it("retains a named quota window as a rich name and a plain isolated value", () => {
+  const params = { agent: "Codex", account: "Work", window: "模型 / Model weekly" };
+  const container = mount(<DaemonErrorMessage error={new DaemonRequestError("fallback", "account_quota_exhausted", params)} />);
+  expect(Array.from(container.querySelectorAll("[data-inline-chip]"), (chip) => chip.textContent)).toEqual(["Work", "Codex", params.window]);
+  expect(daemonMessage("en", "account_quota_exhausted", params, "fallback", createStateStore({}).getState())).toContain(`\u2068${params.window}\u2069`);
+});
+
+it.each(["path_not_absolute", "project_directory_shared", "agent_not_available", "console_has_running_sessions", "trust_answer_failed", "conversation_in_session", "session_locked", "queued_messages_lost"])("keeps %s recovery external and preserves the complete plain wording", (code) => {
+  const params = { path: "/tmp/مراجعة", project: "Docs", agent: "Codex", reason_code: "screen_gone", session: "missing", reason: "fallback reason" };
+  const error = new DaemonRequestError("fallback", code, params);
+  const container = mount(<><section data-summary><DaemonErrorMessage error={error} part="summary" /></section><section data-details><DaemonErrorMessage error={error} part="details" /></section></>);
+  const summary = container.querySelector("[data-summary]")!;
+  const details = container.querySelector("[data-details]")!;
+  const normalize = (text: string | null) => text?.replace(/[\u2066-\u2069]/g, "").replace(/\s/g, "");
+  const plain = daemonMessage("en", code, params, error.message, createStateStore({}).getState());
+  expect(summary.querySelector("div,p,ul,pre")).toBeNull();
+  expect(details.textContent).not.toBe("");
+  expect(details.textContent).not.toContain(summary.textContent);
+  expect(normalize((summary.textContent ?? "") + details.textContent)).toBe(normalize(plain));
+  act(() => setLanguage("zh-Hans"));
+  expect(normalize((summary.textContent ?? "") + details.textContent)).toBe(normalize(daemonMessage("zh-Hans", code, params, error.message, createStateStore({}).getState())));
+});
+
+it("retains local quota-refusal action metadata in rich copy and a plain fallback", () => {
+  const error = new DaemonRequestError("plain fallback", "quick_create_quota_refused", { action: "New session with defaults" });
+  const container = mount(<DaemonErrorMessage error={error} />);
+  expect(container.querySelector("[data-inline-chip]")?.textContent).toBe("New session with defaults");
+  expect(error.message).toBe("plain fallback");
+});
+
+it.each(["terminal_write_failed", "store_io_failed"])("keeps nested trust %s diagnostics outside the reason sentence", (reason_code) => {
+  const detail = "Permission denied\n    /tmp/مراجعة";
+  const error = new DaemonRequestError("fallback", "trust_answer_failed", { agent: "Codex", reason_code, detail });
+  const container = mount(<DaemonErrorMessage error={error} />);
+  expect(container.querySelector("span")?.textContent).not.toContain(detail);
+  expect(container.querySelector("pre")?.textContent).toBe(detail);
+  expect(container.querySelectorAll("pre")).toHaveLength(1);
+  expect(container.textContent).toContain("Answer it in the terminal.");
+});
+
+it("retains the login producer's detail-only shell failure without inventing a command", () => {
+  const detail = "capturing environment failed\n    permission denied";
+  const fallback = `The shell environment could not be captured: ${detail}`;
+  const error = new DaemonRequestError(fallback, "shell_environment_timeout", { detail });
+  const container = mount(<DaemonErrorMessage error={error} />);
+  expect(container.querySelector("span")?.textContent).toBe("The shell environment could not be captured.");
+  expect(container.querySelector("pre")?.textContent).toBe(detail);
+  expect(container.textContent).not.toMatch(/\{(?:shell|command|timeout)\}/);
+  expect(daemonMessage("en", error.code, error.params, fallback, createStateStore({}).getState())).toBe(fallback);
+});
+
+it.each(["project", "console"])("preserves the held %s session's task and name as separate raw directed chips", (owner) => {
+  const session = { id: "held", title: "مراجعة name", terminal_title: "  Task / 任务  " } as import("../protocol").Session;
+  const store = createStateStore({ sessions: new Map([[session.id, session]]), projects: new Map([["owner", { id: "owner", name: "Owner" } as import("../protocol").Project]]), consoles: new Map([["owner", { id: "owner", name: "Owner" } as import("../protocol").Console]]) });
+  const params = { session: session.id, [owner]: "owner" };
+  const error = new DaemonRequestError("fallback", `conversation_held_in_${owner}`, params);
+  const container = mount(<DaemonProvider value={{ store } as Daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
+  const chips = [...container.querySelectorAll("[data-inline-chip]")];
+  expect(chips.map((chip) => chip.textContent)).toEqual(["Task / 任务", session.title, "Owner"]);
+  expect(chips.every((chip) => chip.getAttribute("dir") === "auto" && !/[\u2066-\u2069]/.test(chip.textContent ?? ""))).toBe(true);
+  for (const language of ["en", "zh-Hans"] as const) {
+    const plain = daemonMessage(language, error.code, params, error.message, store.getState());
+    expect(plain).toContain("\u2068Task / 任务\u2069｜\u2068مراجعة name\u2069");
+  }
+  act(() => store.setState({ ...store.getState(), sessions: new Map([[session.id, { ...session, terminal_title: session.title }]]) }));
+  expect([...container.querySelectorAll("[data-inline-chip]")].map((chip) => chip.textContent)).toEqual([session.title, "Owner"]);
+});
+
+it.each([
+  ["tool", ["Git", "PATH", "Octoboard"]],
+  ["projectBranches", ["Terminal", "git worktree list", "git branch", "Git"]],
+  ["sessionBranches", ["Terminal", "Git"]],
+  ["repository", ["Git", "Git", "Terminal"]],
+  ["noCommits", ["Terminal"]], ["shell", ["Terminal"]],
+  ["git", ["Terminal", "Git", "Git"]], ["gitHistory", ["Terminal"]],
+  ["unsentMessage", ["Enter"]],
+] as const)("marks %s recovery references while preserving a matching plain companion", (recovery, englishValues) => {
+  const container = mount(<RecoveryGuidance recovery={recovery} />);
+  for (const language of ["en", "zh-Hans"] as const) {
+    act(() => setLanguage(language));
+    const chips = [...container.querySelectorAll("[data-inline-chip]")];
+    const expected = language === "zh-Hans" && recovery === "repository" ? ["Git", "终端", "Git"] : englishValues.map((value) => language === "zh-Hans" && value === "Terminal" ? "终端" : value);
+    expect(chips.map((chip) => chip.textContent)).toEqual(expected);
+    for (const chip of chips) {
+      const technical = ["PATH", "Enter", "git worktree list", "git branch"].includes(chip.textContent!);
+      expect(chip.getAttribute("dir")).toBe(technical ? "ltr" : "auto");
+      expect(!!chip.querySelector("code")).toBe(technical);
+      expect(chip.textContent).not.toMatch(/[\u2066-\u2069]/);
+    }
+    const plain = format(language, `error.recovery.${recovery}`, recoveryParams((key, ...args) => format(language, key, args[0])));
+    expect(container.textContent).toBe(plain);
+    expect(plain).not.toMatch(/\{\w+\}|<\/?(?:span|code)/);
+  }
+});
+
+it("keeps generic terminal nouns as prose rather than treating them as named controls", () => {
+  const container = mount(<RecoveryGuidance recovery="stopProcess" />);
+  expect(container.textContent).toBe("Open the affected session’s terminal and exit the agent using its quit command, then retry.");
+  expect(container.querySelector("[data-inline-chip]")).toBeNull();
+});
+
+it("routes the operating-system reference in directory recovery through the shared rich/plain boundary", () => {
+  const params = { path: "/Volumes/مراجعة", detail: "permission denied" };
+  const container = mount(<DaemonErrorMessage error={new DaemonRequestError("fallback", "directory_unreadable", params)} />);
+  const system = [...container.querySelectorAll("[data-inline-chip]")].find((chip) => chip.textContent === "macOS")!;
+  expect(system.getAttribute("dir")).toBe("auto");
+  expect(system.querySelector("code")).toBeNull();
+  expect(system.closest("p")?.textContent).toContain("asks for permission per volume");
+  const plain = daemonMessage("en", "directory_unreadable", params, "fallback", createStateStore({}).getState());
+  expect(plain).toContain("\u2068macOS\u2069 asks for permission per volume");
+  expect(plain).not.toMatch(/\{\w+\}/);
+});
+
+it("retains a named key inside a structured trust reason as a technical chip", () => {
+  const params = { agent: "Codex", reason_code: "cursor_did_not_move" };
+  const container = mount(<DaemonErrorMessage error={new DaemonRequestError("fallback", "trust_answer_failed", params)} />);
+  expect(container.querySelector("code")?.textContent).toBe("Enter");
+  expect(container.querySelector("code")?.getAttribute("dir")).toBe("ltr");
+  expect(container.textContent).toContain("so Enter was not sent");
+  expect(container.textContent).toContain("Answer it in the terminal.");
+  const plain = daemonMessage("en", "trust_answer_failed", params, "fallback", createStateStore({}).getState());
+  expect(plain).toContain("so \u2068Enter\u2069 was not sent");
 });

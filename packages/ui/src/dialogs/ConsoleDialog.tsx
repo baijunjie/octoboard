@@ -170,6 +170,7 @@ export function ConsoleDialog({
               label={t("common.name")}
               value={name}
               onChange={setName}
+              placeholder={t("dialog.console.nameExample")}
               errorMessage={shown(nameError)}
               autoFocus
             />

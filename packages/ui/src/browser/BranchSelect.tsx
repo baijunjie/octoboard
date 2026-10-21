@@ -5,8 +5,9 @@ import { ListLayout, Virtualizer } from "react-aria-components";
 
 import { FadeOverflow } from "../components/FadeOverflow";
 import { MotionListBox } from "../components/MotionListBox";
+import { InlineChip } from "../components/InlineChip";
+import { StatusBadge } from "../components/StatusBadge";
 import { useScrollFade } from "../components/scrollFade";
-import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { BranchInfo } from "../protocol";
 import { displayWirePath } from "../wirePath";
@@ -42,9 +43,7 @@ export function BranchSelect({
   const t = useT();
   const branchFade = useScrollFade({ className: "max-h-80 overflow-y-auto px-0" });
   const name = value === undefined ? undefined : displayWirePath(value);
-  const shown =
-    name === undefined ? t("git.branch.choose") : gone ? <Message id="git.branch.gone" params={{ branch: <bdi dir="auto">{name}</bdi> }} /> : name;
-  const title = name === undefined ? undefined : gone ? t("git.branch.gone", { branch: isolate(name) }) : name;
+  const title = name === undefined ? undefined : gone ? <Message id="git.branch.gone" params={{ branch: <InlineChip monospace wrap size="inherit">{name}</InlineChip> }} /> : name;
   return (
     // The subgrid restates the column gap: HeroUI's `.select` sets a gap of its own, which would
     // otherwise replace the parent grid's for this row's gutter. The secondary variant draws from
@@ -65,12 +64,13 @@ export function BranchSelect({
               <GitBranch aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
               <FadeOverflow
                 as="span"
-                dir="auto"
+                dir="ltr"
                 className="min-w-0 flex-1"
                 titleWhenClipped={title}
               >
-                {shown}
+                {name ?? t("git.branch.choose")}
               </FadeOverflow>
+              {name !== undefined && gone && <StatusBadge>{t("git.branch.goneStatus")}</StatusBadge>}
             </>
           )}
         </Select.Value>

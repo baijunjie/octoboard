@@ -124,7 +124,7 @@ const longFailureState = snapshotState({
   consoles: [console_], projects: [squeezeProject], sessions: [squeezeSession],
   gitStatuses: [{ ...squeezeStatus, activity: "idle", error: "fetch: Could not resolve host 'origin'" }],
 });
-const restoreProject = projectOf("p-restore", console_.id, "Search API");
+const restoreProject = projectOf("p-restore", console_.id, "Search API مرحبا 東京 UnbrokenProjectNameForRestoreConfirmationWrapping");
 const restoreState = snapshotState({ consoles: [console_], projects: [restoreProject], gitStatuses: [gitStatusOf(restoreProject.id)] });
 const restoreFixture = { state: restoreState, git: RESTORE_GIT, files: RESTORE_FILES };
 const openRestore = [...openGitSubmenu(restoreProject.name), (ui: Ui) => ui.press(ui.t("sidebar.project.restoreChanges"))];

@@ -226,6 +226,7 @@ export function ShellTerminalPanel({
         >
           <PanelHeader
             title={t("panel.terminal.name")}
+            hideTitleWhenNarrow
             actions={
               <>
                 <TitledControl title={t("shellTerminal.new")}>
@@ -246,7 +247,7 @@ export function ShellTerminalPanel({
               <Tabs.ListContainer
                 // HeroUI lays its scroll buttons over the strip's ends, which here would cover a
                 // tab's close mark: while the strip scrolls, its ends are padded to hold them.
-                className="min-w-0 rounded-none bg-transparent [&_.tabs__list-container__scroller]:scroll-px-6 has-[>:is([data-left-scroll=true],[data-right-scroll=true],[data-left-right-scroll=true])]:px-6"
+                className="min-w-0 rounded-none bg-transparent has-[>:is([data-left-scroll=true],[data-right-scroll=true],[data-left-right-scroll=true])]:px-6"
                 render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
                 {/* The scroller clips outside this padding; leave room for the focus ring and its offset. */}
                 <Tabs.List aria-label={t("shellTerminal.tabs")} className="w-max min-w-0 p-1.5">
@@ -329,6 +330,7 @@ export function ShellTerminalPanel({
           title={t("shellTerminal.renameDialog.title")}
           label={t("shellTerminal.renameDialog.field")}
           initialValue={terminals.find((terminal) => terminal.id === renaming)!.title}
+          placeholder={t("shellTerminal.renameDialog.nameExample")}
           requiredMessage={t("shellTerminal.renameDialog.required")}
           onSubmit={async (title) => {
             await daemon.request({ type: "rename_shell_terminal", shell_terminal: renaming, title: title.trim() });

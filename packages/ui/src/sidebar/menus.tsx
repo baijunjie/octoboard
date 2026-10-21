@@ -5,12 +5,13 @@ import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanel, ActionMenuSubmen
 import { ExternalLinkIcon } from "../components/ExternalLinkIcon";
 import { RepositoryIcon } from "../components/RepositoryIcon";
 import { repositoryLink } from "../repositoryLink";
+import { FadeOverflow } from "../components/FadeOverflow";
 import { AgentIcon } from "../components/AgentIcon";
 import { PathText } from "../components/PathText";
 import type { Translate } from "../i18n/catalog";
 import type { Account, Console, Project, Session, Settings } from "../protocol";
 import { accountUsage } from "../quota/accountUsage";
-import { sessionDisplayTitle } from "../sessionLabel";
+import { sessionChoiceTitle, sessionDisplayTitle } from "../sessionLabel";
 import { FocusShortcutKbd } from "./focusShortcut";
 import { archivePreviewSessions, isUnusedSession } from "./order";
 import { SessionColourSwatches } from "./SessionColourSwatches";
@@ -27,7 +28,8 @@ export function archiveSubmenu(
   onViewAll: () => void,
 ): ActionMenuSubmenu {
   const items: ActionMenuItem[] = archivePreviewSessions(archived, sessions).map((session) => ({
-    label: sessionDisplayTitle(t, session),
+    label: sessionChoiceTitle(t, session),
+    content: <FadeOverflow as="span" dir="auto" className="block" titleWhenClipped={sessionDisplayTitle(t, session)}>{sessionDisplayTitle(t, session)}</FadeOverflow>,
     icon: <AgentIcon agent={session.agent} />,
     onClick: () => onSelect(session),
   }));

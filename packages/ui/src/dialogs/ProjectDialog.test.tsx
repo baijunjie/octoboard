@@ -546,7 +546,15 @@ it("offers the stored model alone and the reason when the agent cannot list its 
   await click(buttonText("Advanced"));
   expect(document.body.textContent).toContain("Loading the models this agent offers");
   await answerModels(pending, { code: "models_timed_out", params: { agent: "claude" }, message: "" });
-  expect(document.body.textContent).toContain(`${isolate("claude")} took too long to list its models.`);
+  const description = pickerNamed("Model").getAttribute("aria-describedby")?.split(" ").map((id) => document.getElementById(id)).find((node) => node?.textContent === "claude took too long to list its models.");
+  expect(description).toBeDefined();
+  const agent = description!.querySelector("[data-inline-chip]")!;
+  expect(agent.textContent).toBe("claude");
+  expect(agent.getAttribute("dir")).toBe("auto");
+  expect(agent.querySelector("code")).toBeNull();
+  expect(agent.textContent).not.toMatch(/[\u2066-\u2069]/);
+  await settle(200);
+  expect(document.body.querySelector('[role="status"]')?.textContent).toBe(`${isolate("claude")} took too long to list its models.`);
   await click(pickerNamed("Model"));
   expect(optionTexts()).toEqual(["retired, Not in the list"]);
 });
@@ -693,4 +701,40 @@ it.each(["trigger", "popover"] as const)("hands focus back to the agent picker w
   expect(accountPicker()).toBeUndefined();
   await settle(50);
   expect(document.activeElement).toBe(agentTrigger);
+});
+
+it("updates the optional name hint with the normalized directory without changing the empty submitted name", async () => {
+  const pending = render();
+  act(() => pending.store.setState({ homeDir: "/home/dev" }));
+  expect(input("Name").placeholder).toBe("Directory name");
+  type(input("Directory"), "~/site/../website/./");
+  expect(input("Name").placeholder).toBe("website");
+  await settle(500);
+  await answer(pending[0], null);
+  await click(buttonText("Add"));
+  expect(sentOf(pending, "add_project")).toMatchObject({ path: "~/site/../website/./", name: undefined, tags: [] });
+});
+
+it("uses the repository's clone name as a live hint, preserving an entered name and empty clone submission", async () => {
+  const pending = render();
+  type(input("Name"), "My name");
+  await chooseSource("git repository URL");
+  type(input("Repository URL"), "git@example.com:owner/site.git");
+  expect(input("Name").placeholder).toBe("site");
+  expect(input("Name").value).toBe("My name");
+  type(input("Repository URL"), "https://example.com/owner/other.git/");
+  expect(input("Name").placeholder).toBe("other");
+  expect(input("Name").value).toBe("My name");
+  await settle(900);
+  await answer(pending[0], null);
+  type(input("Name"), "");
+  await click(buttonText("Add"));
+  expect(sentOf(pending, "add_project")).toMatchObject({ source: "git", path: undefined, name: undefined, remote_url: "https://example.com/owner/other.git/", tags: [] });
+});
+
+it("keeps an example on the populated and cleared required edited project name", () => {
+  render(stored);
+  expect(input("Name").placeholder).toBe("Ex. Website");
+  type(input("Name"), "");
+  expect(input("Name").placeholder).toBe("Ex. Website");
 });

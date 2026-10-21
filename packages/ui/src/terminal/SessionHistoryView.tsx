@@ -3,6 +3,9 @@ import { MessageSquareOff, TriangleAlert } from "lucide-react";
 import React, { Suspense, lazy, useCallback, useId, useRef, useState } from "react";
 
 import { Button } from "../components/Button";
+import { CodeToneContext } from "../components/codeTone";
+import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
+import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
@@ -30,6 +33,7 @@ const MarkdownDocument = lazy(() => import("../viewer/MarkdownDocument").then((m
 export function SessionHistoryView({ sessionId }: { sessionId: string }): React.ReactElement {
   const t = useT();
   const { history, reload } = useSessionHistory(sessionId);
+  useErrorAcknowledgement(history.state === "failed" ? history.error : undefined, t("history.failed"));
   const [showReplies, setShowReplies] = useState(false);
   const titleId = useId();
   const switchLabelId = useId();
@@ -76,9 +80,14 @@ export function SessionHistoryView({ sessionId }: { sessionId: string }): React.
       )}
       {history.state === "failed" && (
         <div className="flex flex-1 flex-col items-center justify-center-safe gap-3 p-4 text-sm">
-          <ErrorAlert announce className="w-full max-w-lg">
-            {t("history.failed")}
-          </ErrorAlert>
+          <CodeToneContext value="danger">
+            <div className="flex w-full min-w-0 max-w-lg flex-col gap-3">
+              <ErrorAlert title={t("history.failed")}>
+                <DaemonErrorMessage error={history.error} part="summary" />
+              </ErrorAlert>
+              <DaemonErrorMessage error={history.error} part="details" />
+            </div>
+          </CodeToneContext>
           <Button size="sm" variant="secondary" preventFocusOnPress onPress={reload}>
             {t("error.tryAgain")}
           </Button>

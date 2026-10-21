@@ -1,7 +1,7 @@
 import type { ReactElement } from "react";
 
 import { classifyError, type ErrorRecovery } from "../errorRecovery";
-import type { Translate } from "../i18n/catalog";
+import { globalParam, type Translate } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
 import { InlineChip } from "./InlineChip";
 
@@ -16,18 +16,26 @@ export function recoveryAction(t: Translate, recovery: ErrorRecovery): { label: 
   }
 }
 
+/** Plain recovery parameters stay suitable for accessibility and system text. The same values are
+ * marked at the rich boundary, keeping control labels and command literals distinct. */
+export function recoveryParams<V = never>(t: Translate, mark?: (value: string, monospace: boolean) => V): Record<string, string | V> {
+  const values: Record<string, string> = {
+    appName: globalParam("appName")!, codex: "Codex", git: "Git", pathVar: "PATH", enter: "Enter",
+    terminal: t("common.terminal"), retry: t("connection.retry"), browse: t("common.browse"), unlock: t("sidebar.session.unlock"),
+    worktreeList: "git worktree list", branchList: "git branch",
+  };
+  if (!mark) return values;
+  return Object.fromEntries(Object.entries(values).map(([name, value]) => [name, mark(value, ["pathVar", "enter", "worktreeList", "branchList"].includes(name))]));
+}
+
 /** A recovery's words; the button it may offer besides them is the alert's (see `recoveryAction`), never part
  * of the body. Nothing for the plain alert that has no remedy. */
 export function RecoveryGuidance({ recovery }: { recovery: ErrorRecovery }): ReactElement | null {
   const t = useT();
-  switch (recovery) {
-    case "connection": return <Message id="error.recovery.connection" params={{ retry: <InlineChip size="inherit">{t("connection.retry")}</InlineChip> }} />;
-    case "path": return <Message id="error.recovery.path" params={{ browse: <InlineChip size="inherit">{t("common.browse")}</InlineChip> }} />;
-    case "unlock": return <Message id="error.recovery.unlock" params={{ unlock: <InlineChip size="inherit">{t("sidebar.session.unlock")}</InlineChip> }} />;
-    case "projectBranches": return <Message id="error.recovery.projectBranches" params={{ worktreeList: <InlineChip monospace size="inherit">git worktree list</InlineChip>, branchList: <InlineChip monospace size="inherit">git branch</InlineChip> }} />;
-    case "none": return null;
-    default: return <>{t(`error.recovery.${recovery}`)}</>;
-  }
+  if (recovery === "none") return null;
+  const id = `error.recovery.${recovery}` as const;
+  const params = recoveryParams(t, (value, monospace) => <InlineChip dir={monospace ? "ltr" : "auto"} monospace={monospace} wrap size="inherit">{value}</InlineChip>);
+  return <Message id={id} params={params as never} />;
 }
 
 /** A batch keeps each failure's remedy beside the item it applies to. */

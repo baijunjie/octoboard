@@ -4,7 +4,7 @@ import { isolate } from "../i18n/isolate";
 import { format, type Translate } from "../i18n/catalog";
 import type { QuotaWindow } from "../protocol";
 import type { AccountQuota } from "../protocol";
-import { exhaustedQuotaWindow, orderedQuotaWindows, primaryQuotaWindow, planLabel, quotaHeadline, quotaResetsIn, quotaUsedUpDetail, quotaUsedUpSentence, quotaUsedUpShort, quotaWindowLabel, quotaWindowPhrase, remainingPercent, twoLayerWindows, usageBarSummary, usageBarWindows } from "./quotaFormat";
+import { exhaustedQuotaWindow, orderedQuotaWindows, primaryQuotaWindow, planLabel, quotaHeadline, quotaResetsIn, quotaUsedUpAlert, quotaUsedUpDetail, quotaUsedUpSentence, quotaUsedUpShort, quotaWindowLabel, quotaWindowPhrase, remainingPercent, twoLayerWindows, usageBarSummary, usageBarWindows } from "./quotaFormat";
 
 const t: Translate = (key, ...args) => format("en", key, args[0]);
 const MINUTE = 60_000;
@@ -147,6 +147,16 @@ describe("exhaustedQuotaWindow", () => {
   it("words the reason as a sentence, naming a credit pool as credits and a window in lower case", () => {
     expect(quotaUsedUpSentence(t, "Work", window({ kind: "weekly", used_percent: 100, resets_at: NOW + 117 * MINUTE }), NOW)).toContain(`${isolate("Work")} cannot be used for now because it has used up its weekly quota. It resets in 1h 57m.`);
     expect(quotaUsedUpSentence(t, "Work", window({ kind: "credit_period", used_percent: 100 }), NOW)).toContain("has used up its credits.");
+  });
+
+  it.each([
+    [null, "It has used up its weekly quota."],
+    [NOW + 117 * MINUTE, "It has used up its weekly quota. It resets in 1h 57m."],
+  ])("separates the quota Alert title from its complete reason (%s)", (resets_at, description) => {
+    expect(quotaUsedUpAlert(t, "Work", window({ kind: "weekly", used_percent: 100, resets_at }), NOW)).toEqual({
+      title: `${isolate("Work")} cannot be used for now`,
+      description,
+    });
   });
 
   it("names a window inside a sentence in lower case, a credit pool by its period", () => {

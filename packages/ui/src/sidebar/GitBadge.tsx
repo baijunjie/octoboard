@@ -3,6 +3,7 @@ import React from "react";
 
 import { FadeOverflow } from "../components/FadeOverflow";
 import { IndicatorTooltip } from "../components/IndicatorTooltip";
+import { gitBadgeContent } from "../gitStatusCopy";
 import { gitBadgeAriaLabel } from "../gitStatusLabel";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { GitStatus } from "../protocol";
@@ -35,7 +36,7 @@ function ScrollingCountArrow({ direction }: { direction: "up" | "down" }): React
  * never colour alone.
  *
  * The whole badge is one `IndicatorTooltip` (hover only, so it adds no tab stop to its row) whose
- * text is the accessible-name sentence itself: one tooltip for the glyph, the branch and both
+ * rich facts mirror the accessible-name sentence: one tooltip for the glyph, the branch and both
  * counts, rather than one per part, so the branch name and the error can still be read once the
  * branch name is squeezed away. The one state with no tooltip is the one
  * showing "No commits yet" as visible text, which a tooltip would only repeat.
@@ -114,7 +115,7 @@ export function GitBadge({ status, decorative }: { status: GitStatus | undefined
     );
   }
   return (
-    <IndicatorTooltip tooltip={label} label={decorative ? undefined : label} className={className}>
+    <IndicatorTooltip tooltip={gitBadgeContent(language, t, status)} label={decorative ? undefined : label} className={className}>
       {/* `contents` keeps the glyph, branch and counts the trigger's own grid items. */}
       {decorative ? (
         <span aria-hidden="true" className="contents">

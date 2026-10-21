@@ -620,6 +620,48 @@ html {
   --app-danger-soft: color-mix(in oklab, var(--app-danger) 15%, transparent);
 }
 
+/* @heroui/theme 2.4.26 flat Alert backgrounds use light 50 (neutral 100), and reversed dark 50
+   at half opacity. Intentional AA exception: the unchanged v3 light description text is about
+   4.397/4.229/4.456/4.117:1 on default/accent/success/danger. Warning passes. The exception applies
+   only to that description text, not titles, indicators, chips or controls on these custom fills.
+   See docs/ui-accessibility.md's "Confirmed visual choices" for the exact reference and scope. */
+:root {
+  --alert-fill-default: #f4f4f5;
+  --alert-fill-accent: #e6f1fe;
+  --alert-fill-success: #e8faf0;
+  --alert-fill-warning: #fefce8;
+  --alert-fill-danger: #fee7ef;
+}
+
+.dark,
+[data-theme="dark"] {
+  --alert-fill-default: rgb(24 24 27 / 50%);
+  --alert-fill-accent: rgb(0 23 49 / 50%);
+  --alert-fill-success: rgb(5 40 20 / 50%);
+  --alert-fill-warning: rgb(49 33 7 / 50%);
+  --alert-fill-danger: rgb(49 4 19 / 50%);
+}
+
+.alert-fill-default {
+  background-color: var(--alert-fill-default);
+}
+
+.alert-fill-accent {
+  background-color: var(--alert-fill-accent);
+}
+
+.alert-fill-success {
+  background-color: var(--alert-fill-success);
+}
+
+.alert-fill-warning {
+  background-color: var(--alert-fill-warning);
+}
+
+.alert-fill-danger {
+  background-color: var(--alert-fill-danger);
+}
+
 /* A selected button of a toggle group takes a solid accent fill and a label colour of its own. The
    only group left is the appearance setting in the settings dialog; the two-state view controls are
    `.icon-toggle`s, which carry their state in the icon instead. HeroUI's soft accent tint

@@ -3,7 +3,6 @@ import React, { useId, useState } from "react";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { InlineChip } from "../components/InlineChip";
 import { Message, useT } from "../i18n/react";
-import { isolate } from "../i18n/isolate";
 import type { Console, Project, Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessionLabel";
 import { useDaemon, useDaemonStore } from "../store";
@@ -76,7 +75,7 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
       autoFocusSubmit
       onSubmit={submit}
     >
-      {usedUp && <ErrorAlert announce>{usedUp}</ErrorAlert>}
+      {usedUp && <ErrorAlert title={usedUp.title} announce>{usedUp.description}</ErrorAlert>}
       <p className="text-sm">{t("dialog.handOff.message")}</p>
       <HandoffMoves session={session} busy={busy} />
       <AgentAccountField
@@ -122,7 +121,7 @@ function HandoffMoves({ session, busy }: { session: Session; busy: boolean }): R
     inspected.failed ? <li key="failed">{t("dialog.handOff.movesBranchesFailed")}</li> : undefined,
     branches > 0 ? <li key="branches">{t("dialog.handOff.movesBranches", { count: branches })}</li> : undefined,
     ownedCount > 0 ? <li key="owned">{t("dialog.handOff.movesSessions", { count: ownedCount })}</li> : undefined,
-    ownerTitle !== undefined ? <li key="owner">{t("dialog.handOff.movesOwner", { owner: isolate(ownerTitle) })}</li> : undefined,
+    ownerTitle !== undefined ? <li key="owner">{<Message id="dialog.handOff.movesOwner" params={{ owner: <InlineChip dir="auto" wrap size="inherit">{ownerTitle}</InlineChip> }} />}</li> : undefined,
   ].filter(Boolean);
   return (
     <div className="flex flex-col gap-1 text-sm">

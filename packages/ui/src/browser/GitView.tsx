@@ -1,17 +1,19 @@
 import { FileCheck, GitBranch, GitFork, TriangleAlert } from "lucide-react";
-import React from "react";
+import React, { useMemo } from "react";
 
 import { CopyButton } from "../components/CopyButton";
-import { failureParam } from "../components/DaemonErrorMessage";
+import { DaemonErrorMessage, failureParam } from "../components/DaemonErrorMessage";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { ErrorAlert } from "../components/ErrorAlert";
+import { CodeToneContext } from "../components/codeTone";
 import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
-import { CodeBlock } from "../components/CodeBlock";
+import { DaemonRequestError } from "../daemon-client";
 import { InlineChip } from "../components/InlineChip";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useListMotion } from "../components/useListMotion";
 import type { Translate } from "../i18n/catalog";
+import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import { displayWirePath, wireRelativeOrAbsolute } from "../wirePath";
 import { BranchSelect } from "./BranchSelect";
@@ -84,25 +86,32 @@ function loadingText(t: Translate, props: ChangesViewProps): string | undefined 
   const parts = partsLoading(props);
   if (items.length === 0) return parts.uncommitted || parts.committed ? t("git.loading") : undefined;
   if (committed.state !== "compare" || !parts.committed) return undefined;
-  return committed.comparison.state === "loading" ? t("git.changes.comparing", { base: displayWirePath(committed.base) }) : t("git.changes.listingCommits");
+  return committed.comparison.state === "loading" ? t("git.changes.comparing", { base: isolate(displayWirePath(committed.base)) }) : t("git.changes.listingCommits");
 }
+
+const UNAVAILABLE_TITLE = <Message id="git.unavailable" />;
 
 function GitContent(props: { source: SourceState } & ChangesViewProps): React.ReactElement {
   const t = useT();
   const { source, onRetry } = props;
-  useErrorAcknowledgement(source.state === "loaded" ? source.source.git_error ?? undefined : undefined, t("git.unavailable"));
+  const diagnostic = source.state === "loaded" ? source.source.git_error ?? undefined : undefined;
+  const failure = useMemo(() => diagnostic === undefined ? undefined : new DaemonRequestError(diagnostic, "git_unavailable", { detail: diagnostic }), [diagnostic]);
+  useErrorAcknowledgement(failure, UNAVAILABLE_TITLE);
   if (source.state === "loading") return <GitLoading label={t("git.loading")} />;
   if (source.state === "error") return <GitFailure title={t("git.error.source")} message={source.message} onRetry={onRetry} />;
   const git = source.source.git;
   if (!git) {
-    return source.source.git_error !== null ? (
+    return failure ? (
       <div className="flex min-w-0 flex-1 items-center justify-center p-4">
-        <ErrorAlert title={t("git.unavailable")} className="w-full max-w-lg">
-          <CodeBlock>{source.source.git_error}</CodeBlock>
-        </ErrorAlert>
+        <CodeToneContext value="danger">
+          <div className="flex w-full min-w-0 max-w-lg flex-col gap-3">
+            <ErrorAlert title={UNAVAILABLE_TITLE}><DaemonErrorMessage error={failure} part="summary" /></ErrorAlert>
+            <DaemonErrorMessage error={failure} part="details" />
+          </div>
+        </CodeToneContext>
       </div>
     ) : (
-      <CenteredEmptyPanel icon={GitFork} message={t("git.notARepository")} />
+      <CenteredEmptyPanel icon={GitFork} message={<Message id="git.notARepository" />} />
     );
   }
   return <ChangesView {...props} projectRoots={[source.source.root, source.source.resolved_root]} />;
@@ -142,7 +151,7 @@ function Notice({ notice, projectRoots }: { notice: ChangesNotice; projectRoots:
     case "noBase":
       return <>{t("git.changes.noBase")}</>;
     case "comparing":
-      return <>{t("git.changes.comparing", { base: notice.base })}</>;
+      return <Message id="git.changes.comparing" params={{ base: code(notice.base) }} />;
     case "base":
       return <Message id="git.changes.base" params={{ base: code(notice.base), baseCommit: code(notice.baseCommit), tip: code(notice.tip) }} />;
     case "listingCommits":
@@ -220,17 +229,19 @@ function ChangesView({
               </p>
             ))}
             {lineFailures.map((failure) => (
-              <p key={failure.key}>
-                <Message id={failure.line} params={{ message: failureParam(failure.message) }} />
-              </p>
+              <div key={failure.key} className="min-w-0">
+                <p><Message id={failure.line} params={{ message: failureParam(failure.message) }} /></p>
+                <DaemonErrorMessage error={failure.message} part="details" />
+              </div>
             ))}
           </div>
         )}
       </div>
       {branchesError !== undefined && !(branch === undefined && branches.state === "error") && (
-        <PaneNote>
-          <Message id="git.branch.branchesError" params={{ message: failureParam(branchesError) }} />
-        </PaneNote>
+        <div className="min-w-0">
+          <PaneNote><Message id="git.branch.branchesError" params={{ message: failureParam(branchesError) }} /></PaneNote>
+          <div className="px-(--pane-inset)"><DaemonErrorMessage error={branchesError} part="details" /></div>
+        </div>
       )}
       <div className="flex min-h-0 flex-1 flex-col" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
         {branch === undefined ? (

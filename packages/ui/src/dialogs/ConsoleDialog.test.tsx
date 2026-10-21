@@ -360,15 +360,39 @@ it("locks the pickers and says so while the list is out, with the stored value i
 });
 
 it.each([
-  ["models_binary_not_found", { binary: "claude" }, "claude was not found, so the models cannot be listed."],
-  ["models_shell_environment_failed", { detail: "no shell" }, `The shell environment could not be read, so the models cannot be listed: ${isolate("no shell")}`],
-  ["models_timed_out", { agent: "Claude Code" }, `${isolate("Claude Code")} took too long to list its models.`],
-  ["models_command_failed", { agent: "Claude Code", detail: "exit 1" }, `${isolate("Claude Code")} could not list its models: ${isolate("exit 1")}`],
-  ["models_unreadable_output", { agent: "Claude Code" }, `${isolate("Claude Code")} printed no models that could be read.`],
-])("says why there is no list for %s, and leaves the form usable", async (code, params, reason) => {
+  ["models_binary_not_found", { binary: "claude" }, "claude was not found, so the models cannot be listed.", `${isolate("claude")} was not found, so the models cannot be listed. Check that it is installed and on your shell's ${isolate("PATH")}.`],
+  ["models_shell_environment_failed", { detail: "no shell" }, "The shell environment could not be read, so the models cannot be listed.", `The shell environment could not be read, so the models cannot be listed: ${isolate("no shell")}`],
+  ["models_timed_out", { agent: "Claude Code" }, "Claude Code took too long to list its models.", `${isolate("Claude Code")} took too long to list its models.`],
+  ["models_command_failed", { agent: "Claude Code", detail: "exit 1" }, "Claude Code could not list its models.", `${isolate("Claude Code")} could not list its models: ${isolate("exit 1")}`],
+  ["models_unreadable_output", { agent: "Claude Code" }, "Claude Code printed no models that could be read.", `${isolate("Claude Code")} printed no models that could be read.`],
+])("says why there is no list for %s, and leaves the form usable", async (code, params, summary, reason) => {
   const request = render(stored, [], async (body) => listing(body, [], { code, params, message: "daemon words" }));
   await openAdvanced();
-  expect(document.body.textContent).toContain(reason);
+  const descriptions = Array.from(document.body.querySelectorAll('[data-slot="description"]')).filter((node) => node.textContent === summary);
+  expect(descriptions).toHaveLength(2);
+  for (const description of descriptions) {
+    expect(description.textContent).not.toMatch(/[\u2066-\u2069]/);
+    expect(description.querySelector("pre")).toBeNull();
+    const reference = description.querySelector("[data-inline-chip]");
+    if ("binary" in params) {
+      expect(reference?.textContent).toBe(params.binary);
+      expect(reference?.getAttribute("dir")).toBe("ltr");
+      expect(reference?.querySelector("code")?.textContent).toBe(params.binary);
+    } else if ("agent" in params) {
+      expect(reference?.textContent).toBe(params.agent);
+      expect(reference?.getAttribute("dir")).toBe("auto");
+      expect(reference?.querySelector("code")).toBeNull();
+    } else expect(reference).toBeNull();
+    if (reference) expect(reference.getAttribute("data-size")).toBe("inherit");
+  }
+  const diagnostics = Array.from(document.body.querySelectorAll("pre"));
+  const detail = "detail" in params ? params.detail : undefined;
+  expect(diagnostics.map((node) => node.textContent)).toEqual(detail ? [detail, detail] : []);
+  expect(diagnostics.every((node) => !node.closest('[data-slot="description"]'))).toBe(true);
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
+  const statuses = Array.from(document.body.querySelectorAll('[role="status"]')).filter((node) => !node.closest("[hidden], [inert], [aria-hidden='true']"));
+  expect(statuses.map((node) => node.textContent)).toEqual([reason]);
+  expect(statuses[0].querySelector("[data-inline-chip], code, pre")).toBeNull();
   await click(pickerNamed("Model"));
   expect(optionTexts()).toEqual(["alpha, Not in the list"]);
   await click(pickerNamed("Model"));

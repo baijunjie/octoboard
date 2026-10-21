@@ -3,17 +3,22 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { DaemonRequestError } from "../daemon-client";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
-import { LaunchSettingsFields } from "./LaunchSettingsFields";
+import { EffortPicker, LaunchSettingsFields, ModelPicker, type LaunchModels } from "./LaunchSettingsFields";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** Longer than `StatusAnnouncer`'s first write delay. */
 const PAST_FIRST_WRITE = 150;
 
-function mount() {
+function mount(unavailable?: import("../protocol").ModelsUnavailable | Error) {
   const request = vi.fn(async (body: { type: string }) => {
-    if (body.type === "list_agent_models") throw new Error("Fixture has no models");
+    if (body.type === "list_agent_models") {
+      if (unavailable instanceof Error) throw unavailable;
+      if (unavailable) return { type: "agent_models", models: [], unavailable };
+      throw new Error("Fixture has no models");
+    }
     return { type: "ack" };
   });
   const daemon = { store: createStateStore({}), request, toastError: vi.fn(), toastNotice: vi.fn() } as unknown as Daemon;
@@ -35,7 +40,7 @@ function mount() {
   const exposedStatuses = () =>
     [...container.querySelectorAll('[role="status"]')].filter((region) => !region.closest("[hidden], [inert], [aria-hidden='true']")).map((region) => region.textContent);
   const wait = (ms: number) => act(() => new Promise((resolve) => setTimeout(resolve, ms)));
-  return { toggle, exposedStatuses, wait, request };
+  return { toggle, exposedStatuses, wait, request, container };
 }
 
 // The failure kept from the first opening comes back with the body; written in that same render it
@@ -62,4 +67,51 @@ it("says the model list's failure again each time the section is opened, once, a
   expect(exposedStatuses()).toEqual(["Fixture has no models"]);
   expect(writes).toEqual(["Fixture has no models"]);
   expect(request).toHaveBeenCalledTimes(2);
+});
+
+it("keeps model diagnostics outside the field description while announcing the complete plain reason once", async () => {
+  const detail = "error: models unavailable\n    /tmp/مراجعة";
+  const { toggle, exposedStatuses, wait, container } = mount({ code: "models_command_failed", params: { agent: "Codex", detail }, message: "fallback" });
+  toggle();
+  await wait(PAST_FIRST_WRITE);
+  const description = [...container.querySelectorAll('[data-slot="description"]')].find((node) => node.textContent === "Codex could not list its models.")!;
+  expect(description.textContent).toBe("Codex could not list its models.");
+  expect(description.querySelector("pre,div,p")).toBeNull();
+  expect(container.querySelector("pre")?.textContent).toBe(detail);
+  expect(description.contains(container.querySelector("pre"))).toBe(false);
+  const select = [...container.querySelectorAll("[aria-describedby]")].find((node) => node.getAttribute("aria-describedby")?.split(" ").includes(description.id))!;
+  expect(select.getAttribute("aria-describedby")?.split(" ")).toContain(description.id);
+  expect(exposedStatuses()).toHaveLength(1);
+  expect(exposedStatuses()[0]).toContain(detail);
+});
+
+
+it("retains request-refusal metadata for rich model descriptions while keeping status announcements plain", async () => {
+  const failure = new DaemonRequestError("Plain model request failure", "unknown_account", { account: "missing-account" });
+  const { toggle, exposedStatuses, wait, container } = mount(failure);
+  toggle();
+  await wait(PAST_FIRST_WRITE);
+  expect(container.querySelector("[data-slot=description] code")?.textContent).toBe("missing-account");
+  expect(exposedStatuses()).toEqual([failure.message]);
+});
+
+it("directs inherited model and effort badges without selecting or submitting their display values", () => {
+  const inherited = { model: "model/中文-مراجعة", effort: "effort/مراجعة-中文" };
+  const changed = vi.fn();
+  const launch: LaunchModels = { loading: false, models: [], modelText: undefined, modelDescription: undefined, modelDetails: undefined };
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  act(() => root.render(<>
+    <ModelPicker launch={launch} model={null} inherit={inherited} onChange={changed} />
+    <EffortPicker launch={launch} model={null} effort={null} inherit={inherited} onChange={changed} />
+  </>));
+  for (const value of Object.values(inherited)) {
+    const badge = [...container.querySelectorAll("button span")].find((node) => node.textContent === value)!;
+    expect(badge.getAttribute("dir")).toBe("auto");
+    expect(badge.textContent).not.toMatch(/[\u2066-\u2069]/);
+  }
+  expect([...container.querySelectorAll("select")].map((select) => select.value)).toEqual(["", ""]);
+  expect([...container.querySelectorAll("option")].map((option) => option.value)).not.toEqual(expect.arrayContaining(Object.values(inherited)));
+  expect(changed).not.toHaveBeenCalled();
 });

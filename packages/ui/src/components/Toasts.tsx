@@ -8,7 +8,7 @@ import { errorAlerts } from "../errorAlerts";
 import { hasCodeParams, hasShellTimeoutDetails } from "../errorPresentation";
 import { t } from "../i18n/language";
 import { useT } from "../i18n/react";
-import { sessionLocation } from "../sessionLabel";
+import { sessionLocationContent } from "../sessionCopy";
 import { useDaemon, type ToastRequest } from "../store";
 import { TOAST_BREAKPOINT } from "./toastGeometry";
 import { TitledControl } from "./TitledControl";
@@ -47,7 +47,7 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
       onToast((request) => {
         const { sessions, consoles, projects } = store.getState();
         const session = request.session ? sessions.get(request.session) : undefined;
-        const location = session && sessionLocation(t, session, consoles, projects);
+        const location = session && sessionLocationContent(t, session, consoles, projects);
         if (request.kind === "error") {
           errorAlerts.report({
             message: request.message,
@@ -149,7 +149,7 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
   );
 }
 
-function showToast({ kind, message, session, daemonError, daemonTitle, content }: ToastRequest, location: string | undefined): void {
+function showToast({ kind, message, session, daemonError, daemonTitle, content }: ToastRequest, location: React.ReactNode): void {
   const signature = JSON.stringify([kind, message, session]);
   const body = content ?? message;
   const shell = daemonError && hasShellTimeoutDetails(daemonError) ? daemonError : undefined;

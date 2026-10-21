@@ -8,6 +8,7 @@ import { errorAlerts } from "../errorAlerts";
 import { InlineChip } from "../components/InlineChip";
 import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "../dialogs/Dialog";
 import { dialogAround } from "../dialogs/dialogElement";
+import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import { useDaemon } from "../store";
@@ -111,7 +112,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
         document = JSON.parse(opened.text);
       } catch {
         errorAlerts.report({
-          message: t("configuration.import.notJson", { name: opened.name }),
+          message: t("configuration.import.notJson", { name: isolate(opened.name) }),
           recovery: "configuration",
           content: <Message id="configuration.import.notJson" params={{ name: <InlineChip monospace wrap size="inherit">{opened.name}</InlineChip> }} />,
         });
@@ -194,7 +195,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
       <div ref={bodyRef} className="flex flex-col gap-4">
         {stage.kind === "choose" && (
           <>
-            <p className="text-sm">{t("configuration.import.choose.intro")}</p>
+            <p className="text-sm"><Message id="configuration.import.choose.intro" /></p>
             <DialogError message={failure} />
           </>
         )}

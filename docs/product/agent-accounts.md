@@ -60,7 +60,8 @@ no tooltip and no such line, and while the list is undecided no tab has the icon
 ## Adding an agent
 
 **Add agent** opens a dialog with a line saying that only an agent installed on this machine can be added, and a list
-of every agent, in the order Claude Code, Codex, Grok Build, each with its icon, its name and its status:
+of every agent, in the order Claude Code, Codex, Grok Build, each with its icon and name, followed by a separate
+status badge in every state:
 
 | Status | What the row offers |
 |---|---|

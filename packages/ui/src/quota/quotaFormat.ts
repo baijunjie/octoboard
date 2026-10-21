@@ -162,6 +162,16 @@ export function quotaUsedUpSentence(t: Translate, account: string, window: Quota
   return resets ? t("quota.accountUsedUp.resets", { ...params, resets }) : t("quota.accountUsedUp", params);
 }
 
+/** The short title and explanation used by an inline quota Alert. */
+export function quotaUsedUpAlert(t: Translate, account: string, window: QuotaWindow, now: number): { title: string; description: string } {
+  const resets = quotaResetsIn(t, window, now);
+  const quota = quotaWindowPhrase(t, window);
+  return {
+    title: t("quota.accountUsedUp.title", { account: isolate(account) }),
+    description: resets ? t("quota.accountUsedUp.descriptionResets", { quota, resets }) : t("quota.accountUsedUp.description", { quota }),
+  };
+}
+
 /** The two layers of a combined meter: the 5-hour window and the account-wide weekly one beneath it. The weekly
  * layer is absent when the agent reports none. `undefined` for an account with no 5-hour window (a single
  * credit pool, say), which keeps one bar. */

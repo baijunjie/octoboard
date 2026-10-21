@@ -6,6 +6,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { errorAlerts } from "../errorAlerts";
 import { DaemonRequestError } from "../daemon-client";
 import { MIXED_RESULT, REVIEW } from "../gallery/fixtures/configuration";
+import { isolate } from "../i18n/isolate";
 import { ConfigurationFileError } from "../platform";
 import type { Event, RequestBody } from "../protocol";
 import { ImportConfigurationDialog } from "./ImportConfigurationDialog";
@@ -87,7 +88,12 @@ it("keeps the dialog on the file step, with the daemon's reason, for a document 
       ? Promise.reject(new DaemonRequestError("This is not a configuration file.", "configuration_not_recognised", {}))
       : reply(body);
   await reviewing({ reply: refuse });
-  expect(text()).toContain("This is not a configuration file.");
+  const acknowledgement = document.body.querySelector('[role="alertdialog"]')!;
+  expect(acknowledgement.textContent).toContain("This is not an Octoboard configuration file.");
+  const product = acknowledgement.querySelector("[data-inline-chip]")!;
+  expect(product.textContent).toBe("Octoboard");
+  expect(product.getAttribute("dir")).toBe("auto");
+  expect(product.textContent).not.toMatch(/[\u2066-\u2069]/);
   expect(text()).toContain("Choose a file exported from");
 });
 
@@ -189,7 +195,19 @@ it("tells each project's result in a table row, with the reason beside a failure
   expect(line("Website")).toContain("/Users/ana/code/website does not exist.");
   expect(line("Notes")).toContain("Left out");
   expect(line("Design System")).toContain("Failed");
-  expect(line("Design System")).toContain("git clone failed:");
+  expect(line("Design System")).toContain("Git could not clone this repository.");
+  const failedRow = Array.from(document.body.querySelectorAll("tbody tr")).find((tr) => tr.querySelectorAll("td")[1]?.textContent?.endsWith("Design System"))!;
+  const diagnostic = failedRow.querySelector("pre")!;
+  const failure = MIXED_RESULT.consoles.flatMap((console) => console.projects).find((project) => project.name === "Design System")!.error!;
+  expect(diagnostic.textContent).toBe(failure.params.detail);
+  expect(diagnostic.getAttribute("dir")).toBe("ltr");
+  expect(failedRow.querySelectorAll("pre")).toHaveLength(1);
+  const summary = Array.from(failedRow.querySelectorAll("span")).find((node) => node.textContent === "Git could not clone this repository.")!;
+  expect(summary.contains(diagnostic)).toBe(false);
+  const product = summary.querySelector("[data-inline-chip]")!;
+  expect(product.textContent).toBe("Git");
+  expect(product.getAttribute("dir")).toBe("auto");
+  expect(product.textContent).not.toMatch(/[\u2066-\u2069]/);
   expect(line("The console itself")).toContain("the data directory cannot be written");
   expect(line("Dotfiles")).toContain("Not attempted");
   expect(line("Dotfiles")).toContain("Its console could not be created.");
@@ -259,7 +277,7 @@ it("ignores another press of Choose file while the open dialog has not answered,
 it.each([
   { error: new ConfigurationFileError("too_large"), shown: "The file is too large to be a configuration file." },
   { error: new ConfigurationFileError("not_text"), shown: "The file is not a text file." },
-  { error: new ConfigurationFileError("io", "Permission denied"), shown: "Could not read the file: Permission denied" },
+  { error: new ConfigurationFileError("io", "Permission denied"), shown: `Could not read the file: ${isolate("Permission denied")}` },
 ])("words a file that could not be read from its kind: $shown", async ({ error, shown }) => {
   const mounted = mountDialog((onClose) => <ImportConfigurationDialog onClose={onClose} />, reply, {
     save: vi.fn(),

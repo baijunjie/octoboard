@@ -3,7 +3,7 @@ import React, { useId } from "react";
 
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
-import { CodeBlock } from "./CodeBlock";
+import { DiagnosticBlock } from "./DiagnosticBlock";
 import { InlineChip } from "./InlineChip";
 import { useListMotion } from "./useListMotion";
 
@@ -76,7 +76,7 @@ function Row({ row }: { row: BranchRow }): React.ReactElement {
     return (
       <div className="flex min-w-0 flex-col gap-1">
         <span>{name}</span>
-        <CodeBlock dir="ltr">{row.detail}</CodeBlock>
+        <DiagnosticBlock>{row.detail}</DiagnosticBlock>
       </div>
     );
   }

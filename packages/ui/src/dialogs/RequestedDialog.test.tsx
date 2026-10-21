@@ -708,6 +708,7 @@ it("takes a locked worktree, and the branch it has checked out, along with a pro
 
 /** The warning boxes the confirmation shows. */
 const warnings = () => [...document.querySelectorAll("[role=alertdialog] [data-slot=alert-root]")];
+const warningContent = () => warnings()[0].parentElement!;
 
 it("says that more may go along with a project in the dialog's one warning", async () => {
   mount({ kind: "delete-project", project }, [], [], {
@@ -720,10 +721,10 @@ it("says that more may go along with a project in the dialog's one warning", asy
   checkAll();
   await act(async () => {});
   expect(warnings()).toHaveLength(1);
-  expect(warnings()[0].textContent).toContain("deleted permanently");
+  expect(warningContent().textContent).toContain("deleted permanently");
 });
 
-it("adds what a ticked option does to the dialog's one warning, which holds no checkbox", async () => {
+it("adds what a ticked option does after the dialog's one warning, which holds no checkbox", async () => {
   const child = sessionOf("s-child", console_.id, project.id, "Child", "archived", { bound_to: owner.id });
   mount({ kind: "delete-session", session: { ...owner, status: "archived" } }, [owner, child], [], {
     request: async (body) => body.type === "inspect_session_branches"
@@ -732,14 +733,22 @@ it("adds what a ticked option does to the dialog's one warning, which holds no c
   });
   await act(async () => {});
   expect(warnings()).toHaveLength(1);
-  expect(warnings()[0].querySelector("input[type=checkbox]")).toBeNull();
+  expect(warnings()[0].querySelector("input[type=checkbox], ul")).toBeNull();
+  expect(warnings()[0].querySelector('[data-slot="alert-content"]')?.children).toHaveLength(1);
   act(() => boxes()[0].click());
   act(() => boxes()[1].click());
   expect(warnings()).toHaveLength(1);
-  expect(warnings()[0].textContent).toContain("Also permanently deletes 2 worktrees and branches Git keeps.");
-  expect(warnings()[0].textContent).toContain("Also permanently deletes the locked worktree, uncommitted changes included.");
+  expect(warningContent().textContent).toContain("Also permanently deletes 2 worktrees and branches Git keeps.");
+  expect(warnings()[0].textContent).not.toContain("Also permanently deletes");
+  for (const box of boxes()) {
+    for (const id of (box.getAttribute("aria-describedby") ?? "").split(" ").filter(Boolean)) {
+      expect(document.getElementById(id)).not.toBeNull();
+      expect(document.getElementById(id)?.closest('[data-slot="alert-root"]')).toBeNull();
+    }
+  }
+  expect(warningContent().textContent).toContain("Also permanently deletes the locked worktree, uncommitted changes included.");
   act(() => boxes()[0].click());
-  expect(warnings()[0].textContent).not.toContain("worktrees and branches Git keeps");
+  expect(warningContent().textContent).not.toContain("worktrees and branches Git keeps");
 });
 
 it("shows a warning only once an option is ticked where the confirmation has none of its own", async () => {
@@ -849,7 +858,7 @@ it("puts the one warning under the options, so a line it gains moves no checkbox
   const tops = boxes().map((box) => box.closest("label"));
   act(() => boxes()[1].click());
   expect(boxes().map((box) => box.closest("label"))).toEqual(tops);
-  expect(warnings()[0].textContent).toContain("Also moves the agent's own records of this session and of the sessions deleted with it to the Trash.");
+  expect(warningContent().textContent).toContain("Also moves the agent's own records of this session and of the sessions deleted with it to the Trash.");
 });
 
 it("describes the Trash option by the line saying more may go, while it shows", async () => {

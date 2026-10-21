@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { choiceKey, findEntry } from "../accountChoices";
 import { AGENT_LABEL } from "../agents";
+import { DaemonRequestError } from "../daemon-client";
 import { CONVERSATION_ID } from "../conversationId";
 import type { ErrorPresentation } from "../errorPresentation";
 import { isolate } from "../i18n/isolate";
@@ -34,7 +35,7 @@ const FOUND_SESSION_MESSAGE = {
  * a session the store does not have, or one whose project or console it does not have, which the
  * caller words generally instead. The names are isolated.
  */
-export function useHeldElsewhere(): (sessionId: string | undefined) => string | undefined {
+export function useHeldElsewhere(): (sessionId: string | undefined) => DaemonRequestError | undefined {
   const t = useT();
   const sessions = useDaemonStore((s) => s.sessions);
   const projects = useDaemonStore((s) => s.projects);
@@ -44,10 +45,10 @@ export function useHeldElsewhere(): (sessionId: string | undefined) => string | 
     if (!session) return undefined;
     if (session.project_id) {
       const project = projects.get(session.project_id);
-      return project && t("dialog.session.resumeHeldInProject", { session: isolate(sessionDisplayTitle(t, session)), project: isolate(project.name) });
+      return project && new DaemonRequestError(t("dialog.session.resumeHeldInProject", { session: isolate(sessionDisplayTitle(t, session)), project: isolate(project.name) }), "conversation_held_in_project", { session: session.id, project: project.id });
     }
     const owner = consoles.get(session.console_id);
-    return owner && t("dialog.session.resumeHeldInConsole", { session: isolate(sessionDisplayTitle(t, session)), console: isolate(owner.name) });
+    return owner && new DaemonRequestError(t("dialog.session.resumeHeldInConsole", { session: isolate(sessionDisplayTitle(t, session)), console: isolate(owner.name) }), "conversation_held_in_console", { session: session.id, console: owner.id });
   };
 }
 

@@ -10,6 +10,8 @@ import { StatusBadge } from "../components/StatusBadge";
 export type Option<T extends string> = {
   value: T;
   label: string;
+  /** Visible whole-label presentation; matching and hidden native options retain the raw label. */
+  labelContent?: React.ReactNode;
   lang?: string;
   icon?: React.ReactNode;
   /** A status badge after the label ("Not added"), which never shrinks: the label gives way first. */
@@ -42,8 +44,7 @@ const FADED = "opacity-(--disabled-opacity)";
  * With `inline` it is only as wide as its value and `label` is its accessible name alone, for a
  * control whose own row already shows the name (a setting). With `joined` it is one part of an
  * input group rather than a field of its own: it shares the group's label, so `label` is its
- * accessible name alone, it takes an equal share of the group's width (the start half whose value
- * carries a badge keeps its natural width, up to 70%, and the other half gives way), and the corners it meets
+ * accessible name alone, it takes an equal share of the group's width, and the corners it meets
  * its neighbour at are squared and the two triggers meet with nothing between them: each half's own
  * chevron and hover fill are what say there are two controls.
  *
@@ -67,6 +68,7 @@ export function OptionSelect<T extends string>({
   hideLabel,
   isDisabled,
   description,
+  descriptionDetails,
   describedBy,
   labelledBy,
 }: {
@@ -79,6 +81,7 @@ export function OptionSelect<T extends string>({
   isDisabled?: boolean;
   /** Extra explanation shown under the field. */
   description?: React.ReactNode;
+  descriptionDetails?: React.ReactNode;
   /** The id of an element elsewhere on the page that also describes the field. */
   describedBy?: string;
   /** With `hideLabel`, the ids of elements elsewhere on the page that name the field. */
@@ -102,9 +105,8 @@ export function OptionSelect<T extends string>({
       // A joined half that holds keyboard focus is raised, as its focus ring is drawn outside the
       // trigger and the later half would otherwise paint over it along the shared edge. The raise
       // is on the flex item, the root, which a trigger's own `z-index` would not be.
-      // The start half of a joined pair whose value carries a badge keeps its natural width, so the name and
-      // the badge stay readable and the other half is what gives way.
-      className={inline ? "w-48" : joined ? `min-w-0 has-[[data-focus-visible=true]]:z-10 ${joined === "start" && badge ? "flex-none max-w-[70%]" : "flex-1"}` : undefined}
+      // Both halves may carry a badge. Share the width so either name gives way within its own half.
+      className={inline ? "w-48" : joined ? "min-w-0 basis-0 flex-1 has-[[data-focus-visible=true]]:z-10" : undefined}
       aria-label={(inline || joined || hideLabel) && !labelledBy ? label : undefined}
       aria-labelledby={labelledBy}
       // react-aria drops the slot's id when no note exists on mount and does not restore it when
@@ -147,12 +149,12 @@ export function OptionSelect<T extends string>({
         <Select.Value className="flex min-w-0 flex-1 items-center gap-2 text-clip">
           {() => <>
             {current?.icon && <span aria-hidden="true" className="flex shrink-0">{current.icon}</span>}
-            <FadeOverflow as="span" lang={current?.lang} dir="auto" className={!badge ? "min-w-0 flex-1" : current ? "min-w-0" : "shrink-0"} titleWhenClipped={current?.label ?? placeholder}>
-              {current?.label ?? placeholder}
+            <FadeOverflow as="span" lang={current?.lang} dir="auto" className={!badge ? "min-w-0 flex-1" : current ? "min-w-0" : "shrink-0"} titleWhenClipped={current?.labelContent ?? current?.label ?? placeholder}>
+              {current?.labelContent ?? current?.label ?? placeholder}
             </FadeOverflow>
             {/* A placeholder's own words are short and say what the field does, so its badge (an
                 inherited value that can be a long model id) is what gives way. */}
-            {badge && <StatusBadge overflow={current ? undefined : "truncate"}>{badge}</StatusBadge>}
+            {badge && <StatusBadge dir={current ? undefined : "auto"} overflow={current ? undefined : "truncate"}>{badge}</StatusBadge>}
           </>}
         </Select.Value>
         {placeholder !== undefined && <Select.ClearButton />}
@@ -185,15 +187,15 @@ export function OptionSelect<T extends string>({
               )}
               {option.detail ? (
                 <span className={`flex min-w-0 flex-col ${option.badge ? "" : "flex-1"}`}>
-                  <FadeOverflow lang={option.lang} dir="auto" className={option.isDisabled && option.reason ? `min-w-0 ${FADED}` : "min-w-0"} titleWhenClipped={option.label}>
-                    {option.label}
+                  <FadeOverflow lang={option.lang} dir="auto" className={option.isDisabled && option.reason ? `min-w-0 ${FADED}` : "min-w-0"} titleWhenClipped={option.labelContent ?? option.label}>
+                    {option.labelContent ?? option.label}
                   </FadeOverflow>
                   <Description className="sr-only">{option.detail}</Description>
                   {option.reason && <span aria-hidden="true" className="text-xs text-app-muted"><ReasonText reason={option.reason} /></span>}
                 </span>
               ) : (
-                <FadeOverflow lang={option.lang} dir="auto" className={option.badge ? "min-w-0" : "min-w-0 flex-1"} titleWhenClipped={option.label}>
-                  {option.label}
+                <FadeOverflow lang={option.lang} dir="auto" className={option.badge ? "min-w-0" : "min-w-0 flex-1"} titleWhenClipped={option.labelContent ?? option.label}>
+                  {option.labelContent ?? option.label}
                 </FadeOverflow>
               )}
               {option.badge && <StatusBadge>{option.badge}</StatusBadge>}
@@ -203,6 +205,7 @@ export function OptionSelect<T extends string>({
         </MotionListBox>
       </Select.Popover>
       {description && <Description id={descriptionId}>{description}</Description>}
+      {descriptionDetails}
     </Select>
   );
 }

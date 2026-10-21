@@ -177,7 +177,11 @@ const WITH_SETTING_OFF: Omit<Inspection, "type"> = {
 const failure = (code: string, params: Record<string, string>, message: string) => ({ code, params, message });
 
 /** What git says of a clone that failed: long, and with an address in it that has no place to break. */
-const LONG_CLONE_DETAIL = "unable to access 'https://github.com/acme/design-system.git/': Could not resolve host: github.com";
+const LONG_CLONE_DETAIL = [
+  "Cloning into '/Users/dev/Projects/مرحبا/design-system'...",
+  "fatal: unable to access 'https://github.com/acme/design-system.git/': Could not resolve host: github.com",
+  "    retry failed after reading the proxy configuration",
+].join("\n");
 
 /** What importing `REVIEW` with its defaults came to: a project whose directory was gone by the time it was
  * imported, a clone that failed with a long reason, a project nothing
@@ -278,6 +282,9 @@ const SETTINGS_FAILED_RESULT: Omit<Imported, "type"> = {
 const FILE = { name: "octoboard-configuration.json", text: JSON.stringify({ format: "octoboard-configuration", version: 1, consoles: [] }, null, 2) };
 
 const refusal = (name: string, text: string, inspection: FixtureError): ConfigurationFixture => ({ file: { name, text }, inspection });
+
+const DIRECTORY_PROJECT = "Notes for production release coordination مرحبا 发布";
+const DIRECTORY_REVIEW = { ...REVIEW, consoles: REVIEW.consoles.map((console) => ({ ...console, projects: console.projects.map((project) => project.name === "Notes" ? { ...project, name: DIRECTORY_PROJECT } : project) })) };
 
 const reviewing = (extra: Partial<ConfigurationFixture> = {}): ConfigurationFixture => ({ file: FILE, inspection: REVIEW, imported: MIXED_RESULT, ...extra });
 
@@ -415,7 +422,7 @@ export const configurationScenarios: Scenario[] = [
     category: "exceptional",
     title: "Import, a file that is not JSON",
     state,
-    configuration: { file: { name: "photo.json", text: "not json at all" } },
+    configuration: { file: { name: "release-configuration-for-production-services-مرحبا-发布.json", text: "not json at all" } },
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -540,7 +547,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Import, result where the settings could not be applied",
-    description: "The settings failure is a danger alert of its own above the table, beside a project that was left out; the error alert the failures raise is dismissed to leave the result in view.",
+    description: "The settings failure has a stock danger alert title above the table, with its short reason in the muted alert description, beside a project that was left out; the error dialog the failures raise is dismissed to leave the result in view.",
     state: autoPulling,
     configuration: { file: FILE, inspection: WITH_SETTING_OFF, imported: SETTINGS_FAILED_RESULT },
     steps: [
@@ -557,12 +564,12 @@ export const configurationScenarios: Scenario[] = [
     category: "exceptional",
     title: "Import placement validation",
     state: state,
-    configuration: reviewing(),
-    description: "Empty and relative directories show errors together; the valid directory is accepted.",
+    configuration: reviewing({ inspection: DIRECTORY_REVIEW, imported: undefined }),
+    description: "Empty and relative directories show errors together; the valid directory is accepted. The empty directory label references a long mixed-script project name.",
     steps: [
       ...importFromSettings,
       chooseFile,
-      (ui) => ui.press(ui.t("configuration.import.project.choice", { project: "Notes" })),
+      (ui) => ui.press(ui.t("configuration.import.project.choice", { project: DIRECTORY_PROJECT })),
       (ui) => ui.press(ui.t("configuration.import.choice.directory")),
       ...placeIn("Search API", "projects/search-api"),
       ...placeIn("Website", "~/work/website"),

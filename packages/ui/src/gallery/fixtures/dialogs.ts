@@ -16,7 +16,7 @@ const RESUME_ID = "3f2b8c1e-7a4d-4e9b-9c55-0d6a1b2e4f70";
 // Each also carries a description: a short one of a few lines, and one longer than the field is tall.
 const tagged = [
   projectOf("p-docs", console_.id, "Docs Site", {
-    tags: ["x", "frontend", "a-long-tag-for-checking-project-interface-layout"],
+    tags: ["x", "frontend", "a-long-tag-for-checking-project-interface-layout-مرحبا-发布"],
     description: "The public documentation site, built with Astro.\nGuides live under src/content/guides.",
   }),
   projectOf("p-billing", console_.id, "Billing Service", {
@@ -58,8 +58,8 @@ const accountsState = snapshotState({
     added_agents: ALL_AGENTS,
     default_clone_dir: "/Users/dev/Projects",
     accounts: [
-      { id: "a-work", agent: "claude", name: "Work account for release coordination across all production services", config_dir: "/Users/dev/.claude-work" },
-      { id: "a-personal", agent: "claude", name: "Personal account for documentation and experimental development", config_dir: "/Users/dev/.claude-personal" },
+      { id: "a-work", agent: "claude", name: "Work account for release coordination across all production services مرحبا 发布", config_dir: "/Users/dev/.claude-work" },
+      { id: "a-personal", agent: "claude", name: "Personal account for documentation and experimental development مرحبا 发布", config_dir: "/Users/dev/.claude-personal" },
     ],
   },
 });
@@ -94,12 +94,13 @@ const removeState = snapshotState({
 });
 
 // A model the agent no longer lists, long enough to be clipped in a picker.
-const RETIRED_MODEL = "retired-model-for-production-release-coordination-and-compatibility-review";
+const RETIRED_MODEL = "retired-model-for-production-release-coordination-and-compatibility-review-مرحبا-发布";
+const RETIRED_EFFORT = "retired-effort-for-production-release-coordination-مرحبا-发布";
 
 // A console that carries a stored model and effort for its default agent: the model is one the
 // dialog's list no longer names, so it is offered on the end, marked.
 const launchSettingsState = snapshotState({
-  consoles: [{ ...console_, claude_console_session_model: RETIRED_MODEL, claude_console_session_effort: "high" }],
+  consoles: [{ ...console_, claude_console_session_model: RETIRED_MODEL, claude_console_session_effort: RETIRED_EFFORT }],
   projects: [web, api],
   sessions,
 });
@@ -117,7 +118,7 @@ const configured = projectOf("p-configured", console_.id, "Configured Site", {
   default_agent: "claude",
   claude_account_id: { kind: "account", id: "a-work" },
   claude_session_model: RETIRED_MODEL,
-  claude_session_effort: "high",
+  claude_session_effort: RETIRED_EFFORT,
 });
 const configuredState = snapshotState({
   consoles: [{ ...console_, claude_account_id: "a-personal" }],
@@ -338,7 +339,7 @@ const resumeState = {
     ...accountsState.settings!,
     accounts: [
       ...accountsState.settings!.accounts,
-      { id: "a-codex-team", agent: "codex" as const, name: "Team Codex", config_dir: "/Users/dev/.codex-team" },
+      { id: "a-codex-team", agent: "codex" as const, name: "Team Codex for release coordination across production services مرحبا 发布", config_dir: "/Users/dev/.codex-team" },
     ],
   },
 };
@@ -433,7 +434,7 @@ const removeProjectTrash: Scenario = {
   group: "Projects",
   category: "normal",
   title: "Remove project and move its folder to the Trash",
-  description: "The Trash option is checked: the message and the hint under the option say the folder goes too, while the confirming button still reads \"Remove\". Under the option, the disclosure \"What goes with it (4)\" is closed, and the locked-worktree option \"Also move the locked worktrees to the Trash (4)\" follows as a plain block, unchecked, with its own closed Details. Under the options, the dialog's one warning has appeared because the Trash option is checked, with a line each for the worktrees moved to the Trash and the branches deleted permanently.",
+  description: "The Trash option is checked: the message and the hint under the option say the folder goes too, while the confirming button still reads \"Remove\". Under the option, the disclosure \"What goes with it (4)\" is closed, and the locked-worktree option \"Also move the locked worktrees to the Trash (4)\" follows as a plain block, unchecked, with its own closed Details. Under the options, the dialog's one stock warning has appeared because the Trash option is checked; separate consequence lines follow it for the worktrees moved to the Trash and the branches deleted permanently.",
   state: removalState,
   projectRemovalBranches: {
     [tagged[0].id]: [
@@ -457,7 +458,7 @@ const archiveConsoleSession: Scenario = {
   group: "Archive view",
   category: "normal",
   title: "Archive console session and its bound sessions",
-  description: "The confirmation offers two plain options, unchecked, each a checkbox with its count in the label, a short note and a closed Details disclosure: \"Also force-remove the worktrees and branches Git keeps (5)\" and \"Also delete the locked worktree\". Under them, the one warning lists the running manually bound session, the waiting lead and its interrupted child; nothing but the sessions is in it. Confirming stops and archives all of them together. The confirming button reads \"Archive\" in the normal colour until a deletion option is ticked.",
+  description: "The confirmation offers two plain options, unchecked, each a checkbox with its count in the label, a short note and a closed Details disclosure: \"Also force-remove the worktrees and branches Git keeps (5)\" and \"Also delete the locked worktree\". Under them, the one stock warning is followed by a separate list of the running manually bound session, the waiting lead and its interrupted child. Confirming stops and archives all of them together. The confirming button reads \"Archive\" in the normal colour until a deletion option is ticked.",
   sessionBranches: [
     worktreeItemOf(web, hubSessions.web, "feat/changelog-tidy", "/Users/dev/worktrees/website-changelog-tidy"),
     worktreeItemOf(web, hubSessions.web, null, "/Users/dev/worktrees/website-changelog-scratch"),
@@ -682,7 +683,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "normal",
     title: "Console settings with avatar, stored launch settings and session instructions",
-    description: "The Claude Code tab holds different values for its two groups: the retired console session model is retained and marked, while project sessions have Sonnet at Low. The avatar and its remove control are visible. At the foot of Advanced, the Console session instructions field holds the console's own multi-line text, longer than the field is tall, so it scrolls inside the field.",
+    description: "The Claude Code tab holds different values for its two groups: the retired console session model and effort are retained with status badges, while project sessions have Sonnet at Low. The avatar and its remove control are visible. At the foot of Advanced, the Console session instructions field holds the console's own multi-line text, longer than the field is tall, so it scrolls inside the field.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.edit")),
@@ -1005,7 +1006,7 @@ export const dialogScenarios: Scenario[] = [
     ...removeProjectTrash,
     id: "dialog-remove-project-trash-expanded",
     title: "Remove project to the Trash, lists opened",
-    description: "Both disclosures are open (What goes with it, Details), and the locked-worktree option is ticked: under the Trash option, the worktrees moved to the Trash with the folder (one on a detached HEAD) and the branches deleted permanently; under the locked option, the four locked worktrees in each wording, those with uncommitted changes ending \"uncommitted changes\". The one warning, under the options, gains a line for the locked worktrees moved to the Trash, and the locked worktree's branch, now going with it, joins the branches.",
+    description: "Both disclosures are open (What goes with it, Details), and the locked-worktree option is ticked: under the Trash option, the worktrees moved to the Trash with the folder (one on a detached HEAD) and the branches deleted permanently; under the locked option, the four locked worktrees in each wording, those with uncommitted changes ending \"uncommitted changes\". The stock warning under the options is followed by consequence lines, including one for the locked worktrees moved to the Trash; the locked worktree's branch, now going with it, joins the branches.",
     steps: [...removeDocsSite, (ui) => ui.press(ui.t("branchCleanup.along", { count: 4 })), (ui) => ui.pressEach(ui.t("branchCleanup.details")), (ui) => ui.press(ui.t("dialog.removeProject.alongLockedRemove", { count: 4 }))],
   },
   {
@@ -1017,7 +1018,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Remove project to the Trash, what goes along unknown",
-    description: "The Trash option is checked but the daemon could not say what else goes: the dialog's one warning, under the option, appears with the single line that outside worktrees may be moved to the Trash with the project and its branches deleted permanently, with no disclosure or locked-worktree option. Confirm stays available.",
+    description: "The Trash option is checked but the daemon could not say what else goes: the dialog's stock warning under the option is followed by a separate consequence line that outside worktrees may be moved to the Trash with the project and its branches deleted permanently, with no disclosure or locked-worktree option. Confirm stays available.",
     steps: removeDocsSite,
   },
   {
@@ -1074,7 +1075,7 @@ export const dialogScenarios: Scenario[] = [
     ...archiveConsoleSession,
     id: "dialog-archive-console-session-expanded",
     title: "Archive console session, lists opened",
-    description: "Both Details disclosures are open and both options ticked: under the force-remove option, the worktrees with uncommitted changes and with initialized submodules (each with its branch chip, or plain detached HEAD text) and the unmerged branch, each group under its lead line; under the locked option, the locked worktree with its row ending \"uncommitted changes\". The one warning, under the options and still holding the sessions, gains a line for each ticked option saying it also permanently deletes them. The confirming button reads \"Archive and delete\" in the danger colour because deletion options are ticked.",
+    description: "Both Details disclosures are open and both options ticked: under the force-remove option, the worktrees with uncommitted changes and with initialized submodules (each with its branch chip, or plain detached HEAD text) and the unmerged branch, each group under its lead line; under the locked option, the locked worktree with its row ending \"uncommitted changes\". The stock warning under the options is followed by the affected sessions and a separate consequence line for each ticked option saying it also permanently deletes them. The confirming button reads \"Archive and delete\" in the danger colour because deletion options are ticked.",
     steps: [
       ...archiveConsoleSession.steps!,
       (ui) => ui.pressEach(ui.t("branchCleanup.details")),
@@ -1169,6 +1170,18 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
+    id: "dialog-rename-project",
+    group: "Projects",
+    category: "normal",
+    title: "Rename an existing project",
+    description: "The required Name retains the current project name and its example remains available when cleared.",
+    steps: [
+      (ui) => projectActions(ui, tagged[0].name),
+      (ui) => ui.press(ui.t("sidebar.project.rename")),
+    ],
+  },
+  {
+    ...dialogFixture,
     id: "dialog-rename-project-text-too-long",
     group: "Projects",
     category: "exceptional",
@@ -1224,15 +1237,29 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
+    id: "dialog-edit-project-effort-choices",
+    group: "Projects",
+    category: "normal",
+    title: "Project reasoning effort choices with a retained value",
+    description: "The open Reasoning effort list retains the stored mixed-script value that no listed model offers, with a Not in the list badge after its raw name. The Model field beside it also retains its unlisted value.",
+    steps: [
+      (ui) => projectActions(ui, configured.name),
+      (ui) => ui.press(ui.t("sidebar.project.edit")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+      (ui) => ui.press(describing("the Reasoning effort picker holding the retired value", (name) => name.startsWith(RETIRED_EFFORT))),
+    ],
+  },
+  {
+    ...dialogFixture,
     state: {
       ...dialogState,
-      consoles: new Map([...dialogState.consoles, [console_.id, { ...dialogState.consoles.get(console_.id)!, claude_project_session_model: RETIRED_MODEL, claude_project_session_effort: null }]]),
+      consoles: new Map([...dialogState.consoles, [console_.id, { ...dialogState.consoles.get(console_.id)!, claude_project_session_model: RETIRED_MODEL, claude_project_session_effort: RETIRED_EFFORT }]]),
     },
     id: "dialog-edit-project-inherited-launch-settings",
     group: "Projects",
     category: "normal",
     title: "Project settings inheriting console launch settings",
-    description: "Model reads Inherit from console with a grey badge after it naming the console's project session model, which is too long for the field and ends in an ellipsis before the chevron; Reasoning effort, which the console leaves to the agent, reads Inherit from console with a grey badge The agent's own setting, in full.",
+    description: "Model reads Inherit from console with a grey badge after it naming the console's project session model, which is too long for the field and ends in an ellipsis before the chevron; Reasoning effort inherits the console's long retained value. Both values mix scripts and keep their own reading order.",
     steps: [
       (ui) => projectActions(ui, onDefault.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),
@@ -1395,6 +1422,23 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
+    id: "dialog-add-project-git",
+    group: "Projects",
+    category: "normal",
+    title: "Git repository with a derived project name",
+    description: "The repository URL is populated and Clone into retains the configured directory. Name stays empty, showing the actual repository-derived default; clearing the URL exposes its required example.",
+    steps: [
+      consoleActions,
+      (ui) => ui.press(ui.t("sidebar.console.addProject")),
+      (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.local"))),
+      (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.git"))),
+      (ui) => ui.focus(ui.t("dialog.project.repositoryUrl")),
+      (ui) => ui.type("https://example.com/team/release-console.git"),
+      (ui) => ui.wait(1100),
+    ],
+  },
+  {
+    ...dialogFixture,
     id: "dialog-add-project-git-unreachable",
     group: "Projects",
     category: "exceptional",
@@ -1445,4 +1489,19 @@ export const dialogScenarios: Scenario[] = [
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
     ],
   },
+  {
+    id: "dialog-edit-console-models-command-failed",
+    group: "Consoles",
+    category: "exceptional",
+    title: "Model command failed with raw diagnostics",
+    description: "The model picker retains its stored choice and presents the named agent's failure with multiline diagnostics below the short reason.",
+    state: dialogState,
+    agentModels: { claude: { models: [], unavailable: {
+      code: "models_command_failed",
+      params: { agent: "Claude Code", detail: "Error: failed to load models\n    /Users/dev/.claude/مرحبا/settings.json: permission denied" },
+      message: "Claude Code could not list its models",
+    } } },
+    steps: [consoleActions, (ui) => ui.press(ui.t("sidebar.console.edit")), (ui) => ui.press(ui.t("dialog.agentSettings.advanced"))],
+  },
+
 ];

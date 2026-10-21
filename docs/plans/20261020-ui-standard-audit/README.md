@@ -12,8 +12,8 @@ Each was fixed where it was found, but nobody has checked the rest of the UI. Th
 
 1. Write the rules the user set during that preview into the UI standard, so the audit has them to check against.
 2. Audit the whole UI against the whole standard and record every place that does not conform.
-3. Fix what the audit found, in milestones split from its findings; moving every Alert onto HeroUI's stock Alert is
-   one of them.
+3. Fix what the audit found, in milestones split from its findings; moving every Alert onto HeroUI's stock structure
+   and styles with only a status background fill is one of them.
 
 ## Key design decisions
 
@@ -40,24 +40,90 @@ Each was fixed where it was found, but nobody has checked the rest of the UI. Th
     after the Alert in the surrounding content's ordinary text style, not inside it.
   - A standalone error, warning or blocking reason is never bare coloured text (already written into "Standalone
     errors use the shared Alert" during the added-agents work).
-- **The Alert loses its custom styling** (user decision): the shared error/tinted wrappers' own fills, text sizes,
-  shadow overrides and custom content structure are removed, and every Alert uses HeroUI's Alert with its original
-  styles and structure (status, indicator, content, title, description). The custom content structure is why the
-  indicator keeps landing out of line with the text and had to be patched per call site. HeroUI's description cannot
-  hold paragraphs, lists or diagnostic blocks; with the recovery moved out of the Alert, what stays inside is a
-  title and a short description, so the stock structure suffices. The standard's sentences that describe the custom
-  wrapper (the danger-soft fill, a heading-element title, block content inside the callout) are rewritten to match.
+- **The Alert's only custom visual treatment is a status background fill** (user decision). Every Alert otherwise
+  uses HeroUI's original styles and component structure (status, indicator, content, title, description). The title
+  retains its original status colour and the description its default colour; indicator, typography, spacing, radius
+  and shadow remain unchanged. Remove text-colour overrides such as `text-foreground`, text-size and shadow overrides,
+  and custom content structure. HeroUI's description cannot hold paragraphs, lists or diagnostic blocks; with the
+  recovery moved out of the Alert, what stays inside is a title and a short description, so the stock structure
+  suffices. The standard preserves the status background fill and replaces the heading-element title and block
+  content inside the callout with that stock structure.
 - **Fixes are split after the audit**, by area or by rule as the findings suggest, so each fix milestone stays
   independently reviewable in the gallery.
 
 ## Milestones
 
-1. [Write the preview's rules into the UI standard](01-write-preview-rules-into-the-standard.md)
-2. [Audit the UI against the standard](02-audit-the-ui.md)
+1. 01 Write the preview's rules into the UI standard (closed)
+2. 02 Audit the UI against the standard (closed)
 
-## Open
+### Accepted fix milestones
 
-- How the fix milestones are split (by area or by rule) is decided from the audit's findings.
-- Whether to add an automated guard (a test or lint over the message catalogs and their render sites) for names
-  interpolated into copy as plain text.
-- Whether the change check should name the "names in copy use the inline chip" rule explicitly.
+The remaining open briefs contain their own accepted finding scope and dependencies. A concise record of
+completed checks and unresolved qualifications is in [audit-checks.md](audit-checks.md). Completed work
+accumulates on the dedicated UI audit integration branch. Each milestone is independently verified; shared
+contracts have one owner at a time. Only the complete plan is rebased onto current main, verified and integrated
+into main. The closed audit changed no production UI; fix milestones implement its findings.
+
+- 03 Restore stock Alerts (closed)
+- 03a Match the HeroUI v2 Alert background reference (closed)
+- 04 Render structured error names and diagnostics (closed)
+- 05 Use rich name chips and tooltip content (closed)
+- 06 Separate choice status and direction (closed)
+- 07 Correct form defaults and blocked validity (closed)
+- 08 Keep horizontal tab strips at content width (closed)
+- [09 Use consistent neutral empty states](09-consistent-empty-states.md)
+- [10 Apply shared collection and reduced-motion behavior](10-collection-and-reduced-motion.md)
+- [11 Defer initial terminal status announcements](11-terminal-status-announcements.md)
+- 12 Hand focus off when report pages are replaced (closed)
+- [13 Use the shared button primitive for tree chevrons](13-collection-button-primitives.md)
+
+Milestones 09–11 and 13 remain open. Their briefs carry the findings, current-source handoffs and validation
+limits needed to resume work. Detailed source inventories and generated index files were pruned after the open
+scope was transferred; retained raw evidence and complete milestone handoffs stay outside Git.
+
+## Evidence baseline and concurrent integration
+
+The detailed audit inventories were collected against an older source baseline and did not certify later quota,
+resume, history or MCP integrations. Completed milestones refreshed their assigned callers; 09 must recheck the
+history empty state described in its brief, and every remaining milestone must re-inventory its affected current
+source before changing it. Historical counts are not current coverage claims.
+
+## Handoff after the 08 integration
+
+The user asked to hand off the unfinished work here and merge the completed audit through milestone 08 into
+main. Once that merge lands, continue from the then-current main and re-inventory affected callers; do not resume
+from the historical audit baseline or replay the aggregate branch again.
+
+- **09** is next: finish the directory-picker and ordinary no-installed-agent empty states, including the later
+  history-unavailable caller described in its brief.
+- **10** follows with shared collection motion and reduced-motion behavior. Preserve 08's Shell single-row,
+  conditional title and pane-minimum contract recorded in its brief and product docs.
+- **11** covers initial terminal status announcements. Its native acceptance remains item-by-item matching to a
+  passing VoiceOver case or fixture-backed packaged listening; browser snapshots do not satisfy it.
+- **13** remains paused on `refactor/collection-chevron-buttons` at `b18eed49468509dd416e742dacf00cf126a4671b`.
+  Its button migration and initial checks are separate from this merge. The user still needs to decide whether
+  that milestone includes the baseline keyboard-menu focus-return defect or tracks it separately. If resumed,
+  transplant only its own change onto current main and revalidate; do not merge its old fork wholesale.
+
+The 08 report and its machine-readable evidence remain under `/tmp/octoboard-08/`; `audit-checks.md` keeps the
+concise historical outcomes and qualifications required for continuation. Do not push as part of this local
+integration.
+
+## Coordination
+
+- Keep generated validation outputs in a task-specific `/tmp` directory. Do not commit additions or modifications
+  under `evidence/`. Historical captures and probes are archived outside Git; evidence names in these records are
+  archive identifiers. Recreate current-source measurements rather than treating those captures as current validation.
+- Independent work may proceed before unrelated milestones close. Coordinate changes to shared useFocusHandoff,
+  Button and collection contracts through the parent before editing them. Each worker writes only its assigned
+  worktree and cleans only its own services. Milestone closure does not authorize integration into main.
+- The accepted 03–13 split has no pending user confirmation. The shared Alert, semantic
+  error map, rich/plain option contract and AgentTabList each need coordinated ownership; integrated quota and resume-by-ID
+  callers are handed off through the coordinating session, not edited by this audit.
+
+## Implementation decisions
+
+- Do not introduce a broad lint/static-scanner framework. Use the full source inventory for manual closure and
+  focused, meaningful regression tests at shared rich/plain parameter and Alert component contracts during fixes.
+- Change-check briefs for 04–06 explicitly name the rule that names referenced in visible copy use InlineChip;
+  no global skill/agent configuration change is needed.

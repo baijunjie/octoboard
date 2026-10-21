@@ -13,7 +13,7 @@ import { useDaemon } from "../store";
 /** What a choice that needs confirming says before it is saved. */
 interface ApprovalConfirmation {
   title: string | React.ReactElement;
-  message: string;
+  message: React.ReactNode;
   confirmLabel: string;
 }
 
@@ -118,7 +118,7 @@ export function ClaudeApprovalModeSelect({ account, name, mode }: {
         title: account === null
           ? t("settings.accounts.approval.bypassTitleDefault")
           : <Message id="settings.accounts.approval.bypassTitle" params={{ name: <InlineChip dir="auto" wrap size="inherit">{name}</InlineChip> }} />,
-        message: t("settings.accounts.approval.bypassMessage"),
+        message: <Message id="settings.accounts.approval.bypassMessage" />,
         confirmLabel: t("settings.accounts.approval.claudeBypass"),
       } : null}
     />

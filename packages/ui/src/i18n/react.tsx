@@ -1,6 +1,8 @@
 import React, { useCallback, useSyncExternalStore } from "react";
 import { I18nProvider } from "react-aria-components";
 
+import { InlineChip } from "../components/InlineChip";
+
 import { format, globalParam, messageText, type MessageArgs, type MessageKey, splitPlaceholders, type Translate } from "./catalog";
 import { currentLanguage, subscribeLanguage } from "./language";
 import type { Language } from "./languages";
@@ -33,10 +35,15 @@ export function Message<K extends MessageKey>({
   return (
     <>
       {parts.map((part, index) =>
-        index % 2 === 0 ? part : <React.Fragment key={index}>{fill(values?.[part] ?? globalParam(part), part, language)}</React.Fragment>,
+        index % 2 === 0 ? part : <React.Fragment key={index}>{fill(values?.[part] ?? richGlobalParam(part, language), part, language)}</React.Fragment>,
       )}
     </>
   );
+}
+
+function richGlobalParam(name: string, language: Language): React.ReactNode {
+  const value = globalParam(name, language);
+  return value === undefined ? undefined : <InlineChip dir="auto" wrap size="inherit">{value}</InlineChip>;
 }
 
 function fill(value: React.ReactNode, name: string, language: Language): React.ReactNode {

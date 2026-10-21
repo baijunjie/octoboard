@@ -10,9 +10,18 @@ import type { Activity } from "./sidebar/order";
  * isolated separately so mixed reading directions cannot reorder them across the separator.
  * The result is for display only: a field that edits the name starts from `session.title`. */
 export function sessionDisplayTitle(t: Translate, session: Session): string {
+  return titleText(t, session, isolate);
+}
+
+/** A whole session choice label for matching and native options, without sentence isolation. */
+export function sessionChoiceTitle(t: Translate, session: Session): string {
+  return titleText(t, session, (value) => value);
+}
+
+function titleText(t: Translate, session: Session, mark: (value: string) => string): string {
   const terminalTitle = session.terminal_title?.trim();
   if (!terminalTitle || terminalTitle === session.title.trim()) return session.title;
-  return t("session.displayTitle", { title: isolate(terminalTitle), name: isolate(session.title) });
+  return t("session.displayTitle", { title: mark(terminalTitle), name: mark(session.title) });
 }
 
 /** Where to tell the user a session is, since the daemon's `Session` record itself only carries

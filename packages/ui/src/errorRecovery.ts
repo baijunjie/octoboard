@@ -1,3 +1,4 @@
+import type { MessageParams } from "./protocol";
 import { DaemonRequestError } from "./daemon-client";
 
 export type ErrorRecovery =
@@ -11,8 +12,8 @@ export type ErrorRecovery =
 
 /** A local failure whose user remedy is known without inspecting its translated message. */
 export class ActionableError extends DaemonRequestError {
-  constructor(message: string, readonly recovery: ErrorRecovery, options?: ErrorOptions) {
-    super(message, "ui_actionable", {});
+  constructor(message: string, readonly recovery: ErrorRecovery, options?: ErrorOptions & { code?: string; params?: MessageParams }) {
+    super(message, options?.code ?? "ui_actionable", options?.params ?? {});
     this.cause = options?.cause;
   }
 }

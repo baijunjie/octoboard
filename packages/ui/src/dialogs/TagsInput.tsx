@@ -7,12 +7,14 @@ import {
   TagGroup,
 } from "@heroui/react";
 import React, { useRef, useState } from "react";
+import { useFocusVisible } from "react-aria";
 
 import { MotionListBox } from "../components/MotionListBox";
 import { PickedTag } from "../components/PickedTag";
-import { TitledControl } from "../components/TitledControl";
+import { InlineChip } from "../components/InlineChip";
+import { AnchoredTooltip } from "../components/AnchoredTooltip";
 import { useListMotion } from "../components/useListMotion";
-import { useT } from "../i18n/react";
+import { Message, useT } from "../i18n/react";
 
 const GROUP_CLASS =
   "relative flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-field border border-(--field-border) bg-default py-1 ps-2 pe-8 [border-width:var(--border-width-field)] transition-[background-color,border-color,box-shadow] has-[input:focus]:border-(--field-border-focus) has-[input:focus]:ring-2 has-[input:focus]:ring-app-focus not-has-[input:focus]:hover:bg-default-hover not-has-[input:focus]:hover:border-(--field-border-hover) motion-reduce:transition-none";
@@ -117,7 +119,7 @@ export function TagsInput({
               <PickedTag
                 key={tag}
                 tag={tag}
-                removeTitle={t("dialog.project.removeTag", { tag })}
+                removeTitle={<Message id="dialog.project.removeTag" params={{ tag: <InlineChip dir="auto" wrap size="inherit">{tag}</InlineChip> }} />}
               />
             ))}
           </TagGroup.List>
@@ -152,9 +154,7 @@ export function TagsInput({
             add(input);
           }}
         />
-        <TitledControl title={t("dialog.project.tagsSuggestions")}>
-          <ComboBox.Trigger aria-label={t("dialog.project.tagsSuggestions")} />
-        </TitledControl>
+        <SuggestionsTrigger label={t("dialog.project.tagsSuggestions")} isDisabled={isDisabled} />
       </ComboBox.InputGroup>
       <ComboBox.Popover>
         <MotionListBox className="relative">
@@ -167,5 +167,28 @@ export function TagsInput({
       </ComboBox.Popover>
       {description && <Description>{description}</Description>}
     </ComboBox>
+  );
+}
+
+/** InputGroup renders its siblings inside the trigger, so a tooltip's focus context there would
+ * also reach the input and tags. Anchor the tooltip to the actual button without a trigger wrapper. */
+function SuggestionsTrigger({ label, isDisabled }: { label: string; isDisabled?: boolean }): React.ReactElement {
+  const anchor = useRef<Element>(null);
+  const [isHovered, setHovered] = useState(false);
+  const [isFocused, setFocused] = useState(false);
+  const { isFocusVisible } = useFocusVisible();
+  const focused = isFocused && isFocusVisible;
+  return (
+    <>
+      <ComboBox.Trigger
+        aria-label={label}
+        aria-describedby=""
+        onFocus={(event) => { anchor.current = event.currentTarget; setFocused(true); }}
+        onBlur={() => setFocused(false)}
+        onHoverStart={(event) => { anchor.current = event.target; }}
+        onHoverChange={setHovered}
+      />
+      <AnchoredTooltip key={String(focused)} tooltip={label} anchor={anchor} hovered={!isDisabled && (isHovered || focused)} immediate={focused} />
+    </>
   );
 }

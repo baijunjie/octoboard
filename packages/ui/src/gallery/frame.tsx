@@ -53,6 +53,7 @@ const [{ App }, { Toasts }, { ErrorAlerts }, { ErrorBoundary }, { LanguageProvid
 await import("../focusGuard");
 await import("../style.css");
 const { createFixtureDaemon } = await import("./fixtureDaemon");
+const { installReportPageFixture } = await import("./reportPageFixture");
 
 const { DaemonFailedMessage, NoAddressMessage, StartupScreen } = startup;
 
@@ -139,6 +140,7 @@ function Crash({ stack }: { stack?: string }): never {
 
 // A viewer scenario has one too: the viewer's header copies a path through the daemon's toasts.
 const daemon = scenario && !scenario.startup ? createFixtureDaemon(scenario) : undefined;
+if (daemon && scenario) installReportPageFixture(document, daemon, scenario.id);
 const { ViewerGallery } = scenario?.viewer ? await import("./viewerGallery") : { ViewerGallery: undefined };
 const viewerSubjects = scenario?.viewer ? await scenario.viewer.subjects(language) : undefined;
 const { CodeGallery } = scenario?.codePalette ? await import("./codeGallery") : { CodeGallery: undefined };

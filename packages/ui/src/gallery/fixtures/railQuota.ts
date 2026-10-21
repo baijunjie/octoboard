@@ -79,7 +79,7 @@ const unreadState = railQuotaState(
     quotaOf("claude", null, null, [], { unavailable: quotaFailure("quota_timed_out", { agent: "Claude Code" }, "Claude Code took too long to report its quota.") }),
     quotaOf("claude", "a-work", "pro", [quotaWindow("session", 46, 83), quotaWindow("weekly", 62, 2 * 24 * 60 + 9 * 60)], {
       fetched_at: minutesAgo(12),
-      unavailable: quotaFailure("quota_command_failed", { agent: "Claude Code", detail: "exit status 1: Error: not logged in" }, "Claude Code could not report its quota: exit status 1: Error: not logged in"),
+      unavailable: quotaFailure("quota_command_failed", { agent: "Claude Code", detail: "exit status 1: Error: not logged in\n    /Users/dev/.claude-work/مرحبا/credentials.json: permission denied" }, "Claude Code could not report its quota: exit status 1: Error: not logged in"),
     }),
   ],
 );

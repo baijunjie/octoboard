@@ -29,7 +29,8 @@ const REVEAL_QUIET_MS = 100;
  * is called with the whole new order and the agent moved when one is dropped elsewhere; the order itself
  * stays the caller's, and the tabs fall back to `agents` until it changes, so the caller shows the new
  * order at once. `trailing` is a control at the end of the strip. It sits flush with the container's
- * end, where a row's actions button of the section beneath ends, so the two columns of buttons line up.
+ * end, aligned with the section's trailing actions column when that column is present; narrow account rows
+ * place their actions on a separate line at reading start.
  * The container is padded at its end so the tabs scroll clear of it, and HeroUI's scroll-forward
  * chevron, which would sit under it, is moved to just before it. */
 export function AgentTabList({
@@ -60,7 +61,7 @@ export function AgentTabList({
     <Tabs.ListContainer
       {...container}
       data-trailing-control={trailing ? "" : undefined}
-      className={`${container.className ?? ""} ${trailing ? "pe-14" : ""}`}
+      className={`min-w-0 max-w-full ${trailing ? "pe-14" : "w-max self-start"} ${container.className ?? ""}`}
       render={(props) => (
         <div {...props}>
           {tabScrollLabels(props.children)}
@@ -68,7 +69,7 @@ export function AgentTabList({
         </div>
       )}
     >
-      <Tabs.List aria-label={label} className="p-1.5">
+      <Tabs.List aria-label={label} className="w-max min-w-0 p-1.5">
         {agents.map((agent) => (
           <AgentTab key={agent} agent={agent} tabRef={tabRef?.(agent)} notInstalledTip={notInstalledTip?.(agent)} elements={elements} onDragStart={onReorder && dragStart} />
         ))}

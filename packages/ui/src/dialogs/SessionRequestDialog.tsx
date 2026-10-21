@@ -20,6 +20,10 @@ function branchList(language: Language, branches: string[]): React.ReactNode[] {
   return joinNodes(language, branches.map(displayWirePath), (branch, key) => <InlineChip key={key} monospace wrap size="inherit">{branch}</InlineChip>);
 }
 
+function recordReference(name: string | undefined, id: string): React.ReactElement {
+  return <InlineChip monospace={name === undefined} dir={name === undefined ? "ltr" : "auto"} wrap size="inherit">{name ?? id}</InlineChip>;
+}
+
 /** What the dialog says: which session asks, and where it is, for a session of which agent where —
  * a project and its console, or a console — that would report to the user, and the branches it
  * would be handed where the request names any. It carries no text an agent wrote: the confirmation
@@ -38,17 +42,17 @@ function SessionRequestMessage({ request }: { request: SessionRequest }): React.
   const projects = useDaemonStore((s) => s.projects);
   // Named rather than "this console": the window may be showing another one, and the session can
   // be asked for in any console.
-  const console_ = consoles.get(request.console)?.name ?? request.console;
-  const project = request.project ? (projects.get(request.project)?.name ?? request.project) : "";
-  const session = <InlineChip dir="auto" wrap size="inherit">{requesting ? sessionDisplayTitle(t, requesting) : request.session}</InlineChip>;
+  const console_ = recordReference(consoles.get(request.console)?.name, request.console);
+  const project = request.project ? recordReference(projects.get(request.project)?.name, request.project) : null;
+  const session = recordReference(requesting ? sessionDisplayTitle(t, requesting) : undefined, request.session);
   let requester: React.ReactElement;
   if (!requesting || (requesting.project_id && requesting.project_id === request.project)) {
     requester = <Message id="dialog.sessionRequest.requester.session" params={{ session }} />;
   } else {
     const elsewhere = requesting.console_id !== request.console;
-    const own = { session, console: <InlineChip dir="auto" wrap size="inherit">{consoles.get(requesting.console_id)?.name ?? requesting.console_id}</InlineChip> };
+    const own = { session, console: recordReference(consoles.get(requesting.console_id)?.name, requesting.console_id) };
     if (requesting.project_id) {
-      const project = <InlineChip dir="auto" wrap size="inherit">{projects.get(requesting.project_id)?.name ?? requesting.project_id}</InlineChip>;
+      const project = recordReference(projects.get(requesting.project_id)?.name, requesting.project_id);
       requester = elsewhere
         ? <Message id="dialog.sessionRequest.requester.projectElsewhere" params={{ ...own, project }} />
         : <Message id="dialog.sessionRequest.requester.project" params={{ session, project }} />;
@@ -58,10 +62,10 @@ function SessionRequestMessage({ request }: { request: SessionRequest }): React.
         : <Message id="dialog.sessionRequest.requester.console" params={{ session }} />;
     }
   }
-  const params = { requester, console: <InlineChip dir="auto" wrap size="inherit">{console_}</InlineChip>, agent: AGENT_LABEL[request.agent] };
+  const params = { requester, console: console_, agent: <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[request.agent]}</InlineChip> };
   const question = request.role === "console"
     ? <Message id="dialog.sessionRequest.question.console" params={params} />
-    : <Message id="dialog.sessionRequest.question.project" params={{ ...params, project: <InlineChip dir="auto" wrap size="inherit">{project}</InlineChip> }} />;
+    : <Message id="dialog.sessionRequest.question.project" params={{ ...params, project }} />;
   return (
     <p className="[overflow-wrap:anywhere]">
       {request.branches.length > 0

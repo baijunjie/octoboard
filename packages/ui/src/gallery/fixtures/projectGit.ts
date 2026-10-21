@@ -1,3 +1,4 @@
+import { GIT_STDERR } from "./structuredErrors";
 // The sample repository the fixture daemon answers a project's Git mode with (`fixtureGit.ts`),
 // and the gallery's "Project pane: Git" scenarios over it: the branch selector, the change list in
 // its sections, whole or by commit, a diff of each kind opened from it, and the states a source or a
@@ -866,7 +867,12 @@ const reviewScenarios: Scenario[] = [
     description: "The comparison is still being made: the line above the list says what it is being compared with, while the uncommitted change from the side worktree is already listed.",
     state,
     preferences,
-    git: { ...SAMPLE_GIT, comparing: "pending" },
+    git: {
+      ...SAMPLE_GIT,
+      comparing: "pending",
+      worktrees: SAMPLE_GIT.worktrees.map((worktree) => worktree.main ? { ...worktree, branch: "main/release-coordination-مرحبا-发布" } : worktree),
+      branches: SAMPLE_GIT.branches!.map((branch) => branch.name === "main" ? { ...branch, name: "main/release-coordination-مرحبا-发布" } : branch),
+    },
     steps: selecting(rankingSession),
   },
   {
@@ -1023,11 +1029,26 @@ const reviewScenarios: Scenario[] = [
     steps: [...selecting(dependenciesSession), (ui) => ui.wait(BRANCH_LIST_REREAD_MS)],
   },
   {
+    id: "git-branch-gone-worktree",
+    group: GROUP,
+    category: "exceptional",
+    title: "A worktree still naming a deleted branch",
+    description: "The worktree inspection still names a long mixed-script branch that the complete branch list no longer contains. Its clipped selector keeps a separate gone-status badge; hover the name for the rich tooltip, or open the selector to inspect the surviving raw branch choices.",
+    state,
+    preferences,
+    git: {
+      ...SAMPLE_GIT,
+      worktrees: SAMPLE_GIT.worktrees.map((worktree) => worktree.main ? { ...worktree, branch: "feature/deleted-release-coordination-and-compatibility-review-مرحبا-发布" } : worktree),
+      branches: SAMPLE_GIT.branches!.filter((branch) => branch.name !== "main"),
+    },
+    steps: openGit,
+  },
+  {
     id: "git-compare-gone",
     group: GROUP,
     category: "exceptional",
     title: "A chosen branch that no longer exists",
-    description: "The comparison failure takes the list's place, with a heading, the reason and a separate Try again control. Narrow shows the same failure in the docked Files card.",
+    description: "The comparison failure takes the list's place, with a stock status-coloured alert title, the reason and a separate Try again control. Narrow shows the same failure in the docked Files card.",
     state,
     preferences,
     git: { ...SAMPLE_GIT, missing: ["chore/update-dependencies"] },
@@ -1071,7 +1092,7 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "No changes could be listed",
-    description: "The project folder's own worktree fails to list, with nothing else to show: the failure takes the list's place, with a heading, the reason and a separate Try again control.",
+    description: "The project folder's own worktree fails to list, with nothing else to show: the failure takes the list's place, with a stock status-coloured alert title, the reason and a separate Try again control.",
     state,
     preferences,
     git: { ...SAMPLE_GIT, changes: { ...SAMPLE_GIT.changes, "wt-main": failedRead } },
@@ -1093,10 +1114,10 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "A repository Git cannot read",
-    description: "The standalone failure has a danger alert with a heading and Git's own diagnostic as selectable code. Narrow shows the same failure in the docked Files card.",
+    description: "The standalone failure has a danger alert with a stock status-coloured title; Git's own diagnostic follows outside it as selectable code. Narrow shows the same failure in the docked Files card.",
     state,
     preferences,
-    git: { worktrees: [], changes: {}, gitError: "fatal: detected dubious ownership in repository at '/Users/dev/code/search-api'" },
+    git: { worktrees: [], changes: {}, gitError: GIT_STDERR },
     steps: openGit,
   },
   {

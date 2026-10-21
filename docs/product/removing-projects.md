@@ -14,9 +14,9 @@ Removing a project asks for confirmation. **Sessions of the project that are sti
 
 - With none running, the confirmation offers **Remove**.
 - With some running, the confirmation lists them — each with its status glyph, its agent's icon and its title, in the
-  sidebar's order (see "Order of projects and sessions" in `docs/product/sidebar.md`) — in its one warning, below its
-  options and above its buttons, under a line saying that that many sessions are still running and will be ended, and
-  its button reads **End and remove**. The list follows
+  sidebar's order (see "Order of projects and sessions" in `docs/product/sidebar.md`) — below its one warning alert,
+  after its options and before its buttons. The alert says that that many sessions are still running and will be ended.
+  Its button reads **End and remove**. The list follows
   sessions starting or stopping while the confirmation is open. Confirming ends each running session's process the way
   archiving does (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`), then removes the project
   with all its sessions and the last output Octoboard kept for each. Sessions bound to another session of the project

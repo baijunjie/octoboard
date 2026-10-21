@@ -6,11 +6,13 @@ import { FadeOverflow } from "../components/FadeOverflow";
 import { useTabScrollLabels } from "../components/tabScrollLabels";
 import { DaemonRequestError } from "../daemon-client";
 import { errorPresentation } from "../errorPresentation";
-import type { MessageKey } from "../i18n/catalog";
+import { ActionableError } from "../errorRecovery";
 import { isolate } from "../i18n/isolate";
-import { useT } from "../i18n/react";
+import type { MessageKey } from "../i18n/catalog";
+import { InlineChip } from "../components/InlineChip";
+import { Message, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
-import { sessionDisplayTitle } from "../sessionLabel";
+import { sessionChoiceTitle, sessionDisplayTitle } from "../sessionLabel";
 import { BindingBadge } from "../sidebar/BindingBadge";
 import { liveConsoleSessions } from "../sidebar/order";
 import { useDaemon, useDaemonStore } from "../store";
@@ -139,8 +141,6 @@ export function SessionDialog({
   const { choice, blocked, usedUp, overrides, agentOptions, setPickedAgent, account: accountField, launch } = useLaunchChoice(parentConsole, project, undefined, record);
   // A used-up account only matters for a session about to be opened on it, not for resuming one that has its own.
   const quotaUsedUp = !resuming || record ? usedUp : undefined;
-  // Nothing to open a session with (an agent was removed or uninstalled while this was open).
-  useCloseWhenBlocked(blocked, t("dialog.session.noAgent"), onClose);
 
   // The select is shown from the moment there is a console session to offer and stays mounted
   // for the rest of the dialog's life, even if the list later empties, leaving "none" alone: it is
@@ -164,6 +164,11 @@ export function SessionDialog({
     ? storedFixedOwner ?? sessions.find((s) => s.id === sessionBinding.to.id) ?? sessionBinding.to
     : undefined;
   const fixedOwnerGone = fixedOwner !== undefined && !owners.some((s) => s.id === fixedOwner.id);
+  useCloseWhenBlocked(blocked || fixedOwnerGone, fixedOwnerGone && fixedOwner ? new ActionableError(
+    t("dialog.session.ownerGone", { name: isolate(sessionDisplayTitle(t, fixedOwner)) }),
+    "none",
+    { code: "quick_create_owner_gone", params: { name: sessionDisplayTitle(t, fixedOwner) } },
+  ) : t("dialog.session.noAgent"), onClose);
   const owner = fixedOwner ?? (sessionBinding.kind === "choose" && !resuming ? owners.find((s) => s.id === pickedOwner) : undefined);
   const [ownerOffered, setOwnerOffered] = useState(owners.length > 0);
   if (owners.length > 0 && !ownerOffered) setOwnerOffered(true);
@@ -185,6 +190,7 @@ export function SessionDialog({
   const refused = resuming && refusal?.id === resumeId && (resume.looking || recordKey === refusal.record) ? refusal.error : undefined;
 
   const submit = () => {
+    if (fixedOwnerGone) return;
     if (!attempt(resume.idProblem)) {
       resumeFieldRef.current?.querySelector("input")?.focus();
       return;
@@ -251,8 +257,8 @@ export function SessionDialog({
       {fixedOwner && (
         <div data-marquee-scope className="flex items-center gap-2 text-sm">
           <BindingBadge owner={fixedOwner} decorative />
-          <FadeOverflow dir="auto" className="min-w-0 flex-1" titleWhenClipped={t("dialog.session.ownerFixed", { name: isolate(sessionDisplayTitle(t, fixedOwner)) })}>
-            {t("dialog.session.ownerFixed", { name: isolate(sessionDisplayTitle(t, fixedOwner)) })}
+          <FadeOverflow dir="auto" className="min-w-0 flex-1" titleWhenClipped={<Message id="dialog.session.ownerFixed" params={{ name: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, fixedOwner)}</InlineChip> }} />}>
+            {<Message id="dialog.session.ownerFixed" params={{ name: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, fixedOwner)}</InlineChip> }} />}
           </FadeOverflow>
         </div>
       )}
@@ -263,7 +269,7 @@ export function SessionDialog({
           onChange={setPickedOwner}
           options={[
             { value: NO_OWNER, label: t("dialog.session.ownerNone") },
-            ...owners.map((s) => ({ value: s.id, label: sessionDisplayTitle(t, s), icon: <BindingBadge owner={s} decorative /> })),
+            ...owners.map((s) => ({ value: s.id, label: sessionChoiceTitle(t, s), labelContent: sessionDisplayTitle(t, s), icon: <BindingBadge owner={s} decorative /> })),
           ]}
         />
       )}
@@ -278,29 +284,28 @@ export function SessionDialog({
   return (
     <Dialog
       title={project
-        ? t("dialog.session.title", { project: isolate(project.name) })
-        : t("dialog.consoleSession.title", { console: isolate(parentConsole.name) })}
+        ? <Message id="dialog.session.title" params={{ project: <InlineChip dir="auto" wrap size="inherit">{project.name}</InlineChip> }} />
+        : <Message id="dialog.consoleSession.title" params={{ console: <InlineChip dir="auto" wrap size="inherit">{parentConsole.name}</InlineChip> }} />}
       onClose={onClose}
       submitLabel={t(target ? SUBMIT_LABEL[target.kind] : "dialog.session.open")}
       busy={busy}
       submitDisabled={blocked || fixedOwnerGone || quotaUsedUp !== undefined || (resuming && resume.idProblem === undefined && target === undefined)}
       onSubmit={submit}
     >
-      {quotaUsedUp && <ErrorAlert announce>{quotaUsedUp}</ErrorAlert>}
-      {fixedOwner && fixedOwnerGone && <ErrorAlert>{t("dialog.session.ownerGone", { name: isolate(sessionDisplayTitle(t, fixedOwner)) })}</ErrorAlert>}
+      {quotaUsedUp && <ErrorAlert title={quotaUsedUp.title} announce>{quotaUsedUp.description}</ErrorAlert>}
       {resumable && (
         <Tabs selectedKey={conversation} onSelectionChange={(key) => {
           setSwitched(true);
           setConversation(key as Conversation);
         }} isDisabled={blocked} className="gap-4">
-          <Tabs.ListContainer render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
-            <Tabs.List aria-label={t("dialog.session.conversation")}>
+          <Tabs.ListContainer className="w-max max-w-full self-start" render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
+            <Tabs.List aria-label={t("dialog.session.conversation")} className="w-max min-w-0 p-1.5">
               {/* Keep hovered labels at full opacity and use the foreground colour for clear feedback. */}
-              <Tabs.Tab id="new" className="whitespace-nowrap hover:text-foreground hover:opacity-100">
+              <Tabs.Tab id="new" className="w-auto flex-none scroll-mx-1.5 whitespace-nowrap hover:text-foreground hover:opacity-100">
                 {t("dialog.session.conversationNew")}
                 <Tabs.Indicator />
               </Tabs.Tab>
-              <Tabs.Tab id="resume" className="whitespace-nowrap hover:text-foreground hover:opacity-100">
+              <Tabs.Tab id="resume" className="w-auto flex-none scroll-mx-1.5 whitespace-nowrap hover:text-foreground hover:opacity-100">
                 {t("dialog.session.conversationResume")}
                 <Tabs.Indicator />
               </Tabs.Tab>

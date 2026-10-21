@@ -7,6 +7,7 @@ import { Button } from "../components/Button";
 import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { ErrorAlert } from "../components/ErrorAlert";
+import { CodeToneContext } from "../components/codeTone";
 import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
 import { handFocusOff } from "../components/handFocusOff";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
@@ -272,7 +273,7 @@ export function ProjectBrowser({
             </Tabs.ListContainer>
           </PanelHeader>
           <FileFilterField contextKey={tab} state={activeFilter} label={t("browser.filter.label")} placeholder={t(mode === "files" ? "browser.filter.placeholder" : "git.filter.placeholder")} />
-          {mode === "files" ? <Tabs.Panel id="files" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
+          {mode === "files" ? <Tabs.Panel key="files" id="files" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
             <div className="flex min-h-0 flex-1 flex-col" onFocus={filesFocus.onFocus} onBlur={filesFocus.onBlur}>
               <StatusAnnouncer text={rootLoading ? loadingLabel : undefined} />
               {rootLoading ? (
@@ -314,7 +315,7 @@ export function ProjectBrowser({
                 </>
               )}
             </div>
-          </Tabs.Panel> : <Tabs.Panel id="changes" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
+          </Tabs.Panel> : <Tabs.Panel key="changes" id="changes" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
             <RowPathScope.Provider value={{ project: project.id, worktree: git.worktree }}>
               <GitView
                 {...git.view}
@@ -364,9 +365,14 @@ function RootError({ message, onRetry, title }: { title?: string; message: Error
   useErrorAcknowledgement(message, title ?? t("browser.error.root"));
   return (
     <div ref={ref} className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-sm">
-      <ErrorAlert title={title ?? t("browser.error.root")} className="w-full max-w-lg">
-        <DaemonErrorMessage error={message} showTitle={false} />
-      </ErrorAlert>
+      <CodeToneContext value="danger">
+        <div className="flex w-full min-w-0 max-w-lg flex-col gap-3">
+          <ErrorAlert title={title ?? t("browser.error.root")}>
+            <DaemonErrorMessage error={message} part="summary" />
+          </ErrorAlert>
+          <DaemonErrorMessage error={message} part="details" />
+        </div>
+      </CodeToneContext>
       <Button size="sm" variant="secondary" preventFocusOnPress onPress={() => onRetry(ref.current)}>
         {t("error.tryAgain")}
       </Button>

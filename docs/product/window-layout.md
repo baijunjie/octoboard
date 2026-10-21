@@ -25,7 +25,7 @@ docked beside the terminal, its width clamped; only a client with no window mini
 in a plain browser, can get there. With none of its panels open, the right pane can float a panel in over the
 terminal at any width.
 
-Everything this doc says of the right pane — its width, its cards and floating in — is the same whoever owns it.
+The right pane's cards and floating behavior are the same whoever owns it.
 
 For the window's light/dark appearance see `docs/product/appearance.md`; for the settings the rail opens see
 `docs/product/settings.md`; for the top bar's Back and Forward see `docs/product/navigation-history.md`; for moving
@@ -393,7 +393,8 @@ connection banner, while it is shown:
 
 Both work the same way:
 
-- **Dragging** the handle sets the pane's width, within its range in the table above.
+- **Dragging** the handle sets the pane's width within its current limits; below 1168 px the right pane's minimum
+  follows the panels in its column (see "Below 1168 px: the sidebar becomes a drawer" below).
 - **Double-clicking** it returns the pane to its default width.
 - The handle is also reachable with Tab and is then operated from the keyboard: the arrow pointing away from the pane
   widens it and the other narrows it (Right widens the sidebar and Left the right pane; the other way round under a
@@ -543,10 +544,12 @@ Because the drawer overlays the terminal rather than pushing it aside, **opening
 terminal**, so the running agent is never sent a terminal-size change by the drawer.
 
 **The right pane stays docked below 1168 px**, at the width the user chose, clamped so that the terminal keeps its
-floor below the breakpoint, **398 px**, about 40 columns: the right pane gives up width down to its 320 px minimum.
-Where the content panel is narrower than the terminal's floor plus the right pane's minimum (398 + 320 px, a window
-narrower than about 766 px), or than the terminal's floor alone with no right pane, the row **scrolls horizontally**
-rather than squeezing the terminal further.
+**398 px** floor, about 40 columns. The right pane's minimum is **336 px while the Terminal panel is in its column**,
+and **320 px otherwise**; a maximized Terminal panel does not raise the Files panel's column minimum. This effective
+minimum does not rewrite the remembered width. Where the content panel is narrower than the terminal's floor plus
+the right pane's minimum (398 + 336 px, or 398 + 320 px: window widths below about 782 px or 766 px), or than the
+terminal's floor alone with no right pane, the row **scrolls horizontally** rather than squeezing the terminal
+further.
 
 ## Right-click menus
 

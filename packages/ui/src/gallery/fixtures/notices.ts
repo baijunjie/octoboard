@@ -174,6 +174,20 @@ export const noticeScenarios: Scenario[] = [
     ],
   },
   {
+    id: "toast-quick-create-owner-gone",
+    group: TRUST,
+    category: "exceptional",
+    title: "Quick create refused, the named owner is no longer available",
+    description: "The quick-create race has no durable form. Its acknowledgement keeps the former owner's full mixed-script task and session title as a wrapping name chip; the plain error sentence remains available to system surfaces.",
+    state: snapshotState({ consoles: [console_], projects: [web], sessions: [] }),
+    toasts: [{
+      kind: "error",
+      code: "quick_create_owner_gone",
+      params: { name: "Review release readiness مرحبا 東京 (UnbrokenOwnerNameForProductionDeploymentCompatibilityReview)" },
+      message: "The owner is no longer available",
+    }],
+  },
+  {
     id: "toast-message-not-sent",
     group: TRUST,
     category: "exceptional",

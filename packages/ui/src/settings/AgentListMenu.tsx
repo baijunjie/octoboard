@@ -137,13 +137,13 @@ export function RemoveAgentDialog({ agent, onRemoved, onCancel }: {
   ].filter((use): use is React.ReactNode => use !== false);
   return (
     <ConfirmDialog
-      title={t("settings.accounts.removeAgentTitle", { agent: AGENT_LABEL[agent] })}
+      title={<Message id="settings.accounts.removeAgentTitle" params={{ agent: <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[agent]}</InlineChip> }} />}
       message={
         <>
-          <p>{t("settings.accounts.removeAgentMessage", { agent: AGENT_LABEL[agent] })}</p>
+          <p><Message id="settings.accounts.removeAgentMessage" params={{ agent: <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[agent]}</InlineChip> }} /></p>
           {uses.length > 0 && (
             <>
-              <p><Message id="settings.accounts.removeAgentInUse" params={{ agent: AGENT_LABEL[agent] }} /></p>
+              <p><Message id="settings.accounts.removeAgentInUse" params={{ agent: <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[agent]}</InlineChip> }} /></p>
               <ul className="list-disc ps-5">
                 {uses.map((use, at) => <li key={at}>{use}</li>)}
               </ul>

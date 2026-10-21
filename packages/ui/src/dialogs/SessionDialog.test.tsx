@@ -6,6 +6,8 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
 import { errorAlerts } from "../errorAlerts";
+import { hasCodeParams } from "../errorPresentation";
+import { ActionableError } from "../errorRecovery";
 import { isolate } from "../i18n/isolate";
 import type { Agent, AgentAvailability, Session } from "../protocol";
 import type { NewSessionBinding } from "./dialogRequest";
@@ -50,11 +52,11 @@ function renderDialog(
   consoleOverride: Partial<typeof parentConsole> = {},
   binding: NewSessionBinding = { kind: "choose" },
   projectOverride: Partial<typeof project> | null = {},
-): { container: HTMLElement; root: ReturnType<typeof createRoot>; daemon: Daemon; onClose: () => void; onOpened: (sessionId: string) => void; onResume: ReturnType<typeof vi.fn>; pastMountRefocus: () => Promise<void> } {
+): { container: HTMLElement; root: ReturnType<typeof createRoot>; daemon: Daemon; onClose: () => void; onOpened: (sessionId: string) => void; onResume: ReturnType<typeof vi.fn<(sessionId: string) => Promise<void>>>; pastMountRefocus: () => Promise<void> } {
   const daemon = fakeDaemon(initial);
   const onClose = vi.fn();
   const onOpened = vi.fn();
-  const onResume = vi.fn(async () => {});
+  const onResume = vi.fn<(sessionId: string) => Promise<void>>(async () => {});
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() =>
@@ -124,7 +126,7 @@ it.each([
   { name: "binds to the console session chosen", sessions: [hub1, hub2, hubArchived], pick: "Hub", binding: choose, options: ["No console session", "Hub 2", "Hub"], boundTo: "s-hub-1" },
   { name: "offers no choice with no live console session", sessions: [hubArchived], pick: undefined, binding: choose, options: [], boundTo: undefined },
   { name: "offers no choice and sends no binding when unbound", sessions: [hub1, hub2], pick: undefined, binding: { kind: "unbound" } as const, options: [], boundTo: undefined },
-  { name: "binds to the fixed owner without offering a choice", sessions: [hub1, hub2], pick: undefined, binding: { kind: "bound", to: hub1 } as const, options: [], boundTo: "s-hub-1", fixedLine: `Reports to ${isolate("Hub")}` },
+  { name: "binds to the fixed owner without offering a choice", sessions: [hub1, hub2], pick: undefined, binding: { kind: "bound", to: hub1 } as const, options: [], boundTo: "s-hub-1", fixedLine: "Reports to Hub" },
 ])("$name", async ({ sessions, pick, binding, options, boundTo, fixedLine }) => {
   const result = await openWith(sessions, pick, binding);
   expect(result.options).toEqual(options);
@@ -133,16 +135,56 @@ it.each([
   if (fixedLine) expect(result.text).toContain(fixedLine);
 });
 
-it("cannot open a session for a fixed owner that is no longer live", () => {
-  const { container, root } = renderDialog([{ ...hub1, status: "archived" }], {}, {}, { kind: "bound", to: hub1 });
-  expect(buttons().find((b) => b.textContent === "Open")?.hasAttribute("disabled")).toBe(true);
-  expect(document.body.textContent).toContain(`${isolate("Hub")} is no longer available`);
-  act(() => root.unmount());
-  container.remove();
+it.each(["archived", "removed"])("closes a fixed-owner form with a structured acknowledgement when its owner is %s", async (change) => {
+  const { container, root, daemon, onClose, onOpened, onResume } = renderDialog([hub1], {}, {}, { kind: "bound", to: hub1 });
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  expect(onClose).not.toHaveBeenCalled();
+  expect(daemon.toastError).not.toHaveBeenCalled();
+  act(() => root.render(
+    <DaemonProvider value={daemon}>
+      <SessionDialog
+        console={parentConsole}
+        project={project}
+        binding={{ kind: "bound", to: hub1 }}
+        sessions={change === "archived" ? [{ ...hub1, status: "archived" }] : []}
+        onClose={onClose}
+        onOpened={onOpened}
+        onResume={onResume}
+      />
+    </DaemonProvider>,
+  ));
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(daemon.toastError).toHaveBeenCalledTimes(1);
+  const error = vi.mocked(daemon.toastError).mock.calls[0][0];
+  expect(error).toBeInstanceOf(ActionableError);
+  expect(error).toMatchObject({
+    message: `${isolate("Hub")} is no longer available, so a session cannot be opened for it.`,
+    recovery: "none",
+    code: "quick_create_owner_gone",
+    params: { name: "Hub" },
+  });
+  expect(hasCodeParams(error as ActionableError)).toBe(true);
+  // Even a stale submit event must not open a session after the immutable owner goes away.
+  await act(async () => document.body.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+  expect(daemon.request).not.toHaveBeenCalled();
+});
+
+it("reports only one acknowledgement when both the fixed owner and every agent are unavailable", () => {
+  const { container, root, daemon, onClose } = renderDialog([], { agentAvailability: everyAgentUnavailable() }, {}, { kind: "bound", to: hub1 });
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(daemon.toastError).toHaveBeenCalledTimes(1);
+  expect(daemon.toastError).toHaveBeenCalledWith(expect.objectContaining({ recovery: "none", code: "quick_create_owner_gone", params: { name: "Hub" } }));
 });
 
 it("keeps the owner select, back on none, when the chosen console session is archived under it", async () => {
-  const { container, root, daemon } = renderDialog([hub1]);
+  const { container, root, daemon, onClose } = renderDialog([hub1]);
   vi.mocked(daemon.request).mockResolvedValue({ type: "ack" } as never);
   await act(async () => buttons().find((b) => b.textContent?.includes("No console session"))?.click());
   await act(async () => optionElements().find((o) => o.textContent === "Hub")?.click());
@@ -156,13 +198,15 @@ it("keeps the owner select, back on none, when the chosen console session is arc
           project={project}
           binding={choose}
           sessions={[{ ...hub1, status: "archived" }]}
-          onClose={() => {}}
+          onClose={onClose}
           onResume={async () => {}}
           onOpened={() => {}}
         />
       </DaemonProvider>,
     ),
   );
+  expect(onClose).not.toHaveBeenCalled();
+  expect(daemon.toastError).not.toHaveBeenCalled();
   const ownerTrigger = buttons().find((b) => b.textContent?.includes("No console session"));
   expect(ownerTrigger).toBeDefined();
   await act(async () => ownerTrigger?.click());
@@ -553,6 +597,57 @@ const archived = sessionOf("s-old", parentConsole.id, project.id, "Old work", "a
 const running = sessionOf("s-run", parentConsole.id, project.id, "Busy", "working");
 const interrupted = sessionOf("s-int", parentConsole.id, project.id, "Paused", "interrupted", { account_id: "a-work" });
 
+it("announces exhausted quota only when the selected conversation requires a new launch", async () => {
+  const { daemon, onResume, onOpened } = renderForResume(
+    { claude_account_id: { kind: "account", id: "a-work" } },
+    heldBy("live_session", interrupted.id),
+    { ...claudeAccounts, sessions: new Map([[interrupted.id, interrupted]]) },
+  );
+  const quotaAlert = () => document.body.querySelector('[data-slot="alert-content"][role="alert"]');
+  expect(quotaAlert()).toBeNull();
+  expect(openDisabled()).toBe(false);
+  // The quota arrives after the form opened, so its title and reason must announce together.
+  act(() => daemon.store.setState({ accountQuotas: [null, "a-work"].map((account) => ({
+    agent: "claude" as const, account, fetched_at: Date.now(), plan: null, unavailable: null,
+    windows: [{ kind: "session" as const, label: null, used_percent: 100, resets_at: Date.now() + 3_600_000, window_minutes: 300 }],
+  })) }));
+  const assertQuotaAlert = () => {
+    const alert = quotaAlert();
+    expect(alert?.querySelector('[data-slot="alert-title"]')?.textContent).toBe("Work cannot be used for now");
+    expect(alert?.querySelector('[data-slot="alert-description"]')?.textContent).toContain("It has used up its 5-hour quota.");
+    expect(alert?.querySelector('[data-slot="alert-description"]')?.querySelector("div,p,ul,pre,h1,h2,h3")).toBeNull();
+    expect(openDisabled()).toBe(true);
+  };
+  assertQuotaAlert();
+  await submit();
+  expect(sentOpenSession(daemon)).toBeUndefined();
+
+  await chooseResume();
+  expect(quotaAlert()).toBeNull();
+  typeResumeId(UUID);
+  expect(quotaAlert()).toBeNull();
+  expect(openDisabled()).toBe(true);
+  await settle();
+  expect(quotaAlert()).toBeNull();
+  expect(resumeStatusText()).toContain("Found interrupted session");
+  expect(buttons().find((button) => button.textContent === "Resume")?.hasAttribute("disabled")).toBe(false);
+  await submit("Resume");
+  expect(onResume).toHaveBeenCalledExactlyOnceWith(interrupted.id);
+  expect(onOpened).toHaveBeenCalledExactlyOnceWith(interrupted.id);
+  expect(sentOpenSession(daemon)).toBeUndefined();
+
+  answerRequests(daemon, record("claude", "a-work"));
+  typeResumeId("11111111-2222-3333-4444-555555555556");
+  expect(quotaAlert()).toBeNull();
+  await settle();
+  expect(resumeStatusText()).toBe(`Found a record on Claude Code · ${isolate("Work")}`);
+  assertQuotaAlert();
+  await submit();
+  expect(sentOpenSession(daemon)).toBeUndefined();
+  expect(onResume).toHaveBeenCalledTimes(1);
+  expect(onOpened).toHaveBeenCalledTimes(1);
+});
+
 it("keeps focus in the Session ID field while the lookup comes and goes", async () => {
   act(() => setInteractionModality("pointer"));
   renderForResume({}, record("claude", null));
@@ -576,6 +671,8 @@ it("prefills an archived session's own name, not its terminal title, and shows i
   await settle();
   expect(resumeStatusText()).toContain("Fixing tests");
   expect(nameInput()!.value).toBe("Old work");
+  expect(nameInput()!.placeholder).toBe("Old work");
+  typeName("");
   expect(nameInput()!.placeholder).toBe("Old work");
   await submit("Reopen");
   expect(requestsOf(daemon, "rename_session")).toEqual([]);
@@ -851,15 +948,18 @@ const elsewhere = sessionOf("s-else", parentConsole.id, otherProject.id, "Invoic
 const consoleHeld = sessionOf("s-cons", parentConsole.id, undefined, "Hub work", "idle");
 
 it.each([
-  { name: "a session of another project", holder: elsewhere, message: `This conversation is already held by the session ${isolate("Invoices")} in ${isolate("Billing")}.` },
-  { name: "a console session", holder: consoleHeld, message: `This conversation is already held by the console session ${isolate("Hub work")} in ${isolate("Main")}.` },
-])("names $name that holds the conversation, and where", async ({ holder, message }) => {
+  { name: "a session of another project", holder: elsewhere, message: "This conversation is already held by the session Invoices in Billing.", names: ["Invoices", "Billing"] },
+  { name: "a console session", holder: consoleHeld, message: "This conversation is already held by the console session Hub work in Main.", names: ["Hub work", "Main"] },
+])("names $name that holds the conversation, and where", async ({ holder, message, names }) => {
   const initial = { sessions: new Map([[holder.id, holder]]), projects: new Map([[otherProject.id, otherProject]]), consoles: new Map([[parentConsole.id, parentConsole]]) };
   renderForResume({}, heldBy("outside_project", holder.id), initial);
   await chooseResume();
   typeResumeId(UUID);
   await settle();
-  expect(resumeField()!.closest('[data-slot="textfield"], [role="group"]')?.textContent).toContain(message);
+  const reason = resumeField()!.closest('[data-slot="textfield"], [role="group"]')!;
+  expect(reason.textContent).toContain(message);
+  expect(Array.from(reason.querySelectorAll("[data-inline-chip]"), (chip) => [chip.textContent, chip.getAttribute("dir")])).toEqual(names.map((name) => [name, "auto"]));
+  expect(reason.textContent).not.toMatch(/[\u2066-\u2069]/);
   expect(openDisabled()).toBe(true);
   expect(nameInput()).toBeUndefined();
 });
@@ -872,7 +972,9 @@ it("names the holder in the open-time refusal too, when the store knows the sess
   typeResumeId(UUID);
   await settle();
   await submit();
-  expect(resumeField()!.closest('[data-slot="textfield"], [role="group"]')?.textContent).toContain(`held by the session ${isolate("Invoices")} in ${isolate("Billing")}`);
+  const reason = resumeField()!.closest('[data-slot="textfield"], [role="group"]')!;
+  expect(reason.textContent).toContain("held by the session Invoices in Billing");
+  expect(Array.from(reason.querySelectorAll("[data-inline-chip]"), (chip) => [chip.textContent, chip.getAttribute("dir")])).toEqual([["Invoices", "auto"], ["Billing", "auto"]]);
 });
 
 it("shows a failed lookup under the field with the daemon's reason, and holds Open back", async () => {
@@ -1047,7 +1149,7 @@ it.each(["inherit", "pick", "clear"] as const)("opens console sessions with cons
   }, { kind: "choose" }, null);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
   answerSessionModels(daemon);
-  expect(document.body.querySelector('[role="dialog"] h2')?.textContent).toBe(`Open console session in ${isolate("Main")}`);
+  expect(document.body.querySelector('[role="dialog"] h2')?.textContent).toBe("Open console session in Main");
   expect(document.body.textContent).not.toContain("Report to");
   const name = document.body.querySelector<HTMLInputElement>('[role="dialog"] input')!;
   expect(name.placeholder).toBe(`${parentConsole.name} session`);

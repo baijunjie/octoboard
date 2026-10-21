@@ -12,6 +12,7 @@ import { LabelledGroup } from "../dialogs/LabelledGroup";
 import { OptionSelect } from "../dialogs/OptionSelect";
 import { TextInput } from "../dialogs/TextInput";
 import type { PlainMessageKey } from "../i18n/catalog";
+import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { AccountFallback, Event, InspectedConsole, InspectedProject } from "../protocol";
 import {
@@ -94,7 +95,7 @@ function FallbackNote({ fallback }: { fallback: AccountFallback }): React.ReactE
     <p className="flex items-start gap-2 text-sm">
       <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning-glyph" />
       <span className="min-w-0">
-        <Message id="configuration.import.fallback" params={{ agent: AGENT_LABEL[fallback.agent], name: <InlineChip dir="auto" wrap size="inherit">{fallback.name}</InlineChip> }} />
+        <Message id="configuration.import.fallback" params={{ agent: <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[fallback.agent]}</InlineChip>, name: <InlineChip dir="auto" wrap size="inherit">{fallback.name}</InlineChip> }} />
       </span>
     </p>
   );
@@ -127,7 +128,7 @@ function ProjectRow({
         <div className="w-full @md:w-56">
           <OptionSelect
             hideLabel
-            label={t("configuration.import.project.choice", { project: project.name })}
+            label={t("configuration.import.project.choice", { project: isolate(project.name) })}
             options={choicesFor(project).map((choice) => ({ value: choice, label: t(CHOICE_LABEL[choice]) }))}
             value={row.choice}
             onChange={(choice) => onChange({ ...row, choice })}
@@ -151,13 +152,14 @@ function ProjectRow({
         {/* A project found at its exported path and placed there is already said by the path's own line. */}
         {!(inPlace && project.default === "exported_path") && (
           <>
-            {" "}<span className="ms-2">{t(STATE_LABEL[project.default ?? "none"])}</span>
+            {" "}<span className="ms-2"><Message id={STATE_LABEL[project.default ?? "none"]} /></span>
           </>
         )}
       </p>
       {row.choice === "directory" ? (
         <TextInput
-          label={t("configuration.import.directory.label", { project: project.name })}
+          label={t("configuration.import.directory.label", { project: isolate(project.name) })}
+          labelContent={<Message id="configuration.import.directory.label" params={{ project: <InlineChip dir="auto" wrap size="inherit">{project.name}</InlineChip> }} />}
           value={row.directory}
           onChange={(directory) => onChange({ ...row, directory })}
           dir="ltr"

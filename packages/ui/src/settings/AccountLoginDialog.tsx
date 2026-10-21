@@ -121,7 +121,7 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
   const progress = t(login?.status === "waiting" ? "settings.accounts.login.waiting" : "settings.accounts.login.starting");
   return (
     <Dialog
-      title={<Message id="settings.accounts.login.dialogTitle" params={{ name: who, agent: AGENT_LABEL[agent] }} />}
+      title={<Message id="settings.accounts.login.dialogTitle" params={{ name: who, agent: <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[agent]}</InlineChip> }} />}
       onClose={close}
       footer={ended ? (
         <>
@@ -144,7 +144,7 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
               ? <Message id="settings.accounts.login.timedOut" params={{ name: who }} />
               : <Message id="settings.accounts.login.failed" params={{ name: who }} />}
           </p>
-          {failure && reason !== undefined && <p>{codedMessageNode(failure, reason)}</p>}
+          {failure && reason !== undefined && <><p>{codedMessageNode(failure, reason, "summary")}</p>{codedMessageNode(failure, reason, "details")}</>}
         </div>
       ) : (
         <div className="flex items-center gap-2 text-sm">

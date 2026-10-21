@@ -163,3 +163,34 @@ it("words a refused Grok sandbox with its profile and where it was set, leaving 
     expect(text).not.toMatch(/\{\w+\}/);
   }
 });
+
+it("resolves only producer-declared record IDs, preserving names that happen to equal another ID", () => {
+  const state = { ...records, projects: new Map([["literal-name", { name: "Wrong project" } as Project]]), accounts: [{ id: "literal-name", name: "Wrong account" } as import("./protocol").Account] };
+  expect(daemonMessage("en", "project_directory_shared", { project: "literal-name" }, "fallback", state)).toContain(isolate("literal-name"));
+  expect(daemonMessage("en", "account_quota_exhausted", { account: "literal-name", agent: "Codex", window: "Weekly" }, "fallback", state)).toContain(isolate("literal-name"));
+  expect(daemonMessage("en", "launch_failed", { title: "Draft", reason_code: "unknown_console", console: "c1" }, "fallback", state)).toContain(isolate("Work"));
+});
+
+it.each([
+  ["login_codex_busy", {}], ["codex_unarchive_failed", { detail: "denied" }],
+  ["grok_home_not_initialized", { path: "/tmp/home" }],
+  ["agent_not_available", { agent: "Codex" }], ["claude_workspace_untrusted", {}],
+] as const)("supplies fixed references for %s without unresolved placeholders in either language", (code, params) => {
+  for (const language of ["en", "zh-Hans"] as const) expect(daemonMessage(language, code, params, "fallback", records)).not.toMatch(/\{\w+\}/);
+});
+
+it("keeps a nested detail-only shell failure usable without inventing missing command fields", () => {
+  const params = { title: "Draft", reason_code: "shell_environment_timeout", detail: "environment capture failed\n    permission denied" };
+  for (const language of ["en", "zh-Hans"] as const) {
+    const plain = daemonMessage(language, "launch_failed", params, "fallback", records);
+    expect(plain).toContain(isolate(params.detail));
+    expect(plain.endsWith(isolate(params.detail))).toBe(true);
+    const reason = "تعذر الالتقاط / capture failed";
+    const withReason = daemonMessage(language, "launch_failed", { ...params, reason }, "fallback", records);
+    expect(withReason.endsWith(isolate(reason))).toBe(true);
+    expect(withReason).not.toContain(params.detail);
+    expect(daemonMessage(language, "shell_environment_timeout", { detail: params.detail }, "original fallback", records)).toBe("original fallback");
+    expect(plain).not.toMatch(/\{(?:shell|command|timeout)\}/);
+
+  }
+});

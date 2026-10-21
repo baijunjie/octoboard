@@ -87,7 +87,7 @@ it("stays open, with no notice, when the save dialog is dismissed", async () => 
 it("shows why a file could not be written and stays open", async () => {
   const mounted = mount(vi.fn<Save>(async () => Promise.reject(new Error("Permission denied"))));
   await press("Export");
-  expect(text()).toContain("Could not save the file: Permission denied");
+  expect(text().replace(/[\u2068\u2069]/g, "")).toContain("Could not save the file: Permission denied");
   expect(mounted.closed()).toBe(0);
 });
 
