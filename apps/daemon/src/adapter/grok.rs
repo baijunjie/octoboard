@@ -7,19 +7,26 @@
 //!
 //! What works is a per-session `GROK_HOME` built as a symlink farm over the source home: the
 //! console's pinned directory when set, else the shell's `GROK_HOME`, else `~/.grok`. Every entry is
-//! a symlink back to the source's except the ones Octoboard has to own. `auth.json` and `sessions/`
+//! a symlink to the source's except the ones Octoboard has to own. A link leads straight to the
+//! entry's fully resolved target, so a source entry that is itself a link (an account sharing the
+//! default configuration) is reached through one link, the same way that account's own link leads
+//! straight at the default entry's target, and a save does not depend on following more than one
+//! link. A dangling source link keeps pointing at the source entry. `auth.json` and `sessions/`
 //! stay symlinks, so login state is shared and a session Octoboard started stays resumable from the
 //! user's own `grok` — plain for the default home, with `GROK_HOME=<that directory>` for a pinned
 //! one.
 //!
 //! Two files in the farm are copies rather than symlinks, and both must stay that way:
 //!
-//! - `config.toml`, because Grok persists session settings back into it — `--reasoning-effort low`
-//!   was observed rewriting `default_reasoning_effort` in the file. Against a symlink that write
-//!   would either replace the link or be followed into the user's own configuration.
-//! - `trusted_folders.toml`, for the same reason: Grok saves it by replacing the file, so against a
-//!   symlink its write would replace the link rather than reach the user's store, and no setting
-//!   moves the store out of `GROK_HOME`. The copy carries every folder the user already trusts,
+//! - `config.toml`. The session home keeps a real copy so the MCP server appended to it stays out of
+//!   the source file. Grok rewrites the copy for session settings. When the source file is a symlink,
+//!   the theme, the plugin switches, and a model chosen in the session are written to that link's
+//!   canonical target after the process exits ([`SharedConfigWriteback`]), and the link itself is left
+//!   in place. The model and reasoning effort passed only for this launch are not written there, and
+//!   neither is the MCP block.
+//! - `trusted_folders.toml`: Grok saves it by replacing the file, so against a symlink its write
+//!   would replace the link rather than reach the user's store, and no setting moves the store out
+//!   of `GROK_HOME`. The copy carries every folder the user already trusts,
 //!   and Octoboard adds nothing to it: a folder Grok has not been told to trust shows Grok's own
 //!   confirmation, which Octoboard presses under the user's permission (`crate::trust`), or the
 //!   person answers in the terminal. The entry Grok then writes lands only in this copy, so once
@@ -55,8 +62,10 @@
 //! and `auth.json` inside the throw-away farm and lose them.
 //!
 //! The copies are a snapshot: an edit the user makes while a session runs is not seen, and anything
-//! the session persists lands in Octoboard's copy and is lost to them, the one exception being the
-//! trust entry above. Both are mitigated by rebuilding the farm on every launch.
+//! the session persists lands in Octoboard's copy. Two things are kept: the trust entry above, once
+//! the confirmation is accepted, and, when the source `config.toml` is a symlink, the settings
+//! [`SharedConfigWriteback`] copies to its target. The rest is lost with the process. Rebuilding the
+//! farm on every launch is what picks up an edit made in between.
 //!
 //! Two conditions come from Grok itself rather than from the mechanism: it locates a project by
 //! walking up for a `.git` directory and reads no project hooks without one; and its hooks must be
@@ -221,9 +230,10 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: &Path) -> Result<LaunchPlan> {
         Agent::Grok,
     ));
 
-    // Grok persists some session settings back into `config.toml`, but the per-session farm
-    // keeps `config.toml` as a copy (see the module comment), so these flags cannot leak into
-    // the user's own configuration.
+    // A fullscreen launch writes `--model` into `[models] default` and `--reasoning-effort` into
+    // `[models] default_reasoning_effort` before the user changes anything. The writeback skips a
+    // default equal to this launch's model and never copies the effort, so neither flag replaces
+    // the stored value. A model the user selects in the session, different from this one, is copied.
     if let Some(model) = spec.model {
         args.push("--model".to_string());
         args.push(model.to_string());
@@ -251,6 +261,7 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: &Path) -> Result<LaunchPlan> {
             grok_home.to_string_lossy().into_owned(),
         )],
         carried_trust: Some(carried_trust),
+        shared_config_writeback: shared_config_writeback(&source_home, &grok_home, spec.model),
         ..LaunchPlan::default()
     })
 }
@@ -416,7 +427,10 @@ fn build_grok_home(spec: &LaunchSpec<'_>, source_home: &Path) -> Result<PathBuf>
                 continue;
             }
             let link = farm.join(&name);
-            std::os::unix::fs::symlink(entry.path(), &link)
+            // The fully resolved target, so a source entry that is itself a link is reached through
+            // one link and a save does not depend on following a chain.
+            let target = std::fs::canonicalize(entry.path()).unwrap_or_else(|_| entry.path());
+            std::os::unix::fs::symlink(&target, &link)
                 .with_context(|| format!("linking {}", link.display()))?;
         }
     }
@@ -554,6 +568,305 @@ fn write_hooks(farm: &Path, hook_script: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Keys a sharing account's session may copy from its `config.toml` onto the shared file.
+///
+/// The session file stays a real copy, so the MCP block appended to it is never this write. The
+/// account entry has to still be a symlink when the process exits; the bytes go to that link's
+/// canonical target, and the link is not replaced. A session that did not change a key does not
+/// write it, so it does not put back a value another session has already published.
+///
+/// A fullscreen launch writes `--model` into `[models] default` and `--reasoning-effort` into
+/// `[models] default_reasoning_effort` with no further action. The effort is never copied. The
+/// default is copied only when it differs from the model this launch passed, which is what a model
+/// chosen in the session looks like; choosing the launch's own model again cannot be told from the
+/// launch write, and is left in the session copy.
+#[derive(Debug)]
+pub struct SharedConfigWriteback {
+    session_config: PathBuf,
+    account_config: PathBuf,
+    baseline: ConfigSlice,
+    launch_model: Option<String>,
+}
+
+/// The keys [`SharedConfigWriteback`] compares. `None` means the key is absent. An empty plugin
+/// list is present and is copied: clearing the list is how a plugin is switched off.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ConfigSlice {
+    theme: Option<String>,
+    enabled: Option<Vec<String>>,
+    disabled: Option<Vec<String>>,
+    model: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct ConfigChanges {
+    theme: Option<String>,
+    enabled: Option<Vec<String>>,
+    disabled: Option<Vec<String>>,
+    model: Option<String>,
+}
+
+impl ConfigChanges {
+    fn is_empty(&self) -> bool {
+        self.theme.is_none()
+            && self.enabled.is_none()
+            && self.disabled.is_none()
+            && self.model.is_none()
+    }
+}
+
+/// One daemon publishes these, and its sessions are the only writers of this slice, so a process-wide
+/// lock around the read and the replace is enough to keep two exits from dropping each other's keys.
+fn writeback_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// `Some` when `account_config`'s source entry is a symlink to a file that exists. A plain file is
+/// the account's own, and a dangling link has no shared file to write.
+fn shared_config_writeback(
+    source_home: &Path,
+    grok_home: &Path,
+    launch_model: Option<&str>,
+) -> Option<SharedConfigWriteback> {
+    let account_config = source_home.join("config.toml");
+    let meta = std::fs::symlink_metadata(&account_config).ok()?;
+    if !meta.file_type().is_symlink() {
+        return None;
+    }
+    std::fs::canonicalize(&account_config).ok()?;
+    let session_config = grok_home.join("config.toml");
+    let text = std::fs::read_to_string(&session_config).ok()?;
+    let table: toml::Table = text.parse().ok()?;
+    Some(SharedConfigWriteback {
+        session_config,
+        account_config,
+        baseline: ConfigSlice::from_table(&table),
+        launch_model: launch_model.map(str::to_owned),
+    })
+}
+
+impl SharedConfigWriteback {
+    /// Copies the keys the session changed onto the shared file. A failure is logged and leaves the
+    /// shared file as it was; the session has already exited, and removing its home must still happen.
+    pub fn publish(&self) {
+        let _guard = writeback_lock();
+        if let Err(err) = self.publish_locked() {
+            tracing::warn!(
+                path = %self.account_config.display(),
+                %err,
+                "writing Grok settings back to the shared configuration failed"
+            );
+        }
+    }
+
+    fn publish_locked(&self) -> Result<()> {
+        let meta = std::fs::symlink_metadata(&self.account_config)
+            .with_context(|| format!("reading {}", self.account_config.display()))?;
+        if !meta.file_type().is_symlink() {
+            return Ok(());
+        }
+        let target = std::fs::canonicalize(&self.account_config)
+            .with_context(|| format!("resolving {}", self.account_config.display()))?;
+        if target == self.session_config {
+            anyhow::bail!("the shared configuration resolves to the session's own copy");
+        }
+        if std::fs::symlink_metadata(&target).is_ok_and(|meta| meta.file_type().is_symlink()) {
+            anyhow::bail!("the shared configuration did not resolve to a file");
+        }
+
+        let session: toml::Table = std::fs::read_to_string(&self.session_config)
+            .with_context(|| format!("reading {}", self.session_config.display()))?
+            .parse()
+            .context("the session's configuration is not valid TOML")?;
+        let changes =
+            ConfigSlice::from_table(&session).changes(&self.baseline, self.launch_model.as_deref());
+        if changes.is_empty() {
+            return Ok(());
+        }
+
+        let current = std::fs::read_to_string(&target)
+            .with_context(|| format!("reading {}", target.display()))?;
+        let merged = apply_changes(&current, &changes)?;
+        if merged == current {
+            return Ok(());
+        }
+        let before: toml::Table = current
+            .parse()
+            .context("the shared configuration is not valid TOML")?;
+        let after: toml::Table = merged
+            .parse()
+            .context("the shared configuration would be left unreadable")?;
+        let mut expected = before.clone();
+        apply_to_table(&mut expected, &changes)
+            .context("the shared configuration is not shaped so these keys can be set")?;
+        if after != expected {
+            anyhow::bail!(
+                "writing the keys would change more of the shared configuration than those keys"
+            );
+        }
+        crate::trust::write_replacing(&target, &merged)
+    }
+}
+
+impl ConfigSlice {
+    fn from_table(table: &toml::Table) -> Self {
+        Self {
+            theme: string_key(table, "ui", "theme"),
+            enabled: string_array(table, "plugins", "enabled"),
+            disabled: string_array(table, "plugins", "disabled"),
+            model: string_key(table, "models", "default"),
+        }
+    }
+
+    /// What of `self` (the session file at exit) differs from `baseline` (the copy taken before
+    /// Grok ran) and is safe to publish. A `[models] default` equal to `launch_model` is the launch
+    /// flag's own write.
+    fn changes(&self, baseline: &Self, launch_model: Option<&str>) -> ConfigChanges {
+        ConfigChanges {
+            theme: self.theme.clone().filter(|_| self.theme != baseline.theme),
+            enabled: self
+                .enabled
+                .clone()
+                .filter(|_| self.enabled != baseline.enabled),
+            disabled: self
+                .disabled
+                .clone()
+                .filter(|_| self.disabled != baseline.disabled),
+            model: self.model.clone().filter(|value| {
+                self.model != baseline.model && launch_model.is_none_or(|launch| value != launch)
+            }),
+        }
+    }
+}
+
+fn string_key(table: &toml::Table, section: &str, key: &str) -> Option<String> {
+    table
+        .get(section)?
+        .as_table()?
+        .get(key)?
+        .as_str()
+        .map(str::to_owned)
+}
+
+/// `None` when the key is absent or any element is not a string, so a shape this does not know is
+/// left untouched rather than rewritten as a string list.
+fn string_array(table: &toml::Table, section: &str, key: &str) -> Option<Vec<String>> {
+    let array = table.get(section)?.as_table()?.get(key)?.as_array()?;
+    let mut items = Vec::with_capacity(array.len());
+    for value in array {
+        items.push(value.as_str()?.to_owned());
+    }
+    Some(items)
+}
+
+fn apply_changes(current: &str, changes: &ConfigChanges) -> Result<String> {
+    let mut doc = current
+        .parse::<toml_edit::DocumentMut>()
+        .context("the shared configuration is not valid TOML")?;
+    if let Some(theme) = &changes.theme {
+        set_value(&mut doc, "ui", "theme", theme.as_str().into())?;
+    }
+    if let Some(enabled) = &changes.enabled {
+        set_value(&mut doc, "plugins", "enabled", string_array_value(enabled))?;
+    }
+    if let Some(disabled) = &changes.disabled {
+        set_value(
+            &mut doc,
+            "plugins",
+            "disabled",
+            string_array_value(disabled),
+        )?;
+    }
+    if let Some(model) = &changes.model {
+        set_value(&mut doc, "models", "default", model.as_str().into())?;
+    }
+    Ok(doc.to_string())
+}
+
+fn string_array_value(items: &[String]) -> toml_edit::Value {
+    let mut array = toml_edit::Array::new();
+    for item in items {
+        array.push(item.as_str());
+    }
+    toml_edit::Value::Array(array)
+}
+
+/// Sets `section.key` in a standard table or an inline table. Refuses when `section` is some other
+/// kind of value, rather than replacing it.
+fn set_value(
+    doc: &mut toml_edit::DocumentMut,
+    section: &str,
+    key: &str,
+    value: toml_edit::Value,
+) -> Result<()> {
+    let item = doc
+        .as_table_mut()
+        .entry(section)
+        .or_insert(toml_edit::Item::None);
+    if item.is_none() {
+        *item = toml_edit::table();
+    }
+    if let Some(table) = item.as_table_mut() {
+        table.insert(key, toml_edit::value(value));
+        return Ok(());
+    }
+    if let Some(inline) = item
+        .as_value_mut()
+        .and_then(|value| value.as_inline_table_mut())
+    {
+        inline.insert(key, value);
+        return Ok(());
+    }
+    anyhow::bail!("`[{section}]` is not a table, so `{key}` was not written")
+}
+
+fn apply_to_table(table: &mut toml::Table, changes: &ConfigChanges) -> Result<()> {
+    if let Some(theme) = &changes.theme {
+        set_table_string(table, "ui", "theme", theme.clone())?;
+    }
+    if let Some(enabled) = &changes.enabled {
+        set_table_array(table, "plugins", "enabled", enabled)?;
+    }
+    if let Some(disabled) = &changes.disabled {
+        set_table_array(table, "plugins", "disabled", disabled)?;
+    }
+    if let Some(model) = &changes.model {
+        set_table_string(table, "models", "default", model.clone())?;
+    }
+    Ok(())
+}
+
+fn section_table<'a>(table: &'a mut toml::Table, section: &str) -> Result<&'a mut toml::Table> {
+    let value = table
+        .entry(section)
+        .or_insert_with(|| toml::Value::Table(toml::Table::new()));
+    value
+        .as_table_mut()
+        .with_context(|| format!("`[{section}]` is not a table"))
+}
+
+fn set_table_string(
+    table: &mut toml::Table,
+    section: &str,
+    key: &str,
+    value: String,
+) -> Result<()> {
+    section_table(table, section)?.insert(key.to_owned(), toml::Value::String(value));
+    Ok(())
+}
+
+fn set_table_array(
+    table: &mut toml::Table,
+    section: &str,
+    key: &str,
+    items: &[String],
+) -> Result<()> {
+    let array = items.iter().cloned().map(toml::Value::String).collect();
+    section_table(table, section)?.insert(key.to_owned(), toml::Value::Array(array));
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -675,11 +988,11 @@ mod tests {
         // Login and session records are the chosen directory's, so a resume finds its transcript.
         assert_eq!(
             std::fs::read_link(farm.join("auth.json")).expect("a link"),
-            pinned.join("auth.json")
+            std::fs::canonicalize(pinned.join("auth.json")).expect("canonical path")
         );
         assert_eq!(
             std::fs::read_link(farm.join("sessions")).expect("a link"),
-            pinned.join("sessions")
+            std::fs::canonicalize(pinned.join("sessions")).expect("canonical path")
         );
     }
 
@@ -954,6 +1267,134 @@ mod tests {
             std::fs::read_link(farm.join("bundled/inner")).expect("still a link"),
             Path::new("sub/tool")
         );
+    }
+
+    /// A sharing account's entries are links into the default directory; the farm links straight to
+    /// the final target rather than through the account's link, however long the chain.
+    #[test]
+    fn a_source_entry_that_is_a_link_is_reached_through_one_link() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        let default = fixture.scratch.join("default-home");
+        std::fs::create_dir_all(default.join("skills")).expect("default directory");
+        std::fs::write(default.join("AGENTS.md"), "shared").expect("default file");
+        std::os::unix::fs::symlink(default.join("AGENTS.md"), home.join("AGENTS.md"))
+            .expect("file link");
+        std::os::unix::fs::symlink(default.join("skills"), home.join("skills"))
+            .expect("directory link");
+        let middle = fixture.scratch.join("middle");
+        std::os::unix::fs::symlink(default.join("AGENTS.md"), &middle).expect("first hop");
+        std::os::unix::fs::symlink(&middle, home.join("chained.md")).expect("second hop");
+
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
+        let farm = PathBuf::from(&plan.env[0].1);
+
+        let file = std::fs::canonicalize(default.join("AGENTS.md")).expect("canonical path");
+        assert_eq!(
+            std::fs::read_link(farm.join("AGENTS.md")).expect("a link"),
+            file
+        );
+        assert_eq!(
+            std::fs::read_link(farm.join("chained.md")).expect("a link"),
+            file
+        );
+        assert_eq!(
+            std::fs::read_link(farm.join("skills")).expect("a link"),
+            std::fs::canonicalize(default.join("skills")).expect("canonical path")
+        );
+        assert_eq!(
+            std::fs::read_to_string(farm.join("AGENTS.md")).expect("read"),
+            "shared"
+        );
+    }
+
+    #[test]
+    fn a_plain_source_entry_is_linked_to_itself() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        std::fs::write(home.join("AGENTS.md"), "own").expect("file");
+
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
+        let farm = PathBuf::from(&plan.env[0].1);
+
+        assert_eq!(
+            std::fs::read_link(farm.join("AGENTS.md")).expect("a link"),
+            std::fs::canonicalize(home.join("AGENTS.md")).expect("canonical path")
+        );
+    }
+
+    /// With nothing to resolve to, the farm link keeps pointing at the source entry.
+    #[test]
+    fn a_dangling_source_link_is_linked_to_the_source_entry() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        std::os::unix::fs::symlink(fixture.scratch.join("gone"), home.join("AGENTS.md"))
+            .expect("dangling link");
+
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
+        let farm = PathBuf::from(&plan.env[0].1);
+
+        assert_eq!(
+            std::fs::read_link(farm.join("AGENTS.md")).expect("a link"),
+            home.join("AGENTS.md")
+        );
+    }
+
+    /// Copies are taken from the source entries' contents, so links in the source change nothing
+    /// about which entries are real.
+    #[test]
+    fn linked_source_entries_still_yield_real_copies_of_the_owned_files() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        let default = fixture.scratch.join("default-home");
+        std::fs::create_dir_all(default.join("bundles")).expect("default directory");
+        std::fs::write(default.join("bundles/one"), "1").expect("bundle");
+        std::fs::write(default.join("hooks-paths"), "/h\n").expect("hooks-paths");
+        std::fs::write(default.join("sandbox.toml"), "[profiles.p]\n").expect("sandbox");
+        std::fs::write(default.join(TRUST_STORE), "[folders.\"/t\"]\n").expect("trust");
+        std::fs::remove_file(home.join("config.toml")).expect("replace config");
+        std::fs::write(default.join("config.toml"), "default_model = \"d\"\n").expect("config");
+        for name in [
+            "bundles",
+            "hooks-paths",
+            "sandbox.toml",
+            TRUST_STORE,
+            "config.toml",
+        ] {
+            std::os::unix::fs::symlink(default.join(name), home.join(name)).expect("link");
+        }
+
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
+        let farm = PathBuf::from(&plan.env[0].1);
+
+        for name in [
+            "bundles",
+            "hooks-paths",
+            "sandbox.toml",
+            TRUST_STORE,
+            "config.toml",
+        ] {
+            assert!(!farm.join(name).is_symlink(), "{name}");
+        }
+        assert_eq!(
+            std::fs::read_to_string(farm.join("bundles/one")).expect("copy"),
+            "1"
+        );
+        assert_eq!(
+            std::fs::read_to_string(farm.join("hooks-paths")).expect("copy"),
+            "/h\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(farm.join("sandbox.toml")).expect("copy"),
+            "[profiles.p]\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(farm.join(TRUST_STORE)).expect("copy"),
+            "[folders.\"/t\"]\n"
+        );
+        assert!(std::fs::read_to_string(farm.join("config.toml"))
+            .expect("copy")
+            .contains("default_model = \"d\""));
     }
 
     #[test]
@@ -1281,5 +1722,299 @@ mod tests {
         std::fs::create_dir_all(&dir).expect("session directory");
         std::os::unix::fs::symlink(&target, dir.join("summary.json")).expect("link");
         assert_eq!(refused_profile(&fixture, Some(SAVED_ON)), None);
+    }
+
+    const SHARED_CONFIG: &str = "\
+# kept comment
+[models]
+default = \"kept-model\" # kept
+default_reasoning_effort = \"high\"
+
+[ui]
+theme = \"dark\"
+
+[plugins]
+enabled = [\"kept-plugin\"]
+
+[notes]
+mark = 'stay'
+";
+
+    /// Replaces the fixture's source `config.toml` with a link to a file holding `text`.
+    fn link_config(fixture: &mut SpecFixture, text: &str) -> PathBuf {
+        let account = with_default_home(fixture);
+        let shared = fixture.scratch.join("default-home");
+        std::fs::create_dir_all(&shared).expect("default directory");
+        std::fs::write(shared.join("config.toml"), text).expect("shared config");
+        std::fs::remove_file(account.join("config.toml")).expect("replace config");
+        std::os::unix::fs::symlink(shared.join("config.toml"), account.join("config.toml"))
+            .expect("link");
+        shared.join("config.toml")
+    }
+
+    fn session_config(plan: &LaunchPlan) -> PathBuf {
+        PathBuf::from(&plan.env[0].1).join("config.toml")
+    }
+
+    #[test]
+    fn a_plain_config_is_not_written_back() {
+        let mut fixture = spec_fixture();
+        with_default_home(&mut fixture);
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
+        assert!(plan.shared_config_writeback.is_none());
+    }
+
+    #[test]
+    fn a_dangling_config_link_is_not_written_back() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        std::fs::remove_file(home.join("config.toml")).expect("replace config");
+        std::os::unix::fs::symlink(
+            fixture.scratch.join("missing.toml"),
+            home.join("config.toml"),
+        )
+        .expect("dangling link");
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
+        assert!(plan.shared_config_writeback.is_none());
+        assert!(std::fs::symlink_metadata(home.join("config.toml"))
+            .expect("link")
+            .file_type()
+            .is_symlink());
+    }
+
+    #[test]
+    fn a_linked_config_gains_the_theme_the_plugin_switches_and_the_chosen_model() {
+        use std::os::unix::fs::MetadataExt;
+
+        let mut fixture = spec_fixture();
+        fixture.model = Some("launch-model".to_string());
+        let shared = link_config(&mut fixture, SHARED_CONFIG);
+        let link = PathBuf::from(fixture.shell_env["GROK_HOME"].clone()).join("config.toml");
+        let link_ino = std::fs::symlink_metadata(&link).expect("link").ino();
+        let link_target = std::fs::read_link(&link).expect("target");
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
+        let session = session_config(&plan);
+        assert!(!std::fs::symlink_metadata(&session)
+            .expect("copy")
+            .file_type()
+            .is_symlink());
+        assert!(std::fs::read_to_string(&session)
+            .expect("copy")
+            .contains("[mcp_servers.octoboard]"));
+        assert_eq!(
+            std::fs::read_to_string(&shared).expect("shared"),
+            SHARED_CONFIG
+        );
+        let writeback = plan.shared_config_writeback.expect("writeback");
+
+        std::fs::write(
+            &session,
+            "\
+[models]
+default = \"other-model\"
+default_reasoning_effort = \"low\"
+
+[ui]
+theme = \"tokyonight\"
+max_thoughts_width = 120
+yolo = false
+compact_mode = false
+
+[plugins]
+enabled = []
+disabled = [\"kept-plugin\"]
+
+[marketplace]
+default_skills_installs_purged = true
+
+[mcp_servers.octoboard]
+command = \"/usr/bin/true\"
+args = []
+tool_timeout_sec = 660
+",
+        )
+        .expect("session config");
+        writeback.publish();
+
+        let updated = std::fs::read_to_string(&shared).expect("shared");
+        let parsed: toml::Table = updated.parse().expect("shared config");
+        assert_eq!(parsed["ui"]["theme"].as_str(), Some("tokyonight"));
+        assert_eq!(parsed["models"]["default"].as_str(), Some("other-model"));
+        assert_eq!(
+            parsed["models"]["default_reasoning_effort"].as_str(),
+            Some("high")
+        );
+        assert_eq!(
+            parsed["plugins"]["enabled"]
+                .as_array()
+                .expect("enabled")
+                .len(),
+            0
+        );
+        assert_eq!(
+            parsed["plugins"]["disabled"][0].as_str(),
+            Some("kept-plugin")
+        );
+        assert!(parsed.get("marketplace").is_none(), "{updated}");
+        assert!(
+            parsed["ui"].get("max_thoughts_width").is_none(),
+            "{updated}"
+        );
+        assert!(!updated.contains("mcp_servers"), "{updated}");
+        assert!(!updated.contains("launch-model"), "{updated}");
+        assert!(updated.contains("# kept comment"), "{updated}");
+        assert!(updated.contains("# kept"), "{updated}");
+        assert!(updated.contains("mark = 'stay'"), "{updated}");
+        let after = std::fs::symlink_metadata(&link).expect("link");
+        assert!(after.file_type().is_symlink());
+        assert_eq!(after.ino(), link_ino);
+        assert_eq!(std::fs::read_link(&link).expect("target"), link_target);
+    }
+
+    #[test]
+    fn the_launch_model_and_startup_writes_stay_in_the_session_copy() {
+        use std::os::unix::fs::MetadataExt;
+
+        let mut fixture = spec_fixture();
+        fixture.model = Some("launch-model".to_string());
+        let shared = link_config(&mut fixture, SHARED_CONFIG);
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
+        let before_ino = std::fs::metadata(&shared).expect("shared").ino();
+        std::fs::write(
+            session_config(&plan),
+            "\
+[models]
+default = \"launch-model\"
+default_reasoning_effort = \"low\"
+
+[ui]
+theme = \"dark\"
+max_thoughts_width = 120
+yolo = false
+compact_mode = false
+
+[plugins]
+enabled = [\"kept-plugin\"]
+
+[marketplace]
+default_skills_installs_purged = true
+
+[mcp_servers.octoboard]
+command = \"/usr/bin/true\"
+",
+        )
+        .expect("session config");
+        plan.shared_config_writeback.expect("writeback").publish();
+        assert_eq!(
+            std::fs::read_to_string(&shared).expect("shared"),
+            SHARED_CONFIG
+        );
+        assert_eq!(
+            std::fs::metadata(&shared).expect("shared").ino(),
+            before_ino
+        );
+    }
+
+    #[test]
+    fn a_model_chosen_without_a_launch_model_is_written_back() {
+        let mut fixture = spec_fixture();
+        let shared = link_config(&mut fixture, SHARED_CONFIG);
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
+        let mut session = std::fs::read_to_string(session_config(&plan)).expect("copy");
+        session = session.replace("kept-model", "other-model");
+        std::fs::write(session_config(&plan), session).expect("session config");
+        plan.shared_config_writeback.expect("writeback").publish();
+        let parsed: toml::Table = std::fs::read_to_string(&shared)
+            .expect("shared")
+            .parse()
+            .expect("shared config");
+        assert_eq!(parsed["models"]["default"].as_str(), Some("other-model"));
+        assert_eq!(
+            parsed["models"]["default_reasoning_effort"].as_str(),
+            Some("high")
+        );
+    }
+
+    #[test]
+    fn a_chain_of_links_is_written_at_its_end_and_both_links_stay() {
+        use std::os::unix::fs::MetadataExt;
+
+        let mut fixture = spec_fixture();
+        let account = with_default_home(&mut fixture);
+        let real_dir = fixture.scratch.join("dotfiles");
+        std::fs::create_dir_all(&real_dir).expect("dotfiles");
+        let real = real_dir.join("config.toml");
+        std::fs::write(&real, SHARED_CONFIG).expect("real config");
+        let middle = fixture.scratch.join("middle.toml");
+        std::os::unix::fs::symlink(&real, &middle).expect("middle link");
+        std::fs::remove_file(account.join("config.toml")).expect("replace config");
+        std::os::unix::fs::symlink(&middle, account.join("config.toml")).expect("account link");
+        let account_ino = std::fs::symlink_metadata(account.join("config.toml"))
+            .expect("link")
+            .ino();
+        let middle_ino = std::fs::symlink_metadata(&middle).expect("link").ino();
+
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
+        let mut session = std::fs::read_to_string(session_config(&plan)).expect("copy");
+        session = session.replace("theme = \"dark\"", "theme = \"tokyonight\"");
+        std::fs::write(session_config(&plan), session).expect("session config");
+        plan.shared_config_writeback.expect("writeback").publish();
+
+        let parsed: toml::Table = std::fs::read_to_string(&real)
+            .expect("real")
+            .parse()
+            .expect("real config");
+        assert_eq!(parsed["ui"]["theme"].as_str(), Some("tokyonight"));
+        assert_eq!(
+            std::fs::read_link(account.join("config.toml")).expect("account link"),
+            middle
+        );
+        assert_eq!(std::fs::read_link(&middle).expect("middle link"), real);
+        assert_eq!(
+            std::fs::symlink_metadata(account.join("config.toml"))
+                .expect("link")
+                .ino(),
+            account_ino
+        );
+        assert_eq!(
+            std::fs::symlink_metadata(&middle).expect("link").ino(),
+            middle_ino
+        );
+    }
+
+    #[test]
+    fn a_link_replaced_before_exit_is_left_alone() {
+        let mut fixture = spec_fixture();
+        let shared = link_config(&mut fixture, SHARED_CONFIG);
+        let link = PathBuf::from(fixture.shell_env["GROK_HOME"].clone()).join("config.toml");
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
+        std::fs::remove_file(&link).expect("unlink");
+        std::fs::write(&link, "own = true\n").expect("plain file");
+        let mut session = std::fs::read_to_string(session_config(&plan)).expect("copy");
+        session = session.replace("theme = \"dark\"", "theme = \"tokyonight\"");
+        std::fs::write(session_config(&plan), session).expect("session config");
+        plan.shared_config_writeback.expect("writeback").publish();
+        assert_eq!(
+            std::fs::read_to_string(&link).expect("account file"),
+            "own = true\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&shared).expect("shared"),
+            SHARED_CONFIG
+        );
+    }
+
+    #[test]
+    fn a_section_that_is_not_a_table_is_left_unchanged() {
+        let mut fixture = spec_fixture();
+        let shared = link_config(&mut fixture, "ui = \"dark\"\n");
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
+        std::fs::write(session_config(&plan), "[ui]\ntheme = \"tokyonight\"\n")
+            .expect("session config");
+        plan.shared_config_writeback.expect("writeback").publish();
+        assert_eq!(
+            std::fs::read_to_string(&shared).expect("shared"),
+            "ui = \"dark\"\n"
+        );
     }
 }

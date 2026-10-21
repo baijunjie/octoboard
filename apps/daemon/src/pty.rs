@@ -190,6 +190,9 @@ pub struct PtyCore {
     final_output_kept: Mutex<bool>,
     /// A scratch directory of the process's own, removed once the process is gone.
     scratch_dir: Mutex<Option<std::path::PathBuf>>,
+    /// Runs after the process is reaped and before [`Self::clean_scratch_dir`] removes the
+    /// directory, so it can still read what the process wrote there.
+    before_scratch_removal: Mutex<Option<Box<dyn FnOnce() + Send>>>,
     /// Whether what the process leaves running in its session is killed once it exits; see
     /// [`NewPty::kill_session_leftovers`].
     kill_session_leftovers: bool,
@@ -209,6 +212,8 @@ pub struct NewPty {
     /// that moved to a process group of their own. Left off, whatever the process started and
     /// detached (`nohup`, `disown`) keeps running after it.
     pub kill_session_leftovers: bool,
+    /// Runs after the process is reaped and before its scratch directory is removed.
+    pub before_scratch_removal: Option<Box<dyn FnOnce() + Send>>,
 }
 
 impl PtyCore {
@@ -242,6 +247,7 @@ impl PtyCore {
             reader_running: AtomicBool::new(false),
             final_output_kept: Mutex::new(false),
             scratch_dir: Mutex::new(new.scratch_dir),
+            before_scratch_removal: Mutex::new(new.before_scratch_removal),
             kill_session_leftovers: new.kill_session_leftovers,
             input_lock: Mutex::new(()),
         }
@@ -625,8 +631,18 @@ impl PtyCore {
             .expect("scratch dir mutex poisoned")
             .take();
         if let Some(dir) = dir {
-            // Every entry in it is either a symlink into the user's own agent directory or a file
-            // Octoboard wrote, so removing the directory never touches the user's configuration.
+            // Before the directory goes: a caller may still need a file the process wrote there,
+            // for instance to copy a setting out of it. The removal itself only deletes this
+            // directory. Every entry in it is either a symlink into the user's own agent directory
+            // or a file Octoboard wrote, so the removal never touches the user's configuration.
+            if let Some(hook) = self
+                .before_scratch_removal
+                .lock()
+                .expect("scratch hook mutex poisoned")
+                .take()
+            {
+                hook();
+            }
             if let Err(err) = std::fs::remove_dir_all(&dir) {
                 tracing::warn!(terminal = %self.label, path = %dir.display(), %err, "removing the scratch directory failed");
             }
@@ -937,6 +953,7 @@ mod tests {
             spawned,
             scratch_dir: None,
             kill_session_leftovers,
+            before_scratch_removal: None,
         });
         let deadline = Instant::now() + crate::test_support::PATIENCE;
         let listed = loop {
@@ -1013,5 +1030,48 @@ mod tests {
             started.elapsed() >= SUBSCRIBER_GRACE,
             "it must wait out the whole grace period before giving up on a client"
         );
+    }
+
+    /// The hook still sees the scratch directory, and the directory is gone afterwards.
+    #[test]
+    fn the_scratch_hook_runs_before_the_directory_is_removed() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "octoboardd-scratch-hook-{}-{nanos}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).expect("scratch directory");
+        std::fs::write(dir.join("config.toml"), "kept").expect("file");
+        let marker = std::env::temp_dir().join(format!(
+            "octoboardd-scratch-hook-marker-{}-{nanos}",
+            std::process::id()
+        ));
+        std::fs::remove_file(&marker).ok();
+        let dir_for_hook = dir.clone();
+        let marker_for_hook = marker.clone();
+        let mut cmd = portable_pty::CommandBuilder::new("/bin/bash");
+        cmd.args(["-c", "exit 0"]);
+        let spawned = super::spawn(cmd, 24, 80).expect("process");
+        let core = super::PtyCore::new(super::NewPty {
+            label: "scratch-hook".to_string(),
+            spawned,
+            scratch_dir: Some(dir.clone()),
+            kill_session_leftovers: false,
+            before_scratch_removal: Some(Box::new(move || {
+                let text = std::fs::read_to_string(dir_for_hook.join("config.toml")).expect("file");
+                std::fs::write(&marker_for_hook, text).expect("marker");
+            })),
+        });
+        let deadline = Instant::now() + crate::test_support::PATIENCE;
+        while !core.poll_exit() {
+            assert!(Instant::now() < deadline, "the process never exited");
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert_eq!(std::fs::read_to_string(&marker).expect("marker"), "kept");
+        assert!(!dir.exists());
+        std::fs::remove_file(&marker).ok();
     }
 }

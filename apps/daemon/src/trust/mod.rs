@@ -113,6 +113,7 @@ mod screen;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use carry::write_replacing;
 pub use carry::CarriedTrust;
 use carry::*;
 pub(crate) use press::wait_for;

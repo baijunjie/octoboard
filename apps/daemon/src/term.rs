@@ -205,6 +205,9 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         scratch_dir: Some(scratch),
         resolves_approvals_itself: plan.resolves_approvals_itself,
         carried_trust: plan.carried_trust,
+        before_scratch_removal: plan
+            .shared_config_writeback
+            .map(|writeback| Box::new(move || writeback.publish()) as Box<dyn FnOnce() + Send>),
         start_signal_missing: plan.start_signal_missing,
     }));
     session::spawn_reader_thread(live.clone(), pty::READ_BUF);

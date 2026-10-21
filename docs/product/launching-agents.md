@@ -342,12 +342,21 @@ user's shell exports, else `~/.codex`. The account choices and their lifetime ru
 exports, else `~/.grok`. The per-session home links back to the source home's entries, so the login and the
 session records are the source home's own, and a session Octoboard started stays resumable from the user's own `grok`
 command run against that same home — for a console's Grok Build config directory, `GROK_HOME=<that directory> grok`.
+Each link points at the source entry's fully resolved target. When the source entry is itself a link, that target is
+the final file or directory, not the link, so the session reaches it through one link. For an account that shares the
+default configuration, a save from the session of a linked shared file — `AGENTS.md`, `pager.toml` or
+`disabled-hooks` — updates the default directory's resolved file and leaves the account's own link in place. A
+dangling source link has nothing to resolve to, and the session's link points at that source entry.
+
 Some of its entries are **copies** taken at launch rather than links. Two are files whose copying has consequences
 worth knowing:
 
 - the Grok configuration file: an edit the user makes to it while a session is running is not picked up by that
   session, and a setting the session persists (changing its reasoning effort, for instance) lands in Octoboard's copy
-  and is lost when the session ends. Both are re-read from the source home on the next launch.
+  and is lost when the session ends. Both are re-read from the source home on the next launch. When the account's
+  `config.toml` is a link into the default directory, turning a plugin on, changing the model, or `/theme` rewrites
+  only the copy: that link and the default directory's file are unchanged, so those saves do not reach the shared
+  file.
 - the trust store, `trusted_folders.toml`: copied as it is, with nothing added, so a folder the user has not trusted
   Grok with shows Grok's own trust confirmation. The one entry Grok writes into the copy when that confirmation is
   accepted is the exception to its being lost: it is carried into the source home's store (see "Carrying Grok

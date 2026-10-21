@@ -275,6 +275,7 @@ fn launch(
             spawned,
             scratch_dir: None,
             kill_session_leftovers: false,
+            before_scratch_removal: None,
         }),
         shell_name,
         titles: Mutex::new(TitleWatch::default()),

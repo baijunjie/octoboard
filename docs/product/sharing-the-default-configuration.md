@@ -206,6 +206,8 @@ on macOS, where directories compare without regard to case.
 ## The sessions of a sharing account
 
 - Their conversations are kept in the default directory, reached through the account's links.
+- What a Grok Build session writes back into a shared entry is in the Grok Build paragraph of "Per-agent specifics a
+  user will notice" in `docs/product/launching-agents.md`.
 - A switch between two accounts whose links lead to the same conversation files copies nothing (see "Carrying the
   conversation" in `docs/product/switching-session-accounts.md`).
 - Deleting one moves its agent records to the Trash from the default directory only while the account shares with no
