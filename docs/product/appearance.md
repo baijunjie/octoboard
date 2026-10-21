@@ -24,6 +24,8 @@ Everything the window shows follows the chosen appearance, including:
   they were given; the Powerline branch, line-number and lock symbols are adjusted like any other character. So
   output from an agent whose own colour scheme assumes the other appearance (pale greys and blues meant for a dark
   background, for instance) stays readable rather than all but vanishing.
+- **A Grok Build session's own theme**, which is picked from the appearance in force when the session is launched and
+  does not change while it runs (see "Per-agent specifics a user will notice" in `docs/product/launching-agents.md`).
 - **A console session's colour**, shown in its own sidebar row and as the binding badge on every project
   session bound to it (see "The binding badge" in `docs/product/sidebar.md`).
   Each colour in the fixed palette of console session colours has its own light and dark value, so in either
@@ -65,9 +67,12 @@ How a launch avoids showing the window before the appearance has been applied is
 
 ## Where the choice is stored
 
-The choice is remembered **per client**, in that client's own browser storage. The daemon neither stores
-it nor carries it: nothing in the daemon's protocol mentions an appearance, and it is not among the files
-under `~/.octoboard` (see "Files Octoboard owns" in `docs/product/application-lifecycle.md`).
+The choice is remembered **per client**, in that client's own browser storage. The daemon does not store it,
+and it is not among the files under `~/.octoboard` (see "Files Octoboard owns" in
+`docs/product/application-lifecycle.md`). The one thing a client tells the daemon is what the choice has resolved to,
+light or dark, sent with a request that launches a session so that a Grok Build session's theme matches the terminal;
+the daemon uses it for that launch alone and keeps nothing of it (see "Per-agent specifics a user will notice" in
+`docs/product/launching-agents.md`).
 
 So the choice does not travel. A desktop window and a browser tab, or two machines reaching the same
 daemon, each keep their own; a client whose storage has been cleared is back to System.

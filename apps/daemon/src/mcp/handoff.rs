@@ -45,6 +45,7 @@ pub(super) async fn handoff_session(
             title: optional_string(arguments, "title"),
             note: optional_string(arguments, "note"),
             asked_by: Some(caller.id.clone()),
+            terminal_appearance: None,
         },
         launch,
     )

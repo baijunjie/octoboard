@@ -40,6 +40,8 @@ pub(super) async fn switch_session_account(
         &target.id,
         Some(account),
         Some(&caller.id),
+        // An owner asks over MCP, which has no window appearance to match.
+        None,
         snapshot,
         launch,
     )

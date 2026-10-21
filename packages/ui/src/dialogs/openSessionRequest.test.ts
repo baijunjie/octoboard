@@ -8,7 +8,7 @@ import { defaultOpenSessionRequest, openSessionRequest } from "./openSessionRequ
 
 const quick = (...[translate, parentConsole, project, binding, accounts, agentAvailability, added, accountQuotas = [], now = 0]: [
   Translate, Console, Project | undefined, NewSessionBinding, Account[], Map<Agent, AgentAvailability>, Agent[] | null, AccountQuota[]?, number?,
-]) => defaultOpenSessionRequest(translate, parentConsole, project, binding, { settings: { accounts, added_agents: added }, agentAvailability, accountQuotas }, now);
+]) => defaultOpenSessionRequest(translate, parentConsole, project, binding, { settings: { accounts, added_agents: added }, agentAvailability, accountQuotas }, now, "light");
 
 /** The request a quick create sends, with no quota readings. */
 const opened = (...args: Parameters<typeof quick>) => {
@@ -34,6 +34,7 @@ it("opens untouched on the parent's agent and account, with the localized defaul
     agent: "codex",
     account: null,
     title: "Search API session",
+    terminal_appearance: "light",
   });
 });
 
@@ -59,8 +60,8 @@ it("localizes default project and console names and preserves custom names", () 
   const zh: Translate = (key, ...args) => format("zh-Hans", key, args[0]);
   expect(opened(zh, parent, project, { kind: "unbound" }, accounts, available(), null).title).toBe("Search API 会话");
   expect(opened(zh, parent, undefined, { kind: "unbound" }, accounts, available(), null).title).toBe("Main 会话");
-  expect(openSessionRequest(zh, { console: parent, project, choice: { agent: "codex", account: null }, title: "  Custom  " }).title).toBe("Custom");
-  expect(openSessionRequest(zh, { console: parent, project, choice: { agent: "codex", account: null }, title: "   " }).title).toBe("Search API 会话");
+  expect(openSessionRequest(zh, { console: parent, project, choice: { agent: "codex", account: null }, title: "  Custom  ", appearance: "dark" }).title).toBe("Custom");
+  expect(openSessionRequest(zh, { console: parent, project, choice: { agent: "codex", account: null }, title: "   ", appearance: "dark" }).title).toBe("Search API 会话");
 });
 
 const usedUp = (account: string | null): AccountQuota => ({
@@ -83,7 +84,7 @@ it("opens on the account whose weekly quota resets soonest when automatic select
     settings: { accounts: stored, added_agents: null, ...(autoSelect !== undefined && { auto_select_account: autoSelect }) },
     agentAvailability: available(),
     accountQuotas: [weekly("w", 10, now + 3 * 24 * 3_600_000), weekly("w2", 99, now + 3_600_000)],
-  }, now);
+  }, now, "light");
   expect(open(true)).toMatchObject({ request: { agent: "claude", account: "w2" } });
   expect(open(false)).toMatchObject({ request: { agent: "claude", account: "w" } });
   expect(open(undefined)).toMatchObject({ request: { agent: "claude", account: "w" } });

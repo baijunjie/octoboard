@@ -27,7 +27,9 @@ use uuid::Uuid;
 
 use crate::coordinator::{self, OpenRequest};
 use crate::mcp::qualified_tool_name;
-use crate::protocol::{error_code, notice_code, Agent, CodedError, Notice, Session, SessionStatus};
+use crate::protocol::{
+    error_code, notice_code, Agent, CodedError, Notice, Session, SessionStatus, TerminalAppearance,
+};
 use crate::reporting::{self, WhenBlocked, NOTICE_PREFIX};
 use crate::sharing::{named_session, one_line, place_of, quote};
 use crate::state::{AppState, OutboxHold};
@@ -48,6 +50,8 @@ pub struct Handoff {
     /// The owner that made the call, when one did: it is not sent the message that tells an owner
     /// of the handoff, since it knows, and the result of its call says what moved.
     pub asked_by: Option<String>,
+    /// The appearance of the terminal the receiving session will be shown in.
+    pub terminal_appearance: Option<TerminalAppearance>,
 }
 
 /// Hands `request.session` off and returns what moved: the receiving session, running in the
@@ -95,6 +99,7 @@ pub(crate) async fn hand_off_with(
             .flatten(),
         resume_agent_session_id: None,
         session_id: Some(key.clone()),
+        terminal_appearance: request.terminal_appearance,
     };
 
     // Refused here for what opening would refuse, before the package is read and written.

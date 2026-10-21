@@ -246,7 +246,9 @@ Besides the terminal type, the variables set over the snapshot are:
   that holds none gets the snapshot's own value, if there is one, unchanged; Octoboard sets `CODEX_HOME` for nothing
   else;
 - for every Grok Build session, `GROK_HOME`, set to the session's own Grok home (see "Per-agent specifics a user will
-  notice" below). A Grok Build config directory is not passed as `GROK_HOME` itself.
+  notice" below). A Grok Build config directory is not passed as `GROK_HOME` itself;
+- for every Grok Build session, `GROK_THEME`, which picks Grok's own colour theme to match the session terminal (see
+  "Per-agent specifics a user will notice" below);
 - for a Claude Code session whose account's directory shares the default configuration, `CLAUDE_CODE_REMOTE_MEMORY_DIR` (see
   "Claude Code's auto memory" in `docs/product/sharing-the-default-configuration.md`).
 - for a project session, a `core.hooksPath` entry through `GIT_CONFIG_COUNT`, together with `OCTOBOARD_SESSION_ID` and
@@ -395,6 +397,28 @@ time limit on a call to Octoboard's tools** above Octoboard's own limit on a for
 session request, is ended by Octoboard's limit and not by Grok's — Grok cancels a call it gives up on, and a
 cancellation withdraws such a request. The limit is set on Octoboard's own entry alone; no other MCP server of the
 user's is touched, and the user's own configuration is untouched because only the copy is written.
+
+**Grok Build's theme follows the session terminal's appearance.** Grok's own default theme is a dark one, which would
+paint dark bands across a terminal in the light appearance, so every Grok Build launch sets `GROK_THEME`:
+
+| The launch | `GROK_THEME` |
+|---|---|
+| asked for from a window in the light appearance | `grokday` |
+| asked for from a window in the dark appearance | `groknight` |
+| with no window behind it | `auto`, which has Grok follow the operating system's appearance |
+
+A window asks for a launch when it opens a session (with the new-session dialog or with defaults), resumes one, switches
+one to another account or hands one off, and it sends the appearance its Light, Dark or System choice has resolved to
+at that moment (see "Light, dark and follow the system" in `docs/product/appearance.md`). No window is behind a launch an
+agent asks for through Octoboard's tools (opening or reopening a session, handing one off, switching one to another
+account), a session opened by an approved session request, or an archived owner relaunched on the way while a session
+is resumed.
+
+The appearance is taken at each launch and not kept with the session: a running Grok session keeps the theme it was
+launched with when the window's appearance changes later, and its next launch picks the theme afresh. `GROK_THEME`
+takes precedence over the theme set in the Grok configuration file, so a theme the user chose for their own `grok` is
+not used in a session Octoboard launches; the configuration file itself is not changed. Claude Code and Codex are told
+nothing of the appearance.
 
 A Grok Build config directory must **already be a Grok home, one Grok has been run against**. Only entries
 that already exist in the source home are linked; for an empty directory, Grok creates its login and session records

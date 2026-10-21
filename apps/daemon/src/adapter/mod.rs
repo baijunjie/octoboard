@@ -44,6 +44,7 @@ use anyhow::Result;
 use crate::mcp::Owner;
 use crate::protocol::{
     error_code, Agent, ApprovalReviewer, ClaudeApprovalMode, CodedError, Notice, Role,
+    TerminalAppearance,
 };
 
 /// Everything an adapter needs to assemble one launch.
@@ -101,6 +102,9 @@ pub struct LaunchSpec<'a> {
     /// The reasoning effort to launch with, in the agent's own spelling; `None` leaves it to the
     /// agent. Set under the same conditions as [`Self::model`].
     pub effort: Option<&'a str>,
+    /// The appearance of the terminal this launch will be shown in. Only the Grok adapter reads
+    /// it, to set `GROK_THEME`; absent means follow the operating system.
+    pub terminal_appearance: Option<TerminalAppearance>,
     /// The version of the agent binary this launch starts, when it could be told without running
     /// it (see [`AgentAdapter::installed_version`]); `None` makes an adapter fall back to what
     /// every version takes.
@@ -475,6 +479,7 @@ pub mod tests {
 
     use super::LaunchSpec;
     use crate::mcp::Owner;
+    use crate::protocol::TerminalAppearance;
 
     /// A launch to plan against, with a real temporary directory standing in for the session's
     /// scratch space — the Grok adapter writes into it, so it cannot be a fiction.
@@ -491,6 +496,7 @@ pub mod tests {
         pub shared_default_dir: Option<PathBuf>,
         pub model: Option<String>,
         pub effort: Option<String>,
+        pub terminal_appearance: Option<TerminalAppearance>,
         pub agent_version: Option<super::AgentVersion>,
         pub self_exe: String,
         pub mcp_token: String,
@@ -515,6 +521,7 @@ pub mod tests {
                 shared_default_dir: self.shared_default_dir.as_deref(),
                 model: self.model.as_deref(),
                 effort: self.effort.as_deref(),
+                terminal_appearance: self.terminal_appearance,
                 agent_version: self.agent_version,
                 self_exe: &self.self_exe,
                 daemon_port: 4321,
@@ -545,6 +552,7 @@ pub mod tests {
             shared_default_dir: None,
             model: None,
             effort: None,
+            terminal_appearance: None,
             agent_version: None,
             self_exe: "/opt/octoboard/octoboardd".to_string(),
             mcp_token: "token-1".to_string(),

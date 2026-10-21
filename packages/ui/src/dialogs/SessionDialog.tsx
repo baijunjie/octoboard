@@ -14,6 +14,7 @@ import { sessionDisplayTitle } from "../sessionLabel";
 import { BindingBadge } from "../sidebar/BindingBadge";
 import { liveConsoleSessions } from "../sidebar/order";
 import { useDaemon, useDaemonStore } from "../store";
+import { useOctoboardTheme } from "../theme";
 import { AgentAccountField } from "./AgentAccountField";
 import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "./Dialog";
 import type { NewSessionBinding } from "./dialogRequest";
@@ -107,6 +108,7 @@ export function SessionDialog({
   onResume: (sessionId: string) => Promise<void>;
 }): React.ReactElement {
   const t = useT();
+  const { resolved: appearance } = useOctoboardTheme();
   const tabScrollLabels = useTabScrollLabels();
   const { request, toastError } = useDaemon();
   const [title, setTitle] = useState("");
@@ -208,6 +210,7 @@ export function SessionDialog({
         choice,
         title,
         overrides,
+        appearance,
       })).catch((err: unknown) => {
         if (!(err instanceof DaemonRequestError) || !resuming || !RESUME_REFUSALS.has(err.code)) throw err;
         setRefusal({ error: err, id: resumeId, record: recordKey });

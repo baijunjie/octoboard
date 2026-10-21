@@ -42,6 +42,7 @@ use crate::protocol::{
     Availability, ClaudeApprovalMode, CodedError, Console, ConsoleSessionColour,
     ConversationLocation, Event, Notice, Origin, Present, Project, ProjectAccount, ProjectSource,
     RequestBody, Role, Session, SessionBranchItem, SessionBranchTarget, SessionStatus,
+    TerminalAppearance,
 };
 use crate::relocate;
 use crate::reporting;
@@ -726,6 +727,7 @@ async fn handle_inner(
             title,
             bound_to,
             resume_agent_session_id,
+            terminal_appearance,
         } => {
             let (session, launch) = open_session_detached(
                 state,
@@ -742,6 +744,7 @@ async fn handle_inner(
                     bound_to,
                     resume_agent_session_id,
                     session_id: None,
+                    terminal_appearance,
                 },
             )
             .await?;
@@ -752,8 +755,11 @@ async fn handle_inner(
             }))
         }
 
-        RequestBody::ResumeSession { session } => {
-            resume_session(state, &session, None).await?;
+        RequestBody::ResumeSession {
+            session,
+            terminal_appearance,
+        } => {
+            resume_session(state, &session, None, terminal_appearance).await?;
             Ok(None)
         }
 
@@ -767,8 +773,19 @@ async fn handle_inner(
             Ok(None)
         }
 
-        RequestBody::SwitchSessionAccount { session, account } => {
-            switch_session_account(state, &session, account, env_shell::launch_snapshot).await?;
+        RequestBody::SwitchSessionAccount {
+            session,
+            account,
+            terminal_appearance,
+        } => {
+            switch_session_account(
+                state,
+                &session,
+                account,
+                terminal_appearance,
+                env_shell::launch_snapshot,
+            )
+            .await?;
             Ok(None)
         }
 
@@ -778,6 +795,7 @@ async fn handle_inner(
             account,
             model,
             effort,
+            terminal_appearance,
         } => {
             let moved = crate::handoff::operation::hand_off(
                 state,
@@ -790,6 +808,7 @@ async fn handle_inner(
                     title: None,
                     note: None,
                     asked_by: None,
+                    terminal_appearance,
                 },
             )
             .await?;
@@ -2125,6 +2144,9 @@ pub struct OpenRequest {
     /// The id to record the session under, for a caller that needs it before the session exists
     /// (a handoff names its package by it); `None` makes a new one.
     pub session_id: Option<String>,
+    /// The appearance of the terminal this launch will be shown in. Not recorded on the session.
+    /// See `protocol::TerminalAppearance`.
+    pub terminal_appearance: Option<TerminalAppearance>,
 }
 
 /// The conversation id `requested` to resume, trimmed, or `None` for none (blank counting as
@@ -2354,6 +2376,8 @@ struct StartingSession {
     /// The login-shell snapshot that conversation's record was found with, which the launch must
     /// use too (see [`term::LaunchRequest::preresolved_shell_env`]).
     resume_shell_env: Option<HashMap<String, String>>,
+    /// See [`OpenRequest::terminal_appearance`].
+    terminal_appearance: Option<TerminalAppearance>,
 }
 
 /// Opens a session and returns it once it has launched: running, or with the launch's refusal
@@ -2594,6 +2618,7 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         title,
         origin,
         session_id,
+        terminal_appearance,
         ..
     } = request;
     let resume_shell_env = match resume_agent_session_id.clone() {
@@ -2711,6 +2736,7 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         task,
         resume_agent_session_id,
         resume_shell_env,
+        terminal_appearance,
     })
 }
 
@@ -2729,6 +2755,7 @@ async fn finish_open(
         task,
         resume_agent_session_id,
         resume_shell_env,
+        terminal_appearance,
     } = starting;
     // Read inside the launch's own result: a failure here is one before anything ran, which is
     // the same as a launch that failed, and must delete the session the same way.
@@ -2746,6 +2773,7 @@ async fn finish_open(
             &cwd,
             task.as_deref(),
             resume_agent_session_id.as_deref(),
+            terminal_appearance,
             // The snapshot the conversation to resume was found with is the one the launch must use.
             move |request| {
                 launch(term::LaunchRequest {
@@ -3142,8 +3170,16 @@ pub async fn resume_session(
     state: &Arc<AppState>,
     id: &str,
     instruction: Option<&str>,
+    terminal_appearance: Option<TerminalAppearance>,
 ) -> Result<()> {
-    resume_session_with(state, id, instruction, env_shell::launch_snapshot).await
+    resume_session_with(
+        state,
+        id,
+        instruction,
+        terminal_appearance,
+        env_shell::launch_snapshot,
+    )
+    .await
 }
 
 /// [`resume_session`] with the login-shell snapshot supplied by the caller. It is taken once and
@@ -3153,6 +3189,7 @@ async fn resume_session_with(
     state: &Arc<AppState>,
     id: &str,
     instruction: Option<&str>,
+    terminal_appearance: Option<TerminalAppearance>,
     shell_snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
 ) -> Result<()> {
     // Claimed before anything else, so two overlapping relaunches cannot both get through, and
@@ -3199,9 +3236,27 @@ async fn resume_session_with(
         } else {
             unarchive_rollout(&checked, &shell).await?;
         }
-        relaunch_session(state, &owner_claim, &owner, None, true, Some(shell.clone())).await?;
+        relaunch_session(
+            state,
+            &owner_claim,
+            &owner,
+            None,
+            true,
+            Some(shell.clone()),
+            None,
+        )
+        .await?;
     }
-    relaunch_session(state, &claim, id, instruction, true, Some(shell)).await
+    relaunch_session(
+        state,
+        &claim,
+        id,
+        instruction,
+        true,
+        Some(shell),
+        terminal_appearance,
+    )
+    .await
 }
 
 /// A session and what [`check_resumable`] found of its conversation.
@@ -3341,6 +3396,7 @@ async fn relaunch_session(
     instruction: Option<&str>,
     reopen: bool,
     shell_env: Option<HashMap<String, String>>,
+    terminal_appearance: Option<TerminalAppearance>,
 ) -> Result<()> {
     relaunch_session_with(
         state,
@@ -3349,11 +3405,13 @@ async fn relaunch_session(
         instruction,
         reopen,
         shell_env,
+        terminal_appearance,
         term::launch,
     )
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn relaunch_session_with(
     state: &Arc<AppState>,
     claim: &crate::state::LaunchClaim,
@@ -3361,6 +3419,7 @@ pub(crate) async fn relaunch_session_with(
     instruction: Option<&str>,
     reopen: bool,
     shell_env: Option<HashMap<String, String>>,
+    terminal_appearance: Option<TerminalAppearance>,
     launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
 ) -> Result<()> {
     let mut session = state.session_record(id)?;
@@ -3408,6 +3467,7 @@ pub(crate) async fn relaunch_session_with(
         &cwd,
         None,
         resume_id.as_deref(),
+        terminal_appearance,
         // The snapshot the caller resolved something from is the one the launch must use.
         move |request| {
             launch(term::LaunchRequest {
@@ -3541,6 +3601,7 @@ fn launch_settings(
 
 /// Launches the agent for an already-stored session, through `launch` (`term::launch` outside the
 /// tests, which cannot start an agent), and starts watching it.
+#[allow(clippy::too_many_arguments)]
 async fn start_process(
     state: &Arc<AppState>,
     _claim: &crate::state::LaunchClaim,
@@ -3548,6 +3609,7 @@ async fn start_process(
     cwd: &Path,
     task: Option<&str>,
     resume_agent_session_id: Option<&str>,
+    terminal_appearance: Option<TerminalAppearance>,
     launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
 ) -> Result<()> {
     // Refresh the instruction file on every console launch, resume and account switch. A missing
@@ -3579,6 +3641,7 @@ async fn start_process(
         shared_default_dir: sharing.shared_default_dir,
         model,
         effort,
+        terminal_appearance,
         preresolved_shell_env: None,
         daemon_port: state.port,
         self_exe: state.self_exe.clone(),
@@ -4051,9 +4114,19 @@ pub async fn switch_session_account(
     state: &Arc<AppState>,
     id: &str,
     account: Option<Option<String>>,
+    terminal_appearance: Option<TerminalAppearance>,
     snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
 ) -> Result<()> {
-    switch_session_account_with(state, id, account, None, snapshot, term::launch).await
+    switch_session_account_with(
+        state,
+        id,
+        account,
+        None,
+        terminal_appearance,
+        snapshot,
+        term::launch,
+    )
+    .await
 }
 
 /// [`switch_session_account`] with the asker: `asked_by` is the asking owner's id, `None` for the
@@ -4065,6 +4138,7 @@ pub(crate) async fn switch_session_account_with(
     id: &str,
     account: Option<Option<String>>,
     asked_by: Option<&str>,
+    terminal_appearance: Option<TerminalAppearance>,
     snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
     launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
 ) -> Result<()> {
@@ -4161,8 +4235,17 @@ pub(crate) async fn switch_session_account_with(
     state.set_session_account(id, target_account.as_deref(), target_dir.as_deref())?;
     drop(copying);
 
-    if let Err(err) =
-        relaunch_session_with(state, &claim, id, None, false, plan.shell_env, launch).await
+    if let Err(err) = relaunch_session_with(
+        state,
+        &claim,
+        id,
+        None,
+        false,
+        plan.shell_env,
+        terminal_appearance,
+        launch,
+    )
+    .await
     {
         put_back_on_account(state, &before);
         return Err(err);
@@ -6353,6 +6436,7 @@ mod tests {
                     bound_to: None,
                     resume_agent_session_id: None,
                     session_id: None,
+                    terminal_appearance: None,
                 },
             )
             .await
@@ -6418,6 +6502,7 @@ mod tests {
             bound_to: None,
             resume_agent_session_id: None,
             session_id: None,
+            terminal_appearance: None,
         };
         let refusal = |account: Option<&str>| {
             resolve_open(&state, &request(account.map(str::to_string))).err()
@@ -6545,7 +6630,7 @@ mod tests {
             })
             .unwrap();
 
-        let err = resume_session_with(&state, "s", None, stub_shell(&dir))
+        let err = resume_session_with(&state, "s", None, None, stub_shell(&dir))
             .await
             .expect_err("the project's directory does not exist");
         assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
@@ -9673,6 +9758,7 @@ mod tests {
                 bound_to: None,
                 resume_agent_session_id: Some("my-title".to_string()),
                 session_id: None,
+                terminal_appearance: None,
             },
         )
         .await
@@ -9938,7 +10024,7 @@ mod tests {
             state.store.delete_session("s").unwrap();
             state.store.insert_session(&session).unwrap();
 
-            let err = switch_session_account(&state, "s", account, shell_env(&dir))
+            let err = switch_session_account(&state, "s", account, None, shell_env(&dir))
                 .await
                 .expect_err(why);
             assert_eq!(code_of(&err), code, "{why}");
@@ -9966,6 +10052,7 @@ mod tests {
             &state,
             "s",
             Some(Some("claude-a".to_string())),
+            None,
             shell_env(&dir),
         )
         .await
@@ -9991,6 +10078,7 @@ mod tests {
             "worker",
             Some(Some("claude-a".to_string())),
             Some("other-hub"),
+            None,
             shell_env(&dir),
             |_| panic!("a refused switch launches nothing"),
         )
@@ -10128,6 +10216,7 @@ mod tests {
             &state,
             "hub",
             Some(Some("claude-a".into())),
+            None,
             shell_env(&dir),
         )
         .await
@@ -10198,7 +10287,13 @@ mod tests {
         state.register_live(live.clone());
         state.watch_exit(live.clone());
         let switch = |account: &str| {
-            switch_session_account(&state, "codex", Some(Some(account.into())), shell_env(&dir))
+            switch_session_account(
+                &state,
+                "codex",
+                Some(Some(account.into())),
+                None,
+                shell_env(&dir),
+            )
         };
 
         let err = switch("codex-b")
@@ -10262,6 +10357,7 @@ mod tests {
             &state,
             "hub",
             Some(Some("claude-a".into())),
+            None,
             shell_env(&dir),
         )
         .await
@@ -10362,7 +10458,7 @@ mod tests {
             .unwrap();
         let claim = state.begin_switch("s").unwrap();
 
-        let err = relaunch_session(&state, &claim, "s", None, false, None)
+        let err = relaunch_session(&state, &claim, "s", None, false, None, None)
             .await
             .expect_err("archived");
         assert_eq!(code_of(&err), error_code::SESSION_ARCHIVED);
@@ -10413,6 +10509,7 @@ mod tests {
                         "worker",
                         Some(Some("claude-a".to_string())),
                         None,
+                        None,
                         || Ok(HashMap::new()),
                         launch,
                     )
@@ -10425,6 +10522,7 @@ mod tests {
                         "worker",
                         Some("obsolete instruction"),
                         true,
+                        None,
                         None,
                         launch,
                     )
@@ -10506,7 +10604,7 @@ mod tests {
             })
             .unwrap();
 
-        let err = resume_session_with(&state, "s", None, stub_shell(&dir))
+        let err = resume_session_with(&state, "s", None, None, stub_shell(&dir))
             .await
             .expect_err("the project's directory does not exist");
         assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
@@ -10547,7 +10645,7 @@ mod tests {
             .insert_session(&archived_with_conversation("s", Agent::Claude, &account))
             .unwrap();
 
-        let err = resume_session_with(&state, "s", None, stub_shell(&dir))
+        let err = resume_session_with(&state, "s", None, None, stub_shell(&dir))
             .await
             .expect_err("no transcript");
         assert_eq!(code_of(&err), error_code::CONVERSATION_UNRESUMABLE);
@@ -10558,7 +10656,7 @@ mod tests {
         let transcript = account.join(format!("projects/work/{AGENT_ID}.jsonl"));
         std::fs::create_dir_all(transcript.parent().unwrap()).unwrap();
         std::fs::write(&transcript, "{}\n").unwrap();
-        let err = resume_session_with(&state, "s", None, stub_shell(&dir))
+        let err = resume_session_with(&state, "s", None, None, stub_shell(&dir))
             .await
             .expect_err("no cwd");
         assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
@@ -10575,7 +10673,7 @@ mod tests {
             .insert_session(&archived_with_conversation("s", Agent::Grok, &account))
             .unwrap();
 
-        let err = resume_session_with(&state, "s", None, stub_shell(&dir))
+        let err = resume_session_with(&state, "s", None, None, stub_shell(&dir))
             .await
             .expect_err("no cwd");
         assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
@@ -10616,7 +10714,7 @@ mod tests {
         std::fs::create_dir_all(worker_account.join("projects")).unwrap();
         insert_hub_and_worker(&state, &hub_account, &worker_account);
 
-        let err = resume_session_with(&state, "worker", None, stub_shell(&dir))
+        let err = resume_session_with(&state, "worker", None, None, stub_shell(&dir))
             .await
             .expect_err("the session's transcript is gone");
         assert_eq!(code_of(&err), error_code::CONVERSATION_UNRESUMABLE);
@@ -10634,7 +10732,7 @@ mod tests {
         std::fs::create_dir_all(worker_account.join("projects")).unwrap();
         insert_hub_and_worker(&state, &hub_account, &worker_account);
 
-        let err = resume_session_with(&state, "worker", None, stub_shell(&dir))
+        let err = resume_session_with(&state, "worker", None, None, stub_shell(&dir))
             .await
             .expect_err("neither transcript exists");
         assert_eq!(code_of(&err), error_code::CONVERSATION_UNRESUMABLE);
@@ -10663,7 +10761,7 @@ mod tests {
         std::fs::write(&record, "{}\n").unwrap();
         insert_hub_and_worker(&state, &hub_account, &worker_account);
 
-        let err = resume_session_with(&state, "worker", None, stub_shell(&dir))
+        let err = resume_session_with(&state, "worker", None, None, stub_shell(&dir))
             .await
             .expect_err("the owner's workdir does not exist");
         assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
@@ -10700,7 +10798,7 @@ mod tests {
             })
             .unwrap();
 
-        let err = resume_session_with(&state, "worker", None, fake_codex(&dir, false))
+        let err = resume_session_with(&state, "worker", None, None, fake_codex(&dir, false))
             .await
             .expect_err("unarchive fails");
         assert_eq!(code_of(&err), error_code::CODEX_UNARCHIVE_FAILED);
@@ -10728,7 +10826,7 @@ mod tests {
         std::fs::write(&record, "{}\n").unwrap();
         insert_hub_and_worker(&state, &hub_account, &worker_account);
 
-        let err = resume_session_with(&state, "worker", None, stub_shell(&dir))
+        let err = resume_session_with(&state, "worker", None, None, stub_shell(&dir))
             .await
             .expect_err("the owner's workdir does not exist");
         assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
@@ -10750,7 +10848,7 @@ mod tests {
             ))
             .unwrap();
 
-        let err = resume_session_with(&state, "s", None, stub_shell(&dir))
+        let err = resume_session_with(&state, "s", None, None, stub_shell(&dir))
             .await
             .expect_err("no cwd");
         assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
@@ -10797,7 +10895,7 @@ mod tests {
             .insert_session(&archived_with_conversation("s", Agent::Codex, &account))
             .unwrap();
 
-        let err = resume_session_with(&state, "s", None, fake_codex(&dir, false))
+        let err = resume_session_with(&state, "s", None, None, fake_codex(&dir, false))
             .await
             .expect_err("unarchive fails");
         assert_eq!(code_of(&err), error_code::CODEX_UNARCHIVE_FAILED);
@@ -10810,7 +10908,7 @@ mod tests {
         assert!(archived.exists());
 
         // The unarchive done, the reopen goes on to the launch, which this fixture refuses.
-        let err = resume_session_with(&state, "s", None, fake_codex(&dir, true))
+        let err = resume_session_with(&state, "s", None, None, fake_codex(&dir, true))
             .await
             .expect_err("no cwd");
         assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
@@ -11211,7 +11309,7 @@ mod tests {
             state.store.insert_session(&session).unwrap();
         }
 
-        let err = resume_session_with(&state, "worker", None, stub_shell(&dir))
+        let err = resume_session_with(&state, "worker", None, None, stub_shell(&dir))
             .await
             .expect_err("the console session cannot launch");
 
@@ -12283,6 +12381,7 @@ mod tests {
             bound_to: None,
             resume_agent_session_id: None,
             session_id: None,
+            terminal_appearance: None,
         }
     }
 
@@ -12530,7 +12629,7 @@ mod tests {
 
         let err = delete_session(&state, &opened.id).expect_err("not while starting");
         assert_eq!(code_of(&err), error_code::SESSION_NOT_DELETABLE);
-        let err = resume_session_with(&state, &opened.id, None, stub_shell(&dir))
+        let err = resume_session_with(&state, &opened.id, None, None, stub_shell(&dir))
             .await
             .expect_err("already being started");
         assert_eq!(code_of(&err), error_code::SESSION_ALREADY_STARTING);

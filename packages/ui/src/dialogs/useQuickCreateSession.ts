@@ -9,6 +9,7 @@ import { useT } from "../i18n/react";
 import { sessionDisplayTitle } from "../sessionLabel";
 import { liveConsoleSessions } from "../sidebar/order";
 import { useDaemon } from "../store";
+import { useOctoboardTheme } from "../theme";
 import type { NewSessionRequest } from "./dialogRequest";
 import { defaultOpenSessionRequest } from "./openSessionRequest";
 
@@ -26,6 +27,7 @@ export function useQuickCreateSession(
   currentConsoleId: string | undefined,
 ): (target: NewSessionRequest, action: string) => void {
   const t = useT();
+  const { resolved: appearance } = useOctoboardTheme();
   const { request, store, toastError } = useDaemon();
   const pending = useRef(false);
   const latestConsoleId = useLatest(currentConsoleId);
@@ -44,7 +46,7 @@ export function useQuickCreateSession(
         return;
       }
     }
-    const opening = defaultOpenSessionRequest(t, target.console, project, binding, state, Date.now());
+    const opening = defaultOpenSessionRequest(t, target.console, project, binding, state, Date.now(), appearance);
     if ("usedUp" in opening) {
       toastError(new ActionableError(t("sidebar.project.openSessionQuickUsedUp", { action }), "quotaUsedUpAgent"));
       return;

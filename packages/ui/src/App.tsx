@@ -38,6 +38,7 @@ import { RequestedDialog } from "./dialogs/RequestedDialog";
 import { useQuickCreateSession } from "./dialogs/useQuickCreateSession";
 import { forcibleBranches, inspectSessionBranches, lockedWorktrees } from "./dialogs/useSessionBranches";
 import { useT } from "./i18n/react";
+import { useOctoboardTheme } from "./theme";
 import type { AsideLayout } from "./layout/AsidePane";
 import { liveOwner, ownerAfterMove, ownerForSession, ownerKey, sameOwner, type AsideOwner } from "./layout/asideOwner";
 import { useIsNarrow } from "./layout/breakpoint";
@@ -86,6 +87,7 @@ const NO_SESSIONS: Session[] = [];
 
 export function App(): React.ReactElement {
   const t = useT();
+  const { resolved: appearance } = useOctoboardTheme();
   const { clipboard, links } = usePlatform();
   const daemon = useDaemon();
   const { request, toastError, toastNotice, reconnect, store } = daemon;
@@ -396,7 +398,7 @@ export function App(): React.ReactElement {
     runOnce(`resume:${sessionId}`, () => startResume(sessionId));
 
   const startResume = (sessionId: string): Promise<void> =>
-    whileResuming(setResumingIds, sessionId, () => request({ type: "resume_session", session: sessionId }));
+    whileResuming(setResumingIds, sessionId, () => request({ type: "resume_session", session: sessionId, terminal_appearance: appearance }));
 
   /** Resumes an archived or interrupted session for the session dialog: the same request as
    * `resumeSession`, with the terminal's resuming state and in-flight guard, but rejecting with the
@@ -412,7 +414,7 @@ export function App(): React.ReactElement {
     whileResuming(
       setResumingIds,
       sessionId,
-      () => request({ type: "switch_session_account", session: sessionId, account }),
+      () => request({ type: "switch_session_account", session: sessionId, account, terminal_appearance: appearance }),
       (err) => {
         // The confirmation shows a failure in place and cannot be dismissed while the switch runs;
         // were it gone anyway, the reason must not be lost with it.

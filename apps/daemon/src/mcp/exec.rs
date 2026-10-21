@@ -377,6 +377,7 @@ fn session_in(
         bound_to: None,
         resume_agent_session_id: None,
         session_id: None,
+        terminal_appearance: None,
     })
 }
 
@@ -711,6 +712,8 @@ async fn reopen_session(
         state,
         &target.id,
         arguments.get("text").and_then(Value::as_str),
+        // An owner asks over MCP, which has no window appearance to match.
+        None,
     )
     .await?;
     Ok(json!({ "session": target.id }))

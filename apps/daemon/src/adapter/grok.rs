@@ -87,7 +87,7 @@ use serde_json::json;
 
 use super::{AgentAdapter, LaunchPlan, LaunchSpec, HOOK_TIMEOUT_SECS};
 use crate::mcp;
-use crate::protocol::{error_code, Agent, CodedError};
+use crate::protocol::{error_code, Agent, CodedError, TerminalAppearance};
 use crate::trust::CarriedTrust;
 
 /// The events Octoboard's session states are derived from. All three stop events are registered
@@ -254,12 +254,24 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: &Path) -> Result<LaunchPlan> {
         user_store: source_home.join(TRUST_STORE),
         folder: canonical_cwd(spec.cwd),
     };
+    // Grok has no `--theme` flag. `GROK_THEME` outranks `config.toml`, so the copy of the user's
+    // configuration cannot paint a dark theme onto the light terminal (or the reverse). A launch
+    // that names no appearance uses `auto`, which follows the operating system, the same source as
+    // the window's System choice.
+    let theme = match spec.terminal_appearance {
+        Some(TerminalAppearance::Light) => "grokday",
+        Some(TerminalAppearance::Dark) => "groknight",
+        None => "auto",
+    };
     Ok(LaunchPlan {
         args,
-        env: vec![(
-            "GROK_HOME".to_string(),
-            grok_home.to_string_lossy().into_owned(),
-        )],
+        env: vec![
+            (
+                "GROK_HOME".to_string(),
+                grok_home.to_string_lossy().into_owned(),
+            ),
+            ("GROK_THEME".to_string(), theme.to_string()),
+        ],
         carried_trust: Some(carried_trust),
         shared_config_writeback: shared_config_writeback(&source_home, &grok_home, spec.model),
         ..LaunchPlan::default()
@@ -924,6 +936,27 @@ mod tests {
         home
     }
 
+    /// The terminal's appearance chooses Grok's theme. With none sent, Grok follows the operating
+    /// system rather than its compiled dark default.
+    #[test]
+    fn the_terminal_appearance_sets_grok_theme() {
+        let theme = |appearance| {
+            let mut fixture = spec_fixture();
+            with_default_home(&mut fixture);
+            fixture.terminal_appearance = appearance;
+            plan_isolated(&fixture.spec())
+                .expect("plan")
+                .env
+                .into_iter()
+                .find(|(key, _)| key == "GROK_THEME")
+                .expect("GROK_THEME")
+                .1
+        };
+        assert_eq!(theme(None), "auto");
+        assert_eq!(theme(Some(TerminalAppearance::Light)), "grokday");
+        assert_eq!(theme(Some(TerminalAppearance::Dark)), "groknight");
+    }
+
     /// With no model or effort set, neither flag is passed, so Grok keeps its own choice.
     #[test]
     fn no_model_or_effort_adds_no_flags() {
@@ -974,7 +1007,13 @@ mod tests {
         let plan = plan_isolated(&fixture.spec()).expect("plan");
         let farm = PathBuf::from(&plan.env[0].1);
         // Still Octoboard's own farm that Grok runs against, never the chosen directory itself.
-        assert_eq!(plan.env.len(), 1);
+        assert_eq!(
+            plan.env
+                .iter()
+                .map(|(key, _)| key.as_str())
+                .collect::<Vec<_>>(),
+            ["GROK_HOME", "GROK_THEME"]
+        );
         assert!(farm.starts_with(&*fixture.scratch), "{}", farm.display());
         // Grok persists into `config.toml`, so it stays a copy and never a link into the source.
         assert!(farm.join("config.toml").is_file());

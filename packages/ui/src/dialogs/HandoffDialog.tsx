@@ -7,6 +7,7 @@ import { isolate } from "../i18n/isolate";
 import type { Console, Project, Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessionLabel";
 import { useDaemon, useDaemonStore } from "../store";
+import { useOctoboardTheme } from "../theme";
 import { AgentAccountField } from "./AgentAccountField";
 import { Dialog, DialogError, useDialogAction } from "./Dialog";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
@@ -42,6 +43,7 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
   onHandedOff: (sessionId: string) => void;
 }): React.ReactElement {
   const t = useT();
+  const { resolved: appearance } = useOctoboardTheme();
   const { request } = useDaemon();
   const { error, busy, run } = useDialogAction();
   const { choice, blocked, usedUp, overrides, agentOptions, setPickedAgent, account, launch } = useLaunchChoice(parentConsole, project, session.agent);
@@ -56,6 +58,7 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
         session: session.id,
         agent: choice.agent,
         account: choice.account,
+        terminal_appearance: appearance,
         ...overrides,
       });
       if (reply.type === "session_opened") onHandedOff(reply.session.id);

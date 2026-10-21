@@ -14,6 +14,8 @@ import { createStateStore, DaemonProvider, type Daemon, type State } from "../st
 import { trackMountRefocus } from "./dialogTestSupport";
 import { SessionDialog } from "./SessionDialog";
 
+vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
+
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const parentConsole = consoleOf("c-1", "Main");
@@ -203,7 +205,7 @@ it("opens on a selectable agent, with the console's account for it, and sends bo
 
   const open = Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Open");
   await act(async () => open?.click());
-  expect(daemon.request).toHaveBeenCalledWith(expect.objectContaining({ type: "open_session", agent: "codex", account: "a-1" }));
+  expect(daemon.request).toHaveBeenCalledWith(expect.objectContaining({ type: "open_session", agent: "codex", account: "a-1", terminal_appearance: "dark" }));
   act(() => root.unmount());
   container.remove();
 });

@@ -11,6 +11,8 @@ import { createStateStore, DaemonProvider, type Daemon, type State } from "../st
 import type { NewSessionRequest } from "./dialogRequest";
 import { useQuickCreateSession } from "./useQuickCreateSession";
 
+vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "light" }) }));
+
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const parent = consoleOf("c-1", "Main");
@@ -59,6 +61,7 @@ it("opens the session on the dialog's defaults without asking anything, and sele
     agent: "claude",
     account: null,
     title: "Search API session",
+    terminal_appearance: "light",
   });
   expect(onOpened).toHaveBeenCalledWith("s-new");
 });

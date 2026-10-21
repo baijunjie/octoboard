@@ -377,6 +377,15 @@ pub enum ClaudeApprovalMode {
     Bypass,
 }
 
+/// The appearance a client has resolved for its window, sent with a launch so Grok's theme matches
+/// the terminal that will show it. It is not stored: a later launch sends its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TerminalAppearance {
+    Light,
+    Dark,
+}
+
 /// A named config directory of one agent, kept once for the whole application and referred to by
 /// id wherever a config directory is referred to — a console's per-agent setting, a session's own
 /// copy of it. Every agent also has a *default* account, which is not a row here: it is the state
@@ -1740,9 +1749,17 @@ pub enum RequestBody {
         /// no session behind.
         #[serde(default)]
         resume_agent_session_id: Option<String>,
+        /// The appearance the asking client's terminal is showing. Absent (a session an agent
+        /// opens, or a client that does not send it) leaves Grok following the operating system.
+        /// Not recorded on the session.
+        #[serde(default)]
+        terminal_appearance: Option<TerminalAppearance>,
     },
     ResumeSession {
         session: String,
+        /// See `OpenSession::terminal_appearance`.
+        #[serde(default)]
+        terminal_appearance: Option<TerminalAppearance>,
     },
     ArchiveSession {
         session: String,
@@ -1763,6 +1780,9 @@ pub enum RequestBody {
         session: String,
         #[serde(default, deserialize_with = "present_option")]
         account: Option<Option<String>>,
+        /// See `OpenSession::terminal_appearance`.
+        #[serde(default)]
+        terminal_appearance: Option<TerminalAppearance>,
     },
     /// Hands a session off to a new session of another agent, which takes its whole place: kind,
     /// project or console, role, owner, the branches it is responsible for and the sessions it
@@ -1780,6 +1800,9 @@ pub enum RequestBody {
         model: Option<Option<String>>,
         #[serde(default, deserialize_with = "present_option")]
         effort: Option<Option<String>>,
+        /// See `OpenSession::terminal_appearance`. Applied to the receiving session's launch.
+        #[serde(default)]
+        terminal_appearance: Option<TerminalAppearance>,
     },
     /// Fresh native-record presence for exactly the supplied sessions, aggregated across accounts.
     InspectSessionRecords {

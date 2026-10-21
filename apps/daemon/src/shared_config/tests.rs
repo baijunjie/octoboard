@@ -384,6 +384,7 @@ async fn resume(fixture: &Fixture, session: &str, launches: &Launches) -> Result
         None,
         false,
         None,
+        None,
         launches.launch(false),
     )
     .await
@@ -462,6 +463,7 @@ async fn a_switch_to_an_account_carries_out_its_pending_change_first() {
         &fixture.state,
         "moving",
         Some(Some("claude-a".to_string())),
+        None,
         None,
         || Ok(std::collections::HashMap::new()),
         launches.launch(false),
@@ -1024,6 +1026,7 @@ async fn a_switch_whose_target_cannot_change_its_sharing_leaves_the_session_runn
         "moving",
         Some(Some("claude-a".to_string())),
         None,
+        None,
         || Ok(std::collections::HashMap::new()),
         launches.launch(false),
     )
@@ -1276,6 +1279,7 @@ async fn a_switch_onto_an_account_turning_sharing_off_that_fails_leaves_the_conv
         &fixture.state,
         "moving",
         Some(Some("claude-a".to_string())),
+        None,
         None,
         move || Ok(shell),
         launches.launch(true),

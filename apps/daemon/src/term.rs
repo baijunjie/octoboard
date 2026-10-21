@@ -16,6 +16,7 @@ use crate::env_shell;
 use crate::paths;
 use crate::protocol::{
     error_code, Agent, ApprovalReviewer, ClaudeApprovalMode, CodedError, Notice, Role,
+    TerminalAppearance,
 };
 use crate::pty;
 use crate::session::{self, LiveSession, NewSession};
@@ -64,6 +65,8 @@ pub struct LaunchRequest {
     pub model: Option<String>,
     /// The reasoning effort to launch with; see `LaunchSpec::effort`.
     pub effort: Option<String>,
+    /// See `LaunchSpec::terminal_appearance`.
+    pub terminal_appearance: Option<TerminalAppearance>,
     /// A shell environment already snapshotted for this launch, used as it is instead of taking
     /// another. Only a caller that has already resolved something from one passes it — a switch
     /// to the default account, which resolved that account's directory from it to copy the
@@ -92,6 +95,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         shared_default_dir,
         model,
         effort,
+        terminal_appearance,
         preresolved_shell_env,
         daemon_port,
         self_exe,
@@ -156,6 +160,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         shared_default_dir: shared_default_dir.as_deref(),
         model: model.as_deref(),
         effort: effort.as_deref(),
+        terminal_appearance,
         agent_version: binary
             .as_ref()
             .ok()

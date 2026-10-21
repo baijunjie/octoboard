@@ -108,6 +108,7 @@ impl Fixture {
                 title: None,
                 note: None,
                 asked_by: None,
+                terminal_appearance: None,
             },
             launch,
         )
@@ -448,6 +449,7 @@ async fn a_handoff_that_is_refused_changes_nothing() {
             title: None,
             note: None,
             asked_by: None,
+            terminal_appearance: None,
         },
         fixture.launch(),
     )
@@ -471,6 +473,7 @@ async fn a_handoff_that_is_refused_changes_nothing() {
                 title: None,
                 note: None,
                 asked_by: None,
+                terminal_appearance: None,
             },
             fixture.launch(),
         )
@@ -545,6 +548,7 @@ async fn a_start_that_fails_moves_nothing_and_removes_the_package() {
             title: None,
             note: None,
             asked_by: None,
+            terminal_appearance: None,
         },
         |_| Err(anyhow!("the agent would not start")),
     )
@@ -638,6 +642,7 @@ async fn messages_for_the_original_during_a_failed_handoff_reach_the_original() 
             title: None,
             note: None,
             asked_by: None,
+            terminal_appearance: None,
         },
         move |_| {
             let delivery = crate::reporting::write_message(
@@ -721,6 +726,7 @@ async fn a_session_that_is_no_longer_the_askers_is_refused() {
             title: None,
             note: None,
             asked_by: Some("boss".to_string()),
+            terminal_appearance: None,
         },
         fixture.launch(),
     )

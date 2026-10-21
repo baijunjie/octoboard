@@ -8,7 +8,7 @@ export type OpenSessionRequest = Extract<RequestBody, { type: "open_session" }>;
 /** The `open_session` request for what the session dialog settled: `choice` is its agent and
  * account, `ownerId` the console session the session reports to, `overrides` the model and effort
  * the user changed (absent, they follow the parent). */
-export function openSessionRequest(t: Translate, { console: parentConsole, project, ownerId, resumeId, choice, title, overrides }: {
+export function openSessionRequest(t: Translate, { console: parentConsole, project, ownerId, resumeId, choice, title, overrides, appearance }: {
   console: Console;
   project?: Project;
   ownerId?: string;
@@ -16,6 +16,8 @@ export function openSessionRequest(t: Translate, { console: parentConsole, proje
   choice: AccountChoice;
   title?: string;
   overrides?: { model?: string | null; effort?: string | null };
+  /** The window's resolved appearance, sent as `terminal_appearance`. */
+  appearance: "light" | "dark";
 }): OpenSessionRequest {
   return {
     type: "open_session",
@@ -25,6 +27,7 @@ export function openSessionRequest(t: Translate, { console: parentConsole, proje
     agent: choice.agent,
     account: choice.account,
     title: title?.trim() || t("session.defaultName", { name: project?.name ?? parentConsole.name }),
+    terminal_appearance: appearance,
     ...overrides,
   };
 }
@@ -72,6 +75,7 @@ export function defaultOpenSessionRequest(
   binding: NewSessionBinding,
   state: QuickCreateState,
   now: number,
+  appearance: "light" | "dark",
 ): { request: OpenSessionRequest } | { usedUp: true } {
   const { choice, exhaustedBy } = settledQuickChoice(parentConsole, project, state, now);
   if (exhaustedBy) return { usedUp: true };
@@ -81,6 +85,7 @@ export function defaultOpenSessionRequest(
       project,
       ownerId: binding.kind === "bound" ? binding.to.id : undefined,
       choice,
+      appearance,
     }),
   };
 }

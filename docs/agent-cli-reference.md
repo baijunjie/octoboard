@@ -513,6 +513,15 @@ every model's.
 before the positional task. Grok persists some session settings back into `config.toml`; the per-session `GROK_HOME`
 farm keeps `config.toml` as a copy, so a flag cannot leak into the user's own configuration.
 
+**Theme** (Grok Build 1.0.62, from `grok --help`, the strings in the executable and Grok's own theming guide): there is
+**no `--theme` flag**. The environment variable `GROK_THEME` (or `LC_GROK_THEME`) forces a theme and outranks
+`config.toml`'s `[ui] theme`. The values include `groknight` (the default, dark: its backgrounds are near-black
+greys), `grokday` (light greys with dark text), `tokyonight`, `rosepine-moon`, `oscura-midnight`, `terminal` (the
+terminal's own colours) and `auto`. On a local macOS desktop `auto` follows the system appearance
+(`AppleInterfaceStyle`), not the terminal's background, and picks the `auto_light_theme` / `auto_dark_theme` themes
+(`grokday` / `groknight` by default). A dark theme on a light terminal leaves the cells Grok paints with the terminal's
+default colour showing through as light holes between dark bands.
+
 **Discovering models** (Grok Build 1.0.50): Grok has **no alias or "latest" indirection** either. `grok models` prints
 to stdout the login line, a blank line, `Default model: <id>`, a blank line, `Available models:` and then one bullet
 line per model, `  * <id> (default)` for the default and `  - <id>` for the others, in the order Grok shows them. It

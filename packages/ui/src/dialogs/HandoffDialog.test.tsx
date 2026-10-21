@@ -9,6 +9,8 @@ import type { AccountQuota, Agent, AgentAvailability, Session, SessionBranchItem
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
 import { HandoffDialog } from "./HandoffDialog";
 
+vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
+
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const parentConsole = consoleOf("c-1", "Main");
@@ -67,7 +69,7 @@ it("says what moves for a project session, then hands off to another agent and s
   await act(async () => buttons().find((b) => b.textContent === "Hand off")?.click());
   await settle();
   const sent = request.mock.calls.map(([body]) => body).find((body) => body.type === "hand_off_session");
-  expect(sent).toMatchObject({ type: "hand_off_session", session: "s-1", agent: "codex", account: null });
+  expect(sent).toMatchObject({ type: "hand_off_session", session: "s-1", agent: "codex", account: null, terminal_appearance: "dark" });
   expect(onHandedOff).toHaveBeenCalledExactlyOnceWith("s-new");
   expect(onClose).toHaveBeenCalledOnce();
 });

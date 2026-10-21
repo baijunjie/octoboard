@@ -1119,8 +1119,16 @@ export type RequestBody =
     /** The agent's own id of a conversation started outside Octoboard, which this project session
        * continues. Only a project session takes one, never together with `bound_to`. */
     resume_agent_session_id?: string;
+    /** The window's resolved appearance, so a Grok Build launch matches the terminal. Absent leaves
+       * Grok following the operating system. Not stored on the session. */
+    terminal_appearance?: "light" | "dark";
   }
-  | { type: "resume_session"; session: string }
+  | {
+    type: "resume_session";
+    session: string;
+    /** See `open_session`'s `terminal_appearance`. */
+    terminal_appearance?: "light" | "dark";
+  }
   /** Bound branches and worktrees go once the archived sessions' processes have ended; those
    * `force_remove` names go although git would refuse them, and those `keep` names, which the
    * confirmation listed and the user kept, are not reported when they stay. */
@@ -1129,7 +1137,13 @@ export type RequestBody =
    * copied into that account's directory, and it is relaunched there. `account` is the target by
    * id, or `null` for the default account; it is always sent. Answered once the relaunched session
    * has stayed up, or with the reason it did not. */
-  | { type: "switch_session_account"; session: string; account: string | null }
+  | {
+    type: "switch_session_account";
+    session: string;
+    account: string | null;
+    /** See `open_session`'s `terminal_appearance`. */
+    terminal_appearance?: "light" | "dark";
+  }
   /** Hands a session off to a new session of another agent, which takes its whole place: kind,
    * project or console, role, owner and title, the branches the session is responsible for and the
    * sessions it owns. The new session starts with a handoff package built from the original's
@@ -1138,7 +1152,16 @@ export type RequestBody =
    * same agent is `switch_session_account`); `account`, `model` and `effort` are as in
    * `open_session`. Answered with `session_opened` for the new session; a refusal, and a failure
    * after the new session is running (the error names it), come back as `error`. */
-  | { type: "hand_off_session"; session: string; agent: Agent; account?: string | null; model?: string | null; effort?: string | null }
+  | {
+    type: "hand_off_session";
+    session: string;
+    agent: Agent;
+    account?: string | null;
+    model?: string | null;
+    effort?: string | null;
+    /** See `open_session`'s `terminal_appearance`. Applied to the receiving session's launch. */
+    terminal_appearance?: "light" | "dark";
+  }
   /** Removes Octoboard's record of one session: an archived one, or one that has never been used
    * (no turn, bound to no owner, none bound to it), whose process is stopped; refused with
    * `session_not_deletable` otherwise, or while it is starting. The agent's own records of the
