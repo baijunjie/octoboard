@@ -1478,9 +1478,9 @@ mod tests {
         };
         let session = window(QuotaWindowKind::Session, 10.0, Some(NOW + 1));
         let month = credit(30 * 24 * 60, 10.0, Some(NOW + 1));
-        assert!(expiring_weekly(&[model.clone()], NOW).is_none());
-        assert!(expiring_weekly(&[session.clone()], NOW).is_none());
-        assert!(expiring_weekly(&[month.clone()], NOW).is_none());
+        assert!(expiring_weekly(std::slice::from_ref(&model), NOW).is_none());
+        assert!(expiring_weekly(std::slice::from_ref(&session), NOW).is_none());
+        assert!(expiring_weekly(std::slice::from_ref(&month), NOW).is_none());
         assert!(expiring_weekly(&[], NOW).is_none());
         for minutes in [28 * 24 * 60, 31 * 24 * 60] {
             assert!(

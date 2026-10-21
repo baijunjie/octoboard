@@ -68,13 +68,13 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            say; an empty field is omitted from the session's opening prompt rather than sent \
            blank. Name it with `title`, in the language the user converses with you in, not \
            that of the project, its docs and code. It runs on your own agent. While \
-           `auto_select_account` is on, a left-out account is the one of the session's agent \
-           whose weekly quota resets soonest and that can still open a session. When none does, \
-           your own account is used only for your own agent when that account can still open a \
-           session; any other takes the account its project, else its console, sets. Name \
-           another agent or account only when the user asked for them. Returns the session's \
-           id. The session is \
-           yours for its whole life.\n\
+           **Automatically select an account** is on (an application setting; see `get_settings`), \
+           a left-out account is the one of the session's agent whose weekly quota resets \
+           soonest and that can still open a session. When none does, your own account is used \
+           only for your own agent when that account can still open a session; any other takes \
+           the account its project, else its console, sets. Name another agent or account only \
+           when the user asked for them. Returns the session's id. The session is yours for its \
+           whole life.\n\
          - `send_message` — the next instruction for a session already running.\n\
          - `get_session` — a session's status and a tail of its output; it reads any session, in \
            any console.\n\
