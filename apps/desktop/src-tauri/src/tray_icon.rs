@@ -12,9 +12,10 @@ const PILL_Y: f64 = 32.0;
 const PILL_WIDTH: f64 = 44.0;
 const PILL_HEIGHT: f64 = 12.0;
 const GAP: u32 = 2;
-/// The two-layer look: the capsule for the main window, then the thinner one for the other, a
-/// pixel apart; together they fill the single capsule's rows and the gap above it.
-const MAIN_Y: f64 = 30.0;
+/// The two-layer look: the capsule for the main window, then the thinner one for the other, two
+/// pixels apart so the gap stays distinct at the menu bar's size; together they clear one more
+/// row of tentacles than the single capsule does.
+const MAIN_Y: f64 = 29.0;
 const MAIN_HEIGHT: f64 = 7.0;
 const THIN_Y: f64 = 38.0;
 const THIN_HEIGHT: f64 = 6.0;
@@ -179,18 +180,18 @@ mod tests {
         let icon = octopus(false, layered(50, 25));
         assert_eq!((icon.width(), icon.height()), (SIDE, SIDE));
         assert!(icon.rgba().chunks(4).all(|pixel| pixel[..3] == [0, 0, 0]));
-        for y in 0..28 {
+        for y in 0..27 {
             for x in 0..SIDE {
                 assert_eq!(alpha(&icon, x, y), alpha(&original, x, y));
             }
         }
         // The main capsule: outlined, filled to half inside.
-        assert_eq!(alpha(&icon, 22, 30), 255);
-        assert_eq!(alpha(&icon, 22, 36), 255);
-        assert_eq!(alpha(&icon, 12, 33), 255);
-        assert_eq!(alpha(&icon, 32, 33), 0);
-        // Nothing in the pixel between the two.
-        assert!((0..SIDE).all(|x| alpha(&icon, x, 37) == 0));
+        assert_eq!(alpha(&icon, 22, 29), 255);
+        assert_eq!(alpha(&icon, 22, 35), 255);
+        assert_eq!(alpha(&icon, 12, 32), 255);
+        assert_eq!(alpha(&icon, 32, 32), 0);
+        // Nothing in the two pixels between the two.
+        assert!((0..SIDE).all(|x| alpha(&icon, x, 36) == 0 && alpha(&icon, x, 37) == 0));
         // The thinner capsule: outlined too, filled to a quarter inside.
         assert_eq!(alpha(&icon, 22, 38), 255);
         assert_eq!(alpha(&icon, 22, 43), 255);
@@ -198,7 +199,7 @@ mod tests {
         assert_eq!(alpha(&icon, 30, 40), 0);
         // The main bar at 0 leaves its capsule's interior empty; the other at 100 fills its own.
         let drained = octopus(false, layered(0, 100));
-        assert_eq!(alpha(&drained, 22, 33), 0);
+        assert_eq!(alpha(&drained, 22, 32), 0);
         assert_eq!(alpha(&drained, 30, 40), 255);
         assert_ne!(octopus(false, layered(50, 100)).rgba(), icon.rgba());
         assert_eq!(

@@ -26,7 +26,7 @@ keeping the octopus at its original scale; the icon keeps its **18 pt** footprin
 looks:
 
 - **Two layers**, when the account has both a 5-hour and an account-wide Weekly window: two **outlined capsules**,
-  each with a hollow unfilled portion — about **18 × 2.9 pt** for the 5-hour window and, about 0.4 pt beneath it,
+  each with a hollow unfilled portion — about **18 × 2.9 pt** for the 5-hour window and, about 0.8 pt beneath it,
   about **18 × 2.5 pt** for the Weekly window.
 - **One bar** otherwise: an **outlined capsule** of about **18 × 4.9 pt**, with a hollow unfilled portion.
 
