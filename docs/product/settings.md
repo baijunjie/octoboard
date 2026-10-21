@@ -12,9 +12,9 @@ sections, in order, are **General**, **Git**, **Agent accounts**, **Trusted fold
 **Notifications** and **Configuration**; the dialog opens on General unless it was asked to open on another section.
 
 A console session can read the default clone directory, the automatic pulling of repositories, the automatic deletion of
-archived sessions whose conversation is gone, the agent accounts (without their directories) and the trusted folders,
-and change the first three (see "Application settings: `get_settings` and `update_settings`" in
-`docs/product/agent-settings-tools.md`).
+archived sessions whose conversation is gone, automatic account selection, the agent accounts (without their
+directories) and the trusted folders, and change the first four (see "Application settings: `get_settings` and
+`update_settings`" in `docs/product/agent-settings-tools.md`).
 
 ## In a narrow window
 
@@ -164,7 +164,8 @@ A switch, the section's last row, labelled for what turning it on does: keep Oct
 the window is closed. It is **off to begin with**, so closing the window quits.
 
 **Only the macOS application has this row.** A browser has no native window to close into the background, so the row
-is absent there — the section then ends with the Automatically approve session requests row.
+is absent there — the section then ends with the Automatically approve session requests row. In the macOS
+application this row sits directly under that switch.
 
 The row's description says what the choice means and never mentions quitting, which the label already carries: while
 the switch is off it says what turning it on will do, and while it is on it says what is happening now — closing the
@@ -188,7 +189,21 @@ never does and where the value is kept are in "Automatically pulling repositorie
 
 The agents the user has added and every account of each, grouped by agent, with the means to add, reorder and remove
 agents, to add, edit, rename and remove accounts, to sign an account in, and each account's approval mode and plan
-quota. What the section shows and offers is in `docs/product/agent-accounts.md`.
+quota, and **Automatically select an account**. Where that switch sits, and what the rest of the section shows and
+offers, are in `docs/product/agent-accounts.md`.
+
+### Automatically select an account
+
+A switch, **off to begin with** — installations from before the switch existed included: whether a new session whose
+account was not named uses the account of its agent whose weekly quota resets soonest. While the switch is off the
+row's description says what turning it on will do, and while it is on it says what is happening now: a new session uses
+the account whose weekly quota resets soonest, so quota that is about to reset is used before it is lost. The daemon
+stores it as `auto_select_account` and keeps it, so every window shows the same. Unlike **Automatically approve session
+requests**, a console session may read and change it, and a full configuration export carries it (see "Application
+settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The application settings
+a full export carries" in `docs/product/configuration-export-and-import.md`). Which account is chosen, and who applies
+the choice, are in "Which account a session uses" in `docs/product/sessions.md`. Turning it on or off changes no
+session already open.
 
 ## Trusted folders
 

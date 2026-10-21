@@ -52,10 +52,10 @@ give every agent, with `null` for an unset value.
 
 **The default agent and account settings do not decide what a session's own sessions run on.** The tools describe a
 project's `default_agent` and `accounts`, a console's `default_agent`, `project_session_agent` and `accounts`, and what
-`get_console` and `get_project` return, as applying to sessions opened without a choice, and say that a session another
+`get_console` and `get_project` return, as applying to sessions opened without a choice. They say that a session another
 session starts itself — with `new_session`, or with `request_session` in that session's own console — runs on that
-session's own agent and account unless the call names others (see "The agent and account of a session a session
-starts" in `docs/product/hub-orchestration.md`).
+session's own agent, and that a left-out account is chosen as "The agent and account of a session a session starts" in
+`docs/product/hub-orchestration.md` describes. They tell the caller to name another only when the user asked for it.
 
 ## A project's settings
 
@@ -146,19 +146,22 @@ working directory. Neither the avatar itself nor the console's console session i
 |---|---|
 | `auto_pull_repositories` | Whether projects behind their upstream are pulled (fast-forwarded) on their own (see "Automatically pulling repositories" in `docs/product/project-git-status.md`). |
 | `auto_delete_unresumable_archives` | Whether archived sessions whose conversation is gone are deleted on their own (see "Deleting archived sessions whose conversation is gone" in `docs/product/deleting-sessions.md`). |
+| `auto_select_account` | Whether a new session whose account was not named uses the account of its agent whose weekly quota resets soonest (see "Automatically select an account" in `docs/product/settings.md` and "Which account a session uses" in `docs/product/sessions.md`). |
 | `default_clone_dir` | The default clone directory (see "Default clone directory" in `docs/product/settings.md`). |
 | `accounts` | Every account, each with `id`, `agent`, `name` and `default`. Each agent's default account is listed first among that agent's, with the id `default` and, as its `name`, the name the user gave it, else `Default` (see "The default account" in `docs/product/agent-accounts.md`). An account's directory is never given. |
 | `trusted_directories` | The trusted folders (see "Trusted folders" in `docs/product/folder-trust.md`). Read-only. |
 
-`update_settings` takes `auto_pull_repositories`, `auto_delete_unresumable_archives` and `default_clone_dir`, under
-the rules of the same settings in Settings: the two switches take `true` or `false`, a clone directory must be absolute
-or start with `~/`, and a blank one goes back to the built-in default. A refused value leaves the others unapplied
-too. An `auto_approve_session_requests` argument is ignored — the setting stays as it is, `get_settings` never lists
-it, and the rest of the call applies as usual. Turning `auto_pull_repositories` on fast-forwards the projects already
-known to be behind at once, as turning the switch on in Settings does, which changes files in the user's repositories.
-Turning
-`auto_delete_unresumable_archives` on deletes nothing at once, and turning it off stops a deletion pass under way,
-exactly as the switch in Settings does. The call answers as `get_settings` does.
+`update_settings` takes `auto_pull_repositories`, `auto_delete_unresumable_archives`, `auto_select_account` and
+`default_clone_dir`, under the rules of the same settings in Settings: the switches take `true` or `false`, a clone
+directory must be absolute or start with `~/`, and a blank one goes back to the built-in default. A refused value
+leaves the others unapplied too. An `auto_approve_session_requests` argument is ignored — the setting stays as it is,
+`get_settings` never lists it, and the rest of the call applies as usual. Turning `auto_pull_repositories` on
+fast-forwards the projects already known to be behind at once, as turning the switch on in Settings does, which
+changes files in the user's repositories. Turning `auto_delete_unresumable_archives` on deletes nothing at once, and
+turning it off stops a deletion pass under way, exactly as the switch in Settings does. Turning `auto_select_account`
+on or off changes no session already open; it is read when a later `new_session` or `request_session` leaves the
+account out (see "Which account a session uses" in `docs/product/sessions.md`). The call answers as `get_settings`
+does.
 
 ## When a change takes effect
 

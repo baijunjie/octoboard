@@ -262,6 +262,7 @@ impl Store {
                 auto_pull_repositories INTEGER NOT NULL DEFAULT 0,
                 auto_delete_unresumable_archives INTEGER NOT NULL DEFAULT 1,
                 auto_approve_session_requests INTEGER NOT NULL DEFAULT 0,
+                auto_select_account INTEGER NOT NULL DEFAULT 0,
                 -- NULL until the user sets one; see `Store::default_clone_dir`.
                 default_clone_dir      TEXT,
                 -- NULL until the list is first decided; see `Store::added_agents`.
@@ -359,6 +360,13 @@ impl Store {
             conn.execute(
                 "ALTER TABLE settings \
                  ADD COLUMN auto_approve_session_requests INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
+        if !column_exists(&conn, "settings", "auto_select_account")? {
+            conn.execute(
+                "ALTER TABLE settings \
+                 ADD COLUMN auto_select_account INTEGER NOT NULL DEFAULT 0",
                 [],
             )?;
         }
@@ -1103,6 +1111,7 @@ impl Store {
             auto_pull_repositories: self.auto_pull_repositories()?,
             auto_delete_unresumable_archives: self.auto_delete_unresumable_archives()?,
             auto_approve_session_requests: self.auto_approve_session_requests()?,
+            auto_select_account: self.auto_select_account()?,
             default_clone_dir: self.default_clone_dir()?,
             accounts: self.list_accounts()?,
             added_agents: self.added_agents()?,
@@ -1251,6 +1260,24 @@ impl Store {
         let changed = self.lock().execute(
             "UPDATE settings SET auto_approve_session_requests = ?2 \
              WHERE id = ?1 AND auto_approve_session_requests != ?2",
+            params![SETTINGS_ID, value],
+        )?;
+        Ok(changed > 0)
+    }
+
+    pub fn auto_select_account(&self) -> Result<bool> {
+        Ok(self.lock().query_row(
+            "SELECT auto_select_account FROM settings WHERE id = ?1",
+            params![SETTINGS_ID],
+            |row| row.get(0),
+        )?)
+    }
+
+    /// Whether the setting actually changed.
+    pub fn set_auto_select_account(&self, value: bool) -> Result<bool> {
+        let changed = self.lock().execute(
+            "UPDATE settings SET auto_select_account = ?2 \
+             WHERE id = ?1 AND auto_select_account != ?2",
             params![SETTINGS_ID, value],
         )?;
         Ok(changed > 0)
@@ -4243,6 +4270,28 @@ mod tests {
         drop(store);
         let store = Store::open(&path).expect("store");
         assert!(!store.auto_approve_session_requests().unwrap());
+    }
+
+    /// Selecting an account from weekly quota is off in a fresh database and in one from before
+    /// the setting existed, round-trips, and a repeat write reports no change.
+    #[test]
+    fn the_auto_select_account_setting_defaults_off_and_round_trips() {
+        let path = temp_db("auto-select-account-setting");
+        let store = Store::open(&path).expect("store");
+        assert!(!store.get_settings().unwrap().auto_select_account);
+
+        assert!(store.set_auto_select_account(true).unwrap());
+        assert!(!store.set_auto_select_account(true).unwrap());
+        assert!(store.auto_select_account().unwrap());
+        assert!(store.set_auto_select_account(false).unwrap());
+
+        store
+            .lock()
+            .execute("ALTER TABLE settings DROP COLUMN auto_select_account", [])
+            .unwrap();
+        drop(store);
+        let store = Store::open(&path).expect("store");
+        assert!(!store.auto_select_account().unwrap());
     }
 
     /// The default clone directory is the built-in one until set, a blank value goes back to it,

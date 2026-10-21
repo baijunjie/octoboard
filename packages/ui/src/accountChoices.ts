@@ -120,6 +120,72 @@ export function choiceExhaustion(choice: AccountChoice, groups: ChoiceGroup[]): 
   return findEntry(groups, choiceKey(choice))?.exhaustedBy;
 }
 
+const DAY_MINUTES = 24 * 60;
+/** A credit period this long is the account's weekly quota. A monthly period (28 to 31 days) is not. */
+const WEEKLY_CREDIT_MIN_MINUTES = 6 * DAY_MINUTES;
+const WEEKLY_CREDIT_MAX_MINUTES = 8 * DAY_MINUTES;
+
+/** Whether `window` is the account-wide weekly quota. A model-specific weekly window and a session
+ * window are not: the former is one model's limit, the latter resets within hours. */
+function isWeeklyQuota(window: QuotaWindow): boolean {
+  if (window.kind === "weekly") return true;
+  return window.kind === "credit_period"
+    && window.window_minutes !== null
+    && window.window_minutes >= WEEKLY_CREDIT_MIN_MINUTES
+    && window.window_minutes <= WEEKLY_CREDIT_MAX_MINUTES;
+}
+
+/** The weekly window of `quota` that resets soonest and still has quota left. Of several, the soonest
+ * reset wins, then the larger remainder. Nothing rankable returns undefined. */
+export function expiringWeekly(quota: AccountQuota | undefined, now: number): { resetsAt: number; remaining: number } | undefined {
+  if (!quota) return undefined;
+  let best: { resetsAt: number; remaining: number } | undefined;
+  for (const window of quota.windows) {
+    if (!isWeeklyQuota(window) || !Number.isFinite(window.used_percent) || window.used_percent >= 100) continue;
+    if (typeof window.resets_at !== "number" || !(window.resets_at > now)) continue;
+    const candidate = { resetsAt: window.resets_at, remaining: Math.max(0, 100 - window.used_percent) };
+    if (!best || candidate.resetsAt < best.resetsAt || (candidate.resetsAt === best.resetsAt && candidate.remaining > best.remaining)) {
+      best = candidate;
+    }
+  }
+  return best;
+}
+
+/** The entry whose weekly quota resets soonest, among entries that are not used up.
+ * Soonest reset wins over a larger remainder. Equal reset and remainder keep `entries` order
+ * (the default account is first). No rankable window returns undefined. */
+export function preferExpiringWeekly(entries: ChoiceEntry[], now: number): ChoiceEntry | undefined {
+  let best: ChoiceEntry | undefined;
+  let bestSignal: { resetsAt: number; remaining: number } | undefined;
+  for (const entry of entries) {
+    if (entry.exhaustedBy) continue;
+    const signal = expiringWeekly(entry.quota, now);
+    if (!signal) continue;
+    if (!bestSignal || signal.resetsAt < bestSignal.resetsAt || (signal.resetsAt === bestSignal.resetsAt && signal.remaining > bestSignal.remaining)) {
+      best = entry;
+      bestSignal = signal;
+    }
+  }
+  return best;
+}
+
+/** The account a new session of `agent` opens on. With `autoSelect`, the one whose weekly quota resets
+ * soonest when one ranks; otherwise the account the project or console resolves to. */
+export function accountOpenedOn(
+  owner: Console,
+  project: Project | undefined,
+  agent: Agent,
+  accounts: Account[],
+  groups: ChoiceGroup[],
+  autoSelect?: { now: number },
+): string | null {
+  if (autoSelect) {
+    const preferred = preferExpiringWeekly(groups.find((candidate) => candidate.agent === agent)?.entries ?? [], autoSelect.now);
+    if (preferred) return preferred.account;
+  }
+  return inheritedAccount(owner, project, agent, accounts);
+}
+
 /** `choice`, or when its account is used up and its agent may be picked, the first account of the same
  * agent that is not, in the order of the agent's group (the default account first). With every account
  * of the agent used up `choice` stays, for the caller to refuse. */
@@ -135,10 +201,12 @@ export function avoidExhaustedAccount(choice: AccountChoice, groups: ChoiceGroup
  * session's: the console's default — moved to one that may be picked when that one is known
  * to be missing or is not added, with the account that agent resolves to when none is chosen: the project's
  * setting for it, else the console `owner`'s, moved to another account of the agent when that one's quota is
- * used up (`avoidExhaustedAccount`). The choice made in the dialog sits above this, as the daemon's own chain
- * puts a session's choice above both. `groups` are the agents' entries with their quotas judged (`choiceGroups`).
- * `exhaustedBy` is the window that still keeps the account from running a session when every account of the
- * agent is used up. */
+ * used up (`avoidExhaustedAccount`). With `autoSelect`, an account of that agent whose weekly quota resets
+ * soonest (`preferExpiringWeekly`) replaces the inherited one before that move, when the group has one;
+ * omitted, the inherited account is used as before. The choice made in the dialog sits above this, as the
+ * daemon's own chain puts a session's choice above both. `groups` are the agents' entries with their quotas
+ * judged (`choiceGroups`). `exhaustedBy` is the window that still keeps the account from running a session
+ * when every account of the agent is used up. */
 export function settledInitialChoice(
   owner: Console,
   project: Project | undefined,
@@ -146,9 +214,10 @@ export function settledInitialChoice(
   agentAvailability: Map<Agent, AgentAvailability>,
   added: Agent[] | null,
   groups: ChoiceGroup[],
+  autoSelect?: { now: number },
 ): { choice: AccountChoice; exhaustedBy: QuotaWindow | undefined } {
   const agent = selectableAgent(agentAvailability, added, project ? project.default_agent ?? projectSessionAgent(owner) : owner.default_agent);
-  const choice = avoidExhaustedAccount({ agent, account: inheritedAccount(owner, project, agent, accounts) }, groups);
+  const choice = avoidExhaustedAccount({ agent, account: accountOpenedOn(owner, project, agent, accounts, groups, autoSelect) }, groups);
   return { choice, exhaustedBy: choiceExhaustion(choice, groups) };
 }
 

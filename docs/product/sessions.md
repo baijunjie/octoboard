@@ -106,9 +106,8 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
   resolved in "Which agent a session uses" below when that agent can be picked, otherwise on the first agent that can,
   whenever there is one.
   The account picker offers only that agent's accounts, with its default account first, and is shown even when the
-  default account is the agent's only one, offering that account alone. It opens on the account resolved from the
-  project and console for that agent (see "Which account a session uses" below); a console session starts from its
-  console's account for the selected agent.
+  default account is the agent's only one, offering that account alone. It opens on the account "Which account a
+  session uses" below describes.
   There is no inheritance entry: both pickers settle concrete choices for this session.
   Each account in the picker carries a compact usage bar (see "In an account picker" in
   `docs/product/account-quotas.md`). A used-up account (see "A used-up account" in `docs/product/account-quotas.md`)
@@ -120,8 +119,8 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
   dialog's body names the account, the quota it has used up and when it resets, and the dialog cannot be submitted
   until another agent or account is chosen or the account is no longer used up.
   Switching agents retains each agent's account choice separately. If a remembered account is removed while the dialog
-  is open, that agent stays selected and its account falls back to its project's and console's current resolution,
-  or its console's alone for a console session; with its last named account removed, the picker stays, offering the
+  is open, that agent stays selected and its account falls back to the account the field would open on for that agent
+  (see "Which account a session uses" below); with its last named account removed, the picker stays, offering the
   default account. Switching agents returns focus to the Agent picker.
 - **Report to** (project sessions only; a choice, "No console session" by default) — one of the console's console
   sessions that are neither archived nor still *starting*, the most recently started first, each shown beside its colour, the same one the session's binding badge
@@ -342,22 +341,61 @@ The account of the session's agent, in descending priority:
 
 A console session carries no project, so after its own account choice its chain goes straight to the console's
 reference. A project leaves the account to the console for every agent it inherits for, which is how every project
-starts (see "The project's account, model and reasoning effort" in `docs/product/projects.md`). A session opened without
-changing the account picker therefore runs under the project's account for its agent, or the console's, or the agent's
-default account when neither pins anything. The session's account is identified by its agent icon's tooltip and its
-accessible session name, without an account suffix in visible session metadata (see "Session rows" in
-`docs/product/sidebar.md`).
+starts (see "The project's account, model and reasoning effort" in `docs/product/projects.md`). While **Automatically
+select an account** is off (see that section in `docs/product/settings.md`), a session opened without changing the
+account picker runs under the project's account for its agent, or the console's, or the agent's default account when
+neither pins anything. The session's account is identified by its agent icon's tooltip and its accessible session name,
+without an account suffix in visible session metadata (see "Session rows" in `docs/product/sidebar.md`).
 
-A session that another session starts without naming an `account` — with `new_session`, `request_session` or
-`handoff_session` — runs on the caller's own account when it is of the caller's own agent (for `request_session`,
-only in the caller's own console) and that account can still open a session; otherwise it resolves through this chain
-as a session that makes no choice of its own does (see "The agent and account of a session a session starts" in
-`docs/product/hub-orchestration.md`). The dialog that opens a session by hand always makes a choice,
-opening on the account the rest of the chain resolves to (the project's setting for the agent, else the console's, else
-the agent's default account) and sending that as the session's own choice, so a session opened there runs under that
-account unless the user picks another in the account picker. A session opened from the **Resume conversation** tab is
-the exception: it is sent the agent and account that hold the conversation, which the tab shows locked (see "Resuming a
-conversation by its session ID" below).
+While the switch is on, a new session whose account was not named uses the account of that session's agent whose weekly
+quota resets soonest, among the accounts that can still open a session. An account the session names still wins,
+including an explicit choice of the agent's default account, which does not fall through to a project pin. On
+`open_session`, `null` is that explicit choice of the default account, not the absence of a choice. Where an agent's
+tool names an account, `default` is the same choice; leaving `account` out, or sending it blank, is not.
+
+Who makes the pick:
+
+- The new-session dialog computes it, shows it in the account picker, and sends it as the session's own choice. The
+  user can still pick another account. Until the user does, the account shown follows the dialog's clock (see "A
+  used-up account" in `docs/product/account-quotas.md`).
+- Opening a session with defaults uses the same account the dialog would open on, and sends it the same way (see
+  "Opening a session with defaults" above).
+- `new_session` and `request_session`, when `account` is left out or blank, have the daemon make the same pick, in the
+  caller's own console and in another console (see "The agent and account of a session a session starts" in
+  `docs/product/hub-orchestration.md`).
+- The **Resume conversation** tab does not follow the pick. It sends the agent and account that hold the conversation,
+  shown locked, when that account can still be selected (see "Resuming a conversation by its session ID" below).
+- `handoff_session` does not follow the pick. A left-out account stays the caller's own when `agent` is the caller's
+  own agent and that account can still open a session; otherwise the project's account for that agent, else the
+  console's (see "Handing off from an owner's tool" in `docs/product/handing-off-sessions.md`).
+
+When the switch is on but no account ranks, the account is the one it would be while the switch is off. The dialog and
+a session opened with defaults open on the account the project or console resolves to, then another account of that
+agent when that one is used up. For `new_session` and `request_session` the fallback is in "The agent and account of a
+session a session starts" in `docs/product/hub-orchestration.md`: in the caller's own console, the caller's own account
+only when the session is of the caller's own agent and that account can still open a session, otherwise the project's
+for the agent, else the console's; in another console, the project's, else the console's, and never the caller's.
+
+The dialog and the daemon rank the same way:
+
+- Candidates are that agent's accounts that can still open a session. An account is not a candidate when it is used up
+  (see "A used-up account" in `docs/product/account-quotas.md`): a 5-hour, account-wide weekly, or credit-pool window
+  at 100% or more, whose reset is still ahead or absent, drops the whole account. A model-specific weekly limit never
+  does that, and it does not drive this pick either.
+- The default account is a candidate ahead of that agent's stored accounts, in the order they are kept.
+- The window that ranks is an account-wide weekly window, or a credit pool whose period is about a week (6 to 8 days,
+  the ends included), the window "Quota windows" in `docs/product/account-quotas.md` calls **Weekly**. A 5-hour
+  window, a model-specific weekly window, and a monthly credit pool do not rank. How much of the 5-hour window remains
+  is not a key.
+- The share used must be a finite number below 100, and the reset must be strictly in the future. A reset that has
+  passed or is missing does not rank.
+- On one account, the soonest such reset wins, then the larger remainder.
+- Across accounts, the soonest reset wins, so quota about to reset is spent first; a larger remainder breaks a tie;
+  an equal tie keeps the earlier candidate. One percent left that resets in an hour is chosen over ninety percent that
+  resets in three days.
+- An account used up on its 5-hour window is not chosen even when its weekly window resets soon.
+- The reading used is the one held for that account under the directory it points at now. A reading taken under
+  another directory does not count (see "Which accounts have a quota" in `docs/product/account-quotas.md`).
 
 ### Which model and reasoning effort a session uses
 

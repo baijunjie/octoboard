@@ -355,8 +355,7 @@ fn session_in(
     let session_agent = coordinator::session_agent(agent, project.as_ref(), console);
     let account = match optional_string(arguments, "account") {
         Some(wanted) => Some(resolve_account(state, session_agent, &wanted)?),
-        None if in_own_console => callers_account(state, caller, session_agent)?,
-        None => None,
+        None => account_when_unset(state, caller, session_agent, in_own_console)?,
     };
     Ok(OpenRequest {
         console_id: console.id.clone(),
@@ -379,6 +378,26 @@ fn session_in(
         resume_agent_session_id: None,
         session_id: None,
     })
+}
+
+fn account_when_unset(
+    state: &Arc<AppState>,
+    caller: &Session,
+    agent: Agent,
+    in_own_console: bool,
+) -> Result<Option<Option<String>>> {
+    if state.store.auto_select_account()? {
+        if let Some(picked) = coordinator::preferred_weekly_account(state, agent)? {
+            // `Some(None)` is an explicit choice of the default account.
+            return Ok(Some(picked));
+        }
+    }
+    if in_own_console {
+        callers_account(state, caller, agent)
+    } else {
+        // Inherit the project, else the console.
+        Ok(None)
+    }
 }
 
 /// The account a session of `agent` that `caller` starts runs on when the call names none:
@@ -1089,7 +1108,8 @@ fn readable_output(bytes: &[u8]) -> String {
 pub(super) mod tests {
     use super::*;
     use crate::protocol::{
-        Agent, AgentAvailability, Availability, Console, Project, ProjectAccount, ProjectSource,
+        Account, AccountQuota, Agent, AgentAvailability, Availability, Console, Project,
+        ProjectAccount, ProjectSource, QuotaWindow, QuotaWindowKind,
     };
     use crate::store::LOCAL_HOST_ID;
     use crate::test_support::{output_containing, running, ScratchDir};
@@ -3034,9 +3054,9 @@ pub(super) mod tests {
     }
 
     /// The settings listing names every agent's default account, never an account's directory, and
-    /// the only writes are to the three settings a console session may change.
+    /// the only writes are to the four settings a console session may change.
     #[tokio::test]
-    async fn settings_are_listed_without_directories_and_three_of_them_are_writable() {
+    async fn settings_are_listed_without_directories_and_four_of_them_are_writable() {
         let (state, _dir) = settings_state("app-settings");
         let updated = call(
             &state,
@@ -3070,6 +3090,17 @@ pub(super) mod tests {
             .await
             .unwrap();
         assert_eq!(read["auto_delete_unresumable_archives"], false);
+        assert_eq!(read["auto_select_account"], false);
+        let selected = call(
+            &state,
+            "a",
+            "update_settings",
+            &arguments(json!({ "auto_select_account": true })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(selected["auto_select_account"], true);
+        assert!(state.store.auto_select_account().unwrap());
         assert_eq!(read["accounts"].as_array().unwrap().len(), 4);
         assert_eq!(read["accounts"][0]["id"], "default");
         assert_eq!(read["accounts"][0]["default"], true);
@@ -3364,6 +3395,401 @@ pub(super) mod tests {
             agent_and_account(&state, &caller, "console-2", "project-2", json!({})),
             (None, None)
         );
+    }
+
+    fn quota(agent: Agent, account: Option<&str>, windows: Vec<QuotaWindow>) -> AccountQuota {
+        AccountQuota {
+            agent,
+            account: account.map(str::to_string),
+            fetched_at: 1,
+            plan: None,
+            windows,
+            unavailable: None,
+        }
+    }
+
+    fn hold(
+        state: &Arc<AppState>,
+        agent: Agent,
+        account: Option<&str>,
+        config_dir: Option<&str>,
+        windows: Vec<QuotaWindow>,
+    ) {
+        let quota = quota(agent, account, windows);
+        match config_dir {
+            Some(dir) => state.account_quotas.hold_in_dir_for_test(&quota, dir),
+            None => state.account_quotas.hold_for_test(&quota),
+        }
+    }
+
+    fn weekly(used_percent: f64, resets_at: i64) -> QuotaWindow {
+        QuotaWindow {
+            kind: QuotaWindowKind::Weekly,
+            label: None,
+            used_percent,
+            resets_at: Some(resets_at),
+            window_minutes: None,
+        }
+    }
+
+    fn insert_codex(state: &Arc<AppState>, id: &str, dir: &str) {
+        state
+            .store
+            .insert_account(&Account {
+                id: id.to_string(),
+                agent: Agent::Codex,
+                name: id.to_string(),
+                config_dir: dir.to_string(),
+                approval_reviewer: None,
+                approval_mode: None,
+                share_default_config: false,
+                share_default_config_pending: false,
+            })
+            .unwrap();
+    }
+
+    fn own_console_account(
+        state: &Arc<AppState>,
+        caller: &Session,
+        args: Value,
+    ) -> Option<Option<String>> {
+        agent_and_account(state, caller, "console-1", "project-1", args).1
+    }
+
+    /// With the setting off, a left-out account stays the caller's even when another account's
+    /// weekly quota resets sooner.
+    #[test]
+    fn auto_select_account_off_keeps_the_callers_account() {
+        let (state, _dir, caller) = codex_caller_state("auto-select-off");
+        let soon = now_millis() + 60_000;
+        insert_codex(&state, "sooner", "/tmp/codex-sooner");
+        hold(
+            &state,
+            Agent::Codex,
+            Some("sooner"),
+            Some("/tmp/codex-sooner"),
+            vec![weekly(80.0, soon)],
+        );
+        hold(
+            &state,
+            Agent::Codex,
+            Some("codex-work"),
+            Some("/tmp/codex-work"),
+            vec![weekly(10.0, soon + 3_600_000)],
+        );
+        assert_eq!(
+            own_console_account(&state, &caller, json!({})),
+            Some(Some("codex-work".to_string()))
+        );
+    }
+
+    /// With the setting on, the account whose weekly quota resets soonest is chosen, including
+    /// when that account is the default.
+    #[test]
+    fn auto_select_account_on_chooses_the_soonest_weekly_reset_including_the_default() {
+        let soon = now_millis() + 60_000;
+        let later = soon + 3_600_000;
+
+        let (state, _dir, caller) = codex_caller_state("auto-select-soonest-stored");
+        state.store.set_auto_select_account(true).unwrap();
+        insert_codex(&state, "sooner", "/tmp/codex-sooner");
+        hold(&state, Agent::Codex, None, None, vec![weekly(10.0, later)]);
+        hold(
+            &state,
+            Agent::Codex,
+            Some("sooner"),
+            Some("/tmp/codex-sooner"),
+            vec![weekly(80.0, soon)],
+        );
+        assert_eq!(
+            own_console_account(&state, &caller, json!({})),
+            Some(Some("sooner".to_string()))
+        );
+
+        let (state, _dir, caller) = codex_caller_state("auto-select-soonest-default");
+        state.store.set_auto_select_account(true).unwrap();
+        hold(&state, Agent::Codex, None, None, vec![weekly(80.0, soon)]);
+        hold(
+            &state,
+            Agent::Codex,
+            Some("codex-work"),
+            Some("/tmp/codex-work"),
+            vec![weekly(10.0, later)],
+        );
+        assert_eq!(own_console_account(&state, &caller, json!({})), Some(None));
+    }
+
+    /// A named account is the one the call asked for, whatever resets sooner.
+    #[test]
+    fn auto_select_account_on_a_named_account_still_wins() {
+        let (state, _dir, caller) = codex_caller_state("auto-select-named");
+        state.store.set_auto_select_account(true).unwrap();
+        let soon = now_millis() + 60_000;
+        insert_codex(&state, "sooner", "/tmp/codex-sooner");
+        hold(
+            &state,
+            Agent::Codex,
+            Some("sooner"),
+            Some("/tmp/codex-sooner"),
+            vec![weekly(10.0, soon)],
+        );
+        assert_eq!(
+            own_console_account(&state, &caller, json!({ "account": "Work" })),
+            Some(Some("codex-work".to_string()))
+        );
+    }
+
+    /// Nothing rankable leaves today's resolution: the caller's account, in the caller's own
+    /// console.
+    #[test]
+    fn auto_select_account_on_without_a_rankable_weekly_window_keeps_the_callers_account() {
+        let soon = now_millis() + 60_000;
+        let cases: &[(&str, Option<Vec<QuotaWindow>>)] = &[
+            ("unread", None),
+            (
+                "session",
+                Some(vec![QuotaWindow {
+                    kind: QuotaWindowKind::Session,
+                    label: None,
+                    used_percent: 10.0,
+                    resets_at: Some(soon),
+                    window_minutes: Some(5 * 60),
+                }]),
+            ),
+            (
+                "monthly",
+                Some(vec![QuotaWindow {
+                    kind: QuotaWindowKind::CreditPeriod,
+                    label: None,
+                    used_percent: 10.0,
+                    resets_at: Some(soon),
+                    window_minutes: Some(30 * 24 * 60),
+                }]),
+            ),
+            (
+                "stale",
+                Some(vec![QuotaWindow {
+                    kind: QuotaWindowKind::Weekly,
+                    label: None,
+                    used_percent: 10.0,
+                    resets_at: Some(now_millis() - 1),
+                    window_minutes: None,
+                }]),
+            ),
+            (
+                "missing-reset",
+                Some(vec![QuotaWindow {
+                    kind: QuotaWindowKind::Weekly,
+                    label: None,
+                    used_percent: 10.0,
+                    resets_at: None,
+                    window_minutes: None,
+                }]),
+            ),
+            (
+                "weekly-model",
+                Some(vec![QuotaWindow {
+                    kind: QuotaWindowKind::WeeklyModel,
+                    label: Some("Fable".to_string()),
+                    used_percent: 10.0,
+                    resets_at: Some(soon),
+                    window_minutes: None,
+                }]),
+            ),
+        ];
+        for (label, windows) in cases {
+            let (state, _dir, caller) = codex_caller_state(&format!("auto-select-none-{label}"));
+            state.store.set_auto_select_account(true).unwrap();
+            insert_codex(&state, "other", "/tmp/codex-other");
+            if let Some(windows) = windows {
+                hold(
+                    &state,
+                    Agent::Codex,
+                    Some("other"),
+                    Some("/tmp/codex-other"),
+                    windows.clone(),
+                );
+            }
+            assert_eq!(
+                own_console_account(&state, &caller, json!({})),
+                Some(Some("codex-work".to_string())),
+                "{label}"
+            );
+        }
+    }
+
+    /// Nothing rankable still inherits when the session is not the caller's agent, and when the
+    /// caller's own account can no longer open a session. It does not keep the caller's account.
+    #[test]
+    fn auto_select_account_on_without_a_rankable_window_inherits_otherwise() {
+        let (state, _dir, caller) = codex_caller_state("auto-select-other-agent");
+        state.store.set_auto_select_account(true).unwrap();
+        assert_eq!(
+            own_console_account(&state, &caller, json!({ "agent": "claude" })),
+            None
+        );
+
+        let (state, _dir, caller) = codex_caller_state("auto-select-caller-used-up");
+        state.store.set_auto_select_account(true).unwrap();
+        hold(
+            &state,
+            Agent::Codex,
+            Some("codex-work"),
+            Some("/tmp/codex-work"),
+            vec![QuotaWindow {
+                kind: QuotaWindowKind::Session,
+                label: None,
+                used_percent: 100.0,
+                resets_at: Some(now_millis() + 60_000),
+                window_minutes: Some(5 * 60),
+            }],
+        );
+        assert_eq!(own_console_account(&state, &caller, json!({})), None);
+    }
+
+    /// Another console still takes a rankable account, and leaves the account unset when none
+    /// ranks — not the caller's.
+    #[test]
+    fn auto_select_account_on_in_another_console_picks_or_leaves_the_account_unset() {
+        let soon = now_millis() + 60_000;
+        let (state, _dir, caller) = codex_caller_state("auto-select-other-console");
+        state.store.set_auto_select_account(true).unwrap();
+        state
+            .store
+            .insert_account(&Account {
+                id: "claude-soon".to_string(),
+                agent: Agent::Claude,
+                name: "Soon".to_string(),
+                config_dir: "/tmp/claude-soon".to_string(),
+                approval_reviewer: None,
+                approval_mode: None,
+                share_default_config: false,
+                share_default_config_pending: false,
+            })
+            .unwrap();
+        hold(
+            &state,
+            Agent::Claude,
+            Some("claude-soon"),
+            Some("/tmp/claude-soon"),
+            vec![weekly(20.0, soon)],
+        );
+        assert_eq!(
+            agent_and_account(&state, &caller, "console-2", "project-2", json!({})),
+            (None, Some(Some("claude-soon".to_string())))
+        );
+
+        let (state, _dir, caller) = codex_caller_state("auto-select-other-console-none");
+        state.store.set_auto_select_account(true).unwrap();
+        hold(
+            &state,
+            Agent::Codex,
+            Some("codex-work"),
+            Some("/tmp/codex-work"),
+            vec![weekly(10.0, soon)],
+        );
+        assert_eq!(
+            agent_and_account(&state, &caller, "console-2", "project-2", json!({})),
+            (None, None)
+        );
+    }
+
+    /// A reading stored under a directory the account no longer points at does not choose it.
+    #[test]
+    fn auto_select_account_ignores_a_reading_from_another_config_dir() {
+        let (state, _dir, caller) = codex_caller_state("auto-select-other-dir");
+        state.store.set_auto_select_account(true).unwrap();
+        let soon = now_millis() + 60_000;
+        insert_codex(&state, "sooner", "/tmp/codex-sooner");
+        insert_codex(&state, "later", "/tmp/codex-later");
+        hold(
+            &state,
+            Agent::Codex,
+            Some("sooner"),
+            Some("/tmp/codex-elsewhere"),
+            vec![weekly(10.0, soon)],
+        );
+        hold(
+            &state,
+            Agent::Codex,
+            Some("later"),
+            Some("/tmp/codex-later"),
+            vec![weekly(80.0, soon + 3_600_000)],
+        );
+        assert_eq!(
+            own_console_account(&state, &caller, json!({})),
+            Some(Some("later".to_string()))
+        );
+    }
+
+    /// A used-up 5-hour window keeps the account out, however soon its weekly window resets.
+    #[test]
+    fn auto_select_account_skips_an_account_whose_five_hour_window_is_used_up() {
+        let (state, _dir, caller) = codex_caller_state("auto-select-five-hour");
+        state.store.set_auto_select_account(true).unwrap();
+        let soon = now_millis() + 60_000;
+        insert_codex(&state, "sooner", "/tmp/codex-sooner");
+        insert_codex(&state, "later", "/tmp/codex-later");
+        hold(
+            &state,
+            Agent::Codex,
+            Some("sooner"),
+            Some("/tmp/codex-sooner"),
+            vec![
+                QuotaWindow {
+                    kind: QuotaWindowKind::Session,
+                    label: None,
+                    used_percent: 100.0,
+                    resets_at: Some(soon + 3_600_000),
+                    window_minutes: None,
+                },
+                weekly(10.0, soon),
+            ],
+        );
+        hold(
+            &state,
+            Agent::Codex,
+            Some("later"),
+            Some("/tmp/codex-later"),
+            vec![weekly(80.0, soon + 3_600_000)],
+        );
+        assert_eq!(
+            own_console_account(&state, &caller, json!({})),
+            Some(Some("later".to_string()))
+        );
+    }
+
+    /// The same reset time prefers more remaining, and a tie keeps the earlier candidate.
+    #[test]
+    fn auto_select_account_breaks_a_reset_tie_by_remaining_then_by_candidate_order() {
+        let reset = now_millis() + 60_000;
+
+        let (state, _dir, caller) = codex_caller_state("auto-select-more-remaining");
+        state.store.set_auto_select_account(true).unwrap();
+        hold(&state, Agent::Codex, None, None, vec![weekly(80.0, reset)]);
+        hold(
+            &state,
+            Agent::Codex,
+            Some("codex-work"),
+            Some("/tmp/codex-work"),
+            vec![weekly(10.0, reset)],
+        );
+        assert_eq!(
+            own_console_account(&state, &caller, json!({})),
+            Some(Some("codex-work".to_string()))
+        );
+
+        let (state, _dir, caller) = codex_caller_state("auto-select-equal-remaining");
+        state.store.set_auto_select_account(true).unwrap();
+        hold(&state, Agent::Codex, None, None, vec![weekly(40.0, reset)]);
+        hold(
+            &state,
+            Agent::Codex,
+            Some("codex-work"),
+            Some("/tmp/codex-work"),
+            vec![weekly(40.0, reset)],
+        );
+        assert_eq!(own_console_account(&state, &caller, json!({})), Some(None));
     }
 
     /// The caller names the session; without a name it is named from the goal's first line.

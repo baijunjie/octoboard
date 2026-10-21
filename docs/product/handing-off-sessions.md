@@ -34,10 +34,13 @@ background" in `docs/product/sessions.md`). A handoff is refused, with nothing c
   (`invalid_launch_setting`);
 - for a session bound to an owner, opening a session bound to that owner would be refused.
 
-The account, model and reasoning effort follow the rules for opening a session (see "Which account a session uses" and
-"Which model and reasoning effort a session uses" in `docs/product/sessions.md`): left out, they come from the project
-or console as for any new session of that agent — except that an owner's `handoff_session` naming no account, whose
-receiving agent is the owner's own, takes the owner's own account (see "Handing off from an owner's tool" below).
+The model and reasoning effort follow the rules for opening a session (see "Which model and reasoning effort a session
+uses" in `docs/product/sessions.md`): left out, they come from the project or console as for any new session of that
+agent. The account does not follow automatic account selection, even while that switch is on (see "Which account a
+session uses" in `docs/product/sessions.md`). Left out, an owner's `handoff_session` takes the owner's own account when
+the receiving agent is the owner's own and that account can still open a session; otherwise, and for a handoff from
+the window, it comes from the project or console (see "Handing off from an owner's tool" and "Handing off from the
+window" below).
 
 From the moment a handoff is accepted until it ends, the original cannot be resumed, switched to another account or
 deleted.
@@ -71,10 +74,11 @@ Then come the fields:
   the agent a new session of the project (or, for a console session, of the console) would use by default (see "Which
   agent a session uses" in `docs/product/sessions.md`) when that is another agent and can be picked (see "Which agents
   the agent pickers list" in `docs/product/consoles.md`), otherwise on the first other agent that can, in the order of
-  the added agents, with the account resolved for that agent as for a new session. Used-up accounts are treated as in
-  the session dialog's field: listed with a usage bar but not pickable, passed over when the field opens, and, when the
-  chosen account is used up all the same, a danger callout at the top of the dialog says why and **Hand off** cannot
-  be pressed.
+  the added agents, with the account the project or console resolves for that agent, not the one automatic account
+  selection would pick (see "Which account a session uses" in `docs/product/sessions.md`). Used-up accounts are treated
+  as in the session dialog's field: listed with a usage bar but not pickable, passed over when the field opens, and,
+  when the chosen account is used up all the same, a danger callout at the top of the dialog says why and **Hand off**
+  cannot be pressed.
 - The collapsed **Advanced** section — the receiving session's model and reasoning effort, showing what a new session of
   the chosen agent and account would inherit, as in the session dialog (see "The Advanced section" in
   `docs/product/model-and-reasoning-effort.md`). Only values the user changed are sent with the request; the rest are
@@ -102,7 +106,7 @@ its own without the user.
 |---|---|---|
 | `session` | yes | The session to hand off: one of the caller's (`yours: true`). |
 | `agent` | yes | The receiving agent, `claude`, `codex` or `grok`; not the session's own. |
-| `account` | no | The receiving session's account: an account's id or name, or `default` for the agent's default account. It must belong to `agent`. Left out or blank, it is the caller's own account when `agent` is the caller's own agent, unless that account no longer exists or is used up, as for a session the caller starts (see "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md`); otherwise it comes from the project or console, as for any handoff (see "What can be handed off" above). |
+| `account` | no | The receiving session's account: an account's id or name, or `default` for the agent's default account. It must belong to `agent`. `default` chooses that account outright and does not fall through to a project pin. Left out or blank, it is the caller's own account when `agent` is the caller's own agent and that account can still open a session; otherwise the project's account for that agent, else the console's (see "What can be handed off" above). It does not follow automatic account selection. |
 | `title` | no | The receiving session's name in the session list, stored trimmed. Left out or blank, it keeps the original's title. It is to be written in the user's language (see "Naming the sessions a session starts" in `docs/product/hub-orchestration.md`). |
 | `model`, `effort` | no | The receiving session's model and reasoning effort. Left out, each comes from the project or console, as for any handoff; blank, it is the agent's own default; any other must be one the agent offers. |
 | `note` | no | What the caller tells the receiving session beyond the package, such as where the work stands and what to do first. It is added at the end of the receiving session's opening prompt, introduced as a note from the owner that handed the work off, every line quoted. Blank is the same as left out. |

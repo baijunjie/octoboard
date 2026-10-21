@@ -243,6 +243,85 @@ mod tests {
         assert_eq!(record.title, "修复构建");
     }
 
+    /// Automatic account selection does not move a handoff off the caller's account, even when
+    /// another account of the same agent has a weekly window that resets sooner.
+    #[tokio::test]
+    async fn a_handoff_keeps_the_callers_account_when_automatic_selection_is_on() {
+        let (state, _dir) = shared_console_state("handoff-ignores-auto-select");
+        state.store.set_auto_select_account(true).unwrap();
+        for (id, dir) in [
+            ("codex-work", "/tmp/codex-work"),
+            ("sooner", "/tmp/codex-sooner"),
+        ] {
+            state
+                .store
+                .insert_account(&crate::protocol::Account {
+                    id: id.to_string(),
+                    agent: Agent::Codex,
+                    name: id.to_string(),
+                    config_dir: dir.to_string(),
+                    approval_reviewer: None,
+                    approval_mode: None,
+                    share_default_config: false,
+                    share_default_config_pending: false,
+                })
+                .unwrap();
+        }
+        let soon = crate::protocol::now_millis() + 60_000;
+        let weekly = |used: f64, resets_at: i64| crate::protocol::QuotaWindow {
+            kind: crate::protocol::QuotaWindowKind::Weekly,
+            label: None,
+            used_percent: used,
+            resets_at: Some(resets_at),
+            window_minutes: None,
+        };
+        let reading =
+            |id: &str, window: crate::protocol::QuotaWindow| crate::protocol::AccountQuota {
+                agent: Agent::Codex,
+                account: Some(id.to_string()),
+                fetched_at: 1,
+                plan: None,
+                windows: vec![window],
+                unavailable: None,
+            };
+        state
+            .account_quotas
+            .hold_in_dir_for_test(&reading("sooner", weekly(10.0, soon)), "/tmp/codex-sooner");
+        state.account_quotas.hold_in_dir_for_test(
+            &reading("codex-work", weekly(80.0, soon + 3_600_000)),
+            "/tmp/codex-work",
+        );
+        state
+            .save_session(&Session {
+                agent: Agent::Codex,
+                ..state.session_record("a").unwrap()
+            })
+            .unwrap();
+        state
+            .store
+            .set_session_account("a", Some("codex-work"), Some("/tmp/codex-work"))
+            .unwrap();
+        let _caller = running(&state, "a");
+        let _original = running(&state, "of-a");
+        let (launches, started) = (Launches::default(), Started::default());
+
+        let result = handoff_session(
+            &state,
+            &state.session_record("a").unwrap(),
+            &arguments(json!({ "session": "of-a", "agent": "codex" })),
+            stand_in_launch(&started, &launches, || {}),
+        )
+        .await
+        .unwrap();
+
+        let record = state
+            .store
+            .get_session(result["session"].as_str().unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(record.account_id.as_deref(), Some("codex-work"));
+    }
+
     /// What is not the caller's to hand off (another owner's session, the caller itself), what the
     /// operation refuses (a session in the middle of a turn), a bad agent and an account of
     /// another agent are all refused in prose: nothing is launched and no session changes.

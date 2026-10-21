@@ -105,6 +105,7 @@ pub(super) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
     Ok(json!({
         "auto_pull_repositories": state.store.auto_pull_repositories()?,
         "auto_delete_unresumable_archives": state.store.auto_delete_unresumable_archives()?,
+        "auto_select_account": state.store.auto_select_account()?,
         "default_clone_dir": state.store.default_clone_dir()?,
         "accounts": listed,
         "trusted_directories": state.store.trusted_directories()?,
@@ -125,6 +126,7 @@ pub(super) fn update_settings(
             )?,
             // Never settable by an agent: it would let a session approve its own requests.
             auto_approve_session_requests: None,
+            auto_select_account: optional_bool(arguments, "auto_select_account")?,
             default_clone_dir: raw_text(arguments, "default_clone_dir")?,
         },
     )?;

@@ -47,6 +47,15 @@ const codexSpent: AccountQuota[] = [
 /** Grok Build's one credit pool, spent. */
 const grokSpent: AccountQuota[] = [quotaOf("grok", null, "SuperGrok", [quotaWindow("credit_period", 100, 2 * 24 * 60)])];
 
+/** Weekly windows only. Default still has most of its quota and resets in six days; Soon has little
+ * left and resets in six hours, so a new session opens on Soon rather than the inherited default. */
+const soonerWeeklyQuotas: AccountQuota[] = [
+  quotaOf("claude", null, "max", [quotaWindow("weekly", 10, 6 * 24 * 60)]),
+  quotaOf("claude", "a-soon", "pro", [quotaWindow("weekly", 90, 6 * 60)]),
+];
+
+const soonAccount: Account = { id: "a-soon", agent: "claude", name: "Soon", config_dir: "/Users/dev/.claude-soon" };
+
 const website = { ...web, default_agent: "claude" as const };
 const searchApi = projectOf("p-api", console_.id, "Search API", { default_agent: "codex" });
 const chat = projectOf("p-chat", console_.id, "Chat Bot", { default_agent: "grok" });
@@ -116,6 +125,18 @@ export const quotaGatingScenarios: Scenario[] = [
     title: "New session, account picker with quota bars",
     description: "Website would run on Work, whose quota is used up, so the Claude Code account field opens on Default, the first account with quota left, and the open picker lists every account with a compact usage bar before its name: the five-hour window's bar with the weekly window's thin one right under it. Default has plenty left and is selected; Work is unselectable, its name and bar faded and its reason at full contrast under the name on two lines, \"Used up\" and when it resets; Personal is nearly empty; Client has no reading yet and shows an empty track.",
     state: launchState([onWork], claudeQuotas),
+    steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Claude Code"))],
+  },
+  {
+    id: "dialog-new-session-auto-select-account",
+    group: GROUP,
+    category: "normal",
+    title: "New session, the account whose weekly quota resets sooner",
+    description: "Website would run on Default, which has most of its weekly quota left and resets later, but the Claude Code account field opens on Soon, which has little weekly quota left and resets sooner. The open picker shows Soon selected beside Default's fuller bar.",
+    state: {
+      ...launchState([website], soonerWeeklyQuotas),
+      settings: { ...settings, auto_select_account: true, accounts: [soonAccount] },
+    },
     steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Claude Code"))],
   },
   {

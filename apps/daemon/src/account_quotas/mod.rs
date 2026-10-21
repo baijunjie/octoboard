@@ -168,6 +168,26 @@ impl AccountQuotas {
         exhausted_in(&self.lock().entries, agent, account, config_dir, now)
     }
 
+    /// The held reading of the account under `config_dir`, if one is held. `None` for
+    /// `config_dir` is the default account. A reading taken under another directory is not this
+    /// account's.
+    pub fn held(
+        &self,
+        agent: Agent,
+        account: Option<&str>,
+        config_dir: Option<&str>,
+    ) -> Option<AccountQuota> {
+        let key = Key {
+            agent,
+            account: account.map(str::to_string),
+            config_dir: config_dir.map(str::to_string),
+        };
+        self.lock()
+            .entries
+            .get(&key)
+            .map(|entry| entry.quota.clone())
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
         self.inner.lock().expect("account quotas lock poisoned")
     }
@@ -454,6 +474,62 @@ fn window_name(window: &QuotaWindow) -> String {
         },
     }
     .to_string()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ExpiringWeekly {
+    pub resets_at: i64,
+    pub remaining: f64,
+}
+
+impl ExpiringWeekly {
+    /// Whether this window ranks ahead of `other`: a sooner reset, then a larger remainder.
+    /// An equal pair does not, so the earlier candidate stays.
+    pub fn ranks_ahead_of(self, other: Self) -> bool {
+        self.resets_at < other.resets_at
+            || (self.resets_at == other.resets_at
+                && self.remaining.total_cmp(&other.remaining).is_gt())
+    }
+}
+
+/// A weekly window that still has quota and whose reset is still ahead.
+/// Account-wide `Weekly`, or `CreditPeriod` whose `window_minutes` is in
+/// `6 * 24 * 60..=8 * 24 * 60`. A model's own weekly window never counts.
+/// `used_percent` must be finite and below 100. A reset that is missing or
+/// not strictly after `now` does not rank. Among the windows of one account,
+/// the soonest reset wins, so quota about to reset is spent first, then the
+/// larger remaining (`(100 - used_percent).max(0)`).
+pub fn expiring_weekly(windows: &[QuotaWindow], now: i64) -> Option<ExpiringWeekly> {
+    let mut best: Option<ExpiringWeekly> = None;
+    for window in windows {
+        let weekly = match window.kind {
+            QuotaWindowKind::Weekly => true,
+            QuotaWindowKind::CreditPeriod => window
+                .window_minutes
+                .is_some_and(|minutes| (6 * 24 * 60..=8 * 24 * 60).contains(&minutes)),
+            QuotaWindowKind::Session | QuotaWindowKind::WeeklyModel => false,
+        };
+        if !weekly || !window.used_percent.is_finite() || window.used_percent >= 100.0 {
+            continue;
+        }
+        let Some(resets_at) = window.resets_at else {
+            continue;
+        };
+        if resets_at <= now {
+            continue;
+        }
+        let candidate = ExpiringWeekly {
+            resets_at,
+            remaining: (100.0 - window.used_percent).max(0.0),
+        };
+        if best
+            .as_ref()
+            .is_none_or(|current| candidate.ranks_ahead_of(*current))
+        {
+            best = Some(candidate);
+        }
+    }
+    best
 }
 
 /// Whether `code` is one of an account's states rather than a failure to read it.
@@ -1350,6 +1426,142 @@ mod tests {
         }
         let asked = exhausted_in(&held, Agent::Codex, Some("a"), Some("/accounts/a"), NOW);
         assert!(asked.is_some());
+    }
+
+    fn credit(minutes: u32, used_percent: f64, resets_at: Option<i64>) -> QuotaWindow {
+        QuotaWindow {
+            window_minutes: Some(minutes),
+            ..window(QuotaWindowKind::CreditPeriod, used_percent, resets_at)
+        }
+    }
+
+    /// The soonest reset is spent first; only a tie looks at how much is left.
+    #[test]
+    fn the_soonest_reset_beats_a_larger_remainder_and_an_equal_reset_prefers_more_remaining() {
+        let soonest = expiring_weekly(
+            &[
+                window(QuotaWindowKind::Weekly, 10.0, Some(NOW + 100)),
+                window(QuotaWindowKind::Weekly, 80.0, Some(NOW + 10)),
+            ],
+            NOW,
+        );
+        assert_eq!(
+            soonest,
+            Some(ExpiringWeekly {
+                resets_at: NOW + 10,
+                remaining: 20.0
+            })
+        );
+        let fuller = expiring_weekly(
+            &[
+                window(QuotaWindowKind::Weekly, 50.0, Some(NOW + 10)),
+                window(QuotaWindowKind::Weekly, 10.0, Some(NOW + 10)),
+            ],
+            NOW,
+        );
+        assert_eq!(
+            fuller,
+            Some(ExpiringWeekly {
+                resets_at: NOW + 10,
+                remaining: 90.0
+            })
+        );
+    }
+
+    /// A model window, a session window and a monthly credit pool are not the account's weekly
+    /// quota, even when they reset sooner than one that is.
+    #[test]
+    fn a_window_that_is_not_an_account_wide_weekly_one_does_not_rank() {
+        let model = QuotaWindow {
+            label: Some("Fable".to_string()),
+            ..window(QuotaWindowKind::WeeklyModel, 10.0, Some(NOW + 1))
+        };
+        let session = window(QuotaWindowKind::Session, 10.0, Some(NOW + 1));
+        let month = credit(30 * 24 * 60, 10.0, Some(NOW + 1));
+        assert!(expiring_weekly(&[model.clone()], NOW).is_none());
+        assert!(expiring_weekly(&[session.clone()], NOW).is_none());
+        assert!(expiring_weekly(&[month.clone()], NOW).is_none());
+        assert!(expiring_weekly(&[], NOW).is_none());
+        for minutes in [28 * 24 * 60, 31 * 24 * 60] {
+            assert!(
+                expiring_weekly(&[credit(minutes, 10.0, Some(NOW + 1))], NOW).is_none(),
+                "{minutes}"
+            );
+        }
+        let ranked = expiring_weekly(
+            &[
+                model,
+                session,
+                month,
+                window(QuotaWindowKind::Weekly, 40.0, Some(NOW + 50)),
+            ],
+            NOW,
+        );
+        assert_eq!(
+            ranked,
+            Some(ExpiringWeekly {
+                resets_at: NOW + 50,
+                remaining: 60.0
+            })
+        );
+    }
+
+    #[test]
+    fn a_used_up_non_finite_or_passed_weekly_window_does_not_rank() {
+        let ignored = [
+            window(QuotaWindowKind::Weekly, 100.0, Some(NOW + 1)),
+            window(QuotaWindowKind::Weekly, 130.0, Some(NOW + 1)),
+            window(QuotaWindowKind::Weekly, f64::NAN, Some(NOW + 1)),
+            window(QuotaWindowKind::Weekly, f64::INFINITY, Some(NOW + 1)),
+            window(QuotaWindowKind::Weekly, f64::NEG_INFINITY, Some(NOW + 1)),
+            window(QuotaWindowKind::Weekly, 10.0, Some(NOW)),
+            window(QuotaWindowKind::Weekly, 10.0, Some(NOW - 1)),
+            window(QuotaWindowKind::Weekly, 10.0, None),
+        ];
+        for window in ignored {
+            assert!(expiring_weekly(&[window], NOW).is_none());
+        }
+        let ranked = expiring_weekly(
+            &[
+                window(QuotaWindowKind::Weekly, 100.0, Some(NOW + 1)),
+                window(QuotaWindowKind::Weekly, f64::NAN, Some(NOW + 1)),
+                window(QuotaWindowKind::Weekly, 10.0, Some(NOW)),
+                window(QuotaWindowKind::Weekly, 10.0, None),
+                window(QuotaWindowKind::Weekly, 25.0, Some(NOW + 20)),
+            ],
+            NOW,
+        );
+        assert_eq!(
+            ranked,
+            Some(ExpiringWeekly {
+                resets_at: NOW + 20,
+                remaining: 75.0
+            })
+        );
+    }
+
+    #[test]
+    fn a_credit_period_inside_the_week_range_ranks() {
+        let week = credit(7 * 24 * 60, 25.0, Some(NOW + 5));
+        assert_eq!(
+            expiring_weekly(&[week], NOW),
+            Some(ExpiringWeekly {
+                resets_at: NOW + 5,
+                remaining: 75.0
+            })
+        );
+        for minutes in [6 * 24 * 60, 8 * 24 * 60] {
+            assert!(
+                expiring_weekly(&[credit(minutes, 10.0, Some(NOW + 1))], NOW).is_some(),
+                "{minutes}"
+            );
+        }
+        for minutes in [6 * 24 * 60 - 1, 8 * 24 * 60 + 1] {
+            assert!(
+                expiring_weekly(&[credit(minutes, 10.0, Some(NOW + 1))], NOW).is_none(),
+                "{minutes}"
+            );
+        }
     }
 
     #[test]

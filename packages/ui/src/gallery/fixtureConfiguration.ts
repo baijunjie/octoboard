@@ -93,6 +93,7 @@ export function exportedDocument(state: State, consoleId?: string): Configuratio
       settings: {
         auto_pull_repositories: state.settings.auto_pull_repositories,
         auto_delete_unresumable_archives: state.settings.auto_delete_unresumable_archives,
+        ...(typeof state.settings.auto_select_account === "boolean" && { auto_select_account: state.settings.auto_select_account }),
       },
     }),
     consoles,

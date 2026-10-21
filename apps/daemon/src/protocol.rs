@@ -856,6 +856,10 @@ pub struct Settings {
     /// Whether a session's `request_session` call is approved without asking the user (see
     /// `session_request`). Off unless the user turned it on; only the user's own client changes it.
     pub auto_approve_session_requests: bool,
+    /// Whether a new session whose account was left out runs on the account of its agent whose
+    /// weekly quota resets soonest and still has some left. Off unless the user turned it on.
+    /// When nothing ranks, the account is chosen as it is while this is off.
+    pub auto_select_account: bool,
     /// The directory a `git` association clones into when none is named: the one the user set, or
     /// `~/Projects` (expanded) while none is. Always an absolute, lexically normalised path.
     pub default_clone_dir: String,
@@ -883,6 +887,7 @@ impl Default for Settings {
             auto_pull_repositories: false,
             auto_delete_unresumable_archives: true,
             auto_approve_session_requests: false,
+            auto_select_account: false,
             default_clone_dir: String::new(),
             accounts: Vec::new(),
             added_agents: None,
@@ -1898,6 +1903,8 @@ pub enum RequestBody {
         auto_pull_repositories: Option<bool>,
         auto_delete_unresumable_archives: Option<bool>,
         auto_approve_session_requests: Option<bool>,
+        #[serde(default)]
+        auto_select_account: Option<bool>,
         /// A blank value goes back to the built-in default.
         default_clone_dir: Option<String>,
     },
@@ -4476,6 +4483,36 @@ mod tests {
             RequestBody::RemoveTrustedDirectory { path } => assert_eq!(path, "/work"),
             _ => panic!("parses as remove_trusted_directory"),
         }
+    }
+
+    /// One field is enough: the others stay absent, and a body that names nothing leaves
+    /// `auto_select_account` absent too.
+    #[test]
+    fn an_update_settings_may_name_only_auto_select_account() {
+        let parsed = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
+            RequestBody::UpdateSettings {
+                auto_pull_repositories,
+                auto_delete_unresumable_archives,
+                auto_approve_session_requests,
+                auto_select_account,
+                default_clone_dir,
+            } => (
+                auto_pull_repositories,
+                auto_delete_unresumable_archives,
+                auto_approve_session_requests,
+                auto_select_account,
+                default_clone_dir,
+            ),
+            _ => panic!("parses as update_settings"),
+        };
+        assert_eq!(
+            parsed(r#"{"type":"update_settings","auto_select_account":true}"#),
+            (None, None, None, Some(true), None)
+        );
+        assert_eq!(
+            parsed(r#"{"type":"update_settings"}"#),
+            (None, None, None, None, None)
+        );
     }
 
     #[test]

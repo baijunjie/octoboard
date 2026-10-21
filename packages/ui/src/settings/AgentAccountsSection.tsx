@@ -27,6 +27,7 @@ import { useAccountQuota } from "../quota/useAccountQuota";
 import { useDaemon, useDaemonStore } from "../store";
 import { ApprovalReviewerSelect, ClaudeApprovalModeSelect } from "./AccountApprovalSelect";
 import { AccountDialog } from "./AccountDialog";
+import { AutoSelectAccountSetting } from "./AutoSelectAccountSetting";
 import { AccountLoginAnnouncer, accountLoginOf, loginIsActive, useClearSucceededLogin } from "./AccountLogin";
 import { AccountLoginDialog } from "./AccountLoginDialog";
 import { AddAgentDialog } from "./AddAgentDialog";
@@ -42,8 +43,10 @@ export const AGENT_STRIP_HEIGHT = 45;
 /** Every added agent's accounts, with one tab for each in the order of the list (the first agent's open) and the
  * agent's default account first, each with its plan and quota, and the means to add, edit and remove the ones the
  * user owns, to rename the default account, and to add, remove and reorder the agents (see
- * `docs/product/agent-accounts.md`); a new account starts on the agent of the tab in view. While the daemon has not decided
- * the list every agent is shown, and the agents cannot be removed or reordered yet. The default account is not a
+ * `docs/product/agent-accounts.md`); a new account starts on the agent of the tab in view. The switch
+ * that picks an account by the weekly quota resetting soonest sits above that list, once: it applies
+ * to every agent, including when none is added. While the daemon has not decided the list every agent
+ * is shown, and the agents cannot be removed or reordered yet. The default account is not a
  * record: it is the state of pinning nothing, so it is shown from the agent's availability and can be renamed but
  * not edited or removed. Opening the section asks the daemon to refresh the quotas that are due, those of every
  * agent and not only of the tab in view. */
@@ -126,7 +129,8 @@ export function AgentAccountsSection(): React.ReactElement {
       <p className="pb-2 text-sm text-app-muted">
         <Message id="settings.accounts.description" params={PATH_VAR_PARAMS} />
       </p>
-      <div className="flex flex-wrap gap-2">
+      <AutoSelectAccountSetting />
+      <div className="flex flex-wrap gap-2 pt-3">
         <Button ref={addAgentButton} size="sm" variant="outline" preventFocusOnPress onPress={() => setAddingAgent(true)}>
           <Bot aria-hidden="true" className="size-4" />
           {t("settings.accounts.addAgent")}

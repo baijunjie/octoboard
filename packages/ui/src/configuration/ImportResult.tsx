@@ -180,6 +180,8 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
       {result.settings_applied && settingLine(t("settings.git.autoPull.label"), result.settings_applied.auto_pull_repositories)}
       {typeof result.settings_applied?.auto_delete_unresumable_archives === "boolean" &&
         settingLine(t("settings.archiveCleanup.label"), result.settings_applied.auto_delete_unresumable_archives)}
+      {typeof result.settings_applied?.auto_select_account === "boolean" &&
+        settingLine(t("settings.autoSelect.label"), result.settings_applied.auto_select_account)}
       {result.settings_error && (
         <ErrorAlert>
           <Message id="configuration.import.result.settings.failed" params={{ reason: failureNode(result.settings_error) }} />

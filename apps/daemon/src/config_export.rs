@@ -57,6 +57,10 @@ pub struct DocumentSettings {
     /// as it is.
     #[serde(default)]
     pub auto_delete_unresumable_archives: Option<bool>,
+    /// Absent in a document exported before the setting existed: importing it leaves the setting
+    /// as it is.
+    #[serde(default)]
+    pub auto_select_account: Option<bool>,
 }
 
 /// A reference to an account: its name, which is unique within its agent. The agent is the one
@@ -164,6 +168,7 @@ pub fn build(store: &Store, console: Option<&str>) -> Result<ConfigurationDocume
         None => Some(DocumentSettings {
             auto_pull_repositories: store.auto_pull_repositories()?,
             auto_delete_unresumable_archives: Some(store.auto_delete_unresumable_archives()?),
+            auto_select_account: Some(store.auto_select_account()?),
         }),
     };
 
@@ -438,7 +443,13 @@ mod tests {
             Some(DocumentSettings {
                 auto_pull_repositories: true,
                 auto_delete_unresumable_archives: Some(false),
+                auto_select_account: Some(false),
             })
+        );
+        assert_eq!(
+            serde_json::to_value(document.settings.as_ref().unwrap()).unwrap()
+                ["auto_select_account"],
+            false
         );
         let names = |console: &DocumentConsole| {
             console

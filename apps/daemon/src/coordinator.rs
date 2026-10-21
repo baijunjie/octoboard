@@ -976,6 +976,7 @@ async fn handle_inner(
             auto_pull_repositories,
             auto_delete_unresumable_archives,
             auto_approve_session_requests,
+            auto_select_account,
             default_clone_dir,
         } => {
             update_settings(
@@ -984,6 +985,7 @@ async fn handle_inner(
                     auto_pull_repositories,
                     auto_delete_unresumable_archives,
                     auto_approve_session_requests,
+                    auto_select_account,
                     default_clone_dir,
                 },
             )?;
@@ -4690,6 +4692,58 @@ pub(crate) fn account_can_open(
     .is_none())
 }
 
+/// The account of `agent` to use when a new session leaves its account out and
+/// `auto_select_account` is on. `Some(Some(id))` is a stored account, `Some(None)` the default
+/// account, and `None` when no account has a weekly window that still has quota and resets
+/// ahead. The soonest reset wins; a larger remainder breaks a tie, and an earlier candidate
+/// wins one that is still tied — the default account, then the stored accounts in the order
+/// they are kept. Rank from the reading held for the account's current directory. The list of
+/// readings carries no directory, so one still stored under another directory would be chosen.
+pub(crate) fn preferred_weekly_account(
+    state: &Arc<AppState>,
+    agent: Agent,
+) -> Result<Option<Option<String>>> {
+    let mut candidates = vec![None];
+    for account in state.store.list_accounts()? {
+        if account.agent == agent {
+            candidates.push(Some(account.id));
+        }
+    }
+    let now = now_millis();
+    let mut best: Option<(i64, f64, Option<String>)> = None;
+    for account_id in candidates {
+        if !account_can_open(state, agent, account_id.as_deref())? {
+            continue;
+        }
+        let config_dir = match account_id.as_deref() {
+            None => None,
+            Some(id) => match account_of_agent(state, agent, id)? {
+                Some(account) => Some(account.config_dir),
+                None => continue,
+            },
+        };
+        let Some(quota) =
+            state
+                .account_quotas
+                .held(agent, account_id.as_deref(), config_dir.as_deref())
+        else {
+            continue;
+        };
+        let Some(weekly) = crate::account_quotas::expiring_weekly(&quota.windows, now) else {
+            continue;
+        };
+        if best.as_ref().is_none_or(|(resets_at, remaining, _)| {
+            weekly.ranks_ahead_of(account_quotas::ExpiringWeekly {
+                resets_at: *resets_at,
+                remaining: *remaining,
+            })
+        }) {
+            best = Some((weekly.resets_at, weekly.remaining, account_id));
+        }
+    }
+    Ok(best.map(|(_, _, account_id)| account_id))
+}
+
 /// A span of milliseconds in the rough terms of a message to read: `3d 4h`, `5h 20m` or `7m`.
 fn duration_label(millis: i64) -> String {
     let minutes = millis.max(0) / 60_000;
@@ -5331,6 +5385,7 @@ pub struct SettingsChanges {
     pub auto_pull_repositories: Option<bool>,
     pub auto_delete_unresumable_archives: Option<bool>,
     pub auto_approve_session_requests: Option<bool>,
+    pub auto_select_account: Option<bool>,
     /// Blank text goes back to the built-in default.
     pub default_clone_dir: Option<String>,
 }
@@ -5342,6 +5397,7 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         auto_pull_repositories,
         auto_delete_unresumable_archives,
         auto_approve_session_requests,
+        auto_select_account,
         default_clone_dir,
     } = changes;
     // Checked before anything is written, so a refused directory leaves the other field unapplied
@@ -5363,6 +5419,9 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     }
     if let Some(value) = auto_approve_session_requests {
         changed |= state.store.set_auto_approve_session_requests(value)?;
+    }
+    if let Some(value) = auto_select_account {
+        changed |= state.store.set_auto_select_account(value)?;
     }
     if let Some(value) = default_clone_dir {
         changed |= state.store.set_default_clone_dir(value.as_deref())?;

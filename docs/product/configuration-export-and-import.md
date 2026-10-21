@@ -52,9 +52,10 @@ daemon's host, which the row then says. Four buttons apply one way to every proj
 default clone directory, clone from remotes) or leave every project out, and a project they do not reach keeps its row.
 The account references that would fall back to a default account are listed on the console or the project that holds
 them. A document with application settings gets a checkbox for them, unchecked, whose note has a line for each setting
-the document carries, saying what applying it would change from what is set now: that it turns the setting on, and what
-Octoboard then does by itself; that it turns it off; or that it is already as the document has it, so applying changes
-nothing.
+the document carries — one an older document leaves out has no line — saying what applying it would change from what
+is set now: that it turns the setting on, and what then follows, in that setting's own words (see "The application
+settings a full export carries" below); that it turns it off; or that it is already as the document has it, so
+applying changes nothing.
 
 The review's **Import** button sends the document unchanged, with the choice of every project that is placed, in one
 request; a project left out is sent none. A directory the user typed that is not usable stops the import before any
@@ -154,7 +155,7 @@ list of added agents and the names the user gave the default accounts (see "Adde
 
 ### The application settings a full export carries
 
-Two, each under its own key:
+Three, each under its own key:
 
 - **Automatically pull repositories** (see "Automatically pulling repositories" in
   `docs/product/project-git-status.md`), under `auto_pull_repositories`. An import also reads it from a document that
@@ -163,6 +164,11 @@ Two, each under its own key:
   conversation is gone" in `docs/product/deleting-sessions.md`), under `auto_delete_unresumable_archives`. A document
   exported before the setting existed does not carry it, and applying that document's settings leaves the importing
   machine's value as it is.
+- **Automatically select an account** (see that section in `docs/product/settings.md`), under `auto_select_account`. A
+  document exported before the setting existed does not carry it, and applying that document's settings leaves the
+  stored value unchanged. The import review notes the setting only when the document carries it as a boolean. The line
+  that says turning it on is its own, not the one used for automatic pull: a new session then uses the account whose
+  weekly quota resets soonest.
 
 **Automatically approve session requests** (see "Approving requests automatically" in
 `docs/product/session-requests.md`) is never carried, unlike the other application-wide switches, and an import never
@@ -265,16 +271,17 @@ fills the window in as it goes.
 ### Application settings are left alone unless they are asked for
 
 A document's application settings are applied **only when the import is explicitly asked to apply them**, and are not
-applied by default. Automatically pull repositories makes the daemon fast-forward the user's own repositories by itself,
-and automatically deleting archived sessions makes it delete sessions by itself, so applying them changes how the
-daemon's host behaves rather than only adding to what it holds. The inspection says both
-what the document sets and what is set now, so what applying would change can be shown before anything is done. The
-settings are applied last, through the same path as a change made in Settings — so an import that turns automatic
-pulling on runs the same immediate fast-forward pass turning it on by hand does (see "Turning the switch on" in
-`docs/product/project-git-status.md`), and one that turns the automatic deletion on deletes nothing until the next
-scheduled check, as the switch does — and the result of the import reports what was applied. Asking to apply the
-settings of a document that carries none is refused rather than quietly ignored, so a request never does less than it
-was told to.
+applied by default. Automatically pull repositories makes the daemon fast-forward the user's own repositories by
+itself, automatically deleting archived sessions makes it delete sessions by itself, and automatic account selection
+makes a later new session that names no account take the one whose weekly quota resets soonest, so applying them
+changes how the daemon's host behaves rather than only adding to what it holds. The inspection says both what the
+document sets and what is set now, so what applying would change can be shown before anything is done. The settings
+are applied last, through the same path as a change made in Settings — so an import that turns automatic pulling on
+runs the same immediate fast-forward pass turning it on by hand does (see "Turning the switch on" in
+`docs/product/project-git-status.md`), one that turns the automatic deletion on deletes nothing until the next
+scheduled check, as the switch does, and one that turns automatic account selection on or off changes no session
+already open — and the result of the import reports what was applied. Asking to apply the settings of a document that
+carries none is refused rather than quietly ignored, so a request never does less than it was told to.
 
 ### What is refused, and what is reported instead
 

@@ -62,6 +62,7 @@ const APPLY_ALL: {
 type SettingMessage =
   | "configuration.import.settings.turnsOn"
   | "configuration.import.settings.archiveCleanup.turnsOn"
+  | "configuration.import.settings.autoSelectAccount.turnsOn"
   | "configuration.import.settings.turnsOff"
   | "configuration.import.settings.alreadyOn"
   | "configuration.import.settings.alreadyOff";
@@ -287,6 +288,9 @@ export function ImportReview({
       <SettingNote label={t("settings.git.autoPull.label")} wanted={settings.auto_pull_repositories} current={settings.current_auto_pull_repositories} turnsOn="configuration.import.settings.turnsOn" />
       {typeof settings.auto_delete_unresumable_archives === "boolean" && (
         <SettingNote label={t("settings.archiveCleanup.label")} wanted={settings.auto_delete_unresumable_archives} current={settings.current_auto_delete_unresumable_archives} turnsOn="configuration.import.settings.archiveCleanup.turnsOn" />
+      )}
+      {typeof settings.auto_select_account === "boolean" && typeof settings.current_auto_select_account === "boolean" && (
+        <SettingNote label={t("settings.autoSelect.label")} wanted={settings.auto_select_account} current={settings.current_auto_select_account} turnsOn="configuration.import.settings.autoSelectAccount.turnsOn" />
       )}
     </>
   );

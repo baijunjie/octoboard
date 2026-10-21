@@ -1311,6 +1311,8 @@ export const en = {
     "Turns on {setting}, which is currently off. {appName} then pulls your repositories by itself.",
   "configuration.import.settings.archiveCleanup.turnsOn":
     "Turns on {setting}, which is currently off. {appName} then deletes such archived sessions by itself.",
+  "configuration.import.settings.autoSelectAccount.turnsOn":
+    "Turns on {setting}, which is currently off. A new session then uses the account whose weekly quota resets soonest.",
   "configuration.import.settings.turnsOff": "Turns off {setting}, which is currently on.",
   "configuration.import.settings.alreadyOn":
     "{setting} is on in the file and already on, so applying changes nothing.",
@@ -1421,6 +1423,11 @@ export const en = {
     "Once this is on, a session can start a session that reports to you without asking you first. Nobody owns the new session but you.",
   "settings.autoApprove.description.on":
     "A session can start a session that reports to you without asking you first. Nobody owns the new session but you.",
+  "settings.autoSelect.label": "Automatically select an account",
+  "settings.autoSelect.description.off":
+    "Once this is on, a new session uses the account whose weekly quota resets soonest, so quota that is about to reset is used before it is lost.",
+  "settings.autoSelect.description.on":
+    "A new session uses the account whose weekly quota resets soonest, so quota that is about to reset is used before it is lost.",
   "settings.background.label": "Keep running in the background when the window is closed",
   "settings.background.description.off":
     "Once this is on, closing the window keeps sessions and their agents running and notifications arriving. The menu bar icon brings the window back.",

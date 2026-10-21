@@ -151,13 +151,15 @@ it("notes what applying each application setting would change", async () => {
   await reviewing();
   expect(text()).toContain("Turns on Automatically pull repositories");
   expect(text()).toContain("Turns off Automatically delete archived sessions whose conversation is gone");
+  expect(text()).toContain("Turns on Automatically select an account");
 });
 
 it("leaves out the setting a file from before it existed does not carry", async () => {
-  const older = { ...REVIEW, settings: { ...REVIEW.settings!, auto_delete_unresumable_archives: null } };
+  const older = { ...REVIEW, settings: { ...REVIEW.settings!, auto_delete_unresumable_archives: null, auto_select_account: null } };
   await reviewing({ reply: (body) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected", ...older }) : reply(body)) });
   expect(text()).toContain("Turns on Automatically pull repositories");
   expect(text()).not.toContain("archived sessions whose conversation is gone");
+  expect(text()).not.toContain("Automatically select an account");
 });
 
 it("stops before any request when a project is to go to a directory that is missing or not a path", async () => {

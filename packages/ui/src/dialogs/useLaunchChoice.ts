@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { avoidExhaustedAccount, choiceExhaustion, choiceGroups, choiceKey, currentChoice, findEntry, inheritedAccount, settledInitialChoice, type AccountChoice, type ChoiceGroup } from "../accountChoices";
+import { accountOpenedOn, avoidExhaustedAccount, choiceExhaustion, choiceGroups, choiceKey, currentChoice, findEntry, inheritedAccount, settledInitialChoice, type AccountChoice, type ChoiceGroup } from "../accountChoices";
 import { AGENT_LABEL, agentsInListingOrder, defaultAccountName, inheritedSessionLaunch, launchWithOverrides, pickableAgents, projectSessionAgent } from "../agents";
 import { agentIconPickerOptions } from "../components/AgentIcon";
 import { useT } from "../i18n/react";
@@ -37,30 +37,38 @@ export function useChoiceGroups(): ChoiceGroup[] {
  * opens on another account of the agent when the one it would inherit is used up, and `usedUp`, when
  * even the account the choice ends on is used up (every account of the agent is, or it is the agent's
  * only one), says why it cannot be used, for the dialog to refuse its submit with.
+ *
+ * With automatic account selection on, and not for a handoff (`exclude`), the account a new session
+ * opens on is the one whose weekly quota resets soonest rather than the one the project or console
+ * resolves to. A forced choice that can still be picked wins over that. Switching to an agent whose
+ * remembered account is no longer an entry falls back the same way.
  */
 export function useLaunchChoice(parentConsole: Console, project: Project | undefined, exclude?: Agent, forced?: AccountChoice) {
   const t = useT();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   const accounts = useDaemonStore((s) => s.settings.accounts);
+  const autoSelect = (useDaemonStore((s) => s.settings.auto_select_account) ?? false) && exclude === undefined;
   const now = useNow();
   const [pickedAgent, setPickedAgent] = useState<Agent>();
   const [pickedAccounts, setPickedAccounts] = useState<Partial<Record<Agent, string | null>>>({});
   const [launchSettings, setLaunchSettings] = useState<Partial<Record<Agent, Overrides>>>({});
 
   const groups = useChoiceGroups().filter((group) => group.agent !== exclude);
+  const openingAccount = (agent: Agent): string | null =>
+    accountOpenedOn(parentConsole, project, agent, accounts, groups, autoSelect ? { now } : undefined);
   const pickedAccount = pickedAgent ? pickedAccounts[pickedAgent] : undefined;
   const pickedEntry = groups.find((group) => group.agent === pickedAgent)?.entries.find((entry) => entry.account === pickedAccount);
   const picked = pickedAgent
     ? pickedEntry
       ? { agent: pickedAgent, account: pickedEntry.account }
-      : avoidExhaustedAccount({ agent: pickedAgent, account: inheritedAccount(parentConsole, project, pickedAgent, accounts) }, groups)
+      : avoidExhaustedAccount({ agent: pickedAgent, account: openingAccount(pickedAgent) }, groups)
     : undefined;
 
   const selectable = pickableAgents(agentAvailability, addedAgents).filter((agent) => agent !== exclude);
   let initial: AccountChoice;
   if (exclude === undefined) {
-    initial = settledInitialChoice(parentConsole, project, accounts, agentAvailability, addedAgents, groups).choice;
+    initial = settledInitialChoice(parentConsole, project, accounts, agentAvailability, addedAgents, groups, autoSelect ? { now } : undefined).choice;
   } else {
     const wanted = project ? project.default_agent ?? projectSessionAgent(parentConsole) : parentConsole.default_agent;
     // With nothing to pick, the first other agent in listing order, so the picker shows a held,

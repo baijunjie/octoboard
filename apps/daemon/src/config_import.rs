@@ -141,6 +141,9 @@ pub struct InspectedSettings {
     /// Absent when the document predates the setting, which applying it then leaves as it is.
     pub auto_delete_unresumable_archives: Option<bool>,
     pub current_auto_delete_unresumable_archives: bool,
+    /// Absent when the document predates the setting, which applying it then leaves as it is.
+    pub auto_select_account: Option<bool>,
+    pub current_auto_select_account: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -480,6 +483,8 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
             current_auto_delete_unresumable_archives: state
                 .store
                 .auto_delete_unresumable_archives()?,
+            auto_select_account: settings.auto_select_account,
+            current_auto_select_account: state.store.auto_select_account()?,
         }),
         None => None,
     };
@@ -667,6 +672,7 @@ pub async fn apply(
             auto_pull_repositories: Some(settings.auto_pull_repositories),
             auto_delete_unresumable_archives: settings.auto_delete_unresumable_archives,
             auto_approve_session_requests: None,
+            auto_select_account: settings.auto_select_account,
             default_clone_dir: None,
         };
         match coordinator::update_settings(state, changes) {
@@ -1694,6 +1700,7 @@ mod tests {
             Some(DocumentSettings {
                 auto_pull_repositories: true,
                 auto_delete_unresumable_archives: Some(false),
+                auto_select_account: None,
             })
         );
         assert!(state.store.auto_pull_repositories().unwrap());
@@ -1710,6 +1717,7 @@ mod tests {
             .store
             .set_auto_delete_unresumable_archives(false)
             .unwrap();
+        source.store.set_auto_select_account(true).unwrap();
         let hub = crate::test_support::console(&source_dir);
         source.store.insert_console(&hub).unwrap();
         let full = serde_json::to_value(crate::config_export::build(&source.store, None).unwrap())
@@ -1729,6 +1737,8 @@ mod tests {
         apply(&target, &full, Vec::new(), true).await.unwrap();
         assert!(target.store.auto_pull_repositories().unwrap());
         assert!(!target.store.auto_delete_unresumable_archives().unwrap());
+        assert!(target.store.auto_select_account().unwrap());
+        assert!(full["settings"]["auto_select_account"].as_bool().unwrap());
     }
 
     /// The automatic approval of session requests is never exported, and an import that applies a
@@ -1771,6 +1781,7 @@ mod tests {
             .store
             .set_auto_delete_unresumable_archives(false)
             .unwrap();
+        state.store.set_auto_select_account(true).unwrap();
         let mut older = document(vec![console("Hub", Vec::new())]);
         older["settings"] = json!({ "auto_pull_repositories": true });
 
@@ -1778,6 +1789,8 @@ mod tests {
         let settings = inspection.settings.unwrap();
         assert_eq!(settings.auto_delete_unresumable_archives, None);
         assert!(!settings.current_auto_delete_unresumable_archives);
+        assert_eq!(settings.auto_select_account, None);
+        assert!(settings.current_auto_select_account);
 
         let imported = apply(&state, &older, Vec::new(), true).await.unwrap();
         assert_eq!(
@@ -1785,10 +1798,12 @@ mod tests {
             Some(DocumentSettings {
                 auto_pull_repositories: true,
                 auto_delete_unresumable_archives: None,
+                auto_select_account: None,
             })
         );
         assert!(state.store.auto_pull_repositories().unwrap());
         assert!(!state.store.auto_delete_unresumable_archives().unwrap());
+        assert!(state.store.auto_select_account().unwrap());
     }
 
     #[tokio::test]
@@ -1803,6 +1818,7 @@ mod tests {
             Some(DocumentSettings {
                 auto_pull_repositories: true,
                 auto_delete_unresumable_archives: None,
+                auto_select_account: None,
             })
         );
         assert!(state.store.auto_pull_repositories().unwrap());

@@ -1189,6 +1189,7 @@ export const zhHans: Translation<"other"> = {
   "configuration.import.settings.label": "同时应用应用设置",
   "configuration.import.settings.turnsOn": "开启 {setting}（目前为关闭）。之后 {appName} 会自动拉取你的仓库。",
   "configuration.import.settings.archiveCleanup.turnsOn": "开启 {setting}（目前为关闭）。之后 {appName} 会自动删除对话已丢失的已归档会话。",
+  "configuration.import.settings.autoSelectAccount.turnsOn": "开启 {setting}（目前为关闭）。之后新建会话会使用周额度最快重置的账户。",
   "configuration.import.settings.turnsOff": "关闭 {setting}（目前为开启）。",
   "configuration.import.settings.alreadyOn": "文件中 {setting} 为开启，当前也已开启，因此应用后不会有任何变化。",
   "configuration.import.settings.alreadyOff": "文件中 {setting} 为关闭，当前也已关闭，因此应用后不会有任何变化。",
@@ -1288,6 +1289,11 @@ export const zhHans: Translation<"other"> = {
     "开启后，会话可以直接启动向你汇报的新会话，无需先征得你的同意。新会话除你之外没有其他所有者。",
   "settings.autoApprove.description.on":
     "会话可以直接启动向你汇报的新会话，无需先征得你的同意。新会话除你之外没有其他所有者。",
+  "settings.autoSelect.label": "自动选择账户",
+  "settings.autoSelect.description.off":
+    "开启后，新建会话会使用周额度最快重置的账户，以免即将重置的额度被浪费。",
+  "settings.autoSelect.description.on":
+    "新建会话使用周额度最快重置的账户，以免即将重置的额度被浪费。",
   "settings.background.label": "关闭窗口后在后台继续运行",
   "settings.background.description.off":
     "开启后，关闭窗口时会话及其智能体会继续运行，通知也会照常送达。点按菜单栏图标即可重新打开窗口。",

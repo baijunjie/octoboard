@@ -86,7 +86,14 @@ const project = (extra: Partial<InspectedProject> & Pick<InspectedProject, "name
  * places (whose recorded path is long enough to break over lines), a second console whose only
  * project can be cloned, and one with no project. */
 export const REVIEW: Omit<Inspection, "type"> = {
-  settings: { auto_pull_repositories: true, current_auto_pull_repositories: false, auto_delete_unresumable_archives: false, current_auto_delete_unresumable_archives: true },
+  settings: {
+    auto_pull_repositories: true,
+    current_auto_pull_repositories: false,
+    auto_delete_unresumable_archives: false,
+    current_auto_delete_unresumable_archives: true,
+    auto_select_account: true,
+    current_auto_select_account: false,
+  },
   consoles: [
     {
       name: "Work laptop",
@@ -160,8 +167,8 @@ const SINGLE: Omit<Inspection, "type"> = {
   ],
 };
 
-/** The same document of a full export made before the archive cleanup setting existed, so it holds
- * only the automatic pull, which is off where this machine has it on. */
+/** The same document of a full export made before archive cleanup and automatic account selection
+ * existed, so it holds only the automatic pull, which is off where this machine has it on. */
 const WITH_SETTING_OFF: Omit<Inspection, "type"> = {
   ...SINGLE,
   settings: { auto_pull_repositories: false, current_auto_pull_repositories: true, current_auto_delete_unresumable_archives: true },
@@ -177,7 +184,7 @@ const LONG_CLONE_DETAIL = "unable to access 'https://github.com/acme/design-syst
  * placed, a console that could not be created with its project not tried, and the account
  * references that fell back. */
 export const MIXED_RESULT: Omit<Imported, "type"> = {
-  settings_applied: { auto_pull_repositories: true, auto_delete_unresumable_archives: false },
+  settings_applied: { auto_pull_repositories: true, auto_delete_unresumable_archives: false, auto_select_account: true },
   consoles: [
     {
       name: "Work laptop",
@@ -464,7 +471,7 @@ export const configurationScenarios: Scenario[] = [
     category: "normal",
     title: "Import, review",
     description:
-      "Projects found at recorded or default paths, clone candidates, missing paths, account fallbacks and an empty console appear together; settings start unchecked, and their note has two lines: automatic pull turns on, archive cleanup turns off.",
+      "Projects found at recorded or default paths, clone candidates, missing paths, account fallbacks and an empty console appear together; settings start unchecked, and their note has three lines: automatic pull turns on, archive cleanup turns off, and automatic account selection turns on.",
     state,
     configuration: reviewing(),
     steps: [
@@ -491,7 +498,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, an older document whose setting is off where it is on here",
-    description: "The checkbox is ticked, and its note is a single line: applying turns automatic pull off. The file predates archive cleanup, so that setting has no line.",
+    description: "The checkbox is ticked, and its note is a single line: applying turns automatic pull off. The file predates archive cleanup and automatic account selection, so neither setting has a line.",
     state: autoPulling,
     configuration: { file: FILE, inspection: WITH_SETTING_OFF },
     steps: [
@@ -569,7 +576,7 @@ export const configurationScenarios: Scenario[] = [
     title: "Import result with failures and fallbacks",
     state: state,
     configuration: reviewing(),
-    description: "Placement outcomes, failed projects and consoles, fallback accounts and applied settings share the result; the settings show two lines, automatic pull on and archive cleanup off. The error alert the failures raise is dismissed to leave the result in view. Short height exposes scrolling; Phone folds rows.",
+    description: "Placement outcomes, failed projects and consoles, fallback accounts and applied settings share the result; the settings show three lines, automatic pull on, archive cleanup off and automatic account selection on. The error alert the failures raise is dismissed to leave the result in view. Short height exposes scrolling; Phone folds rows.",
     steps: [
       ...importFromSettings,
       chooseFile,

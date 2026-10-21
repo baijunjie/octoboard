@@ -3,9 +3,12 @@
 Settings' **Agent accounts** section (see "Agent accounts" in `docs/product/settings.md`): the agents the user has
 added, and every account of each, grouped by agent. The section opens with a paragraph saying what an account is — a
 named config directory of an agent, where it keeps its login and conversation history — and that an agent has to be on
-the user's `PATH` for its accounts to be usable. Below that paragraph sits the **Add agent** button,
-then the agent strip with the selected agent's accounts. What an account is and how consoles, projects and sessions use
-one are in "Agent config directories" in `docs/product/consoles.md`.
+the user's `PATH` for its accounts to be usable. Below that paragraph sits **Automatically select an account** (see
+"Automatically select an account" in `docs/product/settings.md`), one switch for the whole application, not a control
+on one agent's tab. It stays there while agents are listed, while the added-agent list is still undecided, and while
+no agent is added. Below the switch sits the **Add agent** button, then the agent strip with the selected agent's
+accounts. What an account is and how consoles, projects and sessions use one are in "Agent config directories" in
+`docs/product/consoles.md`.
 
 ## Added agents
 
@@ -110,7 +113,7 @@ accounts of the agent stay stored untouched. The consoles, projects and sessions
 
 When the user has removed every agent, the strip is replaced by an empty state titled "No agent added", with a line
 saying to add an agent installed on this machine to manage its accounts here. **Add account** is absent; **Add agent**
-stays.
+stays, and **Automatically select an account** stays above it.
 
 ## The default account
 

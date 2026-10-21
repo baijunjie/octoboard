@@ -475,7 +475,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
               cloneDir = normalizedPath(given);
             }
           }
-          store.setState({ settings: { ...current.settings, auto_pull_repositories: body.auto_pull_repositories ?? current.settings.auto_pull_repositories, auto_delete_unresumable_archives: body.auto_delete_unresumable_archives ?? current.settings.auto_delete_unresumable_archives, ...(body.auto_approve_session_requests !== undefined && { auto_approve_session_requests: body.auto_approve_session_requests }), default_clone_dir: cloneDir } });
+          store.setState({ settings: { ...current.settings, auto_pull_repositories: body.auto_pull_repositories ?? current.settings.auto_pull_repositories, auto_delete_unresumable_archives: body.auto_delete_unresumable_archives ?? current.settings.auto_delete_unresumable_archives, ...(body.auto_approve_session_requests !== undefined && { auto_approve_session_requests: body.auto_approve_session_requests }), ...(body.auto_select_account !== undefined && { auto_select_account: body.auto_select_account }), default_clone_dir: cloneDir } });
           return { type: "ack" };
         }
         case "set_account_approval_reviewer": {

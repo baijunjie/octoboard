@@ -101,8 +101,13 @@ fn relationships(agent: Agent, owns: bool) -> String {
             "- `{new_session}` starts a session that is yours for its whole life: you instruct \
              it, archive it when it is done, and reopen it with `{reopen_session}` when it has \
              another task. Pass `branches` to hand it branches you are responsible for. It runs \
-             on your own agent and account unless the user asked for others, and `title` names it \
-             in the language the user converses with you in. No approval is needed.",
+             on your own agent. While `auto_select_account` is on, a left-out account is the one \
+             of that agent whose weekly quota resets soonest and that can still open a session. \
+             When none does, your own account is used only when it is your own agent and can \
+             still open a session; otherwise the account is the project's, else the console's. \
+             Name another only when the user asked for it. `title` names it in the language the \
+             user \
+             converses with you in. No approval is needed.",
             new_session = tool("new_session"),
             reopen_session = tool("reopen_session"),
         ));

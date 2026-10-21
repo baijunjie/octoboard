@@ -67,6 +67,9 @@ it("reports the setting this machine has now as the scenario's own state has it"
   for (const { id, machine, inspection } of withSettings) {
     expect(inspection.settings!.current_auto_pull_repositories, id).toBe(machine!.auto_pull_repositories);
     expect(inspection.settings!.current_auto_delete_unresumable_archives, id).toBe(machine!.auto_delete_unresumable_archives);
+    if (typeof inspection.settings!.auto_select_account === "boolean") {
+      expect(inspection.settings!.current_auto_select_account, id).toBe(machine!.auto_select_account ?? false);
+    }
   }
 });
 
@@ -142,6 +145,9 @@ it("reports application settings only for a document that carries them", () => {
     } else if (result.settings_applied) {
       expect(result.settings_applied.auto_pull_repositories, id).toBe(inspection.settings.auto_pull_repositories);
       expect(result.settings_applied.auto_delete_unresumable_archives, id).toBe(inspection.settings.auto_delete_unresumable_archives);
+      if (typeof inspection.settings.auto_select_account === "boolean") {
+        expect(result.settings_applied.auto_select_account, id).toBe(inspection.settings.auto_select_account);
+      }
     }
   }
 });

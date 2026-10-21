@@ -208,6 +208,34 @@ it("opens on a selectable agent, with the console's account for it, and sends bo
   container.remove();
 });
 
+it("opens on the account whose weekly quota resets soonest when automatic selection is on", async () => {
+  const now = Date.now();
+  const weekly = (used_percent: number, resets_at: number) => ({ kind: "weekly" as const, label: null, used_percent, resets_at, window_minutes: 7 * 24 * 60 });
+  const { container, root, daemon } = renderDialog(
+    [],
+    {
+      settings: {
+        auto_pull_repositories: false, auto_delete_unresumable_archives: true, auto_select_account: true, added_agents: null, default_clone_dir: "/p",
+        accounts: [
+          { id: "a-1", agent: "codex", name: "Work", config_dir: "/home/me/.codex-work" },
+          { id: "a-soon", agent: "codex", name: "Soon", config_dir: "/home/me/.codex-soon" },
+        ],
+      },
+      accountQuotas: [
+        { agent: "codex", account: "a-1", fetched_at: now, plan: null, unavailable: null, windows: [weekly(10, now + 3 * 24 * 60 * 60 * 1000)] },
+        { agent: "codex", account: "a-soon", fetched_at: now, plan: null, unavailable: null, windows: [weekly(99, now + 60 * 60 * 1000)] },
+      ],
+    },
+    { default_agent: "codex", codex_account_id: "a-1" },
+  );
+  vi.mocked(daemon.request).mockResolvedValue({ type: "ack" } as never);
+  expect(pickerNamed("Codex account").textContent).toContain("Soon");
+  await act(async () => buttons().find((button) => button.textContent === "Open")?.click());
+  expect(daemon.request).toHaveBeenCalledWith(expect.objectContaining({ type: "open_session", agent: "codex", account: "a-soon" }));
+  act(() => root.unmount());
+  container.remove();
+});
+
 it("opens a project session on the console's project session agent when the project names none", () => {
   const { container, root } = renderDialog([], {}, { default_agent: "claude", project_session_agent: "grok" });
   expect(pickerNamed("Agent").textContent).toContain("Grok Build");
@@ -491,6 +519,30 @@ it("opens a new session on the agent and account of a record, which are shown di
   expect(nameInput()!.disabled).toBe(false);
   expect(hasAdvanced()).toBe(true);
   expect(openDisabled()).toBe(false);
+  await submit();
+  expect(sentOpenSession(daemon)).toMatchObject({ agent: "claude", account: "a-work", resume_agent_session_id: UUID });
+});
+
+it("keeps a resumed record's account when automatic selection would pick another", async () => {
+  const now = Date.now();
+  const weekly = (used_percent: number, resets_at: number) => ({ kind: "weekly" as const, label: null, used_percent, resets_at, window_minutes: 7 * 24 * 60 });
+  const { daemon } = renderForResume({ default_agent: "codex" }, record("claude", "a-work"), {
+    settings: {
+      ...claudeAccounts.settings!,
+      auto_select_account: true,
+      accounts: [
+        ...claudeAccounts.settings!.accounts,
+        { id: "a-soon", agent: "claude", name: "Soon", config_dir: "/accounts/soon" },
+      ],
+    },
+    accountQuotas: [
+      { agent: "claude", account: "a-work", fetched_at: now, plan: null, unavailable: null, windows: [weekly(10, now + 7 * 24 * 60 * 60 * 1000)] },
+      { agent: "claude", account: "a-soon", fetched_at: now, plan: null, unavailable: null, windows: [weekly(1, now + 3_600_000)] },
+    ],
+  });
+  await chooseResume();
+  typeResumeId(UUID);
+  await settle();
   await submit();
   expect(sentOpenSession(daemon)).toMatchObject({ agent: "claude", account: "a-work", resume_agent_session_id: UUID });
 });

@@ -5,7 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import { isolate } from "../i18n/isolate";
-import type { AccountQuota, Agent, AgentAvailability, Session, SessionBranchItem } from "../protocol";
+import type { AccountQuota, Agent, AgentAvailability, Session, SessionBranchItem, Settings } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
 import { HandoffDialog } from "./HandoffDialog";
 
@@ -18,7 +18,7 @@ const branch = (name: string): SessionBranchItem => ({
   kind: "branch", repository: "/r", branch: name, path: null, uncommitted: false, project: project.id, session: "s-1", state: "removable", detail: null,
 });
 
-function mount(session: Session, others: Session[] = [], branches: SessionBranchItem[] | "fail" = [], availability: Partial<Record<Agent, AgentAvailability["availability"]>> = {}, added: Agent[] | null = null, accountQuotas: AccountQuota[] = []) {
+function mount(session: Session, others: Session[] = [], branches: SessionBranchItem[] | "fail" = [], availability: Partial<Record<Agent, AgentAvailability["availability"]>> = {}, added: Agent[] | null = null, accountQuotas: AccountQuota[] = [], settings: Partial<Settings> = {}) {
   const sessions = new Map([session, ...others].map((s) => [s.id, s]));
   const initial: Partial<State> = {
     consoles: new Map([[parentConsole.id, parentConsole]]),
@@ -27,7 +27,7 @@ function mount(session: Session, others: Session[] = [], branches: SessionBranch
   };
   const store = createStateStore(initial);
   store.setState({
-    settings: { ...store.getState().settings, added_agents: added },
+    settings: { ...store.getState().settings, added_agents: added, ...settings },
     accountQuotas,
     agentAvailability: new Map((Object.entries(availability) as [Agent, AgentAvailability["availability"]][]).map(([agent, state]) => [agent, { agent, availability: state } as AgentAvailability])),
   });
@@ -70,6 +70,25 @@ it("says what moves for a project session, then hands off to another agent and s
   expect(sent).toMatchObject({ type: "hand_off_session", session: "s-1", agent: "codex", account: null });
   expect(onHandedOff).toHaveBeenCalledExactlyOnceWith("s-new");
   expect(onClose).toHaveBeenCalledOnce();
+});
+
+it("hands off to the inherited account when automatic selection would pick another", async () => {
+  const now = Date.now();
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle");
+  const { request } = mount(session, [], [], {}, null, [
+    {
+      agent: "codex", account: "soon", fetched_at: now, plan: null, unavailable: null,
+      windows: [{ kind: "weekly", label: null, used_percent: 1, resets_at: now + 3_600_000, window_minutes: 7 * 24 * 60 }],
+    },
+  ], {
+    auto_select_account: true,
+    accounts: [{ id: "soon", agent: "codex", name: "Soon", config_dir: "/tmp/codex-soon" }],
+  });
+  await settle();
+  await act(async () => buttons().find((button) => button.textContent === "Hand off")?.click());
+  await settle();
+  const sent = request.mock.calls.map(([body]) => body).find((body) => body.type === "hand_off_session");
+  expect(sent).toMatchObject({ type: "hand_off_session", agent: "codex", account: null });
 });
 
 it("asks for no branches of a console session and says when nothing moves", async () => {

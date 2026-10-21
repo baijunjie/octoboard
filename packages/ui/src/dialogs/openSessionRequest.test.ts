@@ -68,6 +68,27 @@ const usedUp = (account: string | null): AccountQuota => ({
   windows: [{ kind: "weekly", label: null, used_percent: 100, resets_at: null, window_minutes: null }],
 });
 
+it("opens on the account whose weekly quota resets soonest when automatic selection is on, and on the inherited account otherwise", () => {
+  const onClaude = consoleOf("c-1", "Main", { default_agent: "claude", claude_account_id: "w" });
+  const stored: Account[] = [
+    { id: "w", agent: "claude", name: "Work", config_dir: "/w" },
+    { id: "w2", agent: "claude", name: "Work 2", config_dir: "/w2" },
+  ];
+  const now = 1_000_000;
+  const weekly = (accountId: string, used: number, resetsAt: number): AccountQuota => ({
+    agent: "claude", account: accountId, fetched_at: now, plan: null, unavailable: null,
+    windows: [{ kind: "weekly", label: null, used_percent: used, resets_at: resetsAt, window_minutes: 7 * 24 * 60 }],
+  });
+  const open = (autoSelect: boolean | undefined) => defaultOpenSessionRequest(t, onClaude, undefined, { kind: "unbound" }, {
+    settings: { accounts: stored, added_agents: null, ...(autoSelect !== undefined && { auto_select_account: autoSelect }) },
+    agentAvailability: available(),
+    accountQuotas: [weekly("w", 10, now + 3 * 24 * 3_600_000), weekly("w2", 99, now + 3_600_000)],
+  }, now);
+  expect(open(true)).toMatchObject({ request: { agent: "claude", account: "w2" } });
+  expect(open(false)).toMatchObject({ request: { agent: "claude", account: "w" } });
+  expect(open(undefined)).toMatchObject({ request: { agent: "claude", account: "w" } });
+});
+
 it("opens on another account of the agent when the inherited one is used up, and on nothing when all are", () => {
   const onClaude = consoleOf("c-1", "Main", { default_agent: "claude", claude_account_id: "w" });
   expect(quick(t, onClaude, undefined, { kind: "unbound" }, accounts, available(), null, [usedUp("w")], 1)).toMatchObject({ request: { agent: "claude", account: null } });

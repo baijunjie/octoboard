@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { avoidExhaustedAccount, choiceExhaustion, choiceGroups, choiceKey, consoleAccount, currentChoice, inheritedAccount, projectAccount, settledInitialChoice, switchEntries, type QuotaReadings } from "./accountChoices";
+import { avoidExhaustedAccount, choiceExhaustion, choiceGroups, choiceKey, consoleAccount, currentChoice, expiringWeekly, inheritedAccount, preferExpiringWeekly, projectAccount, settledInitialChoice, switchEntries, type QuotaReadings } from "./accountChoices";
 import { consoleOf, projectOf, sessionOf } from "./gallery/fixtures/builders";
 import { format } from "./i18n/catalog";
 import type { Translate } from "./i18n/catalog";
-import type { Account, AccountQuota, Agent, AgentAvailability, Console, Project } from "./protocol";
+import type { Account, AccountQuota, Agent, AgentAvailability, Console, Project, QuotaWindow } from "./protocol";
 
 const availability = (entries: Partial<Record<Agent, AgentAvailability["availability"]>>): Map<Agent, AgentAvailability> =>
   new Map(
@@ -139,6 +139,116 @@ describe("an account whose quota is used up", () => {
   it("is not avoided once the window has reset", () => {
     expect(open([usedUp("claude", "w")]).choice.account).toBeNull();
     expect(settle(owner, undefined, stored, availability({}), null, { quotas: [usedUp("claude", "w")], now: NOW + 120_000 }).choice.account).toBe("w");
+  });
+});
+
+const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
+const windowOf = (patch: Partial<QuotaWindow> = {}): QuotaWindow => ({
+  kind: "weekly", label: null, used_percent: 0, resets_at: NOW + DAY, window_minutes: 7 * 24 * 60, ...patch,
+});
+const reading = (accountId: string | null, windows: QuotaWindow[], agent: Agent = "claude"): AccountQuota => ({
+  agent, account: accountId, fetched_at: NOW, plan: null, unavailable: null, windows,
+});
+
+describe("preferExpiringWeekly", () => {
+  const stored = [account("w", "claude", "Work"), account("soon", "claude", "Soon")];
+  const entries = (quotas: AccountQuota[]) =>
+    choiceGroups(stored, availability({}), null, () => "Default", { quotas, now: NOW }).find((group) => group.agent === "claude")!.entries;
+
+  it("prefers the soonest reset over a larger remainder", () => {
+    const ranked = preferExpiringWeekly(entries([
+      reading("w", [windowOf({ used_percent: 10, resets_at: NOW + 3 * DAY })]),
+      reading("soon", [windowOf({ used_percent: 99, resets_at: NOW + HOUR })]),
+    ]), NOW);
+    expect(ranked?.account).toBe("soon");
+  });
+
+  it("prefers more remaining when the reset is the same", () => {
+    const ranked = preferExpiringWeekly(entries([
+      reading("w", [windowOf({ used_percent: 80, resets_at: NOW + DAY })]),
+      reading("soon", [windowOf({ used_percent: 10, resets_at: NOW + DAY })]),
+    ]), NOW);
+    expect(ranked?.account).toBe("soon");
+    expect(expiringWeekly(reading("w", [
+      windowOf({ used_percent: 80, resets_at: NOW + DAY }),
+      windowOf({ used_percent: 10, resets_at: NOW + DAY }),
+    ]), NOW)).toEqual({ resetsAt: NOW + DAY, remaining: 90 });
+  });
+
+  it("keeps the earlier entry when the reset and the remainder are equal, the default account first", () => {
+    const ranked = preferExpiringWeekly(entries([
+      reading(null, [windowOf({ used_percent: 40, resets_at: NOW + DAY })]),
+      reading("w", [windowOf({ used_percent: 40, resets_at: NOW + DAY })]),
+    ]), NOW);
+    expect(ranked?.account).toBeNull();
+  });
+
+  it.each([
+    ["a model-specific weekly window", windowOf({ kind: "weekly_model", label: "Fable" })],
+    ["a monthly credit period", windowOf({ kind: "credit_period", window_minutes: 30 * 24 * 60 })],
+    ["a session window", windowOf({ kind: "session", window_minutes: 300 })],
+    ["a window that is used up", windowOf({ used_percent: 100 })],
+    ["a window whose reset is not still ahead", windowOf({ resets_at: NOW })],
+    ["a window whose reset is in the past", windowOf({ resets_at: NOW - 1 })],
+    ["a window with no reset", windowOf({ resets_at: null })],
+    ["a window whose used percent is not a number", windowOf({ used_percent: Number.NaN })],
+  ] as const)("ignores %s", (_, window) => {
+    expect(preferExpiringWeekly(entries([reading("w", [window])]), NOW)).toBeUndefined();
+    expect(expiringWeekly(reading("w", [window]), NOW)).toBeUndefined();
+  });
+
+  it("ranks a credit period of 6 to 8 days and ignores one a minute outside that", () => {
+    const week = (minutes: number) => reading("w", [windowOf({ kind: "credit_period", window_minutes: minutes, used_percent: 25, resets_at: NOW + HOUR })]);
+    expect(expiringWeekly(week(6 * 24 * 60), NOW)).toEqual({ resetsAt: NOW + HOUR, remaining: 75 });
+    expect(expiringWeekly(week(8 * 24 * 60), NOW)).toEqual({ resetsAt: NOW + HOUR, remaining: 75 });
+    expect(expiringWeekly(week(6 * 24 * 60 - 1), NOW)).toBeUndefined();
+    expect(expiringWeekly(week(8 * 24 * 60 + 1), NOW)).toBeUndefined();
+    expect(expiringWeekly(week(28 * 24 * 60), NOW)).toBeUndefined();
+  });
+
+  it("takes the soonest weekly window of one account, ignoring a session window that resets sooner", () => {
+    expect(expiringWeekly(reading("w", [
+      windowOf({ kind: "session", window_minutes: 300, used_percent: 1, resets_at: NOW + HOUR }),
+      windowOf({ used_percent: 40, resets_at: NOW + 2 * DAY }),
+      windowOf({ used_percent: 80, resets_at: NOW + DAY }),
+    ]), NOW)).toEqual({ resetsAt: NOW + DAY, remaining: 20 });
+  });
+
+  it("skips an entry a shorter window has used up, even when its weekly quota resets sooner", () => {
+    const spent = reading("soon", [
+      windowOf({ kind: "session", used_percent: 100, resets_at: NOW + HOUR, window_minutes: 300 }),
+      windowOf({ used_percent: 1, resets_at: NOW + HOUR }),
+    ]);
+    const later = reading("w", [windowOf({ used_percent: 50, resets_at: NOW + 3 * DAY })]);
+    expect(preferExpiringWeekly(entries([spent, later]), NOW)?.account).toBe("w");
+  });
+
+  it("returns nothing when no window ranks", () => {
+    expect(preferExpiringWeekly(entries([]), NOW)).toBeUndefined();
+    expect(expiringWeekly(undefined, NOW)).toBeUndefined();
+  });
+});
+
+describe("settledInitialChoice with automatic account selection", () => {
+  const owner = consoleOf("c-1", "Main", { default_agent: "claude", claude_account_id: "w" });
+  const stored = [account("w", "claude", "Work"), account("soon", "claude", "Soon")];
+  const quotas = [
+    reading("w", [windowOf({ used_percent: 10, resets_at: NOW + 3 * DAY })]),
+    reading("soon", [windowOf({ used_percent: 99, resets_at: NOW + HOUR })]),
+  ];
+  const groups = (listed: AccountQuota[] = quotas) => choiceGroups(stored, availability({}), null, () => "", { quotas: listed, now: NOW });
+
+  it("keeps the inherited account when automatic selection is not asked for", () => {
+    expect(settledInitialChoice(owner, undefined, stored, availability({}), null, groups()).choice).toEqual({ agent: "claude", account: "w" });
+  });
+
+  it("keeps the inherited account when nothing ranks", () => {
+    expect(settledInitialChoice(owner, undefined, stored, availability({}), null, groups([]), { now: NOW }).choice).toEqual({ agent: "claude", account: "w" });
+  });
+
+  it("opens on the preferred account even when the inherited one is not used up", () => {
+    expect(settledInitialChoice(owner, undefined, stored, availability({}), null, groups(), { now: NOW }).choice).toEqual({ agent: "claude", account: "soon" });
   });
 });
 

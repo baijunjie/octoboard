@@ -259,7 +259,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Browser General settings",
-    description: "The Language row follows Appearance, then Markdown style starts on Tailwind. The clone-directory explanation describes when the chosen directory is used; the path appears in the input. The archive-cleanup switch sits right below it, on, with the description that says what is deleted and when. The automatic-approval switch for session requests follows it, off, with the description that starts with \"Once this is on\".",
+    description: "The Language row follows Appearance, then Markdown style starts on Tailwind. The clone-directory explanation describes when the chosen directory is used; the path appears in the input. The archive-cleanup switch sits right below it, on, with the description that says what is deleted and when. The automatic-approval switch for session requests follows it and is the last row, off, with the description that starts with \"Once this is on\".",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -304,7 +304,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "General, run in the background offered (desktop app)",
-    description: "The desktop app's background row starts off; switch it on and off to read both descriptions.",
+    description: "The desktop app's background row follows the session-request switch and starts off. Switch it on and off to read both descriptions.",
     state,
     backgroundRun: true,
     steps: [
@@ -369,6 +369,18 @@ export const settingsScenarios: Scenario[] = [
     title: "Settings: accounts, Claude Code tab",
     description: "The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each as wide as its icon and name and the strip starting at the left edge, and Claude Code is open. The default account's name line ends with a small muted \"?\" after Default and its plan chip, with only its config directory beneath. Each account's plan sits beside its name, with its quota beneath: the five-hour window's headline with what remains and the countdown at the end of its line, a thick bar of that remainder in the agent's colour, and the weekly window's thin bar directly under it with its own headline, so the two read as one two-layer bar; the default account lists that pair first and Fable last, in a row of its own with no countdown. Work is spent: 0% remaining, also where use went past 100%. Client has no quota yet and says it is being read. Add agent stays above the tab strip; Add account begins the selected tab on the same row as the vertically centered Permission approval column heading, with a help button for its explanation: the default account is set to Automatic, Work to Approve everything and Client follows its account configuration. The heading and selectors align with the start of the right-hand quota column, and account actions stay at the far right. Remove Work or Client: the account fades out while sliding to the right while the remaining accounts slide into place.",
     state: quotaState,
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.accounts")),
+    ],
+  },
+  {
+    id: "settings-accounts-auto-select-on",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, an account selected automatically",
+    description: "Above Add agent, and above the open Claude Code tab, the account-selection switch is on. Its description states the behaviour and does not start with \"Once this is on\".",
+    state: { ...quotaState, settings: { ...quotaState.settings!, auto_select_account: true } },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
@@ -512,7 +524,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, no agent added",
-    description: "Every agent has been removed: no tab strip or Add account button, a hint to add an installed agent, and Add agent is offered. The accounts set up earlier are kept, only unlisted.",
+    description: "Every agent has been removed: no tab strip or Add account button, a hint to add an installed agent, and Add agent is offered. The account-selection switch stays above Add agent, off, and its description starts with \"Once this is on\". The accounts set up earlier are kept, only unlisted.",
     state: noAgentsState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),

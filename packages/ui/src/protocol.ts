@@ -551,6 +551,11 @@ export interface Settings {
    * dialog. On: a request that passes the daemon's checks is approved at once, without asking.
    * Optional only so that a state built without it reads as off; the daemon always sends it. */
   auto_approve_session_requests?: boolean;
+  /** Off (the default): a new session uses the account the console or project resolves to. On: it
+   * uses the account of that agent whose weekly quota resets soonest, so quota that is about to
+   * reset is used before it is lost. Optional only so that a state built without it reads as off;
+   * the daemon always sends it. */
+  auto_select_account?: boolean;
   /** Where a `git` association clones into when no directory is named: the one the user set, or
    * `~/Projects` expanded while none is. Always an absolute path. */
   default_clone_dir: string;
@@ -635,6 +640,8 @@ export interface DocumentSettings {
   auto_pull_repositories: boolean;
   /** Absent in a file exported before the setting existed; applying then leaves it as it is. */
   auto_delete_unresumable_archives?: boolean | null;
+  /** Absent in a file exported before the setting existed; applying then leaves it as it is. */
+  auto_select_account?: boolean | null;
 }
 
 /** What `export_configuration` answers and a user keeps as a file. The client saves it as it is
@@ -707,6 +714,10 @@ export interface InspectedSettings {
   /** Absent when the document predates the setting. */
   auto_delete_unresumable_archives?: boolean | null;
   current_auto_delete_unresumable_archives: boolean;
+  /** Absent when the document predates the setting. */
+  auto_select_account?: boolean | null;
+  /** This machine's value. Absent when the reply predates the setting. */
+  current_auto_select_account?: boolean;
 }
 
 /** An `error` reply's `code`, `params` and `message`, for something an import could not do. */
@@ -1182,7 +1193,7 @@ export type RequestBody =
   /** Each settable field is optional: absent means leave it as it is. Answered with `ack`;
    * broadcasts `settings_updated` only when something actually changed (the trusted-folders
    * pattern). */
-  | { type: "update_settings"; auto_pull_repositories?: boolean; auto_delete_unresumable_archives?: boolean; auto_approve_session_requests?: boolean; default_clone_dir?: string }
+  | { type: "update_settings"; auto_pull_repositories?: boolean; auto_delete_unresumable_archives?: boolean; auto_approve_session_requests?: boolean; auto_select_account?: boolean; default_clone_dir?: string }
   /** Answered with `ack` at once; each reading that finishes arrives as `account_quotas_updated`.
    * Re-reads the quotas of the accounts it selects whose last attempt is older than the polling
    * interval, and also those whose last attempt is over 30 seconds old and which hold no windows

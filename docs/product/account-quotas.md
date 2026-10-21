@@ -195,6 +195,10 @@ with "Used up" alone when the agent gives no reset time. The short form is only 
 full form, as the account's description. Said in full, it names the account, the window used up (its 5-hour
 quota, weekly quota, monthly quota or credits) and when it resets. In an open dialog the judgement follows the clock,
 so an account becomes usable again within 30 seconds of its reset time passing, without waiting for a newer reading.
+The new-session dialog uses that same clock when it shows the account whose weekly quota resets soonest (see "Which
+account a session uses" in `docs/product/sessions.md`): for up to one tick after a weekly reset, it can still show an
+account whose reset has passed, and a session opened from the dialog while it still shows that account runs on it. A
+session opened with defaults, and a session an agent starts, are judged at the moment they are opened.
 
 ## What reading a quota leaves behind
 

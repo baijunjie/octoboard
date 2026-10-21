@@ -31,17 +31,26 @@ export function openSessionRequest(t: Translate, { console: parentConsole, proje
 
 /** What a session-creating control reads from the store to settle the choice a session opens on. */
 export interface QuickCreateState {
-  settings: Pick<Settings, "accounts" | "added_agents">;
+  settings: Pick<Settings, "accounts" | "added_agents" | "auto_select_account">;
   agentAvailability: Map<Agent, AgentAvailability>;
   accountQuotas: AccountQuota[];
 }
 
 /** The agent and account the session dialog opens on (`settledInitialChoice`) for a session in `parentConsole`
- * and `project`, with the window that still keeps the account from running a session. */
+ * and `project`, with the window that still keeps the account from running a session. When
+ * `auto_select_account` is on, that account is the one whose weekly quota resets soonest. */
 function settledQuickChoice(parentConsole: Console, project: Project | undefined, state: QuickCreateState, now: number) {
-  const { accounts, added_agents } = state.settings;
+  const { accounts, added_agents, auto_select_account } = state.settings;
   const groups = choiceGroups(accounts, state.agentAvailability, added_agents, () => "", { quotas: state.accountQuotas, now });
-  return settledInitialChoice(parentConsole, project, accounts, state.agentAvailability, added_agents, groups);
+  return settledInitialChoice(
+    parentConsole,
+    project,
+    accounts,
+    state.agentAvailability,
+    added_agents,
+    groups,
+    auto_select_account ? { now } : undefined,
+  );
 }
 
 /** Whether the agent a session created where `target` would be has all its accounts used up, so that
@@ -52,8 +61,8 @@ export function quickCreateUsedUp(target: NewSessionRequest, state: QuickCreateS
 }
 
 /** The request the session dialog sends when submitted untouched: the localized default name, the agent and account it
- * opens on (`settledInitialChoice`), the model and effort left to follow the parent, and no owner unless
- * `binding` fixes one (a console session's focus mode). With the inherited account's quota used up it
+ * opens on (`settledQuickChoice`), the model and effort left to follow the parent, and no owner unless
+ * `binding` fixes one (a console session's focus mode). With that account's quota used up it
  * opens on another account of the agent; with every account of the agent used up there
  * is nothing to send, and `usedUp` says so instead (`quickCreateUsedUp`). */
 export function defaultOpenSessionRequest(
