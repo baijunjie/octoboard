@@ -7,6 +7,10 @@ import type { Session } from "../protocol";
 import { useDaemon } from "../store";
 import { withIcons } from "./statusItemIcons";
 import { buildStatusItemMenu } from "./statusItemMenu";
+import { nextQuotaTick } from "./statusItemQuota";
+
+/** The longest a timer may wait: `setTimeout` runs a longer delay at once. */
+const MAX_TIMER_MS = 2 ** 31 - 1;
 
 interface UseStatusItemMenuOptions {
   /** Pass `hosts !== undefined`, as for `useWaitingNotifications`: nothing is sent before the first
@@ -21,6 +25,9 @@ interface UseStatusItemMenuOptions {
  * Keeps the shell's menu bar icon menu listing the live sessions and each available agent's quota
  * (`buildStatusItemMenu`), and selects a session chosen there. Best-effort, like the Dock badge: a
  * menu left a moment behind is not worth surfacing.
+ *
+ * A window's bar is drawn full once its reset time has passed and the readings' ages are worded to the
+ * minute, so the menu is also pushed again when the next of those moments comes (`nextQuotaTick`).
  *
  * Opening the menu asks the daemon to refresh the quotas that are due. The menu is never replaced
  * while open, so what that brings lands in the menu's next update.
@@ -40,8 +47,10 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
 
   useEffect(() => {
     if (!statusItem || !ready) return;
+    let tickTimer: ReturnType<typeof setTimeout> | undefined;
     const push = () => {
       const { consoles, projects, sessions, settings, agentAvailability, accountQuotas } = store.getState();
+      const now = Date.now();
       const draft = buildStatusItemMenu(t, {
         selectedSessionId,
         currentConsoleId,
@@ -50,9 +59,13 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
         sessions: Array.from(sessions.values()),
         consoleMap: consoles,
         projectMap: projects,
-        // Countdowns are as of this push; the menu is not rebuilt for the clock alone.
-        quota: { language, now: Date.now(), accounts: settings.accounts, addedAgents: settings.added_agents, defaultAccountNames: settings.default_account_names, agentAvailability, accountQuotas },
+        // Countdowns and ages are as of this push, which the clock alone also causes (`nextQuotaTick`).
+        quota: { language, now, accounts: settings.accounts, addedAgents: settings.added_agents, defaultAccountNames: settings.default_account_names, agentAvailability, accountQuotas },
       });
+      // Re-armed on every push, so it follows the quotas held now; the one pending is replaced.
+      clearTimeout(tickTimer);
+      const tick = nextQuotaTick(accountQuotas, now);
+      if (tick !== undefined) tickTimer = setTimeout(push, Math.min(MAX_TIMER_MS, Math.max(0, tick - now)));
       const serialized = JSON.stringify(draft);
       if (serialized === lastSentRef.current) return;
       lastSentRef.current = serialized;
@@ -65,7 +78,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
       );
     };
     push();
-    return store.subscribe((state, previous) => {
+    const unsubscribe = store.subscribe((state, previous) => {
       if (
         state.consoles !== previous.consoles ||
         state.projects !== previous.projects ||
@@ -79,6 +92,10 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
         push();
       }
     });
+    return () => {
+      clearTimeout(tickTimer);
+      unsubscribe();
+    };
   }, [statusItem, ready, selectedSessionId, currentConsoleId, t, language, store]);
 
   // Read at call time: the subscription is made once.

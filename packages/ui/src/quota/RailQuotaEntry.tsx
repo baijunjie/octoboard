@@ -1,6 +1,6 @@
 import { Popover, Tabs } from "@heroui/react";
 import { Bot, Gauge, KeyRound } from "lucide-react";
-import React, { useEffect, useId, useMemo, useRef, useState } from "react";
+import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { type PressEvent } from "react-aria";
 
 import { Button } from "../components/Button";
@@ -10,7 +10,7 @@ import { AgentTabList } from "../components/AgentTabList";
 import { ChromeButton } from "../components/ChromeButton";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { EmptyPanel } from "../components/EmptyPanel";
-import { FadedScroller, useFadeRegion } from "../components/scrollFade";
+import { FADE_SIZE, FadedScroller, useFadeRegion } from "../components/scrollFade";
 import { useStableHandler } from "../components/useLatest";
 import { Message, useT } from "../i18n/react";
 import type { Account, Agent, QuotaWindow } from "../protocol";
@@ -19,7 +19,7 @@ import { useDaemon, useDaemonStore } from "../store";
 import { AccountNameLine, AccountQuotaSummary } from "./AccountQuotaSummary";
 import { MODAL_OPEN } from "../layout/useRegionCycle";
 import { useAccountQuota } from "./useAccountQuota";
-import { remainingPercent, type QuotaBar } from "./quotaFormat";
+import { remainingPercentAt, type QuotaBar } from "./quotaFormat";
 import { accountQuotaLabel, sessionQuotaBarOf } from "./sessionQuota";
 
 /** How long the pointer rests on the button before the panel floats in. */
@@ -33,23 +33,49 @@ function insideAny(target: EventTarget | null, ...elements: Array<Element | null
   return target instanceof Node && elements.some((element) => element?.contains(target));
 }
 
+/** The longest the clock goes unread, so a reset that passes while the system sleeps (when timers may
+ * pause) is noticed within a minute of waking. */
+const MAX_CLOCK_WAIT_MS = 60_000;
+
+/** The time the button's bars are drawn as of: re-read when a reset time among the windows they draw
+ * passes, which is when their fill goes full (and at least once a minute). Not `useNow`, whose ticker
+ * would run for as long as the rail is mounted, quota or not. */
+function useResetClock(bar: QuotaBar | undefined): number {
+  const [now, setNow] = useState(() => Date.now());
+  // The resets rather than `bar`, which is a new object whenever the session or the quotas update.
+  const mainReset = bar?.main.resets_at;
+  const thinReset = bar?.thin?.resets_at;
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = () => {
+      const at = Date.now();
+      setNow(at);
+      const ahead = [mainReset, thinReset].filter((reset): reset is number => reset != null && reset > at);
+      if (ahead.length > 0) timer = setTimeout(arm, Math.min(Math.min(...ahead) - at, MAX_CLOCK_WAIT_MS));
+    };
+    arm();
+    return () => clearTimeout(timer);
+  }, [mainReset, thinReset]);
+  return now;
+}
+
 /** The rail button's compact indicator under its gauge: an outlined capsule 18 × 5 px filled by what
  * remains of the main window. With a weekly window too, the main capsule is 4 px tall and one 3 px tall
  * sits a pixel beneath it for that; the gauge rises 2 px further and the pair's bottom sits a pixel
  * lower, so the group stays near the button's middle. Decorative; the button's name states the numbers.
  * They draw in the button's text colour, so they suit a light and a dark rail. */
-function RailQuotaBars({ bar }: { bar: QuotaBar }): React.ReactElement {
+function RailQuotaBars({ bar, now }: { bar: QuotaBar; now: number }): React.ReactElement {
   if (!bar.thin) {
     return (
       <span aria-hidden="true" className="absolute inset-x-[7px] bottom-1.5">
-        <QuotaCapsule window={bar.main} height={5} />
+        <QuotaCapsule window={bar.main} height={5} now={now} />
       </span>
     );
   }
   return (
     <span aria-hidden="true" className="absolute inset-x-[7px] bottom-[5px] flex flex-col gap-px">
-      <QuotaCapsule window={bar.main} height={4} />
-      <QuotaCapsule window={bar.thin} height={3} />
+      <QuotaCapsule window={bar.main} height={4} now={now} />
+      <QuotaCapsule window={bar.thin} height={3} now={now} />
     </span>
   );
 }
@@ -62,10 +88,10 @@ const CAPSULE_WIDTH = 18;
  * direction's start. It is drawn as a vector, a square-ended fill clipped to the capsule and the
  * outline stroked over it: an HTML border beside a filled box leaves a pale antialiased seam between
  * them wherever the button sits at a fractional offset, as it does while scaled down on a press. */
-function QuotaCapsule({ window, height }: { window: QuotaWindow; height: number }): React.ReactElement {
+function QuotaCapsule({ window, height, now }: { window: QuotaWindow; height: number; now: number }): React.ReactElement {
   const radius = height / 2;
   const clipId = useId();
-  const fill = (CAPSULE_WIDTH * remainingPercent(window)) / 100;
+  const fill = (CAPSULE_WIDTH * remainingPercentAt(window, now)) / 100;
   return (
     <svg data-slot="quota-capsule" viewBox={`0 0 ${CAPSULE_WIDTH} ${height}`} className="mx-auto my-0 block rtl:-scale-x-100" style={{ width: CAPSULE_WIDTH, height }}>
       <clipPath id={clipId}>
@@ -102,6 +128,7 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
   const bar = useMemo(() => sessionQuotaBarOf(session, { accounts, agentAvailability, accountQuotas }), [session, accounts, agentAvailability, accountQuotas]);
   const account = accounts.find((account) => account.id === session?.account_id);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
+  const now = useResetClock(bar);
   const [hovered, setHovered] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [keyboardPinned, setKeyboardPinned] = useState(false);
@@ -111,7 +138,7 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
   const openTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const closeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const label = session && bar ? accountQuotaLabel(t, session.agent, account?.name, bar, defaultNames) : t("rail.quota");
+  const label = session && bar ? accountQuotaLabel(t, session.agent, account?.name, bar, defaultNames, now) : t("rail.quota");
 
   const clearTimers = () => {
     clearTimeout(openTimer.current);
@@ -199,7 +226,7 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
         onMouseHoverChange={onHoverChange}
       >
         <Gauge aria-hidden="true" className={!session || !bar ? "size-4" : bar.thin ? "size-4 -translate-y-1" : "size-4 -translate-y-0.5"} />
-        {session && bar && <RailQuotaBars bar={bar} />}
+        {session && bar && <RailQuotaBars bar={bar} now={now} />}
       </ChromeButton>
       <Popover.Content
         isOpen={open}
@@ -236,6 +263,8 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
           <QuotaPanel
             // The tab it opens on: the agent whose quota the button shows, if any.
             shownAgent={session && bar ? session.agent : undefined}
+            // The account the panel scrolls to on that tab: the selected session's, the default account when the session names none.
+            shownAccount={session?.account_id ?? null}
             // A keyboard user pins a panel that floats outside the rail's tab order, so focus is
             // brought to it; a pointer's pin leaves focus where it was.
             focusSelectedTab={keyboardPinned}
@@ -257,7 +286,7 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
 /** The panel's contents: one tab per agent that is added and installed, in the order they were added, each listing the agent's accounts, and the
  * way into Settings' accounts section. The panel mounts afresh on each opening, so the tab starts on `shownAgent`
  * (the first tab if it is not listed or none is given) and the user's own choice lasts only until it closes. */
-function QuotaPanel({ shownAgent, focusSelectedTab, onOpenAccounts, onAddAgent }: { shownAgent?: Agent; focusSelectedTab: boolean; onOpenAccounts: () => void; onAddAgent: () => void }): React.ReactElement {
+function QuotaPanel({ shownAgent, shownAccount, focusSelectedTab, onOpenAccounts, onAddAgent }: { shownAgent?: Agent; shownAccount: string | null; focusSelectedTab: boolean; onOpenAccounts: () => void; onAddAgent: () => void }): React.ReactElement {
   const t = useT();
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
@@ -302,10 +331,12 @@ function QuotaPanel({ shownAgent, focusSelectedTab, onOpenAccounts, onAddAgent }
               is off it, so a tab with fewer accounts must not make it shorter: its top edge, and the
               tab strip with it, would drop out from under the pointer that just chose the tab. Every
               tab's panel therefore stands in this one grid cell, which is as tall as the tallest list
-              the scroll limit allows, and the cell carries the padding the panels go without. */}
-          <div className="grid grid-cols-1 py-2">
+              the scroll limit allows. Each account row's own padding is the list's only space at its
+              ends, so the first and last rows sit as far from the tab strip and the foot as rows do
+              from each other's dividers. */}
+          <div className="grid grid-cols-1">
             {listed.map(({ agent, accounts: owned }) => (
-              <AgentPanel key={agent} agent={agent} owned={owned} />
+              <AgentPanel key={agent} agent={agent} owned={owned} currentAccount={agent === shownAgent ? shownAccount : undefined} />
             ))}
           </div>
         </Tabs>
@@ -333,11 +364,23 @@ function QuotaPanel({ shownAgent, focusSelectedTab, onOpenAccounts, onAddAgent }
  * or something is added inside it, never when an attribute such as `tabindex` changes: the region's
  * `tabindex` arriving with the overflow report goes unnoticed unless the panel renders with it. Left a stop in front of the region, the panel takes Tab from the tab strip and then,
  * rendering on that focus, finds the region and gives up its `tabindex`, which drops focus to the body
- * in WebKit. */
-function AgentPanel({ agent, owned }: { agent: Agent; owned: Account[] }): React.ReactElement {
+ * in WebKit.
+ *
+ * With a `currentAccount` (`null` for the default account) the list opens scrolled so that account's row
+ * is in view, as the selected session's account is the one the user came to read. The row is not marked
+ * in any other way. */
+function AgentPanel({ agent, owned, currentAccount }: { agent: Agent; owned: Account[]; currentAccount?: string | null }): React.ReactElement {
   const t = useT();
   const defaultName = defaultAccountName(t, useDaemonStore((s) => s.settings.default_account_names), agent);
   const region = useFadeRegion({ label: t("rail.quota.accounts") });
+  const scroller = useRef<HTMLDivElement>(null);
+  const currentRow = useRef<HTMLDivElement>(null);
+  // `scrollTop` rather than `scrollIntoView`, which would scroll the popover's ancestors too. The row's
+  // `offsetTop` is measured from the list's content (its wrapper is the offset parent) and is not
+  // affected by the popover's opening transform.
+  useLayoutEffect(() => {
+    if (scroller.current && currentRow.current) scroller.current.scrollTop = Math.max(0, currentRow.current.offsetTop - FADE_SIZE);
+  }, []);
   return (
     <Tabs.Panel
       id={agent}
@@ -350,15 +393,16 @@ function AgentPanel({ agent, owned }: { agent: Agent; owned: Account[] }): React
       className="col-start-1 row-start-1 m-0 self-start p-0 data-[exiting=true]:static data-[inert=true]:invisible"
     >
       <div className={region.focused ? "ring-2 ring-inset ring-app-focus" : ""}>
-        <FadedScroller region={region} className="max-h-[min(24rem,60vh)]">
-          <div className="flex flex-col px-4">
-            <QuotaAccount agent={agent} account={null} name={defaultName} />
+        <FadedScroller ref={scroller} region={region} className="max-h-[min(24rem,60vh)]">
+          <div className="relative flex flex-col px-4">
+            <QuotaAccount agent={agent} account={null} name={defaultName} rowRef={currentAccount === null ? currentRow : undefined} />
             {owned.map((account) => (
               <QuotaAccount
                 key={account.id}
                 agent={agent}
                 account={account.id}
                 name={<FadeOverflow dir="auto" titleWhenClipped={account.name}>{account.name}</FadeOverflow>}
+                rowRef={currentAccount === account.id ? currentRow : undefined}
               />
             ))}
           </div>
@@ -369,10 +413,10 @@ function AgentPanel({ agent, owned }: { agent: Agent; owned: Account[] }): React
 }
 
 /** One account of the panel: its name and plan, and its quota beneath. */
-function QuotaAccount({ agent, account, name }: { agent: Agent; account: string | null; name: React.ReactNode }): React.ReactElement {
+function QuotaAccount({ agent, account, name, rowRef }: { agent: Agent; account: string | null; name: React.ReactNode; rowRef?: React.Ref<HTMLDivElement> }): React.ReactElement {
   const quota = useAccountQuota(agent, account);
   return (
-    <div className="flex flex-col gap-2 groove-b py-3 last:border-b-0">
+    <div ref={rowRef} className="flex flex-col gap-2 groove-b py-3 last:border-b-0">
       <AccountNameLine name={name} quota={quota} />
       <AccountQuotaSummary quota={quota} single />
     </div>

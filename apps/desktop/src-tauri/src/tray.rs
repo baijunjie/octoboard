@@ -155,10 +155,19 @@ pub enum AgentKind {
     Other,
 }
 
+/// One window of a two-layer meter: its name and detail, and how much of its bar is filled (0 to 1).
+#[derive(Clone, Deserialize)]
+pub struct MeterLayer {
+    pub name: String,
+    pub detail: String,
+    pub fraction: f64,
+}
+
 /// What a submenu holds, none of it choosable: an account's header, a quota window's row with
-/// the bar the shell draws (`fraction` of it filled, in the colour of `agent`), a note, and the
-/// rules between accounts. `label` is a window's whole line as one phrase: its menu item's title,
-/// which is what assistive technology reads.
+/// the bar the shell draws (`fraction` of it filled, in the colour of `agent`), the 5-hour and weekly
+/// windows as one two-layer meter, a note, and the rules between accounts. `label` is a window's
+/// (or a meter's) whole line as one phrase: its menu item's title, which is what assistive technology
+/// reads.
 #[derive(Clone, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum SubmenuItem {
@@ -170,6 +179,12 @@ pub enum SubmenuItem {
         detail: String,
         label: String,
         fraction: f64,
+        agent: AgentKind,
+    },
+    Meter {
+        session: MeterLayer,
+        weekly: MeterLayer,
+        label: String,
         agent: AgentKind,
     },
     Note {
@@ -184,7 +199,7 @@ impl SubmenuItem {
     fn text(&self) -> Option<&str> {
         match self {
             Self::Header { title } => Some(title),
-            Self::Window { label, .. } => Some(label),
+            Self::Window { label, .. } | Self::Meter { label, .. } => Some(label),
             Self::Note { text } => Some(text),
             Self::Separator => None,
         }
@@ -889,6 +904,11 @@ mod tests {
                 {"kind": "header", "title": "Default · Plus"},
                 {"kind": "window", "name": "5-hour", "detail": "82% remaining · resets in 1h",
                  "label": "5-hour 82% remaining · resets in 1h", "fraction": 0.82, "agent": "codex"},
+                {"kind": "meter",
+                 "session": {"name": "5-hour", "detail": "82% remaining · resets in 1h", "fraction": 0.82},
+                 "weekly": {"name": "Weekly", "detail": "40% remaining · resets in 2d", "fraction": 0.4},
+                 "label": "5-hour 82% remaining · resets in 1h, Weekly 40% remaining · resets in 2d",
+                 "agent": "codex"},
                 {"kind": "separator"},
                 {"kind": "header", "title": "Work"},
                 {"kind": "note", "text": "Quota unavailable"}
@@ -947,6 +967,7 @@ mod tests {
             vec![
                 Some("Default · Plus"),
                 Some("5-hour 82% remaining · resets in 1h"),
+                Some("5-hour 82% remaining · resets in 1h, Weekly 40% remaining · resets in 2d"),
                 None,
                 Some("Work"),
                 Some("Quota unavailable"),

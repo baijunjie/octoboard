@@ -351,6 +351,8 @@ it("puts the help tip after the plan on the default account's name line when it 
   const nameLine = tip.parentElement!;
   expect(nameLine.lastElementChild).toBe(tip);
   expect(nameLine.textContent).toBe("DefaultPlusLogged in");
+  // When the reading was taken shares the directory's line instead.
+  expect(nameLine.nextElementSibling?.textContent).toMatch(/^\/home\/dev\/\.claude.*Updated /);
   expect(tip.previousElementSibling?.textContent).toBe("Logged in");
 });
 

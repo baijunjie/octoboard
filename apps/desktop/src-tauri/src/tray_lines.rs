@@ -6,7 +6,8 @@
 //! its text in the secondary colour; in a submenu (`dress_submenu`) an account's header is one
 //! line of the same in the small size of a section header, a note one line at the menu's size,
 //! and a window's row is its name and its detail (right-aligned, secondary colour) over a bar
-//! the shell draws.
+//! the shell draws; a 5-hour window with the account-wide weekly one is a single row (`meter_row`)
+//! of the 5-hour row, a thinner bar beneath its bar, and the weekly name and detail under that.
 //!
 //! A row is read by assistive technology as its menu item alone: the item keeps the whole phrase
 //! as its title, and nothing inside the row is an accessibility element. The texts are therefore
@@ -30,7 +31,7 @@ use objc2_app_kit::{
 };
 use objc2_foundation::{NSDictionary, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString};
 
-use crate::tray::{AgentKind, SubmenuItem};
+use crate::tray::{AgentKind, MeterLayer, SubmenuItem};
 
 /// The narrowest a row is, in points; a row whose text needs more is as wide as it needs, and the
 /// menu is as wide as its widest row.
@@ -39,11 +40,15 @@ const MIN_WIDTH: f64 = 280.0;
 const INSET: f64 = 14.0;
 /// The space between a window's name and its detail where they come close.
 const GAP: f64 = 12.0;
-/// The space above a window's text, between its text and its bar, and below its bar.
+/// The space above a window's text, between its text and its bar, and below its bar; a two-layer
+/// meter's rows (`meter_row`) are spaced the same.
 const TEXT_TOP: f64 = 4.0;
 const TEXT_TO_BAR: f64 = 5.0;
 const BAR_BOTTOM: f64 = 7.0;
 const BAR_HEIGHT: f64 = 6.0;
+/// A two-layer meter's weekly bar, and the space between it and the 5-hour bar above it.
+const THIN_BAR_HEIGHT: f64 = 3.0;
+const THIN_BAR_GAP: f64 = 2.0;
 /// The space between a row text's frame and its text, left and right: the inset a text field's
 /// cell has, so the texts sit where they did as fields.
 const TEXT_INSET: f64 = 2.0;
@@ -220,6 +225,65 @@ fn row_view(width: f64, height: f64, mtm: MainThreadMarker) -> Retained<NSView> 
     row
 }
 
+/// A name at the left and a detail right-aligned at the right of one line, the detail in the
+/// secondary colour and the name in `name_colour`; the line a window's bar sits beneath.
+struct TextLine {
+    name: Retained<RowText>,
+    detail: Retained<RowText>,
+    /// The line's height, and the width its content needs, insets included.
+    height: f64,
+    width: f64,
+}
+
+impl TextLine {
+    fn new(name: &str, detail: &str, name_colour: &NSColor, mtm: MainThreadMarker) -> Self {
+        let name = RowText::new(name, name_colour, false, mtm);
+        let detail = RowText::new(detail, &NSColor::secondaryLabelColor(), false, mtm);
+        let (name_size, detail_size) = (name.frame().size, detail.frame().size);
+        Self {
+            height: name_size.height.max(detail_size.height),
+            width: INSET * 2.0 + name_size.width + GAP + detail_size.width,
+            name,
+            detail,
+        }
+    }
+
+    /// Adds the line to `row`, `width` wide, with its bottom at `y`; the detail keeps to the right
+    /// edge as the row grows.
+    fn place(&self, row: &NSView, width: f64, y: f64) {
+        self.name.setFrameOrigin(NSPoint::new(INSET, y));
+        self.detail.setFrameOrigin(NSPoint::new(
+            width - INSET - self.detail.frame().size.width,
+            y,
+        ));
+        self.detail
+            .setAutoresizingMask(NSAutoresizingMaskOptions::ViewMinXMargin);
+        row.addSubview(&self.name);
+        row.addSubview(&self.detail);
+    }
+}
+
+/// Adds to `row`, `width` wide, a bar `thickness` tall with its bottom at `y`, `fraction` of its
+/// width filled in the colour of `agent`; it grows with the row.
+fn add_bar(
+    row: &NSView,
+    width: f64,
+    y: f64,
+    thickness: f64,
+    fraction: f64,
+    agent: AgentKind,
+    mtm: MainThreadMarker,
+) {
+    let bar = QuotaBar::new(
+        rect(INSET, y, width - INSET * 2.0, thickness),
+        fraction.clamp(0.0, 1.0),
+        fill_colour(agent),
+        mtm,
+    );
+    bar.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable);
+    row.addSubview(&bar);
+}
+
 /// A window's row: its name left and its detail right-aligned above a bar of `fraction` of its
 /// width, which grows with the row.
 fn window_row(
@@ -229,29 +293,56 @@ fn window_row(
     agent: AgentKind,
     mtm: MainThreadMarker,
 ) -> Retained<NSView> {
-    let name = RowText::new(name, &NSColor::labelColor(), false, mtm);
-    let detail = RowText::new(detail, &NSColor::secondaryLabelColor(), false, mtm);
-    let (name_size, detail_size) = (name.frame().size, detail.frame().size);
-    let width = (INSET * 2.0 + name_size.width + GAP + detail_size.width).max(MIN_WIDTH);
-    let line = name_size.height.max(detail_size.height);
-    let height = TEXT_TOP + line + TEXT_TO_BAR + BAR_HEIGHT + BAR_BOTTOM;
+    let line = TextLine::new(name, detail, &NSColor::labelColor(), mtm);
+    let width = line.width.max(MIN_WIDTH);
+    let height = TEXT_TOP + line.height + TEXT_TO_BAR + BAR_HEIGHT + BAR_BOTTOM;
     let row = row_view(width, height, mtm);
+    line.place(&row, width, height - TEXT_TOP - line.height);
+    add_bar(&row, width, BAR_BOTTOM, BAR_HEIGHT, fraction, agent, mtm);
+    row
+}
 
-    let y = height - TEXT_TOP - line;
-    name.setFrameOrigin(NSPoint::new(INSET, y));
-    detail.setFrameOrigin(NSPoint::new(width - INSET - detail_size.width, y));
-    detail.setAutoresizingMask(NSAutoresizingMaskOptions::ViewMinXMargin);
-    row.addSubview(&name);
-    row.addSubview(&detail);
-
-    let bar = QuotaBar::new(
-        rect(INSET, BAR_BOTTOM, width - INSET * 2.0, BAR_HEIGHT),
-        fraction.clamp(0.0, 1.0),
-        fill_colour(agent),
+/// The 5-hour and weekly windows as one item: a window's row for the 5-hour one, a thinner bar of
+/// the weekly window directly beneath its bar, and the weekly name and detail under that in the
+/// secondary colour.
+fn meter_row(
+    session: &MeterLayer,
+    weekly: &MeterLayer,
+    agent: AgentKind,
+    mtm: MainThreadMarker,
+) -> Retained<NSView> {
+    let session_line = TextLine::new(&session.name, &session.detail, &NSColor::labelColor(), mtm);
+    let weekly_line = TextLine::new(
+        &weekly.name,
+        &weekly.detail,
+        &NSColor::secondaryLabelColor(),
         mtm,
     );
-    bar.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable);
-    row.addSubview(&bar);
+    let width = session_line.width.max(weekly_line.width).max(MIN_WIDTH);
+    let thin_y = BAR_BOTTOM + weekly_line.height + TEXT_TO_BAR;
+    let thick_y = thin_y + THIN_BAR_HEIGHT + THIN_BAR_GAP;
+    let height = thick_y + BAR_HEIGHT + TEXT_TO_BAR + session_line.height + TEXT_TOP;
+    let row = row_view(width, height, mtm);
+    session_line.place(&row, width, height - TEXT_TOP - session_line.height);
+    add_bar(
+        &row,
+        width,
+        thick_y,
+        BAR_HEIGHT,
+        session.fraction,
+        agent,
+        mtm,
+    );
+    add_bar(
+        &row,
+        width,
+        thin_y,
+        THIN_BAR_HEIGHT,
+        weekly.fraction,
+        agent,
+        mtm,
+    );
+    weekly_line.place(&row, width, BAR_BOTTOM);
     row
 }
 
@@ -326,6 +417,12 @@ pub fn dress_submenu(menu: &NSMenu, items: &[SubmenuItem], mtm: MainThreadMarker
                 agent,
                 ..
             } => item.setView(Some(&window_row(name, detail, *fraction, *agent, mtm))),
+            SubmenuItem::Meter {
+                session,
+                weekly,
+                agent,
+                ..
+            } => item.setView(Some(&meter_row(session, weekly, *agent, mtm))),
         }
     }
 }
@@ -335,8 +432,18 @@ const OPENER_BAR_HEIGHT: f64 = 9.0;
 /// Space reserved for AppKit's submenu arrow and trailing menu inset.
 const OPENER_TRAILING: f64 = 32.0;
 
+/// The widest menu the bars are placed against. A menu whose lines are wider than the screen is
+/// shown at a width AppKit caps, while `NSMenu::size` still reports the width the lines asked for;
+/// placing the bars by that would push them past the visible edge.
+const MAX_OPENER_MENU_WIDTH: f64 = 640.0;
+
 fn opener_gap(menu_width: f64, text_x: f64, text_width: f64) -> f64 {
-    (menu_width - text_x - OPENER_TRAILING - OPENER_BAR_WIDTH - text_width).max(GAP)
+    (menu_width.min(MAX_OPENER_MENU_WIDTH)
+        - text_x
+        - OPENER_TRAILING
+        - OPENER_BAR_WIDTH
+        - text_width)
+        .max(GAP)
 }
 
 /// Keeps AppKit's own interactive row, including submenu tracking, highlighting and keyboard
@@ -375,7 +482,7 @@ pub fn dress_quota_openers(
     }
     // Ask AppKit to include all native titles and section views in its width calculation before
     // spacing the attachments. Pinning that width prevents a second layout from shrinking it.
-    let width = menu.size().width;
+    let width = menu.size().width.min(MAX_OPENER_MENU_WIDTH);
     menu.setMinimumWidth(width);
     for ((item, title), model) in openers.iter().zip(models) {
         if let Some(remaining) = model.quota_remaining {
@@ -508,5 +615,14 @@ mod tests {
             340.0 - OPENER_TRAILING
         );
         assert_eq!(opener_gap(100.0, 38.0, 80.0), GAP);
+    }
+
+    #[test]
+    fn opener_capsule_is_placed_within_the_capped_menu_width() {
+        // A menu that asked for 1879 pt is shown narrower; the bars stay where the cap puts them.
+        assert_eq!(
+            opener_gap(1879.0, 38.0, 80.0),
+            opener_gap(MAX_OPENER_MENU_WIDTH, 38.0, 80.0)
+        );
     }
 }

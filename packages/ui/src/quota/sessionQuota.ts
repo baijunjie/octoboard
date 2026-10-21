@@ -36,10 +36,11 @@ export function accountQuotaLabel(
   accountName: string | undefined,
   bar: QuotaBar,
   defaultNames: Settings["default_account_names"],
+  now: number,
 ): string {
   return t("rail.quota.selected", {
     agent: AGENT_LABEL[agent],
     account: isolate(accountName ?? defaultAccountName(t, defaultNames, agent)),
-    quota: usageBarSummary(t, bar),
+    quota: usageBarSummary(t, bar, now),
   });
 }

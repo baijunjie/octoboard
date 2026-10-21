@@ -37,7 +37,9 @@ The account, the windows drawn and the hiding rules are the same as "The selecte
 `docs/product/account-quotas.md`. The icon has **no tooltip**. With a quota, its accessible name identifies the agent
 and account and, for each window drawn, the window and its whole remaining percent, in the UI's language; without one
 it names only Octoboard. Selecting another session updates the indicator even if no session data changed, and a
-session's account switch, account edits, availability changes and new readings update it too. The bars fill from the
+session's account switch, account edits, availability changes and new readings update it too, as does a window's
+reset time passing, after which that window is drawn full (see "How an account's quota is shown" in
+`docs/product/account-quotas.md`). The bars fill from the
 left in every UI language: the menu bar belongs to the system, not to the window, whose layout is what a right-to-left
 language mirrors (see "Right-to-left layout" in `docs/product/window-layout.md`).
 
@@ -85,6 +87,10 @@ From top to bottom:
      titled after its project reads as the title alone rather than naming it twice. Like every other place, it reads
      the terminal title without the glyphs an agent animates at its start (see "Leading activity glyphs" in
      `docs/product/session-titles.md`).
+   - A session's line is kept to at most **60** display columns, East Asian wide characters and emoji counting as two
+     and every other character as one. The place it names is cut first to at most **24** columns, then the title to
+     whatever room is left; a cut text ends in "…" and is never cut inside a character made of several code points
+     (an emoji sequence, a letter with its accents).
    - A group names at most **10** sessions. Beyond that, a last line that cannot be chosen says how many more there are
      ("N more…"); the heading's number still counts them all.
    - With no session in any of these groups — none running, or only ones still starting — this part is a single
@@ -99,15 +105,24 @@ From top to bottom:
    - each account is a header line, at the small size of a section header, regular weight, in the secondary text
      colour, with its name — for the agent's default account the name the user gave it, else **Default** (see "The
      default account" in `docs/product/agent-accounts.md`) — and its plan after a dot where the agent names one
-     ("Default · Max"), the default account first and then the accounts the user owns, each set off by a separator;
-   - under the header, each window is one row: its name on the left ("5-hour"), "N% remaining · resets in
-     <countdown>" ("82% remaining · resets in 1h 57m", "resets now" once the time has passed, no countdown for a
+     ("Default · Max"), the default account first and then the accounts the user owns, each set off by a separator.
+     For a current reading with windows, the header ends with how long ago it was read ("Default · Max · updated 3
+     minutes ago", "… · updated just now" under a minute); it is left out while the out-of-date note below shows, and
+     for an account still being read or with no windows to show;
+   - under the header, each window is one row, except as the next point says: its name on the left ("5-hour"), "N%
+     remaining · resets in <countdown>" ("82% remaining · resets in 1h 57m", "resets now" once the time has passed, no countdown for a
      window with no reset time) right-aligned in the secondary text colour, and a bar of what remains directly
      below, on a translucent grey track. The bar is orange for Claude Code and blue for Codex, each one fixed colour
      whether the menu is light or dark (their contrast against the track is not measured), and the text colour for
      Grok Build. A row whose text needs more room than the submenu's usual width widens the submenu rather than
      being cut short. A row is read by assistive technology once, as one phrase ("5-hour 82% remaining · resets in
      1h 57m"), by its menu item alone: neither the name, the detail nor the bar is read on its own;
+   - an account with both a **5-hour** and an account-wide **Weekly** window shows the two as **one meter row**, in
+     the 5-hour window's place: the 5-hour name and detail with its bar, directly beneath that bar a thinner one,
+     about **3 pt** tall, for the Weekly window, and beneath it the Weekly name and detail, both in the secondary
+     text colour. Assistive technology reads the row once, as the two windows' phrases joined ("5-hour 82% remaining ·
+     resets in 1h 57m, Weekly 40% remaining · resets in 2d 3h"). Every other window keeps a row of its own, and the
+     order of windows is unchanged;
    - a row, a header and a note are not dimmed the way a menu line that cannot be chosen is: the window's name is at
      full strength, and none ever highlights under the pointer. Their text and the bar's track take the system's
      colours for the menu they are drawn in, light or dark. A header and a note are each read by assistive
@@ -127,7 +142,8 @@ From top to bottom:
    bar, with window priority 5-hour, then Weekly, then the credit pool; model-specific weekly limits are excluded.
    An unread account, a reading without an eligible window or a failed latest reading has no opener bars,
    including when the submenu retains stale windows. Switching consoles or editing their account choices updates
-   the bars.
+   the bars. The bars are placed for a menu at most **640 pt** wide: a menu whose lines ask for more is laid out as
+   if it were 640 pt wide.
 
    These opener bars are solid rounded tracks in a muted tint, with the remaining share filled at full strength,
    aligned at the right across the opening lines. Their tint follows the native row in light and dark menus and
@@ -137,11 +153,15 @@ From top to bottom:
    percent; the bars are not read separately. The row has no tooltip, which would float over the submenu it opens
    and repeat what that shows.
 
-   Countdowns and the age of an out-of-date reading are as of the last time the menu was updated, which a change of
-   the selected session, current console, sessions, consoles, projects, accounts, added agents, agents' availability, quotas or the UI's language causes, not the
-   clock alone, so they can lag behind the clock. Opening the menu asks the daemon for a fresh reading, as opening
-   the rail's panel or Settings' section does (see "When quotas are read" in `docs/product/account-quotas.md`); since
-   the menu never changes while open, what that brings shows from the next time it is opened. The menu does not wait for the reply.
+   Countdowns, the ages of readings and whether a window's reset time has passed (so that it is drawn full; see "How
+   an account's quota is shown" in `docs/product/account-quotas.md`) are as of the last time the menu was updated. A
+   change of the selected session, current console, sessions, consoles, projects, accounts, added agents, agents'
+   availability, quotas or the UI's language updates it, and so does the clock: at the earliest reset time still to
+   come among the readings held, and each time a reading's age reaches another whole minute, so that while the menu
+   is closed the countdowns and ages keep up with the clock to the minute and a window goes full at its reset.
+   Opening the menu asks the daemon for a fresh reading, as opening the rail's panel or Settings' section does (see
+   "When quotas are read" in `docs/product/account-quotas.md`); since the menu never changes while open, what that
+   brings shows from the next time it is opened. The menu does not wait for the reply.
 3. **Open Octoboard**, which brings a window closed into the background back, as described under "Closing the window"
    in `docs/product/application-lifecycle.md`. A window that is shown, or minimized, is brought to the front, restored
    first if it was minimized.
@@ -194,7 +214,9 @@ being dimmed, never highlighting, and how assistive technology reads them), **No
 headers in a submenu; the session lines' agent marks and the headings' status glyphs in a dark menu; either look on a
 light menu bar, and the octopus alone while the icon is highlighted with its menu open; opening the menu asking for
 a refresh of the quotas; a menu changing between light and dark while the app runs; a quota detail row never
-highlighting under the pointer; and a row widened by a long window name.
+highlighting under the pointer; a row widened by a long window name; the meter row that joins an account's 5-hour
+and Weekly windows (the window rows observed above were seen before it existed); and the opener bars staying in view
+in a menu whose session lines would make it wider than 640 pt.
 
 **Observed in native previews and probes:** an AppKit image-view preview showed the original icon without a quota
 and capsules at 0%, 65% and 100% in light and dark appearances. A native menu

@@ -4,7 +4,7 @@ import { isolate } from "../i18n/isolate";
 import { format, type Translate } from "../i18n/catalog";
 import type { QuotaWindow } from "../protocol";
 import type { AccountQuota } from "../protocol";
-import { exhaustedQuotaWindow, orderedQuotaWindows, primaryQuotaWindow, planLabel, quotaHeadline, quotaResetsIn, quotaUsedUpAlert, quotaUsedUpDetail, quotaUsedUpSentence, quotaUsedUpShort, quotaWindowLabel, quotaWindowPhrase, remainingPercent, twoLayerWindows, usageBarSummary, usageBarWindows } from "./quotaFormat";
+import { exhaustedQuotaWindow, orderedQuotaWindows, primaryQuotaWindow, planLabel, quotaHeadline, quotaResetsIn, quotaUsedUpAlert, quotaUsedUpDetail, quotaUsedUpSentence, quotaUsedUpShort, quotaWindowLabel, quotaWindowPhrase, remainingPercentAt, twoLayerWindows, usageBarSummary, usageBarWindows } from "./quotaFormat";
 
 const t: Translate = (key, ...args) => format("en", key, args[0]);
 const MINUTE = 60_000;
@@ -27,7 +27,16 @@ it.each([
   [130, 0],
   [-5, 100],
 ])("shows %s%% used as %s%% remaining", (used, remaining) => {
-  expect(remainingPercent(window({ used_percent: used }))).toBe(remaining);
+  expect(remainingPercentAt(window({ used_percent: used, resets_at: null }), NOW)).toBe(remaining);
+});
+
+it("draws a window whose reset has passed as full until a new reading arrives", () => {
+  const used = window({ used_percent: 100, resets_at: NOW - 1 });
+  expect(remainingPercentAt(used, NOW)).toBe(100);
+  expect(remainingPercentAt(used, NOW - 2)).toBe(0);
+  expect(remainingPercentAt(window({ used_percent: 40, resets_at: NOW + MINUTE }), NOW)).toBe(60);
+  expect(remainingPercentAt(window({ used_percent: 40, resets_at: null }), NOW)).toBe(60);
+  expect(quotaHeadline(t, used, NOW)).toBe("5-hour 100% remaining");
 });
 
 it.each([
@@ -43,7 +52,7 @@ it.each([
 });
 
 it("words the headline from the label and the remaining percent", () => {
-  expect(quotaHeadline(t, window({ kind: "weekly_model", label: "Fable", used_percent: 0 }))).toBe(`${isolate("Fable")} weekly 100% remaining`);
+  expect(quotaHeadline(t, window({ kind: "weekly_model", label: "Fable", used_percent: 0 }), NOW)).toBe(`${isolate("Fable")} weekly 100% remaining`);
 });
 
 it.each([
@@ -199,7 +208,7 @@ describe("the compact usage bar", () => {
   });
 
   it("states both windows in words, or the one", () => {
-    expect(usageBarSummary(t, { main: session, thin: weekly })).toBe("5-hour 70% remaining, Weekly 40% remaining");
-    expect(usageBarSummary(t, { main: weekly })).toBe("Weekly 40% remaining");
+    expect(usageBarSummary(t, { main: session, thin: weekly }, NOW)).toBe("5-hour 70% remaining, Weekly 40% remaining");
+    expect(usageBarSummary(t, { main: weekly }, NOW)).toBe("Weekly 40% remaining");
   });
 });

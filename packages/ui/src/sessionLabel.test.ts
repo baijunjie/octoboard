@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { sessionOf } from "./gallery/fixtures/builders";
+import { projectOf, sessionOf } from "./gallery/fixtures/builders";
 import { format } from "./i18n/catalog";
+import { displayColumns } from "./i18n/displayColumns";
 import type { Translate } from "./i18n/catalog";
 import { isolate } from "./i18n/isolate";
 import type { Account } from "./protocol";
@@ -54,6 +55,29 @@ describe("sessionDisplayTitle", () => {
   });
 });
 
+describe("sessionWithLocation with a length cap", () => {
+  const projectMap = new Map([["p", projectOf("p", "c", "Alpha")]]);
+
+  it("shortens a long title with an ellipsis and keeps the location", () => {
+    const session = sessionOf("s", "c", "p", "word ".repeat(40), "idle");
+    const line = sessionWithLocation(t, session, new Map(), projectMap, 60);
+    expect(displayColumns(line)).toBeLessThanOrEqual(60);
+    expect(line).toContain("…");
+    expect(line.endsWith(` — ${isolate("Alpha")}`)).toBe(true);
+  });
+
+  it("closes an isolate the cut leaves open, and cuts a long location too", () => {
+    const session = sessionOf("s", "c", "p", "octoboard", "working", { terminal_title: "x".repeat(100) });
+    const line = sessionWithLocation(t, session, new Map(), new Map([["p", projectOf("p", "c", "L".repeat(80))]]), 60);
+    expect(line.match(/\u2068/g)?.length).toBe(line.match(/\u2069/g)?.length);
+    expect(displayColumns(line)).toBeLessThanOrEqual(60);
+  });
+
+  it("leaves a line that fits whole", () => {
+    const session = sessionOf("s", "c", "p", "Fix bug", "idle");
+    expect(sessionWithLocation(t, session, new Map(), projectMap, 60)).toBe(sessionWithLocation(t, session, new Map(), projectMap));
+  });
+});
 
 it("keeps composed session choice labels raw while sentence display keeps each name isolated", () => {
   const session = sessionOf("s", "c", "p", "مراجعة Work", "idle", { terminal_title: "Task 中文" });

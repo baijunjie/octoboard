@@ -42,6 +42,10 @@ again.
   reading fails is tried again after 10, then 20, then 40 minutes, and every 40 minutes after that, until a reading
   succeeds and the interval goes back to 5 minutes. An account that is not logged in, or that the agent says has no
   quota to report, is not a failure, and stays on the 5-minute interval.
+- **Once a window resets**, the account is read again whatever the interval: when a window held for it, out-of-date
+  ones included, has a reset time that passed after its last attempt began, it is read about **30 seconds** after
+  that reset time, giving the service a moment to roll the window over. A reset is acted on once: a reading taken for
+  it that fails leaves the account on its interval and retries as above.
 - **A new account**, or an agent found available after the daemon started, is read within about 15 seconds.
 - **When an account's login ends** (see "Logging an account in" in `docs/product/agent-accounts.md`), its quota is
   read again whatever the interval: at once after a successful login, and within about 15 seconds after any other
@@ -99,6 +103,20 @@ owns" in `docs/product/agent-accounts.md`). Beneath the account each window has:
   blue for Codex, and the text colour for Grok Build, each set off against the bar's track in both light and dark
   appearance.
 
+How long ago the reading was taken is shown in small muted text at the end of a line — the account's directory line
+in Settings, its name line in the rail's panel, which shows no directories: "Updated just now" under a minute,
+otherwise "Updated 3 minutes ago" (in hours or days once it is that old). It is shown only for a current reading with
+windows; when the latest reading failed, the out-of-date line (see "Quota states" below) says when the windows were
+last read instead.
+
+**A window whose reset time has passed** is shown as **100% remaining**, its bar full, until a newer reading arrives,
+while its countdown reads "resets now". This holds wherever a quota is drawn or stated: Settings, the rail's panel, the
+selected session's indicator and its accessible name, the account pickers' and the Switch account submenu's usage bars
+and their descriptions, and, in the macOS application, the menu bar icon, its quota submenus and their opening lines.
+Each notices the reset passing on its own clock: within 30 seconds in Settings, the rail's panel and an open dialog,
+at the reset time itself on the rail's button, as of its opening in the Switch account submenu, and in the menu bar
+as "The icon's menu" in `docs/product/menu-bar-icon.md` says.
+
 An account with both a **5-hour** and an account-wide **Weekly** window shows the two as **one meter**: the 5-hour
 line and its bar, directly beneath it a thinner bar for the Weekly window, and beneath that the Weekly window's line,
 in the muted text colour. Every other window — Grok Build's credit pool, a model-specific weekly limit, a Weekly
@@ -138,7 +156,7 @@ This is what Settings and the rail's panel show; the menu bar icon's menu differ
 |---|---|
 | Its agent is not available, or not yet determined | Nothing about a quota, no plan either. |
 | Not read yet | "Reading quota…" in place of the windows. |
-| Read | The plan and the windows. |
+| Read | The plan, the windows and how long ago they were read. |
 | Never read successfully, and the last reading failed | "Quota unavailable" and the reason (see "Why a quota is unavailable" below). |
 | Read before, but the latest reading failed | The last good plan and windows stay, with a line above them saying they are out of date and how long ago they were last read ("last read 12 minutes ago"), and the reason the newer reading failed. The next successful reading clears it. |
 | Not logged in: its directory does not exist, or the agent says it is not signed in there | Any windows read before are dropped, and the agent's own message is not shown. In the rail's panel, a single line saying the account is not logged in yet and pointing to logging in to use it stands in place of the windows. In Settings nothing stands beneath the account; its **Not logged in** badge says so (see "The accounts the user owns" in `docs/product/agent-accounts.md`). |
@@ -232,8 +250,9 @@ hollow inside its outline:
   the 5-hour window and, 1 px beneath it, one 3 px tall for the Weekly window.
 - **One capsule** otherwise, 5 px tall.
 
-It follows session selection, a session's account switch and new quota readings; the console's or project's account
-preference does not choose this reading.
+It follows session selection, a session's account switch and new quota readings, and fills a window's capsule once
+its reset time passes (see "How an account's quota is shown" above); the console's or project's account preference
+does not choose this reading.
 
 The macOS menu bar icon shows the same session's quota using the same window selection and hiding rules below.
 Its appearance and update timing are described in "The icon's look" in `docs/product/menu-bar-icon.md`.
@@ -290,7 +309,10 @@ the accounts' quotas without opening Settings.
   been determined unavailable, has no tab; an added agent whose availability is not yet determined has one. Each
   opening starts on the tab of the selected session's agent while the button shows that session's indicator (see "The
   selected session's quota indicator" above) and the agent has a tab, otherwise on the first agent's tab; a tab
-  chosen in the panel lasts only until it closes.
+  chosen in the panel lasts only until it closes. When it opens on the selected session's agent this way, that tab's
+  list is also scrolled so that the session's account — the default account for a session that names none — is the
+  first whole row in view, clear of the list's top fade, as far as the list can scroll; the row is not marked in any
+  other way. Otherwise a list opens at its top.
 - **The selected agent's accounts**: its default account, under the name the user gave it or else "Default" (see "The
   default account" in `docs/product/agent-accounts.md`), then the accounts the user owns. Each shows
   its name, its plan chip and its quota beneath, in the states of "Quota states" above, as "How an account's quota is

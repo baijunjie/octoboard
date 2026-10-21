@@ -2,7 +2,7 @@ import type { Account, Agent, AgentAvailability, AccountQuota, Settings } from "
 import { describing } from "../interact";
 import type { Scenario } from "../scenario";
 import { ALL_AGENTS, SAMPLE, minutesAgo, snapshotState } from "./builders";
-import { quotaFailure, quotaOf, quotaWindow } from "./quotas";
+import { manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow } from "./quotas";
 
 const GROUP = "Window layout";
 
@@ -53,10 +53,10 @@ const readState = railQuotaState([...claudeAccounts, ...codexAccounts], [
     quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60),
     quotaWindow("session", 18, 117),
   ]),
-  quotaOf("claude", "a-work", "pro", [quotaWindow("session", 100, 42), quotaWindow("weekly", 137, 2 * 24 * 60 + 5 * 60)]),
-  quotaOf("claude", "a-long", "pro", [quotaWindow("session", 96, 83), quotaWindow("weekly", 88, 2 * 24 * 60 + 9 * 60)]),
+  quotaOf("claude", "a-work", "pro", [quotaWindow("session", 100, 42), quotaWindow("weekly", 137, 2 * 24 * 60 + 5 * 60)], { fetched_at: minutesAgo(7) }),
+  quotaOf("claude", "a-long", "pro", [quotaWindow("session", 96, 83), quotaWindow("weekly", 88, 2 * 24 * 60 + 9 * 60)], { fetched_at: minutesAgo(3) }),
   quotaOf("codex", null, "plus", [quotaWindow("session", 64, 140), quotaWindow("weekly", 31, 5 * 24 * 60 + 2 * 60)]),
-  quotaOf("codex", "a-codex", "pro", [quotaWindow("session", 12, 285), quotaWindow("weekly", 40, 24 * 60 + 90)]),
+  quotaOf("codex", "a-codex", "pro", [quotaWindow("session", 12, 285), quotaWindow("weekly", 40, 24 * 60 + 90)], { fetched_at: minutesAgo(3) }),
   quotaOf("codex", "a-codex-auto", null, [quotaWindow("session", 3, 295), quotaWindow("weekly", 9, 6 * 24 * 60)]),
 ], { defaultNames: { claude: "Studio laptop" } });
 
@@ -111,6 +111,24 @@ const shortTabsState = railQuotaState(
   { installed: ALL_AGENTS },
 );
 
+/** Claude Code's default account and eight more (`manyClaudeAccounts`), more than the panel's list is tall. Hub runs
+ * on Mobile, the sixth of the eight and the seventh row of the list. */
+const many = manyClaudeAccounts();
+const longListState = railQuotaState(many.accounts, [
+  quotaOf("claude", null, "max", [quotaWindow("session", 18, 117), quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60)]),
+  ...many.quotas,
+]);
+
+/** Hub on Claude Code's default account, whose five-hour window was spent when it was read nine minutes ago and reset a
+ * minute ago, with Work beside it, spent and not yet reset. Hub's weekly window is unaffected. */
+const resetPassedState = railQuotaState(
+  [{ id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" }],
+  [
+    quotaOf("claude", null, "max", [quotaWindow("session", 100, -1), quotaWindow("weekly", 41, 3 * 24 * 60 + 4 * 60)], { fetched_at: minutesAgo(9) }),
+    quotaOf("claude", "a-work", "pro", [quotaWindow("session", 100, 42), quotaWindow("weekly", 63, 2 * 24 * 60 + 5 * 60)], { fetched_at: minutesAgo(9) }),
+  ],
+);
+
 export const railQuotaScenarios: Scenario[] = [
   {
     id: "rail-quota-selected-session",
@@ -157,9 +175,36 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Rail quota panel, floated in by hovering",
-    description: "No session is selected, so the quota button has no mini bar. The panel floats in beside it, above Settings, after the pointer rests on it, with the button marked open. Claude Code's default account, under the name the user gave it (Studio laptop), shows its five-hour and weekly quota as one two-layer bar (the thick bar for five hours, the thin one beneath it for the week) and Fable last. Work (spent, both bars empty) follows, then an account that is nearly spent, whose clipped name fades out before its plan chip. Manage accounts is at the bottom. Grok Build is added but not installed, so it has no tab.",
+    description: "No session is selected, so the quota button has no mini bar. The panel floats in beside it, above Settings, after the pointer rests on it, with the button marked open. Claude Code's default account, under the name the user gave it (Studio laptop), shows its five-hour and weekly quota as one two-layer bar (the thick bar for five hours, the thin one beneath it for the week) and Fable last. Each account's name line ends, at the far right, with a small muted \"Updated N ago\" (the default account's says 1 minute). Work (spent, both bars empty, read 7 minutes ago) follows, then an account that is nearly spent, whose clipped name fades out before its plan chip. Manage accounts is at the bottom. Grok Build is added but not installed, so it has no tab.",
     state: readState,
     steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
+  },
+  {
+    id: "rail-quota-scrolled-to-account",
+    group: GROUP,
+    category: "normal",
+    title: "Rail quota panel, long list opened on the selected session's account",
+    description: "Hub runs on Mobile, far down Claude Code's nine accounts. The panel opens on Claude Code's tab with its list already scrolled so that Mobile is the first whole row in view, only the tail of the row above it showing under the top fade, and the rows after it below; the quota button's compact indicator and accessible name are Mobile's. Nothing else marks the row, and the list scrolls freely from there.",
+    state: {
+      ...longListState,
+      sessions: new Map(sessions.map((session) => [session.id, session.id === "s-console" ? { ...session, account_id: "a-mobile" } : session])),
+    },
+    steps: [
+      (ui) => ui.press(ui.session("Hub")),
+      (ui) => ui.hoverPanel(describing("quota button with a session's bar", (name) => name.startsWith(ui.t("rail.quota"))), ui.t("rail.quota")),
+    ],
+  },
+  {
+    id: "rail-quota-reset-passed",
+    group: GROUP,
+    category: "normal",
+    title: "Rail quota button and panel, a window whose reset has passed",
+    description: "Hub uses Claude Code's default account, whose reading (taken 9 minutes ago) has its five-hour window spent, but that window's reset was a minute ago and no newer reading has arrived. The quota button's indicator shows that window full (100% remaining, over the weekly 59%), and in the panel the default account's five-hour bar is full and its headline reads 100% remaining with \"resets now\". Work, whose five-hour window is also spent but resets later, stays empty by comparison.",
+    state: resetPassedState,
+    steps: [
+      (ui) => ui.press(ui.session("Hub")),
+      (ui) => ui.hoverPanel(describing("quota button with a session's bar", (name) => name.startsWith(ui.t("rail.quota"))), ui.t("rail.quota")),
+    ],
   },
   {
     id: "rail-quota-pinned-codex",

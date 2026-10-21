@@ -204,6 +204,10 @@ export type StatusItemSubmenuItem =
   /** A window's name and, right-aligned, its detail, with a bar of `fraction` (0 to 1) beneath in
    * `agent`'s colour. `label` is the whole line as one phrase, for assistive technology. */
   | { kind: "window"; name: string; detail: string; label: string; fraction: number; agent: Agent }
+  /** The 5-hour window and the account-wide weekly one as one item: the 5-hour name and detail with
+   * its bar of `session.fraction`, a thinner bar of `weekly.fraction` directly beneath, then the weekly name
+   * and detail in the secondary colour. `label` is both phrases as one, for assistive technology. */
+  | { kind: "meter"; session: { name: string; detail: string; fraction: number }; weekly: { name: string; detail: string; fraction: number }; label: string; agent: Agent }
   | { kind: "note"; text: string }
   | { kind: "separator" };
 

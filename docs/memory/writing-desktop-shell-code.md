@@ -28,3 +28,17 @@ the app that each still has its effect.
 When writing such a hook, take the AppKit object from the notification or delegate call that hands it over (the
 `NSMenu` that is the object of `NSMenuDidBeginTrackingNotification`, say) rather than reading it back through the
 crate's internals, wherever one is delivered.
+
+## Keep a native menu narrow from the data that builds it; AppKit cuts a wide one without saying so
+
+Applies to the menu bar icon's menu and any other `NSMenu` the shell shows. AppKit shows a menu no wider than a cap
+of its own, which is not documented, and cuts an item title that does not fit in its middle, with no error; but
+`NSMenu::size().width` still reports the width the menu's lines asked for. So:
+
+- A menu line carrying text of unbounded length (a session title, a project or console name) is cut where the
+  menu's data is built in `packages/ui`, to a fixed number of display columns, with `ellipsize` from
+  `packages/ui/src/i18n/displayColumns.ts`. Never cap by `length` or code points: at the menu's font a CJK
+  character is about twice as wide as a Latin one, so a cap that keeps Latin text in view still lets CJK text be cut.
+- Anything the shell places against the menu's width is placed against `NSMenu::size().width` clamped to a width
+  the data's caps keep the menu under, never the reported width alone: past AppKit's cap it lands beyond the edge
+  shown and is clipped.

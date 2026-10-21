@@ -1,7 +1,7 @@
 import type { Translate } from "../i18n/catalog";
 import type { StatusItemEntry, StatusItemMenu, StatusItemSection } from "../platform";
 import type { Console, Project, Session } from "../protocol";
-import { remainingPercent } from "../quota/quotaFormat";
+import { remainingPercentAt } from "../quota/quotaFormat";
 import { accountQuotaLabel, sessionQuotaBarOf } from "../quota/sessionQuota";
 import { sessionStatusKind, sessionWithLocation, statusLabel, type StatusKind } from "../sessionLabel";
 import { sessionsInTreeOrder } from "../sidebar/order";
@@ -15,6 +15,11 @@ const SECTION_ORDER: StatusKind[] = ["waiting_user", "working", "background", "i
 /** How many sessions a section names before the rest are summed up in one line, which keeps the
  * menu on screen however many sessions run. */
 export const MAX_PER_SECTION = 10;
+
+/** How wide a session's line may be, in display columns (East Asian wide characters count as two): the
+ * system cuts a menu line that is wider than the screen in its middle, and a menu that wide is beyond what the
+ * quota bars' placement can follow. */
+export const MAX_SESSION_LABEL_COLUMNS = 60;
 
 /** The menu before its pictures are drawn: lines name them by key (`statusItemIconKeys.ts`), and
  * `withIcons` (`statusItemIcons.ts`) draws the keys in use. */
@@ -43,7 +48,7 @@ export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource):
     const items: StatusItemEntry[] = listed
       .slice(0, MAX_PER_SECTION)
       .map((session) => ({
-        label: sessionWithLocation(t, session, consoleMap, projectMap),
+        label: sessionWithLocation(t, session, consoleMap, projectMap, MAX_SESSION_LABEL_COLUMNS),
         icon: agentIconKey(session.agent),
         session: session.id,
       }));
@@ -55,9 +60,9 @@ export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource):
   const accountName = quota.accounts.find((account) => account.id === selected?.account_id)?.name;
   return {
     ...(selected && bar ? {
-      quota_remaining: remainingPercent(bar.main),
-      ...(bar.thin ? { quota_weekly_remaining: remainingPercent(bar.thin) } : {}),
-      quota_label: accountQuotaLabel(t, selected.agent, accountName, bar, quota.defaultAccountNames),
+      quota_remaining: remainingPercentAt(bar.main, quota.now),
+      ...(bar.thin ? { quota_weekly_remaining: remainingPercentAt(bar.thin, quota.now) } : {}),
+      quota_label: accountQuotaLabel(t, selected.agent, accountName, bar, quota.defaultAccountNames, quota.now),
     } : {}),
     sections: sections.length > 0 ? sections : [{ heading: t("statusItem.noSessions"), items: [] }],
     submenus: buildQuotaSubmenus(t, quota, consoleMap.get(source.currentConsoleId ?? "")),

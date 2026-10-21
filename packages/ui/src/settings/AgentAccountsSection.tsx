@@ -20,7 +20,7 @@ import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { Account, AccountLogin as Login, Agent } from "../protocol";
-import { AccountNameLine, AccountQuotaSummary } from "../quota/AccountQuotaSummary";
+import { AccountNameLine, AccountQuotaSummary, QuotaUpdated } from "../quota/AccountQuotaSummary";
 import { accountQuotaOf } from "../quota/accountQuotaOf";
 import { isNotLoggedIn } from "../quota/quotaFormat";
 import { useAccountQuota } from "../quota/useAccountQuota";
@@ -439,13 +439,17 @@ function AccountRow({ agent, account, label, help, description, approval, childr
   return (
     <div data-list-motion={motionKey} className="col-span-full grid grid-cols-subgrid items-center gap-y-3 groove-b py-4 last:border-b-0">
       <div className="min-w-0">
-        <AccountNameLine name={label} quota={quota} help={help} showLoginState>
+        <AccountNameLine name={label} quota={quota} help={help} showLoginState showUpdated={false}>
           {notLoggedIn && <Button ref={loginRef} size="xs" variant="secondary" preventFocusOnPress isDisabled={loginActive} onPress={() => onLogin(returnLoginFocus)}>
             {t("settings.accounts.login")}
             <ExternalLinkIcon />
           </Button>}
         </AccountNameLine>
-        <div className="text-sm text-app-muted">{description}</div>
+        {/* When the reading was taken shares the directory's line, keeping the name line to the name and its badges. */}
+        <div className="flex items-center gap-2 text-sm text-app-muted">
+          <div className="min-w-0">{description}</div>
+          <QuotaUpdated quota={quota} />
+        </div>
       </div>
       <div className="contents sm:flex sm:items-center sm:gap-4">
         {approval && (

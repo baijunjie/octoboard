@@ -1,7 +1,7 @@
 import type { Account, AccountQuota, Agent, AgentAvailability, Console, Project, Settings } from "../../protocol";
 import type { Scenario } from "../scenario";
 import type { Ui } from "../interact";
-import { ALL_AGENTS, SAMPLE, minutesFromNow, projectOf, sessionOf, snapshotState } from "./builders";
+import { ALL_AGENTS, SAMPLE, minutesAgo, minutesFromNow, projectOf, sessionOf, snapshotState } from "./builders";
 import { quotaOf, quotaWindow } from "./quotas";
 
 const GROUP = "Sidebar sessions";
@@ -37,6 +37,13 @@ const claudeQuotas: AccountQuota[] = [
   quotaOf("claude", "a-work", "pro", [quotaWindow("session", 100, 125), quotaWindow("weekly", 63, 2 * 24 * 60 + 5 * 60)]),
   quotaOf("claude", "a-personal", "pro", [quotaWindow("session", 96, 40), quotaWindow("weekly", 88, 24 * 60 + 90)]),
 ];
+
+/** Claude Code's readings as `claudeQuotas` has them, but Work's five-hour window, spent when it was read eight minutes
+ * ago, reset a minute ago and no newer reading has arrived. */
+const workResetPassedQuotas: AccountQuota[] = claudeQuotas.map((quota) =>
+  quota.account === "a-work"
+    ? { ...quota, fetched_at: minutesAgo(8), windows: quota.windows.map((window) => window.kind === "session" ? quotaWindow("session", 100, -1) : window) }
+    : quota);
 
 /** Codex with both its accounts spent: the default one in its five-hour window, Team in its weekly one. */
 const codexSpent: AccountQuota[] = [
@@ -136,6 +143,15 @@ export const quotaGatingScenarios: Scenario[] = [
     title: "New session, account picker with quota bars",
     description: "Website would run on Work, whose quota is used up, so the Claude Code account field opens on Default, the first account with quota left, and the open picker lists every account with a compact usage bar before its name: the five-hour window's bar with the weekly window's thin one right under it. Default has plenty left and is selected; Work is unselectable, its name and bar faded and its reason at full contrast under the name on two lines, \"Used up\" and when it resets; Personal is nearly empty; Client has no reading yet and shows an empty track.",
     state: launchState([onWork], claudeQuotas),
+    steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Claude Code"))],
+  },
+  {
+    id: "dialog-new-session-quota-reset-passed",
+    group: GROUP,
+    category: "normal",
+    title: "New session, account whose spent window has since reset",
+    description: "Website runs on Work, whose five-hour window was spent when it was read 8 minutes ago but reset a minute ago, before any newer reading. The Claude Code account field keeps Work selected, not used up, and the open picker lists Work's bar with the five-hour part full over the weekly window's 37%, its summary reading 5-hour 100% remaining; Personal is nearly empty and Client has no reading.",
+    state: launchState([onWork], workResetPassedQuotas),
     steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Claude Code"))],
   },
   {

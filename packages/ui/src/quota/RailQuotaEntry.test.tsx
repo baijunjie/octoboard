@@ -17,11 +17,12 @@ import { RailQuotaEntry } from "./RailQuotaEntry";
 const overflowing = vi.hoisted(() => ({ marker: "", reports: [] as Array<(visibility: "bottom" | "none") => void> }));
 vi.mock("../components/scrollFade", async (importOriginal) => {
   const original = await importOriginal<typeof import("../components/scrollFade")>();
-  const { useEffect, useRef } = await import("react");
+  const { useEffect, useImperativeHandle, useRef } = await import("react");
   return {
     ...original,
-    FadedScroller: ({ region, children }: { region?: import("../components/scrollFade").FadeRegion; children: React.ReactNode }) => {
+    FadedScroller: ({ region, children, ref: forwarded }: { region?: import("../components/scrollFade").FadeRegion; children: React.ReactNode; ref?: React.Ref<HTMLDivElement> }) => {
       const ref = useRef<HTMLDivElement>(null);
+      useImperativeHandle(forwarded, () => ref.current!);
       useEffect(() => {
         const overflows = overflowing.marker !== "" && ref.current!.textContent!.includes(overflowing.marker);
         region?.onVisibilityChange?.(overflows ? "bottom" : "none");
@@ -604,6 +605,80 @@ it("opens on the tab of the agent whose quota the button shows, each time, and o
   select();
   click(entry());
   expect(selectedTab()).toBe("Claude Code");
+});
+
+it("opens the shown agent's list scrolled to the selected session's account, with room for the fade", () => {
+  withFakeTimers();
+  const { store, container } = mount();
+  // jsdom has no layout: a row's offset is its place among its siblings, 100 px each, and a scroller keeps what is set.
+  const scrolled = new WeakMap<Element, number>();
+  const offset = vi.spyOn(HTMLElement.prototype, "offsetTop", "get").mockImplementation(function (this: HTMLElement) {
+    return Array.from(this.parentElement?.children ?? []).indexOf(this) * 100;
+  });
+  const top = vi.spyOn(HTMLElement.prototype, "scrollTop", "set").mockImplementation(function (this: HTMLElement, value: number) {
+    scrolled.set(this, value);
+  });
+  onTestFinished(() => {
+    offset.mockRestore();
+    top.mockRestore();
+  });
+  const host = container.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  onTestFinished(() => act(() => root.unmount()));
+  const session: Session = {
+    id: "selected", agent: "claude", account_id: "claude-work", config_dir: accounts[0]!.config_dir, console_id: "console", host_id: "local",
+    role: "console", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    pinned: false, locked: false, started_at: NOW,
+  };
+  act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
+  const select = (id?: string) => act(() => root.render(
+    <DaemonProvider value={{ store, request } as unknown as Daemon}>
+      <RailQuotaEntry selectedSessionId={id} onOpenSettingsAt={onOpenSettingsAt} />
+    </DaemonProvider>,
+  ));
+  /** The scroll position the shown agent's list was given when the panel mounted. */
+  const positions = () => Array.from(document.querySelectorAll('[role="tabpanel"]'), (tabpanel) =>
+    Array.from(tabpanel.querySelectorAll("div"), (div) => scrolled.get(div)).find((value) => value !== undefined));
+  const entry = () => host.querySelector("button")!;
+  select(session.id);
+  click(entry());
+  // Claude's list holds the default account, then Work: Work is the second row, 100 px down, less the 24 px fade.
+  expect(positions()).toEqual([76]);
+  click(entry());
+  advance(1000);
+  expect(panel()).toBeNull();
+
+  // The default account is the first row, which needs no scrolling.
+  act(() => store.setState({ sessions: new Map([[session.id, { ...session, account_id: null, config_dir: null }]]) }));
+  click(entry());
+  expect(positions()).toEqual([0]);
+});
+
+it("draws the button's window full, and says so, once its reset time passes while mounted", () => {
+  withFakeTimers();
+  const { store, container } = mount();
+  const host = container.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  onTestFinished(() => act(() => root.unmount()));
+  const session: Session = {
+    id: "selected", agent: "codex", account_id: null, config_dir: null, console_id: "console", host_id: "local",
+    role: "console", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    pinned: false, locked: false, started_at: NOW,
+  };
+  const used = quota("codex", null, "plus");
+  used.windows = [{ ...used.windows[0]!, used_percent: 100, resets_at: NOW + 10 * MINUTE }];
+  act(() => store.setState({ sessions: new Map([[session.id, session]]), accountQuotas: [used] }));
+  act(() => root.render(
+    <DaemonProvider value={{ store, request } as unknown as Daemon}>
+      <RailQuotaEntry selectedSessionId={session.id} onOpenSettingsAt={onOpenSettingsAt} />
+    </DaemonProvider>,
+  ));
+  const button = host.querySelector("button")!;
+  expect(remaining(button)).toEqual(["0%"]);
+  expect(button.getAttribute("aria-label")).toContain("5-hour 0% remaining");
+  advance(10 * MINUTE);
+  expect(remaining(button)).toEqual(["100%"]);
+  expect(button.getAttribute("aria-label")).toContain("5-hour 100% remaining");
 });
 
 it("hides the mini bar for unread, failed, stale or unavailable quota instead of showing another account", () => {

@@ -1,4 +1,4 @@
-import type { AccountQuota, Agent, QuotaUnavailable, QuotaWindow, QuotaWindowKind } from "../../protocol";
+import type { Account, AccountQuota, Agent, QuotaUnavailable, QuotaWindow, QuotaWindowKind } from "../../protocol";
 import { minutesAgo, minutesFromNow } from "./builders";
 
 /** The length of each kind of window as the agents give it, in minutes. */
@@ -10,7 +10,8 @@ const WINDOW_MINUTES: Record<QuotaWindowKind, number> = {
 };
 
 /** A quota window `used` percent used that resets `resetsIn` minutes after the page loaded (never
- * when `null`). A whole number of minutes keeps the countdown on one reading for the first minute. */
+ * when `null`; a negative number is a reset already past, which the reading has not caught up with).
+ * A whole number of minutes keeps the countdown on one reading for the first minute. */
 export function quotaWindow(kind: QuotaWindowKind, used: number, resetsIn: number | null, label: string | null = null): QuotaWindow {
   return {
     kind,
@@ -31,4 +32,19 @@ export function quotaOf(agent: Agent, account: string | null, plan: string | nul
  * from its catalog instead. */
 export function quotaFailure(code: string, params: Record<string, string>, message: string): QuotaUnavailable {
   return { code, params, message };
+}
+
+const MANY_CLAUDE_ACCOUNT_NAMES = ["Research", "Billing", "Support", "Docs", "Staging", "Mobile", "Data", "Infra"] as const;
+
+/** Claude Code's owned accounts beyond a list's height: eight of them, each with a plan, two windows and a reading of
+ * a different age, so every row is as tall as a real one. */
+export function manyClaudeAccounts(): { accounts: Account[]; quotas: AccountQuota[] } {
+  return {
+    accounts: MANY_CLAUDE_ACCOUNT_NAMES.map((name) => ({ id: `a-${name.toLowerCase()}`, agent: "claude", name, config_dir: `/Users/dev/.claude-${name.toLowerCase()}` })),
+    quotas: MANY_CLAUDE_ACCOUNT_NAMES.map((name, index) =>
+      quotaOf("claude", `a-${name.toLowerCase()}`, index % 3 === 0 ? "max" : "pro", [
+        quotaWindow("session", (index * 23 + 11) % 100, 30 + index * 31),
+        quotaWindow("weekly", (index * 37 + 8) % 100, (index + 1) * 24 * 60 + 90),
+      ], { fetched_at: minutesAgo(1 + index * 2) })),
+  };
 }

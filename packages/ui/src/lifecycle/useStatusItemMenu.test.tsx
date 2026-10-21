@@ -166,3 +166,54 @@ it("shows each submenu's current-console default account and follows console swi
   expect(rows().map((row) => row.quota_remaining)).toEqual([undefined, undefined]);
   expect(rows().map((row) => row.quota_weekly_remaining)).toEqual([undefined, undefined]);
 });
+
+it("pushes the menu again when a held window's reset time passes, drawing it full", async () => {
+  vi.useFakeTimers();
+  onTestFinished(() => void vi.useRealTimers());
+  const start = Date.UTC(2026, 9, 19, 12);
+  vi.setSystemTime(start);
+  const setMenu = vi.fn<StatusItemCapability["setMenu"]>(() => Promise.resolve());
+  const statusItem: StatusItemCapability = { setMenu, onSessionChosen: () => () => {}, onOpened: () => () => {} };
+  const session = sessionOf("s", "console", undefined, "S", "idle", { agent: "codex" });
+  const reading: AccountQuota = {
+    agent: "codex", account: null, fetched_at: start - 30_000, plan: null, unavailable: null,
+    windows: [{ kind: "session", label: null, used_percent: 100, resets_at: start + 10_000, window_minutes: 300 }],
+  };
+  mount(statusItem, vi.fn(), {
+    sessions: new Map([[session.id, session]]),
+    agentAvailability: new Map([["codex", { agent: "codex", availability: "available" }]]),
+    accountQuotas: [reading],
+  });
+  await act(async () => {});
+  expect(setMenu).toHaveBeenCalledTimes(1);
+  await act(async () => void vi.advanceTimersByTime(9_000));
+  expect(setMenu).toHaveBeenCalledTimes(1);
+  await act(async () => void vi.advanceTimersByTime(1_000));
+  expect(setMenu).toHaveBeenCalledTimes(2);
+  expect(JSON.stringify(setMenu.mock.lastCall![0])).toContain("100% remaining");
+});
+
+it("pushes the menu again at each whole minute of a reading's age, so the age in its header stays current", async () => {
+  vi.useFakeTimers();
+  onTestFinished(() => void vi.useRealTimers());
+  const start = Date.UTC(2026, 9, 19, 12);
+  vi.setSystemTime(start);
+  const setMenu = vi.fn<StatusItemCapability["setMenu"]>(() => Promise.resolve());
+  const statusItem: StatusItemCapability = { setMenu, onSessionChosen: () => () => {}, onOpened: () => () => {} };
+  const reading: AccountQuota = {
+    agent: "codex", account: null, fetched_at: start - 30_000, plan: null, unavailable: null,
+    windows: [{ kind: "session", label: null, used_percent: 10, resets_at: null, window_minutes: 300 }],
+  };
+  mount(statusItem, vi.fn(), {
+    agentAvailability: new Map([["codex", { agent: "codex", availability: "available" }]]),
+    accountQuotas: [reading],
+  });
+  await act(async () => {});
+  expect(setMenu).toHaveBeenCalledTimes(1);
+  await act(async () => void vi.advanceTimersByTime(30_000));
+  expect(setMenu).toHaveBeenCalledTimes(2);
+  expect(JSON.stringify(setMenu.mock.lastCall![0])).toContain("updated 1 minute ago");
+  await act(async () => void vi.advanceTimersByTime(60_000));
+  expect(setMenu).toHaveBeenCalledTimes(3);
+  expect(JSON.stringify(setMenu.mock.lastCall![0])).toContain("updated 2 minutes ago");
+});

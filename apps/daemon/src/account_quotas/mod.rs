@@ -8,8 +8,10 @@
 //! poller started with the daemon keeps them fresh, and `refresh_account_quotas` runs the same
 //! path on request. Both read an account whose last attempt is older than [`POLL_INTERVAL`],
 //! stretched for an account that keeps failing, so a client that asks on every open costs next
-//! to nothing; a request also reads some accounts sooner, as set out below. A reading that fails
-//! over one that had windows keeps those windows, with the reason set beside them.
+//! to nothing; a request also reads some accounts sooner, as set out below. An account is also
+//! read once a window it holds has reset since its last attempt, a short grace ([`RESET_GRACE`])
+//! later, so a window that rolled over is not shown as used up until the next interval. A reading
+//! that fails over one that had windows keeps those windows, with the reason set beside them.
 //!
 //! An account whose configuration directory is missing or that is not signed in is a state of the
 //! account, not a failure: it is reported as its own [`QuotaUnavailable`] code, drops the windows
@@ -51,6 +53,11 @@ const POLL_INTERVAL: Duration = Duration::from_secs(5 * 60);
 /// start its CLI.
 const MIN_REREAD_INTERVAL: Duration = Duration::from_secs(30);
 
+/// How long after a held window's reset time the account is read again. The service is given a
+/// moment to roll the window over, so that the reading taken shows the new window and not the old
+/// one.
+const RESET_GRACE: Duration = Duration::from_secs(30);
+
 /// How often the poller looks for accounts that are due. Much shorter than [`POLL_INTERVAL`] so
 /// that an account created, or an agent found available, after the poller's start is read within
 /// moments rather than after a whole interval; only a due account costs a subprocess.
@@ -88,6 +95,10 @@ impl Key {
 struct Entry {
     quota: AccountQuota,
     attempted: Instant,
+    /// The wall-clock time the last attempt began, in milliseconds since the epoch, to tell whether
+    /// a window reset since. It is not the reading's `fetched_at`, which a failed attempt leaves as
+    /// it was.
+    attempted_at: i64,
     /// Consecutive attempts that failed to read the account.
     failures: u32,
     /// Read again at the next refresh whatever the wait: set by [`AccountQuotas::make_due`].
@@ -127,6 +138,10 @@ impl Inner {
 struct Claim {
     key: Key,
     token: u64,
+    /// The wall-clock time the attempt began, in milliseconds since the epoch: taken at the start
+    /// rather than when the reading finishes, so a reset that lands while the CLI is answering still
+    /// counts as after the attempt.
+    started_at: i64,
     inner: Arc<Mutex<Inner>>,
 }
 
@@ -225,29 +240,43 @@ impl AccountQuotas {
         }
     }
 
-    fn claim_locked(&self, inner: &mut Inner, key: Key) -> Claim {
+    fn claim_locked(&self, inner: &mut Inner, key: Key, wall: i64) -> Claim {
         inner.next_token += 1;
         inner.in_flight.insert(key.clone(), inner.next_token);
         Claim {
             key,
             token: inner.next_token,
+            started_at: wall,
             inner: self.inner.clone(),
         }
     }
 
     /// A claim on each of `selected` that is due at `now` and not already running. Due is: never
-    /// read, made due by [`AccountQuotas::make_due`], or last attempted longer ago than
-    /// [`wait_after`] its consecutive failures.
+    /// read, made due by [`AccountQuotas::make_due`], last attempted longer ago than
+    /// [`wait_after`] its consecutive failures, or holding a window that reset since its last
+    /// attempt (see [`reset_since_attempt`]).
     #[cfg(test)]
     fn claim_due(&self, selected: Vec<Key>, now: Instant) -> Vec<Claim> {
-        self.claim_due_locked(&mut self.lock(), selected, now, Trigger::Poll)
+        self.claim_due_at(selected, now, now_millis())
+    }
+
+    /// [`AccountQuotas::claim_due`] with `wall` as the wall-clock time in milliseconds.
+    #[cfg(test)]
+    fn claim_due_at(&self, selected: Vec<Key>, now: Instant, wall: i64) -> Vec<Claim> {
+        self.claim_due_locked(&mut self.lock(), selected, now, wall, Trigger::Poll)
     }
 
     /// [`AccountQuotas::claim_due`] as a client's request would, which also claims an account
     /// holding no windows because it is not signed in or has no quota to report once [`MIN_REREAD_INTERVAL`] has passed.
     #[cfg(test)]
     fn claim_requested(&self, selected: Vec<Key>, now: Instant) -> Vec<Claim> {
-        self.claim_due_locked(&mut self.lock(), selected, now, Trigger::Request)
+        self.claim_due_locked(
+            &mut self.lock(),
+            selected,
+            now,
+            now_millis(),
+            Trigger::Request,
+        )
     }
 
     fn claim_due_locked(
@@ -255,6 +284,7 @@ impl AccountQuotas {
         inner: &mut Inner,
         selected: Vec<Key>,
         now: Instant,
+        wall: i64,
         trigger: Trigger,
     ) -> Vec<Claim> {
         let mut claims = Vec::new();
@@ -266,12 +296,13 @@ impl AccountQuotas {
                 let since = now.saturating_duration_since(entry.attempted);
                 entry.due
                     || since >= wait_after(entry.failures)
+                    || reset_since_attempt(entry, wall)
                     || (trigger == Trigger::Request
                         && since >= MIN_REREAD_INTERVAL
                         && may_have_signed_in_since(&entry.quota))
             });
             if is_due {
-                claims.push(self.claim_locked(inner, key));
+                claims.push(self.claim_locked(inner, key, wall));
             }
         }
         claims
@@ -310,6 +341,7 @@ impl AccountQuotas {
                 Entry {
                     quota,
                     attempted: Instant::now(),
+                    attempted_at: claim.started_at,
                     failures,
                     due: false,
                 },
@@ -323,7 +355,7 @@ impl AccountQuotas {
     fn recorded(&self, state: &AppState, key: Key, quota: AccountQuota) {
         let claim = {
             let mut inner = self.lock();
-            self.claim_locked(&mut inner, key)
+            self.claim_locked(&mut inner, key, now_millis())
         };
         self.finish(state, claim, quota);
     }
@@ -348,6 +380,7 @@ impl AccountQuotas {
             Entry {
                 quota: quota.clone(),
                 attempted: Instant::now(),
+                attempted_at: now_millis(),
                 failures: 0,
                 due: false,
             },
@@ -391,7 +424,7 @@ impl AccountQuotas {
                     .is_none_or(|account| key.account.as_ref() == Some(account))
             })
             .collect();
-        Ok(self.claim_due_locked(&mut inner, selected, now, trigger))
+        Ok(self.claim_due_locked(&mut inner, selected, now, now_millis(), trigger))
     }
 
     /// Makes the account's reading due and drops any probe running for it, so that the next
@@ -580,6 +613,19 @@ fn retain_locked(inner: &mut Inner, wanted: &[Key]) -> bool {
 /// How long after an attempt an account is read again, given how many in a row ended unavailable.
 fn wait_after(failures: u32) -> Duration {
     POLL_INTERVAL * 2u32.pow(failures.min(MAX_BACKOFF_DOUBLINGS))
+}
+
+/// Whether a window held for the entry's account reset after its last attempt, at least
+/// [`RESET_GRACE`] before `wall` (wall-clock milliseconds). Windows kept out of date after a
+/// failure count, as they are still held. A read that happens moves the attempt past the
+/// reset, so it does not fire again.
+fn reset_since_attempt(entry: &Entry, wall: i64) -> bool {
+    let settled = wall.saturating_sub(RESET_GRACE.as_millis() as i64);
+    entry.quota.windows.iter().any(|window| {
+        window
+            .resets_at
+            .is_some_and(|at| at > entry.attempted_at && at <= settled)
+    })
 }
 
 /// What started a refresh.
@@ -774,6 +820,52 @@ mod tests {
         assert_eq!(wait_after(1), POLL_INTERVAL * 2);
         assert_eq!(wait_after(3), POLL_INTERVAL * 8);
         assert_eq!(wait_after(40), POLL_INTERVAL * 8);
+    }
+
+    #[test]
+    fn an_account_is_due_once_a_held_window_has_reset_and_the_grace_has_passed() {
+        let (state, _dir) = crate::test_support::app_state("quota-reset");
+        let quotas = &state.account_quotas;
+        let key = key(Agent::Codex, Some("a"));
+        let mut held = quota_of(&key, false);
+        held.windows = vec![window(QuotaWindowKind::Session, 100.0, Some(NOW))];
+        quotas.recorded(&state, key.clone(), held);
+        let set_attempt = |at: i64| {
+            quotas.lock().entries.get_mut(&key).unwrap().attempted_at = at;
+        };
+        let grace = RESET_GRACE.as_millis() as i64;
+        let now = Instant::now();
+        let due = |wall: i64| quotas.claim_due_at(vec![key.clone()], now, wall).len();
+
+        set_attempt(NOW - 1_000);
+        assert_eq!(due(NOW + grace - 1), 0);
+        assert_eq!(due(NOW + grace), 1);
+
+        // A reset that came before the last attempt was already seen by it.
+        set_attempt(NOW + 1);
+        assert_eq!(due(NOW + grace + 1), 0);
+    }
+
+    #[test]
+    fn a_failed_re_read_after_a_reset_falls_back_to_the_ordinary_wait() {
+        let (state, _dir) = crate::test_support::app_state("quota-reset-failed");
+        let quotas = &state.account_quotas;
+        let key = key(Agent::Codex, Some("a"));
+        let mut held = quota_of(&key, false);
+        held.windows = vec![window(
+            QuotaWindowKind::Session,
+            100.0,
+            Some(now_millis() - 60_000),
+        )];
+        quotas.recorded(&state, key.clone(), held);
+        quotas.lock().entries.get_mut(&key).unwrap().attempted_at = now_millis() - 120_000;
+        let claims = quotas.claim_due(vec![key.clone()], Instant::now());
+        assert_eq!(claims.len(), 1);
+
+        // The re-read fails, keeping the old windows: it began after the reset, so no refire.
+        drop(claims);
+        quotas.recorded(&state, key.clone(), quota_of(&key, true));
+        assert!(quotas.claim_due(vec![key], Instant::now()).is_empty());
     }
 
     fn key(agent: Agent, account: Option<&str>) -> Key {
@@ -1320,6 +1412,7 @@ mod tests {
             Entry {
                 quota,
                 attempted: Instant::now(),
+                attempted_at: NOW,
                 failures: 0,
                 due: false,
             },

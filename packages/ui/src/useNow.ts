@@ -40,7 +40,8 @@ function getSnapshot(): number {
 /** The current time in milliseconds, re-read every 30 s while a component uses it. Passing it to
  * `formatRelativeTime` as `now` keeps that text moving: a call that reads `Date.now()` itself is
  * cached by the React Compiler on its other inputs and would never advance. One interval serves
- * every user and runs only while there is one. */
+ * every user and runs only while there is one, so a component mounted for the window's whole life
+ * keeps it running for good; such a component arms its own timer for the next moment it needs. */
 export function useNow(): number {
   return useSyncExternalStore(subscribe, getSnapshot);
 }

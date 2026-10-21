@@ -5,7 +5,7 @@ import { codedMessageNode } from "../components/DaemonErrorMessage";
 import { daemonMessage } from "../daemonMessage";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { QuotaUnavailable } from "../protocol";
-import { formatRelativeTime } from "../relativeTime";
+import { formatRelativeTime, isJustNow } from "../relativeTime";
 import { useNow } from "../useNow";
 import { QuotaMeter, QuotaMeterPair } from "./QuotaMeter";
 import { isLoggedIn, isNotLoggedIn, orderedQuotaWindows, planLabel, twoLayerWindows } from "./quotaFormat";
@@ -41,9 +41,24 @@ function LoginStateBadge({ quota }: { quota: QuotaReading }): React.ReactElement
   );
 }
 
+/** When a current reading with windows was taken ("Updated 3 minutes ago"); nothing otherwise, since the
+ * out-of-date line beneath already says when an account was last read. */
+export function QuotaUpdated({ quota }: { quota: QuotaReading }): React.ReactElement | null {
+  const t = useT();
+  const language = useCurrentLanguage();
+  const now = useNow();
+  if (typeof quota !== "object" || quota.unavailable || quota.windows.length === 0) return null;
+  return (
+    <span className="ms-auto shrink-0 text-xs font-normal text-app-muted">
+      {isJustNow(quota.fetched_at, now) ? t("quota.updatedNow") : t("quota.updated", { age: formatRelativeTime(language, quota.fetched_at, now) })}
+    </span>
+  );
+}
+
 /** The line naming an account: its `name`, its plan chip when the agent names one, with `showLoginState` a badge
- * for an account known to be logged in or not, and a `help` tip that ends the line. */
-export function AccountNameLine({ name, quota, help, showLoginState = false, children }: { children?: React.ReactNode; name: React.ReactNode; quota: QuotaReading; help?: React.ReactNode; showLoginState?: boolean }): React.ReactElement {
+ * for an account known to be logged in or not, a `help` tip, and at its end, unless `showUpdated` is off for a
+ * surface that places it elsewhere, when a current reading was taken. */
+export function AccountNameLine({ name, quota, help, showLoginState = false, showUpdated = true, children }: { children?: React.ReactNode; name: React.ReactNode; quota: QuotaReading; help?: React.ReactNode; showLoginState?: boolean; showUpdated?: boolean }): React.ReactElement {
   return (
     <div className="flex items-center gap-2 text-sm font-medium">
       <div className="min-w-0">{name}</div>
@@ -51,6 +66,7 @@ export function AccountNameLine({ name, quota, help, showLoginState = false, chi
       {showLoginState && <LoginStateBadge quota={quota} />}
       {children}
       {help}
+      {showUpdated && <QuotaUpdated quota={quota} />}
     </div>
   );
 }
@@ -63,6 +79,8 @@ export function AccountNameLine({ name, quota, help, showLoginState = false, chi
  * - an entry with no windows: the reason it is unavailable;
  * - windows and a failure: the last good readings stay, marked as out of date with when they were
  *   taken and why the newer attempt failed.
+ *
+ * When a current reading was taken is shown beside the account's name (`QuotaUpdated`), not here.
  *
  * The 5-hour and weekly windows share one two-layer meter. */
 export function AccountQuotaSummary({ quota, single }: {
@@ -91,11 +109,12 @@ export function AccountQuotaSummary({ quota, single }: {
   // An account with a 5-hour window shows it with the weekly window as one two-layer meter; the
   // other windows (a model's weekly limit) keep a meter of their own.
   const layers = twoLayerWindows(windows);
+  const age = formatRelativeTime(language, quota.fetched_at, now);
   return (
     <div className="flex flex-col gap-3">
       {unavailable && (
         <div className="text-sm text-app-muted">
-          <div className="font-medium">{t("quota.stale", { age: formatRelativeTime(language, quota.fetched_at, now) })}</div>
+          <div className="font-medium">{t("quota.stale", { age })}</div>
           <div><QuotaFailure unavailable={unavailable} /></div>
         </div>
       )}

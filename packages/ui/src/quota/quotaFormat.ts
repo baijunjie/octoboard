@@ -36,8 +36,14 @@ export function isNotLoggedIn(unavailable: QuotaUnavailable | null): unavailable
 /** How much of `window` is left, as a whole percent from 0 to 100. The daemon passes a used
  * percentage above 100 on as the agent gives it, and one below 0 is as unlikely, so both are
  * clamped rather than shown as a negative or an excess. */
-export function remainingPercent(window: QuotaWindow): number {
+function remainingPercent(window: QuotaWindow): number {
   return Math.min(100, Math.max(0, Math.round(100 - window.used_percent)));
+}
+
+/** `remainingPercent` as of `now`: a window whose reset time has passed is drawn full (100) until the next
+ * reading lands, treating the passed reset as `exhaustedQuotaWindow` does. */
+export function remainingPercentAt(window: QuotaWindow, now: number): number {
+  return window.resets_at != null && window.resets_at <= now ? 100 : remainingPercent(window);
 }
 
 /** The window's name: "5-hour", "Weekly", "<Model> weekly". A credit pool is named for the length
@@ -60,8 +66,8 @@ export function quotaWindowLabel(t: Translate, window: QuotaWindow): string {
 }
 
 /** The window's headline: "5-hour 82% remaining". */
-export function quotaHeadline(t: Translate, window: QuotaWindow): string {
-  return t("quota.remaining", { window: quotaWindowLabel(t, window), percent: remainingPercent(window) });
+export function quotaHeadline(t: Translate, window: QuotaWindow, now: number): string {
+  return t("quota.remaining", { window: quotaWindowLabel(t, window), percent: remainingPercentAt(window, now) });
 }
 
 /** The time left until `resetsAt` as "2d 3h", "1h 57m" or "12m", rounded up to the minute so a
@@ -197,7 +203,7 @@ export function usageBarWindows(windows: readonly QuotaWindow[]): QuotaBar | und
 }
 
 /** What a compact usage bar shows, in words: "5-hour 82% remaining, Weekly 40% remaining". */
-export function usageBarSummary(t: Translate, bar: QuotaBar): string {
-  const main = quotaHeadline(t, bar.main);
-  return bar.thin ? t("quota.usageSummary", { main, thin: quotaHeadline(t, bar.thin) }) : main;
+export function usageBarSummary(t: Translate, bar: QuotaBar, now: number): string {
+  const main = quotaHeadline(t, bar.main, now);
+  return bar.thin ? t("quota.usageSummary", { main, thin: quotaHeadline(t, bar.thin, now) }) : main;
 }

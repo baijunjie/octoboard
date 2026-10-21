@@ -5,16 +5,16 @@ import { Message, useT } from "../i18n/react";
 import type { Agent, QuotaWindow } from "../protocol";
 import { useNow } from "../useNow";
 import { QuotaWindowName } from "./quotaCopy";
-import { quotaResetsIn, quotaWindowLabel, remainingPercent } from "./quotaFormat";
+import { quotaResetsIn, quotaWindowLabel, remainingPercentAt } from "./quotaFormat";
 
 /** The line above or beneath a quota bar: the window's headline ("5-hour 82% remaining") with the
  * countdown to its reset ("resets in 1h 57m") at its end. It is hidden from assistive technology,
  * since the bar carries the same facts as its name and value. */
-function QuotaHeadline({ window, resets }: { window: QuotaWindow; resets: string | null }): React.ReactElement {
+function QuotaHeadline({ window, resets, percent }: { window: QuotaWindow; resets: string | null; percent: number }): React.ReactElement {
   const t = useT();
   return (
     <div aria-hidden="true" className="flex items-baseline justify-between gap-x-3 text-sm">
-      <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{<Message id="quota.remaining" params={{ window: <QuotaWindowName window={window} t={t} />, percent: remainingPercent(window) }} />}</span>
+      <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{<Message id="quota.remaining" params={{ window: <QuotaWindowName window={window} t={t} />, percent }} />}</span>
       {resets && <span className="shrink-0 text-app-muted">{resets}</span>}
     </div>
   );
@@ -22,15 +22,15 @@ function QuotaHeadline({ window, resets }: { window: QuotaWindow; resets: string
 
 /** The bar of what remains of a window, in the agent's colour, named by the window and valued by the
  * remaining percent and the countdown. `thin` is the slim bar of a window that sits beneath another. */
-function QuotaBar({ agent, window, resets, thin, className }: {
+function QuotaBar({ agent, window, resets, percent, thin, className }: {
   agent: Agent;
   window: QuotaWindow;
   resets: string | null;
+  percent: number;
   thin?: boolean;
   className: string;
 }): React.ReactElement {
   const t = useT();
-  const percent = remainingPercent(window);
   return (
     <Meter
       aria-label={quotaWindowLabel(t, window)}
@@ -53,10 +53,11 @@ export function QuotaMeter({ agent, window }: { agent: Agent; window: QuotaWindo
   const t = useT();
   const now = useNow();
   const resets = quotaResetsIn(t, window, now);
+  const percent = remainingPercentAt(window, now);
   return (
     <div className="min-w-0">
-      <QuotaHeadline window={window} resets={resets} />
-      <QuotaBar agent={agent} window={window} resets={resets} className="mt-1.5" />
+      <QuotaHeadline window={window} resets={resets} percent={percent} />
+      <QuotaBar agent={agent} window={window} resets={resets} percent={percent} className="mt-1.5" />
     </div>
   );
 }
@@ -69,13 +70,15 @@ export function QuotaMeterPair({ agent, session, weekly }: { agent: Agent; sessi
   const now = useNow();
   const sessionResets = quotaResetsIn(t, session, now);
   const weeklyResets = quotaResetsIn(t, weekly, now);
+  const sessionPercent = remainingPercentAt(session, now);
+  const weeklyPercent = remainingPercentAt(weekly, now);
   return (
     <div className="min-w-0">
-      <QuotaHeadline window={session} resets={sessionResets} />
-      <QuotaBar agent={agent} window={session} resets={sessionResets} className="mt-1.5" />
-      <QuotaBar agent={agent} window={weekly} resets={weeklyResets} thin className="mt-1" />
+      <QuotaHeadline window={session} resets={sessionResets} percent={sessionPercent} />
+      <QuotaBar agent={agent} window={session} resets={sessionResets} percent={sessionPercent} className="mt-1.5" />
+      <QuotaBar agent={agent} window={weekly} resets={weeklyResets} percent={weeklyPercent} thin className="mt-1" />
       <div className="mt-1 text-app-muted">
-        <QuotaHeadline window={weekly} resets={weeklyResets} />
+        <QuotaHeadline window={weekly} resets={weeklyResets} percent={weeklyPercent} />
       </div>
     </div>
   );

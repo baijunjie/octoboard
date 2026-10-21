@@ -7,7 +7,7 @@ import { isolate } from "../i18n/isolate";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import type { AccountQuota, QuotaWindow } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
-import { AccountQuotaSummary, QuotaPlan } from "./AccountQuotaSummary";
+import { AccountNameLine, AccountQuotaSummary, QuotaPlan } from "./AccountQuotaSummary";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -114,10 +114,18 @@ it("sets the binary and its path variable apart as code in a missing-binary fail
   expect(Array.from(container.querySelectorAll("code"), (code) => code.textContent)).toEqual(["claude", "PATH"]);
 });
 
+it("ends the account's name line with when a current reading was taken, just now within a minute", () => {
+  expect(mount(<AccountNameLine name="Work" quota={quota()} />).textContent).toBe("WorkMaxUpdated 5 minutes ago");
+  expect(mount(<AccountNameLine name="Work" quota={quota({ fetched_at: NOW - 10_000 })} />).textContent).toBe("WorkMaxUpdated just now");
+  expect(mount(<AccountQuotaSummary quota={quota()} />).textContent).not.toContain("Updated");
+});
+
 it("keeps the last good windows as out of date, with when they were read and why the newer read failed", () => {
   const unavailable = { code: "quota_command_failed", params: { agent: "Claude Code", detail: "exit 1" }, message: "failed" };
   const container = mount(<AccountQuotaSummary quota={quota({ unavailable })} />);
   expect(container.textContent).toContain("Out of date: last read 5 minutes ago");
+  // The out-of-date line says when it was read, so the name line does not say it again.
+  expect(mount(<AccountNameLine name="Work" quota={quota({ unavailable })} />).textContent).not.toContain("Updated");
   const summary = Array.from(container.querySelectorAll("span")).find((node) => node.textContent === "Claude Code could not report its quota.")!;
   expect(summary).toBeDefined();
   const agent = summary.querySelector("[data-inline-chip]")!;

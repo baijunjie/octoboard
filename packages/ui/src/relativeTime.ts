@@ -11,6 +11,12 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
 
 const formats = new Map<Language, Intl.RelativeTimeFormat>();
 
+/** Whether `at` is under a minute before `now`, which `formatRelativeTime` words as "now": the caller says
+ * "just now" where its sentence cannot take the bare "now". */
+export function isJustNow(at: number, now: number): boolean {
+  return now - at < UNITS[UNITS.length - 1]![1];
+}
+
 /** "5 minutes ago" for a past instant in milliseconds, in `language`; under a minute is "now". `now`
  * is taken from the caller rather than the clock so that a component passes a value it renders on
  * (`useNow`): a call reading the clock itself is cached on its other inputs and never advances. */

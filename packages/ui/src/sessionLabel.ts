@@ -1,5 +1,6 @@
 import { AGENT_LABEL, defaultAccountName } from "./agents";
 import type { MessageKey, Translate } from "./i18n/catalog";
+import { displayColumns, ellipsize } from "./i18n/displayColumns";
 import { isolate } from "./i18n/isolate";
 import { joinPhrases } from "./i18n/joinPhrases";
 import type { Language } from "./i18n/languages";
@@ -43,20 +44,33 @@ export function sessionLocation(
   return owner ? t("session.location.consoleSession", { console: isolate(owner.name) }) : t("session.location.ownConsoleSession");
 }
 
+/** The longest the location may be, in columns, within a line capped by `sessionWithLocation`'s `maxColumns`. */
+const MAX_LOCATION_COLUMNS = 24;
+/** The least the title keeps, in columns, whatever the location and the separator take. */
+const MIN_TITLE_COLUMNS = 8;
+
 /** A session's title with where it is, for a line naming it outside the sidebar. A session titled
- * after its project would name it twice, so it reads as the title alone. */
+ * after its project would name it twice, so it reads as the title alone. With `maxColumns` the line is
+ * kept to about that many display columns (`displayColumns`), the title giving way before the location
+ * does, for a menu that the system would otherwise cut in the middle. */
 export function sessionWithLocation(
   t: Translate,
   session: Session,
   consoles: Map<string, Console>,
   projects: Map<string, Project>,
+  maxColumns?: number,
 ): string {
   // Compared before either is isolated: the marks would only get in the way of the comparison.
   const project = session.project_id ? projects.get(session.project_id) : undefined;
   const title = sessionDisplayTitle(t, session);
-  if (project?.name === session.title) return title;
+  if (project?.name === session.title) return maxColumns === undefined ? title : ellipsize(title, maxColumns);
   const location = sessionLocation(t, session, consoles, projects);
-  return t("session.withLocation", { session: isolate(title), location });
+  if (maxColumns === undefined) return t("session.withLocation", { session: isolate(title), location });
+  const shortLocation = ellipsize(location, MAX_LOCATION_COLUMNS);
+  // What the language puts between the two (" — ", "，"), measured by leaving both out.
+  const separator = displayColumns(t("session.withLocation", { session: "", location: "" }));
+  const room = Math.max(MIN_TITLE_COLUMNS, maxColumns - displayColumns(shortLocation) - separator);
+  return t("session.withLocation", { session: isolate(ellipsize(title, room)), location: shortLocation });
 }
 
 /** What a status glyph and label stand for: the wire statuses, and *working in background*, which

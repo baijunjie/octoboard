@@ -16,8 +16,8 @@ export function accountUsage(
   exhaustedBy: QuotaWindow | undefined,
   now: number,
 ): { icon: React.ReactElement } & ({ detail?: undefined; reason?: undefined } | { detail: string; reason?: Reason }) {
-  const icon = <AccountUsageBar agent={agent} quota={quota} />;
+  const icon = <AccountUsageBar agent={agent} quota={quota} now={now} />;
   if (exhaustedBy) return { icon, detail: quotaUsedUpDetail(t, exhaustedBy, now), reason: quotaUsedUpShort(t, exhaustedBy, now) };
   const bar = quota && !quota.unavailable ? usageBarWindows(quota.windows) : undefined;
-  return bar ? { icon, detail: usageBarSummary(t, bar) } : { icon };
+  return bar ? { icon, detail: usageBarSummary(t, bar, now) } : { icon };
 }

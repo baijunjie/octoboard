@@ -1,7 +1,7 @@
 import React from "react";
 
 import type { AccountQuota, Agent } from "../protocol";
-import { remainingPercent, usageBarWindows } from "./quotaFormat";
+import { remainingPercentAt, usageBarWindows } from "./quotaFormat";
 
 /** A bar of what remains of a window, in the agent's colour (the fill reads `--meter-fill`, which the
  * `quota-meter--<agent>` class sets). Plain spans rather than HeroUI's `Meter` or `ProgressBar`: the bar
@@ -25,12 +25,12 @@ function Track({ percent, thin }: { percent?: number; thin?: boolean }): React.R
  * account with nothing to draw (no reading yet, or one out of date, as on the rail) shows one empty
  * track, so names line up. It is decorative: the list's option states the same numbers in words
  * (`usageBarSummary`). */
-export function AccountUsageBar({ agent, quota }: { agent: Agent; quota: AccountQuota | undefined }): React.ReactElement {
+export function AccountUsageBar({ agent, quota, now }: { agent: Agent; quota: AccountQuota | undefined; now: number }): React.ReactElement {
   const bar = quota && !quota.unavailable ? usageBarWindows(quota.windows) : undefined;
   return (
     <span aria-hidden="true" className={`flex w-8 shrink-0 flex-col gap-0.5 quota-meter--${agent}`}>
-      <Track percent={bar && remainingPercent(bar.main)} />
-      {bar?.thin && <Track thin percent={remainingPercent(bar.thin)} />}
+      <Track percent={bar && remainingPercentAt(bar.main, now)} />
+      {bar?.thin && <Track thin percent={remainingPercentAt(bar.thin, now)} />}
     </span>
   );
 }
