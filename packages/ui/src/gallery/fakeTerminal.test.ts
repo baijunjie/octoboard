@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
-import { brokenUrlsAt, type TerminalRow } from "../terminal/terminalLinks";
+import { brokenUrlsAt, linkSegmentsIn, type TerminalRow } from "../terminal/terminalLinks";
 import { installFakeTerminal, isWide, terminalFixtureUrl } from "./fakeTerminal";
 
 const original = window.WebSocket;
@@ -38,12 +38,25 @@ it("preserves the gallery's default terminal output", async () => {
   socket.close();
 });
 
-/** The sample's rows as `brokenUrlsAt` reads them, after `clear` and the colour codes are stripped. */
-function rowsOf(output: string, clear = ""): { lines: string[]; rows: TerminalRow[] } {
+/** The sample's rows as `brokenUrlsAt` reads them, after `clear` and the colour codes are stripped.
+ * `cols` pads each row out to the terminal's width, which is what a real buffer does with the cells
+ * after a piece that stops short. */
+function rowsOf(output: string, clear = "", cols?: number): { lines: string[]; rows: TerminalRow[] } {
   // eslint-disable-next-line no-control-regex -- strips the sample's ANSI SGR colour codes.
   const lines = output.slice(clear.length).replace(/\x1b\[[0-9;]*m/g, "").split("\r\n");
-  const rows = lines.map((line) => ({ cells: [...line].flatMap((ch) => (isWide(ch) ? [ch, ""] : [ch])), wrapped: false }));
+  const rows = lines.map((line) => {
+    const cells = [...line].flatMap((ch) => (isWide(ch) ? [ch, ""] : [ch]));
+    if (cols !== undefined && cells.length < cols) cells.push(...Array<string>(cols - cells.length).fill(" "));
+    return { cells, wrapped: false as const };
+  });
   return { lines, rows };
+}
+
+/** The column after the row's last text. A blank cell, and the empty half of a wide character, is not text. */
+function textEnd(cells: string[]): number {
+  let end = cells.length;
+  while (end > 0 && (cells[end - 1] === " " || cells[end - 1] === "")) end--;
+  return end;
 }
 
 const CLEAR = "\x1b[H\x1b[2J\x1b[3J";
@@ -65,6 +78,46 @@ it("lays the program-broken address out against the reported width", async () =>
   expect(url.url).toMatch(/&lang=zh-Hans$/);
   expect(url.url.split("trace=")[0]).toBe("http://localhost:5175/gallery-frame.html?scenario=terminal-broken-url-hover&");
   socket.close();
+});
+
+it("joins an address the program broke short of the last column", async () => {
+  const tail = "account&theme=light&lang=zh-Hans";
+  const whole = `http://localhost:5219/gallery-frame.html?scenario=dialog-new-session-auto-select-${tail}`;
+  vi.useFakeTimers();
+  for (const cols of [40, 56, 72, 100]) {
+    installFakeTerminal();
+    const socket = new WebSocket(terminalFixtureUrl("output", "gallery-session"));
+    let output = "";
+    socket.addEventListener("open", () => socket.send(JSON.stringify({ type: "resize", cols, rows: 24 })));
+    socket.addEventListener("message", (event) => { output = new TextDecoder().decode(event.data); });
+    await vi.runAllTimersAsync();
+    socket.close();
+    const { lines, rows } = rowsOf(output, "", cols);
+    const first = lines.findIndex((line) => line.startsWith("http://localhost:5219/"));
+    const tailRow = lines.findIndex((line) => line.includes("account&theme=light"));
+    expect(first).toBeGreaterThanOrEqual(0);
+    expect(tailRow).toBeGreaterThan(first);
+    // Blank cells stay after the first piece, and no piece runs past the row.
+    expect(textEnd(rows[first].cells)).toBeLessThanOrEqual(cols - 12);
+    expect(textEnd(rows[first].cells)).toBeGreaterThan("http://".length);
+    for (let y = first; y <= tailRow; y++) expect(textEnd(rows[y].cells)).toBeLessThanOrEqual(cols);
+    const [url] = brokenUrlsAt((y) => rows[y - 1], first + 1);
+    expect(url.url).toBe(whole);
+    expect(url.range.start.y).toBe(first + 1);
+    expect(url.range.end.y).toBe(tailRow + 1);
+    const segments = linkSegmentsIn((y) => rows[y - 1], first + 1, tailRow + 1);
+    const top = segments.find((segment) => segment.y === first + 1);
+    const marked = segments.find((segment) => segment.y === tailRow + 1);
+    expect(top).toEqual({ y: first + 1, col: 0, width: textEnd(rows[first].cells) });
+    expect(marked && marked.col + marked.width).toBe(textEnd(rows[tailRow].cells));
+    expect(marked && marked.col + marked.width).toBeLessThan(cols);
+    // The address that fills its row stays its own link, and is the earlier `lang=zh-Hans`.
+    const filled = lines.findIndex((line) => line.includes("展开状态"));
+    const [filledUrl] = brokenUrlsAt((y) => rows[y - 1], filled + 1);
+    expect(filledUrl.url.endsWith("&lang=zh-Hans")).toBe(true);
+    expect(filledUrl.range.end.y).toBeLessThan(first + 1);
+    expect(lines.findIndex((line) => line.includes("lang=zh-Hans"))).toBeLessThan(tailRow);
+  }
 });
 
 it("redraws at the new width when the terminal resizes after the output is on screen", async () => {

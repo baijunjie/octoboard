@@ -194,14 +194,22 @@ described under "Web addresses" and "File paths" below; the rest holds for both:
 - **An address the program itself breaks onto the next line is joined**: when the program ends a row partway through
   an address and carries on with it on the next row — as Claude Code does with a long line of text, usually after an
   indent — the pieces are one link, which covers the rows it spans and opens the whole address. This holds when the
-  first piece runs to the terminal's last column, the next row's first non-blank text is made of address characters,
-  and the next row is not just the terminal's own wrap of the first; the continuation runs to the first character that
-  ends an address, and goes on to a further row when it too reaches the last column. An address that happens to end
-  exactly at the last column takes along a word that starts the next row, as the two cannot be told apart. An address
-  that stops short of the last column, one followed by a blank or a non-address character on the next row, and one
-  broken inside a table's cells (a border character follows it) are cut at the end of the first row, and that part is
-  what opens. An address that runs onto the next row only because the terminal is too narrow for it is recognised
-  whole.
+  next row's first non-blank text is made of address characters, and that row is not just the terminal's own wrap of
+  the first. The continuation runs to the first character that ends an address. The pieces may span several rows;
+  joining stops after a piece followed by other text on its row.
+
+  - **A piece reaching the terminal's last column** takes along the next row's address characters, even when they
+    form a separate word: a finished address at that column and a broken one cannot be told apart.
+  - **A piece stopping short of the last column** must be the last text on its row. It joins unless the next row
+    starts a separate `http` or `https` address, or the piece ends with an ASCII letter or digit and the next row's
+    run of address characters consists entirely of ASCII letters and digits. Thus `…auto-select-` followed by
+    `account&theme=light&lang=zh-Hans` joins, while `http://a.dev/x` followed by `Hans` stays separate. A break
+    inside an ordinary word may therefore leave an address incomplete; conversely, separate text containing
+    address punctuation may be taken along.
+  - **A blank next row, or one whose first non-blank character cannot belong to an address**, ends the link. A
+    piece followed by a table border or other non-address text on its own row does not join onto a later row.
+
+  An address that runs onto the next row only because the terminal is too narrow for it is recognised whole.
 
 ### File paths
 

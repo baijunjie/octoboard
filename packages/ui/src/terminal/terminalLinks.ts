@@ -97,10 +97,9 @@ function indentOf(row: TerminalRow): number {
   return col;
 }
 
-/** The column an address starts at in the row and runs from to the last column, if any does. */
-function brokenStartCol(row: TerminalRow): number {
-  // A wide character's empty second cell is no character, so the text's indexes are mapped back
-  // to columns.
+/** Where each character of the row sits. A wide character's empty second cell is no character, so
+ * a match index in the text is the column the character stands in. */
+function textColumns(row: TerminalRow): { text: string; cols: number[] } {
   const cols: number[] = [];
   let text = "";
   row.cells.forEach((cell, col) => {
@@ -108,6 +107,12 @@ function brokenStartCol(row: TerminalRow): number {
     for (let i = 0; i < cell.length; i++) cols.push(col);
     text += cell;
   });
+  return { text, cols };
+}
+
+/** The column an address starts at in the row and runs from to the last column, if any does. */
+function brokenStartCol(row: TerminalRow): number {
+  const { text, cols } = textColumns(row);
   for (const match of text.matchAll(URL_START)) {
     const col = cols[match.index];
     if (urlRun(row.cells, col) === row.cells.length) return col;
@@ -115,16 +120,72 @@ function brokenStartCol(row: TerminalRow): number {
   return -1;
 }
 
+/** The first column after the row's last text. A blank cell, and the empty half of a wide
+ * character, is not text. */
+function textEnd(cells: string[]): number {
+  let end = cells.length;
+  while (end > 0 && (cells[end - 1] === " " || cells[end - 1] === "")) end--;
+  return end;
+}
+
+/** The column a scheme starts at when that address is the row's last text and stops short of the
+ * last column. One that fills the row is `brokenStartCol`'s. */
+function shortStartCol(row: TerminalRow): number {
+  const { text, cols } = textColumns(row);
+  const limit = textEnd(row.cells);
+  for (const match of text.matchAll(URL_START)) {
+    const col = cols[match.index];
+    const end = urlRun(row.cells, col);
+    if (end === limit && end < row.cells.length) return col;
+  }
+  return -1;
+}
+
+/** The address characters a later row might continue, when they are the row's last text and stop
+ * short of the last column: a scheme, or the tail of an address that a row above started. */
+function shortTail(row: TerminalRow): string[] | undefined {
+  const limit = textEnd(row.cells);
+  if (limit === 0 || limit === row.cells.length) return undefined;
+  const start = shortStartCol(row);
+  if (start >= 0) return row.cells.slice(start, limit);
+  const from = indentOf(row);
+  if (urlRun(row.cells, from) === limit) return row.cells.slice(from, limit);
+  return undefined;
+}
+
+const WORD_CHAR = /^[A-Za-z0-9]$/;
+const WORD_RUN = /^[A-Za-z0-9]+$/;
+
+/**
+ * Whether `row` carries on an address that ends on `above`.
+ *
+ * A piece that fills its row always does: a break on the last column cannot be told from a word
+ * that merely follows, so the word is taken along. A piece that stops short does only when it is
+ * the row's last text and the next row is not a separate word. A program often breaks at its own
+ * text width, short of the terminal's last column; a mark such as `-` or `&` shows the rows are
+ * one address (`…auto-select-` / `account&…`). A finished address and a word of letters or digits
+ * (`http://a.dev/x` / `Hans`) stay apart. A row xterm itself wrapped is the web-links addon's.
+ */
+function continuesAddress(above: TerminalRow, row: TerminalRow): boolean {
+  if (row.wrapped) return false;
+  const from = indentOf(row);
+  const end = urlRun(row.cells, from);
+  if (end === from) return false;
+  const filled = brokenStartCol(above) >= 0 || urlRun(above.cells, indentOf(above)) === above.cells.length;
+  if (filled) return true;
+  const tail = shortTail(above);
+  if (!tail) return false;
+  const continuation = row.cells.slice(from, end).join("");
+  if (continuation.search(URL_START) === 0) return false;
+  const prevEnd = tail[tail.length - 1] ?? "";
+  return !(WORD_CHAR.test(prevEnd) && WORD_RUN.test(continuation));
+}
+
 /**
  * Finds the addresses that the program itself broke across rows and that cover row `y` (1-based),
  * for `TERMINAL_URL_REGEX` and the terminal's soft wrap to leave in pieces. Claude Code wraps its
  * own text: it ends the row and, usually, indents the next one, so xterm sees two unrelated rows.
- *
- * An address is broken when it runs to the very last column — Claude Code fills the row to the
- * full width before breaking — and the next row, past any indent, goes on in address characters,
- * which chain onto yet another row for as long as they too reach the last column. A row that
- * xterm itself wrapped is left to the web-links addon. An address that merely ends at the last
- * column takes along the word that starts the next row; that cannot be told apart.
+ * Which row carries on which is `continuesAddress`.
  */
 export function brokenUrlsAt(rowAt: (y: number) => TerminalRow | undefined, y: number): BrokenUrl[] {
   const cache = new Map<number, TerminalRow | undefined>();
@@ -136,13 +197,9 @@ export function brokenUrlsAt(rowAt: (y: number) => TerminalRow | undefined, y: n
   for (let top = y; top >= 1; top--) {
     const url = brokenUrlFrom(read, top);
     if (url && url.range.end.y >= y) found.push(url);
-    // Only a row that carries on a row reaching the last column can be the later part of an
-    // address.
     const row = read(top);
     const above = read(top - 1);
-    if (!row || row.wrapped || !above) break;
-    const aboveReaches = brokenStartCol(above) >= 0 || urlRun(above.cells, indentOf(above)) === above.cells.length;
-    if (!aboveReaches || !URL_CHAR_CELL.test(row.cells[indentOf(row)])) break;
+    if (!row || row.wrapped || !above || !continuesAddress(above, row)) break;
   }
   return outermost(found);
 }
@@ -162,18 +219,21 @@ function outermost(found: BrokenUrl[]): BrokenUrl[] {
 function brokenUrlFrom(rowAt: (y: number) => TerminalRow | undefined, y: number): BrokenUrl | undefined {
   const first = rowAt(y);
   if (!first) return undefined;
-  const startCol = brokenStartCol(first);
+  const filledCol = brokenStartCol(first);
+  const startCol = filledCol >= 0 ? filledCol : shortStartCol(first);
   if (startCol < 0) return undefined;
 
-  const parts = [{ y, from: startCol, cells: first.cells.slice(startCol) }];
+  const parts = [{ y, from: startCol, cells: first.cells.slice(startCol, urlRun(first.cells, startCol)) }];
+  let prev = first;
   for (let next = y + 1; ; next++) {
     const row = rowAt(next);
-    if (!row || row.wrapped) break;
+    if (!row || !continuesAddress(prev, row)) break;
     const from = indentOf(row);
     const end = urlRun(row.cells, from);
-    if (end === from) break;
     parts.push({ y: next, from, cells: row.cells.slice(from, end) });
-    if (end !== row.cells.length) break;
+    // Anything past this piece stays on this row. A further row would continue a different address.
+    if (textEnd(row.cells) !== end) break;
+    prev = row;
   }
   if (parts.length === 1) return undefined;
 
@@ -249,7 +309,9 @@ function plainUrlSegments(rows: { y: number; row: TerminalRow }[]): LinkSegment[
   return segments;
 }
 
-/** The cells a broken address fills, one segment per row. */
+/** The cells a broken address fills, one segment per row. The range ends on the last row, so an
+ * earlier row is measured by its own address characters: a piece that stops short of the last
+ * column must not take the blank cells after it. */
 function brokenUrlSegments(found: BrokenUrl, rowAt: (y: number) => TerminalRow | undefined): LinkSegment[] {
   const { start, end } = found.range;
   const segments: LinkSegment[] = [];
@@ -257,8 +319,8 @@ function brokenUrlSegments(found: BrokenUrl, rowAt: (y: number) => TerminalRow |
     const row = rowAt(y);
     if (!row) continue;
     const col = y === start.y ? start.x - 1 : indentOf(row);
-    const to = y === end.y ? end.x : row.cells.length;
-    segments.push({ y, col, width: to - col });
+    const to = y === end.y ? end.x : urlRun(row.cells, col);
+    if (to > col) segments.push({ y, col, width: to - col });
   }
   return segments;
 }

@@ -75,6 +75,47 @@ function brokenUrlLines(cols: number): string[] {
   return lines;
 }
 
+/** Blank cells kept after the first piece of an address the program broke short of the last
+ * column. Enough to read as a gap at the gallery's usual width, and kept however wide the
+ * terminal is, so the break is not an effect of a window narrower than the text. */
+const SHORT_GAP = 12;
+
+/** The address broken short of the last column. Its tail is what a scenario points at, and it
+ * stays whole on the last row. */
+const SHORT_URL = "http://localhost:5219/gallery-frame.html?scenario=dialog-new-session-auto-select-";
+const SHORT_TAIL = "account&theme=light&lang=zh-Hans";
+
+/** The same kind of break as `brokenUrlLines`, but the first piece stops short of the last column.
+ * The longest piece that still leaves `SHORT_GAP` blank cells and ends on `-` is the first row;
+ * the rest follows after a two-cell hanging indent, with the tail whole on the last row. A line is
+ * never longer than `cols`, so the terminal's own wrap is not what joins it. */
+function shortBrokenUrlLines(cols: number): string[] {
+  const indent = "  ";
+  const limit = Math.max(cols - SHORT_GAP, 1);
+  let headLen = SHORT_URL.length <= limit ? SHORT_URL.length : 0;
+  if (headLen === 0) {
+    for (let i = Math.min(limit, SHORT_URL.length) - 1; i > "http://".length; i--) {
+      if (SHORT_URL[i] === "-") {
+        headLen = i + 1;
+        break;
+      }
+    }
+  }
+  if (headLen === 0) headLen = Math.min(limit, SHORT_URL.length);
+  const head = SHORT_URL.slice(0, headLen);
+  const middle = SHORT_URL.slice(headLen);
+  const lines = [head];
+  const width = Math.max(cols - indent.length, 1);
+  const rest = middle + SHORT_TAIL;
+  // One continuation row when it fits, so the usual width shows the two rows of the break.
+  if (indent.length + rest.length <= cols) lines.push(indent + rest);
+  else {
+    for (let at = 0; at < middle.length; at += width) lines.push(indent + middle.slice(at, at + width));
+    for (let at = 0; at < SHORT_TAIL.length; at += width) lines.push(indent + SHORT_TAIL.slice(at, at + width));
+  }
+  return lines;
+}
+
 const sample = (cols: number) => [
   `${ESC}1;38;5;208m ✻ Welcome to Claude Code${ESC}0m`,
   "",
@@ -101,8 +142,12 @@ const sample = (cols: number) => [
   `${ESC}32m●${ESC}0m The summary no longer overflows on a narrow screen.`,
   `${ESC}2m  A long line that runs past the terminal's width to show how it wraps: ${"sample output wraps here. ".repeat(5)}${ESC}0m`,
   "",
-  // An address the program itself breaks onto the next row, which the terminal joins into one link.
+  // An address the program itself breaks onto the next row, filling the last column, which the
+  // terminal joins into one link. The one after it stops short of that column. A blank row keeps
+  // them apart, and this one comes first so a hover of `lang=zh-Hans` still finds it.
   ...brokenUrlLines(cols),
+  "",
+  ...shortBrokenUrlLines(cols),
   "",
   `${ESC}35m✻ Pondering…${ESC}0m ${ESC}2m(12s · esc to interrupt)${ESC}0m`,
   "",

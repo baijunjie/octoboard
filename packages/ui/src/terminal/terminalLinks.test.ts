@@ -90,13 +90,49 @@ it("finds both the address a row ends and the one it starts", () => {
 });
 
 it.each([
-  ["it stops short of the last column", [row("http://a.dev/x"), row("  Hans")]],
+  ["it stops short of the last column and the next row is a separate word", [row("http://a.dev/x"), row("  Hans")]],
+  ["the next row is a separate word", [row("http://a.dev/docs"), row("  frame")]],
+  ["the next row starts its own address", [row("http://a.dev/x"), row("  http://b.dev/y")]],
+  ["other text follows it on its own row", [row("http://a.dev/sel- now"), row("  account&x=1")]],
+  ["a border follows it", [row("http://a.dev/sel-│"), row("  account&x=1")]],
   ["the next row is empty", [row("http://a.dev/xxxxxxxxxxx"), row("")]],
   ["the next row starts with a delimiter", [row("http://a.dev/xxxxxxxxxxx"), row("  (Hans)")]],
   ["the next row is the terminal's own wrap", [row("http://a.dev/xxxxxxxxxxx"), row("Hans", true)]],
 ])("leaves an address alone when %s", (_rule, rows) => {
   expect(brokenAt(rows, 1)).toEqual([]);
   expect(brokenAt(rows, 2)).toEqual([]);
+});
+
+it("joins an address the program broke short of the last column, whichever row is hovered", () => {
+  const rows = [row("http://a.dev/sel-"), row("  account&x=1")];
+  const link = {
+    url: "http://a.dev/sel-account&x=1",
+    range: { start: { x: 1, y: 1 }, end: { x: 13, y: 2 } },
+  };
+  expect(brokenAt(rows, 1)).toEqual([link]);
+  expect(brokenAt(rows, 2)).toEqual([link]);
+});
+
+it("joins a short address that breaks on a hyphen onto the word that follows", () => {
+  const rows = [row("http://a.dev/sel-"), row("  Hans")];
+  expect(brokenAt(rows, 2).map((link) => link.url)).toEqual(["http://a.dev/sel-Hans"]);
+});
+
+it("joins a short address onto a continuation that carries address punctuation", () => {
+  const rows = [row("http://a.dev/docs"), row("  frame.html?x=1")];
+  expect(brokenAt(rows, 1).map((link) => link.url)).toEqual(["http://a.dev/docsframe.html?x=1"]);
+});
+
+it("chains a short break across every following row that still continues the address", () => {
+  const rows = [row("http://a.dev/sel-"), row("  account&theme="), row("  light&lang=zh-Hans")];
+  expect(brokenAt(rows, 3).map((link) => link.url)).toEqual(["http://a.dev/sel-account&theme=light&lang=zh-Hans"]);
+  expect(brokenAt(rows, 2).map((link) => link.url)).toEqual(["http://a.dev/sel-account&theme=light&lang=zh-Hans"]);
+});
+
+it("stops a short chain at a separate word", () => {
+  const rows = [row("http://a.dev/docs"), row("  frame.html"), row("  today")];
+  expect(brokenAt(rows, 1).map((link) => link.url)).toEqual(["http://a.dev/docsframe.html"]);
+  expect(brokenAt(rows, 3)).toEqual([]);
 });
 
 function segmentsOf(rows: TerminalRow[], from = 1, to = rows.length) {
@@ -123,6 +159,14 @@ it("segments an address the program broke, each row from its indent, once", () =
     { y: 1, col: 4, width: 20 },
     { y: 2, col: 2, width: 22 },
     { y: 3, col: 2, width: 2 },
+  ]);
+});
+
+it("segments an address the program broke short of the last column, on every row", () => {
+  const rows = [row("http://a.dev/sel-"), row("  account&x=1")];
+  expect(segmentsOf(rows)).toEqual([
+    { y: 1, col: 0, width: 17 },
+    { y: 2, col: 2, width: 11 },
   ]);
 });
 
