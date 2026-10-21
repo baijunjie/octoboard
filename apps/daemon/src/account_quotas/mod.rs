@@ -75,6 +75,16 @@ struct Key {
     config_dir: Option<String>,
 }
 
+impl Key {
+    fn of(agent: Agent, account: Option<&str>, config_dir: Option<&str>) -> Self {
+        Self {
+            agent,
+            account: account.map(str::to_string),
+            config_dir: config_dir.map(str::to_string),
+        }
+    }
+}
+
 struct Entry {
     quota: AccountQuota,
     attempted: Instant,
@@ -177,15 +187,28 @@ impl AccountQuotas {
         account: Option<&str>,
         config_dir: Option<&str>,
     ) -> Option<AccountQuota> {
-        let key = Key {
-            agent,
-            account: account.map(str::to_string),
-            config_dir: config_dir.map(str::to_string),
-        };
+        let key = Key::of(agent, account, config_dir);
         self.lock()
             .entries
             .get(&key)
             .map(|entry| entry.quota.clone())
+    }
+
+    /// [`AccountQuotas::held`] and [`AccountQuotas::exhausted`] of the same account under one
+    /// lock, so the reading and the judgement made from it cannot come from different moments.
+    pub fn held_and_exhausted(
+        &self,
+        agent: Agent,
+        account: Option<&str>,
+        config_dir: Option<&str>,
+        now: i64,
+    ) -> (Option<AccountQuota>, Option<Exhausted>) {
+        let inner = self.lock();
+        let key = Key::of(agent, account, config_dir);
+        (
+            inner.entries.get(&key).map(|entry| entry.quota.clone()),
+            exhausted_in(&inner.entries, agent, account, config_dir, now),
+        )
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
@@ -319,11 +342,7 @@ impl AccountQuotas {
 
     #[cfg(test)]
     fn hold_under_for_test(&self, quota: &AccountQuota, config_dir: Option<&str>) {
-        let key = Key {
-            agent: quota.agent,
-            account: quota.account.clone(),
-            config_dir: config_dir.map(str::to_string),
-        };
+        let key = Key::of(quota.agent, quota.account.as_deref(), config_dir);
         self.lock().entries.insert(
             key,
             Entry {
@@ -428,11 +447,7 @@ fn exhausted_in(
     config_dir: Option<&str>,
     now: i64,
 ) -> Option<Exhausted> {
-    let key = Key {
-        agent,
-        account: account.map(str::to_string),
-        config_dir: config_dir.map(str::to_string),
-    };
+    let key = Key::of(agent, account, config_dir);
     entries
         .get(&key)?
         .quota
@@ -520,7 +535,7 @@ pub fn expiring_weekly(windows: &[QuotaWindow], now: i64) -> Option<ExpiringWeek
         }
         let candidate = ExpiringWeekly {
             resets_at,
-            remaining: (100.0 - window.used_percent).max(0.0),
+            remaining: window.remaining_percent(),
         };
         if best
             .as_ref()
@@ -592,20 +607,12 @@ fn targets(state: &AppState) -> anyhow::Result<Vec<Key>> {
         if state.agent_availability_of(agent).availability != Availability::Available {
             continue;
         }
-        keys.push(Key {
-            agent,
-            account: None,
-            config_dir: None,
-        });
+        keys.push(Key::of(agent, None, None));
         keys.extend(
             accounts
                 .iter()
                 .filter(|account| account.agent == agent)
-                .map(|account| Key {
-                    agent,
-                    account: Some(account.id.clone()),
-                    config_dir: Some(account.config_dir.clone()),
-                }),
+                .map(|account| Key::of(agent, Some(&account.id), Some(&account.config_dir))),
         );
     }
     Ok(keys)

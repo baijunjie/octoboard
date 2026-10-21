@@ -2800,6 +2800,13 @@ pub struct QuotaWindow {
     pub window_minutes: Option<u32>,
 }
 
+impl QuotaWindow {
+    /// How much of the window is left, 0 to 100: what `used_percent` leaves, never below 0.
+    pub fn remaining_percent(&self) -> f64 {
+        (100.0 - self.used_percent).max(0.0)
+    }
+}
+
 /// Why an account's quota has no windows, as a coded message of the same shape as an `error`. It
 /// is part of the reading rather than a failure of anything else.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

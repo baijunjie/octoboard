@@ -37,8 +37,10 @@ below); a project session that can own sessions — an unbound one or a lead ses
 project for what it starts and drives (see "The unbound project session's tools" below); and a project session with
 the role of a bound one — bound to an owner and not a lead session — gets one tool back the other way, `report`, and
 cannot start or drive sessions. Every session, whatever its kind, also gets the two tools for sharing information with
-every other running session (see `docs/product/information-between-sessions.md`) and `request_session`; every project session
-also gets `get_project`, a read-only view of its own project's settings (see `docs/product/agent-settings-tools.md`).
+every other running session (see `docs/product/information-between-sessions.md`) and `request_session`; every project
+session also gets `get_project`, a read-only view of its own project's settings (see
+`docs/product/agent-settings-tools.md`); and every session gets `get_account_quotas`, a read of each account's plan
+quota (see "Reading quotas from a session" in `docs/product/account-quotas.md`).
 **Which tools a session sees follows from its role, fixed for its lifetime, and from its binding as it stands**, which
 can change while the session runs (see `docs/product/changing-session-owners.md`). A console session cannot report, and
 orchestration is at most two levels deep: a console session, a lead session bound to it, and the lead session's own
@@ -80,6 +82,7 @@ console sessions are listed, are in "Console sessions and project sessions" in
 | `transfer_session` | `session`, `to`, `note` | Hands one of the caller's running sessions to another owner, without the user. See "Handing a session to another owner" in `docs/product/changing-session-owners.md`. |
 | `request_session` | `kind`, `project?`, `console?`, `brief`, `title?`, `agent?`, `account?`, `model?`, `effort?`, `branches?` | Asks the user to start a session that is nobody's. See `docs/product/session-requests.md`. |
 | `list_sessions`, `share_info` | see `docs/product/information-between-sessions.md` | As for every session. |
+| `get_account_quotas` | `agent?` | Each account's plan quota, read-only, as for every session. See "Reading quotas from a session" in `docs/product/account-quotas.md`. |
 | `show_page` | `html` | Pushes an HTML page to the calling console session's report panel, beside the console session's own terminal. Answers with the new page's id. See `docs/product/report-panel.md`. |
 
 A project is named either by its id or by its name where that name is unambiguous within the
@@ -147,6 +150,7 @@ own project and drive them, the way a console session drives its console's:
 | `request_session` | as the console session's | Asks the user to start a session that is nobody's. See `docs/product/session-requests.md`. |
 | `report` | as in `docs/product/reporting-to-owners.md` | Offered, but refused while the session is unbound: it has nobody to report to. A lead session's `report` is accepted and goes to its console session (see "Lead sessions" below). |
 | `list_sessions`, `share_info` | see `docs/product/information-between-sessions.md` | As for every session. |
+| `get_account_quotas` | `agent?` | Each account's plan quota, read-only, as for every session. See "Reading quotas from a session" in `docs/product/account-quotas.md`. |
 | `get_project` | — | Its own project's settings, read-only, as for every project session (see "A project's settings" in `docs/product/agent-settings-tools.md`). |
 
 It has no `list_projects`, `list_archived`, `add_project` or `show_page`, and none of the tools that change a setting:
@@ -161,9 +165,9 @@ itself, or a console session. For an unbound project session, `archive_session` 
 `archive_self` instead.
 
 A session a project session starts is bound to it, so it has the role of a bound one: it is offered `report`,
-`list_sessions`, `share_info`, `get_project` and `request_session`, and cannot start or drive sessions of its own, nor
-read one with `get_session`. It reports to the project session that started it exactly as a console session's sessions
-report to their console session: see `docs/product/reporting-to-owners.md`.
+`list_sessions`, `share_info`, `get_project`, `get_account_quotas` and `request_session`, and cannot start or drive
+sessions of its own, nor read one with `get_session`. It reports to the project session that started it exactly as a
+console session's sessions report to their console session: see `docs/product/reporting-to-owners.md`.
 
 ## Lead sessions
 

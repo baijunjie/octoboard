@@ -84,6 +84,8 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          - `archive_self` — end and archive yourself once your sessions are all archived.\n\
          - `list_archived` / `reopen_session` — pick an earlier session back up instead of \
            starting over, handing it its next task.\n\
+         - `get_account_quotas` — how much plan quota each account of each agent has left, as \
+           percentages; check it before choosing an account or when one may be running out.\n\
          - `handoff_session` — move a session of yours to a new session of another agent, for \
            instance when its account has run out of quota; the new session takes its place.\n\
          - `handover_branches` — move the responsibility for git branches from one session of \
@@ -158,7 +160,7 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            relaunched resuming it on the new account, and it is sent no message for it. It \
            comes back awaiting instructions and a turn in progress is cut off, so send it the \
            next step with `send_message`. Use it rather than a handoff when the same agent can \
-           go on.\n\
+           go on. `get_account_quotas` shows which accounts still have quota.\n\
          - `transfer_session` passes a session of yours to another owner — another console \
            session of this console, or a project session of that session's project that can own \
            sessions — without asking the user. A session with sessions of its own (a lead \

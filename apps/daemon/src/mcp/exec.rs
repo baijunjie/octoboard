@@ -49,6 +49,7 @@ use super::args::{
 use super::bindings;
 use super::handoff;
 use super::handover::{self, branch_names, held_by};
+use super::quotas;
 use super::settings::{
     self, describe_project, launch_argument, project_accounts_argument, resolve_account,
 };
@@ -105,6 +106,7 @@ pub async fn call(
         "report" => report(state, &session, arguments).await,
         "list_sessions" => list_sessions(state, &session),
         "get_project" => settings::get_project(state, &session),
+        "get_account_quotas" => quotas::get_account_quotas(state, arguments),
         "share_info" => share_info(state, &session, arguments).await,
         "transfer_session" => bindings::transfer_session(state, &session, arguments).await,
         "bind_to_session" => bindings::bind_to_session(state, &session, arguments).await,

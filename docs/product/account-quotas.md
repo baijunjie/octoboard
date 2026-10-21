@@ -259,6 +259,22 @@ The button opens the account quota panel as described below, on the tab of the a
 (see "What the panel shows" below). Selecting a session does not itself request a fresh quota reading; the indicator uses
 the readings described in "When quotas are read" above.
 
+## Reading quotas from a session
+
+Every session, of any kind, has the `get_account_quotas` tool, so an agent can check what an account has left before it
+picks one for `switch_session_account` or `handoff_session`. It takes an optional `agent` to list only that agent's
+accounts, and answers with every account of every agent a session could be opened on, the default account first
+(`account` is `default`), whether or not a reading is held for it. An agent that is not installed or not on the added
+list lists no accounts; one not detected yet lists its accounts as not read yet. Each entry gives the account's
+`account_name`, `plan`, `fetched_at` (milliseconds since the epoch, `null` for an account not read yet), `exhausted`
+(whether the account is used up, by the rule in "A used-up account" above) and `exhausted_until` (when the window that
+keeps it used up resets, in milliseconds since the epoch; `null` when it is not used up or the agent gives no reset
+time), `unavailable` (the reason a reading is missing or could not be refreshed, else `null`) and its `windows`, each
+with `kind`, `label`, `used_percent`, `remaining_percent` (100 less the used share, never below 0), `resets_at` and
+`window_minutes`. Values are percentages only; no absolute token or money amount is given.
+
+It answers from the readings already held and never waits for a new one, so an entry is as old as its `fetched_at`.
+
 ## The account quota panel on the rail
 
 The rail's **Account quota** button, a gauge directly above Settings (see "The rail" in

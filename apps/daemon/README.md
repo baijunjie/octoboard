@@ -57,7 +57,7 @@ once.
 | `src/store.rs` | The coordinator's SQLite storage: consoles, projects, sessions, pages, agent accounts (with their sharing choice and whether a change of it is pending), each agent's default account name, the added agents list, branch origins, trusted folders, user settings and the host table |
 | `src/state.rs` | Shared daemon state: session status and turn bookkeeping, the shell terminal registry, record-watch bookkeeping, each project's live git status and check claim, pending `request_session` requests, agent availability, the model cache, each session's default effort (`set_default_effort`, filled into the wire record by `wire_session`), the account quotas, the account logins and the hook queues |
 | `src/launch_settings.rs`, `src/agent_models.rs` | Normalising and checking a model and reasoning effort (`LaunchCheck`), and listing the models an agent offers for an account (`ModelCache`); fixtures in `testdata/` |
-| `src/account_quotas/` | Each account's plan quota from its agent's own CLI: `mod.rs` keeps the readings (`AccountQuotas`) and runs the background poller and the on-request refresh, `probe.rs` holds the three conversations and their reply parsers; an account's missing directory and its not being signed in are told apart from a failure there; `AccountQuotas::exhausted` (`exhausted_in`, `Exhausted`) judges from the held reading alone whether an account's quota is used up |
+| `src/account_quotas/` | Each account's plan quota from its agent's own CLI: `mod.rs` keeps the readings (`AccountQuotas`) and runs the background poller and the on-request refresh, `probe.rs` holds the three conversations and their reply parsers; an account's missing directory and its not being signed in are told apart from a failure there; `AccountQuotas::exhausted` (`exhausted_in`, `Exhausted`) judges from the held reading alone whether an account's quota is used up, and `held_and_exhausted` gives the reading with that judgement under one lock |
 | `src/rfc3339.rs` | Reading the RFC 3339 timestamps the agents write into milliseconds since the epoch (`parse_rfc3339_millis`), and writing the compact UTC stamp backups are named with (`compact_utc_stamp`); shared by `account_quotas/probe.rs` and `transcript.rs` |
 | `src/account_login/` | Signing an account in with its agent's own CLI in the background: `mod.rs` keeps the logins running (`AccountLogins`: one per account, a timeout, cancel, the end of each, the kill on shutdown), `flows.rs` drives the three CLIs and reads what they print |
 | `src/availability.rs` | Working out, once per daemon start, which agents are available and each one's default account, then filling the added agents once |
@@ -130,9 +130,9 @@ External interfaces (all in `mod.rs`):
 
 The tool surface a session drives Octoboard with: orchestration tools for console sessions, a narrower set for project
 sessions that can own sessions, the reporting tool for bound sessions, settings tools, information sharing between
-sessions, and `request_session`. Which set a session sees follows its role and its current binding, which the daemon
-checks on every call. The catalogue is shared by both sides of the stdio bridge. The wire contract is in
-[`PROTOCOL.md`](PROTOCOL.md).
+sessions, the read of the accounts' plan quotas, and `request_session`. Which set a session sees follows its role and
+its current binding, which the daemon checks on every call. The catalogue is shared by both sides of the stdio bridge.
+The wire contract is in [`PROTOCOL.md`](PROTOCOL.md).
 
 | File | Role |
 |---|---|
@@ -142,6 +142,7 @@ checks on every call. The catalogue is shared by both sides of the stdio bridge.
 | `handoff.rs` | `handoff_session`: an owner hands a session of its own off to another agent, through the `hand_off_session` operation, and is not sent the message that tells an owner of it |
 | `handover.rs` | `handover_branches`: an owner moves the responsibility for git branches between itself and a session of its own, or between two sessions of its own, and tells the sessions concerned; also holds the checks on the branches a call names (`branch_names`, `held_by`), which `new_session` and `request_session` use too |
 | `account_switch.rs` | `switch_session_account`: an owner moves a session of its own to another account of its agent, through the `switch_session_account` operation, keeping its conversation |
+| `quotas.rs` | `get_account_quotas`: every account of every agent a session can be opened on with the plan quota reading the daemon holds for it, read-only |
 | `bindings.rs` | `transfer_session` and `bind_to_session`, and what they tell the sessions concerned |
 | `args.rs` | Reading a tool call's arguments and finding the records they name |
 | `settings.rs` | The settings tools for a console, its projects and the application, and a project session's read of its own project |

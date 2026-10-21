@@ -91,8 +91,9 @@ pub(super) fn handover_guidance(agent: Option<Agent>) -> String {
 /// The ways a session relates to another, in the words every project session's role text gives
 /// them: which tool makes a session one's own, the ones that move a session to another agent,
 /// another account or another owner, the one that moves branches between sessions, the one that
-/// binds this session to an owner, which one makes a session nobody's, then information, which
-/// needs none.
+/// binds this session to an owner, which one makes a session nobody's, the read of the accounts'
+/// quotas (for a session that owns none, which has no other line naming it), then information,
+/// which needs none.
 fn relationships(agent: Agent, owns: bool) -> String {
     let tool = |name: &str| qualified_tool_name(agent, name);
     let mut lines = Vec::new();
@@ -121,16 +122,20 @@ fn relationships(agent: Agent, owns: bool) -> String {
         ));
         lines.push(format!(
             "- `{handoff_session}` hands a session of yours off to a new session of another agent \
-             — when its account has run out of quota, say. The new session takes its place and \
-             stays yours, and the original is archived. No approval is needed.",
+             — when its account has run out of quota, say; `{get_account_quotas}` shows what \
+             each account has left. The new session takes its place and stays yours, and the \
+             original is archived. No approval is needed.",
             handoff_session = tool("handoff_session"),
+            get_account_quotas = tool("get_account_quotas"),
         ));
         lines.push(format!(
             "- `{switch_session_account}` moves a session of yours to another account of its own \
-             agent — when its account has run out of quota, say. It keeps its conversation and \
-             comes back awaiting instructions (a turn in progress is cut off), so send it the \
-             next step with `{send_message}`. No approval is needed.",
+             agent — when its account has run out of quota, say; `{get_account_quotas}` shows \
+             what each account has left. It keeps its conversation and comes back awaiting \
+             instructions (a turn in progress is cut off), so send it the next step with \
+             `{send_message}`. No approval is needed.",
             switch_session_account = tool("switch_session_account"),
+            get_account_quotas = tool("get_account_quotas"),
             send_message = tool("send_message"),
         ));
         lines.push(format!(
@@ -155,6 +160,14 @@ fn relationships(agent: Agent, owns: bool) -> String {
          answer, and nothing is started without it.",
         request_session = tool("request_session"),
     ));
+    if !owns {
+        lines.push(format!(
+            "- `{get_account_quotas}` shows how much plan quota each account has left, as \
+             percentages of each window and with the time it resets; check it before relying on \
+             an account that may be running low.",
+            get_account_quotas = tool("get_account_quotas"),
+        ));
+    }
     lines.push(format!(
         "- `{list_sessions}` shows the other running sessions, in every console and project, and \
          who owns each; `{share_info}` tells any of them something that touches its work — what \

@@ -2015,7 +2015,7 @@ the one waiting request a session may have, are described in `docs/product/sessi
 |---|---|---|---|
 | `list_projects`, `add_project`, `update_project`, `get_console`, `update_console`, `get_settings`, `update_settings`, `list_archived`, `show_page` | yes | — | — |
 | `new_session`, `send_message`, `get_session`, `archive_session`, `reopen_session`, `rename_session`, `set_session_pinned` | yes | yes | — |
-| `list_sessions`, `share_info` | yes | yes | yes |
+| `list_sessions`, `share_info`, `get_account_quotas` | yes | yes | yes |
 | `archive_self` | yes | yes (refused once bound, a lead session included, which wraps up with `report`) | — |
 | `handoff_session`, `handover_branches`, `switch_session_account`, `transfer_session` | yes | yes | — |
 | `bind_to_session` | — | yes (refused once bound, a lead session included) | — |

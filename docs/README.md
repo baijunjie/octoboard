@@ -8,7 +8,7 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   read through the agent's own CLI and when, the windows per agent and their labels, how a quota is shown, the
   reading / unavailable / out-of-date states and their reasons, the two-layer 5-hour / weekly meter and the account
   picker's usage bar, what a reading leaves in the account's directory, the rail's quota panel, and when an account
-  counts as used up and what that refuses.
+  counts as used up and what that refuses, and the `get_account_quotas` tool that gives a session the readings.
 - [Collection motion](product/collection-motion.md) — entry, exit and position transitions for dynamic collections, including
   horizontal and wrapping items, virtualized rows, keyboard focus and reduced motion.
 - [Consoles](product/consoles.md) — consoles: their fields and working directory, the two default agents, agents

@@ -1,7 +1,8 @@
 //! The Octoboard MCP server: the orchestration and settings tools the console session drives
 //! Octoboard with, the narrower set a project session that can own sessions drives its own project
 //! with, the reporting tool a bound project session answers through, and the tools every session
-//! shares information through and asks the user for a session with no owner through.
+//! shares information and reads the accounts' plan quotas through, and asks the user for a
+//! session with no owner through.
 //!
 //! **Transport is a stdio child process, not an HTTP endpoint the agent connects to.** Each
 //! adapter registers `octoboardd mcp --session … --role … --port … --token …` as a `command`-type
@@ -28,6 +29,7 @@ pub mod console_instructions;
 pub mod exec;
 mod handoff;
 mod handover;
+mod quotas;
 pub mod role;
 mod settings;
 pub mod stdio;
@@ -438,6 +440,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     REQUEST_SESSION,
     LIST_SESSIONS,
     SHARE_INFO,
+    GET_ACCOUNT_QUOTAS,
     ToolDef {
         name: "show_page",
         description: "Push a page to the report panel the user sees beside this session. Every \
@@ -918,14 +921,52 @@ const REQUEST_SESSION: ToolDef = ToolDef {
     schema: request_session_schema,
 };
 
+/// What every session may read of the plan quota each account has left, to choose an account or
+/// an agent before one runs dry.
+const GET_ACCOUNT_QUOTAS: ToolDef = ToolDef {
+    name: "get_account_quotas",
+    description: "How much plan quota each account has left, read-only: every account of every \
+                  agent, the agent's default account (`account: \"default\"`) and the stored \
+                  ones, with its `account_name`, `plan`, and its quota `windows` (`kind` \
+                  `session` is the 5-hour window, `weekly` the weekly one across all models, \
+                  `weekly_model` a weekly window of the model named by `label`, `credit_period` \
+                  a pool of credits over a billing period). All values are percentages of a \
+                  window: `used_percent` and `remaining_percent`, with `resets_at` \
+                  (milliseconds since the epoch) and `window_minutes`; no absolute token or \
+                  dollar amount is available. `exhausted` says the account is used up and cannot \
+                  open a session until it resets, and `exhausted_until` is when (milliseconds \
+                  since the epoch; null when it is not exhausted or the reset time is unknown). \
+                  Only agents a session could be opened on are listed: one that is not installed \
+                  or not added lists no accounts. These are the readings Octoboard last took, \
+                  refreshed about every five minutes, and this call does not take a new one: \
+                  `fetched_at` says how old a reading is, `unavailable` gives the reason a \
+                  reading is missing or could not be refreshed (an account not read yet has \
+                  `fetched_at: null`, as has one of an agent not detected yet). Use it to check \
+                  an account before relying on it, or to pick the account for \
+                  `switch_session_account` or `handoff_session`.",
+    schema: || {
+        object_schema(
+            json!({
+                "agent": {
+                    "type": "string",
+                    "enum": ["claude", "codex", "grok"],
+                    "description": "List only this agent's accounts. Left out, every agent's.",
+                },
+            }),
+            &[],
+        )
+    },
+};
+
 /// A project session that reports to another session has the one tool it answers through, the
-/// two it shares information with, the read of its project, and the request for a session with no
-/// owner.
+/// two it shares information with, the read of its project, the read of the accounts' quotas, and
+/// the request for a session with no owner.
 const BOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     REPORT,
     LIST_SESSIONS,
     SHARE_INFO,
     GET_PROJECT,
+    GET_ACCOUNT_QUOTAS,
     REQUEST_SESSION,
 ];
 
@@ -996,6 +1037,7 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     LIST_SESSIONS,
     SHARE_INFO,
     GET_PROJECT,
+    GET_ACCOUNT_QUOTAS,
 ];
 
 /// The schema of `request_session`: `new_session`'s, and where the new session is to be.
@@ -1228,6 +1270,7 @@ mod tests {
                 "list_sessions",
                 "share_info",
                 "get_project",
+                "get_account_quotas",
                 "request_session"
             ]
         );
@@ -1251,7 +1294,8 @@ mod tests {
                 "report",
                 "list_sessions",
                 "share_info",
-                "get_project"
+                "get_project",
+                "get_account_quotas"
             ]
         );
         assert_eq!(
@@ -1280,6 +1324,7 @@ mod tests {
                 "request_session",
                 "list_sessions",
                 "share_info",
+                "get_account_quotas",
                 "show_page"
             ]
         );
