@@ -144,6 +144,11 @@ receiving session to read. It holds:
 
 - **the original session**: its title, id, agent and account, kind and project or console, its status when handed off,
   the title of the session it reports to, if any, and where the agent's own conversation record is;
+- **an earlier handoff**, only when the original itself took another session over through a handoff and the package it
+  read then is still there: that package's path, as the place the conversation before the original's own is kept,
+  with the instruction to read it, and any earlier package it names in turn. It also says that if that file is gone,
+  the original was deleted since and the chain cannot be followed further back. Whether there is one is judged by
+  that file existing alone; nothing is read from it, and it is left as it is;
 - **the branches it is responsible for** (see "The responsible session" in
   `docs/product/branch-responsible-session.md`), each as git has it at that moment: the worktree it is checked out in
   and whether that worktree has uncommitted changes, its head, and, against the branch it is compared with (as the
@@ -152,7 +157,7 @@ receiving session to read. It holds:
 - **the sessions it owns**, archived ones included, each with its title, status and id;
 - **its latest todo list**, as the agent's last update left it;
 - **the files its edits changed**, as its edit and write calls named them;
-- **the conversation**: every user message and every reply, in order, each set apart so nothing in it reads as the
+- **the conversation**: the original's own conversation — every user message and every reply, in order, each set apart so nothing in it reads as the
   file's own structure. Tool output, file contents read, command output, the model's reasoning, and what the agent
   injects into the conversation on its own are left out. Where the agent compacted its history and rewrote its record
   (Grok Build), the package keeps the summary it wrote and names the files holding the earlier conversation. For a
@@ -174,7 +179,9 @@ conversation can hold secrets. It stays for as long as the receiving session's r
 ## What the receiving session takes over
 
 The receiving session starts with an opening prompt that names the original, gives the package's path and tells it to
-read the package whole before doing anything else and to carry on where the original stopped; it also tells it that
+read the package whole before doing anything else and to carry on where the original stopped — and, when the package
+names an earlier handoff package, to read that one too, and so on back along the chain, before carrying on; it also
+tells it that
 its place is about to move to it, that it will be told what it holds, and not to message the original. It comes up
 *working* on that prompt.
 

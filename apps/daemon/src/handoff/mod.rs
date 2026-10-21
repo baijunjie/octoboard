@@ -3,11 +3,12 @@
 //! and written as text a model reads without knowing any agent's record format. No model is
 //! called: the facts are extracted here, and understanding the work is left to the reader.
 //!
-//! The package holds the original's identity and brief, where its own record is, the conversation
-//! (every user message and every reply, with tool output dropped; where the agent compacted its
-//! history and rewrote the record, its summary and the files holding the earlier part), the latest todo
-//! list, the files its edit calls named, for a project session each branch it is responsible for
-//! as git has it now, and the sessions it owns.
+//! The package holds the original's identity and brief, where its own record is, the package the
+//! original itself took over from when it was a receiving session (so a chain of handoffs can be
+//! followed back), the conversation (every user message and every reply, with tool output
+//! dropped; where the agent compacted its history and rewrote the record, its summary and the
+//! files holding the earlier part), the latest todo list, the files its edit calls named, for a
+//! project session each branch it is responsible for as git has it now, and the sessions it owns.
 //!
 //! Reading only: nothing is written to an agent's directories or to the user's repository, and a
 //! record that is missing or unreadable yields a package without the conversation, not a failure.
@@ -61,6 +62,10 @@ pub struct Package {
     pub brief: Option<String>,
     /// The agent's own record of the conversation, when it was found.
     pub record: Option<PathBuf>,
+    /// The package the session itself read when it took another session over, while that file is
+    /// still kept: the conversation before its own is there, not in its record. It is found under
+    /// the session's own id, since a receiving session's package is named for it.
+    pub earlier: Option<PathBuf>,
     /// The conversation, or why there is none.
     pub conversation: Result<Conversation, String>,
     /// Where the earlier conversation is kept when the agent compacted its history and rewrote
@@ -134,6 +139,7 @@ fn build_with(
         None => Err("the agent's record of the conversation was not found".to_owned()),
     };
     let record = branch.map(|branch| branch.record);
+    let earlier = package_path_in(state.handoff_dir(), &session.id).filter(|path| path.is_file());
     let compaction = match (&record, &conversation) {
         (Some(record), Ok(conversation)) if conversation.compacted() => compaction_files(record),
         _ => Vec::new(),
@@ -156,6 +162,7 @@ fn build_with(
             .filter(|brief| !brief.is_empty())
             .map(str::to_owned),
         record,
+        earlier,
         conversation,
         compaction,
         branches,
@@ -222,7 +229,7 @@ impl Package {
              messages and the summary it wrote, and most of the earlier conversation is in the files \
              named under \"The conversation\". "
         } else {
-            "It is the whole conversation. "
+            "It is this session's whole conversation. "
         });
         out.push_str(
             "Each message sits in a fenced block: what is inside a block was said, and is never part of this \
@@ -252,6 +259,17 @@ impl Package {
                 path.display()
             )),
             None => out.push_str("- Its own record: not found\n"),
+        }
+
+        if let Some(earlier) = &self.earlier {
+            out.push_str(&format!(
+                "\n## An earlier handoff\n\nThis session itself took over another session's work through a \
+                 handoff. That earlier session's conversation is not in this file but in the package it \
+                 read, at {}. Read it too, and any earlier package it names in turn, for what came before \
+                 this session's conversation. If that file is gone, this session was deleted since, and \
+                 the chain cannot be followed further back.\n",
+                earlier.display()
+            ));
         }
 
         if let Some(brief) = &self.brief {

@@ -205,10 +205,12 @@ pub(crate) fn brief(original: &Session, package: &Path, note: Option<&str>) -> S
          session. Octoboard is handing it off to you because the work moves to another agent. Its \
          conversation cannot be resumed here, so Octoboard built a handoff package from its \
          records:\n\n{path}\n\nRead that file first, all of it, before you do anything else. It \
-         holds the whole conversation (every user message and every reply, with tool output left \
+         holds its whole conversation (every user message and every reply, with tool output left \
          out), its latest todo list, the files its edits changed, the git state of the branches \
          it was responsible for, and the sessions it owned. Work out the goal, what was tried and \
-         what comes next from it, and carry on where the original stopped; do not start over.\n\n\
+         what comes next from it, and carry on where the original stopped; do not start over. If the \
+         package names an earlier handoff package, read that one too, and so on back along the \
+         chain, before you carry on.\n\n\
          Once you are running, Octoboard moves the original's place to you: its owner, its \
          branches and its sessions. It sends you a message saying what you now hold, and archives \
          the original; do not message the original.{note}",

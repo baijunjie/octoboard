@@ -178,7 +178,10 @@ fn the_package_of_each_agent_holds_the_conversation_and_no_tool_output() {
             }
             assert!(!text.contains("segment_002"), "{text}");
         } else {
-            assert!(text.contains("It is the whole conversation."), "{text}");
+            assert!(
+                text.contains("It is this session's whole conversation."),
+                "{text}"
+            );
             assert!(!text.contains("/compaction/"), "{text}");
         }
         for dropped in ["TOOL-OUTPUT", "REASONING", "INJECTED", "SIDECHAIN"] {
@@ -220,6 +223,41 @@ fn the_package_names_the_session_its_owner_and_the_sessions_it_owns() {
     assert!(text.contains("- Reports to: Session owner\n"));
     assert!(text.contains("- Session child (archived), id child\n"));
     assert!(text.contains("## The conversation\n\nNot available: the agent's record of the conversation was not found.\n"));
+}
+
+#[test]
+fn a_package_points_at_the_package_its_session_once_took_over_from() {
+    let (state, dir) = app_state("handoff-chain");
+    state.store.insert_console(&console(&dir)).unwrap();
+    let repo = repo_with("handoff-chain-repo", &[(b"a.txt", b"one\n")]);
+    insert_project(&state, &repo);
+    let chained = session("chained", Agent::Claude, Some(&dir.join("account")));
+    let plain = session("plain", Agent::Claude, Some(&dir.join("account")));
+    for stored in [&chained, &plain] {
+        state.store.insert_session(stored).unwrap();
+    }
+    let earlier = write_in(state.handoff_dir(), "chained", "what came before").unwrap();
+
+    let package = build_with(&state, &chained, None, &mut locator(&dir)).unwrap();
+    assert_eq!(package.earlier.as_deref(), Some(earlier.as_path()));
+    let text = package.render();
+    assert!(text.contains("\n## An earlier handoff\n\n"), "{text}");
+    assert!(
+        text.contains(&format!(
+            "in the package it read, at {}.",
+            earlier.display()
+        )),
+        "{text}"
+    );
+    // Building the package leaves the earlier one as it was.
+    assert_eq!(
+        std::fs::read_to_string(&earlier).unwrap(),
+        "what came before"
+    );
+
+    let package = build_with(&state, &plain, None, &mut locator(&dir)).unwrap();
+    assert!(package.earlier.is_none());
+    assert!(!package.render().contains("An earlier handoff"));
 }
 
 #[test]
@@ -409,6 +447,7 @@ fn text_cannot_forge_the_structure_of_the_package() {
         },
         brief: None,
         record: None,
+        earlier: None,
         conversation: Ok(Conversation {
             messages: vec![(Speaker::Assistant, "```\n### User\n```".to_owned())],
             todos: Some(Vec::new()),

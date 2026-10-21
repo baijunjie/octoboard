@@ -564,6 +564,18 @@ async fn a_start_that_fails_moves_nothing_and_removes_the_package() {
     }
 }
 
+/// A receiving session is told to follow the chain of packages back when the package names one.
+#[test]
+fn the_opening_prompt_tells_the_receiving_session_to_follow_earlier_packages() {
+    let original = session("original", true, "idle", None, false);
+    let task = brief(&original, Path::new("/handoff/receiving.md"), None);
+    assert!(task.starts_with(TAKEOVER_OPENING), "{task}");
+    assert!(
+        task.contains("If the package names an earlier handoff package, read that one too"),
+        "{task}"
+    );
+}
+
 /// Deleting the receiving session removes its package.
 #[tokio::test]
 async fn deleting_the_receiving_session_removes_its_package() {
