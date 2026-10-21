@@ -9,9 +9,8 @@ import { consoleOf, gitStatusOf, projectOf, sessionOf } from "./gallery/fixtures
 import { gitBadgeContent } from "./gitStatusCopy";
 import { gitBadgeAriaLabel } from "./gitStatusLabel";
 import { currentLanguage, setLanguage, t } from "./i18n/language";
-import { sessionLocationContent, sessionModelContent } from "./sessionCopy";
+import { sessionLocationContent } from "./sessionCopy";
 import { sessionLocation } from "./sessionLabel";
-import { sessionModelLabel } from "./sessionModel";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -28,7 +27,7 @@ function mount(content: React.ReactNode): HTMLElement {
 
 const bare = (text: string) => text.replace(/[\u2068\u2069]/g, "");
 
-it.each(["en", "zh-Hans", "ar"] as const)("keeps rich location/model wording equal to plain copy without embedding string isolates (%s)", (language) => {
+it.each(["en", "zh-Hans", "ar"] as const)("keeps rich location wording equal to plain copy without embedding string isolates (%s)", (language) => {
   const before = currentLanguage();
   setLanguage(language);
   onTestFinished(() => setLanguage(before));
@@ -43,13 +42,6 @@ it.each(["en", "zh-Hans", "ar"] as const)("keeps rich location/model wording equ
     for (const chip of container.querySelectorAll("[data-inline-chip]")) {
       expect(chip.getAttribute("dir")).toBe("auto");
       expect(chip.querySelector("code")).toBeNull();
-    }
-  }
-  for (const { value: agent } of AGENT_OPTIONS) {
-    for (const launch of [{ model: "model/中文", effort: "high" }, { model: null, effort: "high" }, { model: "opus", effort: null }, { model: null, effort: null }]) {
-      const container = mount(sessionModelContent(t, agent, launch));
-      expect(container.textContent).toBe(bare(sessionModelLabel(t, agent, launch)));
-      expect(container.querySelectorAll("code")).toHaveLength(Number(launch.model !== null) + Number(launch.effort !== null));
     }
   }
 });

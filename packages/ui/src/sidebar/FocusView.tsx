@@ -24,7 +24,6 @@ import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
 import { activityLabelKey, sessionAriaLabel, sessionDisplayTitle, sessionStatusKind, statusLabel } from "../sessionLabel";
-import { sessionModelContent } from "../sessionCopy";
 import { inheritedLaunch, sessionModelEffort, sessionModelLabel } from "../sessionModel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 import { useHasBoundSessions, useProjectSessions, useSessionProjectId } from "../sessions/useSessions";
@@ -589,9 +588,7 @@ const SessionCard = memo(function SessionCard({
   const hasBound = useHasBoundSessions(session.id);
   const rowRef = useRef<HTMLDivElement>(null);
   const inherited = useDaemonStoreEqual((s) => inheritedLaunch(session, s.consoles, s.projects));
-  const launch = sessionModelEffort(session, inherited);
-  const modelLabel = sessionModelLabel(t, session.agent, launch);
-  const modelContent = sessionModelContent(t, session.agent, launch);
+  const modelLabel = sessionModelLabel(t, session.agent, sessionModelEffort(session, inherited));
   // The row is one button, so the model line beside the agent's mark reaches assistive technology
   // only through the row's name, where it comes last.
   const name = [sessionAriaLabel(t, language, session, accounts, under ?? consoleOwner, defaultNames)];
@@ -631,9 +628,9 @@ const SessionCard = memo(function SessionCard({
         <FadeOverflow
           as="span"
           className="min-w-0 flex-1"
-          titleWhenClipped={modelContent}
+          titleWhenClipped={modelLabel}
         >
-          {modelContent}
+          {modelLabel}
         </FadeOverflow>
         <div className="flex shrink-0 items-center gap-2">
           {hasVisibleContext(session.context) && <div id={metadataId}><SessionContextLabel context={session.context} /></div>}

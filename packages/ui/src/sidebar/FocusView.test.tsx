@@ -135,8 +135,8 @@ it("a card's accessible name ends with the model line shown beside its agent mar
   const { container, text, unmount } = mount((h) => (
     <ProjectFocusView handlers={h} console={main} project={web} sessions={[observed]} owners={owners} />
   ));
-  expect(text()).toContain("Opus 5.5 · high");
-  expect(Array.from(container.querySelectorAll("[data-inline-chip] code")).map((code) => [code.textContent, code.getAttribute("dir")])).toEqual([["Opus 5.5", "ltr"], ["high", "ltr"]]);
+  expect(text()).toContain(`${isolate("Opus 5.5")} · ${isolate("high")}`);
+  expect(container.querySelector("[data-inline-chip]")).toBeNull();
   const label = sessionLabels(container).find((l) => l.includes("Observe the model"));
   expect(label?.endsWith(`${isolate("Opus 5.5")} · ${isolate("high")}`)).toBe(true);
   unmount();
