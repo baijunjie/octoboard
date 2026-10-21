@@ -8,6 +8,7 @@ import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { ErrorAlert } from "../components/ErrorAlert";
+import { PaneTitle } from "../components/PaneTitle";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useFadeRegion, useScrollFade } from "../components/scrollFade";
@@ -35,7 +36,6 @@ export function SessionHistoryView({ sessionId }: { sessionId: string }): React.
   const { history, reload } = useSessionHistory(sessionId);
   useErrorAcknowledgement(history.state === "failed" ? history.error : undefined, t("history.failed"));
   const [showReplies, setShowReplies] = useState(false);
-  const titleId = useId();
   const switchLabelId = useId();
   const rootRef = useRef<HTMLElement>(null);
   // The retry button goes away under focus, into the loading state: it moves to the messages when
@@ -53,12 +53,12 @@ export function SessionHistoryView({ sessionId }: { sessionId: string }): React.
           ? t("history.empty")
           : undefined;
   return (
-    <section ref={rootRef} {...held} aria-labelledby={titleId} className="absolute inset-0 flex flex-col bg-panel">
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 pt-3 pb-2">
-        <h2 id={titleId} className="text-base font-semibold">
-          {t("history.title")}
-        </h2>
-        <div className="control-fills flex items-center gap-2">
+    <section ref={rootRef} {...held} aria-label={t("history.title")} className="absolute inset-0 flex flex-col bg-panel">
+      {/* A pane header: its height and groove run its bottom line on from the sidebar's and the side
+          pane's headers. */}
+      <header className="flex h-(--pane-header-height) shrink-0 items-center gap-2 groove-b px-(--pane-inset)">
+        <PaneTitle heading={t("history.title")} />
+        <div className="control-fills flex shrink-0 items-center gap-2">
           <span id={switchLabelId} className="text-sm">
             {t("history.showReplies")}
           </span>
@@ -117,11 +117,11 @@ function MessageList({ messages, showReplies }: { messages: HistoryMessage[]; sh
   // Always a region, even when the messages fit: it is the pane's F6 landing and what the keyboard
   // scrolls.
   const region = useFadeRegion({ label: t("history.messages"), always: true });
-  const fade = useScrollFade({ region, className: "min-h-0 flex-1 overflow-auto px-4 pt-1 pb-24" });
+  const fade = useScrollFade({ region, className: "min-h-0 flex-1 overflow-auto px-(--pane-inset) pt-4 pb-24" });
   return (
     <div className={`flex min-h-0 flex-1 flex-col rounded-xl ${region.focused ? "ring-2 ring-app-focus ring-inset" : ""}`}>
       <div {...fade}>
-        <ol className="mx-auto flex max-w-3xl flex-col gap-5">
+        <ol className="flex flex-col gap-4">
           {messages.map((message, index) =>
             showReplies || message.speaker !== "agent" ? (
               // The index in the whole list, so a message keeps its identity when replies come and go.
@@ -176,7 +176,7 @@ function Message({ message }: { message: HistoryMessage }): React.ReactElement {
       ) : (
         <p
           dir="auto"
-          className={`text-sm leading-6 break-words whitespace-pre-wrap ${message.speaker === "octoboard" ? "border-s-2 border-separator ps-3 text-app-muted" : ""}`}
+          className={`text-sm leading-6 break-words whitespace-pre-wrap ${message.speaker === "octoboard" ? "border-s-2 border-separator ps-3 text-app-muted" : "rounded-xl bg-default px-3 py-2"}`}
         >
           {message.text}
         </p>

@@ -256,8 +256,9 @@ html {
   --title-bar-height: 40px;
 
   /* The header of each pane in the content panel (the sidebar's console and focus headers, the
-     archive view's, the project pane's, the report panel's): one height for all of them, so their
-     bottom lines run on as one line across the panel. A second tier beside the top bar's 40px.
+     archive view's, the session history's, the project pane's, the report panel's): one height
+     for all of them, so their bottom lines run on as one line across the panel. A second tier
+     beside the top bar's 40px.
      An overlay pane is a card inset by `--peek-gap`, so its headers take the floating value
      instead, which puts their bottom line at the same height as the docked ones'
      (`floatingFrame` in `layout/paneOverlay.tsx`). Only the gap comes off: the card's edge is a
