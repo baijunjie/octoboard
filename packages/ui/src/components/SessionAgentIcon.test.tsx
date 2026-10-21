@@ -22,7 +22,8 @@ const accounts: Account[] = [{ id: "w", agent: "claude", name: "Work", config_di
 it("names the agent, then the account as a badge that takes its text's own direction", () => {
   const container = mount(<SessionAgentTooltip session={sessionOf("s", "c", "p", "T", "idle", { account_id: "w" })} accounts={accounts} defaultNames={undefined} />);
   expect(container.textContent).toBe("Claude Code, Work");
-  expect(container.querySelector("[dir]")?.getAttribute("dir")).toBe("auto");
+  const badge = Array.from(container.querySelectorAll("[dir]")).find((element) => element.textContent === "Work");
+  expect(badge?.getAttribute("dir")).toBe("auto");
 });
 
 it("lets a long recorded path wrap inside the tooltip, read left to right", () => {

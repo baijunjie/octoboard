@@ -50,7 +50,8 @@ it.each(AGENT_OPTIONS)("retains account qualifiers and removed-account paths for
   for (const account of [undefined, { id: "stored", name: "العمل Work 中文", config_dir: "/home/stored" }]) {
     const session = sessionOf("s", "c", "p", "Task", "idle", { agent, account_id: account?.id ?? "gone", config_dir: "/Users/中文/old account" });
     const container = mount(<SessionAgentTooltip session={session} accounts={account ? [{ ...account, agent }] : []} defaultNames={undefined} />);
-    expect(container.querySelector("[data-inline-chip]")?.textContent).toBe(label);
+    expect(container.querySelector("[data-inline-chip]")).toBeNull();
+    expect(container.firstElementChild!.firstElementChild!.textContent).toBe(label);
     expect(container.textContent).toContain(account?.name ?? session.config_dir);
     expect(container.querySelector("code")?.textContent).toBe(account ? undefined : session.config_dir);
   }

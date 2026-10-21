@@ -651,7 +651,8 @@ non-monospace `InlineChip` at `inherit` size, with `dir="auto"` and wrapping, in
 fixed agent and product names when they are references within copy. Whole entity and control labels, structured
 entity/path rows, and foreign source, terminal and report layouts keep their established presentation.
 A session's model line — its model and reasoning effort beside the agent mark — is such a whole metadata label: it
-is plain text without chips, shown as the same isolated string its accessible name ends with.
+is plain text without chips, shown as the same isolated string its accessible name ends with. So is the agent's name
+heading the agent mark's tooltip: it names the mark rather than being referenced within prose.
 Plain-text surfaces, including accessible names, native labels, announcements and system notifications, retain
 readable text without chip markup. Isolate references at the sentence boundary where needed, as specified under
 "Text direction"; collection keys, `textValue`, sorting, defaults and submitted values stay raw.
