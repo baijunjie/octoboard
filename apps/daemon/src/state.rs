@@ -792,6 +792,19 @@ impl AppState {
         )
     }
 
+    /// The name the session list shows for the session: its task title and created name joined by
+    /// a fullwidth bar, or the created name alone when there is no task title or it repeats the
+    /// name. Clients compose the same from the record they receive; see "Displayed names" in
+    /// docs/product/session-titles.md.
+    pub(crate) fn display_title(&self, session: &Session) -> String {
+        match self.resolved_title(session, &std::cell::OnceCell::new()) {
+            Some(task) if !task.trim().is_empty() && task.trim() != session.title.trim() => {
+                format!("{}｜{}", task.trim(), session.title)
+            }
+            _ => session.title.clone(),
+        }
+    }
+
     /// The session as a client receives it, with its resolved title and live user interactions.
     /// These leave the stored agent status intact so answering restores it even before a hook.
     pub(crate) fn wire_session(&self, mut session: Session) -> Session {

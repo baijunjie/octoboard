@@ -107,7 +107,7 @@ its own without the user.
 | `session` | yes | The session to hand off: one of the caller's (`yours: true`). |
 | `agent` | yes | The receiving agent, `claude`, `codex` or `grok`; not the session's own. |
 | `account` | no | The receiving session's account: an account's id or name, or `default` for the agent's default account. It must belong to `agent`. `default` chooses that account outright and does not fall through to a project pin. Left out or blank, it is the caller's own account when `agent` is the caller's own agent and that account can still open a session; otherwise the project's account for that agent, else the console's (see "What can be handed off" above). It does not follow automatic account selection. |
-| `title` | no | The receiving session's name in the session list, stored trimmed. Left out or blank, it keeps the original's title. It is to be written in the user's language (see "Naming the sessions a session starts" in `docs/product/hub-orchestration.md`). |
+| `title` | no | The receiving session's created name, stored trimmed. Left out or blank, it takes the original's displayed name (see "What the receiving session takes over" below). It is to be written in the user's language (see "Naming the sessions a session starts" in `docs/product/hub-orchestration.md`). |
 | `model`, `effort` | no | The receiving session's model and reasoning effort. Left out, each comes from the project or console, as for any handoff; blank, it is the agent's own default; any other must be one the agent offers. |
 | `note` | no | What the caller tells the receiving session beyond the package, such as where the work stands and what to do first. It is added at the end of the receiving session's opening prompt, introduced as a note from the owner that handed the work off, every line quoted. Blank is the same as left out. |
 
@@ -187,8 +187,12 @@ its place is about to move to it, that it will be told what it holds, and not to
 
 Once it is running, it takes the original's whole place:
 
-- **the same kind, project or console, and title** as the original — the title unless the owner's `handoff_session`
-  named another;
+- **the same kind, project or console** as the original;
+- **the original's displayed name as its created name**, unless the owner's `handoff_session` supplied another:
+  **task title｜created name**, or the created name alone under "Displayed names" in
+  `docs/product/session-titles.md`. This is saved as the receiving session's created name; its own task title is
+  independent and, when present, prefixes that name under the same display rules. A later handoff takes the name
+  displayed at that time;
 - **the same role and owner**: a bound session is bound to the original's owner from its first launch; a lead session
   launches as an unbound project session does and is then bound to the original's console session as its lead session
   (see "Lead sessions" in `docs/product/hub-orchestration.md`); an unbound session stays unbound;

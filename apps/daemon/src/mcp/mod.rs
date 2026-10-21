@@ -676,7 +676,8 @@ const HANDOFF_SESSION: ToolDef = ToolDef {
                     "type": "string",
                     "description": format!(
                         "The new session's name in Octoboard's session list. Left out or blank, \
-                         it keeps the original's. {NAMING_LANGUAGE}"
+                         it is the name the original is shown under, its task title included. \
+                         {NAMING_LANGUAGE}"
                     ),
                 },
                 "model": {

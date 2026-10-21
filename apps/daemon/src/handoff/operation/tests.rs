@@ -179,6 +179,7 @@ async fn an_unbound_project_session_hands_its_branches_and_sessions_to_the_recei
     let fixture = Fixture::new("unbound");
     let mut pinned = session("original", true, "idle", None, false);
     pinned.pinned = true;
+    pinned.terminal_title = Some("Fix the build".to_string());
     let original = fixture.run(pinned);
     let owned = fixture.run(session("owned", true, "idle", Some("original"), false));
     fixture.run(session(
@@ -198,6 +199,10 @@ async fn an_unbound_project_session_hands_its_branches_and_sessions_to_the_recei
     assert_eq!(stored.agent, Agent::Codex);
     assert_eq!(stored.status, SessionStatus::Working);
     assert!(stored.pinned, "the original's pinned mark is carried over");
+    assert_eq!(
+        stored.title, "Fix the build｜Session original",
+        "named as the original is shown, task title included"
+    );
     assert!(fixture.state.has_process(&receiving.id));
     assert_eq!(
         (
@@ -308,6 +313,10 @@ async fn a_bound_session_is_replaced_by_a_session_bound_to_the_same_owner() {
     let receiving = fixture.hand_off("original").await.unwrap();
 
     let stored = fixture.stored(&receiving.id);
+    assert_eq!(
+        stored.title, "Session original",
+        "with no task title, the original's name alone"
+    );
     assert_eq!(
         (stored.bound_to.as_deref(), stored.lead),
         (Some("boss"), false)

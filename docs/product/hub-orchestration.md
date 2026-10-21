@@ -243,9 +243,8 @@ repository's own configuration — for Claude Code, the permission rules and hoo
 created name; see `docs/product/session-titles.md`), stored trimmed. Left out or blank, the session is **titled from
 its goal** rather than from its project — the goal's first non-blank line, shortened to roughly 48 characters on a word
 boundary with an ellipsis — so several sessions dispatched into one project can be told apart in the menu.
-`handoff_session`'s `title` names the receiving session the same way, which otherwise keeps the original's title (see
-"Handing off from an owner's tool" in `docs/product/handing-off-sessions.md`), and `rename_session`'s `title` is a
-session's new name.
+`handoff_session`'s `title` names the receiving session the same way; its default is described in "What the receiving
+session takes over" in `docs/product/handing-off-sessions.md`. `rename_session`'s `title` is a session's new name.
 
 Every one of these `title` arguments tells the agent to write the name in **the language the user converses with it
 in**, not that of the project, its docs and code, or a brief. A session that takes its work from an owner session
