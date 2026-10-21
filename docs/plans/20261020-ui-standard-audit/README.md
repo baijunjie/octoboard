@@ -58,8 +58,8 @@ Each was fixed where it was found, but nobody has checked the rest of the UI. Th
 
 ### Accepted fix milestones
 
-The [coverage and delivery record](audit-coverage.md) maps every standard section, confirmed finding and evidence
-artifact. The user accepted the exact 03–13 split and independent work on 04, 12 and 13. Completed work now
+The remaining open briefs contain their own accepted finding scope and dependencies. A concise record of
+completed checks and unresolved qualifications is in [audit-checks.md](audit-checks.md). Completed work
 accumulates on the dedicated UI audit integration branch. Each milestone is independently verified; shared
 contracts have one owner at a time. Only the complete plan is rebased onto current main, verified and integrated
 into main. The closed audit changed no production UI; fix milestones implement its findings.
@@ -77,18 +77,16 @@ into main. The closed audit changed no production UI; fix milestones implement i
 - 12 Hand focus off when report pages are replaced (closed)
 - [13 Use the shared button primitive for tree chevrons](13-collection-button-primitives.md)
 
-Milestones 09–11 and 13 remain open. The open milestones carry their current-source handoffs; the original audit
-inventories remain historical evidence, with check limitations in [the check record](audit-checks.md).
+Milestones 09–11 and 13 remain open. Their briefs carry the findings, current-source handoffs and validation
+limits needed to resume work. Detailed source inventories and generated index files were pruned after the open
+scope was transferred; retained raw evidence and complete milestone handoffs stay outside Git.
 
 ## Evidence baseline and concurrent integration
 
-Evidence and the interpolation inventory describe `3a65c903`, even after this documentation is rebased onto local
-main's quota integration `7a7a2f34e`. Milestone 05 refreshed its Alert, account-name, ReasonText
-and recovery routes and validated the five named exhausted/refused quota scenarios; its current-source results are
-in [the check record](audit-checks.md#milestone-05-rich-references-and-tooltip-closure). Original counts and
-captures do not certify the later 95-file change. Resume-by-ID subsequently integrated locally at `368a1f1f3`, followed by archived history (`501bd872d`) and
-MCP defaults (`d6b69d18a`). The shared Alert and error router now include those current callers; their source
-provenance stays separate from the original audit. Milestone 05 also refreshed the resume and history callers. Remaining milestones must refresh their affected current source.
+The detailed audit inventories were collected against an older source baseline and did not certify later quota,
+resume, history or MCP integrations. Completed milestones refreshed their assigned callers; 09 must recheck the
+history empty state described in its brief, and every remaining milestone must re-inventory its affected current
+source before changing it. Historical counts are not current coverage claims.
 
 ## Coordination
 

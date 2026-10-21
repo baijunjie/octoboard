@@ -7,7 +7,20 @@ Status: **accepted; implementation not started**. Implementation begins only aft
 
 ## Scope
 
-I-03 and I-04 in [the interaction audit](audit-interactions.md), G02 in [the gallery audit](audit-gallery.md).
+The accepted findings and current layout dependency are reproduced below so this brief remains self-contained.
+
+- **Mutable collections (I-03):** shared agent tabs, Console Advanced agent tabs, Shell tabs and quota-account
+  lists change while mounted without shared collection motion. Keep stable identities, lazy mounting, React Aria
+  tab focus/selection, drag/reorder, menu focus return, shell close handoff and quota height behavior. Cover
+  add/remove/reorder and live availability/account changes on both axes and RTL. Exclude initial render, scroll,
+  recycling and resize; removed controls disappear immediately and exit copies remain inert.
+- **Reduced motion (I-04/G02):** custom transitions remain in sidebar rows/overlay, archive actions and the resize
+  grip. Height motion checks preference only before starting; drag snapshots preference at drag start. Guard these
+  effects and cancel active height/drag motion when the preference changes. Do not duplicate `useListMotion`.
+- **Current Shell layout:** keep the 08 one-row contract. The visual title stays hidden until the viewport is at
+  least 1168px and the named header container has at least 352px of content; the accessible heading and DOM nodes
+  remain. The narrow pane floor is 336px only while Terminal remains in the column, otherwise 320px; saved widths
+  are not rewritten. Preserve the full focus ring, selected Files/Changes identity and real F6 entry in RTL.
 
 ## Implementation contract
 

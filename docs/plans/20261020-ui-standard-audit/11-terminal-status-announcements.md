@@ -7,7 +7,17 @@ Status: **accepted; implementation not started**. Implementation begins only aft
 
 ## Scope
 
-I-05 in [the interaction audit](audit-interactions.md).
+The accepted finding and native verification boundary are reproduced below so this brief remains self-contained.
+
+- **Initial writes (I-05):** `TerminalPane.tsx` currently places initial starting/loading and dormant text directly
+  in `role="status"`; `ShellTerminalView.tsx` does the same for initial trouble/exited text. Later changes in a
+  persistent region are not part of this finding. Use the established status mechanism so an empty region mounts
+  before the deferred first write, while durable visible copy, reconnect/resume actions, one active shell-tab
+  announcement, modal exposure and focus timing remain intact.
+- Check `terminal-starting`, `terminal-reconnecting`, `terminal-disconnected`, `shell-panel-reconnecting`,
+  `shell-panel-disconnected` and `shell-panel-exited`, separating initial mount from later changes. Match an
+  existing passing VoiceOver case item by item; where none matches, complete fixture-backed packaged listening.
+  Chromium or Playwright WebKit snapshots do not establish spoken output. No real daemon/account mutation is needed.
 
 ## Implementation contract
 

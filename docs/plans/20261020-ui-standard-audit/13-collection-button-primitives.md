@@ -3,13 +3,28 @@
 > Goal: use the shared button primitive for collection chevrons.
 > Completion criteria: Files/Git tree chevrons follow the shared HeroUI Button contract, preserving React Aria collection slot, expansion semantics, row focus and equivalent row action. All listed validation passes and the result is independently reviewed.
 
-Status: **accepted for parallel implementation** in its own worktree. The user authorized 04, 12 and 13 to
-proceed independently; closure of 04–11 is not a start prerequisite. Independently verify this scope and wait for
-the coordinating session’s local-integration authorization, after 04’s first integration slot.
+Status: **paused after milestone 08**. The shared-button migration is implemented on its separate branch and
+has its own initial validation, but final actual interaction coverage and closure remain incomplete. Do not
+resume until the user clears the menu-focus scope decision and the coordinator resumes the audit after the
+requested pause. The separate branch must not be integrated into this aggregate without explicit coordination.
 
 ## Scope
 
-I-08 in [the interaction audit](audit-interactions.md); source and actual traversal evidence in evidence/interaction-probes.json.
+The accepted finding and its open scope decision are reproduced below so this brief remains self-contained.
+
+- `treeRow.tsx` uses a bare React Aria Button for the chevron even though the installed HeroUI Button wraps the
+  same primitive and forwards `slot`. Migrate the chevron to the shared Button without adding a Tab stop; retain
+  collection-managed expansion/focus and the documented custom section-heading control.
+- Existing Files traversal reached the folder action, returned to the row, expanded with Enter and moved to the
+  next row with ArrowDown. The 16px glyph is not itself a pointer-target defect because the whole row is the
+  equivalent larger action. Recheck Files and grouped Changes in en/ar light/dark plus Chinese, including arrows,
+  Home/End, fold focus, menus, visible rings and the 24px equivalent action.
+- **Held scope decision:** closing a keyboard-opened row menu returns focus to the row; project documentation
+  promises return to the exact surviving Actions button. The same behavior occurs on the untouched baseline. The
+  proposed bounded public-API repair uses a one-shot guarded focus return for the original connected row/key/tree
+  and surviving trigger, leaving pointer behavior and virtualized stale targets to the collection. The user has
+  not chosen whether to include that pre-existing defect in 13 or keep it as a separately tracked failing boundary.
+  Keep 13 paused until that choice; do not weaken the exact-trigger assertion or infer consent from time.
 
 ## Implementation and validation contract
 

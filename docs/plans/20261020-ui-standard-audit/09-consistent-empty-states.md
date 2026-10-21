@@ -7,7 +7,20 @@ Status: **accepted; implementation not started**. Implementation begins only aft
 
 ## Scope
 
-S03 and S05 in [the state audit](audit-states.md), G03 in [the gallery audit](audit-gallery.md).
+The accepted findings are reproduced below so this brief remains self-contained.
+
+- **Directory picker (S03):** `DirectoryPicker.tsx` currently uses a disabled list option with fading text only.
+  Keep that valid option and collection semantics, but give the empty listing the shared compact glyph/message
+  presentation. Preserve parent navigation, keyboard skipping and the absence of row actions. The existing
+  `dialog-directory-picker` only shows populated content; add an empty fixture and compare populated, parent,
+  root and failed-list states.
+- **No installed agent (S05/G03):** `TerminalPane.tsx` and `Sidebar.tsx` use a warning triangle for ordinary
+  absence, while the added-but-not-installed state is different. Use a neutral or purpose glyph in these two
+  empty states; retain PATH explanations, disabled creation actions, genuine load failures and the approved
+  warning glyph in `AgentTabList`.
+- **Integrated history handoff:** re-inventory `SessionHistoryView`'s unavailable-record `EmptyPanel` and
+  `history-unavailable`. Keep it distinct from `history-failed`, which retains structured reason, acknowledgement,
+  silent summary, retry and reconnect behavior. These callers arrived after the original audit baseline.
 
 ## Implementation contract
 
