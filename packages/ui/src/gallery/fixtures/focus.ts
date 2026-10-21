@@ -217,13 +217,14 @@ const removedAccountState = {
   sessions: new Map([...combinedState.sessions].map(([id, session]) => [id, id === "s-1" ? { ...session, account_id: "a-removed", config_dir: REMOVED_ACCOUNT_DIR } : session])),
 };
 
-// "Add idempotency keys" is a Claude session, whose context size never comes with a window. The tooltip
-// that names a limit is about a Codex session, which always reports a window with its used percentage.
-const withContext = (context: SessionContext, codex = false) => ({
+// "Add idempotency keys" is a Claude session. A session's context size comes with a window only once its agent
+// has reported one, which a Claude session may not have yet (nor on an older Claude Code, or with managed status
+// line settings); the tooltip that names a limit is the same for every agent that does report it.
+const withContext = (context: SessionContext) => ({
   ...scrollingFocusState,
-  sessions: new Map([...scrollingFocusState.sessions].map(([id, session]) => [id, id === "s-1" ? { ...session, ...(codex ? { agent: "codex" as const, account_id: undefined } : {}), context } : session])),
+  sessions: new Map([...scrollingFocusState.sessions].map(([id, session]) => [id, id === "s-1" ? { ...session, context } : session])),
 });
-const limitContextState = withContext({ tokens: 200_704, window: 475_000, used_percent: 41 }, true);
+const limitContextState = withContext({ tokens: 90_227, window: 200_000, used_percent: 45 });
 // A single token exercises the heading's singular form.
 const singleTokenContextState = withContext({ tokens: 1 });
 
@@ -398,7 +399,7 @@ export const focusScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Context size tooltip",
-    description: "The pointer rests on the context-size chip of Add idempotency keys, a Claude session whose agent reports no window. The tooltip holds only its heading, Context 200,704 tokens (plural “tokens” in English), with no divider and no Limit row. Compare the chip's accessible name: one plain phrase, not the chip's compact number.",
+    description: "The pointer rests on the context-size chip of Add idempotency keys, a Claude session whose agent has not reported a window. The tooltip holds only its heading, Context 200,704 tokens (plural “tokens” in English), with no divider and no Limit row. Compare the chip's accessible name: one plain phrase, not the chip's compact number.",
     state: scrollingFocusState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
     steps: [(ui) => ui.hoverSessionContext(addIdempotencyKeys(ui))],
@@ -408,7 +409,7 @@ export const focusScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Context size tooltip with a limit",
-    description: "The same chip on a Codex session, whose agent reports the window. Below the heading sits a divider and a Limit row, the muted label at the start and the value, 475,000 (41% used), aligned to the end (mirrored under right-to-left).",
+    description: "The same chip once the agent has reported the window. The heading reads Context 90,227 tokens; below it sit a divider and a Limit row, the muted label at the start and the value, 200,000 (45% used), aligned to the end (mirrored under right-to-left).",
     state: limitContextState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
     steps: [(ui) => ui.hoverSessionContext(addIdempotencyKeys(ui))],

@@ -74,8 +74,8 @@ both run, in the same session.
 
 ## What is injected on every launch
 
-Three things, and nothing else, besides the variables a project session's agent is given for its git (see "The launch
-environment" below):
+Three things, and for Claude Code a status line besides (see "Claude Code's status line" below), and nothing else,
+besides the variables a project session's agent is given for its git (see "The launch environment" below):
 
 - **Status hooks** — the events the session statuses in `docs/product/sessions.md` are derived from.
 - **Octoboard's own MCP server** — the tools described in `docs/product/hub-orchestration.md`. It is
@@ -173,6 +173,35 @@ Code or Codex console session resumed after it reads it too (on Codex 0.142.5, o
 console session never does within its life, resumed or not: only a new one does. Codex reads at most 32 KiB of a
 project's instruction files by default (its own `project_doc_max_bytes` setting), so a very long text can be cut off
 for Codex console sessions; Octoboard sets no limit on the text itself.
+
+### Claude Code's status line
+
+A Claude Code session is also launched with a status line command of Octoboard's, given as a launch setting like the
+hooks, so no configuration file is written. Claude Code passes a status line its session's figures, the model's
+context window among them, which its own records never hold; the command reports that window to Octoboard (see
+"Claude Code's context window" in `docs/product/session-context.md`). It is given only to a Claude Code known to be
+2.0.0 or later; one older, or one whose version Octoboard cannot tell from where it is installed, gets none. A status
+line set by managed (policy) settings outranks Octoboard's, which then never runs.
+
+A status line from the launch outranks the user's and the project's own, so the command runs theirs in its place, and
+what the user sees is what their own status line would show:
+
+- which one is theirs is resolved on every run, so an edit made while the session runs is followed: the user settings
+  in the Claude Code config directory in effect (the session's own, else a `CLAUDE_CONFIG_DIR` the user's shell
+  exports, else `~/.claude`), then the project's `.claude/settings.json`, then its `.claude/settings.local.json`,
+  each later one overriding the earlier ones key by key; a file that cannot be read or parsed counts for nothing;
+- only a `command` status line is run, through `/bin/sh`, with the same input, environment and working directory
+  Claude Code gave Octoboard's, and its output and exit status are passed on unchanged; one that cannot be started or
+  is ended by a signal counts as exiting with status 1; with none configured, nothing is printed;
+- its `padding`, `refreshInterval` and `hideVimModeIndicator` are carried into Octoboard's as they stand at launch,
+  each only with a value of the type Claude Code takes for it (a `refreshInterval` of at least 1 second); a change
+  to them takes effect at the next launch;
+- reporting the window prints nothing, and a daemon that is slow or unreachable delays the status line by no more
+  than a fraction of a second.
+
+What cannot be carried over is having no status line at all. With any status line configured, Claude Code hides its
+"? for shortcuts" footer hint and, in fullscreen, keeps a blank row for the line, so a user with no status line of
+their own sees those two differences in sessions Octoboard runs. Running `claude` outside Octoboard is unaffected.
 
 ## The model and reasoning effort
 
@@ -290,6 +319,8 @@ unavailable, no session can be opened at all; see "Opening a session" in `docs/p
 
 **Claude Code.** Octoboard assigns the session's id up front, so a session has an agent-side id from the moment it
 starts; a session opened to resume a conversation has that conversation's id. The flags that would drop the project's own permission rules, hooks or MCP servers are never passed.
+Its status line is Octoboard's, which runs the user's own in its place; the footer differences that brings for a user
+without one are in "Claude Code's status line" above.
 
 When Claude Code has **not been trusted with the project's directory**, it ignores that project's own
 `allow` permission rules for the session while still applying its `deny` rules — so the session is

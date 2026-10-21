@@ -71,7 +71,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   displayed, what renaming edits, where it comes from (the agent's records, its decorated terminal title, the first
   prompt), how titles are retained, and the accepted terminal sequences.
 - [Session context size](product/session-context.md) — the session's current context size (the main conversation's latest
-  request): per-agent sources, when it is unknown or drops, the context-size chip and its Limit tooltip, refresh, and what
+  request): per-agent sources, Claude Code's context window from its status line and when it is missing, when the size
+  is unknown or drops, the context-size chip and its Limit tooltip, refresh, and what
   happens on archiving, upgrading and account switches.
 - [Sidebar](product/sidebar.md) — one console at a time, picked on the rail's console switcher with each console's
   activity badge and the session a switch brings back into the terminal, previewing another console from the rail
@@ -256,7 +257,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   never writes the user's agent configuration (the four narrow exceptions being the conversation a switch of a
   session's account copies, the Codex thread row that switch points at the copied head, the Grok Build trust entry
   carried to the user's own store, and an account set to share the default configuration), and that a fast-forward and a push are the ways it changes a project repository,
-  both only at the user's word; the three things injected per launch and the console's one generated instruction file
+  both only at the user's word; the three things injected per launch (plus Claude Code's status line, which runs the
+  user's own and reports the context window) and the console's one generated instruction file
   shared by every agent, ending with the console's own instructions, its refresh on each launch and which sessions an
   edit reaches, the launch environment, and the per-agent specifics.
 - [Folder trust](product/folder-trust.md) — each agent's own folder-trust confirmation and where it records the trust,

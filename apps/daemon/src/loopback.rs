@@ -1,5 +1,5 @@
-//! A minimal HTTP client for the daemon's own loopback address, used by the two CLI modes that
-//! have to call the running daemon from a separate process: the hook forwarder and the MCP server.
+//! A minimal HTTP client for the daemon's own loopback address, used by the CLI modes that have to
+//! call the running daemon from a separate process.
 //!
 //! Hand-rolled rather than taken from a client crate. The traffic only ever goes to `127.0.0.1`,
 //! so a TLS stack and URL normalisation would be weight with no purpose.
@@ -8,9 +8,9 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
 
-/// Posts a body and returns the response body. The whole round trip is bounded by `timeout`,
-/// because both callers sit on a path where a wedged daemon would otherwise be charged to the
-/// agent's turn.
+/// Posts a body and returns the response body. Each step of the round trip is bounded by
+/// `timeout`, because every caller runs on a path where a wedged daemon would otherwise hold
+/// something up: the agent's turn, a git command, or the status line.
 pub fn post(port: u16, path: &str, body: &[u8], timeout: Duration) -> std::io::Result<Vec<u8>> {
     exchange(connect(port, timeout)?, port, path, body)
 }

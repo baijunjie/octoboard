@@ -608,7 +608,7 @@ impl Project {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionContext {
     pub tokens: u64,
-    /// The context-window limit, for an agent that records one.
+    /// The context-window limit, present only once the agent has given one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub window: Option<u64>,
     /// The share of the window in use, in whole percent, by the agent's own formula. Present only

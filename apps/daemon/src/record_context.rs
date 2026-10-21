@@ -3,8 +3,14 @@
 //! size falls again after a compaction or a revert. This module holds each agent's knowledge of
 //! which record says it, in which field, and how the window limit and the share used come out;
 //! reading the records is the collector's business (`record_collector.rs`).
+//!
+//! Claude Code's transcript records no window. Its status line input does, so Octoboard's injected
+//! status line reports it (`crate::status_line_mode`), and [`ReportedWindows`] holds the last report
+//! of each stored session, which the collector applies on every pass.
 
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use serde_json::Value;
 
@@ -19,8 +25,8 @@ pub struct Context {
     /// The size in tokens the records last gave: `None` before any, `Some(None)` after a
     /// compaction left it unknown until the next request.
     tokens: Option<Option<u64>>,
-    /// The context-window limit the records give: with each figure for Codex, from the signals
-    /// file for Grok.
+    /// The context-window limit: with each figure for Codex, from the signals file for Grok, and
+    /// for Claude what its status line reported (`ReportedWindows`).
     window: Option<u64>,
     /// The size a Grok compaction began from, which a trailing line may still repeat.
     stale: Option<u64>,
@@ -53,7 +59,8 @@ impl Context {
         self.base = Some((head, figure));
     }
 
-    /// Takes the window limit a separate file gives (Grok's signals file).
+    /// Takes the window limit a source beside the record gives: Grok's signals file, Claude's
+    /// status line.
     pub fn set_window(&mut self, window: Option<u64>) {
         self.window = window;
     }
@@ -174,6 +181,30 @@ impl Context {
     }
 }
 
+/// The context window each Claude Code session's status line last reported, by Octoboard session
+/// id. In memory only: the collector stores it with the session's context, which is what a daemon
+/// restart starts from, and a running Claude Code reports it again after its next reply.
+#[derive(Default)]
+pub struct ReportedWindows {
+    windows: Mutex<HashMap<String, u64>>,
+}
+
+impl ReportedWindows {
+    pub fn report(&self, session_id: &str, window: u64) {
+        self.windows
+            .lock()
+            .expect("reported window lock poisoned")
+            .insert(session_id.to_owned(), window);
+    }
+
+    /// Forgets the sessions not in `ids` and returns what is left.
+    pub fn retain(&self, ids: &HashSet<&str>) -> HashMap<String, u64> {
+        let mut windows = self.windows.lock().expect("reported window lock poisoned");
+        windows.retain(|id, _| ids.contains(id.as_str()));
+        windows.clone()
+    }
+}
+
 fn number(value: &Value, key: &str) -> Option<u64> {
     value.get(key)?.as_u64()
 }
@@ -199,8 +230,7 @@ pub fn codex_figure(line: &str) -> Option<Figure> {
     ))
 }
 
-/// How much of the window is used, in whole percent, by the agent's own formula. Claude records no
-/// window.
+/// How much of the window is used, in whole percent, by the agent's own formula.
 fn used_percent(agent: Agent, tokens: u64, window: u64) -> Option<u8> {
     /// What Codex sets aside of every window before it counts anything as used or left.
     const CODEX_BASELINE: u64 = 12_000;
@@ -218,7 +248,8 @@ fn used_percent(agent: Agent, tokens: u64, window: u64) -> Option<u8> {
         },
         // Grok's `contextWindowUsage` rounds down.
         Agent::Grok => (u128::from(tokens) * 100 / u128::from(window.max(1))).min(100) as u64,
-        Agent::Claude => return None,
+        // Claude Code's status line rounds to the nearest percent.
+        Agent::Claude => ((tokens as f64 / window.max(1) as f64 * 100.0).round() as u64).min(100),
     };
     u8::try_from(percent).ok()
 }
@@ -348,6 +379,47 @@ mod tests {
         );
         context.forget();
         assert_eq!(context.context(Agent::Claude), None);
+    }
+
+    /// The window comes from beside the transcript, so a compaction leaves it for the next request,
+    /// and the share is Claude Code's own, rounded.
+    #[test]
+    fn claudes_reported_window_outlasts_a_compaction_and_sizes_the_share_rounded() {
+        let request = claude_line(json!({}), json!({"input_tokens":1_000,"output_tokens":1}));
+        let mut context = claude(std::slice::from_ref(&request));
+        context.set_window(Some(200_000));
+        let shown = context.context(Agent::Claude).unwrap().unwrap();
+        assert_eq!(
+            (shown.tokens, shown.window, shown.used_percent),
+            (1_000, Some(200_000), Some(1))
+        );
+        context.fold_claude(&json!({"type":"system","subtype":"compact_boundary"}));
+        assert_eq!(context.context(Agent::Claude), Some(None));
+        context.fold_claude(&claude_line(
+            json!({}),
+            json!({"input_tokens":2_000,"cache_read_input_tokens":96_000,"output_tokens":1}),
+        ));
+        let shown = context.context(Agent::Claude).unwrap().unwrap();
+        assert_eq!(
+            (shown.tokens, shown.window, shown.used_percent),
+            (98_000, Some(200_000), Some(49))
+        );
+        assert_eq!(used_percent(Agent::Claude, 0, 200_000), Some(0));
+        assert_eq!(used_percent(Agent::Claude, 999, 200_000), Some(0));
+        assert_eq!(used_percent(Agent::Claude, 1_001, 200_000), Some(1));
+        assert_eq!(used_percent(Agent::Claude, 199_000, 200_000), Some(100));
+        assert_eq!(used_percent(Agent::Claude, 900_000, 200_000), Some(100));
+    }
+
+    #[test]
+    fn reported_windows_keep_the_last_report_of_the_sessions_still_there() {
+        let windows = ReportedWindows::default();
+        windows.report("a", 200_000);
+        windows.report("a", 1_000_000);
+        windows.report("b", 200_000);
+        let kept = windows.retain(&HashSet::from(["a"]));
+        assert_eq!(kept, HashMap::from([("a".to_owned(), 1_000_000)]));
+        assert!(windows.retain(&HashSet::from(["b"])).is_empty());
     }
 
     fn codex_count(info: Value) -> String {

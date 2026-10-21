@@ -207,6 +207,8 @@ pub struct AppState {
     /// run no hooks and so never report sending anything.
     pub send_wait: Mutex<Option<Duration>>,
     pub record_hints: crate::agent_records::Hints,
+    /// The context window each Claude Code session's status line last reported.
+    pub context_windows: crate::record_context::ReportedWindows,
     /// The repositories' refs under watch, so a commit made outside the daemon is re-read
     /// (`crate::git_watch`).
     pub git_watch: crate::git_watch::Watch,
@@ -479,6 +481,7 @@ impl AppState {
             host_tools: Default::default(),
             send_wait: Mutex::new(Some(SEND_WAIT)),
             record_hints: Default::default(),
+            context_windows: Default::default(),
             git_watch: Default::default(),
             agent_availability: RwLock::new(
                 Agent::ALL

@@ -27,17 +27,35 @@
 //! (`CLAUDE_CONFIG_DIR`). That directory holds the conversation transcripts as well as the global
 //! config file, so everything here that reads or relaunches follows it: the variable is set for the
 //! launch, and the trust state is read from the file inside it.
+//!
+//! Claude Code's transcript records no context window; only the input of its status line carries
+//! one. So the `--settings` JSON also sets `statusLine`, to a command that hands the window to the
+//! daemon and then runs the user's own status line, resolved afresh on every run, with the same
+//! input, its output and exit status passed on unchanged (`crate::status_line_mode`). A
+//! `statusLine` from the flags outranks the user's and the project's, so carrying theirs out is
+//! this command's job, and their layout fields (`padding`, `refreshInterval`,
+//! `hideVimModeIndicator`) are carried into the injected one when well-typed. What cannot be carried over is the status line's absence: with any status
+//! line configured Claude Code drops its "? for shortcuts" footer hint, and in fullscreen keeps a
+//! blank row for the line (read out of Claude Code 2.1.306), so a user with none of their own sees
+//! those two changes. That is accepted as the price of the window. A managed `statusLine` outranks
+//! the flags, and then this one never runs and the session reports no window.
 
-use std::path::{Path, PathBuf};
+pub mod settings;
+
+use std::path::Path;
 
 use serde_json::json;
 
 use super::{
-    hook_command, hook_url, AgentAdapter, AgentVersion, LaunchPlan, LaunchSpec, NamedTitle,
-    HOOK_TIMEOUT_SECS,
+    hook_command, hook_url, shell_quote, AgentAdapter, AgentVersion, LaunchPlan, LaunchSpec,
+    NamedTitle, HOOK_TIMEOUT_SECS,
 };
 use crate::mcp;
-use crate::protocol::{notice_code, Agent, ClaudeApprovalMode, Notice};
+use crate::protocol::{Agent, ClaudeApprovalMode};
+use settings::{
+    http_hooks_allowed, settings_files, untrusted_workspace_notice, user_config_dir,
+    user_status_line,
+};
 
 /// The events that carry the session states Octoboard shows. `StopFailure` is registered next to
 /// `Stop` because the two are mutually exclusive — a turn ending in an API error fires only
@@ -64,6 +82,11 @@ const HOOK_EVENTS: &[&str] = &[
 /// The first Claude Code that takes a `"type": "http"` hook handler, which posts the event's JSON
 /// to a URL from inside the agent's own process. Older ones only run commands.
 const HTTP_HOOKS_SINCE: AgentVersion = (2, 1, 63);
+
+/// The status line is injected only for a Claude Code known to be at least this version, well
+/// inside the releases that run a `statusLine` command; one whose input carries no context window
+/// still passes the user's own status line through and reports nothing.
+const STATUS_LINE_SINCE: AgentVersion = (2, 0, 0);
 
 pub struct ClaudeAdapter;
 
@@ -126,7 +149,45 @@ impl ClaudeAdapter {
         if spec.approval_mode == Some(ClaudeApprovalMode::Bypass) {
             settings["skipDangerousModePermissionPrompt"] = json!(true);
         }
+        if spec.agent_version.is_some_and(|v| v >= STATUS_LINE_SINCE) {
+            settings["statusLine"] = Self::status_line(spec, pinned);
+        }
         settings.to_string()
+    }
+
+    /// The injected `statusLine`: the command that runs `octoboardd status-line`, with the layout
+    /// fields of the user's own status line as they stand at launch. Only the fields Claude Code
+    /// 2.1.306 knows are carried, each only with a value of the type its schema takes, so nothing
+    /// in the user's files can make the flag's settings, hooks and all, fail to validate. The
+    /// command is given the directories the user's settings files are in, worked out here as for
+    /// the rest of this launch, and reads the files themselves again on every run.
+    fn status_line(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> serde_json::Value {
+        let user_dir = user_config_dir(spec, pinned);
+        let own = user_status_line(&user_dir, spec.cwd).unwrap_or_default();
+        let mut line = serde_json::Map::new();
+        line.insert("type".to_owned(), json!("command"));
+        line.insert(
+            "command".to_owned(),
+            json!(format!(
+                "exec {} status-line --session {} --port {} --cwd {} --config-dir {}",
+                shell_quote(spec.self_exe),
+                shell_quote(spec.session_id),
+                spec.daemon_port,
+                shell_quote(&spec.cwd.to_string_lossy()),
+                shell_quote(&user_dir.to_string_lossy()),
+            )),
+        );
+        for key in ["padding", "refreshInterval", "hideVimModeIndicator"] {
+            let valid = |value: &serde_json::Value| match key {
+                "padding" => value.is_number(),
+                "refreshInterval" => value.as_f64().is_some_and(|seconds| seconds >= 1.0),
+                _ => value.is_boolean(),
+            };
+            if let Some(value) = own.get(key).filter(|value| valid(value)) {
+                line.insert(key.to_owned(), value.clone());
+            }
+        }
+        serde_json::Value::Object(line)
     }
 
     /// The `--mcp-config` JSON. Merged with the project's and the user's servers, which is why
@@ -299,163 +360,6 @@ impl AgentAdapter for ClaudeAdapter {
     }
 }
 
-/// The settings files whose `allowedHttpHookUrls` this launch's Claude Code would merge: the
-/// user's, the project's two, and the managed file and drop-in directory. Policy delivered through
-/// an MDM profile or the claude.ai console is in none of them and cannot be read from here.
-fn settings_files(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> Vec<PathBuf> {
-    let user = pinned
-        .map(PathBuf::from)
-        .or_else(|| {
-            spec.shell_env
-                .get("CLAUDE_CONFIG_DIR")
-                .filter(|dir| !dir.is_empty())
-                .map(PathBuf::from)
-        })
-        .unwrap_or_else(|| {
-            spec.shell_env
-                .get("HOME")
-                .filter(|home| !home.is_empty())
-                .map(PathBuf::from)
-                .unwrap_or_else(crate::paths::home_dir)
-                .join(".claude")
-        });
-    let managed = Path::new(if cfg!(target_os = "macos") {
-        "/Library/Application Support/ClaudeCode"
-    } else {
-        "/etc/claude-code"
-    });
-    let mut files = vec![
-        user.join("settings.json"),
-        spec.cwd.join(".claude/settings.json"),
-        spec.cwd.join(".claude/settings.local.json"),
-        managed.join("managed-settings.json"),
-    ];
-    if let Ok(entries) = std::fs::read_dir(managed.join("managed-settings.d")) {
-        files.extend(entries.flatten().map(|entry| entry.path()));
-    }
-    files
-}
-
-/// Whether Claude Code would run an HTTP hook for `url` given `files`: it does unless some file
-/// defines `allowedHttpHookUrls`, whose arrays merge across files, and no merged pattern matches.
-/// A pattern's `*` stands for anything; a file that cannot be read or parsed counts for nothing.
-fn http_hooks_allowed(url: &str, files: &[PathBuf]) -> bool {
-    let mut patterns: Option<Vec<String>> = None;
-    for file in files {
-        let Some(settings) = std::fs::read_to_string(file)
-            .ok()
-            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
-        else {
-            continue;
-        };
-        if let Some(list) = settings
-            .get("allowedHttpHookUrls")
-            .and_then(serde_json::Value::as_array)
-        {
-            patterns.get_or_insert_with(Vec::new).extend(
-                list.iter()
-                    .filter_map(|p| p.as_str().map(str::to_lowercase)),
-            );
-        }
-    }
-    let url = url.to_lowercase();
-    patterns.is_none_or(|patterns| {
-        patterns
-            .iter()
-            .any(|pattern| wildcard_matches(pattern, &url))
-    })
-}
-
-/// Whether `text` matches `pattern`, in which `*` stands for any run of characters.
-fn wildcard_matches(pattern: &str, text: &str) -> bool {
-    let mut parts = pattern.split('*');
-    let first = parts.next().unwrap_or_default();
-    let Some(mut rest) = text.strip_prefix(first) else {
-        return false;
-    };
-    let mut parts = parts.peekable();
-    while let Some(part) = parts.next() {
-        if parts.peek().is_none() {
-            return rest.ends_with(part);
-        }
-        match rest.find(part) {
-            Some(at) => rest = &rest[at + part.len()..],
-            None => return false,
-        }
-    }
-    rest.is_empty()
-}
-
-/// The global config file this launch's Claude Code will read: inside the configuration directory
-/// when one is in effect — the session's, else one the user's own shell exports — and
-/// `~/.claude.json` otherwise.
-fn global_config_file(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> PathBuf {
-    let dir = pinned.map(PathBuf::from).or_else(|| {
-        spec.shell_env
-            .get("CLAUDE_CONFIG_DIR")
-            .filter(|dir| !dir.is_empty())
-            .map(PathBuf::from)
-    });
-    match dir {
-        Some(dir) => dir.join(".claude.json"),
-        None => spec
-            .shell_env
-            .get("HOME")
-            .filter(|home| !home.is_empty())
-            .map(PathBuf::from)
-            .unwrap_or_else(crate::paths::home_dir)
-            .join(".claude.json"),
-    }
-}
-
-/// What to tell the user when Claude Code will ignore this project's own `allow` rules.
-///
-/// Deliberately silent unless the trust state is explicitly negative: the field is only read, so
-/// an absent project entry or a renamed key must leave the user alone rather than warn them on
-/// every launch about something that may not be true.
-///
-/// A directory's own entry saying `false` is not enough on its own. Claude Code creates that entry
-/// with `false` the first time it runs in a directory, and also counts a directory as trusted when
-/// a directory above it carries an accepted trust flag — so a directory under a trusted one never
-/// shows the trust screen and keeps its `false` (read out of Claude Code 2.1.294). Claude Code
-/// stops that walk at the repository root inside a git repository; it is not stopped here, which
-/// can only leave a notice out, the side this notice errs on.
-fn untrusted_workspace_notice(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> Option<Notice> {
-    let config: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(global_config_file(spec, pinned)).ok()?)
-            .ok()?;
-
-    let canonical = std::fs::canonicalize(spec.cwd).unwrap_or_else(|_| spec.cwd.to_path_buf());
-    let projects = config.get("projects")?;
-    let accepted = |dir: &Path| {
-        projects
-            .get(dir.to_string_lossy().as_ref())
-            .and_then(|entry| entry.get("hasTrustDialogAccepted"))
-            .and_then(serde_json::Value::as_bool)
-    };
-    if canonical
-        .ancestors()
-        .skip(1)
-        .any(|dir| accepted(dir) == Some(true))
-    {
-        return None;
-    }
-    match accepted(&canonical) {
-        Some(false) => Some(Notice::new(
-            notice_code::CLAUDE_WORKSPACE_UNTRUSTED,
-            format!(
-                "Claude Code has not been trusted with this directory, so this project's own `allow` \
-                 permission rules are ignored until Claude Code's trust prompt is answered — its `deny` \
-                 rules still apply, so a session is only more restrictive, never less. {} \
-                 answers that prompt for you once you have agreed to it.",
-                crate::APP_NAME
-            ),
-            &[],
-        )),
-        _ => None,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -594,68 +498,6 @@ mod tests {
         }
     }
 
-    /// Reading the trust state wrong must not nag: only an explicit `false` warns, so an absent
-    /// project entry or a key that was renamed upstream leaves the user alone.
-    #[test]
-    fn only_an_explicitly_untrusted_workspace_produces_a_notice() {
-        let mut fixture = spec_fixture();
-        let home = fixture.scratch.join("home");
-        std::fs::create_dir_all(&home).expect("home");
-        fixture
-            .shell_env
-            .insert("HOME".to_string(), home.to_string_lossy().into_owned());
-        let canonical = std::fs::canonicalize(&fixture.cwd).expect("canonical path");
-        let config = home.join(".claude.json");
-
-        assert!(ClaudeAdapter
-            .plan(&fixture.spec())
-            .expect("plan")
-            .notice
-            .is_none());
-
-        std::fs::write(&config, r#"{"projects":{}}"#).expect("config");
-        assert!(ClaudeAdapter
-            .plan(&fixture.spec())
-            .expect("plan")
-            .notice
-            .is_none());
-
-        let untrusted = serde_json::json!({
-            "projects": { canonical.to_string_lossy(): { "hasTrustDialogAccepted": false } }
-        });
-        std::fs::write(&config, untrusted.to_string()).expect("config");
-        assert!(ClaudeAdapter
-            .plan(&fixture.spec())
-            .expect("plan")
-            .notice
-            .is_some());
-
-        let trusted = serde_json::json!({
-            "projects": { canonical.to_string_lossy(): { "hasTrustDialogAccepted": true } }
-        });
-        std::fs::write(&config, trusted.to_string()).expect("config");
-        assert!(ClaudeAdapter
-            .plan(&fixture.spec())
-            .expect("plan")
-            .notice
-            .is_none());
-
-        // Claude Code trusts a directory below a trusted one without asking, and leaves the
-        // directory's own entry at `false`.
-        let under_trusted = serde_json::json!({
-            "projects": {
-                canonical.to_string_lossy(): { "hasTrustDialogAccepted": false },
-                canonical.parent().expect("a parent").to_string_lossy(): { "hasTrustDialogAccepted": true },
-            }
-        });
-        std::fs::write(&config, under_trusted.to_string()).expect("config");
-        assert!(ClaudeAdapter
-            .plan(&fixture.spec())
-            .expect("plan")
-            .notice
-            .is_none());
-    }
-
     /// A console's setting reaches Claude Code only as an environment entry in the plan; with none
     /// set the plan adds nothing, so the shell snapshot's own value stays in force. Layering the
     /// entry over the snapshot is `term::launch`'s job, not the adapter's.
@@ -730,64 +572,6 @@ mod tests {
         ClaudeAdapter.plan(&fixture.spec()).expect("not refused");
     }
 
-    /// The trust state lives in the config file Claude Code will actually read, which moves into the
-    /// configuration directory when there is one: the session's, or failing that the shell's.
-    #[test]
-    fn the_trust_state_is_read_from_the_file_inside_the_config_dir() {
-        let mut fixture = spec_fixture();
-        let home = fixture.scratch.join("home");
-        let pinned = fixture.scratch.join("pinned");
-        let from_shell = fixture.scratch.join("from-shell");
-        for dir in [&home, &pinned, &from_shell] {
-            std::fs::create_dir_all(dir).expect("directory");
-        }
-        fixture
-            .shell_env
-            .insert("HOME".to_string(), home.to_string_lossy().into_owned());
-        let canonical = std::fs::canonicalize(&fixture.cwd).expect("canonical path");
-        let write = |dir: &std::path::Path, trusted: bool| {
-            let config = serde_json::json!({
-                "projects": { canonical.to_string_lossy(): { "hasTrustDialogAccepted": trusted } }
-            });
-            std::fs::write(dir.join(".claude.json"), config.to_string()).expect("config");
-        };
-        let warns = |fixture: &crate::adapter::tests::SpecFixture| {
-            ClaudeAdapter
-                .plan(&fixture.spec())
-                .expect("plan")
-                .notice
-                .is_some()
-        };
-
-        // Trusted in the default file, untrusted in the pinned directory's: only the latter counts.
-        write(&home, true);
-        write(&pinned, false);
-        assert!(!warns(&fixture));
-        fixture.config_dir = Some(pinned.clone());
-        assert!(warns(&fixture));
-
-        // The pinned directory has no config file yet: silent, and the default file is not a
-        // fallback because Claude Code would not read it either.
-        std::fs::remove_file(pinned.join(".claude.json")).expect("removed");
-        write(&home, false);
-        assert!(!warns(&fixture));
-
-        // A directory the user's own shell exports is followed when the console pins nothing, and
-        // the console's wins when it does.
-        fixture.config_dir = None;
-        fixture.shell_env.insert(
-            "CLAUDE_CONFIG_DIR".to_string(),
-            from_shell.to_string_lossy().into_owned(),
-        );
-        write(&from_shell, false);
-        assert!(warns(&fixture));
-        write(&from_shell, true);
-        assert!(!warns(&fixture));
-        write(&pinned, false);
-        fixture.config_dir = Some(pinned);
-        assert!(warns(&fixture));
-    }
-
     /// The `hooks` table of the `--settings` this launch passes.
     fn injected_hooks(fixture: &crate::adapter::tests::SpecFixture) -> serde_json::Value {
         let plan = ClaudeAdapter.plan(&fixture.spec()).expect("plan");
@@ -822,40 +606,6 @@ mod tests {
                 (*event == "Notification").then_some("idle_prompt")
             );
         }
-    }
-
-    /// An `allowedHttpHookUrls` that leaves the daemon's URL out keeps the command form, whichever
-    /// file defines it.
-    #[test]
-    fn an_http_hook_allowlist_without_the_daemon_keeps_the_command_form() {
-        let url = "http://127.0.0.1:4321/hook/session-1";
-        let dir = crate::test_support::ScratchDir::new("hook-allowlist");
-        let file = |name: &str, content: &str| {
-            let path = dir.join(name);
-            std::fs::write(&path, content).expect("settings");
-            path
-        };
-        let none = file("none.json", "{}");
-        let broken = file("broken.json", "{");
-        let other = file(
-            "other.json",
-            r#"{"allowedHttpHookUrls":["https://hooks.example.com/*"]}"#,
-        );
-        let loopback = file(
-            "loopback.json",
-            r#"{"allowedHttpHookUrls":["http://127.0.0.1:*"]}"#,
-        );
-        let empty = file("empty.json", r#"{"allowedHttpHookUrls":[]}"#);
-        let missing = dir.join("missing.json");
-
-        assert!(http_hooks_allowed(url, &[none.clone(), broken, missing]));
-        assert!(!http_hooks_allowed(url, std::slice::from_ref(&other)));
-        assert!(!http_hooks_allowed(url, &[empty]));
-        assert!(http_hooks_allowed(url, std::slice::from_ref(&loopback)));
-        // The arrays merge, so one file naming the daemon is enough.
-        assert!(http_hooks_allowed(url, &[other, none, loopback]));
-        assert!(wildcard_matches("http://*/hook/*", url));
-        assert!(!wildcard_matches("http://*/hook", url));
     }
 
     /// Both layouts match exactly, and a binary whose install tells nothing has no version.
@@ -939,6 +689,142 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// The `--settings` this launch passes.
+    fn injected_settings(fixture: &crate::adapter::tests::SpecFixture) -> serde_json::Value {
+        let plan = ClaudeAdapter.plan(&fixture.spec()).expect("plan");
+        let at = plan
+            .args
+            .iter()
+            .position(|arg| arg == "--settings")
+            .expect("--settings is passed");
+        serde_json::from_str(&plan.args[at + 1]).expect("the settings are JSON")
+    }
+
+    /// The status line is injected only for a Claude Code known to run one, and names the
+    /// directories its settings are read from: the pinned one when there is one.
+    #[test]
+    fn the_status_line_is_injected_from_the_version_that_runs_one() {
+        let mut fixture = spec_fixture();
+        let home = fixture.scratch.join("home");
+        fixture
+            .shell_env
+            .insert("HOME".to_string(), home.to_string_lossy().into_owned());
+        for (version, injected) in [
+            (Some((2, 0, 0)), true),
+            (Some((2, 1, 306)), true),
+            (Some((1, 0, 99)), false),
+            (None, false),
+        ] {
+            fixture.agent_version = version;
+            assert_eq!(
+                injected_settings(&fixture).get("statusLine").is_some(),
+                injected,
+                "{version:?}"
+            );
+        }
+        fixture.agent_version = Some((2, 1, 306));
+        let command = |fixture: &crate::adapter::tests::SpecFixture| {
+            injected_settings(fixture)["statusLine"]["command"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        };
+        let cwd = fixture.cwd.to_string_lossy().into_owned();
+        assert_eq!(
+            command(&fixture),
+            format!(
+                "exec '/opt/octoboard/octoboardd' status-line --session 'session-1' --port 4321 \
+                 --cwd '{cwd}' --config-dir '{}'",
+                home.join(".claude").display()
+            )
+        );
+        let pinned = fixture.scratch.join("pinned");
+        std::fs::create_dir_all(&pinned).expect("pinned");
+        fixture.config_dir = Some(pinned.clone());
+        assert!(command(&fixture).ends_with(&format!("--config-dir '{}'", pinned.display())));
+    }
+
+    /// The layout fields of the user's own status line are carried into the injected one, so its
+    /// layout is kept; with none of their own, only the type and command are set.
+    #[test]
+    fn the_users_status_line_fields_are_carried_into_the_injected_one() {
+        let mut fixture = spec_fixture();
+        fixture.agent_version = Some((2, 1, 306));
+        let user = fixture.scratch.join("user");
+        std::fs::create_dir_all(&user).expect("user directory");
+        fixture.config_dir = Some(user.clone());
+        let line = |fixture: &crate::adapter::tests::SpecFixture| {
+            let mut line = injected_settings(fixture)["statusLine"].clone();
+            assert_eq!(line["type"], "command");
+            assert!(line["command"].as_str().unwrap().contains(" status-line "));
+            let line = line.as_object_mut().unwrap();
+            line.remove("type");
+            line.remove("command");
+            serde_json::Value::Object(line.clone())
+        };
+        assert_eq!(line(&fixture), json!({}));
+
+        std::fs::write(
+            user.join("settings.json"),
+            json!({"statusLine":{"type":"command","command":"mine","padding":1,
+                "hideVimModeIndicator":true}})
+            .to_string(),
+        )
+        .expect("user settings");
+        std::fs::create_dir_all(fixture.cwd.join(".claude")).expect("project settings");
+        std::fs::write(
+            fixture.cwd.join(".claude/settings.local.json"),
+            json!({"statusLine":{"padding":0,"refreshInterval":10}}).to_string(),
+        )
+        .expect("local settings");
+        assert_eq!(
+            line(&fixture),
+            json!({"padding":0,"hideVimModeIndicator":true,"refreshInterval":10})
+        );
+    }
+
+    /// A field Claude Code does not know, or a known one with a value its schema refuses, is left
+    /// out, so the user's files can never make the flag's settings invalid.
+    #[test]
+    fn only_known_status_line_fields_of_the_right_type_are_carried() {
+        let mut fixture = spec_fixture();
+        fixture.agent_version = Some((2, 1, 306));
+        let user = fixture.scratch.join("user");
+        std::fs::create_dir_all(&user).expect("user directory");
+        fixture.config_dir = Some(user.clone());
+        let carried = |own: serde_json::Value| {
+            std::fs::write(
+                user.join("settings.json"),
+                json!({ "statusLine": own }).to_string(),
+            )
+            .expect("user settings");
+            let line = injected_settings(&fixture)["statusLine"].clone();
+            let mut keys: Vec<_> = line.as_object().unwrap().keys().cloned().collect();
+            keys.sort();
+            (keys, line)
+        };
+        let (keys, line) = carried(json!({"type":"command","command":"mine","padding":"2",
+            "refreshInterval":0.5,"hideVimModeIndicator":"yes","shell":"bash","timeout":5}));
+        assert_eq!(keys, ["command", "type"]);
+        assert_eq!(line["type"], "command");
+        let (keys, line) = carried(json!({"type":"other","padding":2.5,"refreshInterval":1,
+            "hideVimModeIndicator":false}));
+        assert_eq!(
+            keys,
+            [
+                "command",
+                "hideVimModeIndicator",
+                "padding",
+                "refreshInterval",
+                "type"
+            ]
+        );
+        assert_eq!(
+            (&line["type"], &line["padding"], &line["refreshInterval"]),
+            (&json!("command"), &json!(2.5), &json!(1))
+        );
     }
 
     /// `--mcp-config` takes a list of values, so a task left after the flags is read as another

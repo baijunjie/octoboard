@@ -98,6 +98,7 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
     state.retain_default_efforts(&ids);
     cursors.default_efforts.begin_pass();
     let hints = state.record_hints.retain(&ids);
+    let windows = state.context_windows.retain(&ids);
     // Default homes resolve through the same login-shell snapshot as agent launches.
     let mut locator = Locator::default();
     // The sessions each account's shared title file is read for.
@@ -210,6 +211,16 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
                         .fold_summary(adapter_for(session.agent).as_ref(), &summary);
                     cursor.observed.fold_grok(&summary);
                 }
+            }
+        }
+        // Claude Code's status line reports the window; its transcript never does. The last report
+        // wins, and until there is one the stored window stands, so a daemon restart, a cursor
+        // started afresh or a record read again from its start (which forgets the window) keeps
+        // it. Hence after the scan.
+        if session.agent == Agent::Claude {
+            let reported = windows.get(&session.id).copied();
+            if let Some(window) = reported.or_else(|| session.context.as_ref()?.window) {
+                cursor.context.set_window(Some(window));
             }
         }
         let context = cursor
@@ -494,6 +505,65 @@ mod tests {
         assert!(
             events.try_recv().is_err(),
             "an unchanged context emits no extra events"
+        );
+    }
+
+    /// The window Claude Code's status line reported is stored with the transcript's size, and a
+    /// daemon that starts again with nothing reported keeps the stored one rather than clearing it.
+    #[test]
+    fn a_claude_sessions_reported_window_is_stored_and_outlives_a_restart() {
+        let (state, directory) = crate::test_support::app_state("record-collector-claude-window");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&directory))
+            .unwrap();
+        let console_id = state.store.list_consoles().unwrap()[0].id.clone();
+        let root = directory.join("account");
+        let record = root.join("projects/project/native.jsonl");
+        std::fs::create_dir_all(record.parent().unwrap()).unwrap();
+        std::fs::write(&record, claude_request(48_762) + "\n").unwrap();
+        let session: crate::protocol::Session = serde_json::from_value(json!({
+            "id":"s","agent":"claude","agent_session_id":"native","console_id":console_id,
+            "host_id":"local","role":"console","origin":"user","title":"Session",
+            "status":"idle","has_conversation":true,"pinned":false,"started_at":0,
+            "config_dir":root.to_string_lossy()}))
+        .unwrap();
+        state.store.insert_session(&session).unwrap();
+        let live = crate::test_support::idle_stand_in("s");
+        state.register_live(live.clone());
+        let mut cursors = Cursors::default();
+        collect(&state, &mut cursors);
+        assert_eq!(
+            state.session_record("s").unwrap().context.unwrap().window,
+            None
+        );
+
+        state.context_windows.report("s", 200_000);
+        collect(&state, &mut cursors);
+        let expected = crate::protocol::SessionContext {
+            tokens: 48_762,
+            window: Some(200_000),
+            used_percent: Some(24),
+        };
+        assert_eq!(
+            state.session_record("s").unwrap().context,
+            Some(expected.clone())
+        );
+
+        let (restarted, restarted_dir) =
+            crate::test_support::app_state("record-collector-claude-window-restart");
+        restarted
+            .store
+            .insert_console(&crate::test_support::console(&restarted_dir))
+            .unwrap();
+        restarted
+            .store
+            .insert_session(&state.session_record("s").unwrap())
+            .unwrap();
+        collect(&restarted, &mut Cursors::default());
+        assert_eq!(
+            restarted.session_record("s").unwrap().context,
+            Some(expected)
         );
     }
 

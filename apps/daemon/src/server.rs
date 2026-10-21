@@ -46,6 +46,7 @@ fn routes(state: Arc<AppState>) -> Router {
         .route("/ws/term/:session", get(term_ws))
         .route("/hook/:session", post(hook_callback))
         .route("/git-ref/:session", post(git_ref_callback))
+        .route("/context-window/:session", post(context_window_callback))
         .route("/mcp/:token", post(mcp_call))
         .with_state(state)
 }
@@ -789,6 +790,29 @@ async fn git_ref_callback(
     axum::http::StatusCode::OK
 }
 
+// -- /context-window/:session -----------------------------------------------
+
+/// A Claude Code session's status line reporting the session's context window (`octoboardd
+/// status-line`). Held for the record collector, which stores it with the session's context; the
+/// reply carries nothing, and the reporter ignores it.
+async fn context_window_callback(
+    Path(session_id): Path<String>,
+    State(state): State<Arc<AppState>>,
+    body: Bytes,
+) -> impl IntoResponse {
+    #[derive(serde::Deserialize)]
+    struct Report {
+        window: u64,
+    }
+    match serde_json::from_slice::<Report>(&body) {
+        Ok(Report { window }) if window > 0 => {
+            state.context_windows.report(&session_id, window);
+            axum::http::StatusCode::OK
+        }
+        _ => axum::http::StatusCode::BAD_REQUEST,
+    }
+}
+
 // -- /mcp/:token -------------------------------------------------------------
 
 /// One MCP tool call, forwarded here by the session's own MCP server. The token is what says which
@@ -1101,6 +1125,7 @@ mod tests {
                 "GET /ws/term/s",
                 "POST /hook/s",
                 "POST /git-ref/s",
+                "POST /context-window/s",
                 "POST /mcp/x",
             ];
             for route in routes {
@@ -1159,6 +1184,42 @@ mod tests {
         })
         .await
         .expect("the checks ran");
+    }
+
+    /// What `octoboardd status-line` posts is held for the record collector; a body without a
+    /// usable window is refused and holds nothing.
+    #[tokio::test]
+    async fn a_reported_context_window_is_held_for_the_collector() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("a loopback port");
+        let port = listener.local_addr().expect("a bound address").port();
+        let (state, dir) = app_state("server-context-window");
+        let served = state.clone();
+        tokio::spawn(async move {
+            let _dir = dir;
+            axum::serve(listener, router(served)).await
+        });
+        tokio::task::spawn_blocking(move || {
+            let post = |session: &str, body: &[u8]| {
+                crate::loopback::post(port, &format!("/context-window/{session}"), body, PATIENCE)
+                    .expect("answered")
+            };
+            assert!(post("s", br#"{"window":200000}"#).is_empty());
+            for body in [&b"{}"[..], br#"{"window":0}"#, b"200000"] {
+                post("t", body);
+            }
+            let host = format!("Host: 127.0.0.1:{port}");
+            assert_eq!(status_of(port, "POST /context-window/t", &[&host]), 400);
+        })
+        .await
+        .expect("the checks ran");
+        assert_eq!(
+            state
+                .context_windows
+                .retain(&std::collections::HashSet::from(["s", "t"])),
+            std::collections::HashMap::from([("s".to_owned(), 200_000)])
+        );
     }
 
     /// The handshake a browser sends: a refusal must come before the upgrade, and an allowed

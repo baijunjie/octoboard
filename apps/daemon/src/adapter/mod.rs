@@ -2,9 +2,10 @@
 //! capabilities are injected *additionally*, without modifying project files or the user's own
 //! configuration. Everything else in the daemon is agent-agnostic.
 //!
-//! Three things are injected: the status hooks, the Octoboard MCP server, and a role description
-//! ("What is injected on every launch" in `docs/product/launching-agents.md`). The mechanism for each
-//! differs per agent and is the adapter's own business; the conditions all three share are below.
+//! Three things are injected into every agent: the status hooks, the Octoboard MCP server, and a role
+//! description, plus a status line for Claude Code ("What is injected on every launch" in
+//! `docs/product/launching-agents.md`). The mechanism for each differs per agent and is the adapter's
+//! own business; the conditions the three shared ones meet are below.
 //!
 //! Three rules hold for every adapter, each of which fails silently if broken:
 //!

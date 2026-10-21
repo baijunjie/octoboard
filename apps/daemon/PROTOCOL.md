@@ -448,16 +448,21 @@ main conversation's latest request carried, a gauge of whether continuing the se
 a cumulative usage count or a billing figure, and subagents and side calls (title generation, summaries, classifiers)
 never count. It is persisted independently of other session changes and retained when archived or restarted, and it
 falls again after a compaction, a revert or a rewind: there is no "never lower" guard. Missing `context` means unknown,
-not zero. `window` is the context-window limit, present only for an agent that records one (Codex, Grok Build); and
-`used_percent`, in whole percent from 0 to 100, is how much of it is in use by that agent's own formula, present only
-with `window`. The daemon computes it so that clients stay agent-agnostic. Claude Code has no `window` and no
-`used_percent`.
+not zero. `window` is the context-window limit, present only once the agent has given one; and `used_percent`, in
+whole percent from 0 to 100, is how much of it is in use by that agent's own formula, present only with `window`. The
+daemon computes it so that clients stay agent-agnostic.
 
 - Claude Code reads the main transcript only, never the `subagents` directory. The value is the input of the last
   `assistant` line that is not a sidechain, `<synthetic>`, `isUnmetered` or `isApiErrorMessage` line and carries input:
   `input_tokens` plus `cache_creation_input_tokens` plus `cache_read_input_tokens`, with output left out. When
   `message.usage.iterations` exists, its last `message` or `fallback_message` entry stands in for the top-level
-  usage. A `compact_boundary` line makes the context unknown until the next qualifying `assistant` line.
+  usage. A `compact_boundary` line makes the context unknown until the next qualifying `assistant` line. The
+  transcript records no window: `window` is the `context_window.context_window_size` Claude Code last gave the
+  status line Octoboard injects (see `POST /context-window/:session`), kept across a compaction, and failing a report
+  since the daemon started, the one stored with the session. `used_percent` is
+  `round(tokens / window * 100)`, capped at 100, as Claude Code's own status line computes it. A session whose Claude
+  Code runs no status line of Octoboard's (a version not known to be 2.0.0 or later, or a managed `statusLine` that
+  outranks it) has no `window`.
 - Codex reads the last `event_msg` `token_count` record whose `info` is not null: `tokens` is
   `info.last_token_usage.total_tokens` and `window` is `info.model_context_window`. `used_percent` is 100 less the
   percentage left that Codex's own `/status` shows, which counts a fixed 12,000-token baseline as neither used nor
@@ -1959,6 +1964,22 @@ relative), both wire paths; `refs` holds each created reference's full name (a w
 created at; `unix_time` is when the report was made, in seconds. Answers `200` with an empty body, or `400` for a body
 that does not parse, and records the report afterwards as "Comparing two branches" describes; the reporter ignores the
 answer.
+
+## `POST /context-window/:session` — a Claude Code session reporting its context window
+
+Not part of the application's interface. This is how `octoboardd status-line`, the status line command the Claude
+Code adapter injects through `--settings`, reports the context window Claude Code gave it on stdin:
+
+```
+{ window }
+```
+
+`window` is `context_window.context_window_size`, a positive number of tokens; a status line input without one sends
+nothing. Answers `200` with an empty body, or `400` for a body that does not parse or a `window` of 0. The window is
+held in memory for the session and stored with its context (`Session.context`) once the session's records show a
+size; the reporter ignores the answer. The command then runs the status line the user's and the project's own
+settings files configure, read again on every run, with the same stdin, and passes its output and exit status on;
+with none configured it prints nothing.
 
 ## `POST /mcp/:token` — Octoboard's MCP tools
 

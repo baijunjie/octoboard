@@ -252,7 +252,7 @@ export interface Project {
 
 /** How much the main conversation's latest request carried: a gauge of whether continuing the session is
  * getting expensive, not a running total. `window` and `used_percent` (whole percent, by the agent's own
- * formula) are present only for an agent that records its context-window limit. */
+ * formula) are present only once the agent has given its context-window limit. */
 export interface SessionContext {
   tokens: number;
   window?: number;

@@ -70,6 +70,7 @@ mod shared_items;
 mod sharing;
 mod shell_terminal;
 mod state;
+mod status_line_mode;
 mod store;
 mod subprocess;
 mod term;
@@ -125,6 +126,20 @@ enum Command {
         #[arg(last = true)]
         refs: Vec<std::ffi::OsString>,
     },
+    /// Report a Claude Code session's context window and run the user's own status line. This is
+    /// the status line the Claude Code adapter injects; it is not meant to be run by hand.
+    StatusLine {
+        #[arg(long)]
+        session: String,
+        #[arg(long)]
+        port: u16,
+        /// The session's working directory, whose project settings name the user's status line.
+        #[arg(long)]
+        cwd: std::path::PathBuf,
+        /// The Claude Code configuration directory whose user settings name it.
+        #[arg(long)]
+        config_dir: std::path::PathBuf,
+    },
     /// Serve the Octoboard MCP tools for one session over stdio. This is what the adapters
     /// register as the session's MCP server; it is not meant to be run by hand.
     Mcp {
@@ -176,6 +191,17 @@ fn main() -> Result<()> {
     {
         git_ref_mode::run(session, *port, refs);
         return Ok(());
+    }
+
+    // On the path of every status line update, and its stdout is the user's status line's.
+    if let Some(Command::StatusLine {
+        session,
+        port,
+        cwd,
+        config_dir,
+    }) = &cli.command
+    {
+        std::process::exit(status_line_mode::run(session, *port, cwd, config_dir));
     }
 
     // The MCP child owns its stdout for the protocol, so it installs no log subscriber either.
