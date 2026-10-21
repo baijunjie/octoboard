@@ -8,10 +8,10 @@
 //! What works is a per-session `GROK_HOME` built as a symlink farm over the source home: the
 //! console's pinned directory when set, else the shell's `GROK_HOME`, else `~/.grok`. Every entry is
 //! a symlink to the source's except the ones Octoboard has to own. A link leads straight to the
-//! entry's fully resolved target, one link deep, so a source entry that is itself a link (an account
-//! sharing the default configuration) is not reached through a chain: Grok saves a file by following
-//! one link and replacing its target, which through two links would replace the middle one. A
-//! dangling source link keeps pointing at the source entry. `auth.json` and `sessions/`
+//! entry's fully resolved target, so a source entry that is itself a link (an account sharing the
+//! default configuration) is reached through one link, the same way that account's own link leads
+//! straight at the default entry's target, and a save does not depend on following more than one
+//! link. A dangling source link keeps pointing at the source entry. `auth.json` and `sessions/`
 //! stay symlinks, so login state is shared and a session Octoboard started stays resumable from the
 //! user's own `grok` — plain for the default home, with `GROK_HOME=<that directory>` for a pinned
 //! one.
@@ -19,11 +19,11 @@
 //! Two files in the farm are copies rather than symlinks, and both must stay that way:
 //!
 //! - `config.toml`, because Grok persists session settings back into it — `--reasoning-effort low`
-//!   was observed rewriting `default_reasoning_effort` in the file. Against a symlink that write
-//!   would either replace the link or be followed into the user's own configuration.
-//! - `trusted_folders.toml`, for the same reason: Grok saves it by replacing the file, so against a
-//!   symlink its write would replace the link rather than reach the user's store, and no setting
-//!   moves the store out of `GROK_HOME`. The copy carries every folder the user already trusts,
+//!   was observed rewriting `default_reasoning_effort` in the file. The copy keeps that write inside
+//!   the session home, so it does not change the source home's file.
+//! - `trusted_folders.toml`: Grok saves it by replacing the file, so against a symlink its write
+//!   would replace the link rather than reach the user's store, and no setting moves the store out
+//!   of `GROK_HOME`. The copy carries every folder the user already trusts,
 //!   and Octoboard adds nothing to it: a folder Grok has not been told to trust shows Grok's own
 //!   confirmation, which Octoboard presses under the user's permission (`crate::trust`), or the
 //!   person answers in the terminal. The entry Grok then writes lands only in this copy, so once
@@ -420,9 +420,8 @@ fn build_grok_home(spec: &LaunchSpec<'_>, source_home: &Path) -> Result<PathBuf>
                 continue;
             }
             let link = farm.join(&name);
-            // The fully resolved target, so a source entry that is itself a link (an account sharing
-            // the default configuration) is reached through one link: Grok saves by following one
-            // link and replacing its target, which through two would replace the middle link.
+            // The fully resolved target, so a source entry that is itself a link is reached through
+            // one link and a save does not depend on following a chain.
             let target = std::fs::canonicalize(entry.path()).unwrap_or_else(|_| entry.path());
             std::os::unix::fs::symlink(&target, &link)
                 .with_context(|| format!("linking {}", link.display()))?;
@@ -1018,8 +1017,7 @@ mod tests {
         );
     }
 
-    /// With nothing to resolve to, the farm link keeps pointing at the source entry, so Grok sees
-    /// the same dangling link it would in the source.
+    /// With nothing to resolve to, the farm link keeps pointing at the source entry.
     #[test]
     fn a_dangling_source_link_is_linked_to_the_source_entry() {
         let mut fixture = spec_fixture();
@@ -1079,6 +1077,14 @@ mod tests {
         assert_eq!(
             std::fs::read_to_string(farm.join("hooks-paths")).expect("copy"),
             "/h\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(farm.join("sandbox.toml")).expect("copy"),
+            "[profiles.p]\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(farm.join(TRUST_STORE)).expect("copy"),
+            "[folders.\"/t\"]\n"
         );
         assert!(std::fs::read_to_string(farm.join("config.toml"))
             .expect("copy")

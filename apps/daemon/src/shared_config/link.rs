@@ -5,10 +5,10 @@
 //! and prompt-history work included; nothing is rolled back, and each item that could not be
 //! brought in line is reported with the state it was left in.
 //!
-//! A link always names the default entry's fully resolved target, never the entry itself: when
-//! the default directory's own entry is a link (to a dotfiles copy, say), an agent saving through
-//! a chain of two links replaces the first one with a plain file, and the copy it led to stops
-//! being updated.
+//! A link always names the default entry's fully resolved target, never the entry itself. When
+//! the default directory's own entry is a link (to a dotfiles copy, say), the account's link
+//! leads straight at that copy, so a save does not depend on the agent following more than one
+//! link.
 
 use std::io;
 use std::path::{Path, PathBuf};

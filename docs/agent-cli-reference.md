@@ -23,8 +23,10 @@ What "Sharing a session directory between accounts" says, and the "Codex, histor
 account" notes under "Moving a conversation to another config directory", were measured on 2026-10-19 on **Claude Code
 2.1.302**, **Codex 0.162.1** and **Grok Build 1.0.62**. What "Codex resume from aged rollouts" says was measured on
 **Codex 0.162.1**. What "Sharing a configuration directory between accounts" says was measured on 2026-10-20 on **Claude
-Code 2.1.304**, **Codex 0.162.1** and **Grok Build 1.0.62**. What "Signing in a config directory without a terminal"
-says was measured on 2026-10-19 on **Claude Code 2.1.303**, **Codex 0.162.1** and **Grok Build 1.0.62**. What "Writing
+Code 2.1.304**, **Codex 0.162.1** and **Grok Build 1.0.62**. The Grok Build chain-following note and the per-session
+`config.toml` copy note in that section were measured on 2026-10-21 on **Grok Build 1.0.62**. What "Signing in a
+config directory without a terminal" says was measured on 2026-10-19 on **Claude Code 2.1.303**, **Codex 0.162.1** and
+**Grok Build 1.0.62**. What "Writing
 into a running session" says about invisible characters was read from the executable of, and measured on, **Claude Code
 2.1.304** on 2026-10-20. All three rewrite their hook surface, their payload fields, their configuration layering and
 their on-disk layout on upgrade, so check a detail here against the installed version before relying on it.
@@ -1186,15 +1188,29 @@ target).
 - **A two-level chain breaks the first link** (Claude Code 2.1.304). With the account's `settings.json` linked to
   `default/settings.json`, itself a link to `dotfiles/settings.json`, a save from the account replaced
   `default/settings.json`'s link with a plain file, and the dotfiles copy stopped updating. A save from the default
-  account (one level) wrote through correctly. Not measured for the other agents.
+  account (one level) wrote through correctly. Not measured for Codex.
+- **Grok Build follows the whole chain** (1.0.62, measured 2026-10-21, scratch homes, a fake API key, the model
+  endpoint on `127.0.0.1`). Default directory D held the files; account A linked `AGENTS.md`, `pager.toml` and
+  `disabled-hooks` at D's resolved paths; a per-session farm linked those names either at D's files (one link) or at
+  A's entries (two links). In both layouts the model's `write` of `AGENTS.md` and of `pager.toml`, and its `search_replace`
+  of `AGENTS.md`, replaced D's file (new inode) and left A's link and the farm's link in place — the farm's still
+  pointing at A when the layout was two links. `/hooks` disable wrote D's `disabled-hooks` in place (same inode);
+  `/hooks` enable replaced D's file (new inode, emptied). A's link and the farm's link stayed, including when the
+  farm pointed at A. The one-link results in the table above still hold. A two-link chain was not measured for
+  `config.toml`, `trusted_folders.toml` or `/settings` as a `pager.toml` writer. `/theme` writes `[ui] theme` into
+  `config.toml`, not into `pager.toml`.
+- **An Octoboard per-session home copies `config.toml`** (same probe, 1.0.62). `grok mcp add --scope user` and the
+  TUI command `/theme` rewrote only that copy (new inode: the server block, or `[ui] theme`, added). D's
+  `config.toml` and A's link to it were unchanged. A `grok` run directly against the account home, where
+  `config.toml` is a link, still updates D (the table's `grok mcp add -s user` row).
 - **Grok's `disabled-hooks` is keyed by hook source**, e.g. `global/octoboard:session_start[0].hooks[0]`. Switching
   Octoboard's hook off in one session writes the entry into the source home's file, silencing it in every later session
   from that home; with the file linked, that is every sharing account.
 - **Grok's sandbox mode refuses a linked tree** (1.0.62, measured in a per-session home built over a home with
   `bundled/`). `grok --sandbox workspace` refuses to start when `hooks/`, `hooks-paths` or `bundled/` is a symlink (the
-  guide adds `bundles/` and a symlinked `GROK_HOME`). Octoboard's per-session homes already link `bundled/` and, when
-  present, `hooks-paths`, so a session with a sandbox profile is refused today, with or without account sharing. Sandbox
-  mode is off by default.
+  guide adds `bundles/` and a symlinked `GROK_HOME`). Octoboard's per-session homes copy `bundled/`, `bundles/`,
+  `hooks-paths` and `sandbox.toml`, and a launch whose profile Octoboard can read as not `off` is refused before
+  the home is built. Sandbox mode is off by default.
 
 **Items load through links** (measured with a control for each).
 
@@ -1528,11 +1544,12 @@ edit of the project's or the user's files, and was exercised against the version
   permission rules and hooks) or `--strict-mcp-config` (it silently drops the project's and the user's MCP servers). The
   injected MCP server's key must not collide with one the project defines, or the project's is silently never spawned.
 - **Grok Build** has no flag for hooks or MCP, and its `GROK_CONFIG` / `GROK_CONFIG_PATH` overlay accepts only
-  allowlisted keys, so both silently drop. The working mechanism is a per-session `GROK_HOME` where every entry links
-  back to the source home, except a copied `config.toml` carrying the MCP block, a copied `trusted_folders.toml` with
-  nothing added to it, an Octoboard `hooks/` directory, and real copies of `bundled/`, `bundles/`, `hooks-paths` and
-  `sandbox.toml`. `auth.json` and `sessions/` stay links, so login is shared and sessions stay resumable from the
-  user's own `grok`. The mechanism cannot run under Grok's sandbox (Grok Build 1.0.62, macOS):
+  allowlisted keys, so both silently drop. The working mechanism is a per-session `GROK_HOME` where every linked entry
+  points at the source entry's fully resolved target, except a copied `config.toml` carrying the MCP block, a copied
+  `trusted_folders.toml` with nothing added to it, an Octoboard `hooks/` directory, and real copies of `bundled/`,
+  `bundles/`, `hooks-paths` and `sandbox.toml`. `auth.json` and `sessions/` stay links, so login is shared and
+  sessions stay resumable from the user's own `grok`. The mechanism cannot run under Grok's sandbox (Grok Build
+  1.0.62, macOS):
   - With any profile but `off`, Grok refuses to start when `bundled/` or `bundles/` is not a real directory, or
     `hooks-paths` or `sandbox.toml` not a real file: `hook write-deny ensure failed: Grok directory has wrong type
     (expected real directory)`, then `Refusing to start with its protections missing`. Missing ones it creates itself,

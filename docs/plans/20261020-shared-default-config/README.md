@@ -74,4 +74,4 @@ account's login.
 - 02 Account switch over shared conversations (closed)
 - 03 Linking, restoring and launch-time repair (closed)
 - [04 Account settings switch](04-account-settings-switch.md)
-- [05 Grok session homes over shared entries](05-grok-farm-links.md)
+- 05 Grok session homes over shared entries (closed)
