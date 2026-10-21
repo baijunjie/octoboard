@@ -429,6 +429,7 @@ fn live_session_watching(
         scratch_dir: None,
         resolves_approvals_itself: false,
         carried_trust,
+        before_scratch_removal: None,
         start_signal_missing,
     })))
 }

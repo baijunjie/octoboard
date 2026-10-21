@@ -314,6 +314,9 @@ pub struct LaunchPlan {
     /// startup (Codex's terminal title), or cannot be read to say it does not; the watch is then
     /// bounded instead (`crate::trust::TrustState::new`).
     pub start_signal_missing: bool,
+    /// Grok's: keys to copy from the session's `config.toml` onto the shared file once the process
+    /// has exited. Only when that source file is a symlink.
+    pub shared_config_writeback: Option<grok::SharedConfigWriteback>,
 }
 
 /// A title an agent's own record gives its conversation. Of the titles one record gives, the

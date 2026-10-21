@@ -276,7 +276,7 @@ pub(super) fn lock_store(store: &Path) -> Result<std::fs::File> {
 
 /// Replaces `target` with `text` in one step: written beside it under a name of its own, with the
 /// permissions the file had (the owner's alone for a new one), then renamed over it.
-pub(super) fn write_replacing(target: &Path, text: &str) -> Result<()> {
+pub(crate) fn write_replacing(target: &Path, text: &str) -> Result<()> {
     use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
     let directory = target

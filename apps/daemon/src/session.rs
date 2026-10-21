@@ -105,6 +105,8 @@ pub struct NewSession {
     /// Grok's: where the trust it records when its confirmation is pressed is carried from and to;
     /// see `adapter::LaunchPlan::carried_trust`.
     pub carried_trust: Option<CarriedTrust>,
+    /// Runs after the process is reaped and before its scratch directory is removed.
+    pub before_scratch_removal: Option<Box<dyn FnOnce() + Send>>,
     /// See `adapter::LaunchPlan::start_signal_missing`.
     pub start_signal_missing: bool,
 }
@@ -117,6 +119,7 @@ impl LiveSession {
                 spawned: session.spawned,
                 scratch_dir: session.scratch_dir,
                 kill_session_leftovers: true,
+                before_scratch_removal: session.before_scratch_removal,
             }),
             id: session.id,
             agent: session.agent,

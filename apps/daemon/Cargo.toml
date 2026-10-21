@@ -42,6 +42,9 @@ futures-util = { version = "0.3", default-features = false }
 rusqlite = { version = "0.32", features = ["bundled"] }
 rmcp = { version = "3.5", features = ["server", "transport-io"] }
 toml = { version = "1.1.6", default-features = false, features = ["parse", "display", "serde"] }
+# Format-preserving edits of a shared Grok `config.toml`. The `toml` crate above parses and
+# compares; it does not keep comments.
+toml_edit = { version = "0.25.15", default-features = false, features = ["parse", "display"] }
 trash = "5"
 # Reads a Codex rollout it has compressed (`rollout-….jsonl.zst`). The bindings to the C library
 # are what the project already builds for SQLite, and a decoder-only crate would add a second
