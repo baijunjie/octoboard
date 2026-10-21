@@ -283,10 +283,9 @@ the caller's own cannot. The account does not always follow the caller.
 A `request_session` for a session in **another console** — a console session there, or a session in one of its
 projects — takes its agent from that console and its project, and nothing of the caller's agent. Its account, when
 left out, is the pick above while automatic account selection is on, and the project's, else the console's, when the
-setting is off or none ranks. `handoff_session` does not follow that pick. It always names its receiving agent; a
-left-out account stays the caller's own when that agent is the caller's and that account can still open a session,
-otherwise the project's account for that agent, else the console's (see "Handing off from an owner's tool" in
-`docs/product/handing-off-sessions.md`).
+setting is off or none ranks. `handoff_session` always names its receiving agent; a left-out account follows the
+account rule above as in the caller's own console, the session it hands off being always in it (see "Handing off from
+an owner's tool" in `docs/product/handing-off-sessions.md`).
 
 ## Which sessions an owner drives
 

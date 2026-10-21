@@ -159,9 +159,9 @@ leaves the others unapplied too. An `auto_approve_session_requests` argument is 
 fast-forwards the projects already known to be behind at once, as turning the switch on in Settings does, which
 changes files in the user's repositories. Turning `auto_delete_unresumable_archives` on deletes nothing at once, and
 turning it off stops a deletion pass under way, exactly as the switch in Settings does. Turning `auto_select_account`
-on or off changes no session already open; it is read when a later `new_session` or `request_session` leaves the
-account out (see "Which account a session uses" in `docs/product/sessions.md`). The call answers as `get_settings`
-does.
+on or off changes no session already open; it is read when a later `new_session`, `request_session` or
+`handoff_session` leaves the account out (see "Which account a session uses" in `docs/product/sessions.md`). The call
+answers as `get_settings` does.
 
 ## When a change takes effect
 

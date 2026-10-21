@@ -360,7 +360,8 @@ Who makes the pick:
 
 - The new-session dialog computes it, shows it in the account picker, and sends it as the session's own choice. The
   user can still pick another account. Until the user does, the account shown follows the dialog's clock (see "A
-  used-up account" in `docs/product/account-quotas.md`).
+  used-up account" in `docs/product/account-quotas.md`). The handoff dialog does the same for the receiving session
+  (see "Handing off from the window" in `docs/product/handing-off-sessions.md`).
 - Opening a session with defaults uses the same account the dialog would open on, and sends it the same way (see
   "Opening a session with defaults" above).
 - `new_session` and `request_session`, when `account` is left out or blank, have the daemon make the same pick, in the
@@ -368,16 +369,17 @@ Who makes the pick:
   `docs/product/hub-orchestration.md`).
 - The **Resume conversation** tab does not follow the pick. It sends the agent and account that hold the conversation,
   shown locked, when that account can still be selected (see "Resuming a conversation by its session ID" below).
-- `handoff_session` does not follow the pick. A left-out account stays the caller's own when `agent` is the caller's
-  own agent and that account can still open a session; otherwise the project's account for that agent, else the
-  console's (see "Handing off from an owner's tool" in `docs/product/handing-off-sessions.md`).
+- `handoff_session`, when `account` is left out or blank, has the daemon make the same pick for the receiving session
+  (see "Handing off from an owner's tool" in `docs/product/handing-off-sessions.md`).
 
-When the switch is on but no account ranks, the account is the one it would be while the switch is off. The dialog and
-a session opened with defaults open on the account the project or console resolves to, then another account of that
-agent when that one is used up. For `new_session` and `request_session` the fallback is in "The agent and account of a
-session a session starts" in `docs/product/hub-orchestration.md`: in the caller's own console, the caller's own account
-only when the session is of the caller's own agent and that account can still open a session, otherwise the project's
-for the agent, else the console's; in another console, the project's, else the console's, and never the caller's.
+When the switch is on but no account ranks, the account is the one it would be while the switch is off. The
+new-session dialog, the handoff dialog and a session opened with defaults open on the account the project or console
+resolves to, then another account of that agent when that one is used up. For `new_session` and `request_session` the
+fallback is in "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md`: in the
+caller's own console, the caller's own account only when the session is of the caller's own agent and that account can
+still open a session, otherwise the project's for the agent, else the console's; in another console, the project's,
+else the console's, and never the caller's. `handoff_session` falls back as `new_session` does in the caller's own
+console, a session the caller owns always being in it.
 
 The dialog and the daemon rank the same way:
 

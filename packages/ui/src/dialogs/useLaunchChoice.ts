@@ -1,7 +1,7 @@
 import { useState } from "react";
 
-import { accountOpenedOn, avoidExhaustedAccount, choiceExhaustion, choiceGroups, choiceKey, currentChoice, findEntry, inheritedAccount, settledInitialChoice, type AccountChoice, type ChoiceGroup } from "../accountChoices";
-import { AGENT_LABEL, agentsInListingOrder, defaultAccountName, inheritedSessionLaunch, launchWithOverrides, pickableAgents, projectSessionAgent } from "../agents";
+import { accountOpenedOn, avoidExhaustedAccount, choiceExhaustion, choiceGroups, choiceKey, currentChoice, findEntry, type AccountChoice, type ChoiceGroup } from "../accountChoices";
+import { AGENT_LABEL, agentsInListingOrder, defaultAccountName, inheritedSessionLaunch, launchWithOverrides, pickableAgents, projectSessionAgent, selectableAgent } from "../agents";
 import { agentIconPickerOptions } from "../components/AgentIcon";
 import { useT } from "../i18n/react";
 import type { Agent, Console, Project } from "../protocol";
@@ -38,17 +38,17 @@ export function useChoiceGroups(): ChoiceGroup[] {
  * even the account the choice ends on is used up (every account of the agent is, or it is the agent's
  * only one), says why it cannot be used, for the dialog to refuse its submit with.
  *
- * With automatic account selection on, and not for a handoff (`exclude`), the account a new session
- * opens on is the one whose weekly quota resets soonest rather than the one the project or console
- * resolves to. A forced choice that can still be picked wins over that. Switching to an agent whose
- * remembered account is no longer an entry falls back the same way.
+ * With automatic account selection on, the account a new session (a handoff's included) opens on is
+ * the one whose weekly quota resets soonest rather than the one the project or console resolves to.
+ * A forced choice that can still be picked wins over that. Switching to an agent whose remembered
+ * account is no longer an entry falls back the same way.
  */
 export function useLaunchChoice(parentConsole: Console, project: Project | undefined, exclude?: Agent, forced?: AccountChoice) {
   const t = useT();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   const accounts = useDaemonStore((s) => s.settings.accounts);
-  const autoSelect = (useDaemonStore((s) => s.settings.auto_select_account) ?? false) && exclude === undefined;
+  const autoSelect = useDaemonStore((s) => s.settings.auto_select_account) ?? false;
   const now = useNow();
   const [pickedAgent, setPickedAgent] = useState<Agent>();
   const [pickedAccounts, setPickedAccounts] = useState<Partial<Record<Agent, string | null>>>({});
@@ -66,16 +66,13 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
     : undefined;
 
   const selectable = pickableAgents(agentAvailability, addedAgents).filter((agent) => agent !== exclude);
-  let initial: AccountChoice;
-  if (exclude === undefined) {
-    initial = settledInitialChoice(parentConsole, project, accounts, agentAvailability, addedAgents, groups, autoSelect ? { now } : undefined).choice;
-  } else {
-    const wanted = project ? project.default_agent ?? projectSessionAgent(parentConsole) : parentConsole.default_agent;
+  const wanted = project ? project.default_agent ?? projectSessionAgent(parentConsole) : parentConsole.default_agent;
+  const initialAgent = exclude === undefined
+    ? selectableAgent(agentAvailability, addedAgents, wanted)
     // With nothing to pick, the first other agent in listing order, so the picker shows a held,
     // marked value and never the excluded agent itself; submitting stays blocked.
-    const agent = selectable.includes(wanted) ? wanted : selectable[0] ?? agentsInListingOrder(addedAgents).find((other) => other !== exclude)!;
-    initial = avoidExhaustedAccount({ agent, account: inheritedAccount(parentConsole, project, agent, accounts) }, groups);
-  }
+    : selectable.includes(wanted) ? wanted : selectable[0] ?? agentsInListingOrder(addedAgents).find((other) => other !== exclude)!;
+  const initial = avoidExhaustedAccount({ agent: initialAgent, account: openingAccount(initialAgent) }, groups);
   const forcedEntry = forced && findEntry(groups, choiceKey(forced));
   const choice = forced && forcedEntry?.selectable ? forced : currentChoice(picked, initial, groups);
   const accountEntries = groups.find((group) => group.agent === choice.agent)?.entries ?? [];

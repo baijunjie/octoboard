@@ -347,12 +347,12 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                     },
                     "auto_select_account": {
                         "type": "boolean",
-                        "description": "When on, `new_session` and `request_session` whose \
-                                        account was left out use the account of that session's \
-                                        agent whose weekly quota resets soonest, among accounts \
-                                        that can still open a session. When none does, the \
-                                        account is the one used while the setting is off. \
-                                        `handoff_session` does not follow this.",
+                        "description": "When on, `new_session`, `request_session` and \
+                                        `handoff_session` whose account was left out use the \
+                                        account of that session's agent whose weekly quota \
+                                        resets soonest, among accounts that can still open a \
+                                        session. When none does, the account is the one used \
+                                        while the setting is off.",
                     },
                     "default_clone_dir": {
                         "type": "string",
@@ -666,9 +666,11 @@ const HANDOFF_SESSION: ToolDef = ToolDef {
                     "type": "string",
                     "description": "The new session's account: an account's id or name, or \
                                     `default` for the agent's default account. It must belong \
-                                    to `agent`. Left out, it does not follow \
-                                    `auto_select_account`: it is your own account when `agent` \
-                                    is your own agent and that account's quota is not used up; \
+                                    to `agent`. Left out while `auto_select_account` is on, \
+                                    it is the account of `agent` whose weekly quota resets \
+                                    soonest and that can still open a session. When none does, \
+                                    or while it is off, it is your own account when `agent` is \
+                                    your own agent and that account's quota is not used up; \
                                     otherwise the account the session's project (else its \
                                     console) sets for `agent`.",
                 },

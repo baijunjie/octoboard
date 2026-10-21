@@ -13,7 +13,7 @@ use crate::protocol::Session;
 use crate::state::AppState;
 
 use super::args::{optional_string, parse_agent, present_text, required_str};
-use super::exec::{callers_account, resolve_owned_session};
+use super::exec::{account_when_unset, resolve_owned_session};
 use super::settings::resolve_account;
 
 /// Hands a session of the caller's off to a new session of another agent, which takes its place and
@@ -32,7 +32,8 @@ pub(super) async fn handoff_session(
     let agent = parse_agent(required_str(arguments, "agent")?)?;
     let account = match optional_string(arguments, "account") {
         Some(wanted) => Some(resolve_account(state, agent, &wanted)?),
-        None => callers_account(state, caller, agent)?,
+        // A session the caller owns is always in the caller's own console.
+        None => account_when_unset(state, caller, agent, true)?,
     };
     let moved = operation::hand_off_with(
         state,
@@ -244,11 +245,11 @@ mod tests {
         assert_eq!(record.title, "修复构建");
     }
 
-    /// Automatic account selection does not move a handoff off the caller's account, even when
-    /// another account of the same agent has a weekly window that resets sooner.
+    /// With automatic account selection on, a handoff that names no account takes the account
+    /// whose weekly window resets soonest over the caller's own.
     #[tokio::test]
-    async fn a_handoff_keeps_the_callers_account_when_automatic_selection_is_on() {
-        let (state, _dir) = shared_console_state("handoff-ignores-auto-select");
+    async fn a_handoff_takes_the_soonest_weekly_reset_when_automatic_selection_is_on() {
+        let (state, _dir) = shared_console_state("handoff-follows-auto-select");
         state.store.set_auto_select_account(true).unwrap();
         for (id, dir) in [
             ("codex-work", "/tmp/codex-work"),
@@ -320,7 +321,7 @@ mod tests {
             .get_session(result["session"].as_str().unwrap())
             .unwrap()
             .unwrap();
-        assert_eq!(record.account_id.as_deref(), Some("codex-work"));
+        assert_eq!(record.account_id.as_deref(), Some("sooner"));
     }
 
     /// What is not the caller's to hand off (another owner's session, the caller itself), what the

@@ -54,6 +54,17 @@ const soonerWeeklyQuotas: AccountQuota[] = [
   quotaOf("claude", "a-soon", "pro", [quotaWindow("weekly", 90, 6 * 60)]),
 ];
 
+/** Codex's weekly windows, with the default account used up. Team, listed second, resets in five days; Sprint, listed
+ * third, resets in two, so a handoff opens on Sprint rather than the default account (used up, though its weekly
+ * window would reset first) or Team, the first account with quota left. */
+const handoffWeeklyQuotas: AccountQuota[] = [
+  quotaOf("codex", null, "plus", [quotaWindow("weekly", 100, 20 * 60)]),
+  quotaOf("codex", "a-team", "pro", [quotaWindow("weekly", 44, 5 * 24 * 60)]),
+  quotaOf("codex", "a-sprint", "pro", [quotaWindow("weekly", 81, 2 * 24 * 60)]),
+];
+
+const sprintAccount: Account = { id: "a-sprint", agent: "codex", name: "Sprint", config_dir: "/Users/dev/.codex-sprint" };
+
 const soonAccount: Account = { id: "a-soon", agent: "claude", name: "Soon", config_dir: "/Users/dev/.claude-soon" };
 
 const website = { ...web, default_agent: "claude" as const };
@@ -138,6 +149,22 @@ export const quotaGatingScenarios: Scenario[] = [
       settings: { ...settings, auto_select_account: true, accounts: [soonAccount] },
     },
     steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Claude Code"))],
+  },
+  {
+    id: "dialog-hand-off-auto-select-account",
+    group: GROUP,
+    category: "normal",
+    title: "Hand off, the account whose weekly quota resets sooner",
+    description: "Hub hands off to Codex, whose default account is used up. The Codex account field opens on Sprint, whose weekly quota resets in two days, not on Team, the first account with quota left, which resets in five. The open picker lists the used-up default account unselectable, then Team, then Sprint selected.",
+    state: {
+      ...launchState([], handoffWeeklyQuotas),
+      settings: { ...settings, auto_select_account: true, accounts: [...accounts.filter((account) => account.agent === "codex"), sprintAccount] },
+    },
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.session.actions", { title: hub.title })),
+      (ui) => ui.press(ui.t("sidebar.session.handOff")),
+      (ui) => ui.press(accountField(ui, "Codex")),
+    ],
   },
   {
     id: "dialog-new-session-quota-all-used-up",

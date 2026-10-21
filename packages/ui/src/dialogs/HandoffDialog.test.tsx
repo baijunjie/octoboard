@@ -73,7 +73,10 @@ it("says what moves for a project session, then hands off to another agent and s
   expect(onClose).toHaveBeenCalledOnce();
 });
 
-it("hands off to the inherited account when automatic selection would pick another", async () => {
+it.each([
+  [true, "soon"],
+  [false, null],
+])("hands off to the account whose weekly quota resets soonest only while automatic selection is on (%s)", async (autoSelect, expected) => {
   const now = Date.now();
   const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle");
   const { request } = mount(session, [], [], {}, null, [
@@ -82,14 +85,14 @@ it("hands off to the inherited account when automatic selection would pick anoth
       windows: [{ kind: "weekly", label: null, used_percent: 1, resets_at: now + 3_600_000, window_minutes: 7 * 24 * 60 }],
     },
   ], {
-    auto_select_account: true,
+    auto_select_account: autoSelect,
     accounts: [{ id: "soon", agent: "codex", name: "Soon", config_dir: "/tmp/codex-soon" }],
   });
   await settle();
   await act(async () => buttons().find((button) => button.textContent === "Hand off")?.click());
   await settle();
   const sent = request.mock.calls.map(([body]) => body).find((body) => body.type === "hand_off_session");
-  expect(sent).toMatchObject({ type: "hand_off_session", agent: "codex", account: null });
+  expect(sent).toMatchObject({ type: "hand_off_session", agent: "codex", account: expected });
 });
 
 it("asks for no branches of a console session and says when nothing moves", async () => {
