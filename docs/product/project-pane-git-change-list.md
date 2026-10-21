@@ -177,12 +177,23 @@ project keeps its own choice across reloads and restarts (see "What is remembere
 
 ## Rows and the keyboard
 
-Each row shows a status letter, the file's name, and then the folder it is in — or, for a rename, where it came from,
+Each row shows an icon, a status letter, the file's name, and then the folder it is in — or, for a rename, where it came from,
 and for a rename across the project's boundary, where it came from or went, outside the project. Grouped by folder a
 row drops the folder, which its parent row carries instead, and keeps the rest (see "Flat or grouped by folder"
 below). After them come the lines the change adds and removes, where they are counted (see "Line counts" below), and
-at the row's end is the button of its own actions (see "A row's actions" in `docs/product/project-pane.md`). The
-letters:
+at the row's end is the button of its own actions (see "A row's actions" in `docs/product/project-pane.md`).
+
+**The icon says what the row's path is**, judged on the side the path is taken from — the new side where the change
+has one inside the project, the old side otherwise, as for a deletion:
+
+- a symbolic link has the link icon the Files tree gives one;
+- a submodule, or an untracked folder that is a repository of its own, has a Git folder icon;
+- anything else has the icon its name and extension get in Files (see "Rows and the keyboard" in
+  `docs/product/project-pane.md`). A path in conflict always has this one, whatever it is.
+
+A type-changed row so shows what its path has become.
+
+The letters:
 
 | Letter | Status |
 |---|---|
@@ -201,7 +212,7 @@ same capitalised wording the file viewer's header carries as an opened change's 
 `docs/product/project-pane-git-change-viewer.md`). The letter is the only part of the row that opens it, and it opens
 on the mouse alone, after the usual wait: the letter is no tab stop and adds none to the row, so the tooltip never
 shows on keyboard focus (see "Tooltips on indicators" in `docs/product/labels-and-tooltips.md`). The letter itself
-stays out of the accessibility tree, which costs nothing: assistive technology hears a row as its name, its status in
+stays out of the accessibility tree, as the icon does, which costs nothing: assistive technology hears a row as its name, its status in
 words and what follows the name, its line counts included.
 
 A name, or what follows it, too long for its row fades out, with its full text as its tooltip (see "Names too

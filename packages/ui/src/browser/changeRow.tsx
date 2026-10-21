@@ -1,8 +1,10 @@
+import { FileSymlink, FolderGit2 } from "lucide-react";
 import React, { useRef, useState } from "react";
 
 import { InlineChip } from "../components/InlineChip";
 import { AnchoredTooltip } from "../components/AnchoredTooltip";
 import { FadeOverflow } from "../components/FadeOverflow";
+import { FileTypeIcon } from "../components/FileTypeIcon";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
@@ -82,15 +84,16 @@ export function changeRowText(
   return { name, detail, ariaLabel };
 }
 
-/** What a change's row shows: its status mark, its file's name and the detail beside it, and at its
- * end the lines it adds and removes and the button of the row's actions. The button keeps its room
- * while hidden, so the counts do not move when it shows. Host actions use the live directory of
- * the list even when the change itself names versions in commits. */
+/** What a change's row shows: its icon, its status mark, its file's name and the detail beside it,
+ * and at its end the lines it adds and removes and the button of the row's actions. The button
+ * keeps its room while hidden, so the counts do not move when it shows. Host actions use the live
+ * directory of the list even when the change itself names versions in commits. */
 export function ChangeRowBody({ item, name, detail, contextTargetRef }: { item: ChangeItem; name: string; detail: string; contextTargetRef: React.RefObject<HTMLElement | null> }): React.ReactElement {
   const prose = pathDetail(item);
   const shownDetail = prose ? <Message id={prose.id} params={{ path: <InlineChip monospace size="inherit">{prose.path}</InlineChip> }} /> : detail;
   return (
     <>
+      <ChangeIcon item={item} />
       <ChangeStatusChip status={item.status} />
       <FadeOverflow as="span" dir="auto" className="min-w-0 shrink" titleWhenClipped={name}>
         {name}
@@ -124,6 +127,17 @@ function LineCounts({ item }: { item: ChangeItem }): React.ReactElement | null {
       {stats.removed > 0 && <span className="text-line-removed">-{number.format(stats.removed)}</span>}
     </span>
   );
+}
+
+/** The icon of what a change's path names, from the side the path is taken from: a link or a
+ * submodule by its kind, and anything else, a path in conflict included, by its file type. */
+function ChangeIcon({ item }: { item: ChangeItem }): React.ReactElement {
+  const { entry } = item;
+  const side = entry.group === "conflicted" ? undefined : entry.new.state === "present" ? entry.new : entry.old;
+  const kind = side?.state === "present" ? side.kind : "file";
+  if (kind === "file") return <FileTypeIcon path={item.path} />;
+  const Icon = kind === "symlink" ? FileSymlink : FolderGit2;
+  return <Icon aria-hidden="true" className="size-4 shrink-0 text-app-muted" />;
 }
 
 /** The row's status letter, which says in a tooltip what it stands for. The row's accessible name
