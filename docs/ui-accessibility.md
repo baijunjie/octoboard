@@ -322,8 +322,8 @@ which the fade covered at the window heights where that field was the one scroll
 rather than on what it holds, so nothing put inside has to know about it. Every scroller that takes the fade gets it,
 a dialog's body and a list in a popover alike, and neither shape of the project's own capability leaves it to the
 site: the padding comes with the fade. A fade the library draws for its own component is the one exception, and not
-one to copy — a HeroUI `Tabs.ListContainer` fades its tab strip over 64 px with no padding at all, so a tab the arrow
-keys reach at the strip's edge does land under it.
+one to copy — a HeroUI `Tabs.ListContainer` uses its own 64 px fade. Suppress that mask while a tab has visible
+keyboard focus, as specified under "Visible focus", so the revealed tab and its full ring stay visible.
 
 Where a sticky heading occupies the top of a faded list, the top scroll padding includes both the heading's height
 and the fade's size, so a focused row is visible below them. The heading itself stays clear of the fade.
@@ -576,7 +576,10 @@ the surface around it does not forbid selection. It is accepted there because th
 - HeroUI's `Tabs` and `ListBox` mark their selection themselves with `aria-selected` and get no `aria-current` on top.
 
 Every tab strip, including agent tabs, uses its content width and is start-aligned in the current reading direction.
-Tabs do not stretch to fill the row. Keep the scrolling and focus-ring clearance specified under "Visible focus".
+Constrain the painted strip as well as the list and individual tab allocation; tabs do not stretch to fill the row.
+The strip is bounded by its available width and scrolls when its content does not fit. A surrounding pinned header
+and its end actions may span the section while the transparent tab list keeps its content width. Keep the scrolling
+and focus-ring clearance specified under "Visible focus".
 
 ### The menu bar icon and its native menu
 

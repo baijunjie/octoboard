@@ -159,7 +159,7 @@ export function AgentAccountsSection(): React.ReactElement {
             notInstalledTip={(agent) => added !== null && isAgentUnavailable(availability, agent) && (
               <Message id="settings.accounts.notInstalledTip" params={{ agent: <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[agent]}</InlineChip>, ...PATH_VAR_PARAMS }} />
             )}
-            className={`sticky top-[calc(-1*var(--section-padding))] z-3 h-[45px] groove-b bg-overlay ${pinnedFocus.className}`}
+            className={`sticky top-[calc(-1*var(--section-padding))] z-3 h-[45px] w-full groove-b bg-overlay ${pinnedFocus.className}`}
           />
           {agents.map((agent) => (
             <AgentAccountsPanel

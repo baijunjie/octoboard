@@ -23,7 +23,14 @@ I-03 and I-04 in [the interaction audit](audit-interactions.md), G02 in [the gal
 
 ## Dependencies and handoff
 
-Coordinate shared tab ownership with milestone 08. Dynamic collection behavior and its reduced-motion path share one validation contract; parent may split I-04 cleanup separately if preferred.
+Preserve content-width, start-aligned tab lists and their complete focus-ring, clipping and scroll clearance.
+Keep surviving tab nodes, selection and Files/Changes mode stable during resize and reallocation, including real
+F6 entry and RTL behavior. Shell remains on one header row; retain the title allocation in
+`docs/product/right-pane-panels.md`, "A panel's header", and the conditional pane minimum in
+`docs/product/window-layout.md`, "Below 1168 px: the sidebar becomes a drawer".
+
+Dynamic collection behavior and its reduced-motion path share one validation contract; parent may split I-04
+cleanup separately if preferred.
 
 ## Test invocation
 

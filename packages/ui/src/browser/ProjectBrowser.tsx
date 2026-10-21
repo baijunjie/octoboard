@@ -273,7 +273,7 @@ export function ProjectBrowser({
             </Tabs.ListContainer>
           </PanelHeader>
           <FileFilterField contextKey={tab} state={activeFilter} label={t("browser.filter.label")} placeholder={t(mode === "files" ? "browser.filter.placeholder" : "git.filter.placeholder")} />
-          {mode === "files" ? <Tabs.Panel id="files" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
+          {mode === "files" ? <Tabs.Panel key="files" id="files" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
             <div className="flex min-h-0 flex-1 flex-col" onFocus={filesFocus.onFocus} onBlur={filesFocus.onBlur}>
               <StatusAnnouncer text={rootLoading ? loadingLabel : undefined} />
               {rootLoading ? (
@@ -315,7 +315,7 @@ export function ProjectBrowser({
                 </>
               )}
             </div>
-          </Tabs.Panel> : <Tabs.Panel id="changes" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
+          </Tabs.Panel> : <Tabs.Panel key="changes" id="changes" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
             <RowPathScope.Provider value={{ project: project.id, worktree: git.worktree }}>
               <GitView
                 {...git.view}

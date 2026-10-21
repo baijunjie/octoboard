@@ -112,7 +112,7 @@ The user accepted the numbered split without a scope change. The milestone files
 | 05 Rich names/tooltips (closed) | COPY-02/03, caller-agent COPY-09 | Actual rich visible prose and metadata tooltips |
 | 06 Choice status/direction (closed) | COPY-04/05/08, numeric COPY-06 | Badges, raw matching labels, isolation and fixed-order values |
 | 07 Form defaults/validity (closed) | I-01/02/06, S04 | Placeholder/default/typed word and impossible fixed-owner form |
-| [08 Content-width tabs](08-content-width-tabs.md) | G01 | Tab allocation and entire strip paint, ring and scroll clearance |
+| 08 Content-width tabs (closed) | G01 | Tab allocation and entire strip paint, ring and scroll clearance |
 | [09 Empty states](09-consistent-empty-states.md) | S03/S05/G03 | Shared compact listing and neutral absence glyphs |
 | [10 Collection/reduced motion](10-collection-and-reduced-motion.md) | I-03/04/G02 | Shared movement contract, guards and in-flight cancellation |
 | [11 Terminal status](11-terminal-status-announcements.md) | I-05 | Deferred first writes and recorded-case/native listening requirements |

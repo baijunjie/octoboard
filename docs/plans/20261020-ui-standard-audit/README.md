@@ -70,14 +70,14 @@ into main. The closed audit changed no production UI; fix milestones implement i
 - 05 Use rich name chips and tooltip content (closed)
 - 06 Separate choice status and direction (closed)
 - 07 Correct form defaults and blocked validity (closed)
-- [08 Keep horizontal tab strips at content width](08-content-width-tabs.md)
+- 08 Keep horizontal tab strips at content width (closed)
 - [09 Use consistent neutral empty states](09-consistent-empty-states.md)
 - [10 Apply shared collection and reduced-motion behavior](10-collection-and-reduced-motion.md)
 - [11 Defer initial terminal status announcements](11-terminal-status-announcements.md)
 - 12 Hand focus off when report pages are replaced (closed)
 - [13 Use the shared button primitive for tree chevrons](13-collection-button-primitives.md)
 
-Milestones 08–11 and 13 remain open. The open milestones carry their current-source handoffs; the original audit
+Milestones 09–11 and 13 remain open. The open milestones carry their current-source handoffs; the original audit
 inventories remain historical evidence, with check limitations in [the check record](audit-checks.md).
 
 ## Evidence baseline and concurrent integration

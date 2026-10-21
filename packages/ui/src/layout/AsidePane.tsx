@@ -9,6 +9,8 @@ import type { PanePeek } from "./usePaneToggles";
 export interface AsideLayout {
   /** The user's chosen width (`usePaneWidth`), for the docked column and the floating cards alike. */
   width: number;
+  /** The docked column's floor, shared with its width clamp and resize handle. */
+  minWidth?: number;
   /** The hover reveal of the aside while it has no panel open: the cards float over the terminal,
    * showing the panel whose toggle the pointer is on. `undefined` while the pane is docked. */
   peek?: PanePeek;
@@ -29,7 +31,7 @@ export interface AsideLayout {
  * lying on the content.
  *
  * While it has a panel open it is docked, a row sibling of the terminal that takes its room from it
- * and shrinks to the row's available room down to a 320px floor; it does so at every width, there is
+ * and shrinks to the row's available room down to `minWidth` (320px by default); it does so at every width, there is
  * no drawer form, and docking (and going, when its last panel closes) is at once. With no panel open
  * it is nothing, except while `peek` is active (the pointer is on a panel kind's toggle): then it is
  * a fixed overlay at `--aside-width` (capped at 92vw), so only its cards are on the terminal, whose
@@ -46,7 +48,7 @@ export interface AsideLayout {
  * `peek` callbacks onto that element too.
  */
 export function AsidePane({ layout, children }: { layout: AsideLayout; children?: React.ReactNode }): React.ReactElement | null {
-  const { width, peek, folded = false } = layout;
+  const { width, minWidth = 320, peek, folded = false } = layout;
   // Only its floating half is used, as if the pane were never docked: it docks and goes at once, so
   // there is no column to ease out before the card floats in.
   const dock = usePaneDockMotion(false, peek?.active ?? false);
@@ -57,7 +59,7 @@ export function AsidePane({ layout, children }: { layout: AsideLayout; children?
       id={folded ? undefined : PANE_ID.aside}
       data-pane={folded ? undefined : "aside"}
       data-escape-scope
-      style={{ "--aside-width": `${width}px` } as React.CSSProperties}
+      style={{ "--aside-width": `${width}px`, "--aside-min-width": `${minWidth}px` } as React.CSSProperties}
       onTransitionEnd={dock.onInsetTransitionEnd}
       onPointerEnter={peek?.keep}
       onPointerLeave={peek?.leave}
@@ -66,7 +68,7 @@ export function AsidePane({ layout, children }: { layout: AsideLayout; children?
           ? `pointer-events-none fixed bottom-(--bottom-chrome-height) top-(--top-chrome-height) end-0 z-40 w-(--aside-width) max-w-[92vw] transition-[translate,opacity,visibility] duration-240 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none ${dock.insetShown ? "translate-y-0 opacity-100" : "translate-y-1.5 opacity-0 invisible"}${dock.preparingInset ? " transition-none" : ""}`
           : folded
             ? "h-full w-0"
-            : "h-full w-(--aside-width) min-w-[320px] shrink"
+            : "h-full w-(--aside-width) min-w-(--aside-min-width) shrink"
       }`}
     >
       {children}

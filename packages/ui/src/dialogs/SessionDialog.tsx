@@ -294,14 +294,14 @@ export function SessionDialog({
           setSwitched(true);
           setConversation(key as Conversation);
         }} isDisabled={blocked} className="gap-4">
-          <Tabs.ListContainer render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
-            <Tabs.List aria-label={t("dialog.session.conversation")}>
+          <Tabs.ListContainer className="w-max max-w-full self-start" render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
+            <Tabs.List aria-label={t("dialog.session.conversation")} className="w-max min-w-0 p-1.5">
               {/* Keep hovered labels at full opacity and use the foreground colour for clear feedback. */}
-              <Tabs.Tab id="new" className="whitespace-nowrap hover:text-foreground hover:opacity-100">
+              <Tabs.Tab id="new" className="w-auto flex-none scroll-mx-1.5 whitespace-nowrap hover:text-foreground hover:opacity-100">
                 {t("dialog.session.conversationNew")}
                 <Tabs.Indicator />
               </Tabs.Tab>
-              <Tabs.Tab id="resume" className="whitespace-nowrap hover:text-foreground hover:opacity-100">
+              <Tabs.Tab id="resume" className="w-auto flex-none scroll-mx-1.5 whitespace-nowrap hover:text-foreground hover:opacity-100">
                 {t("dialog.session.conversationResume")}
                 <Tabs.Indicator />
               </Tabs.Tab>

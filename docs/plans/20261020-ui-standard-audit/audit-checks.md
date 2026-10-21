@@ -390,3 +390,171 @@ matched at capture completion. The source freeze and exclusive bulk slot were re
 All generated logs, raw results and captures remain outside Git. No real login, live daemon mutation, website build,
 packaged WKWebView or VoiceOver listening was performed. Chromium and Playwright WebKit are not native speech proof;
 all earlier failure, decorative-overhang and native-verification qualifications above remain in effect.
+
+## Milestone 08 mid-task checkpoint
+
+Milestone 08 remains **open**. The user requested a clean successor handoff before the remaining verification;
+this is not closure or a whole-gallery pass. Aggregate HEAD remains
+`d2439e8ab3dab4b128e6b0c947e00f49121707b9` (UI tree
+`d6412bb2efcefcf075bf3f9d0577260a10b626cf`), with the uncommitted implementation preserved.
+The 08 brief at this checkpoint carried ownership, exact fingerprints, remaining work and resource state.
+All logs, screenshots, commands and raw data are under `/tmp/octoboard-08/`, outside Git.
+
+The six runtime files constrain intrinsic horizontal tab/list allocation and bounded/start-aligned paint, preserve
+the full-width opaque Settings sticky heading even without trailing actions, and keep the original wide vertical
+Settings navigation. Repeated Files/Changes traversal exposed a persistent reused-panel ID mismatch; explicit
+panel keys repair it. A real ProjectBrowser keyboard regression failed before the keys (1 failed/18 passed), then
+passed unchanged (19/19), including existing filter, folder, layout and focus tests. No palette, dependency, global
+appearance, fixture or gallery-machinery source change is included.
+
+The 736-file F5 source snapshot, including runtime, tests, build configuration, bootstrap and lockfiles, has SHA-256
+`9a3b29b1a348e2d7f8c46b72938784235ca76c1a8565121874a444cb95e4a318`.
+It matched at final capture completion. Dependencies resolve inside this worktree; `.env.local` is absent.
+This fingerprints repository source, not every installed-dependency or process/environment input.
+The full file map is `freeze-final.json`; the 24-file configuration/bootstrap subset has SHA-256
+`d05950cd9781a3cb773b6f92b10281d00c77c8e6e74f086af6fb5d02c841a816`
+in `handoff-config-fingerprint.json`. Earlier F1–F4 snapshots certify intermediate source only.
+
+Completed on F5:
+
+- The exact command in `final-test-command.txt` / `final-check-summary.json`,
+  `pnpm --filter @octoboard/ui exec vitest run <76 explicit paths> --maxWorkers=1`, passed
+  76 files / 1,395 tests in 87.34s. This is focused, not a whole-suite pass.
+- `pnpm --filter @octoboard/ui build` passed typecheck, five i18n files / 30 tests and Vite:
+  12.70s total, Vite 5.40s, retaining existing build advisories. Ten required intrinsic/max-docked utilities
+  were emitted in production CSS. `pnpm format:check` passed zero-warning ESLint and Cargo format in 10.24s.
+- `f5-geometry.json` passed 576/576 conditions in 1,146.39s, with no network/page errors:
+  24 scenarios × four widths × English/Chinese/Arabic English fallback × both appearances.
+  All 13 Resume scenes contribute 312 cases; all 24 record-account cases include settled expanded-field
+  clipping/viewport/opacity/hit proof. Independent numerical and representative-screenshot review passed.
+- Current stronger global-ring probes passed `f5-global-record-advanced-v4.json`: 24/24, 96 focus states,
+  124.29s; and `f5-global-nav-supplement.json`: 18/18, 234 focus states, no failures or network errors.
+  The latter stage finished naturally during handoff; its stopped parent exited 143 to prevent later launches.
+  This does not turn the unrun remainder into a pass.
+- The strengthened collector and its `f5-global-bounded-core.json` passed independent review:
+  18/18 conditions, 107 focus states, viewport plus every overflow-clipping ancestor, center hit, full local ring,
+  ordered selection, mounted named panels, fade suppression and endpoints. The six-page Files/Git diagnostic
+  also proves real F6 reveal at 1440/390/320; F6 preserves the selected Files/Changes tab before Home goes to Files.
+
+Representative geometry: Chinese/dark New/Resume is 188px (176px tabs + 12px padding) in 392px available;
+English/light Console is 375.141px (363.141 + 12) in 678px; Chinese/dark quota is 250.719px (238.719 + 12)
+in 384px. At 390px Chinese/dark Settings, the intrinsic 375.141px agent list scrolls in a 254px tab viewport beneath
+the opaque 310px section-wide heading. Files/Changes remains 92px (80 + 12) in Chinese.
+Wide Settings remains a 192px column with 184px tabs and 8px list padding.
+
+Earlier attempts remain failed, interrupted or qualified:
+
+- Initial preview/browser attempts hit sandbox listener EPERM, Chromium MachPort denial and gallery --list setup
+  side effects. An interrupted localhost attempt's cause remains unverified. A readiness timeout was followed
+  by diagnosed HTTP 504 Outdated Optimize Dep replies; restarting only this preview with --force cleared that
+  startup issue without dependency changes. This explains neither historical removed-account first-hover
+  failures nor the separately held milestone 13 focus question.
+- The initial Files geometry probe omitted a preceding heading/gap. F1 geometry was interrupted after 317 passes
+  when the undecided sticky heading left 328.859px uncovered (375.141px against 704px available); 235 ensuing
+  closed-browser rejections were interruption artifacts, not rendered states. Caller-last classes and an explicit
+  full-width Settings heading repaired the real defect. F2 stopped at 366 passes and a probe error omitting
+  Settings' 64px inline margins. A separate 18-case navigation preflight exposed eight real allocation and ten
+  ring failures; the horizontal-only Settings fix repaired them.
+- F3 first passed 16 cases before a quota setup focused an offscreen unselected tab and sent no-op Home.
+  Selected visible roving-tab entry retained all arrow/ring assertions; its real Home trace showed 4px ring and
+  at least 5.859px clearance. The next attempt passed 18 cases before the Files panel ID defect, persistent
+  through two seconds, which was repaired and regression-tested as above.
+- F4 immediate post-Escape focus failed: the trace showed the exact original Codex tab focused by 16ms,
+  menu removed by 180ms and stability through 1000ms. The corrected probe captures original DOM handles
+  before opening and waits boundedly for menu closure plus that same connected node. An unconditional narrow
+  account-action alignment check then failed; four 390/1440 LTR/RTL measurements confirmed existing responsive
+  start-row versus wide trailing-column layout. The corrected probe retains More's flush end, scroll clearance
+  and exact focus. An early broad label selected a Select; the diagnostic was rerun with the exact action label.
+- Expanded-record attempts stopped at 0 passes/one hover failure (lookup moved the dialog about 105px away
+  from the pointer) and 12 passes/one pointer-modality programmatic-focus reveal failure. Real Shift+Tab from
+  Advanced through Name and Session ID reveals the same Resume tab in three keys, with 5.578px clearance
+  for its 4px ring. Semantic readiness, finite-animation settlement and true pointer hit now precede unchanged
+  hover assertions; real keyboard entry precedes unchanged Home/arrow assertions.
+- A subsequent 24-case numerical pass was **visually unqualified for expansion**: all three screenshots still
+  showed Disclosure clipping despite field layout boxes. Independent review caught it; primary geometry was
+  stopped at 42 passes/zero failures while the probe was fixed. The final shared helper requires both named
+  enabled fields fully exposed through every clipping ancestor and viewport, ancestor opacity 1, center hit,
+  quiet layout and no finite animation. Six bounded screenshots and the later v3 24-case evidence passed
+  independent review. The current v4 adds global focused-ring exposure.
+- Initial narrow Files screenshots prove local allocation only: below the documented combined minimums the
+  content row scrolls horizontally, with the pane initially off viewport. Six Files/Git cases × two entry paths
+  proved real reveal, not an application defect. An old interaction run stopped at eight passes/zero failures
+  while viewport/all-ancestor focused-ring assertions were added. Old local-ring nav 18/threshold six results
+  remain separate from the stronger current results. Archived partials use `interrupted-` or
+  `stopped-offviewport-review-` names; none is relabeled as a completed matrix.
+- Task-local orchestration also encountered an unavailable python alias and tool-script syntax errors; these were
+  corrected without production-source or dependency changes and are not production-check passes.
+
+The 1,488-load canonical gallery sweep has **not started**. Stronger global-ring threshold/core/pinned/Shell/action/
+glyph/WebKit stages remain unrun; earlier bounded/local-ring results do not certify them. Oversized Shell tabs
+(about 186px in a 135px scroller) are additional selection regressions with explicit ring clipping, never full-ring
+passes or a proven new application regression. Preserve that qualification rather than weakening G01 assertions.
+
+Source reviews F1–F5, collector corrections, completed geometry, bounded global evidence and expanded v3 evidence
+passed independently; full final actual/canonical/closure review remains outstanding. Sequential map/product/memory
+workflows ran (seven reachable code-tree READMEs, no broken links); a final product-table clarification is pending
+in the brief. Retained 04 semantic metadata/literal routing/external/full details, 05 rich/plain names, 06 raw matching/
+badges/direction, 07 forms/fixed-owner/all Resume, 12 focus and quota/history/context/viewer contracts remain covered
+by focused tests; cancellation means debounce cancellation/stale-answer rejection, not transport abort.
+The exact v2 fills and four approved light stock Alert.Description exceptions remain unchanged.
+
+All owned browsers/check/build jobs and the verified 5208 preview chain were stopped for handoff; the ignored
+service record and empty scratch directory were removed. Other owners' services were untouched. The source
+freeze and bulk slot were released for coordinator scheduling; this grants no peer authority. No commit or closure
+was made. No real login, live daemon mutation, website build, packaged WKWebView or VoiceOver listening occurred.
+Playwright WebKit is not native speech proof; its earlier seven-case bounded run retained two ResizeObserver
+notifications. All pre-existing failed, native-unverified, decorative-overhang and tooltip-cause qualifications above
+remain unchanged.
+
+## Milestone 08 final closure
+
+G01 is accepted on the audit aggregate under the coordinator's explicit qualified closure policy. This final
+record supersedes the checkpoint's open status; it does not rewrite any historical command outcome.
+
+- Content-width tab lists, sticky Settings allocation and keyed Files/Changes panels retain their selected mode.
+  Shell stays on one header row. Its visual title yields while its accessible heading remains; the narrow pane
+  floor is 336 px only while Terminal remains in the column, otherwise 320 px. Saved widths are not rewritten by
+  the effective clamp. Product docs own the exact title allocation and F6 contracts.
+- Final G2 source: 738 files, SHA-256
+  `3dbd74a33ba03a200032f0d3b8beeed489d92d4a5a5d1e51a290d05aab11b8d9`.
+  Configuration: 24 files, SHA-256
+  `d05950cd9781a3cb773b6f92b10281d00c77c8e6e74f086af6fb5d02c841a816`.
+  Pre/post-stage and final freezes matched, including the original eight recipes and 189 protected artifacts.
+- The F5 focused baseline remains 76 files / 1395 tests PASS on its recorded source. The G2 affected regression
+  check passed four explicit files / 29 tests; UI-only build, typecheck, i18n checks and format checks passed.
+  Unchanged checks were reused with their source qualification; no broad test or website build was added.
+- Final affected actual coverage is exactly 208 unique conditions with every required phase mapped: 102 existing,
+  24 qualified Advanced dialog rows, 60 independently verified WebKit core-tail rows and 22 final targeted rows.
+  The six content boundaries measured exactly 351/352/353 px in English and Arabic; title visibility, surviving
+  nodes, full-ring, viewport, every clipping ancestor, hit testing and endpoints passed where required.
+  The 26 oversized Shell rows remain selection-only; allocation-only and vertical-navigation evidence retains
+  its narrower scope. These counts are not a whole-run PASS claim for the original 942-row plan.
+- The qualified 24-row replay passed all physical/interaction guards. Its original strict pageerror command
+  remains FAIL: 70 trusted raw ErrorEvents all had null error objects and no exception stack; all 24 Playwright
+  notices matched the same URL/context within 0–3 ms. The other 46 raw notices had no Playwright counterpart.
+  This matches the existing production runtime-error classification; no runner filter, assertion, timeout,
+  production fix or new visual/AA exception was introduced for these notices.
+- The original 23 notices still have unknown identities; the original 84-row WebKit stage remains FAIL. Its
+  trailing 60 rows have complete guards and an independently verified error-free execution-log interval. The
+  earlier F5 180 PASS / 1 FAIL / 143 unrun, baseline reproduction, canary harness/RTL failures, collector retries
+  and two-case diagnostic strict FAIL remain historical outcomes, not renamed passes or resource-caused failures.
+- Canonical sweep: one run, 1516/1516 clean, zero failed or duplicate contexts, no retries. The original 1488
+  loads are intact; seven omitted Settings states add 28 loads. Stages were 952 en/zh light, 282 affected en/zh
+  dark and 282 affected Arabic light/dark, all using the unchanged gallery CLI/assertions with jobs 1.
+  The sweep ran 12:38:12–13:19:49 JST on 2026-10-21 (41m37s); all three stages exited zero and were independently
+  reviewed. Its readiness/banner/pageerror/history checks do not add geometry or native-assistive-technology proof.
+- Source/product-documentation, actual evidence and canonical reviews passed independently. Sequential product
+  updates preserve selected Files/Changes focus and failed-load Try again; the memory followup found nothing new
+  to record. Retained 04/05/06/07/12, quota/resume/history/context/viewer and rich/plain contracts remain unchanged,
+  as do exact v2 Alert fills and the four accepted light stock Description exceptions.
+- Source-bound proof remains outside Git under `/tmp/octoboard-08/`: G2-208-provenance-index.json SHA-256
+  `2879816d7cc1f1c579f9949ca3e16b7239ea02af31d12e3c13ea15ffe539c8e9`, and
+  G2-canonical1516-20261021-summary.json SHA-256
+  `466a59252ab677809e6d343616a2cf17b42d926cfccf435a55b68de3d09dbd00`.
+  Raw outputs, failed attempts and screenshots were not added to Git. Packaged WKWebView, native material and
+  VoiceOver/speech remain unverified; Playwright WebKit is not a substitute. Earlier decorative and unresolved
+  tooltip-cause qualifications remain intact.
+
+Only 09–11 and the separately held 13 remain open. Shared tab motion work must preserve the current layout
+contract in its brief. No implementation of those milestones, main alignment/integration or push belongs to this
+closure. The user requested cleanup and a pause after 08; the coordinator owns subsequent auxiliary-record pruning.

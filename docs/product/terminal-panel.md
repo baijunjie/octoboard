@@ -6,7 +6,9 @@ shows a project's shell terminals — the plain login shells the daemon runs for
 session has no Terminal panel and no Terminal toggle, since a shell needs a project's directory. It is stacked under
 the Files panel, and is **closed** until the user opens it.
 
-Its header's title is "Terminal"; for assistive technology the panel is a region named for the project's terminals.
+Its header's title is "Terminal", retained as an accessible heading when its visual title is hidden (see "A panel's
+header" in `docs/product/right-pane-panels.md`); for assistive technology the panel is a region named for the project's
+terminals.
 
 ## Starting a terminal
 
@@ -42,14 +44,15 @@ shell terminal" in `docs/product/shell-terminals.md`.
 
 ## Tabs
 
-The tabs sit in the panel's header after its title, one per terminal of the project, **oldest first**.
+The tabs sit in the panel's header after its title when that title is visible, one per terminal of the project,
+**oldest first**.
 
 - **A tab's name is its terminal's title**, which follows the title the shell sets until the user renames the terminal
   (see "Terminal title" in `docs/product/shell-terminals.md`). A tab whose shell has exited reads "*title* (exited)",
   in the muted colour. A name is at most 160 px wide; a longer one fades out at its cut edge, with its full text as
   its tooltip.
-- **The panel's title stays whole.** When the tabs do not fit, the tab strip scrolls, with scroll buttons at its ends,
-  and the shown tab is kept in view in it — as it becomes the shown tab and whenever the strip changes width.
+- **When the tabs do not fit, the tab strip scrolls**, with scroll buttons at its ends, and the shown tab is kept in
+  view in it — as it becomes the shown tab and whenever the strip changes width.
 - **Pressing a tab** with the pointer shows its terminal and puts keyboard focus in it. From the keyboard the arrow
   keys move between the tabs, showing each one's terminal, and focus stays in the strip.
 - **Each tab keeps its screen and its connection while it is hidden**, so going back to it shows it as it was left.

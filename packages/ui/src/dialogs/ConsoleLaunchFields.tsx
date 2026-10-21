@@ -83,12 +83,12 @@ export function ConsoleLaunchFields({
     <AdvancedSection expanded={expanded} onExpandedChange={setExpanded} status={launch.modelText}>
       <div ref={rootRef} {...focusHandoff} className="rounded-xl border border-separator p-4">
         <Tabs selectedKey={agent} onSelectionChange={(key) => setPicked(key as Agent)} className="gap-4">
-          <Tabs.ListContainer render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
-            <Tabs.List aria-label={t("dialog.console.launchAgent")}>
+          <Tabs.ListContainer className="w-max max-w-full self-start" render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
+            <Tabs.List aria-label={t("dialog.console.launchAgent")} className="w-max min-w-0 p-1.5">
               {listed.map((option) => {
                 const badge = agentChoiceBadge(t, agentAvailability, addedAgents, option);
                 return (
-                  <Tabs.Tab key={option} id={option} className="w-auto flex-none gap-2 whitespace-nowrap hover:text-foreground hover:opacity-100">
+                  <Tabs.Tab key={option} id={option} className="w-auto flex-none scroll-mx-1.5 gap-2 whitespace-nowrap hover:text-foreground hover:opacity-100">
                     <AgentIcon agent={option} />
                     {AGENT_LABEL[option]}
                     {badge && <StatusBadge>{badge}</StatusBadge>}

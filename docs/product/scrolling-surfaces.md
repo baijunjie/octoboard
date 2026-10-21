@@ -36,6 +36,14 @@ avatars, too narrow for a scrollbar (see "The rail" in `docs/product/window-layo
 and a strip of tabs, which also shows a small chevron at each end that has
 more beyond it, pressed to scroll the strip that way; the chevrons are not keyboard stops.
 
+The **New conversation / Resume conversation**, console **Advanced**, Settings **agent**, rail **quota agent** and
+narrow Settings **section navigation** tab lists fit their tabs' combined content and inner padding, bounded by the
+available width, and begin at the reading direction's start. Each tab keeps its content's width without stretching to
+fill the row; a filled tab list's background ends with the list. Overflow scrolls sideways, and arrow-key navigation
+reveals the focused tab with clearance for its focus ring. Settings' agent header spans the section with its opaque
+pinned surface, divider and actions at the end; its transparent tab list occupies only the space its contents need
+within it.
+
 ## The surfaces that fade
 
 Once it holds more than it can show, each of these fades at its edge:
@@ -60,8 +68,8 @@ Once it holds more than it can show, each of these fades at its edge:
   `docs/product/projects.md`);
 - a **strip of tabs** whose tabs do not fit, which scrolls sideways: the row Settings' list of sections becomes
   in a narrow window (see "In a narrow window" in `docs/product/settings.md`). **A tab strip fades over 64 px,
-  not 24**, and is the one surface where the fade can cover what the keyboard moved to: a tab reached with the arrow
-  keys is scrolled only as far as the strip's edge, which is where its fade sits. The fade's size and the chevrons'
+  not 24**. While a tab has visible keyboard focus, the strip's fade is suppressed so the tab and its focus ring stay
+  fully visible, including after the arrow keys scroll a tab into view. The fade's size and the chevrons'
   appearance remain the component library's own; the application supplies the chevrons' accessible names in the
   current language. Settings' sections are such a strip only in the narrow window: in the docked layout they stand
   as a column as tall as the sections it holds, however many there are, which therefore never scrolls and carries
@@ -109,8 +117,8 @@ covers. These are:
 the edge, clear of the fade, rather than arriving underneath. In focus mode's lists and the Git mode's change lists
 that space is measured below the section heading (see "What both views show" in `docs/product/focus-mode.md` and
 "Folding a section" in `docs/product/project-pane-git-change-list.md`), and in Settings' Agent accounts section below the
-agent tab strip. A strip of tabs is the exception, as above. For focus visibility in the Files panel's header
-controls, see "A panel's header" in `docs/product/right-pane-panels.md`.
+agent tab strip. A strip of tabs instead suppresses its fade while a tab has visible keyboard focus, as above. For
+focus visibility in the Files panel's header controls, see "A panel's header" in `docs/product/right-pane-panels.md`.
 
 **A control in a section heading pinned at the top is not scrolled to**: in the sidebar, in focus mode and in
 Settings' Agent accounts section, a heading that stays at the top of its list is in view already, so moving keyboard

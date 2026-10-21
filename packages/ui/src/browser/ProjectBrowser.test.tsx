@@ -92,6 +92,32 @@ const press = (icon: Element) => act(async () => void icon.closest("button")!.cl
 const spinning = (icon: Element) => icon.classList.contains("motion-safe:animate-spin-slow");
 const wait = (ms: number) => act(async () => void vi.advanceTimersByTime(ms));
 
+it("keeps each selected tab linked to its mounted panel across repeated switches", async () => {
+  await mount("panel-identity", "files");
+  await answer("list_project_dir", dir("panel-identity"));
+  const tab = (key: string) => document.querySelector<HTMLElement>(`[role="tab"][data-key="${key}"]`)!;
+  const linkedPanel = (key: string) => {
+    const selected = tab(key);
+    expect(selected.getAttribute("aria-selected")).toBe("true");
+    expect(document.querySelectorAll('[role="tab"][aria-selected="true"]')).toHaveLength(1);
+    const panel = document.getElementById(selected.getAttribute("aria-controls")!);
+    expect(panel?.isConnected).toBe(true);
+    expect(panel?.getAttribute("role")).toBe("tabpanel");
+    expect(panel?.getAttribute("aria-labelledby")).toBe(selected.id);
+    expect(panel?.closest('[hidden], [inert], [aria-hidden="true"]')).toBeNull();
+    expect(document.querySelectorAll('[role="tabpanel"]')).toHaveLength(1);
+    return panel;
+  };
+  linkedPanel("files");
+  await act(async () => tab("files").focus());
+  for (const [key, arrow] of [["changes", "ArrowRight"], ["files", "ArrowLeft"], ["changes", "ArrowRight"]]) {
+    const previous = document.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')!;
+    await act(async () => previous.dispatchEvent(new KeyboardEvent("keydown", { key: arrow, bubbles: true })));
+    expect(document.activeElement).toBe(tab(key));
+    linkedPanel(key);
+  }
+});
+
 it("spins the Files refresh icon while the listings it asked for are out, and for a moment at least", async () => {
   const icon = await mount("files-p", "files");
   await answer("list_project_dir", dir("files-p"));
