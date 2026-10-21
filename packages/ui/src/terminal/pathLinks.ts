@@ -4,14 +4,24 @@ import type { PathLinkKind, PathLinkView } from "../protocol";
 import { isPrimaryModifier } from "../useWindowShortcut";
 import {
   cachedRows,
-  type ExtraLinkSegments,
+  crossesJoin,
+  indentOf,
+  type LineChain,
+  type LineLayout,
+  lineCells,
+  lineLength,
+  type LineRow,
   type LinkSegment,
+  type LineText,
+  lineText,
   logicalLinesIn,
+  matchCells,
   mergeSegments,
-  terminalLinkHandler,
   terminalRowReader,
   type TerminalRow,
-} from "./terminalLinks";
+  textEnd,
+} from "./terminalLines";
+import { type ExtraLinkSegments, terminalLinkHandler } from "./terminalLinks";
 
 /** The most paths one probe may ask about; the daemon refuses more. */
 const MAX_PROBED_PATHS = 64;
@@ -117,11 +127,74 @@ export interface PathMatch {
   segments: LinkSegment[];
   /** The same cells as xterm's link range: 1-based, the end inclusive. */
   range: IBufferRange;
+  /** It runs over a break the program made in the line, so its pieces are candidates as well. */
+  joined?: boolean;
+}
+
+const PATH_CHAR_CELL = new RegExp(`^${PATH_CHAR}$`);
+
+/** The narrowest width taken as the one a program laid its lines out at. A program's text width is
+ * never this narrow, so a block of lines that are all shorter is a listing (`src/` / `lib/`), not
+ * prose wrapped at its longest line, and only a line that fills the terminal counts as a wrapped one. */
+const MIN_LAYOUT_WIDTH = 40;
+
+/**
+ * Whether `row` may carry on a path that ends on the line `above`, and the column it does from.
+ * Claude Code breaks a long line itself, in the middle of a path and at its own width, and
+ * indents the next row. That is the case when the line above reached the width it was laid out
+ * at and ends in a path character, and the next row starts with one. A line that fills the terminal
+ * did; so did the longest line of its block when output was laid out narrower than the terminal
+ * shows it (but see `MIN_LAYOUT_WIDTH`). It is only a candidate: the daemon says whether the joined
+ * text names anything, and the pieces stay candidates too.
+ */
+function continuesPath(above: LineRow[], row: TerminalRow, layout: LineLayout): number | undefined {
+  const length = lineLength(above);
+  if (length < layout.cols && !(length >= MIN_LAYOUT_WIDTH && length >= layout.longest)) return undefined;
+  const cells = lineCells(above);
+  const end = textEnd(cells);
+  if (end === 0 || !PATH_CHAR_CELL.test(cells[end - 1])) return undefined;
+  const from = indentOf(row.cells);
+  return PATH_CHAR_CELL.test(row.cells[from] ?? "") ? from : undefined;
+}
+
+const PATH_CHAIN: LineChain = { continues: continuesPath, maxChars: MAX_PATH_CHARS };
+
+/** The candidates in a joined line that run over a program break. Each break is also taken as a
+ * start of its own, since the row above may end in a word that is not part of the path
+ * (`looks right:` / `/private/…`). */
+function joinedCandidates(text: string, joins: number[]): PathCandidate[] {
+  if (joins.length === 0) return [];
+  const seen = new Set<string>();
+  const found: PathCandidate[] = [];
+  for (const offset of [0, ...joins]) {
+    for (const candidate of pathCandidates(text.slice(offset))) {
+      const start = candidate.start + offset;
+      const end = candidate.end + offset;
+      if (!crossesJoin(joins, start, end) || seen.has(`${start}:${end}`)) continue;
+      seen.add(`${start}:${end}`);
+      found.push({ ...candidate, start, end });
+    }
+  }
+  return found;
+}
+
+/** The matches of `candidates`, which are in the text of a line. */
+function matchesIn({ at, joins }: LineText, candidates: PathCandidate[]): PathMatch[] {
+  return candidates.map(({ start, end, path, line }) => {
+    const joined = crossesJoin(joins, start, end);
+    return {
+      path,
+      ...(line !== undefined && { line }),
+      ...matchCells(at, start, end),
+      ...(joined && { joined }),
+    };
+  });
 }
 
 /** The paths in the logical lines touching rows `from` to `to` (1-based buffer lines, both
  * inclusive), a path soft-wrapped by xterm onto the next row included. A path the program itself
- * breaks onto another row is not found. */
+ * broke onto another row is found twice over: joined, and as the pieces on each row. Which of the
+ * two is the path is for the daemon to say (see `foundPathMatches`). */
 export function pathMatchesIn(
   rowAt: (y: number) => TerminalRow | undefined,
   from: number,
@@ -129,38 +202,32 @@ export function pathMatchesIn(
 ): PathMatch[] {
   const read = cachedRows(rowAt);
   const matches: PathMatch[] = [];
-  for (const lines of logicalLinesIn(read, from, to)) {
-    let text = "";
-    const at: { y: number; col: number; width: number }[] = [];
-    for (const { y, row } of lines) {
-      row.cells.forEach((cell, col) => {
-        if (cell === "") return;
-        const width = row.cells[col + 1] === "" ? 2 : 1;
-        for (let i = 0; i < cell.length; i++) at.push({ y, col, width });
-        text += cell;
-      });
-    }
-    for (const { start, end, path, line } of pathCandidates(text)) {
-      const segments: LinkSegment[] = [];
-      for (let i = start; i < end; i++) {
-        const { y, col, width } = at[i];
-        const last = segments[segments.length - 1];
-        // The second half of a surrogate pair stands on the cell its first half did.
-        if (last && last.y === y && last.col + last.width > col) continue;
-        if (last && last.y === y && last.col + last.width === col) last.width += width;
-        else segments.push({ y, col, width });
-      }
-      const first = at[start];
-      const final = at[end - 1];
-      matches.push({
-        path,
-        ...(line !== undefined && { line }),
-        segments,
-        range: { start: { x: first.col + 1, y: first.y }, end: { x: final.col + final.width, y: final.y } },
-      });
-    }
+  for (const line of logicalLinesIn(read, from, to)) {
+    const content = lineText(line);
+    matches.push(...matchesIn(content, pathCandidates(content.text)));
+  }
+  for (const line of logicalLinesIn(read, from, to, PATH_CHAIN)) {
+    const content = lineText(line);
+    matches.push(...matchesIn(content, joinedCandidates(content.text, content.joins)));
   }
   return matches;
+}
+
+/** Whether cell `a` is no later than cell `b`. */
+function before(a: { x: number; y: number }, b: { x: number; y: number }): boolean {
+  return a.y < b.y || (a.y === b.y && a.x <= b.x);
+}
+
+/** The matches `found` says are paths. A joined match wins over the pieces it is made of, which
+ * count only where no joined match was found over them. */
+export function foundPathMatches(matches: PathMatch[], found: (path: string) => boolean): PathMatch[] {
+  const hits = matches.filter((match) => found(match.path));
+  const joined = hits.filter((match) => match.joined);
+  return hits.filter(
+    (match) =>
+      match.joined ||
+      !joined.some(({ range }) => before(range.start, match.range.start) && before(match.range.end, range.end)),
+  );
 }
 
 /**
@@ -291,8 +358,7 @@ function pathSegmentsIn(
   cache.setVisible(matches.map((match) => match.path));
   cache.want(matches.map((match) => match.path));
   return mergeSegments(
-    matches
-      .filter((match) => cache.kind(match.path))
+    foundPathMatches(matches, (path) => !!cache.kind(path))
       .flatMap((match) => match.segments)
       .filter((segment) => segment.y >= from && segment.y <= to),
   );
@@ -313,8 +379,7 @@ function pathLinkProvider(
     provideLinks(y, callback) {
       const matches = pathMatchesIn(rowAt, y, y).filter((match) => match.segments.some((segment) => segment.y === y));
       cache.want(matches.map((match) => match.path));
-      const links: ILink[] = matches
-        .filter((match) => cache.kind(match.path))
+      const links: ILink[] = foundPathMatches(matches, (path) => !!cache.kind(path))
         .map((match) => {
           const target: PathLinkTarget = { path: match.path, line: match.line, ...cache.answerFor(match.path) };
           const activate = terminalLinkHandler((_, event) => open(target, isPrimaryModifier(event)), hasSelection);

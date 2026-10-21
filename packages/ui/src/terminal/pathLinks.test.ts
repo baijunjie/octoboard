@@ -1,7 +1,8 @@
+import type { ILinkProvider, Terminal } from "@xterm/xterm";
 import { expect, it, vi } from "vitest";
 
-import { type PathAnswer, PathLinkCache, pathCandidates, pathMatchesIn } from "./pathLinks";
-import type { TerminalRow } from "./terminalLinks";
+import { foundPathMatches, installPathLinks, type PathAnswer, PathLinkCache, pathCandidates, pathMatchesIn } from "./pathLinks";
+import type { TerminalRow } from "./terminalLines";
 
 const paths = (text: string) => pathCandidates(text).map((candidate) => candidate.path);
 
@@ -71,6 +72,151 @@ it("places a path soft-wrapped onto the next row, in cells", () => {
 it("counts a double-width character as two cells", () => {
   const [match] = pathMatchesIn((y) => [row("/a/图.png")][y - 1], 1, 1);
   expect(match.segments).toEqual([{ y: 1, col: 0, width: 9 }]);
+});
+
+// A line the program broke onto the next row in the middle of a path, laid out 30 columns wide:
+// the first piece fills the row, and the next row starts with its indent.
+const BROKEN_PATH = "/tmp/scratch/icon/set.iconset/icon.png";
+function sized(cols: number, text: string, wrapped = false): TerminalRow {
+  return { cells: [...text.padEnd(cols)], wrapped };
+}
+const matchesAt = (rows: TerminalRow[], from: number, to = from) => pathMatchesIn((y) => rows[y - 1], from, to);
+
+it("finds a path the program broke onto the next row, as the whole path and as its pieces", () => {
+  const rows = [
+    sized(30, "  Checked it, looks right:"),
+    sized(30, "  /tmp/scratch/icon/set.iconse"),
+    sized(30, "  t/icon.png. I have not seen"),
+  ];
+  const matches = matchesAt(rows, 1, 3);
+  const joined = matches.find((match) => match.joined);
+  expect(joined?.path).toBe(BROKEN_PATH);
+  expect(joined?.segments).toEqual([{ y: 2, col: 2, width: 28 }, { y: 3, col: 2, width: 10 }]);
+  expect(joined?.range).toEqual({ start: { x: 3, y: 2 }, end: { x: 12, y: 3 } });
+  expect(matches.filter((match) => !match.joined).map((match) => match.path)).toEqual(["/tmp/scratch/icon/set.iconse", "t/icon.png"]);
+});
+
+it("finds a program-broken path in output replayed into a narrower terminal", () => {
+  // The same output at 20 columns: xterm soft-wrapped the full row, which leaves a short piece.
+  const rows = [sized(20, "  /tmp/scratch/icon/"), sized(20, "set.iconse", true), sized(20, "  t/icon.png. ok")];
+  const joined = matchesAt(rows, 1, 3).find((match) => match.joined);
+  expect(joined?.path).toBe(BROKEN_PATH);
+  expect(joined?.segments).toEqual([
+    { y: 1, col: 2, width: 18 },
+    { y: 2, col: 0, width: 10 },
+    { y: 3, col: 2, width: 10 },
+  ]);
+});
+
+it("finds a program-broken path whose row is taken on from a word above it", () => {
+  // Replayed at 20 columns, the line above leaves `right:` on a short row, which the path row
+  // joins.
+  const rows = [
+    sized(20, "  Checked it, looks "),
+    sized(20, "right:", true),
+    sized(20, "  /tmp/scratch/icon/"),
+    sized(20, "set.iconse", true),
+    sized(20, "  t/icon.png. ok"),
+  ];
+  const joined = matchesAt(rows, 1, 5).filter((match) => match.joined).map((match) => match.path);
+  expect(joined).toContain(BROKEN_PATH);
+});
+
+it("finds a program-broken path from the row its last piece is on", () => {
+  const rows = [sized(30, "  Checked it:"), sized(30, "  /tmp/scratch/icon/set.iconse"), sized(30, "  t/icon.png. ok")];
+  expect(matchesAt(rows, 3).find((match) => match.joined)?.path).toBe(BROKEN_PATH);
+});
+
+it.each([
+  ["an empty row", [sized(30, "  /tmp/scratch/icon/set.iconse"), sized(30, "  ")]],
+  ["a row that starts with a bracket", [sized(30, "  /tmp/scratch/icon/set.iconse"), sized(30, "  (see above)")]],
+  ["a row after a line that stops short", [sized(30, "  /tmp/a/b.png"), sized(30, "  t/icon.png. ok")]],
+])("joins no path to %s", (_name, rows) => {
+  expect(matchesAt(rows, 1, 2).some((match) => match.joined)).toBe(false);
+});
+
+// The path row, 83 cells of text in a terminal 140 wide, and the path it makes with the next row.
+const WIDE_PATH = "  the file is at /tmp/scratch/aaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const WIDE_JOINED = "/tmp/scratch/aaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/icon.png";
+const joinedPaths = (rows: TerminalRow[], from: number, to = from) =>
+  matchesAt(rows, from, to).filter((match) => match.joined).map((match) => match.path);
+
+it("joins a path broken where the program's text width ended, short of the terminal's", () => {
+  // Laid out 83 columns wide, shown in 140: the longest line of the block is the one that broke.
+  const rows = [sized(140, "  A line of prose above, shorter."), sized(140, WIDE_PATH), sized(140, "  /icon.png ok")];
+  expect(WIDE_PATH.length).toBe(83);
+  expect(joinedPaths(rows, 2)).toEqual([WIDE_JOINED]);
+});
+
+it("does not join a path to a row when a longer line of its block is the one that filled the width", () => {
+  const rows = [sized(140, `${WIDE_PATH} and more words after it, filling the line`), sized(140, WIDE_PATH), sized(140, "  /icon.png ok")];
+  expect(joinedPaths(rows, 2)).toEqual([]);
+});
+
+it("joins a path broken at the terminal's width though a longer soft-wrapped line is in its block", () => {
+  const rows = [
+    sized(30, "  /tmp/scratch/icon/set.iconse"),
+    sized(30, "  t/icon.png. ok"),
+    sized(30, "a line that fills the row up"),
+    sized(30, "and goes on and on", true),
+  ];
+  expect(joinedPaths(rows, 1, 2)).toContain(BROKEN_PATH);
+});
+
+it("does not join a listing's short rows, though they are the longest of their block", () => {
+  expect(joinedPaths([sized(30, "  src/"), sized(30, "  lib/")], 1, 2)).toEqual([]);
+});
+
+// A line longer than the path row, which would be the one that filled the width if it counted.
+const LONGER = sized(140, `${WIDE_PATH} and more words after it, filling the line`);
+const BLANK = sized(140, "");
+
+it.each([
+  ["above", [LONGER, BLANK, sized(140, WIDE_PATH), sized(140, "  /icon.png ok")], 3],
+  ["below", [sized(140, WIDE_PATH), sized(140, "  /icon.png ok"), BLANK, LONGER], 1],
+])("does not count a longer line %s a blank row as one of the block", (_side, rows, at) => {
+  expect(joinedPaths(rows, at)).toEqual([WIDE_JOINED]);
+  expect(joinedPaths(rows, 1, rows.length)).toContain(WIDE_JOINED);
+});
+
+it.each<[string, number, boolean]>([
+  ["above", 10, false],
+  ["above", 24, true],
+  ["below", 10, false],
+  ["below", 24, true],
+])("learns the layout from a longer line %s only within reach: %i rows between, joined %s", (side, between, joins) => {
+  // Reach is 20 rows. The filler is not blank, so it does not end the block.
+  const filler = Array.from({ length: between }, () => sized(140, "lorem ipsum (dolor)"));
+  const path = [sized(140, WIDE_PATH), sized(140, "  /icon.png ok")];
+  const rows = side === "above" ? [LONGER, ...filler, ...path] : [...path, ...filler, LONGER];
+  const at = side === "above" ? rows.length - 1 : 1;
+  const expected = joins ? [WIDE_JOINED] : [];
+  expect(joinedPaths(rows, at)).toEqual(expected);
+  expect(joinedPaths(rows, 1, rows.length)).toEqual(expected);
+  expect(joinedPaths(rows, at, rows.length)).toEqual(expected);
+});
+
+it("finds a path crossing two breaks once, though it is looked for from each break", () => {
+  const rows = [
+    sized(30, "  abcdefghijklmnopqrstuvwxyzab"),
+    sized(30, "  note /tmp/scratch/iconsetxyz"),
+    sized(30, "  bbb/c.png ok"),
+  ];
+  expect(joinedPaths(rows, 1, 3)).toEqual(["/tmp/scratch/iconsetxyzbbb/c.png"]);
+});
+
+it("links the pieces of a broken path when the joined path is not one, and the whole when it is", () => {
+  // A full-width row ending in a complete path, then an unrelated word.
+  const rows = [sized(20, "  see /tmp/aaaa/b.png"), sized(20, "  tomorrow ok")];
+  const matches = matchesAt(rows, 1, 2);
+  expect(matches.find((match) => match.joined)?.path).toBe("/tmp/aaaa/b.pngtomorrow");
+  const whole = (path: string) => path === "/tmp/aaaa/b.png";
+  expect(foundPathMatches(matches, whole).map((match) => match.path)).toEqual(["/tmp/aaaa/b.png"]);
+
+  const broken = [sized(30, "  /tmp/scratch/icon/set.iconse"), sized(30, "  t/icon.png. ok")];
+  const pieces = matchesAt(broken, 1, 2);
+  expect(foundPathMatches(pieces, (path) => path === BROKEN_PATH).map((match) => match.path)).toEqual([BROKEN_PATH]);
+  expect(foundPathMatches(pieces, (path) => path !== BROKEN_PATH).map((match) => match.path)).toEqual(["/tmp/scratch/icon/set.iconse", "t/icon.png"]);
 });
 
 function cache(answer: (paths: string[]) => PathAnswer[], now = () => 0) {
@@ -184,4 +330,36 @@ it("sends at most 64 paths a request and two requests at a time", async () => {
   await vi.waitFor(() => expect(probe).toHaveBeenCalledTimes(3));
   answers[1]();
   answers[2]();
+});
+
+it("offers a path only on the rows it fills, though its line is under the pointer on others", async () => {
+  // One soft-wrapped line: the path is on the first row, and the pointer is on the second.
+  const rows = [sized(20, "see /tmp/a.png and m"), sized(20, "ore text", true)];
+  const term = {
+    cols: 20,
+    registerLinkProvider: vi.fn(),
+    buffer: { active: {
+      getNullCell: () => ({}),
+      getLine: (y: number) => rows[y] && {
+        isWrapped: rows[y].wrapped,
+        getCell: (x: number) => ({ getChars: () => rows[y].cells[x].trim(), getWidth: () => 1 }),
+      },
+    } },
+  };
+  const { cache: links } = installPathLinks(
+    term as unknown as Terminal,
+    { probe: async (asked) => asked.map((): PathAnswer => ({ kind: "file" })), open: vi.fn(async () => {}) },
+    () => false,
+    () => {},
+  );
+  const provider = term.registerLinkProvider.mock.calls[0][0] as ILinkProvider;
+  const linksAt = (y: number) => {
+    const found = vi.fn();
+    provider.provideLinks(y, found);
+    return found.mock.calls[0][0]?.map((link: { text: string }) => link.text);
+  };
+  links.want(["/tmp/a.png"]);
+  await vi.waitFor(() => expect(links.kind("/tmp/a.png")).toBe("file"));
+  expect(linksAt(1)).toEqual(["/tmp/a.png"]);
+  expect(linksAt(2)).toBeUndefined();
 });

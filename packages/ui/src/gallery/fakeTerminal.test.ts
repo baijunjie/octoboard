@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
-import { brokenUrlsAt, linkSegmentsIn, type TerminalRow } from "../terminal/terminalLinks";
+import type { TerminalRow } from "../terminal/terminalLines";
+import { brokenUrlsAt, linkSegmentsIn } from "../terminal/terminalLinks";
 import { installFakeTerminal, isWide, terminalFixtureUrl } from "./fakeTerminal";
 
 const original = window.WebSocket;

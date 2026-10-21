@@ -3,7 +3,8 @@ import type { Terminal } from "@xterm/xterm";
 import { expect, it, vi } from "vitest";
 
 import { IS_MAC } from "../useWindowShortcut";
-import { brokenUrlsAt, linkBox, linkSegmentsIn, type TerminalRow, TERMINAL_URL_REGEX, terminalLinkHandler, visibleLinkSegments } from "./terminalLinks";
+import type { TerminalRow } from "./terminalLines";
+import { brokenUrlsAt, linkBox, linkSegmentsIn, TERMINAL_URL_REGEX, terminalLinkHandler, visibleLinkSegments } from "./terminalLinks";
 
 it("opens a link with a plain click", () => {
   const open = vi.fn(async () => {});
@@ -133,6 +134,56 @@ it("stops a short chain at a separate word", () => {
   const rows = [row("http://a.dev/docs"), row("  frame.html"), row("  today")];
   expect(brokenAt(rows, 1).map((link) => link.url)).toEqual(["http://a.dev/docsframe.html"]);
   expect(brokenAt(rows, 3)).toEqual([]);
+});
+
+function sized(cols: number, text: string, wrapped = false): TerminalRow {
+  return { cells: [...text.padEnd(cols)], wrapped };
+}
+
+it("joins an address in output replayed into a narrower terminal, where its first row was soft-wrapped", () => {
+  // Laid out 26 columns wide, shown in 20: the first row xterm wrapped is short, and the
+  // program's break follows it.
+  const rows = [sized(20, "  https://ex.dev/aaa"), sized(20, "aaaaaa", true), sized(20, "  bbb/ccc next")];
+  const url = "https://ex.dev/aaaaaaaaabbb/ccc";
+  const link = { url, range: { start: { x: 3, y: 1 }, end: { x: 9, y: 3 } } };
+  expect(brokenAt(rows, 1)).toEqual([link]);
+  expect(brokenAt(rows, 3)).toEqual([link]);
+  expect(segmentsOf(rows)).toEqual([
+    { y: 1, col: 2, width: 18 },
+    { y: 2, col: 0, width: 6 },
+    { y: 3, col: 2, width: 7 },
+  ]);
+});
+
+it("joins an address whose first row was soft-wrapped at the width a resize left behind, onto a continuation that is no plain word", () => {
+  const rows = [sized(20, "  https://ex.dev/aaa"), sized(20, "aaaaaa", true), sized(20, "  b.html")];
+  expect(brokenAt(rows, 2).map((link) => link.url)).toEqual(["https://ex.dev/aaaaaaaaab.html"]);
+});
+
+it("leaves an address alone when the last row of its soft-wrapped line stops short and a word follows", () => {
+  const rows = [sized(20, "some prose words to "), sized(20, "see https://a.dev/x", true), sized(20, "  Next thing")];
+  expect(brokenAt(rows, 2)).toEqual([]);
+  expect(brokenAt(rows, 3)).toEqual([]);
+});
+
+it("joins a replayed address over every row, though the last soft-wrapped row of a piece is short", () => {
+  const rows = [
+    sized(30, "  https://example.com/aaaaaaaa"),
+    sized(30, "a/bbbbbbb", true),
+    sized(30, "  bbb/cccccccccc/01234 next"),
+  ];
+  expect(brokenAt(rows, 3).map((link) => link.url)).toEqual(["https://example.com/aaaaaaaaa/bbbbbbbbbb/cccccccccc/01234"]);
+});
+
+it("joins an address broken at the terminal's width though a longer soft-wrapped line is in its block", () => {
+  const rows = [row("http://a.dev/aaaaaaaaaaa"), row("  bbb"), row("a line that fills up row"), row("and goes on", true)];
+  expect(brokenAt(rows, 1).map((link) => link.url)).toEqual(["http://a.dev/aaaaaaaaaaabbb"]);
+});
+
+it("leaves an address alone when its row stops short of the layout width and a word follows", () => {
+  const rows = [sized(60, "  https://github.com/org/repo/commit/0123456789ab"), sized(60, "  cdef0123 next")];
+  expect(brokenAt(rows, 1)).toEqual([]);
+  expect(brokenAt(rows, 2)).toEqual([]);
 });
 
 function segmentsOf(rows: TerminalRow[], from = 1, to = rows.length) {

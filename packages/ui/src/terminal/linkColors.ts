@@ -1,6 +1,7 @@
 import type { IDecoration, IDisposable, IMarker, Terminal } from "@xterm/xterm";
 
-import { type ExtraLinkSegments, segmentKey, visibleLinkSegments } from "./terminalLinks";
+import { segmentKey } from "./terminalLines";
+import { type ExtraLinkSegments, visibleLinkSegments } from "./terminalLinks";
 import { XTERM_LINK_COLORS } from "./xtermThemes";
 
 let nextFixedMarkerId = -1;

@@ -133,6 +133,15 @@ value the reader must keep or drop. A reader built otherwise here passed its tes
 messages typed mid-turn, which carry no user line at all, taking background-task notifications for
 the user, and losing the part of a conversation that compaction moved out of the record file.
 
+What the UI reads back out of a session's terminal buffer — the links it finds in the output — is
+checked the same way before its tests are trusted: replay a real capture's bytes into a real
+`@xterm/xterm` `Terminal`, at more than one width, and see which rows it gives; the committed tests
+may then build rows by hand, in the shapes the replay showed. Two shapes are missed otherwise. An
+agent that wraps its own text — Claude Code does, with a real line break and the paragraph's indent —
+leaves rows xterm does not mark as wrapped. And a session's output is replayed into the terminal at
+its current width, not the width the program laid it out for, so a row "reaching the last column"
+says nothing about whether the program broke the line there.
+
 ## A jsdom test leaves nothing running, and the cleanup is bound to the test that armed it
 
 Applies to the `packages/ui` component tests (`vitest` under jsdom). Work a test leaves running outlives the file:

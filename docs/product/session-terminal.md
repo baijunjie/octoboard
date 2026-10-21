@@ -193,23 +193,28 @@ described under "Web addresses" and "File paths" below; the rest holds for both:
   output does.
 - **An address the program itself breaks onto the next line is joined**: when the program ends a row partway through
   an address and carries on with it on the next row — as Claude Code does with a long line of text, usually after an
-  indent — the pieces are one link, which covers the rows it spans and opens the whole address. This holds when the
-  next row's first non-blank text is made of address characters, and that row is not just the terminal's own wrap of
-  the first. The continuation runs to the first character that ends an address. The pieces may span several rows;
-  joining stops after a piece followed by other text on its row.
+  indent — the pieces are one link, which covers the rows it spans and opens the whole address; the next row's indent
+  is no part of it. This holds when the piece is the last text of the line above and the next row's first non-blank
+  text is made of address characters. The continuation runs to the first character that ends an address. The pieces
+  may span several rows; joining stops after a piece followed by other text on its row, and once the rows joined,
+  each counted at the terminal's full width, would hold more than 2048 characters.
 
-  - **A piece reaching the terminal's last column** takes along the next row's address characters, even when they
-    form a separate word: a finished address at that column and a broken one cannot be told apart.
-  - **A piece stopping short of the last column** must be the last text on its row. It joins unless the next row
-    starts a separate `http` or `https` address, or the piece ends with an ASCII letter or digit and the next row's
-    run of address characters consists entirely of ASCII letters and digits. Thus `…auto-select-` followed by
+  - **When the row above reaches the terminal's last column**, the piece takes along the next row's address
+    characters, even when they form a separate word: a finished address at that column and a broken one cannot be
+    told apart.
+  - **When the row above stops short of the last column**, the piece joins unless the next row starts a separate
+    `http` or `https` address, or the piece ends with an ASCII letter or digit and the next row's run of address
+    characters consists entirely of ASCII letters and digits. Thus `…auto-select-` followed by
     `account&theme=light&lang=zh-Hans` joins, while `http://a.dev/x` followed by `Hans` stays separate. A break
     inside an ordinary word may therefore leave an address incomplete; conversely, separate text containing
-    address punctuation may be taken along.
+    address punctuation may be taken along. Only the terminal's own width counts: output the program laid out
+    narrower than the terminal follows this rule too, however long its lines are.
   - **A blank next row, or one whose first non-blank character cannot belong to an address**, ends the link. A
     piece followed by a table border or other non-address text on its own row does not join onto a later row.
 
-  An address that runs onto the next row only because the terminal is too narrow for it is recognised whole.
+  An address that runs onto the next row only because the terminal is too narrow for it is recognised whole. A line
+  the terminal wrapped is taken as a whole by the rules above, whether the row after it continues the address
+  depending on the line's last row — so output replayed or resized into a narrower terminal still joins.
 
 ### File paths
 
@@ -236,7 +241,20 @@ the session may open. Until then — for a moment after it appears — and whene
   or a directory ending in `/` followed by `(` — so a route pattern such as `app/[id]/page.tsx` or
   `app/(group)/page.tsx` is no link, not even its first part.
 - **Rows**: a path the terminal wraps onto the next row is recognised whole and covers both rows. A path the program
-  itself breaks onto the next line is not joined: each piece is taken on its own.
+  itself breaks onto the next line — as Claude Code does with a long line of text, usually after an indent — may be
+  joined too:
+  - A row is taken as carrying on the line above when that line reached the width the program laid it out at, its
+    last text ends in a character a path may contain, and the row's first non-blank character is one as well. The
+    line above reached that width when it is at least as wide as the terminal, counting the rows the terminal wrapped
+    it onto, or when it is at least 40 cells wide and no line near it in the same block of text (a blank line ends a
+    block) is longer — so output laid out narrower than the terminal joins, while a block of short lines, such as a
+    listing, does not. The row's indent is no part of the path. Rows go on joining this way while the rows joined,
+    each counted at the terminal's full width, hold no more than 1024 characters.
+  - Both the joined path and the separate pieces are checked, by the rules below. When the joined path passes, it is
+    the link — one link covering every row it spans, whichever piece the pointer is on — and the pieces it covers are
+    not; otherwise each piece that passes is a link on its own.
+  - A joined path may also start at the beginning of any row the program carried the line onto, so a word ending the
+    row above (`looks right:`) is not taken into a path that starts on the row below.
 - **Where a path may lead**: inside the session's project — its directory and, when the project is in a git
   repository, its place in each worktree of that repository — or inside a temporary directory: `/tmp`,
   `/private/tmp` and the daemon's own temporary directory, which covers agents' scratch space. A temporary directory
