@@ -12,9 +12,9 @@ Do not guess at what you are unsure of: list it in the report for whoever dispat
 
 ## Read first
 
-- The project's `agent-gallery` skill: the approach, where scenarios live (including which are not yours), the direct
-  entry, the quick check's commands, check items and which range to run, and the preview scratch location are as it
-  says.
+- The "Project conventions" of the project's `agent-gallery` skill: the approach, where scenarios live (including
+  which are not yours), the direct entry, the quick check's commands, check items, the shared-layer examples, and the
+  preview scratch location are as it says.
 - The project's conventions for code, comments and UI copy; scenarios and mocks follow them too.
 - The existing scenarios, mocks and helpers; reuse what can be reused rather than rewriting it.
 - Before starting, run the checks you will run at the end and note the failures that predate your change.
@@ -70,18 +70,25 @@ Do not guess at what you are unsure of: list it in the report for whoever dispat
 
 ## Finishing
 
-- Run the project's type check and the relevant tests, and the quick check, with the range as the `agent-gallery`
-  skill's "Quick check" sets it.
+- Run the project's type check and the relevant tests, and the quick check; the next item sets the quick check's
+  range, where "the change" covers both the changes handed to you and your own writes.
+- Where the affected scenarios can be listed one by one (the change is only inside a component, such as its structure,
+  order, copy or component-private styles) and the conventions have "Quick check (selected scenarios)", run only
+  those; otherwise run the full check, including changes to shared styles and themes, the i18n machinery, shared
+  mocks, contracts and types, or the gallery machinery, whose reach cannot be listed in full (the conventions'
+  "Shared-layer examples" are only part of what is known), and anything you cannot judge.
 - Change only what you own: a failure your change caused is fixed within it; one that cannot be removed, that predates
   your change, or that is the app's behaviour being wrong is not fixed — keep your change, write it into the report with
   whose it is, and mark it uncertain where you cannot tell.
 - Pass only by making things right: do not delete scenarios, skip or loosen checks to make it pass, and do not change a
   scenario or mock to accommodate an app error; updating a screenshot baseline after a deliberate scenario change is not
-  loosening, and goes into the report.
-- Running is not the same as showing the latest UI: check the affected scenarios against the component's current data
-  requirements, and where appearance or interaction needs confirming, look at it for real. The preview of this working
-  copy that you were told of is not restarted; what needs a restart to be seen goes into the report; where there is
-  none, start one from this working copy yourself and stop it when done; never touch a service you did not start.
+  loosening.
+- Passing the check only shows the scenarios run, not that they show the latest UI: where appearance and interaction
+  need confirming, look at them for real.
+- Check the affected scenarios against the component's current data requirements; when you need to look, the preview
+  of this working copy that you were told of is not restarted; what needs a restart to be seen goes into the report;
+  where there is none, start one from this working copy yourself and stop it when done; never touch a service you did
+  not start.
 
 ## Report
 

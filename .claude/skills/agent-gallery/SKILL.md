@@ -51,8 +51,9 @@ row each, and the items below the table say so where packages differ.
   state, or a change to the interface contracts and types mocks depend on (even if the UI did not change); how a
   scenario is shown, which to extend and which to delete, is its judgement.
 - One dispatch at a time, to keep each from adding its own; it cannot see your conversation, so each time hand over
-  every UI state to be shown, what each is for a person to confirm, what changed in the contract and the trade-offs
-  the user settled, plus the address of any preview this working copy is serving.
+  every UI state to be shown, what each is for a person to confirm, what changed in the contract, the files this
+  change touches (it sets the quick check's range from them) and the trade-offs the user settled, plus the address of
+  any preview this working copy is serving.
 - For what it reports as unshowable, needing app code changes, or trade-offs it could not settle: decide the minor
   ones yourself and leave the rest to the user; where the conventions must follow, handle it as "Project conventions"
   says.
@@ -69,8 +70,11 @@ row each, and the items below the table say so where packages differ.
   those; otherwise run the full check, including changes to shared styles and themes, the i18n machinery, shared
   mocks, contracts and types, or the gallery machinery, whose reach cannot be listed in full (the conventions'
   "Shared-layer examples" are only part of what is known), and anything you cannot judge.
-- Pass only by making things right: never delete scenarios, skip or loosen checks to make it pass (a scenario whose UI
-  state no longer exists is for `gallery-writer` to judge and delete); handle a failure by its cause:
+- Pass only by making things right: never delete scenarios, skip or loosen checks to make it pass, and never change a
+  scenario or mock to accommodate an app error; updating a screenshot baseline after a deliberate scenario change is
+  not loosening.
+- Handle a failure by its cause (a scenario whose UI state no longer exists is for `gallery-writer` to judge and
+  delete):
 
   | Cause of failure | What to do |
   |---|---|
@@ -78,8 +82,8 @@ row each, and the items below the table say so where packages differ.
   | A scenario, mock or the gallery machinery is broken or behind | Dispatch `gallery-writer` to fix it |
   | The command runs, and some scenario fails the same way on the baseline before the change (e.g. the branch to merge back into); verifying on the baseline leaves this working copy alone, and a separately made copy is isolated as the conventions say and removed after use | Do not fix, do not block delivery; state in the final reply that it failed before the change and does not count as passing |
 
-- Passing only shows the scenarios run, not that they show the latest UI: where appearance and interaction need
-  confirming, look at them for real.
+- Passing the check only shows the scenarios run, not that they show the latest UI: where appearance and interaction
+  need confirming, look at them for real.
 - State in the final reply whether the full check or which scenarios were run, and the result.
 
 ## Previewing for the user to confirm

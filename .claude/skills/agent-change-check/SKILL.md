@@ -25,8 +25,6 @@ description: Change check entry point — dispatch the change-checker subagent t
   definition of the subagent to dispatch cannot be found, the installation is incomplete: stop and ask the user to
   rerun the installer that installed this skill. With no subagent mechanism, read the installed definition and do the
   work yourself following the rules inside.
-- When reviewing it yourself with no subagent mechanism, first read every file involved in the change in full, not
-  just the diff.
 
 When unsure, report back: stop, spell out what needs deciding (with the options) or what information is missing,
 together with what you have already found out, and let the recipient of the report (the user, or the dispatcher

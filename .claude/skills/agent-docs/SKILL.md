@@ -41,7 +41,7 @@ When unsure, report back: stop, spell out what needs deciding (with the options)
 - The subagent cannot see your conversation: tell it what was finished this time and what you want recorded, and give it **source material it can read** (the change scope, task notes, requirement descriptions, etc.); anything that exists only in the conversation has to be written up as key points inside what you tell it first. Whether it is worth writing and which doc it goes into is its call — it may refuse.
 - The subagent only reads the source material and does not touch it; what happens to it afterwards is your business.
 - The subagents this skill dispatches are installed together with it: if there is a subagent mechanism but the definition of the subagent to dispatch cannot be found, the installation is incomplete: stop and ask the user to rerun the installer that installed this skill. With no subagent mechanism, read the installed definitions and do the work yourself following the rules inside.
-- When writing it yourself with no subagent mechanism, go through the categories in the same table order; **the default is to write nothing**; lay out the file changes in the format of a subagent report, to be used for updating the documentation index.
+- When writing it yourself with no subagent mechanism, go through the categories in the same table order; lay out the file changes in the format of a subagent report, to be used for updating the documentation index.
 
 Handle what a subagent hands back according to where it belongs; for a destination not in this table, you decide:
 
