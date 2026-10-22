@@ -26,9 +26,11 @@ keeping the octopus at its original scale; the icon keeps its **18 pt** footprin
 looks:
 
 - **Two layers**, when the account has both a 5-hour and an account-wide Weekly window: two **outlined capsules**,
-  each with a hollow unfilled portion — about **18 × 2.9 pt** for the 5-hour window and, about 0.8 pt beneath it,
-  about **18 × 2.5 pt** for the Weekly window.
-- **One bar** otherwise: an **outlined capsule** of about **18 × 4.9 pt**, with a hollow unfilled portion.
+  each with a hollow unfilled portion — about **18 × 3.3 pt** for the 5-hour window and, about 0.8 pt beneath it,
+  about **18 × 2.5 pt** for the Weekly window. The 5-hour capsule, the gap and the Weekly capsule stand 4 : 1 : 3, the
+  same proportion as the rail's two layers.
+- **One bar** otherwise: an **outlined capsule** of about **18 × 4.1 pt**, with a hollow unfilled portion; its outline is
+  a fifth of its height, as on the rail's single bar.
 
 The attention dot stays at the upper right, clear of the bars. Without a readable quota the bars disappear; without
 attention or a quota the original octopus returns.

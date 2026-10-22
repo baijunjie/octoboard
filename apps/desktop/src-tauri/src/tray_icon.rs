@@ -8,15 +8,18 @@ use tauri::image::Image;
 
 const SIDE: u32 = 44;
 const PILL_X: f64 = 0.0;
-const PILL_Y: f64 = 32.0;
+/// The single capsule: its outline is a fifth of its height, as in `docs/product/menu-bar-icon.md`,
+/// "The icon's look".
+const PILL_Y: f64 = 34.0;
 const PILL_WIDTH: f64 = 44.0;
-const PILL_HEIGHT: f64 = 12.0;
+const PILL_HEIGHT: f64 = 10.0;
 const GAP: u32 = 2;
 /// The two-layer look: the capsule for the main window, then the thinner one for the other, two
-/// pixels apart so the gap stays distinct at the menu bar's size; together they clear one more
-/// row of tentacles than the single capsule does.
-const MAIN_Y: f64 = 29.0;
-const MAIN_HEIGHT: f64 = 7.0;
+/// pixels apart so the gap stays distinct at the menu bar's size; together they clear six more
+/// pixel rows of tentacles than the single capsule does. Main capsule, gap and thinner capsule
+/// stand 4 : 1 : 3, the two-layer proportion in `docs/product/menu-bar-icon.md`, "The icon's look".
+const MAIN_Y: f64 = 28.0;
+const MAIN_HEIGHT: f64 = 8.0;
 const THIN_Y: f64 = 38.0;
 const THIN_HEIGHT: f64 = 6.0;
 const DOT_X: f64 = 35.0;
@@ -157,11 +160,11 @@ mod tests {
         for icon in [&empty, &half, &full] {
             assert_eq!((icon.width(), icon.height()), (SIDE, SIDE));
             assert!(icon.rgba().chunks(4).all(|pixel| pixel[..3] == [0, 0, 0]));
-            assert_eq!(alpha(icon, 22, 32), 255);
-            assert!((0..SIDE).all(|x| alpha(icon, x, 30) == 0 && alpha(icon, x, 31) == 0));
+            assert_eq!(alpha(icon, 22, 34), 255);
+            assert!((0..SIDE).all(|x| alpha(icon, x, 32) == 0 && alpha(icon, x, 33) == 0));
         }
         let original = octopus(false, None);
-        for y in 0..30 {
+        for y in 0..32 {
             for x in 0..SIDE {
                 assert_eq!(alpha(&empty, x, y), alpha(&original, x, y));
             }
@@ -180,13 +183,15 @@ mod tests {
         let icon = octopus(false, layered(50, 25));
         assert_eq!((icon.width(), icon.height()), (SIDE, SIDE));
         assert!(icon.rgba().chunks(4).all(|pixel| pixel[..3] == [0, 0, 0]));
-        for y in 0..27 {
+        for y in 0..26 {
             for x in 0..SIDE {
                 assert_eq!(alpha(&icon, x, y), alpha(&original, x, y));
             }
         }
+        // The band above the main capsule is cleared.
+        assert!((0..SIDE).all(|x| alpha(&icon, x, 26) == 0 && alpha(&icon, x, 27) == 0));
         // The main capsule: outlined, filled to half inside.
-        assert_eq!(alpha(&icon, 22, 29), 255);
+        assert_eq!(alpha(&icon, 22, 28), 255);
         assert_eq!(alpha(&icon, 22, 35), 255);
         assert_eq!(alpha(&icon, 12, 32), 255);
         assert_eq!(alpha(&icon, 32, 32), 0);
