@@ -12,7 +12,7 @@ import { TintedAlert } from "../components/TintedAlert";
 import { ImportConfigurationDialog } from "../configuration/ImportConfigurationDialog";
 import { Message, useT } from "../i18n/react";
 import { isLive, type Project, type Session, type SessionBranchItem } from "../protocol";
-import { sessionAgentLabel, sessionDisplayTitle, sessionStatusKind } from "../sessionLabel";
+import { sessionAgentLabel, sessionDisplayTitle, sessionShownStatusKind, sessionStatusKind } from "../sessionLabel";
 import {
   boundArchivedSessions,
   boundSessionsArchivedWith,
@@ -62,7 +62,7 @@ function ConfirmWarning({ title, sessions, lines = [] }: { title?: string; sessi
         <ul ref={sessionsRef} className="relative mt-1 flex min-w-0 flex-col gap-1 self-stretch text-sm text-foreground">
           {sessions.map((session) => (
             <li key={session.id} data-list-motion={session.id} className="flex min-w-0 items-center gap-2">
-              {session.status !== "archived" && <StatusIcon status={sessionStatusKind(session)} withTooltip />}
+              {session.status !== "archived" && <StatusIcon status={sessionShownStatusKind(session)} withTooltip />}
               <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} />
               {/* The icon is decorative, and nothing else here names the agent. */}
               <span className="sr-only">{sessionAgentLabel(t, session, accounts, defaultNames)}</span>
@@ -286,15 +286,15 @@ export function RequestedDialog({
   dialog: requestedDialog,
   onClose,
   onSessionOpened,
-  onSwitchAccount,
+  onSwitchAccounts,
   onResumeSession,
 }: {
   dialog: DialogRequest;
   onClose: () => void;
   onSessionOpened: (sessionId: string) => void;
-  /** Switches a session's account (`null`, the default account); resolves once the daemon has
-   * the result, and rejects with the reason when the switch did not happen. */
-  onSwitchAccount: (sessionId: string, account: string | null) => Promise<void>;
+  /** Starts switching sessions to an account (`null`, the default account; `accountName` its name) in
+   * the background, and returns at once; the outcome is reported once the whole batch is done. */
+  onSwitchAccounts: (sessionIds: string[], account: string | null, accountName: string) => void;
   /** Resumes a session the session dialog found, an archived one (reopening it) or an interrupted one;
    * rejects with the reason when it did not happen. */
   onResumeSession: (sessionId: string) => Promise<void>;
@@ -423,7 +423,7 @@ export function RequestedDialog({
           account={dialog.account}
           accountName={dialog.accountName}
           onClose={onClose}
-          onSwitchAccount={onSwitchAccount}
+          onSwitchAccounts={onSwitchAccounts}
         />
       );
     case "hand-off":

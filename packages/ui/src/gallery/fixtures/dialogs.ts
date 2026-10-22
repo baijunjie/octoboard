@@ -1,7 +1,7 @@
 import type { Agent, AgentAvailability, Settings } from "../../protocol";
 import { describing, type Ui } from "../interact";
 import type { Scenario, Step } from "../scenario";
-import { ALL_AGENTS, SAMPLE, branchItemOf, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState, worktreeItemOf } from "./builders";
+import { ALL_AGENTS, SAMPLE, branchItemOf, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState, switchingAccount, worktreeItemOf } from "./builders";
 import { SAMPLE_CODEX_MODELS } from "./agentModels";
 import { IMAGES } from "./viewerImages";
 import { SHELL_TIMEOUT } from "./shellTimeout";
@@ -389,7 +389,7 @@ const consoleSessionLaunchState = {
 };
 
 // Three eligible Claude sessions share a console: its hub, an independent project session,
-// and a bound child. Other-agent, archived, already-target and other-console sessions stay put.
+// and the hub's bound child. Other-agent, archived, already-target and other-console sessions stay put.
 const switchAccountState = snapshotState({
   consoles: [console_, consoleOf("c-other", "Personal")],
   projects: [web, api],
@@ -420,14 +420,14 @@ const unusedState = snapshotState({
   ],
 });
 const openUnusedMenu = (ui: Ui) => ui.press(ui.t("sidebar.session.actions", { title: unusedSession.title }));
-const openSwitchAccount = [
-  (ui: Ui) => ui.press(ui.t("sidebar.session.actions", { title: "Review the release checklist" })),
+const openSwitchAccount = (title: string) => [
+  (ui: Ui) => ui.press(ui.t("sidebar.session.actions", { title })),
   (ui: Ui) => ui.press(ui.t("sidebar.session.switchAccount")),
   (ui: Ui) => ui.press(accountsState.settings!.accounts[0].name),
 ];
 const submitConsoleSwitch = [
-  ...openSwitchAccount,
-  (ui: Ui) => ui.press(ui.t("dialog.switchAccount.all", { agent: "Claude Code" })),
+  ...openSwitchAccount("Review the release checklist"),
+  (ui: Ui) => ui.press(ui.t("dialog.switchAccount.scopeConsole", { agent: "Claude Code" })),
   (ui: Ui) => ui.confirm(),
 ];
 
@@ -437,6 +437,45 @@ const quotaRefusal = {
   params: { agent: "Claude Code", account: accountsState.settings!.accounts[0].name, window: "Weekly" },
   message: `${accountsState.settings!.accounts[0].name} has used up its Claude Code quota (Weekly)`,
 };
+
+/** The daemon's `relocation_failed` for a switch into the account whose directory is `path` for every session of the
+ * batch, stopped at `stage` for `cause`, with the system's own words `detail`. `kept_staging` also names where the
+ * older item is kept, in the staging directory the daemon makes under the account's directory. */
+function relocationFailure(path: string, stage: "copy" | "thread_record" | "kept_staging", cause: string, detail: string) {
+  return {
+    code: "relocation_failed",
+    params: { path, stage, cause, detail, ...(stage === "kept_staging" ? { kept_in: `${path}/.octoboard-switch/9b1d4e7a-5c3f-4a28-b6d0-1e8f2a7c3d59` } : {}) },
+    message: `The conversation could not be copied into ${path}: ${detail}`,
+  };
+}
+const NO_SPACE = "No space left on device (os error 28)";
+/** The same, into the Claude Code Work account. */
+const claudeRelocationFailure = (stage: "copy" | "kept_staging", cause: string, detail: string) =>
+  relocationFailure("/Users/dev/.claude-work", stage, cause, detail);
+/** The same, into the Codex Work account, whose thread database the `thread_record` stage updates. */
+const codexRelocationFailure = (cause: string, detail: string) =>
+  relocationFailure("/Users/dev/.codex-work", "thread_record", cause, detail);
+
+// Three Codex sessions share a console, the second bound to the hub: a Codex account's thread database is what the
+// `thread_record` stage of a switch updates.
+const codexWork = { id: "a-codex-work", agent: "codex" as const, name: "Codex Work", config_dir: "/Users/dev/.codex-work" };
+const codexSwitchState = snapshotState({
+  consoles: [console_],
+  projects: [web, api],
+  sessions: [
+    sessionOf("s-codex-hub", console_.id, undefined, "Release coordinator", "idle", { agent: "codex" }),
+    sessionOf("s-codex-work", console_.id, web.id, "Review the release checklist", "idle", { agent: "codex" }),
+    sessionOf("s-codex-bound", console_.id, api.id, "Verify the migration", "idle", { agent: "codex", bound_to: "s-codex-hub" }),
+  ],
+  settings: { ...accountsState.settings!, accounts: [...accountsState.settings!.accounts, codexWork] },
+});
+const submitCodexSwitch = [
+  (ui: Ui) => ui.press(ui.t("sidebar.session.actions", { title: "Review the release checklist" })),
+  (ui: Ui) => ui.press(ui.t("sidebar.session.switchAccount")),
+  (ui: Ui) => ui.press(codexWork.name),
+  (ui: Ui) => ui.press(ui.t("dialog.switchAccount.scopeConsole", { agent: "Codex" })),
+  (ui: Ui) => ui.confirm(),
+];
 
 const removeProjectTrash: Scenario = {
   ...dialogFixture,
@@ -508,48 +547,62 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "Switch account confirmation",
-    description: "The console-wide checkbox starts unchecked. Selecting it includes the console hub, independent project sessions and bound sessions of the same agent; archived sessions and sessions already on the target account are omitted.",
+    description: "Opened from the hub, which has a bound session. Under the message, a radio group \"Sessions to switch\" starts on \"This session and its sub-sessions\", its note counting 2 sessions that can switch (the hub and its bound session); the other option, \"Every Claude Code session in this console\", counts 3 (the independent project session joins). Below the group, one line says only Claude Code sessions are switched and archived sessions and sessions already on this account are skipped; sessions of other consoles are not counted either. There is no progress bar: Confirm closes the dialog at once.",
     state: switchAccountState,
-    steps: openSwitchAccount,
-  },
-  {
-    id: "dialog-switch-account-progress",
-    group: "Sidebar sessions",
-    category: "normal",
-    title: "Console account switch in progress",
-    description: "Two of three sessions have finished; the determinate bar and current session remain visible while the third switch is pending. Controls stay locked until switching completes.",
-    state: switchAccountState,
-    sessionAccountSwitches: { "s-switch-bound": "pending" },
-    steps: submitConsoleSwitch,
+    steps: openSwitchAccount("Release coordinator"),
   },
   {
     id: "dialog-switch-account-partial-failure",
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Console account switch partial failure",
-    description: "The completed batch reports a full disk and an unexpected internal failure together. Each row keeps its own cause and guidance; the unexpected item also enables diagnostics and Report issue. After acknowledgement, Retry targets only failed sessions and preserves the successful switch.",
+    description: "The dialog has closed and the batch has finished: one alert titled \"2 sessions could not move to\" the Work account's chip, its first line saying they stay on their current account. One row per failed session, its name in bold over a short reason: the copy failure's sentence for one, and for the other the daemon's own text of an unexpected failure. The remedy for the full disk follows the list once, then the paragraph about a possible bug, which is there because one failure is unexpected. Error details is open, with a heading per session that has raw text: only the copy's, the system's own words, since the unexpected failure's text is already in its row. The footer holds Report issue and OK; the session that did switch stays on the new account.",
     state: switchAccountState,
     externalLinks: "available",
     sessionAccountSwitches: {
       "s-switch-bound": {
         code: "internal_error",
-        params: { detail: "Unexpected session state while applying the account update" },
-        message: "Unexpected session state while applying the account update",
+        params: { detail: "The session's agent exited during the restart" },
+        message: "The session's agent exited during the restart",
       },
-      "s-switch-work": {
-        code: "relocation_failed",
-        params: { path: "/Users/dev/.claude-work/projects/-Users-dev-code-website", detail: "No space left on device (os error 28)" },
-        message: "The conversation could not be copied into /Users/dev/.claude-work/projects/-Users-dev-code-website: No space left on device (os error 28)",
-      },
+      "s-switch-work": claudeRelocationFailure("copy", "no_space", NO_SPACE),
+    },
+    steps: [...submitConsoleSwitch, (ui) => ui.press(ui.t("error.diagnostics"))],
+  },
+  {
+    id: "dialog-switch-account-relocation-failed",
+    group: "Sidebar sessions",
+    category: "exceptional",
+    title: "Console account switch, the conversation could not be copied",
+    description: "Three Claude Code failures, each for a cause the daemon names, so no paragraph about a bug and no Report issue. Each row words where the copy stopped (the conversation could not be copied, twice; and, for the third, that an older item could not be put back and is kept in a named folder). After the rows come the remedies, each once and always in this order: copy the older item out of the named folder before it is cleared (that failure was a full disk too); replace or remove the symbolic link named in the details; and free disk space, once for the two disk-full failures. Error details is closed but present, holding the system's own text per session; the footer holds OK alone.",
+    state: switchAccountState,
+    sessionAccountSwitches: {
+      "s-switch-bound": claudeRelocationFailure("copy", "no_space", NO_SPACE),
+      "s-switch-hub": claudeRelocationFailure("copy", "symlink", "`/Users/dev/.claude/projects/-Users-dev-code-hub/7d2f6c1e-8a43-4b0e-9c15-2e6b0f5a9d34/notes` is a symbolic link"),
+      "s-switch-work": claudeRelocationFailure("kept_staging", "not_restored", NO_SPACE),
     },
     steps: submitConsoleSwitch,
+  },
+  {
+    id: "dialog-switch-account-codex-thread-record",
+    group: "Sidebar sessions",
+    category: "exceptional",
+    title: "Console account switch, the Codex thread record could not be updated",
+    description: "Three Codex failures at the stage after the copy, each for a cause the daemon names, so no paragraph about a bug and no Report issue. Each row says the conversation was copied into the account's directory but the target account's record of the thread could not be updated. After the rows, one remedy sentence per cause: close other programs using the account's files (the database was locked); make the account's config.toml readable valid TOML or remove it; set an absolute sqlite_home or CODEX_SQLITE_HOME, with ~ and HOME as chips. Error details is closed but present; the footer holds OK alone.",
+    state: codexSwitchState,
+    sessionAccountSwitches: {
+      "s-codex-bound": codexRelocationFailure("busy", "updating `/Users/dev/.codex-work/state_5.sqlite` failed: database is locked"),
+      "s-codex-hub": codexRelocationFailure("config_unreadable", "`config.toml` is not valid: TOML parse error at line 3, column 9"),
+      "s-codex-work": codexRelocationFailure("sqlite_home", "`CODEX_SQLITE_HOME` is the relative path `./state`, which depends on the directory the session starts in"),
+    },
+    steps: submitCodexSwitch,
   },
   {
     id: "dialog-switch-account-shared-recovery",
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Console account switch, every failure shares one remedy",
-    description: "Both failed sessions say the target account no longer exists, so the alert's footer carries a Manage accounts… button, left of OK, and the failure rows carry no button of their own. Compare the partial failure above, whose different remedies leave the footer without one.",
+    description: "Both failed sessions say the target account no longer exists, so the alert gives that one remedy once, under the two rows, and its footer carries a Manage accounts… button, left of OK; the rows carry no button of their own. The alert has no Error details and no paragraph about a bug. Compare the partial failure above, whose different remedies each come once after the list and whose footer has no Manage accounts….",
     state: switchAccountState,
     sessionAccountSwitches: {
       "s-switch-bound": { code: "unknown_account", params: { account: "a-removed" }, message: "unknown account a-removed" },
@@ -562,7 +615,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Console account switch refused, the quota is used up",
-    description: "The daemon holds a newer reading than the window and refuses two sessions' switch to the Work account. Both failure rows say the account's weekly quota is used up, with no reset time, and advise another account or waiting. The window name is in the app's language.",
+    description: "The daemon holds a newer reading than the window and refuses two sessions' switch to the Work account. Both rows say the account's weekly quota is used up, with no reset time, and the advice to choose another account or try again once the quota resets comes once under them. The footer holds OK alone. The account's name appears as a chip in the title and in each row, in the app's language.",
     state: switchAccountState,
     sessionAccountSwitches: { "s-switch-bound": quotaRefusal, "s-switch-work": quotaRefusal },
     steps: submitConsoleSwitch,
@@ -1115,6 +1168,18 @@ export const dialogScenarios: Scenario[] = [
     state: backgroundArchiveState,
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: watcher.title })),
+      (ui) => ui.press(ui.t("sidebar.session.archive")),
+    ],
+  },
+  {
+    id: "dialog-archive-session-switching",
+    group: "Archive view",
+    category: "normal",
+    title: "Archive a session switching its account",
+    description: "Release coordinator and its bound session are both mid account switch, as the daemon reports it. The warning lists the bound session that goes with the archive, its status glyph the muted turning arc of \"Switching account…\" in place of its waiting status, the same as in its own row and the hub's row behind the dialog.",
+    state: switchingAccount(switchAccountState, ["s-switch-hub", "s-switch-bound"]),
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Release coordinator" })),
       (ui) => ui.press(ui.t("sidebar.session.archive")),
     ],
   },

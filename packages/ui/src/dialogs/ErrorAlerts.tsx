@@ -9,6 +9,7 @@ import { RecoveryGuidance, recoveryAction } from "../components/ErrorGuidance";
 import { InlineChip } from "../components/InlineChip";
 import { FadedScroller, useFadeRegion } from "../components/scrollFade";
 import { errorAlerts } from "../errorAlerts";
+import { diagnosticText } from "../errorText";
 import { Message, useT } from "../i18n/react";
 import { useOptionalPlatform } from "../platform/react";
 import { openSettingsFromAnywhere } from "../settings/settingsLauncher";
@@ -16,19 +17,18 @@ import { DaemonProvider, type Daemon } from "../store";
 import { dialogAround } from "./dialogElement";
 import { Dialog } from "./Dialog";
 
-function diagnosticText(error: unknown): string | undefined {
-  if (typeof error === "string") return error;
-  if (!error || typeof error !== "object") return error === undefined || error === null ? undefined : String(error);
-  try {
-    if ("stack" in error && typeof error.stack === "string" && error.stack) return error.stack;
-    if ("message" in error && typeof error.message === "string") return error.message;
-  } catch {
-    return undefined;
-  }
-  return undefined;
-}
-
 export const issueUrl = appConfig.issueUrl;
+
+/** The "Error details" disclosure around details a caller laid out itself. */
+function DetailsDisclosure({ children }: { children: React.ReactNode }): React.ReactElement {
+  const t = useT();
+  return (
+    <details className="min-w-0 max-w-full">
+      <summary>{t("error.diagnostics")}</summary>
+      <div className="mt-2 flex min-w-0 max-w-full flex-col gap-3">{children}</div>
+    </details>
+  );
+}
 
 function DiagnosticDetails({ text }: { text: string }): React.ReactElement {
   const t = useT();
@@ -106,9 +106,10 @@ export function ErrorAlerts({ daemon }: { daemon?: Daemon }): React.ReactElement
           <p>{manualIssue
             ? <Message id="error.unexpected.manualAddressGuidance" params={{ address: <InlineChip size="inherit" monospace wrap>{issueUrl}</InlineChip> }} />
             : <Message id="error.unexpected.reportGuidance" params={{ report: <InlineChip size="inherit">{t("error.issue.report")}</InlineChip> }} />}</p>
-          {diagnostics.length > 0 && <DiagnosticDetails text={[...new Set(diagnostics)].join("\n\n")} />}
+          {error.details === undefined && diagnostics.length > 0 && <DiagnosticDetails text={[...new Set(diagnostics)].join("\n\n")} />}
         </>
         : !error.failures?.length && error.classification.recovery !== "none" && <p><RecoveryGuidance recovery={error.classification.recovery} /></p>}
+      {error.details ? <DetailsDisclosure>{error.details}</DetailsDisclosure> : null}
     </Dialog>
   );
   return daemon ? <DaemonProvider value={daemon}>{dialog}</DaemonProvider> : dialog;

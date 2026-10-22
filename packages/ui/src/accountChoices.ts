@@ -62,6 +62,12 @@ export function ownAccountChangingUnavailable(t: Translate): { detail: string; r
   return { detail: t("accountChoice.ownSharingChange.detail"), reason: { state: t("accountChoice.ownSharingChange.reason") } };
 }
 
+/** What a session's menu items show while an account switch holds it (`Session.switching_account`): nothing
+ * else can be done to it until the switch lets go. */
+export function sessionSwitchingUnavailable(t: Translate): { detail: string; reason: Reason } {
+  return { detail: t("accountChoice.switching.detail"), reason: { state: t("accountChoice.switching.reason") } };
+}
+
 export function choiceKey({ agent, account }: AccountChoice): string {
   return `${agent}:${account ?? ""}`;
 }

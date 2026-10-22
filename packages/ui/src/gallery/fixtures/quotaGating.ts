@@ -1,7 +1,7 @@
 import type { Account, AccountQuota, Agent, AgentAvailability, Console, Project, Settings } from "../../protocol";
 import type { Scenario } from "../scenario";
 import type { Ui } from "../interact";
-import { ALL_AGENTS, SAMPLE, accountSharingOf, minutesAgo, minutesFromNow, projectOf, sessionOf, snapshotState } from "./builders";
+import { ALL_AGENTS, SAMPLE, accountSharingOf, minutesAgo, minutesFromNow, projectOf, sessionOf, snapshotState, switchingAccount } from "./builders";
 import { quotaOf, quotaWindow } from "./quotas";
 
 const GROUP = "Sidebar sessions";
@@ -306,6 +306,23 @@ export const quotaGatingScenarios: Scenario[] = [
     state: { ...switchState([]), accountSharing: clientChangingSharing },
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Review the release checklist" })),
+      (ui) => ui.press(ui.t("sidebar.session.switchAccount")),
+    ],
+  },
+  {
+    id: "sidebar-session-switching-menu",
+    group: GROUP,
+    category: "normal",
+    title: "Menu of a session switching its account",
+    description: "Verify the migration, bound to Release coordinator, reads interrupted while the daemon holds it for its account switch. In its menu, Hand off and Unbind are greyed out, Hand off with \"Switching account\" under its name; in the Switch account submenu, Default stays marked as current and Work, Personal and Client are greyed out with the same reason under each name and cannot be chosen.",
+    state: (() => {
+      const base = switchState([]);
+      const sessions = new Map(base.sessions);
+      sessions.set("s-switch-bound", { ...sessions.get("s-switch-bound")!, status: "interrupted" });
+      return switchingAccount({ ...base, sessions }, ["s-switch-bound"]);
+    })(),
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Verify the migration" })),
       (ui) => ui.press(ui.t("sidebar.session.switchAccount")),
     ],
   },

@@ -30,7 +30,7 @@ export function noticeErrorPresentation(code: string, params: MessageParams, mes
   return new DaemonRequestError(message, params.reason_code ?? "", params);
 }
 
-export function errorPresentation(error: unknown): ErrorPresentation {
+export function errorPresentation(error: unknown): DaemonRequestError {
   if (error instanceof DaemonRequestError) return error;
   const foreign = error && typeof error === "object" ? error as { message?: unknown; stack?: unknown } : undefined;
   const message = error instanceof Error ? error.message || error.name : typeof foreign?.message === "string" ? foreign.message : String(error);

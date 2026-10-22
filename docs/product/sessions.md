@@ -599,6 +599,7 @@ found. The request only reads what is stored and on disk.
 | Waiting for the user | `waiting_user` | a raised hand that waves now and then | The agent is waiting on a permission decision, including its folder-trust confirmation, or has asked the user a question through its own ask-the-user tool; or Octoboard is asking the user on the agent's behalf while the agent's call waits, which is a session request (see "Waiting for the answer" in `docs/product/session-requests.md`). |
 | Awaiting instructions | `idle` | a green speech bubble | The process is running and sitting at its prompt. |
 | Working in background | `idle`, with a non-empty `background_tasks` | the *working* glyph as a hollow green ring: a green ring pulsing a fading copy of itself outward | The process is sitting at its prompt, but its last turn ended with work still running in the background. Claude Code sessions only; see "Working in background" below. |
+| Switching account | any status except `archived`, with `switching_account` true | the *starting* arc | An account switch holds the session, or, in the window that confirmed the switch, the session waits for its turn in it (see "While a session is switching" in `docs/product/switching-session-accounts.md`). Shown in place of the session's own status, which it does not change and which the order of sessions still goes by. |
 | Interrupted | `interrupted` | a pause sign | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in the console sessions section) and can be resumed. |
 | Archived | `archived` | an archive box | Ended by being archived (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`). No longer listed among its project's sessions (a console session, no longer in the console sessions section); reached through the archive (see "Archived sessions" in `docs/product/archiving-and-resuming-sessions.md`) and can be reopened. |
 
@@ -610,7 +611,7 @@ breadcrumb and a confirmation's list of the sessions it affects. In a confirmati
 status glyph; the warning identifies them as archived. The waving hand and the outward pulse stand still
 where the system asks for reduced motion, leaving the working glyph a plain accent-coloured dot and the *working in
 background* glyph a plain hollow green ring; working and awaiting instructions still differ by shape as well as by
-colour. The starting arc stands still there too and differs from the rest by shape.
+colour. The starting arc, which *switching account* shares, stands still there too and differs from the rest by shape.
 *Working in background* is the *working* glyph drawn as a hollow ring in *awaiting instructions*' green: it is told
 apart from *working*'s filled dot by shape as well as by colour, and from *awaiting instructions* by shape.
 

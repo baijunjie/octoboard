@@ -12,12 +12,13 @@ import { IS_MAC } from "../useWindowShortcut";
 import { STATUS_LABELS, type StatusKey } from "../viewer/statusMarks";
 
 /** Everything a pressable thing is looked up among. A hand-built row is a `role="button"`, a tag
- * in a tag group is a `role="row"`, and a checkbox is its (visually hidden) input: pressing the label
- * HeroUI draws it in does not toggle it. */
+ * in a tag group is a `role="row"`, and a checkbox or radio is its (visually hidden) input: pressing
+ * the label HeroUI draws it in does not toggle it. The `summary` of a `details` is a disclosure's
+ * control, such as an error alert's "Error details". */
 const PRESSABLE =
-  "button, [role=button], [role=menuitem], [role=menuitemradio], [role=tab], [role=option], [role=row], a[href], input[type=checkbox], [role=separator][tabindex]";
+  "button, [role=button], [role=menuitem], [role=menuitemradio], [role=tab], [role=option], [role=row], a[href], input[type=checkbox], input[type=radio], summary, [role=separator][tabindex]";
 
-/** The name a control is found by: its `aria-label`, otherwise its text, and for a checkbox or switch
+/** The name a control is found by: its `aria-label`, otherwise its text, and for a checkbox, radio or switch
  * the text of its label, or of the element its `aria-labelledby` names when the label stands beside
  * it. Deliberately not the browser's accessible-name computation, which folds in the label of a
  * `role="img"` child — such a child inside a control does not enter the name a `Matcher` is

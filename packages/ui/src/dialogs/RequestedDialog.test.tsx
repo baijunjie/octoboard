@@ -1,4 +1,3 @@
-import { errorAlerts } from "../errorAlerts";
 // @vitest-environment jsdom
 import { act, StrictMode } from "react";
 import { expect, it, vi } from "vitest";
@@ -24,7 +23,7 @@ function mount(
   dialog: DialogRequest,
   sessions: Session[],
   accounts: Account[] = [],
-  callbacks: { onClose?: () => void; request?: Daemon["request"]; onSwitchAccount?: (sessionId: string, account: string | null) => Promise<void>; strict?: boolean } = {},
+  callbacks: { onClose?: () => void; request?: Daemon["request"]; onSwitchAccounts?: (sessionIds: string[], account: string | null, accountName: string) => void; strict?: boolean } = {},
 ): { container: HTMLElement; daemon: Daemon } {
   const daemon: Daemon = {
     store: createStateStore({
@@ -40,7 +39,7 @@ function mount(
     terminalUrl: () => "",
   };
   const content = <DaemonProvider value={daemon}>
-    <RequestedDialog dialog={dialog} onClose={callbacks.onClose ?? (() => {})} onSessionOpened={() => {}} onResumeSession={async () => {}} onSwitchAccount={callbacks.onSwitchAccount ?? (async () => {})} />
+    <RequestedDialog dialog={dialog} onClose={callbacks.onClose ?? (() => {})} onSessionOpened={() => {}} onResumeSession={async () => {}} onSwitchAccounts={callbacks.onSwitchAccounts ?? (() => {})} />
   </DaemonProvider>;
   const container = mountForTooltip(callbacks.strict ? <StrictMode>{content}</StrictMode> : content);
   return { container, daemon };
@@ -310,101 +309,58 @@ it("labels archiving for deletion when only locked worktrees are ticked", async 
   expect(confirmText()).toBe("Archive and delete");
 });
 
-it("switches only the selected session to the default account unless the checkbox is selected", async () => {
-  const selected = { ...owner, account_id: account.id };
-  const waiting = deferred();
+const hub = sessionOf("s-hub", console_.id, undefined, "Hub", "idle", { role: "console" });
+const lead = sessionOf("s-lead", console_.id, project.id, "Lead", "idle", { bound_to: hub.id });
+const bound = sessionOf("s-bound", console_.id, project.id, "Bound", "idle", { bound_to: lead.id });
+const unrelated = sessionOf("s-unrelated", console_.id, project.id, "Unrelated", "idle");
+const excluded = [
+  { ...owner, id: "already", account_id: account.id, bound_to: hub.id },
+  { ...owner, id: "archived", status: "archived" as const, bound_to: hub.id },
+  { ...owner, id: "other-agent", agent: "codex" as const, bound_to: hub.id },
+  { ...owner, id: "other-console", console_id: "c-other" },
+];
+
+function chooseScope(label: RegExp): void {
+  act(() => [...document.body.querySelectorAll<HTMLInputElement>('input[type="radio"]')].find((radio) => label.test(radio.closest("label")?.textContent ?? ""))!.click());
+}
+
+it("switches only the selected session, and closes at once, unless another scope is chosen", async () => {
+  const selected = { ...owner, id: "s-sel", account_id: account.id };
   const onClose = vi.fn();
-  const onSwitchAccount = vi.fn(() => waiting.promise);
-  mount({ kind: "switch-account", session: selected, account: null, accountName: "Default" }, [selected, { ...selected, id: "s-other" }], [account], { onClose, onSwitchAccount });
-  expect(document.body.querySelector<HTMLInputElement>('input[type="checkbox"]')!.checked).toBe(false);
+  const onSwitchAccounts = vi.fn();
+  mount({ kind: "switch-account", session: selected, account: null, accountName: "Default" }, [selected, { ...selected, id: "s-other" }], [account], { onClose, onSwitchAccounts });
+  const radios = [...document.body.querySelectorAll<HTMLInputElement>('input[type="radio"]')];
+  expect(radios.map((radio) => radio.checked)).toEqual([true, false]);
+  expect(document.body.querySelector('[role="progressbar"]')).toBeNull();
   await submitDialog();
-  expect(onSwitchAccount).toHaveBeenCalledExactlyOnceWith(selected.id, null);
-  expect(document.body.querySelector('[role="progressbar"]')?.getAttribute("aria-valuemax")).toBe("1");
-  expect(onClose).not.toHaveBeenCalled();
-  await act(async () => waiting.resolve());
+  expect(onSwitchAccounts).toHaveBeenCalledExactlyOnceWith([selected.id], null, "Default");
   expect(onClose).toHaveBeenCalledOnce();
 });
 
-it("switches a console's same-agent console, project and bound sessions sequentially with progress and a fixed scope", async () => {
-  const hub = sessionOf("s-hub", console_.id, undefined, "Hub", "idle", { role: "console" });
-  const bound = sessionOf("s-bound", console_.id, project.id, "Bound", "idle", { bound_to: hub.id });
-  const excluded = [
-    { ...owner, id: "already", account_id: account.id },
-    { ...owner, id: "archived", status: "archived" as const },
-    { ...owner, id: "other-agent", agent: "codex" as const },
-    { ...owner, id: "other-console", console_id: "c-other" },
-  ];
-  const first = deferred();
-  const second = deferred();
-  const third = deferred();
+it("switches the session with every session bound under it, however deep, and not the ones that cannot switch", async () => {
   const onClose = vi.fn();
-  const onSwitchAccount = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise).mockReturnValueOnce(third.promise);
-  const { daemon } = mount({ kind: "switch-account", session: owner, account: account.id, accountName: account.name }, [hub, owner, bound, ...excluded], [account], { onClose, onSwitchAccount });
-  checkAll();
+  const onSwitchAccounts = vi.fn();
+  const archivedLead = { ...lead, id: "s-archived-lead", status: "archived" as const, bound_to: hub.id };
+  const underArchived = { ...bound, id: "s-under-archived", bound_to: archivedLead.id };
+  mount({ kind: "switch-account", session: hub, account: account.id, accountName: account.name }, [hub, lead, bound, archivedLead, underArchived, unrelated, ...excluded], [account], { onClose, onSwitchAccounts });
+  expect(document.body.textContent).toContain("4 sessions can switch");
   await submitDialog();
-  expect(onSwitchAccount.mock.calls).toEqual([[hub.id, account.id]]);
-  const progress = () => document.body.querySelector('[role="progressbar"]')!;
-  expect(progress().getAttribute("aria-valuemax")).toBe("3");
-  expect(progress().getAttribute("aria-valuenow")).toBe("0");
-  expect(document.body.querySelector('input[type="checkbox"]')!.getAttribute("aria-readonly")).toBe("true");
-  act(() => {
-    const next = new Map(daemon.store.getState().sessions);
-    next.set("late", { ...owner, id: "late" });
-    daemon.store.setState({ sessions: next });
-    document.body.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click();
-    document.body.querySelector('[role="alertdialog"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-  });
-  await submitDialog();
-  expect(onClose).not.toHaveBeenCalled();
-  expect(onSwitchAccount).toHaveBeenCalledTimes(1);
-  await act(async () => first.resolve());
-  expect(progress().getAttribute("aria-valuenow")).toBe("1");
-  expect(onSwitchAccount.mock.calls).toEqual([[hub.id, account.id], [owner.id, account.id]]);
-  await act(async () => second.resolve());
-  expect(progress().getAttribute("aria-valuenow")).toBe("2");
-  await act(async () => third.resolve());
-  expect(onSwitchAccount.mock.calls).toEqual([[hub.id, account.id], [owner.id, account.id], [bound.id, account.id]]);
+  expect(onSwitchAccounts).toHaveBeenCalledOnce();
+  const [ids, target] = onSwitchAccounts.mock.calls[0] as [string[], string, string];
+  expect([...ids].sort()).toEqual([bound.id, hub.id, lead.id, underArchived.id].sort());
+  expect(target).toBe(account.id);
   expect(onClose).toHaveBeenCalledOnce();
 });
 
-it("continues after a failure and retries only failed sessions without relying on daemon events for successes", async () => {
-  const failed = { ...owner, id: "failed", title: "Needs attention" };
-  const last = { ...owner, id: "last" };
-  const onClose = vi.fn();
-  const onSwitchAccount = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("Copy failed")).mockResolvedValue(undefined);
-  const { daemon } = mount({ kind: "switch-account", session: owner, account: account.id, accountName: account.name }, [owner, failed, last], [account], { onClose, onSwitchAccount });
-  checkAll();
+it("switches every eligible session of the agent in the console when that scope is chosen", async () => {
+  const onSwitchAccounts = vi.fn();
+  mount({ kind: "switch-account", session: lead, account: account.id, accountName: account.name }, [hub, lead, bound, unrelated, ...excluded], [account], { onSwitchAccounts });
+  expect(document.body.textContent).toContain("2 sessions can switch");
+  chooseScope(/Every Claude Code session/);
   await submitDialog();
-  expect(onSwitchAccount.mock.calls).toEqual([[owner.id, account.id], [failed.id, account.id], [last.id, account.id]]);
-  expect(document.body.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("3");
-  expect(errorAlerts.getSnapshot().some((error) => error.message.includes("Copy failed"))).toBe(true);
-  expect(document.body.querySelector('[role="alert"]')).toBeNull();
-  expect(onClose).not.toHaveBeenCalled();
-  act(() => daemon.store.setState({ sessions: new Map([...daemon.store.getState().sessions, ["late", { ...owner, id: "late" }]]) }));
-  await submitDialog();
-  expect(onSwitchAccount.mock.calls).toEqual([[owner.id, account.id], [failed.id, account.id], [last.id, account.id], [failed.id, account.id]]);
-  expect(onClose).toHaveBeenCalledOnce();
+  const [ids] = onSwitchAccounts.mock.calls[0] as [string[]];
+  expect([...ids].sort()).toEqual([bound.id, hub.id, lead.id, unrelated.id].sort());
 });
-
-it.each(["archived", "on-target", "removed"] as const)("skips a snapshotted session that becomes %s before its turn", async (change) => {
-  const next = { ...owner, id: "next" };
-  const first = deferred();
-  const onClose = vi.fn();
-  const onSwitchAccount = vi.fn(() => first.promise);
-  const { daemon } = mount({ kind: "switch-account", session: owner, account: account.id, accountName: account.name }, [owner, next], [account], { onClose, onSwitchAccount });
-  checkAll();
-  await submitDialog();
-  act(() => {
-    const sessions = new Map(daemon.store.getState().sessions);
-    if (change === "removed") sessions.delete(next.id);
-    else sessions.set(next.id, change === "archived" ? { ...next, status: "archived" } : { ...next, account_id: account.id });
-    daemon.store.setState({ sessions });
-  });
-  await act(async () => first.resolve());
-  expect(onSwitchAccount).toHaveBeenCalledExactlyOnceWith(owner.id, account.id);
-  expect(onClose).toHaveBeenCalledOnce();
-});
-
 
 it.each(["claude", "codex", "grok"] as const)("deletes an unused %s session and its records without inspection or confirmation", async (agent) => {
   const unused = { ...owner, agent, has_conversation: false, agent_session_id: agent === "codex" ? undefined : owner.agent_session_id };

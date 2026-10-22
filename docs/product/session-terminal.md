@@ -112,18 +112,21 @@ and a freshly started agent drawing its first screen. An agent that prints nothi
 terminal has been connected for 10 seconds without output, the bare terminal is shown. While the terminal is not
 connected — a first connection that hangs, an attempt started with Reconnect, a resume still starting the process —
 the loading state stays, however long that takes. While the terminal is reconnecting
-or disconnected, the cover described in "Reconnecting" above is shown in its place.
+or disconnected, the cover described in "Reconnecting" above is shown in its place. While the session is shown as
+switching its account, the cover described in "While a session is switching" in
+`docs/product/switching-session-accounts.md` is shown in place of all of these.
 
 ## Interrupted, archived and dormant sessions
 
-- Selecting an interrupted session resumes it rather than attaching. Two ways of reaching one only show it, with its
+- Selecting an interrupted session resumes it rather than attaching, unless it is shown as switching its account (see
+  "While a session is switching" in `docs/product/switching-session-accounts.md`). Two ways of reaching one only show it, with its
   card, and never resume it: moving with Back or Forward (see "Moving back and forward" in
   `docs/product/navigation-history.md`), and `Ctrl+Tab` / `Ctrl+Shift+Tab` in a console session's focus mode (see
   "The switch strip" in `docs/product/focus-mode.md`). While a session has no process and no resume of
   it is under way, the terminal shows a card at its bottom centre, raised over it by a large shadow with no outline
   (see "The window chrome and the content panel" in `docs/product/window-layout.md`): for an interrupted session it
   reads "Not running" and offers "Resume"; for an archived one it says the session is archived and offers "Reopen".
-  The card is hidden while the session is being resumed.
+  The card is hidden while the session is being resumed or is shown as switching its account.
 - **An archived session shows its history, not its terminal**: a read-only list of what was said in it, read from the
   agent's own record (see `docs/product/session-history.md`). Its terminal cannot be reached: nothing typed or pasted
   goes anywhere, and typing does not reopen it. Reopening it — the card's "Reopen", or the other ways in "Archiving,

@@ -23,7 +23,7 @@ import { joinPhrases } from "../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
-import { activityLabelKey, sessionAccountModelLine, sessionAriaLabel, sessionDisplayTitle, sessionStatusKind, statusLabel } from "../sessionLabel";
+import { activityLabelKey, sessionAccountModelLine, sessionAriaLabel, sessionDisplayTitle, sessionShownStatusKind, statusLabel } from "../sessionLabel";
 import { inheritedLaunch, sessionModelEffort, sessionModelLabel } from "../sessionModel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 import { useHasBoundSessions, useProjectSessions, useSessionProjectId } from "../sessions/useSessions";
@@ -609,8 +609,8 @@ const SessionCard = memo(function SessionCard({
       onActivate={() => handlers.onSelectSession(session)}
       className="min-h-8 flex-col gap-1 border border-transparent shadow-(--panel-shadow) px-[calc(var(--row-content-inset)-1px)] py-[7px] data-selected:border-accent-glyph"
     >
-      <RowIconLine icon={<StatusIcon status={sessionStatusKind(session)} decorative />}>
-        <span className="text-xs font-medium text-app-muted">{statusLabel(t, sessionStatusKind(session))}</span>
+      <RowIconLine icon={<StatusIcon status={sessionShownStatusKind(session)} decorative />}>
+        <span className="text-xs font-medium text-app-muted">{statusLabel(t, sessionShownStatusKind(session))}</span>
         <span className="flex-1" />
         {/* The controls reach 4px past the status line above and below so it keeps the agent line's
             height, leaving the card's top and bottom edges the same distance from their text. */}

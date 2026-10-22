@@ -82,20 +82,30 @@ export function sessionStatusKind(session: Pick<Session, "status" | "background_
   return session.status === "idle" && session.background_tasks?.length ? "background" : session.status;
 }
 
+/** What a status glyph and label show: a `StatusKind`, or *switching account*, which a session
+ * shows over its own status while an account switch holds it (`Session.switching_account`). Only
+ * what is drawn follows it; ordering and the other decisions about a session go by `StatusKind`. */
+export type ShownStatusKind = StatusKind | "switching";
+
+export function sessionShownStatusKind(session: Pick<Session, "status" | "background_tasks" | "switching_account">): ShownStatusKind {
+  return session.switching_account && session.status !== "archived" ? "switching" : sessionStatusKind(session);
+}
+
 /** The catalog message naming each status, for the "Session statuses" table in
  * docs/product/sessions.md. A row's own `aria-label` wins over one on an element nested inside it,
  * so the wire enum must never be the only place a status is put into words. */
 const STATUS_KEY = {
   background: "session.status.background",
+  switching: "session.status.switching",
   starting: "session.status.starting",
   working: "session.status.working",
   waiting_user: "session.status.waitingUser",
   idle: "session.status.idle",
   interrupted: "session.status.interrupted",
   archived: "session.status.archived",
-} as const satisfies Record<StatusKind, MessageKey>;
+} as const satisfies Record<ShownStatusKind, MessageKey>;
 
-export function statusLabel(t: Translate, status: StatusKind): string {
+export function statusLabel(t: Translate, status: ShownStatusKind): string {
   return t(STATUS_KEY[status]);
 }
 
@@ -147,7 +157,7 @@ export function sessionAriaLabel(
   const base = t(session.pinned ? "sidebar.session.ariaLabelPinned" : "sidebar.session.ariaLabel", {
     title: isolate(sessionDisplayTitle(t, session)),
     agent: sessionAgentLabel(t, session, accounts, defaultNames),
-    status: statusLabel(t, sessionStatusKind(session)),
+    status: statusLabel(t, sessionShownStatusKind(session)),
   });
   return owner ? joinPhrases(language, [base, t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, owner)) })]) : base;
 }

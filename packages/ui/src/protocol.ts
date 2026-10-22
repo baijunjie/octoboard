@@ -336,6 +336,9 @@ export interface Session {
   /** What an `idle` session has left running in the background; absent when none, and for every
    * other status. The session takes a message like any idle one, but its work is not over. */
   background_tasks?: BackgroundTask[];
+  /** Whether an account switch holds the session right now (see `switch_session_account`); absent
+   * when none does. */
+  switching_account?: boolean;
   has_conversation: boolean;
   /** The console session this session is bound to, or absent for one outside the orchestration.
    * Set when the session is created and never changed afterwards; a console session is never

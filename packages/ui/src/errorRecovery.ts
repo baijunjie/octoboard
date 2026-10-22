@@ -8,6 +8,7 @@ export type ErrorRecovery =
   | "refresh" | "scope" | "limit" | "openExternal" | "issueLink"
   | "contentSyntax" | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
   | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "quotaUsedUpAgent" | "grokSandbox"
+  | "fileBusy" | "codexConfig" | "sqliteHome" | "symlink" | "notRestored"
   | "accountNotShareable" | "accountSharing" | "accountBusy" | "accountChanging" | "sharingStop"
   | "none";
 
@@ -101,15 +102,37 @@ function environmentRecovery(error: unknown, seen = new Set<object>()): ErrorRec
 
 export type ErrorClassification = { kind: "actionable"; recovery: ErrorRecovery } | { kind: "unexpected" };
 
+/** The remedy of a conversation move that failed for a cause the daemon names (`relocation_failed`'s `cause`); `other`
+ * and an unknown one name none. */
+const RELOCATION_CAUSE_RECOVERY: Record<string, ErrorRecovery> = {
+  permission_denied: "access", busy: "fileBusy", no_space: "diskSpace", config_unreadable: "codexConfig",
+  sqlite_home: "sqliteHome", symlink: "symlink", not_restored: "notRestored",
+};
+
+/** A move whose older item could not be put back (`relocation_failed`'s `cause` `not_restored`). */
+function isNotRestored(error: unknown): boolean {
+  return error instanceof DaemonRequestError && error.code === "relocation_failed" && error.params.cause === "not_restored";
+}
+
+/** The remedy that goes with a failure's own as well, said after it: what a recognised operating-system signature in
+ * a failure that kept an older item aside asks for (free space, permissions), which `classifyError` leaves behind the
+ * remedy that prevents losing that item. */
+export function additionalRecovery(error: unknown): ErrorRecovery | undefined {
+  return isNotRestored(error) ? environmentRecovery(error) : undefined;
+}
+
 export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorClassification {
   const explicit = recovery ?? (error instanceof ActionableError ? error.recovery : undefined);
   if (explicit === "issueLink" || explicit === "openExternal") return { kind: "actionable", recovery: explicit };
+  if (isNotRestored(error)) return { kind: "actionable", recovery: "notRestored" };
   const remedy = environmentRecovery(error) ?? explicit;
   if (remedy) return { kind: "actionable", recovery: remedy };
   if (error instanceof DaemonRequestError) {
     const code = error.code === "launch_failed" ? error.params.reason_code : error.code;
     const domain = code && DOMAIN_RECOVERY.get(code);
     if (domain) return { kind: "actionable", recovery: domain };
+    const relocation = code === "relocation_failed" ? RELOCATION_CAUSE_RECOVERY[error.params.cause] : undefined;
+    if (relocation) return { kind: "actionable", recovery: relocation };
   }
   return { kind: "unexpected" };
 }

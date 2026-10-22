@@ -6,7 +6,7 @@ import { displayColumns } from "./i18n/displayColumns";
 import type { Translate } from "./i18n/catalog";
 import { isolate } from "./i18n/isolate";
 import type { Account } from "./protocol";
-import { sessionChoiceTitle, sessionAgentLabel, sessionAriaLabel, sessionDisplayTitle, sessionStatusKind, sessionWithLocation } from "./sessionLabel";
+import { sessionChoiceTitle, sessionAgentLabel, sessionAriaLabel, sessionDisplayTitle, sessionShownStatusKind, sessionStatusKind, sessionWithLocation } from "./sessionLabel";
 
 const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as never, args[0] as never)) as Translate;
 const accounts: Account[] = [{ id: "w", agent: "claude", name: "Work", config_dir: "/home/w" }];
@@ -22,6 +22,15 @@ describe("sessionAgentLabel", () => {
   });
 });
 
+
+describe("sessionShownStatusKind", () => {
+  it("shows a session switching its account as such over its own status, and leaves its status kind alone", () => {
+    const switching = sessionOf("s", "c", "p", "T", "interrupted", { switching_account: true });
+    expect(sessionShownStatusKind(switching)).toBe("switching");
+    expect(sessionStatusKind(switching)).toBe("interrupted");
+    expect(sessionShownStatusKind(sessionOf("s", "c", "p", "T", "interrupted"))).toBe("interrupted");
+  });
+});
 
 describe("sessionStatusKind", () => {
   it("reads idle with work left running as running in the background, and nothing else", () => {

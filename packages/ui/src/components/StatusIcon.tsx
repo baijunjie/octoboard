@@ -2,7 +2,7 @@ import { Archive, LoaderCircle, MessageCircleMore, Pause } from "lucide-react";
 import React from "react";
 
 import { useT } from "../i18n/react";
-import { type StatusKind, statusLabel } from "../sessionLabel";
+import { type ShownStatusKind, statusLabel } from "../sessionLabel";
 import { IndicatorTooltip } from "./IndicatorTooltip";
 import { WavingHand, WorkingDot } from "./statusGlyphs";
 
@@ -19,8 +19,9 @@ type Naming = { "aria-hidden": true } | { role: "img"; "aria-label": string };
  * launched), interrupted a pause sign (stopped where it was, and can be resumed from there), and
  * running in the background the working dot as a hollow ring in idle's green: at the prompt, but
  * with work still going. */
-function statusGlyph(status: StatusKind, naming: Naming): React.ReactElement {
+function statusGlyph(status: ShownStatusKind, naming: Naming): React.ReactElement {
   switch (status) {
+    case "switching":
     case "starting":
       // An arc turning in the muted ink: coming up, with nothing to answer for yet. The arc's
       // shape tells it from the other glyphs where the system asks for reduced motion.
@@ -74,7 +75,7 @@ export function StatusIcon({
   decorative,
   withTooltip,
 }: {
-  status: StatusKind;
+  status: ShownStatusKind;
   decorative?: boolean;
   withTooltip?: boolean;
 }): React.ReactElement {

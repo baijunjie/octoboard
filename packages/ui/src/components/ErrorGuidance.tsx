@@ -23,9 +23,10 @@ export function recoveryParams<V = never>(t: Translate, mark?: (value: string, m
     appName: globalParam("appName")!, codex: "Codex", git: "Git", pathVar: "PATH", enter: "Enter",
     terminal: t("common.terminal"), retry: t("connection.retry"), browse: t("common.browse"), unlock: t("sidebar.session.unlock"),
     worktreeList: "git worktree list", branchList: "git branch",
+    configToml: "config.toml", sqliteHome: "sqlite_home", codexSqliteHome: "CODEX_SQLITE_HOME", tilde: "~", home: "HOME",
   };
   if (!mark) return values;
-  return Object.fromEntries(Object.entries(values).map(([name, value]) => [name, mark(value, ["pathVar", "enter", "worktreeList", "branchList"].includes(name))]));
+  return Object.fromEntries(Object.entries(values).map(([name, value]) => [name, mark(value, ["pathVar", "enter", "worktreeList", "branchList", "configToml", "sqliteHome", "codexSqliteHome", "tilde", "home"].includes(name))]));
 }
 
 /** A recovery's words; the button it may offer besides them is the alert's (see `recoveryAction`), never part

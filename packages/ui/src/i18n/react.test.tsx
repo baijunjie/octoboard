@@ -45,10 +45,6 @@ it.each(["en", "zh-Hans", "ar"] as const)("keeps fixed product references rich a
       expect(container.textContent).toBe(format(language, id, { count }));
     }
   }
-  const retry = format(language, "connection.retry");
-  act(() => root.render(<Message id="dialog.switchAccount.failed" params={{ count: 2, retry: <InlineChip dir="auto" wrap size="inherit">{retry}</InlineChip> }} />));
-  expect(container.querySelector("[data-inline-chip]")?.textContent).toBe(retry);
-  expect(container.textContent).toBe(format(language, "dialog.switchAccount.failed", { count: 2, retry }));
   act(() => root.render(<Message id="startup.noAddress.shell" params={{ port: <InlineChip monospace wrap size="inherit">?port=</InlineChip> }} />));
   expect([...container.querySelectorAll("[data-inline-chip]")].map((chip) => chip.textContent)).toEqual(["Tauri", "?port="]);
   const name = "مراجعة/中文/Work";

@@ -2706,6 +2706,7 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         terminal_title: None,
         record_titles: Default::default(),
         background_tasks: Vec::new(),
+        switching_account: false,
         default_effort: None,
         context: None,
         observed_model: None,
@@ -4303,7 +4304,7 @@ pub(crate) async fn switch_session_account_with(
     // can launch, resume, switch or delete the session while its process is down, while the
     // relaunched one is being watched, or while the account is put back; refused here when one
     // of those is under way.
-    let claim = state.begin_switch(id)?;
+    let claim = state.begin_account_switch(id)?;
     let before = state.session_record(id)?;
     refuse_unless_still_askers(&before, asked_by)?;
     if before.status == SessionStatus::Archived {
@@ -6047,6 +6048,7 @@ mod tests {
                     terminal_title: None,
                     record_titles: Default::default(),
                     background_tasks: Vec::new(),
+                    switching_account: false,
                     default_effort: None,
                     context: None,
                     observed_model: None,
@@ -6180,6 +6182,7 @@ mod tests {
                 terminal_title: None,
                 record_titles: Default::default(),
                 background_tasks: Vec::new(),
+                switching_account: false,
                 default_effort: None,
                 context: None,
                 observed_model: None,
@@ -10680,6 +10683,47 @@ mod tests {
         }
         drop(claim);
         assert!(state.begin_launch("s").is_ok());
+    }
+
+    /// Clients are shown a session as switching its account for as long as the switch's claim
+    /// lasts, and the other claims on a session do not show as one.
+    #[tokio::test]
+    async fn a_session_shows_as_switching_its_account_while_the_switch_holds_it() {
+        let (state, _dir) = console_with_project_and_accounts("coordinator-switch-shown");
+        state
+            .store
+            .insert_session(&project_session("s", Agent::Claude, SessionStatus::Idle))
+            .unwrap();
+        let mut events = state.subscribe();
+        let shown = |events: &mut tokio::sync::broadcast::Receiver<Event>| {
+            let mut last = None;
+            while let Ok(event) = events.try_recv() {
+                if let Event::SessionUpserted { session } = event {
+                    last = Some(session.switching_account);
+                }
+            }
+            last
+        };
+
+        let claim = state.begin_account_switch("s").unwrap();
+        assert!(state.is_switching_account("s"));
+        assert!(
+            state
+                .wire_session(state.session_record("s").unwrap())
+                .switching_account
+        );
+        assert_eq!(shown(&mut events), Some(true));
+        drop(claim);
+        assert!(!state.is_switching_account("s"));
+        assert_eq!(shown(&mut events), Some(false));
+
+        let claim = state.begin_switch("s").unwrap();
+        assert!(
+            !state
+                .wire_session(state.session_record("s").unwrap())
+                .switching_account
+        );
+        drop(claim);
     }
 
     /// An archive that lands before the relaunch writes anything is not undone by the switch: the

@@ -5,7 +5,7 @@ import { PANE_ID } from "../layout/paneOverlay";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import type { Session } from "../protocol";
-import { sessionDisplayTitle, sessionStatusKind } from "../sessionLabel";
+import { sessionDisplayTitle, sessionShownStatusKind } from "../sessionLabel";
 import { useDaemonStore } from "../store";
 import { ChromeButton } from "./ChromeButton";
 import { FadeOverflow } from "./FadeOverflow";
@@ -73,7 +73,7 @@ function Breadcrumb({ session }: { session: Session }): React.ReactElement {
   const trail = session.role === "console" ? [consoleName, sessionDisplayTitle(t, session)] : [consoleName, projectName, sessionDisplayTitle(t, session)];
   return (
     <Trail names={trail.map((part) => part ?? "…")}>
-      <StatusIcon status={sessionStatusKind(session)} withTooltip />
+      <StatusIcon status={sessionShownStatusKind(session)} withTooltip />
     </Trail>
   );
 }

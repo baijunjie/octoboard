@@ -1,5 +1,5 @@
 import type { Scenario } from "../scenario";
-import { consoleOf, projectOf, sessionOf, snapshotState } from "./builders";
+import { consoleOf, projectOf, sessionOf, snapshotState, switchingAccount } from "./builders";
 import { PATH_LINK_FILES, PATH_LINK_WORKTREE_FILES } from "./pathLinkFiles";
 
 const console_ = consoleOf("c-1", "Main");
@@ -239,6 +239,22 @@ export const connectionScenarios: Scenario[] = [
     description: "The selected session's agent is still being launched: the terminal is covered by a spinner and \"Starting session…\", with no Reconnect button. Its sidebar row shows the muted turning arc.",
     state: snapshotState({ consoles: [console_], projects: [project], sessions: [...sessions, starting] }),
     steps: [(ui) => ui.press(ui.session(starting.title))],
+  },
+  {
+    id: "terminal-switching-account",
+    group: TERMINAL,
+    category: "normal",
+    title: "Terminal of a session switching its account",
+    description: "The selected session's account switch is running, as the daemon reports it: its process is down meanwhile, so the session reads interrupted, yet the terminal is covered by a spinner and \"Switching account…\" and takes no input, with no \"Not running\" bar or Resume offered. In the sidebar row and the title bar's breadcrumb the interrupted pause sign gives way to the muted turning arc, whose tooltip reads \"Switching account…\"; Hub, in the same batch, shows it too.",
+    state: switchingAccount(
+      snapshotState({
+        consoles: [console_],
+        projects: [project],
+        sessions: sessions.map((session) => (session.id === "s-console" ? { ...session, status: "interrupted" as const } : session)),
+      }),
+      ["s-interrupted", "s-console"],
+    ),
+    steps: [(ui) => ui.press(ui.session("Interrupted by a restart"))],
   },
   {
     id: "terminal-reconnecting",

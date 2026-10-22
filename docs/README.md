@@ -47,10 +47,11 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   `conversation_unresumable` and `codex_unarchive_failed` refusals, an archived owner whose conversation is gone
   relaunched fresh), when a conversation counts as resumable per agent, and how long archived sessions are kept.
 - [Switching a session's account](product/switching-session-accounts.md) — moving a session to another account of its
-  agent: the confirmation and the console-wide switch, an owner's `switch_session_account` tool, what is copied per
-  agent (Claude Code sidecars and rewind checkpoints, Codex rollouts compressed or not and every history segment of
-  a reverted thread, subagent rollouts left behind), the target's Codex thread row pointed at the copied head, the
-  all-or-nothing copy, and when a switch fails.
+  agent: the confirmation's two scopes (the session with its sub-sessions, or the whole console), the background
+  batch of up to four switches at once and the session's switching state, an owner's `switch_session_account` tool,
+  what is copied per agent (Claude Code sidecars and rewind checkpoints, Codex rollouts compressed or not and every
+  history segment of a reverted thread, subagent rollouts left behind), the target's Codex thread row pointed at the
+  copied head, the all-or-nothing copy, and when a switch fails.
 - [Handing a session off to another agent](product/handing-off-sessions.md) — the session row's Hand off entry and its
   dialog, an owner's `handoff_session` tool (its arguments, result and refusals), and the daemon's `hand_off_session`:
   when a session can be handed off, the handoff package built from its records, how the receiving session takes over

@@ -49,6 +49,8 @@ export const CODE_PARAMS: Record<string, readonly string[]> = {
   source_changed: ["path"],
   trust_path_not_absolute: ["path"],
   relocation_failed: ["path"],
+  "relocation_failed.thread_record": ["path"],
+  "relocation_failed.kept_staging": ["path", "kept_in"],
   repository_name_missing: ["url"],
   config_dir_unreachable: ["path"],
   grok_home_not_initialized: ["path"],
@@ -322,7 +324,7 @@ export function leftBranchItems(code: string, params: MessageParams): LeftBranch
 export const DETAIL_BLOCK_CODES = new Set([
   "project_branches_not_determined", "account_sharing_failed", "git_failed", "git_clone_failed", "git_remote_unreachable",
   "git_push_failed", "git_switch_failed", "git_restore_failed", "git_unavailable",
-  "models_command_failed", "models_shell_environment_failed", "quota_command_failed", "quota_shell_environment_failed", "codex_unarchive_failed", "login_failed", "sharing_resume_failed", "shell_environment_timeout",
+  "models_command_failed", "models_shell_environment_failed", "quota_command_failed", "quota_shell_environment_failed", "codex_unarchive_failed", "login_failed", "sharing_resume_failed", "shell_environment_timeout", "relocation_failed",
 ]);
 
 /** These trust reasons carry an OS write/read diagnostic, not another daemon error code. */
@@ -390,6 +392,7 @@ export function messageCode(code: string, params: MessageParams): string {
   if (code === "field_too_long" && (params.field === "name" || params.field === "description")) return `${code}.${params.field}`;
   if (code === "account_quota_exhausted" && /^\d+$/.test(params.resets_at ?? "")) return "account_quota_exhausted.resets";
   if (code === "sharing_resume_failed" && params.still_running === "true") return "sharing_resume_failed.running";
+  if (code === "relocation_failed" && (params.stage === "thread_record" || params.stage === "kept_staging")) return `${code}.${params.stage}`;
   if (code === "account_in_use" && params.signing_in === "true") return /^[1-9]\d*$/.test(params.sessions ?? "") ? "account_in_use.both" : "account_in_use.signingIn";
   return code === "unsupported_file_type" && params.file_type === "unmerged" ? "unsupported_file_type.unmerged" : code;
 }

@@ -675,6 +675,12 @@ pub struct Session {
     /// `StopFailure`, and is empty for every other status.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub background_tasks: Vec<BackgroundTask>,
+    /// Whether an account switch (`switch_session_account`) holds the session right now, from the
+    /// moment it takes its claim until it lets it go: the process is being ended, the conversation
+    /// copied and the process relaunched. Never stored: it is filled in on the record a client
+    /// receives (`AppState::wire_session`), and absent otherwise.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub switching_account: bool,
     /// Whether this session has a conversation on the agent's side: a turn taken, or one resumed
     /// at open. Until it has, the agent has stored no conversation to resume: `claude --resume`
     /// on such an id fails outright with "No conversation found", and a session the user opened

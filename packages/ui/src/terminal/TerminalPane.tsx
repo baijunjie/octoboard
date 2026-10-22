@@ -151,6 +151,17 @@ export function TerminalPane({
   useLayoutEffect(() => {
     if (isArchived && rootRef.current?.contains(document.activeElement)) focusTerminal();
   }, [isArchived, focusTerminal]);
+  // An account switch holds the session: the terminal is covered and inert for its whole length, so
+  // no key reaches the process, and focus that was in it goes back once it is released.
+  const switching = session?.switching_account === true && !isArchived;
+  const focusWasInTerminalRef = useRef(false);
+  useLayoutEffect(() => {
+    if (switching) focusWasInTerminalRef.current = rootRef.current?.contains(document.activeElement) ?? false;
+    else if (focusWasInTerminalRef.current) {
+      focusWasInTerminalRef.current = false;
+      if (document.activeElement === document.body) focusTerminal();
+    }
+  }, [switching, focusTerminal]);
   const held = useFocusHandoff(focusTerminal);
 
   useImperativeHandle(
@@ -422,15 +433,16 @@ export function TerminalPane({
     setTroubleOf(session && next ? { session: session.id, state: next } : undefined);
   }, [status, session?.id, isDormant, sessionIsLive]);
 
-  // What covers the terminal. A connection in trouble comes first, over any old output as well: a
-  // terminal that is not connected has nothing live to show, and the disconnected state carries the
-  // Reconnect. Otherwise, from selecting a session until its first output is on screen — through a
-  // resume starting the process, the socket connecting, and a freshly started agent drawing its
-  // first frame — the blank terminal is covered by a loading state. An agent that stays silent does
-  // not keep it up forever: once the socket has been open for `LOADING_LIMIT_MS` the bare terminal
-  // is shown. The count only runs while the socket is open, so the limit never uncovers a terminal
-  // that is not connected (a first connect that hangs, a manual Reconnect under way, a resume still
-  // starting the process).
+  // What covers the terminal. A switch of the session's account comes first, as its process going
+  // down and coming back up is no trouble with the connection. A connection in trouble comes next,
+  // over any old output as well: a terminal that is not connected has nothing live to show, and the
+  // disconnected state carries the Reconnect. Otherwise, from selecting a session until its first
+  // output is on screen — through a resume starting the process, the socket connecting, and a
+  // freshly started agent drawing its first frame — the blank terminal is covered by a loading
+  // state. An agent that stays silent does not keep it up forever: once the socket has been open
+  // for `LOADING_LIMIT_MS` the bare terminal is shown. The count only runs while the socket is
+  // open, so the limit never uncovers a terminal that is not connected (a first connect that
+  // hangs, a manual Reconnect under way, a resume still starting the process).
   const awaitingOutput = session !== undefined && !painted && (resuming || !isDormant);
   const [loadingExpired, setLoadingExpired] = useState(false);
   useEffect(() => {
@@ -442,11 +454,13 @@ export function TerminalPane({
     return () => clearTimeout(timer);
   }, [awaitingOutput, session?.id, status]);
   const loading = awaitingOutput && !loadingExpired;
-  const cover: { text: string; spinner: boolean } | undefined = trouble
-    ? { text: t(trouble === "disconnected" ? "terminal.disconnected" : "terminal.reconnecting"), spinner: trouble === "reconnecting" }
-    : loading
-      ? { text: t(resuming ? "terminal.resuming" : isStarting ? "terminal.starting" : "terminal.loading"), spinner: true }
-      : undefined;
+  const cover: { text: string; spinner: boolean } | undefined = switching
+    ? { text: t("terminal.switchingAccount"), spinner: true }
+    : trouble
+      ? { text: t(trouble === "disconnected" ? "terminal.disconnected" : "terminal.reconnecting"), spinner: trouble === "reconnecting" }
+      : loading
+        ? { text: t(resuming ? "terminal.resuming" : isStarting ? "terminal.starting" : "terminal.loading"), spinner: true }
+        : undefined;
 
   return (
     // The background must match the active xterm theme's (`XTERM_THEMES`, read here rather than
@@ -471,7 +485,7 @@ export function TerminalPane({
           the terminal from that element's computed height and width, padding included, so padding
           there gives it rows and columns that the overflow then clips. Isolation keeps xterm's
           transparent link canvas below the pane's overlays so it cannot intercept their clicks. */}
-      <div inert={!session || isArchived} className="isolate min-h-0 flex-1 px-3 py-2">
+      <div inert={!session || isArchived || switching} className="isolate min-h-0 flex-1 px-3 py-2">
         {/* xterm lays its cells out left to right whatever the page's direction. */}
         <div dir="ltr" className="h-full overflow-hidden" ref={containerRef} />
       </div>
@@ -549,7 +563,7 @@ export function TerminalPane({
           live region stays mounted and only its content comes and goes, as a live region has to
           exist before its content changes to be announced. */}
       <div role="status" className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
-        {session && isDormant && !resuming && (
+        {session && isDormant && !resuming && !switching && (
           <Surface ref={barRef} className="pointer-events-auto flex items-center gap-3 rounded-lg px-3 py-2 text-sm shadow-lg">
             <span className="text-app-muted">
               {t(session.status === "archived" ? "terminal.archived" : "terminal.notRunning")}

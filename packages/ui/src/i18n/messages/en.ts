@@ -104,6 +104,11 @@ export const en = {
   "error.recovery.quotaUsedUp": "Choose another account that still has quota, or try again once the quota resets.",
   "error.recovery.quotaUsedUpAgent": "Choose another agent in the new session dialog, or try again once the quota resets.",
   "error.recovery.addedAgents": "The list of added agents is not as this change expected. Check it before changing it again.",
+  "error.recovery.fileBusy": "Close other programs using the account's files, then try the switch again.",
+  "error.recovery.codexConfig": "Make the account's {configToml} a readable file of valid TOML, or remove it, then try the switch again.",
+  "error.recovery.sqliteHome": "Set {sqliteHome} in the account's {configToml}, or {codexSqliteHome} in your login shell, to an absolute path (a leading {tilde} needs {home} to be set), then try the switch again.",
+  "error.recovery.symlink": "The conversation files contain a symbolic link, which is never copied. Replace it with a copy of what it points to, or remove it if it is not needed, in the files named in the details, then try the switch again.",
+  "error.recovery.notRestored": "If you need the older item, copy it out of the folder named above before the daemon next starts or the session is next switched into that account, either of which clears it. Then try the switch again.",
   "error.recovery.wait": "Wait for the session's current turn or operation to finish and check its status before retrying.",
   "error.recovery.sharingLostMessages": "The messages were never written to a terminal, and the session may not be running. Resume the session if you still need it, and send the messages again.",
   "error.recovery.lostMessages": "Open the session they were meant for, or the one that took over, and check its terminal. Send again anything that did not arrive.",
@@ -372,6 +377,14 @@ export const en = {
   "daemon.conversation_held_in_project": "This conversation is already held by the session {session} in {project}.",
   "daemon.conversation_held_in_console": "This conversation is already held by the console session {session} in {console}.",
   "daemon.conversation_outside_project": "This conversation already belongs to a session outside this project.",
+  "daemon.relocation_failed.summary": "The conversation could not be copied into {path}.",
+  "daemon.relocation_failed.thread_record.summary": "The conversation was copied into {path}, but the target account's record of the thread could not be updated.",
+  "daemon.relocation_failed.thread_record":
+    "The conversation was copied into {path}, but the target account's record of the thread could not be updated: {detail}. The session stays on the account it had.",
+  "daemon.relocation_failed.kept_staging.summary":
+    "The conversation could not be copied into {path}. An older item could not be put back and is kept in {kept_in} until the daemon next starts or this session is next switched into that account.",
+  "daemon.relocation_failed.kept_staging":
+    "The conversation could not be copied into {path}: {detail}. An older item could not be put back and is kept in {kept_in} until the daemon next starts or this session is next switched into that account. The session stays on the account it had.",
   "daemon.relocation_failed":
     "The conversation could not be copied into {path}: {detail}. The session stays on the account it had.",
   "daemon.session_did_not_stop":
@@ -566,6 +579,7 @@ export const en = {
   "session.status.waitingUser": "Waiting for you",
   "session.status.idle": "Awaiting instructions",
   "session.status.background": "Working in background",
+  "session.status.switching": "Switching account…",
   "session.status.interrupted": "Interrupted",
   "session.status.archived": "Archived",
 
@@ -814,6 +828,7 @@ export const en = {
   "terminal.loading": "Loading terminal…",
   "terminal.resuming": "Resuming session…",
   "terminal.starting": "Starting session…",
+  "terminal.switchingAccount": "Switching account…",
   "terminal.reconnecting": "Reconnecting the terminal…",
   "terminal.disconnected": "Terminal disconnected",
   "terminal.archived": "This session is archived",
@@ -1241,28 +1256,34 @@ export const en = {
     "Its process restarts under the new account and the conversation continues there. The session reads that account's configuration and keeps its explicit model and reasoning effort settings. A copy of the conversation stays in the current account.",
   "dialog.switchAccount.messageFresh":
     "Its process restarts under the new account with a fresh conversation, as nothing has been typed into it yet. The session reads that account's configuration and keeps its explicit model and reasoning effort settings.",
-  "dialog.switchAccount.pending": "Switching account…",
   "dialog.switchAccount.confirm": "Switch",
-  "dialog.switchAccount.all": "Switch every {agent} session in this console",
-  "dialog.switchAccount.scope": {
-    one: "Includes console and project sessions. {count} session can switch; archived sessions and sessions already on this account are skipped.",
-    other: "Includes console and project sessions. {count} sessions can switch; archived sessions and sessions already on this account are skipped.",
+  "dialog.switchAccount.scopeConsole": "Every {agent} session in this console",
+  "dialog.switchAccount.scopeLabel": "Sessions to switch",
+  "dialog.switchAccount.scopeSession": "This session and its sub-sessions",
+  "dialog.switchAccount.countSession": {
+    one: "{count} session can switch.",
+    other: "{count} sessions can switch.",
   },
+  "dialog.switchAccount.countConsole": {
+    one: "Includes console and project sessions. {count} session can switch.",
+    other: "Includes console and project sessions. {count} sessions can switch.",
+  },
+  "dialog.switchAccount.eligibility":
+    "Only {agent} sessions are switched. Archived sessions and sessions already on this account are skipped.",
   "dialog.switchAccount.messageAll":
     "Each session's process restarts under the new account. Existing conversations continue there, with a copy kept in each current account. Sessions with no conversation start fresh. Each session reads the new account's configuration and keeps its explicit model and reasoning effort settings.",
-  "dialog.switchAccount.progress": {
-    one: "{completed} of {count} session processed",
-    other: "{completed} of {count} sessions processed",
-  },
-  "dialog.switchAccount.current": "Switching {title}…",
-  "dialog.switchAccount.progressLabel": "Account switch progress",
-  "dialog.switchAccount.progressCurrent": {
-    one: "{completed} of {count} session processed. Switching {title}…",
-    other: "{completed} of {count} sessions processed. Switching {title}…",
+  "dialog.switchAccount.done": {
+    one: "{count} session switched to {account}",
+    other: "{count} sessions switched to {account}",
   },
   "dialog.switchAccount.failed": {
-    one: "{count} session could not be switched. {retry} only attempts this session.",
-    other: "{count} sessions could not be switched. {retry} only attempts these sessions.",
+    one: "{count} session could not move to {account}",
+    other: "{count} sessions could not move to {account}",
+  },
+  "dialog.switchAccount.unexpectedReason": "Failed unexpectedly.",
+  "dialog.switchAccount.failedIntro": {
+    one: "It stays on its current account.",
+    other: "They stay on their current account.",
   },
   "dialog.incompleteLaunch.title": "Start on {account}?",
   "dialog.incompleteLaunch.message": "The last sharing change of this account did not finish, so its configuration and conversations may be incomplete.",
@@ -1771,6 +1792,8 @@ export const en = {
   "accountChoice.sharingChange.detail": "Unavailable while its sharing is being changed",
   "accountChoice.ownSharingChange.reason": "Account changing sharing",
   "accountChoice.ownSharingChange.detail": "Unavailable while this session’s account is having its sharing changed",
+  "accountChoice.switching.reason": "Switching account",
+  "accountChoice.switching.detail": "Unavailable while this session is switching its account",
   "accountChoice.sharingChange.title": "Sharing is being changed",
   "accountChoice.sharingChange.description": "Sharing for account {name} is being changed, so a session cannot use it yet. Choose another account or wait for the change to finish.",
   "settings.accounts.notInstalledTip": "{agent} is not installed. Its accounts are not usable until it is on your {pathVar}.",

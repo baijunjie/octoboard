@@ -36,7 +36,7 @@ import { COLUMN_EASE_CLASS, columnSpan, isDockEasing, usePaneDockMotion, type Do
 import type { PanePeek } from "../layout/usePaneToggles";
 import { effectiveTags, matchesFilter, tagVocabulary } from "../projectFiltering";
 import type { Console, Project, Session } from "../protocol";
-import { activityLabelKey, sessionAriaLabel, sessionDisplayTitle, sessionStatusKind } from "../sessionLabel";
+import { activityLabelKey, sessionAriaLabel, sessionDisplayTitle, sessionShownStatusKind } from "../sessionLabel";
 import { inheritedLaunch, sessionModelEffort, sessionModelLabel } from "../sessionModel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 import { useDaemonStore, useDaemonStoreEqual } from "../store";
@@ -889,7 +889,7 @@ const SessionRow = memo(function SessionRow({
       locked={session.locked}
       onActivate={() => handlers.onSelectSession(session)}
     >
-      <StatusIcon status={sessionStatusKind(session)} decorative withTooltip />
+      <StatusIcon status={sessionShownStatusKind(session)} decorative withTooltip />
       <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} />
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <RowLabel title={sessionDisplayTitle(t, session)} className="min-w-0">{sessionDisplayTitle(t, session)}</RowLabel>

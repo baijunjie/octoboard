@@ -556,6 +556,21 @@ describe("the fixture daemon's account switches", () => {
     expect(daemon.store.getState().sessions.get("s")).toEqual({ ...session, account_id: undefined, config_dir: undefined });
   });
 
+  it("broadcasts the session as switching while the switch holds it, and as it rests once the switch ends", async () => {
+    const pending = createFixtureDaemon({ ...scenario, sessionAccountSwitches: { s: "pending" } });
+    void pending.request({ type: "switch_session_account", session: "s", account: "work" });
+    expect(pending.store.getState().sessions.get("s")).toEqual({ ...session, switching_account: true });
+    expect(pending.store.getState().daemonSwitching).toEqual(new Set(["s"]));
+    const failing = createFixtureDaemon({ ...scenario, sessionAccountSwitches: { s: { code: "internal_error", params: { detail: "x" }, message: "x" } } });
+    await expect(failing.request({ type: "switch_session_account", session: "s", account: "work" })).rejects.toMatchObject({ code: "internal_error" });
+    expect(failing.store.getState().sessions.get("s")).toEqual(session);
+    expect(failing.store.getState().daemonSwitching).toEqual(new Set());
+    const done = createFixtureDaemon(scenario);
+    await done.request({ type: "switch_session_account", session: "s", account: "work" });
+    expect(done.store.getState().sessions.get("s")?.switching_account).toBeUndefined();
+    expect(done.store.getState().daemonSwitching).toEqual(new Set());
+  });
+
   it("refuses invalid targets and configured failures without changing the session", async () => {
     const daemon = createFixtureDaemon({ ...scenario, sessionAccountSwitches: { s: { code: "internal_error", params: { detail: "Could not restart the agent" }, message: "Could not restart the agent" } } });
     await expect(daemon.request({ type: "switch_session_account", session: "s", account: "codex" })).rejects.toMatchObject({ code: "unknown_account" });

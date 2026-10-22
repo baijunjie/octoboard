@@ -8,7 +8,7 @@ import { currentLanguage } from "../i18n/language";
 import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, type Account, type AccountLogin, type AccountSharing, type Agent, type ConsoleSessionColour, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type Project, type QuotaWindow, type RequestBody, type Session, type SharingCause, type SessionRecordsPresence, type ShellTerminal } from "../protocol";
 import { accountQuotaOf } from "../quota/accountQuotaOf";
 import { exhaustedQuotaWindow } from "../quota/quotaFormat";
-import { createStateStore, type Daemon, type ToastRequest } from "../store";
+import { applyDaemonEvent, createStateStore, type Daemon, type ToastRequest } from "../store";
 import type { Scenario } from "./scenario";
 import { terminalFixtureUrl } from "./fakeTerminal";
 import { createConfigurationReplies } from "./fixtureConfiguration";
@@ -374,11 +374,17 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           refuseIfSharingChanges(session.account_id);
           refuseIfSharingChanges(account?.id);
           refuseIfQuotaExhausted(session.agent, account);
+          // The daemon broadcasts the session as switching while the switch holds its claim, and the
+          // session as it is once the switch ends. What the window adds for its own batch is not the daemon's to send.
+          const { switching_account: _, ...resting } = session;
+          applyDaemonEvent(store, { type: "session_upserted", session: { ...resting, switching_account: true } });
           const reply = scenario.sessionAccountSwitches?.[body.session];
           if (reply === "pending") return new Promise<Event>(() => {});
-          if (reply) return fail(reply);
-          const updated = { ...session, account_id: account?.id, config_dir: account?.config_dir };
-          store.setState((state) => ({ sessions: new Map(state.sessions).set(session.id, updated) }));
+          if (reply) {
+            applyDaemonEvent(store, { type: "session_upserted", session: resting });
+            return fail(reply);
+          }
+          applyDaemonEvent(store, { type: "session_upserted", session: { ...resting, account_id: account?.id, config_dir: account?.config_dir } });
           return { type: "ack" };
         }
         case "hand_off_session": {

@@ -18,6 +18,10 @@ export interface ErrorAlertRequest {
   error?: unknown;
   recovery?: ErrorRecovery;
   failures?: readonly ErrorAlertFailure[];
+  /** What the alert's "Error details" disclosure holds, in place of the diagnostics it works out from the
+   * errors: for an alert whose failures each have details of their own, set apart by whose they are. `null` says
+   * there are none, and the alert shows no disclosure; only when absent does it work them out. */
+  details?: ReactNode;
 }
 
 const listeners = new Set<() => void>();

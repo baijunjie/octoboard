@@ -213,3 +213,153 @@ it("preserves an unhandled foreign rejection's message and stack through the rep
   expect(alert.textContent).toContain("Foreign rejection");
   expect(alert.querySelector("details")?.textContent).toContain("Foreign rejection stack");
 });
+
+it("shows a failed account-switch batch as prose: the target once, a short reason per session, the remedy once, and the raw text only in Error details", async () => {
+  const { runAccountSwitchBatch } = await import("../accountSwitchBatch");
+  const { createStateStore } = await import("../store");
+  const { sessionOf } = await import("../gallery/fixtures/builders");
+  const sessions = ["one", "two"].map((id) => sessionOf(id, "c-1", "p-1", `Session ${id}`, "idle"));
+  const store = createStateStore({ sessions: new Map(sessions.map((s) => [s.id, s])) });
+  const switchOne = vi.fn(async () => {
+    throw new DaemonRequestError("No space left on device (os error 28)", "relocation_failed", { path: "/home/w/.claude", detail: "No space left on device (os error 28)" });
+  });
+  mount();
+  await act(async () => { await runAccountSwitchBatch(store, ["one", "two"], "a-1", { accountName: "Work", switchOne }); });
+  const alert = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
+  expect(alert.textContent).toContain("2 sessions could not move to Work");
+  expect(alert.textContent?.match(/They stay on their current account\./g)).toHaveLength(1);
+  expect(alert.textContent).toContain("Session one");
+  expect(alert.textContent).toContain("Session two");
+  expect(alert.textContent?.match(/Free space on the disk/g)).toHaveLength(1);
+  expect(alert.textContent).not.toContain("Report issue");
+  const details = alert.querySelector("details")!;
+  expect(details.textContent).toContain("No space left on device (os error 28)");
+  const visible = (alert.textContent ?? "").replace(details.textContent ?? "", "");
+  expect(visible).not.toContain("os error 28");
+  expect([...alert.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["OK"]);
+});
+
+async function failedBatch(failures: Record<string, Error>, accountName = "Work") {
+  const { runAccountSwitchBatch } = await import("../accountSwitchBatch");
+  const { createStateStore } = await import("../store");
+  const { sessionOf } = await import("../gallery/fixtures/builders");
+  const sessions = Object.keys(failures).map((id) => sessionOf(id, "c-1", "p-1", `Session ${id}`, "idle"));
+  const store = createStateStore({ sessions: new Map(sessions.map((s) => [s.id, s])) });
+  mount();
+  await act(async () => {
+    await runAccountSwitchBatch(store, Object.keys(failures), "a-1", { accountName, switchOne: async (id) => { throw failures[id]; } });
+  });
+  const alert = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
+  const details = alert.querySelector("details");
+  const visible = (alert.textContent ?? "").replace(details?.textContent ?? "\u0000", "");
+  return { alert, details, visible };
+}
+
+it("says a code's own remedy once for the code, and not the kind's generic remedy for it", async () => {
+  const unreachable = () => new DaemonRequestError("raw", "config_dir_unreachable", { agent: "Claude Code", path: "/home/w/.claude" });
+  const { visible } = await failedBatch({ a: unreachable(), b: unreachable(), c: new DaemonRequestError("Session is locked", "session_locked", {}) });
+  expect(visible.match(/Recreate it, or point the account at a different directory\./g)).toHaveLength(1);
+  expect(visible).not.toContain("correct the path in the dialog");
+  expect(visible.match(/Unlock/g)?.length).toBe(1);
+});
+
+it("gives an unexpected failure a short reason in its row and keeps its stack for Error details only", async () => {
+  const boom = new Error("Boom happened");
+  const { visible, details } = await failedBatch({ a: boom });
+  expect(visible).toContain("Failed unexpectedly.");
+  expect(visible).not.toContain("Boom happened");
+  expect(visible).toContain("Report issue");
+  expect(details!.textContent).toContain("Boom happened");
+  expect(details!.querySelector("h3")?.textContent).toBe("Session a");
+  expect(details!.querySelector('[role="region"]')).toBeNull();
+});
+
+it("words each stage of a failed conversation copy, and says where an older item is kept", async () => {
+  const stage = (stageName: string, extra: Record<string, string> = {}) => new DaemonRequestError("raw", "relocation_failed", { path: "/t", stage: stageName, detail: "disk full", ...extra });
+  const { visible } = await failedBatch({
+    a: stage("thread_record"),
+    b: stage("kept_staging", { kept_in: "/t/.octoboard-switch/x" }),
+  });
+  expect(visible).toContain("was copied into /t, but the target account's record of the thread could not be updated");
+  expect(visible).toContain("kept in /t/.octoboard-switch/x until the daemon next starts");
+  expect(visible).not.toContain("disk full");
+});
+
+it("shows an alert's own details in place of the diagnostics it would work out for an unexpected failure", () => {
+  mount();
+  act(() => errorAlerts.report({ message: "Failed", error: new Error("worked out"), details: <p>supplied detail</p> }));
+  const details = document.querySelector('[role="alertdialog"] details')!;
+  expect(document.querySelectorAll('[role="alertdialog"] details')).toHaveLength(1);
+  expect(details.textContent).toContain("supplied detail");
+  expect(details.textContent).not.toContain("worked out");
+});
+
+it("puts a wrapped error's message ahead of a stack that has only frames, and a coded failure's message alone", async () => {
+  const jsc = new Error("Boom happened");
+  jsc.stack = "runBatch@http://localhost/app.js:10:5\nasync@[native code]";
+  const { details } = await failedBatch({ a: jsc });
+  expect(details!.textContent).toContain("Boom happened\nrunBatch@http://localhost/app.js:10:5");
+  while (errorAlerts.getSnapshot().length) act(() => errorAlerts.acknowledge());
+  const coded = new DaemonRequestError("Something internal", "internal_error", { detail: "no sentence for this" });
+  const { details: codedDetails } = await failedBatch({ b: coded });
+  expect(codedDetails?.textContent ?? "").not.toContain("@http");
+});
+
+it("puts the message ahead of a stack whose first line only ends the same way as a short message", async () => {
+  const short = new Error("no");
+  short.stack = "Error: another\nframe@x:1:1";
+  const { details } = await failedBatch({ a: short });
+  expect(details!.textContent).toContain("no\nError: another");
+});
+
+it("shows no Error details at all when no session has any, rather than every stack together", async () => {
+  const unreachable = () => new DaemonRequestError("raw", "config_dir_unreachable", { agent: "Claude Code", path: "/home/w/.claude" });
+  const first = unreachable();
+  first.stack = "frames only";
+  const { details } = await failedBatch({ a: first, b: unreachable() });
+  expect(details).toBeNull();
+});
+
+it("keeps a shell-environment failure's own remedy and shows its command only in the details", async () => {
+  const timeout = new DaemonRequestError("raw", "shell_environment_timeout", { shell: "/bin/zsh", command: "env", timeout: "5" });
+  const { visible, details } = await failedBatch({ a: timeout });
+  expect(visible).not.toContain("/bin/zsh");
+  expect(details!.textContent).toContain("/bin/zsh -l -i -c 'env'");
+  expect(visible).toContain("Fix or skip the slow step in the shell's rc files.");
+});
+
+it.each([
+  ["permission_denied", "Check the folder’s file permissions"],
+  ["no_space", "Free space on the disk"],
+  ["busy", "Close other programs using the account's files"],
+  ["config_unreadable", "readable file of valid TOML"],
+  ["sqlite_home", "to an absolute path"],
+  ["symlink", "contain a symbolic link"],
+  ["not_restored", "copy it out of the folder named above"],
+])("treats a conversation move that failed for %s as something to fix, not as a bug", async (cause, remedy) => {
+  const stage = cause === "not_restored" ? "kept_staging" : cause === "symlink" ? "copy" : "thread_record";
+  const failure = new DaemonRequestError("raw", "relocation_failed", { path: "/t", stage, cause, detail: "the system's own words", kept_in: "/t/.octoboard-switch/x" });
+  const { visible, details } = await failedBatch({ a: failure });
+  expect(visible).toContain(remedy);
+  expect(visible).not.toContain("Report issue");
+  expect(visible).not.toContain("the system's own words");
+  expect(details!.textContent).toContain("the system's own words");
+});
+
+it("still treats a conversation move with cause other as unexpected, and an os error in its detail as the disk's", async () => {
+  const other = new DaemonRequestError("raw", "relocation_failed", { path: "/t", stage: "copy", cause: "other", detail: "odd" });
+  expect((await failedBatch({ a: other })).visible).toContain("Report issue");
+  while (errorAlerts.getSnapshot().length) act(() => errorAlerts.acknowledge());
+  const full = new DaemonRequestError("raw", "relocation_failed", { path: "/t", stage: "copy", cause: "other", detail: "No space left on device (os error 28)" });
+  const { visible } = await failedBatch({ b: full });
+  expect(visible).toContain("Free space on the disk");
+});
+
+it("says both remedies when an older item is kept aside and the system also reported a full disk", async () => {
+  const failure = new DaemonRequestError("raw", "relocation_failed", { path: "/t", stage: "kept_staging", cause: "not_restored", detail: "No space left on device (os error 28)", kept_in: "/t/.octoboard-switch/x" });
+  const { visible } = await failedBatch({ a: failure });
+  expect(visible).toContain("copy it out of the folder named above");
+  expect(visible).toContain("Free space on the disk");
+  expect(visible.indexOf("copy it out")).toBeLessThan(visible.indexOf("Free space"));
+  expect(visible).not.toContain("Report issue");
+});

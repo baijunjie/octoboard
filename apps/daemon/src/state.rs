@@ -716,11 +716,34 @@ impl AppState {
         })
     }
 
+    /// [`Self::begin_switch`] for an account switch: the session is also shown as switching its
+    /// account to every client until the claim is released.
+    pub fn begin_account_switch(self: &Arc<Self>, id: &str) -> Result<LaunchClaim> {
+        let claim = self.begin_switch(id)?;
+        self.live
+            .write()
+            .expect("live sessions lock poisoned")
+            .account_switches
+            .insert(id.to_string());
+        self.publish_session_by_id(id);
+        Ok(claim)
+    }
+
+    /// Whether an account switch holds the session's claim (see [`Self::begin_account_switch`]).
+    pub fn is_switching_account(&self, id: &str) -> bool {
+        let live = self.live.read().expect("live sessions lock poisoned");
+        live.account_switches.contains(id)
+    }
+
     fn release_launch(&self, id: &str) {
         let mut live = self.live.write().expect("live sessions lock poisoned");
         live.launching.remove(id);
         live.switching.remove(id);
+        let was_switching_account = live.account_switches.remove(id);
         drop(live);
+        if was_switching_account {
+            self.publish_session_by_id(id);
+        }
         crate::shared_config::publish(self);
     }
 
@@ -1029,6 +1052,7 @@ impl AppState {
     pub(crate) fn wire_session(&self, mut session: Session) -> Session {
         session.status = self.shown_status(&session);
         session.background_tasks = self.shown_background_tasks(&session);
+        session.switching_account = self.is_switching_account(&session.id);
         session.default_effort = self
             .default_efforts
             .lock()
@@ -1218,6 +1242,11 @@ impl AppState {
     }
 
     pub fn publish_session(&self, session: &Session) {
+        self.publish_session_by_id(&session.id);
+    }
+
+    /// Publishes the session the store holds under `id`, as [`Self::publish_session`] does.
+    pub fn publish_session_by_id(&self, id: &str) {
         {
             let _publication = self
                 .session_publication
@@ -1226,17 +1255,17 @@ impl AppState {
             // Partial store writes preserve columns owned by other paths. Always publish the
             // stored row so a previously read record cannot blank a terminal title learned in the
             // meantime.
-            match self.store.get_session(&session.id) {
+            match self.store.get_session(id) {
                 Ok(Some(session)) => self.broadcast_locked(Event::SessionUpserted {
                     session: self.wire_session(session),
                 }),
                 Ok(None) => {}
                 Err(err) => {
-                    tracing::warn!(session = %session.id, %err, "reading the session for publication failed")
+                    tracing::warn!(session = %id, %err, "reading the session for publication failed")
                 }
             }
         }
-        if let Ok(Some(session)) = self.store.get_session(&session.id) {
+        if let Ok(Some(session)) = self.store.get_session(id) {
             crate::shared_config::note_session(self, &session);
         }
     }
@@ -2495,6 +2524,9 @@ struct LiveSessions {
     /// The sessions in `launching` whose claim came from [`AppState::begin_switch`], so is not a
     /// launch of their process.
     switching: HashSet<String>,
+    /// The sessions in `switching` held by an account switch, which clients are shown
+    /// (`Session::switching_account`).
+    account_switches: HashSet<String>,
     /// The accounts locked for a change of their sharing, by id.
     sharing_locks: HashMap<String, SharingLockEntry>,
 }
@@ -2847,6 +2879,7 @@ mod tests {
             terminal_title: None,
             record_titles: Default::default(),
             background_tasks: Vec::new(),
+            switching_account: false,
             default_effort: None,
             context: None,
             observed_model: None,

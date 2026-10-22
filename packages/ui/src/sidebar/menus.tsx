@@ -1,6 +1,6 @@
 import { Archive, ArrowLeftRight, Copy, Download, Focus, Forward, Folder, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Lock, LockOpen, Palette, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Unlink, Upload, SquareArrowOutUpRight } from "lucide-react";
 
-import { ownAccountChangingUnavailable, sharingChangeUnavailable, switchEntries, type QuotaReadings } from "../accountChoices";
+import { ownAccountChangingUnavailable, sessionSwitchingUnavailable, sharingChangeUnavailable, switchEntries, type QuotaReadings } from "../accountChoices";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanel, ActionMenuSubmenu } from "../components/ActionMenu";
 import { ExternalLinkIcon } from "../components/ExternalLinkIcon";
 import { RepositoryIcon } from "../components/RepositoryIcon";
@@ -151,8 +151,9 @@ export function projectMenu(
 /** "Switch account": the session's agent's accounts, the one the session is on marked as current
  * and doing nothing, and last a way into Settings' Agent accounts section. An account whose quota
  * is used up, or whose sharing change runs, is disabled, with why under its name; so is every account while the
- * session's own account is changing. Absent when the agent has no other account to go
- * to — hidden rather than disabled, as there is nothing the user could do with it. */
+ * session's own account is changing, and every account but the current one while an account switch holds the
+ * session. Absent when the agent has no other account to go to — hidden rather than disabled, as there is nothing the
+ * user could do with it. */
 function switchAccountSubmenu(
   t: Translate,
   handlers: SidebarHandlers,
@@ -165,6 +166,7 @@ function switchAccountSubmenu(
   const entries = switchEntries(session, accounts, t, defaultNames, readings, sharing);
   if (entries.length < 2) return undefined;
   const ownChanging = entries.some((entry) => entry.current && entry.changingSharing);
+  const switching = session.switching_account === true;
   return {
     label: t("sidebar.session.switchAccount"),
     icon: ArrowLeftRight,
@@ -175,7 +177,7 @@ function switchAccountSubmenu(
         // not marked used up; a removed account's directory has no quota.
         const usage = accountUsage(t, session.agent, quota, current ? undefined : exhaustedBy, readings?.now ?? 0);
         // Nothing can be switched onto an account whose sharing change runs, nor away from one, whatever its quota.
-        const unavailable = current ? undefined : changingSharing ? sharingChangeUnavailable(t) : ownChanging ? ownAccountChangingUnavailable(t) : undefined;
+        const unavailable = current ? undefined : switching ? sessionSwitchingUnavailable(t) : changingSharing ? sharingChangeUnavailable(t) : ownChanging ? ownAccountChangingUnavailable(t) : undefined;
         const { icon, detail, reason } = unavailable ? { icon: usage.icon, ...unavailable } : usage;
         return {
           label: name,
@@ -201,9 +203,10 @@ function switchAccountSubmenu(
 /** "Hand off": offered for a session that is not archived. Disabled while the session is in the
  * middle of a turn or still starting, which the daemon refuses (`session_working`), while it
  * is locked, as Archive is, and while no other agent could take it over (`hasTarget`); and, with the reason
- * shown, while the session's own account is changing its sharing (`ownChanging`), which the daemon refuses. */
+ * shown, while the session's own account is changing its sharing (`ownChanging`), which the daemon refuses, and
+ * while an account switch holds the session. */
 function handOffItem(t: Translate, handlers: SidebarHandlers, session: Session, hasTarget: boolean, ownChanging: boolean): ActionMenuItem {
-  const unavailable = ownChanging ? ownAccountChangingUnavailable(t) : undefined;
+  const unavailable = session.switching_account ? sessionSwitchingUnavailable(t) : ownChanging ? ownAccountChangingUnavailable(t) : undefined;
   return {
     ...(unavailable ? { description: unavailable.detail, reason: unavailable.reason } : {}),
     label: t("sidebar.session.handOff"),
@@ -282,7 +285,7 @@ export function sessionMenu(
     ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <FocusShortcutKbd />, onClick: () => handlers.onFocus({ consoleSession: session }) }] : []),
     ...(switchAccount ? [switchAccount] : []),
     ...(archived ? [] : [handOffItem(t, handlers, session, canHandOff, sharing?.get(session.account_id ?? "")?.progress !== undefined)]),
-    ...(session.bound_to && !archived ? [{ label: t("sidebar.session.unbind"), icon: Unlink, disabled: session.status === "starting", onClick: () => handlers.onReleaseSession(session) }] : []),
+    ...(session.bound_to && !archived ? [{ label: t("sidebar.session.unbind"), icon: Unlink, disabled: session.status === "starting" || session.switching_account === true, onClick: () => handlers.onReleaseSession(session) }] : []),
     "separator",
     offersDelete(session, hasBoundSessions)
       ? { label: t("sidebar.session.delete"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-session", session }), destructive: true, disabled: session.locked }

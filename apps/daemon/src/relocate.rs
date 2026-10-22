@@ -34,6 +34,7 @@ use anyhow::Result;
 
 use crate::agent_records::{names_thread, plausible_id, rollout_head, rollout_stem};
 use crate::protocol::{error_code, Agent, CodedError};
+use crate::shared_config::FailureCause as Cause;
 
 /// Where an agent keeps its session records inside a config directory (`root`), how deep below it
 /// a record sits (`depth`, counting `root`'s own entries as 1), and what a record is called. The
@@ -191,6 +192,42 @@ pub fn repoint_thread_row(
     repoint_within(agent, target, head, thread, launch_env, DATABASE_PATIENCE)
 }
 
+/// Why a conversation could not be moved, in the words of the wire's `cause` param on
+/// `relocation_failed`: the file system's own causes ([`Cause`]), which a user can act on, and the
+/// ones of this move alone — `config_unreadable` (the target's `config.toml` cannot be read or
+/// parsed), `sqlite_home` (where its thread database is cannot be told), `symlink` (a record holds
+/// a symbolic link, which is not copied) and `not_restored` (an older item could not be put back).
+/// `other` is everything else. Not found and conflicts are told only as `other`.
+fn cause_of_io(err: &io::Error) -> &'static str {
+    narrowed(Cause::of(err))
+}
+
+/// The wire word for `cause` where this move tells it apart, else `other`.
+fn narrowed(cause: Cause) -> &'static str {
+    match cause {
+        Cause::PermissionDenied | Cause::Busy | Cause::NoSpace => cause.as_str(),
+        _ => "other",
+    }
+}
+
+/// A failure of where the thread database is, with its cause.
+struct DatabaseDirectoryError {
+    cause: &'static str,
+    text: String,
+}
+
+/// A symbolic link met while copying a record, which fails the copy.
+#[derive(Debug)]
+struct SymbolicLink(String);
+
+impl std::fmt::Display for SymbolicLink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "`{}` is a symbolic link", self.0)
+    }
+}
+
+impl std::error::Error for SymbolicLink {}
+
 fn repoint_within(
     agent: Agent,
     target: &Path,
@@ -202,25 +239,34 @@ fn repoint_within(
     if agent != Agent::Codex || !plausible_id(thread) {
         return Ok(());
     }
-    let failed = |detail: String| {
-        let detail = format!(
+    let failed = |cause: &str, detail: String| {
+        let message = format!(
             "the conversation was copied but Codex's record of the thread was not updated: \
              {detail}"
         );
         CodedError::raised(
             error_code::RELOCATION_FAILED,
-            detail.clone(),
-            &[("path", &target.to_string_lossy()), ("detail", &detail)],
+            message,
+            &[
+                ("path", &target.to_string_lossy()),
+                ("stage", "thread_record"),
+                ("cause", cause),
+                ("detail", &detail),
+            ],
         )
     };
     let directory =
-        database_directory(target, launch_env).map_err(|err| failed(format!("{err}")))?;
+        database_directory(target, launch_env).map_err(|err| failed(err.cause, err.text))?;
     let mut rollout = target.join(head);
     if rollout.extension().is_some_and(|ext| ext == "zst") {
         rollout.set_extension("");
     }
-    let listing =
-        |err: io::Error| failed(format!("listing `{}` failed: {err}", directory.display()));
+    let listing = |err: io::Error| {
+        failed(
+            cause_of_io(&err),
+            format!("listing `{}` failed: {err}", directory.display()),
+        )
+    };
     let entries = match std::fs::read_dir(&directory) {
         Ok(entries) => entries,
         // No directory, no database: the home has not run Codex yet.
@@ -245,14 +291,18 @@ fn repoint_within(
             Ok(_) => continue,
             Err(err) if err.kind() == io::ErrorKind::NotFound => continue,
             Err(err) => {
-                return Err(failed(format!(
-                    "inspecting `{}` failed: {err}",
-                    path.display()
-                )))
+                return Err(failed(
+                    cause_of_io(&err),
+                    format!("inspecting `{}` failed: {err}", path.display()),
+                ))
             }
         }
-        repoint_in(&path, thread, &rollout, patience)
-            .map_err(|err| failed(format!("updating `{}` failed: {err}", path.display())))?;
+        repoint_in(&path, thread, &rollout, patience).map_err(|err| {
+            failed(
+                narrowed(Cause::of_database(&err)),
+                format!("updating `{}` failed: {err}", path.display()),
+            )
+        })?;
     }
     Ok(())
 }
@@ -287,15 +337,33 @@ pub(crate) fn open_existing_database(
 /// environment's `HOME`; a relative `CODEX_SQLITE_HOME` is taken against the directory Codex is
 /// started in, which is not known here, so it is refused. Codex also lets an enterprise
 /// requirement override both, which is not looked for here.
-fn database_directory(home: &Path, launch_env: &HashMap<String, String>) -> io::Result<PathBuf> {
+fn database_directory(
+    home: &Path,
+    launch_env: &HashMap<String, String>,
+) -> Result<PathBuf, DatabaseDirectoryError> {
+    let unresolvable = |text: String| DatabaseDirectoryError {
+        cause: "sqlite_home",
+        text,
+    };
     let configured = match std::fs::read_to_string(home.join("config.toml")) {
         Ok(text) => toml::from_str::<toml::Table>(&text)
-            .map_err(|err| io::Error::other(format!("`config.toml` is not valid: {err}")))?
+            .map_err(|err| DatabaseDirectoryError {
+                cause: "config_unreadable",
+                text: format!("`config.toml` is not valid: {err}"),
+            })?
             .get("sqlite_home")
             .and_then(toml::Value::as_str)
             .map(str::to_owned),
         Err(err) if err.kind() == io::ErrorKind::NotFound => None,
-        Err(err) => return Err(err),
+        Err(err) => {
+            return Err(DatabaseDirectoryError {
+                cause: match cause_of_io(&err) {
+                    "other" => "config_unreadable",
+                    cause => cause,
+                },
+                text: err.to_string(),
+            })
+        }
     };
     if let Some(dir) = configured {
         let user_home = launch_env.get("HOME").filter(|home| !home.is_empty());
@@ -303,8 +371,8 @@ fn database_directory(home: &Path, launch_env: &HashMap<String, String>) -> io::
             (Some(rest), Some(user_home)) if rest.is_empty() || rest.starts_with('/') => {
                 Ok(PathBuf::from(user_home).join(rest.trim_start_matches('/')))
             }
-            (Some(_), None) => Err(io::Error::other(
-                "`sqlite_home` starts with `~` and the launch environment has no HOME",
+            (Some(_), None) => Err(unresolvable(
+                "`sqlite_home` starts with `~` and the launch environment has no HOME".into(),
             )),
             _ => Ok(home.join(dir)),
         };
@@ -314,7 +382,7 @@ fn database_directory(home: &Path, launch_env: &HashMap<String, String>) -> io::
         .filter(|dir| !dir.is_empty())
     {
         Some(dir) if Path::new(dir).is_absolute() => Ok(PathBuf::from(dir)),
-        Some(dir) => Err(io::Error::other(format!(
+        Some(dir) => Err(unresolvable(format!(
             "`CODEX_SQLITE_HOME` is the relative path `{dir}`, which depends on the directory \
              the session starts in"
         ))),
@@ -454,7 +522,12 @@ pub fn copy(source: &Path, target: &Path, record: &Path, companions: &[PathBuf])
         return Err(CodedError::raised(
             error_code::RELOCATION_FAILED,
             "the record has no name",
-            &[("path", &target.to_string_lossy()), ("detail", "no name")],
+            &[
+                ("path", &target.to_string_lossy()),
+                ("stage", "copy"),
+                ("cause", "other"),
+                ("detail", "no name"),
+            ],
         ));
     };
     let items: Vec<(PathBuf, PathBuf)> = std::iter::once(record)
@@ -485,13 +558,40 @@ pub fn copy(source: &Path, target: &Path, record: &Path, companions: &[PathBuf])
             } else {
                 failed.err.to_string()
             };
+            let cause = if kept {
+                "not_restored"
+            } else if failed
+                .err
+                .get_ref()
+                .is_some_and(|inner| inner.is::<SymbolicLink>())
+            {
+                "symlink"
+            } else {
+                cause_of_io(&failed.err)
+            };
+            let mut params = vec![
+                ("path", target.to_string_lossy().into_owned()),
+                (
+                    "stage",
+                    if kept { "kept_staging" } else { "copy" }.to_string(),
+                ),
+                ("cause", cause.to_string()),
+                ("detail", failed.err.to_string()),
+            ];
+            if kept {
+                params.push(("kept_in", staging.to_string_lossy().into_owned()));
+            }
+            let params: Vec<(&str, &str)> = params
+                .iter()
+                .map(|(name, value)| (*name, value.as_str()))
+                .collect();
             CodedError::raised(
                 error_code::RELOCATION_FAILED,
                 format!(
                     "copying the conversation into `{}` did not complete: {detail}",
                     target.display()
                 ),
-                &[("path", &target.to_string_lossy()), ("detail", &detail)],
+                &params,
             )
         });
     if kept {
@@ -600,10 +700,7 @@ pub(crate) fn remove_any(path: &Path) -> io::Result<()> {
 fn copy_tree(from: &Path, to: &Path) -> io::Result<()> {
     let file_type = std::fs::symlink_metadata(from)?.file_type();
     if file_type.is_symlink() {
-        return Err(io::Error::other(format!(
-            "`{}` is a symbolic link",
-            from.display()
-        )));
+        return Err(io::Error::other(SymbolicLink(from.display().to_string())));
     }
     if file_type.is_dir() {
         std::fs::create_dir(to)?;
@@ -650,6 +747,24 @@ mod tests {
         let path = root.join(relative);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, content).unwrap();
+    }
+
+    fn stage_of(err: &anyhow::Error) -> String {
+        err.downcast_ref::<CodedError>()
+            .expect("a coded error")
+            .params
+            .get("stage")
+            .cloned()
+            .expect("a stage")
+    }
+
+    fn cause_of(err: &anyhow::Error) -> String {
+        err.downcast_ref::<CodedError>()
+            .expect("a coded error")
+            .params
+            .get("cause")
+            .cloned()
+            .expect("a cause")
     }
 
     fn code_of(err: &anyhow::Error) -> &'static str {
@@ -801,6 +916,8 @@ mod tests {
         held.execute_batch("BEGIN EXCLUSIVE").unwrap();
         let err = point(&target, CODEX_ID, &[]).expect_err("a busy database");
         assert_eq!(code_of(&err), error_code::RELOCATION_FAILED);
+        assert_eq!(stage_of(&err), "thread_record");
+        assert_eq!(cause_of(&err), "busy");
         assert!(
             err.to_string().contains("conversation was copied"),
             "{err:#}"
@@ -1021,6 +1138,8 @@ mod tests {
         let err =
             copy(&source, &target, &record_path, &companions).expect_err("a link in the sidecar");
         assert_eq!(code_of(&err), error_code::RELOCATION_FAILED);
+        assert_eq!(stage_of(&err), "copy");
+        assert_eq!(cause_of(&err), "symlink");
         assert!(!target.join(&record).exists());
         assert!(!target.join(STAGING).exists());
         std::fs::remove_file(source.join(&sidecar).join("link")).unwrap();
@@ -1031,6 +1150,7 @@ mod tests {
         write(&blocked, "file-history", "a file where a directory must be");
         let err = copy(&source, &blocked, &record_path, &companions).expect_err("blocked");
         assert_eq!(code_of(&err), error_code::RELOCATION_FAILED);
+        assert_eq!(cause_of(&err), "other");
         assert_eq!(
             std::fs::read_to_string(blocked.join(&record)).unwrap(),
             "older conversation"
@@ -1495,5 +1615,78 @@ mod tests {
         write(&target, ".octoboard-switch/b/leftover", "from a crash");
         sweep_staging([&*target]);
         assert!(!target.join(STAGING).exists());
+    }
+    /// Where a Codex home keeps its thread database is told wrongly in a way the user can fix:
+    /// the cause says which, so a client can word the remedy.
+    #[test]
+    fn a_thread_record_failure_names_a_cause_the_user_can_fix() {
+        let head = Path::new("sessions/2026/10/03/rollout-2026-10-03T00-00-00-x_y.jsonl");
+        let point = |target: &Path, env: &[(&str, &str)]| {
+            let env = env
+                .iter()
+                .map(|(key, value)| (key.to_string(), value.to_string()))
+                .collect();
+            repoint_within(
+                Agent::Codex,
+                target,
+                head,
+                CODEX_ID,
+                &env,
+                std::time::Duration::from_millis(50),
+            )
+        };
+
+        let invalid = temp_dir("cause-invalid");
+        write(&invalid, "config.toml", "sqlite_home = [unterminated");
+        let err = point(&invalid, &[]).expect_err("an invalid config.toml");
+        assert_eq!(
+            (stage_of(&err).as_str(), cause_of(&err).as_str()),
+            ("thread_record", "config_unreadable")
+        );
+
+        let unreadable = temp_dir("cause-config-dir");
+        std::fs::create_dir(unreadable.join("config.toml")).unwrap();
+        let err = point(&unreadable, &[]).expect_err("a config.toml that is a directory");
+        assert_eq!(cause_of(&err), "config_unreadable");
+
+        let relative = temp_dir("cause-relative");
+        let err = point(&relative, &[("CODEX_SQLITE_HOME", "state")]).expect_err("relative");
+        assert_eq!(cause_of(&err), "sqlite_home");
+
+        let tilde = temp_dir("cause-tilde");
+        write(&tilde, "config.toml", "sqlite_home = \"~/db\"");
+        let err = point(&tilde, &[]).expect_err("a ~ with no HOME");
+        assert_eq!(cause_of(&err), "sqlite_home");
+
+        let broken = temp_dir("cause-broken");
+        write(
+            &broken,
+            "state_5.sqlite",
+            "not a database, but long enough to be read as one",
+        );
+        let err = point(&broken, &[]).expect_err("not a database");
+        assert_eq!(cause_of(&err), "other");
+    }
+
+    /// A copy the file system refuses names why, when it is one a user can act on.
+    #[test]
+    fn a_copy_refused_for_permissions_says_so() {
+        use std::os::unix::fs::PermissionsExt;
+        let source = temp_dir("cause-perm-source");
+        write(&source, "sessions/enc/grok-id/messages.jsonl", "x");
+        let target = temp_dir("cause-perm-target");
+        std::fs::set_permissions(&*target, std::fs::Permissions::from_mode(0o555)).unwrap();
+        // A superuser writes anyway, and then there is nothing to refuse.
+        if std::fs::create_dir(target.join("probe")).is_ok() {
+            std::fs::set_permissions(&*target, std::fs::Permissions::from_mode(0o755)).unwrap();
+            return;
+        }
+        let err =
+            copy(&source, &target, Path::new("sessions/enc/grok-id"), &[]).expect_err("read-only");
+        std::fs::set_permissions(&*target, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(
+            (stage_of(&err).as_str(), cause_of(&err).as_str()),
+            ("copy", "permission_denied")
+        );
     }
 }

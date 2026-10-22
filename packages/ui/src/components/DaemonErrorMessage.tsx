@@ -23,7 +23,7 @@ export function DaemonErrorTitle(): React.ReactElement {
 
 const NO_RECORDS = new Map<string, never>();
 
-export type DaemonErrorPart = "summary" | "details";
+export type DaemonErrorPart = "summary" | "details" | "recovery";
 
 /** What a `session_branches_not_removed` alert names, grouped by why each is still there: a lead
  * line per group over a list of names as code chips, with a locked worktree's uncommitted changes
@@ -64,9 +64,9 @@ function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?:
   const shellTerminals = useErrorRecords((s) => ("shell_terminal" in error.params ? s.shellTerminals : NO_RECORDS));
   const accounts = useErrorRecords((s) => (error.code === "unknown_account" ? s.settings.accounts : undefined));
   const id = `daemon.${richMessageCode(error.code, error.params)}`;
-  if (!isMessageKey(id)) return part === "details" ? null : <>{error.message}</>;
+  if (!isMessageKey(id)) return part === "details" || part === "recovery" ? null : <>{error.message}</>;
   const left = leftBranchItems(error.code, error.params);
-  if (left) return <LeftBranches count={left.length} items={left} part={part} />;
+  if (left) return part === "recovery" ? null : <LeftBranches count={left.length} items={left} part={part} />;
   const params = daemonParams<React.ReactNode>(language, error.code, error.params, { consoles, projects, sessions, shellTerminals, accounts }, (value, monospace) => <InlineChip dir={monospace ? "ltr" : "auto"} monospace={monospace} wrap size="inherit">{value}</InlineChip>);
   if (error.code === "conversation_held_in_project" || error.code === "conversation_held_in_console") {
     const holder = sessions.get(error.params.session);
@@ -111,6 +111,7 @@ function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?:
   const recoveryId = `daemon.${error.code}.recovery`;
   const recovery = RECOVERY_CODES.has(error.code) && isMessageKey(recoveryId) ? <p><Message id={recoveryId} params={params as never} /></p> : null;
   const nestedDetails = structuredNested && part !== "summary" ? <DaemonErrorMessage error={nested} part="details" /> : null;
+  if (part === "recovery") return recovery;
   if (part === "details") return <>{sharingDetails}{diagnostic}{recovery}{nestedDetails}</>;
   // One element, so a container that lays its children out as flex items (an alert's column) keeps
   // the sentence whole instead of making each run of text and each literal an item of its own.
@@ -231,7 +232,7 @@ function SharingFailures({ items }: { items: SharingFailureItem[] }): React.Reac
 /** A failure worded as `text` (in the current language), as a node: where its message sets some params
  * as code they are set as code, anywhere else it is the text itself. */
 export function codedMessageNode(failure: { code: string; params: MessageParams }, text: string, part?: DaemonErrorPart): React.ReactNode {
-  return hasCodeParams(failure) || (part && hasShellTimeoutDetails(failure)) ? <DaemonErrorMessage error={new DaemonRequestError(text, failure.code, failure.params)} part={part} /> : part === "details" ? null : text;
+  return hasCodeParams(failure) || (part && hasShellTimeoutDetails(failure)) ? <DaemonErrorMessage error={new DaemonRequestError(text, failure.code, failure.params)} part={part} /> : part === "details" || part === "recovery" ? null : text;
 }
 
 /** A failure as a param of a sentence: the structured message where it has one, otherwise its text
@@ -240,23 +241,30 @@ export function failureParam(error: ErrorPresentation): React.ReactNode {
   return typeof error !== "string" && (hasCodeParams(error) || hasShellTimeoutDetails(error)) ? <DaemonErrorMessage error={error} showTitle={false} part="summary" /> : isolate(errorText(error));
 }
 
+/** The login-shell command that timed out and for how long, which a shell-environment failure's details open with. */
+export function ShellTimeoutCommand({ params: { shell, command, timeout } }: { params: MessageParams }): React.ReactElement {
+  return (
+    <p>
+      <Message
+        id="daemon.shell_environment_timeout.command"
+        params={{ command: <InlineChip monospace wrap size="inherit">{`${shell} -l -i -c '${command}'`}</InlineChip>, timeout }}
+      />
+    </p>
+  );
+}
+
 /** Structured failures retain their metadata; `summary` is inline-safe for Alert.Description,
  * while `details` holds only the remaining blocks. Omitting `part` renders the complete message. */
 export function DaemonErrorMessage({ error, showTitle = true, part }: { error: ErrorPresentation; showTitle?: boolean; part?: DaemonErrorPart }): React.ReactElement | null {
   const t = useT();
   if (typeof error !== "string" && !hasShellTimeoutDetails(error) && hasCodeParams(error)) return <CodedDaemonMessage error={error} part={part} />;
-  if (typeof error === "string" || !hasShellTimeoutDetails(error)) return part === "details" ? null : <>{errorText(error)}</>;
+  if (typeof error === "string" || !hasShellTimeoutDetails(error)) return part === "details" || part === "recovery" ? null : <>{errorText(error)}</>;
+  if (part === "recovery") return <p>{t("daemon.shell_environment_timeout.recovery")}</p>;
   if (part === "summary") return <>{t("daemon.shell_environment_timeout.cause")}</>;
-  const { shell, command, timeout } = error.params;
   return (
     <div className="flex min-w-0 flex-col gap-2 [overflow-wrap:anywhere]">
       {!part && showTitle && <h3 className="text-base font-semibold text-foreground"><DaemonErrorTitle /></h3>}
-      <p>
-        <Message
-          id="daemon.shell_environment_timeout.command"
-          params={{ command: <InlineChip monospace wrap size="inherit">{`${shell} -l -i -c '${command}'`}</InlineChip>, timeout }}
-        />
-      </p>
+      <ShellTimeoutCommand params={error.params} />
       {!part && <p>{t("daemon.shell_environment_timeout.cause")}</p>}
       <p><Message id="daemon.shell_environment_timeout.consequence" params={{ appName: <InlineChip dir="auto" wrap size="inherit">{globalParam("appName")}</InlineChip> } as never} /></p>
       <p>{t("daemon.shell_environment_timeout.recovery")}</p>

@@ -78,8 +78,8 @@ const handoffDialog = () => (
   <HandoffDialog session={sessionOf("s-1", "c-1", project.id, "Fix search", "idle")} onClose={() => {}} onHandedOff={() => {}} />
 );
 const switching = sessionOf("s-1", "c-1", project.id, "Fix search", "idle");
-const switchDialog = (onSwitchAccount: () => Promise<void>) => () => (
-  <SwitchAccountDialog session={switching} account="claude-half" accountName="Half" onClose={() => {}} onSwitchAccount={onSwitchAccount} />
+const switchDialog = (onSwitchAccount: () => void) => () => (
+  <SwitchAccountDialog session={switching} account="claude-half" accountName="Half" onClose={() => {}} onSwitchAccounts={onSwitchAccount} />
 );
 
 it("opening a new session on an incomplete account asks first, and sends the same request once confirmed", async () => {
@@ -116,7 +116,7 @@ it("handing off onto an incomplete account asks first, sends nothing on close an
 });
 
 it("switching a session onto an incomplete account asks after the switch is confirmed, and switches only on Start anyway", async () => {
-  const onSwitchAccount = vi.fn(async () => {});
+  const onSwitchAccount = vi.fn();
   render([half("claude")], switchDialog(onSwitchAccount), [switching]);
   // A press that is not the pointer's leaves focus on the switch dialog's Confirm; the question opens
   // as that button turns pending, and in a browser focus has fallen to the page by then.
@@ -135,7 +135,7 @@ it("switching a session onto an incomplete account asks after the switch is conf
   await press("Switch");
   await press("Start anyway");
   await settle();
-  expect(onSwitchAccount).toHaveBeenCalledExactlyOnceWith("s-1", "claude-half");
+  expect(onSwitchAccount).toHaveBeenCalledExactlyOnceWith(["s-1"], "claude-half", "Half");
 });
 
 const switchedOnto = vi.fn(async () => {});
@@ -228,10 +228,10 @@ it("offers View in Settings and Start anyway only, with Start anyway focused and
 it("View in Settings sends nothing, closes the question and the dialog under it, and opens Settings on the account's sharing switch", async () => {
   const open = vi.fn();
   onTestFinished(registerSettingsLauncher(open));
-  const onSwitchAccount = vi.fn(async () => {});
+  const onSwitchAccount = vi.fn();
   const onClose = vi.fn();
   const { request } = render([half("claude")], () => (
-    <SwitchAccountDialog session={switching} account="claude-half" accountName="Half" onClose={onClose} onSwitchAccount={onSwitchAccount} />
+    <SwitchAccountDialog session={switching} account="claude-half" accountName="Half" onClose={onClose} onSwitchAccounts={onSwitchAccount} />
   ), [switching]);
   await press("Switch");
   expect(document.body.querySelectorAll(ASKING)).toHaveLength(2);
@@ -287,7 +287,7 @@ it("Escape in the question settles the launch as cancelled and sends nothing", a
 });
 
 it("Escape on the question over the switch dialog closes only the question and the switch dialog stays", async () => {
-  const onSwitchAccount = vi.fn(async () => {});
+  const onSwitchAccount = vi.fn();
   render([half("claude")], switchDialog(onSwitchAccount), [switching]);
   await press("Switch");
   expect(document.body.querySelectorAll(ASKING)).toHaveLength(2);

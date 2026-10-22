@@ -72,8 +72,13 @@ Retry, Browse and Unlock appear as inline chips rather than quoted text. For exa
   destination while preserving the existing folder.
 - A clipboard failure explains granting clipboard access or using the terminal's keyboard copy and paste shortcuts.
 
-Known domain failures and recognized operating-system causes provide the remedy. An unfamiliar failure does not get
-generic retry advice merely because it occurred during a familiar operation.
+Known domain failures, the causes the daemon names for some of them (such as why a session's conversation could not
+be moved to another account; see "When a switch fails" in `docs/product/switching-session-accounts.md`), and
+recognized operating-system causes provide the remedy; a recognized operating-system cause takes precedence over the
+others, except for a switch's copy that failed and could not put back an older item: that is classified by the item
+put aside, and the operating-system cause's remedy is given as well. A failure whose named cause is not one the window
+knows stays unexpected. An unfamiliar failure does not get generic retry advice merely because it occurred during a
+familiar operation.
 
 **A remedy that lives in Settings' Agent accounts section has a button** in the footer, a secondary action before the
 acknowledgement button, instead of the step naming where to go:
@@ -93,10 +98,10 @@ when a dialog closes itself because what it would choose from went away while it
 `docs/product/sessions.md` and "Handing off from the window" in `docs/product/handing-off-sessions.md`).
 
 **An unexpected failure** explains that it may be a bug the user cannot resolve in the current interface. The alert
-keeps the error explanation and offers expandable diagnostic details when the original message or stack trace adds
-information to its summary. This includes diagnostic strings and errors from another rendering context, even when
-they have no stack trace. It asks the user to take a screenshot and file an Issue describing the steps that led to
-the failure.
+keeps the error explanation and offers expandable diagnostic details, **Error details**, when the original message or
+stack trace adds information to its summary. This includes diagnostic strings and errors from another rendering
+context, even when they have no stack trace. It asks the user to take a screenshot and file an Issue describing the
+steps that led to the failure.
 
 **Report issue** is a secondary action in the footer, before the acknowledgement button, with a trailing
 external-link icon. The guidance names it with a non-interactive inline chip; only the footer action is a link. It
@@ -108,9 +113,20 @@ address displayed as a selectable chip and instructions to open it manually. Ack
 the original pending error. Where the desktop platform cannot open external links, the guidance includes the
 address as a selectable chip for manual use.
 
-**A batch of failures**, such as account switches or a configuration import, uses one acknowledgement dialog with
-recovery guidance beside each failed item. Each actionable item keeps its own remedy. If any item is unexpected,
-the dialog adds one shared screenshot and Issue-reporting instruction and the same Issue entry or manual address
-described above; it does not replace the other items' remedies with a common instruction. The footer carries a
-remedy's button (see above) only when every failure in the batch has that same remedy. The result or retry controls
-remain available after acknowledgement under the operation's own rules.
+**A batch of failures** uses one acknowledgement dialog listing each failed item. Where the remedies stand depends on
+the operation:
+
+- **A configuration import** puts recovery guidance beside each failed item; each actionable item keeps its own remedy
+  (see `docs/product/configuration-export-and-import.md`).
+- **A set of account switches** gives each failed session only its short reason, and says each remedy once after the
+  list: a code's own remedy once for that code, and one sentence per kind of remedy for the rest (see "The alert for
+  failed switches" in `docs/product/switching-session-accounts.md`).
+
+If any item is unexpected, the dialog adds one shared screenshot and Issue-reporting instruction and the same Issue
+entry or manual address described above; it does not replace the other items' remedies with a common instruction.
+The footer carries a remedy's button (see above) only when every failure in the batch has that same remedy. A batch
+whose items have raw text of their own, such as a set of account switches, sets **Error details** apart by item, a
+heading naming the item over its own block, in place of the details worked out from the errors: it shows the
+disclosure whether or not a failure is unexpected, and leaves out an item whose raw text adds nothing to its reason.
+When no item of such a batch has raw text, the alert has no **Error details** at all, even when a failure is
+unexpected. The result or retry controls remain available after acknowledgement under the operation's own rules.

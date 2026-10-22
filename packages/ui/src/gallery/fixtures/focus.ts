@@ -2,7 +2,7 @@ import { AGENT_LABEL } from "../../agents";
 import type { Session, SessionContext } from "../../protocol";
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
-import { ALL_AGENTS, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState } from "./builders";
+import { ALL_AGENTS, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState, switchingAccount } from "./builders";
 
 const GROUP = "Focus mode";
 
@@ -379,6 +379,15 @@ export const focusScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Plan the database migration", name: "Write the migration" }))),
     ],
+  },
+  {
+    id: "focus-project-switching-account",
+    group: GROUP,
+    category: "normal",
+    title: "Project focus, sessions switching their account",
+    state: switchingAccount(state, ["s-3", "s-3b"]),
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
+    description: "The first card, which was running a watcher in the background, and Profile the slow query, which was interrupted, read \"Switching account…\" with the muted turning arc in place of their own status, and keep their position; the nested Check the index sizes beside them still reads Interrupted.",
   },
   {
     id: "focus-project-menu",

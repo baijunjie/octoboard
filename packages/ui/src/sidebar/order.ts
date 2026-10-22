@@ -157,6 +157,23 @@ export function boundSessions(sessions: Session[], ownerId: string): Session[] {
   return sessions.filter((s) => s.bound_to === ownerId).sort(compareSessions);
 }
 
+/** `root` and every session under it, however deep: the sessions bound to it, those bound to them, and so
+ * on, whatever their status. A binding that leads back on itself ends the walk. */
+export function sessionWithDescendants(sessions: Iterable<Session>, root: Session): Session[] {
+  const all = Array.from(sessions);
+  const found = [root];
+  const seen = new Set([root.id]);
+  for (let next = 0; next < found.length; next += 1) {
+    for (const session of all) {
+      if (session.bound_to === found[next].id && !seen.has(session.id)) {
+        seen.add(session.id);
+        found.push(session);
+      }
+    }
+  }
+  return found;
+}
+
 /** Whether any session is bound to the session `ownerId`, in any status. */
 export function hasBoundSessions(sessions: Iterable<Session>, ownerId: string): boolean {
   for (const s of sessions) if (s.bound_to === ownerId) return true;

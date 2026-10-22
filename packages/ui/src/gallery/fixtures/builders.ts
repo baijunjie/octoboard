@@ -161,6 +161,8 @@ export function snapshotState(parts: {
     consoles: new Map((parts.consoles ?? []).map((c) => [c.id, c])),
     projects: new Map((parts.projects ?? []).map((p) => [p.id, p])),
     sessions: new Map((parts.sessions ?? []).map((s) => [s.id, s])),
+    // The sessions the daemon's snapshot says are switching their account, kept apart from what the window adds for its own batch.
+    daemonSwitching: new Set((parts.sessions ?? []).filter((s) => s.switching_account).map((s) => s.id)),
     pages: new Map(Object.entries(parts.pages ?? {})),
     shellTerminals: new Map((parts.shellTerminals ?? []).map((terminal) => [terminal.id, terminal])),
     snapshotEpoch: 1,
@@ -173,6 +175,18 @@ export function snapshotState(parts: {
     accountSharing: accountSharingOf(parts.accountSharing ?? []),
     homeDir: "/Users/dev",
   };
+}
+
+/** `state` as the daemon reports it when the account switches of the sessions `ids` are under way
+ * (`Session.switching_account`), whatever those sessions were doing. */
+export function switchingAccount(state: Partial<State>, ids: string[]): Partial<State> {
+  const sessions = new Map(state.sessions);
+  for (const id of ids) {
+    const session = sessions.get(id);
+    if (!session) throw new Error(`switchingAccount: no session ${id} in the state`);
+    sessions.set(id, { ...session, switching_account: true });
+  }
+  return { ...state, sessions, daemonSwitching: new Set([...(state.daemonSwitching ?? []), ...ids]) };
 }
 
 /** A small, ordinary console to build a scenario on: one console, two projects, a console session

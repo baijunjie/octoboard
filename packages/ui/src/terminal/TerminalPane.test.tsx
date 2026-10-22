@@ -337,6 +337,33 @@ it("offers to add an agent instead of the installation step when installed agent
   expect(onAddAgent).toHaveBeenCalledOnce();
 });
 
+it("covers the terminal with the switching state, inert and ahead of a failing connection, while an account switch holds the session", () => {
+  const { container, root } = mount();
+  FakeController.last.settle("open");
+  const terminal = () => container.querySelector("[data-region=terminal] > .isolate")!;
+  expect(terminal().hasAttribute("inert")).toBe(false);
+  render(root, { ...session, switching_account: true });
+  expect(status(container)).toBe("Switching account…");
+  expect(terminal().hasAttribute("inert")).toBe(true);
+  expect(container.querySelector("[data-slot=spinner]")).not.toBeNull();
+  FakeController.last.settle("closed");
+  expect(status(container)).toBe("Switching account…");
+  render(root, session);
+  expect(status(container)).not.toBe("Switching account…");
+  expect(terminal().hasAttribute("inert")).toBe(false);
+});
+
+it("offers no Resume over the cover while an account switch holds an interrupted session", () => {
+  const interrupted = sessionOf("s-1", "c-1", undefined, "Work", "interrupted");
+  const { container, root } = mount();
+  render(root, interrupted);
+  expect(container.textContent).toContain("Not running");
+  render(root, { ...interrupted, switching_account: true });
+  expect(status(container)).toBe("Switching account…");
+  expect(container.textContent).not.toContain("Not running");
+  expect([...container.querySelectorAll("button")].map((button) => button.textContent)).not.toContain("Resume");
+});
+
 it("covers a starting session with its own message and attaches only once it is up", () => {
   const starting = sessionOf("s-1", "c-1", undefined, "Work", "starting");
   const container = document.body.appendChild(document.createElement("div"));

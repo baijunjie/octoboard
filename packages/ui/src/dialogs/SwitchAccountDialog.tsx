@@ -1,43 +1,40 @@
-import { Checkbox, Description, Label, ProgressBar } from "@heroui/react";
-import React, { useRef, useState } from "react";
+import { Description, Label, Radio, RadioGroup } from "@heroui/react";
+import React, { useState } from "react";
 
+import { canSwitchTo } from "../accountSwitchBatch";
 import { AGENT_LABEL } from "../agents";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { InlineChip } from "../components/InlineChip";
-import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
-import { StatusAnnouncer } from "../components/StatusAnnouncer";
-import { ErrorGuidance } from "../components/ErrorGuidance";
-import { errorAlerts } from "../errorAlerts";
-import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
-import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { Session } from "../protocol";
 import { accountQuotaOf } from "../quota/accountQuotaOf";
 import { quotaUsedUpCopy } from "../quota/quotaCopy";
 import { exhaustedQuotaWindow } from "../quota/quotaFormat";
 import { sessionDisplayTitle } from "../sessionLabel";
+import { sessionWithDescendants } from "../sidebar/order";
 import { useDaemon, useDaemonStore } from "../store";
 import { useNow } from "../useNow";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useConfirmIncompleteLaunch } from "./useConfirmIncompleteLaunch";
 
-interface SwitchFailure {
-  session: Session;
-  error: ErrorPresentation;
-}
+/** Which sessions Confirm switches: the session with everything bound under it, or every session
+ * of its agent in its console. */
+type Scope = "session" | "console";
 
 export function SwitchAccountDialog({
   session,
   account,
   accountName,
   onClose,
-  onSwitchAccount,
+  onSwitchAccounts,
 }: {
   session: Session;
   account: string | null;
   accountName: string;
   onClose: () => void;
-  onSwitchAccount: (sessionId: string, account: string | null) => Promise<void>;
+  /** Starts switching `sessionIds` to `account`, called `accountName`, in the background and returns
+   * at once; the dialog closes meanwhile, and the outcome is reported where the sessions are shown. */
+  onSwitchAccounts: (sessionIds: string[], account: string | null, accountName: string) => void;
 }): React.ReactElement {
   const t = useT();
   const { store } = useDaemon();
@@ -46,98 +43,59 @@ export function SwitchAccountDialog({
   const now = useNow();
   // The account being switched to may have no quota left: the daemon refuses the switch, so Confirm is held.
   const exhaustedBy = exhaustedQuotaWindow(accountQuotaOf(quotas, session.agent, account), now);
-  const [all, setAll] = useState(false);
-  const [snapshot, setSnapshot] = useState<Session[]>();
-  const [progress, setProgress] = useState<{ completed: number; total: number; current?: Session }>();
-  const [failures, setFailures] = useState<SwitchFailure[]>([]);
-  const completed = useRef(new Set<string>());
-  const pending = useRef<Promise<void> | undefined>(undefined);
+  const [scope, setScope] = useState<Scope>("session");
+  // A session an account switch already holds is left out: it is on its way, and cannot be claimed twice.
   const eligible = (candidate: Session) => candidate.console_id === session.console_id
-    && candidate.agent === session.agent && candidate.status !== "archived"
-    && (candidate.account_id ?? null) !== account;
-  const candidates = Array.from(sessions.values()).filter(eligible);
-  const progressText = progress && t("dialog.switchAccount.progress", { count: progress.total, completed: progress.completed });
-  const currentText = progress?.current && <Message id="dialog.switchAccount.current" params={{ title: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, progress.current)}</InlineChip> }} />;
-  const announcement = progress?.current
-    ? t("dialog.switchAccount.progressCurrent", { count: progress.total, completed: progress.completed, title: isolate(sessionDisplayTitle(t, progress.current)) })
-    : progressText;
-
-  const switchSessions = async () => {
-    // Freeze the consented scope: sessions opened during the batch never join it, and retries
-    // never relaunch a success even before its daemon event has arrived.
-    const targets = snapshot ?? (all ? candidates : [sessions.get(session.id) ?? session].filter(eligible));
-    setSnapshot(targets);
-    setFailures([]);
-    const failed: SwitchFailure[] = [];
-    let processed = completed.current.size;
-    setProgress({ completed: processed, total: targets.length });
-    for (const target of targets) {
-      if (completed.current.has(target.id)) continue;
-      const latest = store.getState().sessions.get(target.id);
-      if (latest && eligible(latest)) {
-        setProgress({ completed: processed, total: targets.length, current: latest });
-        try {
-          await onSwitchAccount(target.id, account);
-          completed.current.add(target.id);
-        } catch (error) {
-          failed.push({ session: latest, error: errorPresentation(error as Error) });
-        }
-      } else {
-        completed.current.add(target.id);
-      }
-      processed += 1;
-      setProgress({ completed: processed, total: targets.length });
-    }
-    setFailures(failed);
-    if (failed.length) errorAlerts.report({
-      message: failed.map((failure) => `${failure.session.id}: ${typeof failure.error === "string" ? failure.error : failure.error.message}`).join("\n"),
-      title: <Message id="dialog.switchAccount.failed" params={{ count: failed.length, retry: <InlineChip dir="auto" wrap size="inherit">{t("connection.retry")}</InlineChip> }} />,
-      failures: failed.map((failure) => ({ error: failure.error })),
-      content: <ul className="flex flex-col gap-2">{failed.map((failure) => <li key={failure.session.id}><p dir="auto" className="font-semibold">{sessionDisplayTitle(t, failure.session)}</p><DaemonErrorMessage error={failure.error} /><ErrorGuidance error={failure.error} /></li>)}</ul>,
-    });
-    if (failed.length === 0) onClose();
-  };
-
+    && candidate.agent === session.agent && canSwitchTo(candidate, account) && candidate.switching_account !== true;
+  const targetsIn = (all: Map<string, Session>, chosen: Scope): Session[] => (
+    chosen === "console"
+      ? Array.from(all.values()).filter(eligible)
+      : sessionWithDescendants(all.values(), all.get(session.id) ?? session).filter(eligible)
+  );
+  const counts = { session: targetsIn(sessions, "session").length, console: targetsIn(sessions, "console").length };
   const { confirmLaunch, confirmation } = useConfirmIncompleteLaunch(onClose);
   const usedUp = exhaustedBy && quotaUsedUpCopy(t, accountName, exhaustedBy, now);
+  const agent = <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[session.agent]}</InlineChip>;
+  const several = scope === "console" || counts.session > 1;
   return (
     <ConfirmDialog
       title={<Message id="dialog.switchAccount.title" params={{ title: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, session)}</InlineChip>, account: <InlineChip dir="auto" wrap size="inherit">{accountName}</InlineChip> }} />}
       message={<>
         {usedUp && <ErrorAlert title={usedUp.title} announce>{usedUp.description}</ErrorAlert>}
-        <p>{t(all ? "dialog.switchAccount.messageAll" : session.has_conversation ? "dialog.switchAccount.message" : "dialog.switchAccount.messageFresh")}</p>
+        <p>{t(several ? "dialog.switchAccount.messageAll" : session.has_conversation ? "dialog.switchAccount.message" : "dialog.switchAccount.messageFresh")}</p>
       </>}
-      confirmLabel={t(failures.length ? "connection.retry" : "dialog.switchAccount.confirm")}
-      pendingLabel={t("dialog.switchAccount.pending")}
-      confirmDisabled={exhaustedBy !== undefined}
+      confirmLabel={t("dialog.switchAccount.confirm")}
+      // Nothing left to switch in the chosen scope (its sessions began switching after the dialog opened).
+      confirmDisabled={exhaustedBy !== undefined || counts[scope] === 0}
       onCancel={onClose}
+      // The set is read once Confirm is pressed, and fixed from then on: sessions opened later never join it.
       onConfirm={() => confirmLaunch(account, () => {
-        pending.current ??= switchSessions().finally(() => { pending.current = undefined; });
-        return pending.current;
+        onSwitchAccounts(targetsIn(store.getState().sessions, scope).map((target) => target.id), account, accountName);
+        onClose();
       })}
       extraControl={
         <>
-          <Checkbox variant="secondary" isSelected={all} onChange={setAll} isReadOnly={snapshot !== undefined}>
-            <Checkbox.Content className="min-h-6">
-              <Checkbox.Control><Checkbox.Indicator /></Checkbox.Control>
-              <Label><Message id="dialog.switchAccount.all" params={{ agent: <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[session.agent]}</InlineChip> }} /></Label>
-            </Checkbox.Content>
-            <Description>{t("dialog.switchAccount.scope", { count: snapshot?.length ?? candidates.length })}</Description>
-          </Checkbox>
-          <StatusAnnouncer text={announcement} />
+          <RadioGroup variant="secondary" value={scope} onChange={(value) => setScope(value as Scope)}>
+            <Label className="sr-only">{t("dialog.switchAccount.scopeLabel")}</Label>
+            <Radio value="session">
+              <Radio.Content>
+                <Radio.Control><Radio.Indicator /></Radio.Control>
+                <Label>{t("dialog.switchAccount.scopeSession")}</Label>
+              </Radio.Content>
+              <Description>{t("dialog.switchAccount.countSession", { count: counts.session })}</Description>
+            </Radio>
+            <Radio value="console">
+              <Radio.Content>
+                <Radio.Control><Radio.Indicator /></Radio.Control>
+                <Label><Message id="dialog.switchAccount.scopeConsole" params={{ agent }} /></Label>
+              </Radio.Content>
+              <Description>{t("dialog.switchAccount.countConsole", { count: counts.console })}</Description>
+            </Radio>
+          </RadioGroup>
+          <p className="text-sm text-muted"><Message id="dialog.switchAccount.eligibility" params={{ agent }} /></p>
           {/* Inside this dialog's tree, though it shows in its own layer: a focus scope that is not
               nested in the one beneath it is bounced back to it. */}
           {confirmation}
-          {progress && progress.total > 0 && (
-            <div className="flex min-w-0 flex-col gap-2 text-sm">
-              <ProgressBar value={progress.completed} maxValue={progress.total} aria-label={t("dialog.switchAccount.progressLabel")} aria-valuetext={progressText}>
-                <Label>{progressText}</Label>
-                <ProgressBar.Track><ProgressBar.Fill /></ProgressBar.Track>
-              </ProgressBar>
-              {currentText && <p className="[overflow-wrap:anywhere]">{currentText}</p>}
-            </div>
-          )}
-
         </>
       }
     />

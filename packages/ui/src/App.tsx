@@ -1,3 +1,6 @@
+import { runAccountSwitchBatch } from "./accountSwitchBatch";
+import { StatusAnnouncer } from "./components/StatusAnnouncer";
+import { isolate } from "./i18n/isolate";
 import { errorAlerts } from "./errorAlerts";
 import { noAgentState, pickableAgents } from "./agents";
 import { reportExternalLinkFailure } from "./components/ExternalLink";
@@ -87,6 +90,9 @@ import { WelcomeScreen, type WelcomeScreenHandle } from "./WelcomeScreen";
 /** Shared and never changed, so that no sessions is the same value every time. */
 const NO_SESSIONS: Session[] = [];
 
+/** How long the result of a batch of account switches stays in the status region. */
+const SWITCH_ANNOUNCEMENT_MS = 10_000;
+
 export function App(): React.ReactElement {
   const t = useT();
   const { resolved: appearance } = useOctoboardTheme();
@@ -122,7 +128,6 @@ export function App(): React.ReactElement {
     linkedReturnFocus.current = returnFocus;
     setLinkedFile(file);
   };
-  const latestDialogRequest = useLatest(dialogRequest);
   const [archiveScope, setArchiveScope] = useState<ArchiveScope>();
   // How far each scope's archive list was loaded and scrolled, by `archiveKey`, for Back and
   // Forward to put it back. A visit opened fresh (`openArchive`) forgets it and starts at the top.
@@ -130,6 +135,9 @@ export function App(): React.ReactElement {
   const [archiveRestore, setArchiveRestore] = useState<ArchiveViewState>();
   // Sessions whose `resume_session` is in flight, for the terminal's loading state.
   const [resumingIds, setResumingIds] = useState<ReadonlySet<string>>(new Set());
+  // What the window says once a batch of account switches is done, for assistive technology.
+  const [switchAnnouncement, setSwitchAnnouncement] = useState<string>();
+  const switchAnnouncementTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const terminalRef = useRef<TerminalPaneHandle>(null);
   const welcomeRef = useRef<WelcomeScreenHandle>(null);
@@ -462,20 +470,27 @@ export function App(): React.ReactElement {
   const resumeFromDialog = (sessionId: string): Promise<void> =>
     runOnceRejecting(inFlightRef.current, `resume:${sessionId}`, () => startResume(sessionId));
 
-  /** Switches a session's account. The session counts as resuming while it runs, so its terminal
-   * says so instead of offering a Resume that would race the switch. Rejects with the daemon's
-   * reason, which the confirmation shows. */
-  const switchAccount = (sessionId: string, account: string | null): Promise<void> =>
-    whileResuming(
-      setResumingIds,
-      sessionId,
-      () => request({ type: "switch_session_account", session: sessionId, account, terminal_appearance: appearance }),
-      (err) => {
-        // The confirmation shows a failure in place and cannot be dismissed while the switch runs;
-        // were it gone anyway, the reason must not be lost with it.
-        if (latestDialogRequest.current?.kind !== "switch-account") toastError(errorPresentation(err as Error));
+  /** Switches sessions to an account in the background, the dialog that asked being gone by then.
+   * Each session shows as switching its account until its turn is over (see
+   * `runAccountSwitchBatch`), so its terminal says so instead of offering a Resume that would race
+   * the switch; the failures come as one error alert. */
+  const switchAccounts = (sessionIds: string[], account: string | null, accountName: string): void => {
+    void runAccountSwitchBatch(store, sessionIds, account, {
+      accountName,
+      switchOne: (sessionId, target) =>
+        request({ type: "switch_session_account", session: sessionId, account: target, terminal_appearance: appearance }).then(() => undefined),
+      onFinished: ({ switched, failed }) => {
+        // The dialog that asked is gone, and with it anything that would say the outcome. A batch with
+        // failures is told by its error alert alone. The text is cleared again so that an identical
+        // result of a later batch is written afresh. A switch takes seconds, so this is never within the
+        // focus move of the dialog closing.
+        if (failed > 0 || switched === 0) return;
+        clearTimeout(switchAnnouncementTimer.current);
+        setSwitchAnnouncement(t("dialog.switchAccount.done", { count: switched, account: isolate(accountName) }));
+        switchAnnouncementTimer.current = setTimeout(() => setSwitchAnnouncement(undefined), SWITCH_ANNOUNCEMENT_MS);
       },
-    );
+    });
+  };
 
   const openConsoleSession = (console_: Console) => openDialog({ kind: "new-console-session", console: console_ });
 
@@ -558,7 +573,9 @@ export function App(): React.ReactElement {
     }
     // An interrupted session is resumed by selecting it, unless `resume` is off; an archived one only
     // shows its history, and is reopened by the Reopen button or an explicit Reopen (`reopenSession`).
-    if (resume && session.status === "interrupted") void resumeSession(session.id);
+    // One an account switch holds reads interrupted while its process is down, and the switch relaunches it.
+    const switching = (store.getState().sessions.get(session.id) ?? session).switching_account === true;
+    if (resume && session.status === "interrupted" && !switching) void resumeSession(session.id);
   };
 
   const reopenSession = (session: Session) => {
@@ -804,17 +821,17 @@ export function App(): React.ReactElement {
     ringForAutomaticFocus();
     focusTerminal();
   }, [archivingStatus]);
-  // A session being resumed still asks: archiving it would cut the resume short. So does one with
-  // a bound branch or worktree git refuses to remove, or a locked worktree, which only the
-  // confirmation can take along; the daemon removes the rest once the process has ended. Finding
-  // that out takes a round trip, during which the session can change, a repeated press is ignored,
-  // and a dialog opened meanwhile is left alone.
+  // A session being resumed, or switched to another account, still asks: archiving it would cut that
+  // short. So does one with a bound branch or worktree git refuses to remove, or a locked worktree,
+  // which only the confirmation can take along; the daemon removes the rest once the process has
+  // ended. Finding that out takes a round trip, during which the session can change, a repeated
+  // press is ignored, and a dialog opened meanwhile is left alone.
   const resuming = useLatest(resumingIds);
   const openedDialog = useLatest(dialogRequest);
   const launchQuestionOpen = useLatest(launchConfirmation !== undefined);
   const inspectingArchive = useRef(new Set<string>());
   const asksBeforeArchiving = (session: Session) =>
-    resuming.current.has(session.id) || archiveNeedsConfirmation(allSessions(), session);
+    resuming.current.has(session.id) || session.switching_account === true || archiveNeedsConfirmation(allSessions(), session);
   const archiveSession = (session: Session) => {
     const live = store.getState().sessions.get(session.id) ?? session;
     if (asksBeforeArchiving(live)) {
@@ -1141,13 +1158,14 @@ export function App(): React.ReactElement {
       {/* A login started in Settings opens its authorization page for as long as the window lives, Settings open or not. */}
       <LoginPageOpener />
       <ConnectionBanner state={connectionState} onRetry={reconnect} focusTerminal={focusTerminal} />
+      <StatusAnnouncer text={switchAnnouncement} />
       {settingsOpen && <SettingsDialog navigation={settingsNavigation} onClose={closeSettings} />}
       {dialogRequest && (
         <RequestedDialog
           dialog={dialogRequest}
           onClose={closeDialog}
           onSessionOpened={showOpenedSession}
-          onSwitchAccount={switchAccount}
+          onSwitchAccounts={switchAccounts}
           onResumeSession={resumeFromDialog}
         />
       )}

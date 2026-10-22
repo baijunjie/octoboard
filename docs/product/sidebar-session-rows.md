@@ -4,20 +4,22 @@ A session row lists a console session in the sidebar's console sessions section 
 section and the project list" in `docs/product/sidebar.md`), or a project's session under its project row (see
 `docs/product/sidebar-project-rows.md`).
 
-A session row shows the session's status glyph (see "Session statuses" in `docs/product/sessions.md`), its agent's icon,
-its displayed title (see "Displayed names" in `docs/product/session-titles.md`), and its pin button when it is pinned
-(see "Pinning" in `docs/product/order-of-projects-and-sessions.md`). Outside focus mode, every console and project
-session row, nested sessions included, shows its context-size chip immediately after its title when the context size is
-known and above zero (see "The context-size chip" in `docs/product/session-context.md`). The title clips and fades when
-space is short, keeping the context-size chip visible. The row's accessible description carries the context size. A
-project session bound to a console session also carries that console session's **binding badge**: a small dot in the
-console session's colour, whose tooltip names it (see "The binding badge" below); one bound to a project session carries
-none, since its row is listed under that session instead (see "Project rows" in `docs/product/sidebar-project-rows.md`),
-with the owner named in the row's own accessible name. A console session's own row carries no *binding* badge — what it
-shows there instead is its own colour (see "The binding badge" below).
-Selecting a row resumes it when it is interrupted; no menu item does that. The row shows its agent as an icon alone;
-wherever the agent is named in visible session metadata, its name appears without an account suffix. The agent's
-icon's tooltip has the agent's name on a line of its own, then a labelled list in plain text: **Account**, the account
+A session row shows the session's status glyph (see "Session statuses" in `docs/product/sessions.md`; the *switching
+account* status takes its place while the session is shown as switching its account, see "While a session is
+switching" in `docs/product/switching-session-accounts.md`), its agent's icon, its displayed title (see "Displayed
+names" in `docs/product/session-titles.md`), and its pin button when it is pinned (see "Pinning" in
+`docs/product/order-of-projects-and-sessions.md`). Outside focus mode, every console and project session row, nested
+sessions included, shows its context-size chip immediately after its title when the context size is known and above
+zero (see "The context-size chip" in `docs/product/session-context.md`). The title clips and fades when space is short,
+keeping the context-size chip visible. The row's accessible description carries the context size. A project session
+bound to a console session also carries that console session's **binding badge**: a small dot in the console session's
+colour, whose tooltip names it (see "The binding badge" below); one bound to a project session carries none, since its
+row is listed under that session instead (see "Project rows" in `docs/product/sidebar-project-rows.md`), with the owner
+named in the row's own accessible name. A console session's own row carries no *binding* badge — what it shows there
+instead is its own colour (see "The binding badge" below).
+Selecting a row resumes it when it is interrupted, unless it is shown as switching its account; no menu item does that.
+The row shows its agent as an icon alone; wherever the agent is named in visible session metadata, its name appears
+without an account suffix. The agent's icon's tooltip has the agent's name on a line of its own, then a labelled list in plain text: **Account**, the account
 the session runs under; **Model** and **Effort**, the model and reasoning effort it runs with, as "The model and effort
 a session is shown running with" in `docs/product/model-and-reasoning-effort.md` decides them, each reading
 **Default** when unknown. The account is the account's name, the default account's name for the agent's default
@@ -67,22 +69,26 @@ A session row's action menu offers:
   is being changed, as judged when the menu opens, is disabled the same way, whatever its quota, with a short reason
   saying so; while the session's own account is having its sharing changed, every other account is disabled with a
   reason saying that the session's account is changing, as the session cannot be switched away from it either (see
-  "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`). A removed account named by
+  "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`). While the session is shown as
+  switching its account, every other account is disabled with a reason saying that the session is switching its
+  account. A removed account named by
   its directory shows a key icon in the bar's place, lined up with the bars, and is never marked used up.
 - **Hand off** — opens the handoff dialog, which moves the session's place to a new session of another agent (see
   "Handing off from the window" in `docs/product/handing-off-sessions.md`). Present for a project session's and a
   console session's row; an archived session has no such entry. Disabled while the session is *working* or
-  *starting*, while it is locked, while no agent other than its own can be picked, and while the session's own
-  account is having its sharing changed, with that reason.
+  *starting*, while it is locked, while no agent other than its own can be picked, while the session's own account is
+  having its sharing changed, with that reason, and while the session is shown as switching its account, with that
+  reason.
 - **Unbind** — releases the session from its owner at once, without confirmation, leaving it the user's own, unbound
   session (see "Releasing a session from its owner" in `docs/product/changing-session-owners.md`); its row then shows
   it as unbound (see "Project rows" in `docs/product/sidebar-project-rows.md` and "The binding badge" below). Present
   only for a bound session's row — a project session bound to a console session or to a project session; an archived
-  session has no such entry. Disabled while the session is *starting*. A refusal is shown as an error alert.
+  session has no such entry. Disabled while the session is *starting* and while it is shown as switching its account.
+  A refusal is shown as an error alert.
 - **Archive** — archives the session (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`). A
   session at its prompt or interrupted, with no unarchived session under it, is archived at once, unless a branch or
   worktree bound to it needs the user's word (see "The confirmation" in `docs/product/branch-and-worktree-cleanup.md`);
-  any other asks for confirmation first, and so does one still being resumed. When the archived row takes keyboard focus with it, focus
+  any other asks for confirmation first, and so does one still being resumed or shown as switching its account. When the archived row takes keyboard focus with it, focus
   goes to the terminal. For a console session this is the user's only way to archive it — the console session can
   also archive itself once nothing under it is unarchived (see "A session archiving itself" in
   `docs/product/hub-orchestration.md`); its confirmation lists the
@@ -105,7 +111,7 @@ automatic cleanup of its agent records; deletion is refused if the session is no
 A row whose menu offers **Archive** instead carries an Archive button while archiving would go through without a
 confirmation: the session is at its prompt or interrupted, no unarchived session is bound to it or to a session
 bound to it, and it has been used. Pressing Archive does what the menu's **Archive** does — a session still being
-resumed asks for confirmation first there too, and so does one with a bound branch or worktree that needs the user's
+resumed or shown as switching its account asks for confirmation first there too, and so does one with a bound branch or worktree that needs the user's
 word — and when the row leaves with keyboard focus, focus goes to the terminal.
 When the Archive conditions stop holding — the session starts working or raises a hand, or a session becomes bound
 to it — the button goes away.

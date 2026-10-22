@@ -324,7 +324,7 @@ The account asked about is the one the session would run on. The question comes:
 - resuming an interrupted session or reopening an archived one — by selecting it, with Resume or Reopen wherever they
   are offered, or from the session dialog's **Resume conversation** tab — on the session's own account; going to a
   session already running asks nothing;
-- switching sessions onto the account, after the switch confirmation's Confirm, and again on each Retry; switching a
+- switching sessions onto the account, after the switch confirmation's Confirm, once for the whole set; switching a
   session away from the account asks nothing;
 - handing a session off onto the account, after **Hand off**.
 

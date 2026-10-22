@@ -10,28 +10,86 @@ A session cannot be switched onto a used-up account (see "A used-up account" in 
 
 ## Confirming a switch
 
-The confirmation has an **unchecked by default** checkbox to switch every session of the same agent in that console
-to the selected account. It includes console sessions, project sessions and bound sessions, across all projects in
-the console; archived sessions and sessions already on the target account are excluded. The confirmation shows how
-many sessions are eligible. Leaving the checkbox unchecked switches only the selected session. Neither choice
-changes the console's or projects' account defaults for future sessions.
+The confirmation asks which sessions to switch, as two options of a radio group; the first is selected by default:
+
+- **This session and its sub-sessions** — the session and every session under it: those bound to it, those bound to
+  them, and so on to any depth, reached through archived sessions as well.
+- **Every <agent> session in this console** — every session of the same agent in that console: console sessions,
+  project sessions and bound sessions, across all projects in the console.
+
+In both, only sessions of the session's own agent are switched, and archived sessions, sessions already on the target
+account and sessions already being switched (see "While a session is switching" below) are left out. Each option shows
+how many sessions it would switch, kept up to date while the confirmation is open, and Confirm is disabled while the
+chosen option has none. Neither choice changes the console's or projects' account defaults for future sessions.
 
 When the target account is used up (see "A used-up account" in `docs/product/account-quotas.md`), a danger callout at
 the top of the confirmation names the account, the quota it has used up and when it resets, and Confirm is disabled
 until the account is no longer used up. The submenu already disables such an account (see "Session rows" in
 `docs/product/sidebar-session-rows.md`).
 
-When the target account's last change of sharing is incomplete, Confirm, and each Retry, first asks the user whether
-to start on it, and nothing is switched when that is cancelled (see "Starting a session on an account whose last
-change is incomplete" in `docs/product/sharing-the-default-configuration.md`).
+When the target account's last change of sharing is incomplete, Confirm first asks the user whether to start on it,
+and nothing is switched when that is cancelled (see "Starting a session on an account whose last change is incomplete"
+in `docs/product/sharing-the-default-configuration.md`).
 
-Confirming fixes the set of sessions to process and locks the checkbox. Sessions opened afterwards do not join that
-set, including on a retry. Sessions are switched one at a time; one that has been removed, archived or moved to the
-target account before its turn is skipped. A progress bar shows the number processed out of the fixed total, counting
-failed and skipped sessions as processed, and the title of the session currently being switched is shown and
-announced to assistive technology. A failure does not stop the remaining sessions: an error alert lists each failed
-session and its reason when the pass finishes. After acknowledgement, the confirmation offers Retry for those failures alone. Successful switches are kept and never repeated
-by Retry. The confirmation closes when the pass finishes without failures.
+Confirming closes the confirmation at once, and the switches go on in the background of the window; there is no progress
+display. The set of sessions is fixed at that moment: sessions opened afterwards do not join it, and a session that a
+switch started earlier in the same window has not finished with is not added to it. Up to four sessions are switched at
+the same time and the rest wait for a turn; one that has been removed, archived or moved to the target account before
+its turn is skipped. Every session of the set shows as switching its account (see "While a session is switching" below)
+from confirming until its own turn is over, the waiting ones included. A failure does not stop the remaining sessions:
+when the whole set is done, one error alert reports every failure of the set (see "The alert for failed switches"
+below). When the whole set is done without a failure and at least one session was switched, the window announces to
+assistive technology how many sessions were switched and to which account; a set with failures is told by its error
+alert alone.
+
+## The alert for failed switches
+
+The failures of one confirmed set are reported together, in one error alert (see "Recovery and unexpected errors" in
+`docs/product/error-alerts.md`):
+
+- **The title** says how many sessions could not move, and to which account, the account's name as a name chip. One
+  sentence after it says, once for all of them, that they stay on their current account.
+- **One row per failed session**: its displayed name and only the short reason, a path in it as a reference chip. A
+  conversation that could not be moved is worded for where it failed: the copy did not complete; the copy was made but
+  the target's record of the Codex thread could not be updated; or the copy did not complete and an older item could
+  not be put back, naming the folder it is kept in until the daemon next starts or the session is next switched into
+  that account (see "Carrying the conversation" below). An unexpected failure with no sentence of its own reads only
+  that it failed unexpectedly.
+- **Remedies after the list, each said once**: a failure whose code has a remedy sentence of its own gets it once for
+  that code, a login shell environment that could not be read in time included; the other failures with a known
+  remedy share one sentence per kind of remedy. A conversation that could not be moved has the remedy of its cause,
+  or two of them (see "When a switch fails" below), and counts as unexpected when its cause is none the window knows.
+- **When any failure is unexpected**, the alert's own paragraph asking for a screenshot and an issue report follows,
+  with **Report issue** in the footer (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`).
+- **Error details** holds, under a heading naming each session, what says more than its row: the system's own text
+  of a conversation that could not be moved; for a login shell environment that could not be read in time, the
+  command that was run and how long it was given; or, for an unexpected failure with no sentence of its own, its
+  message, followed by its stack when it is an error of the window's own. A session whose row says it all has no entry
+  there, and when no session has one the alert has no **Error details**, even when a failure is unexpected.
+- **The footer** is the alert's usual one, with no retry: the acknowledgement button, **Report issue** when a failure
+  is unexpected, and a remedy's button when every failure shares that remedy. The user switches a failed session again
+  from its menu; a session that did switch is on the target account already.
+
+## While a session is switching
+
+From the moment a switch takes hold of a session until it lets go, the session is shown as *switching account* in
+every window, whether the user's confirmation or an owner's `switch_session_account` started it (the session's
+`switching_account` field in the daemon protocol). In the window that confirmed a set, a session still waiting for its
+turn is shown the same way, though no switch holds it yet; other windows show it as it is until its turn comes.
+
+While a session is shown as switching:
+
+- its sidebar row, focus mode card, breadcrumb and its entry in a confirmation's list of sessions show the *switching
+  account* status in place of its own (see "Session statuses" in `docs/product/sessions.md`);
+- its terminal is covered by the loading cover with a spinner, saying that the session is switching its account,
+  whatever state its connection passes through meanwhile, and takes no input: no key reaches the session's process.
+  The terminal offers no Resume. When the session stops being shown as switching, the cover gives way to whatever the
+  terminal would show otherwise, and keyboard focus that was in the terminal when the cover came goes back to it,
+  unless it has been put somewhere else meanwhile;
+- selecting it does not resume it, though it reads *interrupted* while its process is down;
+- archiving it asks for confirmation first;
+- its row's menu disables the other accounts of **Switch account**, **Hand off** and **Unbind** (see "Session rows" in
+  `docs/product/sidebar-session-rows.md`).
 
 ## Switching from an owner's tool
 
@@ -39,7 +97,7 @@ by Retry. The confirmation closes when the pass finishes without failures.
 session and a lead session — and not to a session with the role of a bound one (see "The console session's tools" and
 "The unbound project session's tools" in `docs/product/hub-orchestration.md`). It needs no approval: an owner switches
 a session of its own without the user. It switches the one session it names; it has no counterpart of the
-confirmation's console-wide choice.
+confirmation's choices of several sessions.
 
 | Argument | Required | Contents |
 |---|---|---|
@@ -80,17 +138,16 @@ A switch ends the session's process the way archiving does, copies the session's
 account's config directory, records the new account and directory on the session, and relaunches it as a resume does,
 with everything Octoboard injects reassembled. It archives nothing: while the process is down the session reads as
 *interrupted*, and it comes back in *awaiting instructions* like any resumed session. Ending an owner's process this
-way does not itself switch or archive the sessions bound to it; the console-wide choice switches each eligible bound
-session separately.
+way does not itself switch or archive the sessions bound to it; a confirmation whose set takes them in switches each of
+them separately.
 
 - **The session reads the target account's configuration and keeps its explicit model and reasoning effort choices.**
   An account's directory holds the agent's global configuration as well as its login. Settings kept only in the old
   account's directory do not follow the session; values explicitly supplied by Octoboard still apply according to
   `docs/product/model-and-reasoning-effort.md`. The same conversation can come up with different account defaults.
 - **It can take a few seconds**, the time the agent is given to exit and the time the relaunched process is watched; the
-  confirmation stays open, its button reading "Switching account…" and the session's terminal "Resuming session…",
-  until the result is known, and shows a failure in place. The confirmation cannot be dismissed meanwhile, and the
-  session cannot be resumed or switched again.
+  session shows as switching its account until the result is known (see "While a session is switching" above), and
+  cannot be resumed or switched again meanwhile.
 
 ## Carrying the conversation
 
@@ -138,8 +195,9 @@ came from:
     No other entry of the directory is looked at, so an unrelated link there that cannot be followed does not affect
     the switch.
   - **Rather than risk resuming the older branch unnoticed, the switch fails** (see "When a switch fails" below) when
-    where the database is cannot be determined (a `config.toml` that cannot be read or parsed, a relative
-    `CODEX_SQLITE_HOME`, a directory that cannot be listed), when an entry named `state_<n>.sqlite` cannot be
+    where the database is cannot be determined (a `config.toml` that cannot be read or parsed, a `sqlite_home` that
+    starts with `~` while the user's shell environment has no `HOME`, a relative `CODEX_SQLITE_HOME`, a directory that
+    cannot be listed), when an entry named `state_<n>.sqlite` cannot be
     inspected, or when a database cannot be opened or written to, or stays busy for 5 seconds. The conversation is
     already copied by then and stays in the target, and the failure says so.
 
@@ -187,3 +245,21 @@ shown. Octoboard tells that last case from a success by the process ending withi
 never by reading what the agent printed. An account that is not signed in is therefore not a failed switch: every
 agent, Grok Build included, comes up on its own sign-in rather than exiting, so the switch succeeds and the session's
 terminal shows that agent's sign-in, which may start its sign-in flow.
+
+**A conversation that could not be moved says why**, as one of these causes, each of which the window answers with
+a remedy for it (see "The alert for failed switches" above):
+
+| Cause | When |
+|---|---|
+| Not allowed | A file or directory could not be read or written, or the volume is read-only. |
+| In use | A file is in use, or a Codex thread database stayed busy for the 5 seconds waited. |
+| No space | The volume, or a quota, is full. |
+| Unreadable `config.toml` | The target's `config.toml` cannot be read for another reason than those above, or is not valid TOML. |
+| Database location unknown | Where the target keeps its thread database cannot be told: a relative `CODEX_SQLITE_HOME`, or a `sqlite_home` starting with `~` with no `HOME`. |
+| Symbolic link | An item to copy contains a symbolic link, which is never copied. |
+| Not put back | The copy failed and an older item could not be put back (see "Carrying the conversation" above). |
+
+Any other cause is shown as an unexpected failure. Where the system's own text of the cause names an operating-system
+error the window recognises, that error's remedy is given instead, except when an older item could not be put back:
+the remedy for that item, which is lost once the staging directory is cleared, is kept, and the operating-system
+error's remedy is given as well.

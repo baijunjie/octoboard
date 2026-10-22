@@ -819,12 +819,12 @@ items, and was not itself heard. A candidate still has to pass the checks under 
 | `terminal/ShellTerminalPanel.tsx` | shell starting | none | none | Text can be present at the first render at default delay and clears as a terminal appears and takes focus, a write at a focus move; the starting status was not observed populated. |
 | `viewer/viewerStates.tsx`, `Notice` | the notice's sentence | none | none | The announcing branch is dormant: every call that speaks uses the failed tone, which suppresses its announcer, so no reachable non-failed speaking instance exists. SA-J is the nearest case by delay and exposure if one appears. |
 | `viewer/inlineNotice.tsx`, `InlineNotice` | the notice's sentence | none | none | As `Notice`; the only non-failed speaking branch cannot be reached because the daemon refuses files over its limit first. |
-| `dialogs/SwitchAccountDialog.tsx` | per-session progress | none | none | The credential-free fixture does not produce conversation records to switch, so the repeated per-session text together with the progress bar's own value text was not recorded. |
+| `App.tsx`, account switch outcome | a batch of account switches finished | none | none | Written seconds after the switch dialog has closed, once the batch finishes without failures, and cleared after 10 s. The credential-free fixture does not produce conversation records to switch, so it was not recorded. |
 
 Totals: of 19 callers, 12 were heard for the writes named (`Sidebar`, `ConnectionBanner`, `AccountLoginDialog`,
 `AccountLoginAnnouncer`, `PermissionsAnnouncer`, `ViewerContentView`, `UnchangedView`, `CopyButton`, `GitView`,
 `ActionMenu`, `CodeSurface`, `AdvancedSection`), 3 are candidates (`ImportReview`, `ChangeList`, `ProjectBrowser`) and 4
-match no case (`ShellTerminalPanel`, `Notice`, `InlineNotice`, `SwitchAccountDialog`). Of the heard callers,
+match no case (`ShellTerminalPanel`, `Notice`, `InlineNotice`, the account switch outcome in `App`). Of the heard callers,
 `ConnectionBanner` and `AccountLoginAnnouncer` match for every write they make; the other ten match for some writes
 only. Of the candidates, `ImportReview` matches for every write it makes; `ChangeList` and `ProjectBrowser` for some.
 
@@ -852,7 +852,7 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
   recorded); `PermissionsAnnouncer`'s change while Settings is open (no permission was granted or revoked) and Settings
   opened directly onto Permissions (no production control opens it there, so it is untested); `GitView`'s replacement
   sequences and notices region (no fixture reached them); `ProjectBrowser`'s search loading (not recorded);
-  `SwitchAccountDialog`'s per-session progress (the credential-free fixture does not produce conversation records to
+  the account switch outcome in `App` (the credential-free fixture does not produce conversation records to
   switch); `ShellTerminalPanel`'s starting status (not observed populated); the `sr-only` terminal statuses and the
   dormant `TerminalPane` status (an error alert masks the first, no agent archive was recorded for the second).
 - A write made while the region is under an open modal outside a marker: heard failing in the login success form

@@ -233,6 +233,13 @@ export interface State {
    * daemon lists them (oldest first) and then as created. Live state of the daemon: a `snapshot`
    * names them all again, and one goes only on `shell_terminal_deleted` or with its project. */
   shellTerminals: Map<string, ShellTerminal>;
+  /** The sessions an account-switch batch of this window has not finished with, queued or running
+   * (see `setAccountSwitchesQueued`). Client state, which the daemon knows nothing of. */
+  queuedAccountSwitches: ReadonlySet<string>;
+  /** The sessions the daemon last said were switching their account, kept apart from what
+   * `sessions` shows (`Session.switching_account`, which a queued session also has set), so that
+   * leaving the queue puts back what the daemon said. */
+  daemonSwitching: ReadonlySet<string>;
 }
 
 /** The three entries every run begins with, before the daemon's one-time determination lands. */
@@ -246,7 +253,8 @@ type Action =
   | { kind: "event"; event: Event }
   | { kind: "dismiss_trust_prompt"; session: string }
   | { kind: "track_account_login"; key: string; tracked: boolean }
-  | { kind: "dismiss_account_login"; login: AccountLogin };
+  | { kind: "dismiss_account_login"; login: AccountLogin }
+  | { kind: "queue_account_switches"; ids: readonly string[]; queued: boolean };
 
 const initialState: State = {
   connectionState: "connecting",
@@ -267,6 +275,8 @@ const initialState: State = {
   accountSharing: new Map(),
   homeDir: null,
   shellTerminals: new Map(),
+  queuedAccountSwitches: new Set(),
+  daemonSwitching: new Set(),
 };
 
 /** A store holding the empty state with `initial` laid over it. */
@@ -313,6 +323,43 @@ export function trackAccountLogin(store: StoreApi<State>, agent: Agent, account:
   store.setState((state) => reducer(state, { kind: "track_account_login", key: accountLoginKey(agent, account), tracked }));
 }
 
+/** Adds `ids` to the sessions account-switch batches have not finished with, or takes them out
+ * (`queued` false): only these ids change, so batches that overlap in time never undo each other.
+ * Such a session shows as switching its account (`Session.switching_account`) alongside the ones
+ * the daemon says are. */
+export function setAccountSwitchesQueued(store: StoreApi<State>, ids: readonly string[], queued: boolean): void {
+  store.setState((state) => reducer(state, { kind: "queue_account_switches", ids, queued }));
+}
+
+/** `session` as the window shows it, with `Session.switching_account` set or absent as `switching`
+ * says. */
+function withSwitching(session: Session, switching: boolean): Session {
+  if ((session.switching_account === true) === switching) return session;
+  if (switching) return { ...session, switching_account: true };
+  const { switching_account: _, ...rest } = session;
+  return rest;
+}
+
+/** `session` as the window shows it: switching its account when the daemon says so or a batch of
+ * this window still holds it. */
+function shownSwitching(session: Session, queued: ReadonlySet<string>): Session {
+  return withSwitching(session, session.switching_account === true || queued.has(session.id));
+}
+
+/** The sessions among `sessions` the daemon says are switching their account. */
+function daemonSwitchingOf(sessions: Session[]): Set<string> {
+  return new Set(sessions.filter((session) => session.switching_account).map((session) => session.id));
+}
+
+/** `held` with `id` in it or not, as `member` says; `held` itself when that changes nothing. */
+function withMember(held: ReadonlySet<string>, id: string, member: boolean): ReadonlySet<string> {
+  if (held.has(id) === member) return held;
+  const next = new Set(held);
+  if (member) next.add(id);
+  else next.delete(id);
+  return next;
+}
+
 /** Drops an ended login from the state, once the user has seen its outcome or it has cleared itself. Does nothing
  * when the login is not the one held, since the account's next login is a new object. */
 export function dismissAccountLogin(store: StoreApi<State>, login: AccountLogin): void {
@@ -355,16 +402,31 @@ function reducer(state: State, action: Action): State {
     }
     case "dismiss_account_login":
       return state.accountLogins.includes(action.login) ? { ...state, accountLogins: state.accountLogins.filter((held) => held !== action.login) } : state;
+    case "queue_account_switches": {
+      const queuedAccountSwitches = action.ids.reduce((held, id) => withMember(held, id, action.queued), state.queuedAccountSwitches);
+      if (queuedAccountSwitches === state.queuedAccountSwitches) return state;
+      let sessions = state.sessions;
+      for (const id of action.ids) {
+        const held = sessions.get(id);
+        if (!held) continue;
+        const shown = withSwitching(held, state.daemonSwitching.has(id) || queuedAccountSwitches.has(id));
+        if (shown === held) continue;
+        if (sessions === state.sessions) sessions = new Map(sessions);
+        sessions.set(id, shown);
+      }
+      return { ...state, queuedAccountSwitches, sessions };
+    }
     case "event": {
       const event = action.event;
       switch (event.type) {
         case "snapshot":
           return {
             ...state,
+            daemonSwitching: daemonSwitchingOf(event.sessions),
             hosts: new Map(event.hosts.map((h) => [h.id, h])),
             consoles: keepSame(state.consoles, event.consoles, (c) => c.id),
             projects: keepSame(state.projects, event.projects, (p) => p.id),
-            sessions: keepSame(state.sessions, event.sessions, (s) => s.id),
+            sessions: keepSame(state.sessions, event.sessions.map((s) => shownSwitching(s, state.queuedAccountSwitches)), (s) => s.id),
             // A snapshot means either first connect or a lag recovery, and carries no pages either
             // way (see `Page` in protocol.ts). Cleared rather than kept, because a console session
             // that was deleted while this client was behind would otherwise go on holding its
@@ -427,8 +489,8 @@ function reducer(state: State, action: Action): State {
           // authoritative record if one already exists; otherwise seed the newly opened session.
           if (state.sessions.has(event.session.id)) return state;
           const sessions = new Map(state.sessions);
-          sessions.set(event.session.id, event.session);
-          return { ...state, sessions };
+          sessions.set(event.session.id, shownSwitching(event.session, state.queuedAccountSwitches));
+          return { ...state, sessions, daemonSwitching: withMember(state.daemonSwitching, event.session.id, event.session.switching_account === true) };
         }
         case "project_upserted": {
           if (sameValue(state.projects.get(event.project.id), event.project)) return state;
@@ -455,14 +517,16 @@ function reducer(state: State, action: Action): State {
         }
         case "session_upserted": {
           // A session's status broadcasts repeat what the store holds as often as they change it.
-          if (sameValue(state.sessions.get(event.session.id), event.session)) return state;
+          const shown = shownSwitching(event.session, state.queuedAccountSwitches);
+          if (sameValue(state.sessions.get(event.session.id), shown)) return state;
           const sessions = new Map(state.sessions);
-          sessions.set(event.session.id, event.session);
+          sessions.set(event.session.id, shown);
+          const daemonSwitching = withMember(state.daemonSwitching, event.session.id, event.session.switching_account === true);
           // A session that no longer runs is no longer at a confirmation anyone can answer.
           const trustPrompts = isLive(event.session.status)
             ? state.trustPrompts
             : state.trustPrompts.filter((p) => p.session !== event.session.id);
-          return { ...state, sessions, trustPrompts };
+          return { ...state, sessions, trustPrompts, daemonSwitching };
         }
         case "session_deleted": {
           const sessions = new Map(state.sessions);
@@ -474,6 +538,7 @@ function reducer(state: State, action: Action): State {
           return {
             ...state,
             sessions,
+            daemonSwitching: withMember(state.daemonSwitching, event.session, false),
             pages,
             trustPrompts: state.trustPrompts.filter((p) => p.session !== event.session),
             sessionRequests: state.sessionRequests.filter((r) => r.session !== event.session),

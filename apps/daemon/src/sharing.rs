@@ -209,6 +209,7 @@ mod tests {
             terminal_title: None,
             record_titles: Default::default(),
             background_tasks: Vec::new(),
+            switching_account: false,
             default_effort: None,
             context: None,
             observed_model: None,

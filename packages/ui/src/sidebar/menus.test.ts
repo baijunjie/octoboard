@@ -105,6 +105,18 @@ describe("the Switch account entry", () => {
     expect(handOff({ sharing: new Map() }).reason).toBeUndefined();
   });
 
+  it("disables the other accounts, Hand off and Unbind while an account switch holds the session", () => {
+    const held = project({ account_id: "w", config_dir: "/home/w", bound_to: "hub", switching_account: true });
+    const menu = sessionMenu(t, {} as SidebarHandlers, held, [account("w", "claude")], undefined, {});
+    const entry = menu.find((candidate) => typeof candidate === "object" && "items" in candidate) as ActionMenuSubmenu;
+    const [dflt, current] = entry.items as { reason?: { state: string }; selected: boolean }[];
+    expect(current.reason).toBeUndefined();
+    expect(dflt.reason).toEqual({ state: "Switching account" });
+    const item = (label: string) => menu.find((candidate) => typeof candidate === "object" && "label" in candidate && candidate.label === label) as { disabled?: boolean; reason?: { state: string } };
+    expect(item("Hand off").reason).toEqual({ state: "Switching account" });
+    expect(item("Unbind").disabled).toBe(true);
+  });
+
   it("states what remains of an account's quota as its description, and has no reason for it", () => {
     const quota = {
       agent: "claude" as const, account: "w", fetched_at: 0, plan: null, unavailable: null,
