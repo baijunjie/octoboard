@@ -44,9 +44,9 @@ window shows until the relaunched process reports its own.
 
 ## The context-size chip
 
-The sidebar's session rows outside focus mode, focus mode's live session cards, its archive preview rows and the full
-archive view show the context size as a chip only when it is known and greater than zero; an unknown or zero size
-shows no chip at all. The chip holds a compact, localized number without a unit label, drawn as the same small grey
+The sidebar's session rows outside focus mode, focus mode's live session cards, its archive preview rows, the items
+of the "View archive" and "Archived console sessions" submenus, and the full archive view show the context size as a
+chip only when it is known and greater than zero; an unknown or zero size shows no chip at all. The chip holds a compact, localized number without a unit label, drawn as the same small grey
 badge an agent picker uses to mark an agent as not installed (see "Which agents the agent pickers list" in
 `docs/product/consoles.md`), set apart from neighbouring text by spacing alone, with no separator character.
 
@@ -60,7 +60,8 @@ a size beyond the window showing 100%. The chip's accessible name is one plain s
 in the same order.
 
 For where the sidebar-row chip appears, see "Session rows" in `docs/product/sidebar.md`; for the live-card chip, see
-"What both views show" in `docs/product/focus-mode.md`. Archive dates and the archive metadata block are described in
+"What both views show" in `docs/product/focus-mode.md`; for the archive submenus' chip, which has no tooltip there, see
+"The archive view" in `docs/product/sidebar.md`. Archive dates and the archive metadata block are described in
 "The archive view" in `docs/product/sidebar.md`.
 
 ## When the context size refreshes

@@ -96,29 +96,26 @@ describe("a session running in the background", () => {
 });
 
 describe("archivePreviewSessions", () => {
-  it("keeps the ten newest parents for a focus-mode preview", () => {
+  it("keeps the ten newest rows by default", () => {
     const parents = Array.from({ length: 11 }, (_, index) => ({
       ...session(`parent-${index}`, "archived", index),
       ended_at: index,
     }));
-    const child = session("child", "archived", 200, false, "parent-10");
-    expect(archivePreviewSessions([...parents, child], [...parents, child], 10).map((s) => s.id))
+    expect(archivePreviewSessions(parents).map((s) => s.id))
       .toEqual(Array.from({ length: 10 }, (_, index) => `parent-${10 - index}`));
   });
 
-  it("keeps five newest parents, including console-bound and unknown-owner roots, but no project children", () => {
-    const consoleOwner = { ...session("hub", "idle", 0), role: "console" as const, project_id: undefined };
-    const parents = Array.from({ length: 6 }, (_, index) => ({
-      ...session(`parent-${index}`, "archived", 100 - index, index === 0, index === 4 ? "hub" : index === 5 ? "unknown" : undefined),
+  it("lists the rows the archive lists on their own: a child whose owner is not archived, but not one under its archived owner", () => {
+    const parents = Array.from({ length: 3 }, (_, index) => ({
+      ...session(`parent-${index}`, "archived", 100 - index, index === 0, index === 1 ? "hub" : undefined),
       ended_at: index,
     }));
-    const liveOwner = session("live-owner", "idle", 0);
     const children = [
-      session("archived-owner-child", "archived", 200, false, "parent-5"),
-      session("live-owner-child", "archived", 300, false, liveOwner.id),
+      { ...session("archived-owner-child", "archived", 200, false, "parent-2"), ended_at: 20 },
+      { ...session("live-owner-child", "archived", 300, false, "live-owner"), ended_at: 10 },
     ];
-    expect(archivePreviewSessions([...children, ...parents], [...parents, ...children, liveOwner, consoleOwner]).map((s) => s.id))
-      .toEqual(["parent-5", "parent-4", "parent-3", "parent-2", "parent-1"]);
+    expect(archivePreviewSessions([...children, ...parents], 3).map((s) => s.id))
+      .toEqual(["live-owner-child", "parent-2", "parent-1"]);
   });
 });
 

@@ -75,13 +75,13 @@ export function archivedSessions(sessions: Session[]): Session[] {
     .sort((a, b) => (b.ended_at ?? b.started_at) - (a.ended_at ?? a.started_at));
 }
 
-/** The archive previews show parent sessions only. Resolve bindings against every status so a
- * child whose project owner is still live stays in the full archive alone. An unknown owner is
- * not enough to classify a session as a child; direct console bindings remain parent rows. */
-export function archivePreviewSessions(archived: Session[], sessions: Session[], limit = 5): Session[] {
-  const byId = new Map(sessions.map((session) => [session.id, session]));
+/** The newest `limit` sessions an archive preview lists: those the archive lists as rows of their
+ * own (`archivedSessionRows`), so a child shows while its owner is not archived and is left to the
+ * full archive once it sits under its archived owner. */
+export function archivePreviewSessions(archived: Session[], limit = 10): Session[] {
+  const ids = new Set(archived.map((session) => session.id));
   return archivedSessions(archived)
-    .filter((session) => !session.bound_to || byId.get(session.bound_to)?.role !== "project")
+    .filter((session) => !session.bound_to || !ids.has(session.bound_to))
     .slice(0, limit);
 }
 

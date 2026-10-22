@@ -198,7 +198,9 @@ function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElem
       {/* A label is often a name the user typed, so it reads in its own direction; `content` sets
           its own. */}
       <span className="flex min-w-0 flex-1 flex-col">
-        <Label className={entry.reason ? "min-w-0 text-clip opacity-(--disabled-opacity)" : "min-w-0 text-clip"}>
+        {/* HeroUI sizes a menu item's label to its text (`w-fit`), which would run a long one under
+            `end`; `max-w-full` keeps it to its column, where it fades. */}
+        <Label className={`min-w-0 max-w-full text-clip${entry.reason ? " opacity-(--disabled-opacity)" : ""}`}>
           {entry.content ?? <FadeOverflow as="span" className="block" dir="auto" titleWhenClipped={entry.label}>{entry.label}</FadeOverflow>}
         </Label>
         {entry.description && <Description className="sr-only">{entry.description}</Description>}

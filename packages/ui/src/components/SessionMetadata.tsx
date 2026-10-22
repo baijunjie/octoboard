@@ -36,7 +36,9 @@ function ContextTooltip({ heading, rows }: {
   );
 }
 
-export function SessionContextLabel({ context }: { context?: SessionContext | null }): React.ReactElement | null {
+/** `plain` leaves the tooltip out, for a menu's transient surface, where no mark carries one; the
+ * size then reaches assistive technology through its name alone. */
+export function SessionContextLabel({ context, plain }: { context?: SessionContext | null; plain?: boolean }): React.ReactElement | null {
   const t = useT();
   const language = useCurrentLanguage();
   if (!hasVisibleContext(context)) return null;
@@ -58,11 +60,15 @@ export function SessionContextLabel({ context }: { context?: SessionContext | nu
   const compact = new Intl.NumberFormat(language, { notation: "compact", maximumFractionDigits: 1 });
   // The compact size is a badge, so the metadata line stays as tall as the text beside it; the
   // exact count is in the name and the tooltip.
+  const badge = (
+    <span aria-hidden="true" className="contents">
+      <StatusBadge separated={false}>{compact.format(context.tokens)}</StatusBadge>
+    </span>
+  );
+  if (plain) return <span role="img" aria-label={details} className="flex shrink-0">{badge}</span>;
   return (
     <IndicatorTooltip tooltip={<ContextTooltip heading={heading} rows={rows} />} label={details} className="flex shrink-0">
-      <span aria-hidden="true" className="contents">
-        <StatusBadge separated={false}>{compact.format(context.tokens)}</StatusBadge>
-      </span>
+      {badge}
     </IndicatorTooltip>
   );
 }

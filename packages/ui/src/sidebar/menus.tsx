@@ -6,6 +6,7 @@ import { ExternalLinkIcon } from "../components/ExternalLinkIcon";
 import { RepositoryIcon } from "../components/RepositoryIcon";
 import { repositoryLink } from "../repositoryLink";
 import { FadeOverflow } from "../components/FadeOverflow";
+import { SessionContextLabel } from "../components/SessionMetadata";
 import { AgentIcon } from "../components/AgentIcon";
 import { PathText } from "../components/PathText";
 import type { Translate } from "../i18n/catalog";
@@ -15,22 +16,22 @@ import { sessionChoiceTitle, sessionDisplayTitle } from "../sessionLabel";
 import { FocusShortcutKbd } from "./focusShortcut";
 import { archivePreviewSessions, isUnusedSession } from "./order";
 import { SessionColourSwatches } from "./SessionColourSwatches";
-import type { SidebarHandlers } from "./types";
+import type { ArchiveScope, SidebarHandlers } from "./types";
 
-/** "View archive": the five newest archived parent sessions, each selecting its session, then
- * "View all", which opens the full archive including children. `sessions` includes live owners. */
+/** "View archive": the archive's preview (`archivePreviewSessions`), each item selecting its session
+ * and showing its context size, then "View all", which opens the full archive. */
 export function archiveSubmenu(
   t: Translate,
   label: string,
   archived: Session[],
-  sessions: Session[],
   onSelect: (session: Session) => void,
   onViewAll: () => void,
 ): ActionMenuSubmenu {
-  const items: ActionMenuItem[] = archivePreviewSessions(archived, sessions).map((session) => ({
+  const items: ActionMenuItem[] = archivePreviewSessions(archived).map((session) => ({
     label: sessionChoiceTitle(t, session),
     content: <FadeOverflow as="span" dir="auto" className="block" titleWhenClipped={sessionDisplayTitle(t, session)}>{sessionDisplayTitle(t, session)}</FadeOverflow>,
     icon: <AgentIcon agent={session.agent} />,
+    end: <SessionContextLabel context={session.context} plain />,
     onClick: () => onSelect(session),
   }));
   if (archived.length === 0) {
@@ -64,7 +65,7 @@ export function consoleMenu(
   return [
     { label: t("sidebar.console.addProject"), icon: FolderPlus, onClick: () => handlers.onOpenDialog({ kind: "new-project", console }) },
     { label: t("sidebar.console.edit"), icon: Settings2, onClick: () => handlers.onOpenDialog({ kind: "edit-console", console }) },
-    archiveSubmenu(t, t("sidebar.archive.consoleSessions"), archived, archived, handlers.onSelectSession, () =>
+    archiveSubmenu(t, t("sidebar.archive.consoleSessions"), archived, handlers.onSelectSession, () =>
       handlers.onOpenArchive({ console: console.id }),
     ),
     "separator",
@@ -75,14 +76,18 @@ export function consoleMenu(
 /** Where a menu is shown, which decides what it leaves out: `list` is the item's row in the
  * sidebar's lists, with everything; `focused` is the item's own focus mode: the project's header,
  * the console session's own card. It has no "Focus mode" to enter and no Pin / Unpin (the item in
- * focus is not pinned from there); `nested` is a project's heading inside a console session's focus
- * mode, which has no project focus mode to enter from there. */
+ * focus is not pinned from there), and the project's header no "View archive", which its focus mode
+ * lists below; `nested` is a project's heading inside a console session's focus mode, which has no
+ * project focus mode to enter from there. */
 export type MenuPlacement = "list" | "focused" | "nested";
 
 /** The project's actions, in the project row and in a focus mode (the project's own header, and a
  * console session's project headings); `placement` says which. Pin / Unpin comes first, as in a
  * session's menu; then the actions are grouped as viewing the project inside the app (focus mode,
  * files, archive), opening it in outside tools, managing the project itself, and removing it.
+ * "View archive" previews `archived` and its "View all" opens `archiveScope`. By default both are the
+ * project's archive; a console session's focus mode passes the project's share of that console
+ * session's archive and opens the whole of it.
  * Git is a submenu, offered only while the project is known to be a git repository
  * (`gitRepository`, from its git status): pull the current branch, push the current branch, switch
  * to a local branch through its own submenu, and restore tracked file changes after confirmation. */
@@ -91,8 +96,11 @@ export function projectMenu(
   handlers: SidebarHandlers,
   project: Project,
   archived: Session[],
-  sessions: Session[],
-  { placement = "list", gitRepository = false }: { placement?: MenuPlacement; gitRepository?: boolean } = {},
+  {
+    placement = "list",
+    gitRepository = false,
+    archiveScope = { console: project.console_id, project: project.id },
+  }: { placement?: MenuPlacement; gitRepository?: boolean; archiveScope?: ArchiveScope } = {},
 ): ActionMenuEntry[] {
   const repository = repositoryLink(project.remote_url);
   return [
@@ -101,9 +109,9 @@ export function projectMenu(
     ...(handlers.visibleBrowserProjectId === project.id
       ? []
       : [{ label: t("sidebar.project.browse"), icon: FolderOpen, onClick: () => handlers.onBrowseProject(project) }]),
-    archiveSubmenu(t, t("sidebar.project.archive"), archived, sessions, handlers.onSelectSession, () =>
-      handlers.onOpenArchive({ console: project.console_id, project: project.id }),
-    ),
+    ...(placement === "focused"
+      ? []
+      : [archiveSubmenu(t, t("sidebar.project.archive"), archived, handlers.onSelectSession, () => handlers.onOpenArchive(archiveScope))]),
     "separator",
     {
       label: t("common.openIn"), icon: SquareArrowOutUpRight,

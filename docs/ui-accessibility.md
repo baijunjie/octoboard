@@ -545,7 +545,9 @@ One gap is left open on purpose: no mark on a menu's transient surface carries a
 menu item does carry its own through the anchored shape, as in the Switch account submenu, but no indicator there
 does — so the agent icon beside each session in the archive submenu says which agent it is to nobody, its `svg`
 being `aria-hidden` as well. The agent is read from the archive view's own rows instead, where that icon carries its
-tooltip and the agent is written out beside it.
+tooltip and the agent is written out beside it. The context-size chip at the end of those archive items is drawn
+without its tooltip too (`SessionContextLabel`'s `plain`); it keeps its `role="img"` name, which the menu item's own
+name takes in after the title, so the size is still read there.
 
 **A tooltip is worded from the string that already names the mark**, not from one of its own: the same string where
 it names the mark on its own, so the two cannot drift apart (a session's agent mark shows that string's two parts, the

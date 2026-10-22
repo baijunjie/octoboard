@@ -14,9 +14,9 @@ and a **+** button for a new session. A project's header shows the console's nam
 project's name, which is the heading. A console session's header shows the console's name alone, on one line, as the
 heading; the console session's title is on its own card below. The heading is a heading only: pressing it selects
 nothing. The header shows no pin button. A project's header also carries its branch badge (see "The branch badge" in
-`docs/product/project-git-status.md`) and, after the **+**, the project's action menu without its **Focus mode** and
-**Pin** / **Unpin** items. A console session's header carries nothing else — no colour, lock button or action menu,
-and no menu on a right-click: those are on the console session's own card below it (see "A console session's focus
+`docs/product/project-git-status.md`) and, after the **+**, the project's action menu without its **Focus mode**,
+**Pin** / **Unpin** and **View archive** items — the view's own **Archived (n)** list stands in for the last. A
+console session's header carries nothing else — no colour, lock button or action menu, and no menu on a right-click: those are on the console session's own card below it (see "A console session's focus
 mode" below).
 
 **The list's section headings**, in both: **Sessions (n)** stays at the top of the scrolling list while its
@@ -67,10 +67,10 @@ console session above them (see "A project's focus mode" below and "The binding 
 `docs/product/sidebar.md`).
 
 **Archived (n)**, in both, only while the view has archived sessions — with none, the section is not shown at all: the
-parent-session preview described in "The archive view" in `docs/product/sidebar.md`, each row showing its agent's icon
+archive preview described in "The archive view" in `docs/product/sidebar.md`, each row showing its agent's icon
 and its title on one compact line, with its context-size chip at the trailing end when the context size is known and above zero (see "The
 context-size chip" in `docs/product/session-context.md`). These preview rows show no creation or archive time. The heading
-counts every archived session in the view's scope, including children omitted from the preview. Clicking a row selects
+counts every archived session in the view's scope, including those the preview leaves out. Clicking a row selects
 it while leaving it archived. Its action menu offers **Reopen**, which selects and resumes the session, then **Copy
 session ID** (see "Session rows" in `docs/product/sidebar.md`), and after a separator **Delete**, disabled while locked.
 A Delete shortcut immediately before the action-menu button appears for an unlocked unused session that is not still
@@ -78,11 +78,10 @@ starting, under the same rules as "Session rows" in `docs/product/sidebar.md`. I
 menu (see "Deleting archived sessions" in `docs/product/deleting-sessions.md` for the confirmation rules). The menu and
 an available shortcut show with the row's other controls as described in "Rows, names and keyboard focus" in
 `docs/product/sidebar.md`. Reopening follows "Archiving, interruption and resuming" in
-`docs/product/archiving-and-resuming-sessions.md`. Whenever any archived session is omitted — a child or a parent beyond
-the first ten — **View all** follows the preview as a row with the same alignment, hover feedback and keyboard focus
-treatment as the session rows; it opens the archive view and carries no count. With only archived children, the section
-shows its count and View all without any preview rows. When every archived session fits in the preview, there is no View
-all row.
+`docs/product/archiving-and-resuming-sessions.md`. Whenever any archived session is left out — one under an archived
+owner, or one beyond the first ten — **View all** follows the preview as a row with the same alignment, hover feedback
+and keyboard focus treatment as the session rows; it opens the archive view and carries no count. When every archived
+session fits in the preview, there is no View all row.
 
 The archive preview, including View all, follows "Items moving within a collection" in
 `docs/product/collection-motion.md`.
@@ -128,7 +127,7 @@ From the top, below the header:
   the lead session's team is listed with it in that console session's focus mode. Pressing a chip enters that console
   session's focus mode; assistive technology hears it as entering that focus mode, with the count.
 - **Archived (n)** counts all of the project's archived sessions, including those under a lead session that is
-  still live. The switch changes only the live list; the archive's count, parent-session preview and View all
+  still live. The switch changes only the live list; the archive's count, preview and View all
   scope stay the same.
 
 **New session** (the header's **+** and the empty row) opens the new-session dialog with no "Report to"
@@ -159,7 +158,14 @@ added and installed, the header's **+** is disabled and the empty row is plain t
   place, carrying no action of its own — the header's **+** below is the way to open one. Each project's name carries its pin
   button while it is pinned (see "Pinning" in `docs/product/sidebar.md`), its own **+**, which opens a new session in
   that project, and its action menu, which is the project row's without its Focus mode item — a project has no focus
-  mode to be entered from here — and keeps **Pin** / **Unpin**. The project list's filter is not part of this view.
+  mode to be entered from here — and keeps **Pin** / **Unpin**. That menu's **View archive** covers only the project's
+  share of this console session's archive: the project's archived sessions bound to this console session, or bound to
+  an archived lead session that is bound to it, previewed as any archive preview is (see "The archive view" in
+  `docs/product/sidebar.md`). The project's sessions bound to another console session or to none, and those of a lead
+  session that is still live, are not in it; with none in the share, the submenu shows only the disabled item saying
+  there are none. Its **View all**, offered whenever the share is nonempty, opens this console session's archive view
+  — the one **View all** under **Archived (n)** below opens — not the project's. The project's row in the full sidebar
+  keeps the project's whole archive in its menu. The project list's filter is not part of this view.
 - **New session**: the header's **+** opens a menu of the console's projects, so that a project with nothing bound yet
   can be reached; choosing one opens the new-session dialog for it. The dialog has no "Report to" field, and shows a
   line saying the session reports to this console session, which it will be bound to. With the primary modifier held,
@@ -171,9 +177,9 @@ added and installed, the header's **+** is disabled and the empty row is plain t
   in place of the sessions a compact row says the console has no projects yet; clicking it opens **Add project**.
 - **Archived (n)** counts the archived sessions under this console session — bound to it, or bound to an archived lead
   session that is bound to it (see "Lead sessions" in `docs/product/hub-orchestration.md`) — and **View all** opens
-  the archive view scoped to them, including the children omitted from the preview (see "The archive view" in
-  `docs/product/sidebar.md`). An archived session of a lead session that is still live is not here: it is in the lead
-  session's project's archive alone.
+  the archive view scoped to them, including the sessions of archived lead sessions, which the preview leaves out
+  (see "The archive view" in `docs/product/sidebar.md`). An archived session of a lead session that is still live is
+  not here: it is in the lead session's project's archive alone.
 
 ## The switch strip
 

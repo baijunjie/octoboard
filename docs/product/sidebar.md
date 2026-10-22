@@ -118,9 +118,9 @@ action menu. The **+** opens the session dialog before launching anything (see "
 "Opening a session with defaults" in `docs/product/sessions.md`). The menu offers **Add project**, **Console settings**,
 **Archived console sessions** and, after a separator, **Delete console** (see "Associating a project" in
 `docs/product/projects.md`, and "Editing a console" and "Deleting a console" in `docs/product/consoles.md`; deleting
-asks for a typed confirmation first). **Archived console sessions** is a submenu of the console's newest archived
-console sessions, each with its agent's icon and its title; choosing one selects it (see "Selecting a session" below).
-After them, **View all** opens the archive view of all of them whenever the console has an archived console session (see
+asks for a typed confirmation first). **Archived console sessions** is a submenu of the console's archive preview
+(see "The archive view" below for what it lists and how each item looks); choosing one selects it (see "Selecting a
+session" below). After them, **View all** opens the archive view of all of them whenever the console has an archived console session (see
 "The archive view" below). A console with no archived console session shows only a disabled item saying so. The
 console's avatar is not repeated here; the rail marks it.
 
@@ -295,10 +295,13 @@ and **Remove project**. An item a view does not offer is left out without moving
 - **Focus mode** — see `docs/product/focus-mode.md`.
 - **Browse files** — see "Opening a project's files" in `docs/product/project-pane.md` for its visibility and the
   Files mode it opens.
-- **View archive** — a submenu of the project's archived parent-session preview (see "The archive view" below), each
-  with its agent's icon and its title; choosing one selects it (see "Selecting a session" below). After them,
+- **View archive** — a submenu of the project's archive preview (see "The archive view" below for what it lists and
+  how each item looks); choosing one selects it (see "Selecting a session" below). After them,
   **View all**, without a count, opens the archive view whenever the project has an archived session, including
-  when all of them fit in the submenu. A project with no archived session shows only a disabled item saying so.
+  when all of them fit in the submenu. A project with no archived session shows only a disabled item saying so. On a
+  project's heading in a console session's focus mode, the submenu covers only the project's share of that console
+  session's archive, and its View all opens the console session's archive view instead (see "A console session's focus
+  mode" in `docs/product/focus-mode.md`).
 - **Open in** — a submenu with **File manager**, then **Terminal**, then the project's repository host when available.
   File manager opens the project's directory on the daemon's host (see "Opening the system file manager" below).
   Terminal opens the system terminal at that directory (see "Opening a project terminal" in
@@ -686,17 +689,21 @@ mirrored under a right-to-left language, and nothing moves where the system asks
 every archived session under that console session (bound to it, or bound to an archived lead session that is bound to
 it), or every archived console session of that console. A lead session's own archived sessions are in that console
 session's archive only while the lead session is archived too; while the lead session is still live they are in its
-project's archive alone. The submenus offer View all whenever their archive is nonempty, so the archive's
-reopen and deletion controls remain reachable even when every session fits in the submenu. An archive containing
-only children shows View all alone in its submenu; the disabled empty item is shown only when the archive itself
-is empty. Focus mode's preview offers View all whenever it omits any archived session (see "What both views show"
-in `docs/product/focus-mode.md`).
+project's archive alone. A project's heading in a console session's focus mode is the exception to "that project":
+its View all opens that console session's archive (see "A console session's focus mode" in
+`docs/product/focus-mode.md`). The submenus offer View all whenever their archive is nonempty, so the archive's
+reopen and deletion controls remain reachable even when every session fits in the submenu. Focus mode's preview
+offers View all whenever it omits any archived session (see "What both views show" in `docs/product/focus-mode.md`).
 
-**Archive previews** show at most five archived parent sessions in those submenus and at most ten in either focus
-mode, most recently archived first. A session bound to a project session is a child and is omitted, whether its owner is
-live or archived. Unbound sessions and sessions bound directly to a console session are parent sessions; a session
-whose owner is no longer known is included as well. Children remain available in the full archive view, whose
-scope and nesting are described below.
+**Archive previews** — the submenus above and focus mode's archived list — list the sessions the archive view lists
+as rows of their own, most recently archived first, at most ten. A session inset there under its archived owner (see
+below) is left out of the preview and reached through View all; every other archived session is a preview row,
+including one bound to a project session that is not archived, such as a session of a lead session that is still
+live, and one whose owner is no longer known. A submenu item shows the session's agent's icon, its title and, at the
+item's end edge, its context-size chip while the size is known and above zero (see "The context-size chip" in
+`docs/product/session-context.md`). Neither the icon nor the chip carries a tooltip in a submenu; the size is read as
+part of the item's accessible name, after its title. Focus mode's preview rows are described in "What both views
+show" in `docs/product/focus-mode.md`.
 
 - It **covers the terminal's area only**: the sidebar and the right pane stay as they are.
   The terminal goes on running beneath it and is not resized.
@@ -710,8 +717,7 @@ scope and nesting are described below.
   `docs/product/session-context.md`). At the trailing end, a metadata block shows only dates: the archive date first,
   when known, then the creation date, each identified by its meaning. These are absolute dates with year, month, day,
   hour and minute, formatted in the current language and the client's local time zone. An unknown archive date is
-  omitted; the creation date never stands in for it. Archive previews show no dates: submenu previews keep their compact title-only presentation, and focus
-  mode's preview rows are described in "What both views show" in `docs/product/focus-mode.md`. The date block sits
+  omitted; the creation date never stands in for it. Archive previews show no dates. The date block sits
   flush at the row's end in the reading direction, on the right in a left-to-right language. The row's **Reopen** and
   **Delete** buttons show only while the row is hovered or holds keyboard focus, and are still reached with Tab.
   Hidden, they take no room, so a resting row's title runs up to the date block; shown, they appear just before the

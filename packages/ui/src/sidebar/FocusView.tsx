@@ -122,7 +122,6 @@ export function ProjectFocusView({
   const byId = new Map(sessions.map((session) => [session.id, session]));
   const consoleOwner = (session: Session) => consoleSessionAbove(session, (id) => byId.get(id) ?? owners.get(id));
   const archived = archivedSessions(sessions);
-  const archiveContext = [...sessions, ...owners.values()];
   const elsewhere = boundElsewhere(sessions, owners);
   const noAgentToStart = useNoAgentToStart();
   const newSession = (): NewSessionRequest => ({ kind: "new-session", console: parentConsole, project, binding: { kind: "unbound" } });
@@ -139,7 +138,7 @@ export function ProjectFocusView({
           <NewSessionButton label={t("sidebar.project.openSession")} quickLabel={t("sidebar.project.openSessionQuick")} target={newSession} onOpen={handlers.onOpenDialog} onQuickCreate={handlers.onQuickCreateSession} />
           <ActionMenu
             label={t("sidebar.project.actions", { name: isolate(project.name) })}
-            items={projectMenu(t, handlers, project, archived, archiveContext, { placement: "focused", gitRepository: gitStatus?.repository })}
+            items={projectMenu(t, handlers, project, archived, { placement: "focused", gitRepository: gitStatus?.repository })}
             contextTargetRef={headerRef}
           />
         </RowIconGroup>
@@ -188,7 +187,7 @@ export function ProjectFocusView({
           )}
           {!includeConsoleSessions && elsewhere && <BoundElsewhere handlers={handlers} count={elsewhere.count} owners={elsewhere.owners} />}
         </section>
-        <ArchivedList handlers={handlers} archived={archived} sessions={archiveContext} selectedSessionId={selectedSessionId} onViewAll={viewAll} />
+        <ArchivedList handlers={handlers} archived={archived} selectedSessionId={selectedSessionId} onViewAll={viewAll} />
       </FadedScroller>
     </>
   );
@@ -286,7 +285,7 @@ export function ConsoleSessionFocusView({
             </div>
           )}
         </section>
-        <ArchivedList handlers={handlers} archived={archived} sessions={sessions} selectedSessionId={selectedSessionId} onViewAll={viewAll} />
+        <ArchivedList handlers={handlers} archived={archived} selectedSessionId={selectedSessionId} onViewAll={viewAll} />
       </FadedScroller>
     </>
   );
@@ -362,7 +361,8 @@ function SwitchStrip({
 /** One project of a console session's focus mode: its name with its own new-session button and
  * actions, over the cards of the sessions bound to the console session, each lead session among
  * them carrying its own sessions under it. Memoised, and reading its own sessions from the store
- * (the rows as `focusGroupRows` gives them, the project's archive for its "View archive" submenu),
+ * (the rows as `focusGroupRows` gives them, and for its "View archive" submenu the project's
+ * sessions in the console session's archive, whose "View all" opens that archive),
  * so an event about another project's session leaves it alone. */
 const FocusProjectGroup = memo(function FocusProjectGroup({
   handlers,
@@ -385,7 +385,7 @@ const FocusProjectGroup = memo(function FocusProjectGroup({
   const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
   const boundHere = useDaemonStoreEqual((s) => focusGroupRows(sessionsOf(indexSessions(s.sessions).byConsole, parentConsole.id), project, consoleSessionId));
   const sessions = useProjectSessions(project.id);
-  const archived = archivedSessions(sessions);
+  const archived = boundArchivedSessions(sessions, consoleSessionId);
   const newSessionHere = (): NewSessionRequest | undefined => {
     const consoleSession = store.getState().sessions.get(consoleSessionId);
     return consoleSession && { kind: "new-session", console: parentConsole, project, binding: { kind: "bound", to: consoleSession } };
@@ -416,7 +416,7 @@ const FocusProjectGroup = memo(function FocusProjectGroup({
           />
           <ActionMenu
             label={t("sidebar.project.actions", { name: isolate(project.name) })}
-            items={projectMenu(t, handlers, project, archived, sessions, { placement: "nested", gitRepository: gitStatus?.repository })}
+            items={projectMenu(t, handlers, project, archived, { placement: "nested", gitRepository: gitStatus?.repository, archiveScope: { console: parentConsole.id, consoleSession: consoleSessionId } })}
             contextTargetRef={headerRef}
           />
         </RowIconGroup>
@@ -514,25 +514,23 @@ function SessionCards({
   );
 }
 
-/** A focus mode's archive: the ten newest archived parent sessions. The heading counts the full
- * archive, and "View all" keeps every omitted session reachable, including hidden children. */
+/** A focus mode's archive: its preview (`archivePreviewSessions`).
+ * The heading counts the full archive, and "View all" keeps every omitted session reachable. */
 function ArchivedList({
   handlers,
   archived,
-  sessions,
   selectedSessionId,
   onViewAll,
 }: {
   handlers: SidebarHandlers;
   archived: Session[];
-  sessions: Session[];
   selectedSessionId?: string;
   onViewAll: () => void;
 }): React.ReactElement | null {
   const t = useT();
   const listRef = useFlip<HTMLDivElement>();
   if (archived.length === 0) return null;
-  const preview = archivePreviewSessions(archived, sessions, 10);
+  const preview = archivePreviewSessions(archived);
   return (
     <section>
       <StickySectionHeading>{t("sidebar.focus.archived", { count: archived.length })}</StickySectionHeading>
@@ -645,7 +643,7 @@ const SessionCard = memo(function SessionCard({
   );
 });
 
-/** One parent session in a focus mode's archive preview. */
+/** One session in a focus mode's archive preview. */
 function ArchivedRow({
   handlers,
   session,

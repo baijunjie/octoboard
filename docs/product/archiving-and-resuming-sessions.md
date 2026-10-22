@@ -184,9 +184,8 @@ deleted, or until Octoboard deletes them once their agent's conversation is prov
 sessions whose conversation is gone" in `docs/product/deleting-sessions.md`). They are listed most recently archived first, and reached:
 
 - from the project's "View archive" submenu, or for console sessions the console's "Archived console
-  sessions" submenu, with the newest five;
-- from either focus mode, as the parent-session preview described in "The archive view" in
-  `docs/product/sidebar.md`, within that focus mode's scope;
+  sessions" submenu, as the archive preview described in "The archive view" in `docs/product/sidebar.md`;
+- from either focus mode, as that same preview, within that focus mode's scope;
 - from the archive view, with all of them.
 
 How each of those looks and behaves is in "Project rows" and "The archive view" in `docs/product/sidebar.md`, and in

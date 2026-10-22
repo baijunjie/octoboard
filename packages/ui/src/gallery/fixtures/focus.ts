@@ -296,6 +296,22 @@ const consoleFocusState = {
   ]),
 };
 
+// Search API's archive holds more than Hub's own: an archived session bound to Hub 2, next to the
+// unbound one and the archived child of a live lead that the workspace already has. Hub's own archived
+// sessions for the project, two of them with a context size, are what its heading menu previews.
+const projectArchiveInConsoleState = {
+  ...consoleFocusState,
+  sessions: new Map([
+    ...[...consoleFocusState.sessions].map(([id, session]) => [
+      id,
+      id === "s-lead-archived" ? { ...session, context: { tokens: 192_345 } }
+        : id === "s-scroll-archive-1" ? { ...session, context: { tokens: 12_345 } }
+          : session,
+    ] as const),
+    ["s-hub2-archived", sessionOf("s-hub2-archived", console_.id, project.id, "Archived work for Hub 2", "archived", { bound_to: hub2.id, ended_at: minutesAgo(30) })] as const,
+  ]),
+};
+
 export const focusScenarios: Scenario[] = [
   {
     id: "sidebar-session-hierarchy",
@@ -335,10 +351,20 @@ export const focusScenarios: Scenario[] = [
     state: runningInBackgroundState,
     sessionRecords: { "s-scroll-unused": "absent" },
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
-    description: "The switch beside the Sessions count starts off. Hover or focus it for its tooltip. The cards of project sessions bound to console sessions (Rework the result ranking and the working and waiting ones) join the list once it is on. Colored summary chips and gray count badges sit above archives. Scroll to confirm Sessions stays clear above the fade. At a 200px window height Archived pushes it away at the top, its preview hiding child sessions and retaining View all. Idle and interrupted cards show an Archive button beside the menu, the pinned Review search improvement 1 after its pin. Write the migration, selected, has none, as an unarchived session is bound under it and its build watcher is still running: its card reads Working in background with a pinging hollow green ring, unlike the filled blue dot of Optimize the query plan and the working cards that join once the switch is on, as does the glyph at the end of the top bar's breadcrumb, whose tooltip says the same. Scroll down to it: it sits below Awaiting instructions and above the newer working Optimize the query plan, followed by the interrupted Profile the slow query. The unused Draft the release notes has a Delete shortcut instead. Compare the selected card's and the project header's actions buttons at rest, with muted glyphs, then hover or open each menu for the subtle tint every actions button shares. Set Modifier to Held to see the header's new-session button as the bolt.",
+    description: "The switch beside the Sessions count starts off. Hover or focus it for its tooltip. The cards of project sessions bound to console sessions (Rework the result ranking and the working and waiting ones) join the list once it is on. Colored summary chips and gray count badges sit above archives. Scroll to confirm Sessions stays clear above the fade. At a 200px window height Archived pushes it away at the top, its preview listing Archived work of the active lead on its own, since its owner is not archived, while A session of the archived lead session stays in View all. Idle and interrupted cards show an Archive button beside the menu, the pinned Review search improvement 1 after its pin. Write the migration, selected, has none, as an unarchived session is bound under it and its build watcher is still running: its card reads Working in background with a pinging hollow green ring, unlike the filled blue dot of Optimize the query plan and the working cards that join once the switch is on, as does the glyph at the end of the top bar's breadcrumb, whose tooltip says the same. Scroll down to it: it sits below Awaiting instructions and above the newer working Optimize the query plan, followed by the interrupted Profile the slow query. The unused Draft the release notes has a Delete shortcut instead. Compare the selected card's and the project header's actions buttons at rest, with muted glyphs, then hover or open each menu for the subtle tint every actions button shares. Set Modifier to Held to see the header's new-session button as the bolt.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Plan the database migration", name: "Write the migration" }))),
     ],
+  },
+  {
+    id: "focus-project-menu",
+    group: GROUP,
+    category: "normal",
+    title: "Project focus, header menu",
+    state,
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
+    description: "The header's menu has no View archive: the Archived list below the sessions already lists the archive and opens it in full with View all.",
+    steps: [(ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name }))],
   },
   {
     id: "focus-project-console-sessions",
@@ -373,6 +399,20 @@ export const focusScenarios: Scenario[] = [
     description: "The header holds only the back button, the console name Main as a single-line heading and the plus menu; Hub's title is on the card below, not in the header. Below the switch strip, fixed above the scrolling list, Hub's own card is not selected: its status, a colour dot, its agent, creation time and 612K context-size chip, and its persistent Unlock control before the actions menu, whose items have no Pin or Focus mode. The pinned Add idempotency keys card has a persistent Unlock control too, without lock borders; unlocking either keeps their order. Draft the changelog and Start the benchmark run are both bound to Hub and were never used; the first was opened by the user, so its shortcut and menu offer Delete, while the second was started by an agent and keeps Archive. Within Rework the result ranking, the older Watch the ranking build sits after the waiting child and before the newer working Chase the flaky test. The pinned working Add idempotency keys stays above the waiting and background cards. The switch strip includes waiting, working and inactive sessions; hover markers for details. Hub 3's marker shows work although its only bound session, Document the retry policy, is idle with a test watcher still running. Set Modifier to Held to see the header plus menu and each project group's new-session button as the bolt; choosing a project from the menu then creates with defaults.",
     steps: [
       (ui) => ui.press(addIdempotencyKeys(ui)),
+    ],
+  },
+  {
+    id: "focus-console-session-project-archive-menu",
+    group: GROUP,
+    category: "normal",
+    title: "Console session focus, project archive menu",
+    state: projectArchiveInConsoleState,
+    sessionRecords: unusedBoundRecords,
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
+    description: "Search API's heading menu is open on View archive. The submenu lists only that project's archived sessions in Hub's archive: the archived lead session and the older, completed ones bound to Hub, with context-size badges on two of them. Archived work for Hub 2, Last week's spike (unbound) and Archived work of the active lead stay out, as does the archived lead's own child, which View all keeps. View all opens Hub's archive, the same as View all under the Archived list.",
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
+      (ui) => ui.press(ui.t("sidebar.project.archive")),
     ],
   },
   {

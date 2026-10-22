@@ -1,8 +1,10 @@
+// @vitest-environment jsdom
 import { KeyRound } from "lucide-react";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ActionMenuEntry, ActionMenuSubmenu } from "../components/ActionMenu";
+import type { ActionMenuEntry, ActionMenuItem, ActionMenuSubmenu } from "../components/ActionMenu";
+import { SessionContextLabel } from "../components/SessionMetadata";
 import { consoleOf, sessionOf } from "../gallery/fixtures/builders";
 import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
@@ -219,7 +221,7 @@ describe("the Archive and Delete entries", () => {
 
 describe("a project's menu", () => {
   const labels = (placement: MenuPlacement, gitRepository = false) =>
-    projectMenu(t, {} as SidebarHandlers, { id: "p" } as Project, [], [], { placement, gitRepository }).flatMap((entry) =>
+    projectMenu(t, {} as SidebarHandlers, { id: "p" } as Project, [], { placement, gitRepository }).flatMap((entry) =>
       typeof entry === "object" ? [entry.label] : [],
     );
 
@@ -231,7 +233,7 @@ describe("a project's menu", () => {
 
   it("puts Pin first, then groups viewing in the app, outside tools, managing the project, and removing it", () => {
     const handlers = {} as unknown as SidebarHandlers;
-    const menu = projectMenu(t, handlers, { id: "p", pinned: false } as Project, [], [], { gitRepository: true });
+    const menu = projectMenu(t, handlers, { id: "p", pinned: false } as Project, [], { gitRepository: true });
     expect(menu.map((entry) => (entry === "separator" ? entry : entry.label))).toEqual([
       "Pin", "Focus mode", "Browse files", "View archive", "separator",
       "Open in", "Git", "separator",
@@ -241,7 +243,7 @@ describe("a project's menu", () => {
   });
 
   it.each(["list", "focused", "nested"] as const)("groups outside tools for every project in %s", (placement) => {
-    const menu = projectMenu(t, {} as SidebarHandlers, { id: "p" } as Project, [], [], { placement });
+    const menu = projectMenu(t, {} as SidebarHandlers, { id: "p" } as Project, [], { placement });
     expect(openIn(menu).items.map((entry) => typeof entry === "object" ? entry.label : entry)).toEqual(["File manager", "Terminal"]);
     expect(labels(placement)).not.toContain("Terminal");
   });
@@ -249,18 +251,18 @@ describe("a project's menu", () => {
   it.each(["list", "focused", "nested"] as const)("opens the branded repository through the same %s submenu", (placement) => {
     const handlers = { onOpenRepository: vi.fn() } as unknown as SidebarHandlers;
     const project = { id: "p", remote_url: "git@github.com:acme/app.git" } as Project;
-    const entry = openIn(projectMenu(t, handlers, project, [], [], { placement })).items[2];
+    const entry = openIn(projectMenu(t, handlers, project, [], { placement })).items[2];
     expect(entry).toMatchObject({ label: "GitHub", icon: { props: { brand: "github" } } });
     (entry as { onClick: () => void }).onClick();
     expect(handlers.onOpenRepository).toHaveBeenCalledExactlyOnceWith("https://github.com/acme/app");
-    expect(openIn(projectMenu(t, {} as SidebarHandlers, project, [], [])).items).toHaveLength(2);
-    expect(openIn(projectMenu(t, handlers, { ...project, remote_url: "/tmp/repo" }, [], [])).items).toHaveLength(2);
+    expect(openIn(projectMenu(t, {} as SidebarHandlers, project, [])).items).toHaveLength(2);
+    expect(openIn(projectMenu(t, handlers, { ...project, remote_url: "/tmp/repo" }, [])).items).toHaveLength(2);
   });
 
   it.each(["list", "focused", "nested"] as const)("offers Browse files only while this project's browser is not visible in the %s menu", (placement) => {
     for (const visibleBrowserProjectId of [undefined, "other", "p"]) {
       const handlers = { visibleBrowserProjectId } as SidebarHandlers;
-      const menu = projectMenu(t, handlers, { id: "p" } as Project, [], [], { placement });
+      const menu = projectMenu(t, handlers, { id: "p" } as Project, [], { placement });
       const menuLabels = menu.flatMap((entry) => typeof entry === "object" ? [entry.label] : []);
       expect(menuLabels.includes("Browse files")).toBe(visibleBrowserProjectId !== "p");
       expect(menuLabels).toContain("Open in");
@@ -270,7 +272,7 @@ describe("a project's menu", () => {
   it("opens this project's directory in the file manager", () => {
     const project = { id: "p" } as Project;
     const handlers = { onOpenProjectDirectory: vi.fn(), visibleBrowserProjectId: "p" } as unknown as SidebarHandlers;
-    const menu = projectMenu(t, handlers, project, [], []);
+    const menu = projectMenu(t, handlers, project, []);
     const entry = openIn(menu).items.find((item) => typeof item === "object" && item.label === "File manager");
     (entry as { onClick: () => void }).onClick();
     expect(handlers.onOpenProjectDirectory).toHaveBeenCalledExactlyOnceWith(project);
@@ -278,7 +280,7 @@ describe("a project's menu", () => {
 
   it("puts pull and push under Git only for a git repository", () => {
     const git = (repository: boolean) => {
-      const entry = projectMenu(t, {} as SidebarHandlers, { id: "p" } as Project, [], [], { gitRepository: repository }).find(
+      const entry = projectMenu(t, {} as SidebarHandlers, { id: "p" } as Project, [], { gitRepository: repository }).find(
         (candidate) => typeof candidate === "object" && candidate.label === "Git",
       );
       return entry && typeof entry === "object" && "items" in entry ? entry.items.flatMap((item) => (typeof item === "object" ? [item.label] : [])) : undefined;
@@ -290,7 +292,7 @@ describe("a project's menu", () => {
   it("opens a terminal and pushes the current branch", () => {
     const handlers = { onOpenProjectTerminal: vi.fn(), onPushProjectBranch: vi.fn() } as unknown as SidebarHandlers;
     const project = { id: "p" } as Project;
-    const menu = projectMenu(t, handlers, project, [], [], { gitRepository: true });
+    const menu = projectMenu(t, handlers, project, [], { gitRepository: true });
     const terminal = openIn(menu).items.find((entry) => typeof entry === "object" && entry.label === "Terminal");
     (terminal as { onClick: () => void }).onClick();
     expect(handlers.onOpenProjectTerminal).toHaveBeenCalledWith(project);
@@ -331,28 +333,43 @@ describe("a console's menu", () => {
 
 describe("archive previews in menus", () => {
   const live = sessionOf("owner", "c", "p", "Live owner", "idle");
-  const child = sessionOf("child", "c", "p", "Hidden child", "archived", { bound_to: live.id });
-  const roots = Array.from({ length: 6 }, (_, index) => sessionOf(`root-${index}`, "c", "p", `Root ${index}`, "archived", { ended_at: index }));
+  const archivedOwner = sessionOf("archived-owner", "c", "p", "Archived owner", "archived", { ended_at: 0 });
+  const child = sessionOf("child", "c", "p", "Live owner's child", "archived", { bound_to: live.id, ended_at: 100 });
+  const nested = sessionOf("nested", "c", "p", "Nested child", "archived", { bound_to: archivedOwner.id, ended_at: 200 });
+  const roots = Array.from({ length: 10 }, (_, index) => sessionOf(`root-${index}`, "c", "p", `Root ${index}`, "archived", { ended_at: index + 1 }));
 
-  it.each(["list", "focused", "nested"] as const)("a project's %s menu shows five parents and keeps the full archive reachable", (placement) => {
+  it.each(["list", "nested"] as const)("a project's %s menu shows the archive's ten newest rows and keeps the full archive reachable", (placement) => {
     const handlers = { onOpenArchive: vi.fn(), onSelectSession: vi.fn() } as unknown as SidebarHandlers;
-    const archived = [...roots, child];
-    const menu = projectMenu(t, handlers, { id: "p", console_id: "c" } as Project, archived, [...archived, live], { placement });
+    const archived = [...roots, archivedOwner, child, nested];
+    const menu = projectMenu(t, handlers, { id: "p", console_id: "c" } as Project, archived, { placement });
     const archive = menu.find((entry) => typeof entry === "object" && "items" in entry && entry.label === "View archive");
     const items = (archive as { items: { label: string; onClick: () => void }[] }).items;
-    expect(items.map((item) => item.label)).toEqual(["Root 5", "Root 4", "Root 3", "Root 2", "Root 1", "View all"]);
+    expect(items.map((item) => item.label)).toEqual([
+      "Live owner's child", "Root 9", "Root 8", "Root 7", "Root 6", "Root 5", "Root 4", "Root 3", "Root 2", "Root 1", "View all",
+    ]);
     items[0].onClick();
-    expect(handlers.onSelectSession).toHaveBeenCalledWith(roots[5]);
-    items[5].onClick();
+    expect(handlers.onSelectSession).toHaveBeenCalledWith(child);
+    items[10].onClick();
     expect(handlers.onOpenArchive).toHaveBeenCalledWith({ console: "c", project: "p" });
   });
 
+  it("shows each archived session's context size at the item's end, without a tooltip", () => {
+    const sized = { ...roots[0], context: { tokens: 12_345 } };
+    const [item] = archiveSubmenu(t, "Archive", [sized], vi.fn(), vi.fn()).items as ActionMenuItem[];
+    expect(item.end).toMatchObject({ type: SessionContextLabel, props: { context: sized.context, plain: true } });
+  });
+
+  it("leaves View archive out of a project's own focus mode, which lists its archive below", () => {
+    const menu = projectMenu(t, {} as SidebarHandlers, { id: "p" } as Project, roots, { placement: "focused" });
+    expect(menu.some((entry) => typeof entry === "object" && entry.label === "View archive")).toBe(false);
+  });
+
   it.each([
-    ["only a child", [child], [child, live], ["View all"]],
-    ["one parent", [roots[0]], [roots[0]], ["Root 0", "View all"]],
-    ["empty", [], [], ["No archived sessions"]],
-  ])("keeps navigation without a misleading empty message: %s", (_name, archived, context, labels) => {
-    const items = archiveSubmenu(t, "Archive", archived as Session[], context as Session[], vi.fn(), vi.fn()).items;
+    ["a child whose owner is not in the archive", [nested], ["Nested child", "View all"]],
+    ["one parent", [roots[0]], ["Root 0", "View all"]],
+    ["empty", [], ["No archived sessions"]],
+  ])("keeps navigation without a misleading empty message: %s", (_name, archived, labels) => {
+    const items = archiveSubmenu(t, "Archive", archived as Session[], vi.fn(), vi.fn()).items;
     expect(items.map((item) => typeof item === "object" ? item.label : item)).toEqual(labels);
   });
 });
@@ -360,7 +377,7 @@ describe("archive previews in menus", () => {
 it("asks for confirmation before restoring project changes", () => {
   const project = { id: "p" } as Project;
   const handlers = { onOpenDialog: vi.fn() } as unknown as SidebarHandlers;
-  const git = projectMenu(t, handlers, project, [], [], { gitRepository: true }).find((entry) => typeof entry === "object" && "items" in entry && entry.label === "Git");
+  const git = projectMenu(t, handlers, project, [], { gitRepository: true }).find((entry) => typeof entry === "object" && "items" in entry && entry.label === "Git");
   const entry = (git as { items: { label: string; onClick: () => void }[] }).items.find((item) => item.label === "Restore file changes");
   entry!.onClick();
   expect(handlers.onOpenDialog).toHaveBeenCalledExactlyOnceWith({ kind: "restore-project-changes", project });
@@ -420,7 +437,7 @@ it.each([false, true])("offers no lock controls on archived sessions, locked=%s"
 
 it("keeps composed archive names raw for matching while retaining their visible overflow presentation", () => {
   const session = sessionOf("archived", "c", "p", "مراجعة Work", "archived", { terminal_title: "Task 中文" });
-  const entry = archiveSubmenu(t, "Archive", [session], [session], vi.fn(), vi.fn()).items[0];
+  const entry = archiveSubmenu(t, "Archive", [session], vi.fn(), vi.fn()).items[0];
   expect(typeof entry).toBe("object");
   if (typeof entry !== "object" || !("onClick" in entry)) throw new Error("Expected archived session action");
   expect(entry.label).toBe("Task 中文｜مراجعة Work");
