@@ -23,10 +23,11 @@ function mount(reduce = false) {
     return <input defaultValue="retained" />;
   }
   const peek = { active: false, reveal: vi.fn(), keep: vi.fn(), leave: vi.fn() } satisfies PanePeek;
-  /** `docked` is the pane with a panel open; otherwise it floats while `active`. */
-  const render = (docked: boolean, active = false, minWidth?: number) =>
+  /** `docked` is the pane with a panel open; otherwise it floats while `active`. `overlay` is a
+   * window too narrow to dock it, where `floatingKind` floats over the terminal. */
+  const render = (docked: boolean, active = false, minWidth?: number, overlay = false, floatingKind?: string) =>
     act(() => root.render(
-      <AsidePane layout={{ width: 300, minWidth, peek: docked ? undefined : { ...peek, active } }}>
+      <AsidePane layout={{ width: 300, minWidth, peek: docked ? undefined : { ...peek, active }, overlay, floatingKind }}>
         <Content />
       </AsidePane>,
     ));
@@ -59,6 +60,72 @@ it("docks as a row sibling that takes its room from the terminal, at any width",
   expect(pane.style.getPropertyValue("--aside-min-width")).toBe("320px");
   expect(pane.className).not.toMatch(/fixed|docked:|drawer/);
   expect(pane.style.getPropertyValue("--aside-width")).toBe("300px");
+});
+
+it("floats an open panel over the terminal's area in a window too narrow to dock it, in place, clear of a strip beside it, fading up as it comes", () => {
+  const test = mount();
+  const pane = test.pane()!;
+  const input = pane.querySelector("input")!;
+  act(() => input.focus());
+  test.advance(32);
+  test.render(true, false, undefined, true, "files");
+  expect(test.pane()).toBe(pane);
+  expect(pane.className).toContain("absolute inset-y-0 end-0");
+  expect(pane.className).toContain("w-(--aside-width) max-w-[calc(100%-var(--rail-width))] [@media(max-width:360px)]:max-w-[calc(100%-24px)]");
+  // No width grip beside it: the gap is the same all round.
+  expect(pane.className).toContain("p-(--peek-gap)");
+  expect(pane.className).not.toMatch(/fixed|min-w-|invisible/);
+  // A press in its gaps reaches the scrim beneath, which dismisses it; the cards take their own.
+  expect(pane.className).toContain("pointer-events-none");
+  expect(pane.hasAttribute("data-floating-panel")).toBe(true);
+  // It starts just below its place and clear, without a transition, and is then let to rise: the
+  // pane fades, its cards rise by 4% of their own height (`style.css`).
+  expect(pane.className).toContain("opacity-0");
+  expect(pane.classList.contains("transition-none")).toBe(true);
+  expect(pane.dataset.cardMotion).toBe("preparing");
+  test.advance(32);
+  expect(pane.className).toContain("opacity-100");
+  expect(pane.dataset.cardMotion).toBe("shown");
+  expect(pane.className).toContain("duration-240 ease-[cubic-bezier(0.2,0,0,1)]");
+  expect(pane.classList.contains("transition-none")).toBe(false);
+  expect(document.activeElement).toBe(input);
+
+  // Another panel in its place comes up from below the same way.
+  test.render(true, false, undefined, true, "terminal");
+  expect(pane.className).toContain("opacity-0");
+  expect(pane.classList.contains("transition-none")).toBe(true);
+  test.advance(32);
+  expect(pane.className).toContain("opacity-100");
+
+  test.render(true);
+  expect(pane.className).toContain("h-full w-(--aside-width) min-w-(--aside-min-width) shrink");
+  expect(test.mounted).toHaveBeenCalledTimes(1);
+  test.advance(300);
+});
+
+it("fades a floating panel down and away as it closes, out of reach meanwhile, and is not rendered once it has gone", () => {
+  const test = mount();
+  test.render(true, false, undefined, true, "files");
+  test.advance(32);
+  test.render(false, false, undefined, true);
+  const pane = test.pane()!;
+  expect(pane.className).toContain("absolute inset-y-0 end-0");
+  expect(pane.className).toContain("opacity-0");
+  expect(pane.classList.contains("transition-none")).toBe(false);
+  expect(pane.hasAttribute("inert")).toBe(true);
+  expect(pane.dataset.cardMotion).toBe("away");
+  expect(pane.hasAttribute("data-floating-panel")).toBe(false);
+  test.advance(300);
+  expect(test.pane()).toBeNull();
+});
+
+it("floats a panel in and takes it away at once under reduced motion", () => {
+  const test = mount(true);
+  test.render(true, false, undefined, true, "files");
+  expect(test.pane()!.className).toContain("opacity-100");
+  expect(test.pane()!.className).toContain("motion-reduce:transition-none");
+  test.render(false, false, undefined, true);
+  expect(test.pane()).toBeNull();
 });
 
 it("updates the column floor without replacing its content or rewriting its chosen width", () => {
@@ -97,10 +164,10 @@ it("floats in fading up like the sidebar's card, over the terminal without takin
   expect(pane.className).toContain("fixed");
   expect(pane.className).toContain("pointer-events-none");
   // It starts below its place and clear, without a transition, and is then let to rise.
-  expect(pane.className).toContain("translate-y-1.5 opacity-0 invisible");
+  expect(pane.className).toContain("opacity-0 invisible");
   expect(pane.classList.contains("transition-none")).toBe(true);
   test.advance(32);
-  expect(pane.className).toContain("translate-y-0 opacity-100");
+  expect(pane.className).toContain("opacity-100");
   expect(pane.className).toContain("duration-240");
   expect(pane.classList.contains("transition-none")).toBe(false);
 });
@@ -110,7 +177,7 @@ it("fades away as it came, and is not rendered once it has gone", () => {
   test.floatIn();
   test.advance(32);
   test.render(false, false);
-  expect(test.pane()!.className).toContain("translate-y-1.5 opacity-0 invisible");
+  expect(test.pane()!.className).toContain("opacity-0 invisible");
   test.advance(300);
   expect(test.pane()).toBeNull();
 });

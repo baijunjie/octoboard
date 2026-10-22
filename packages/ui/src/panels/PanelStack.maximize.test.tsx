@@ -37,7 +37,7 @@ vi.mock("./panelRegistry", () => {
 
 /** The stack beside the agent terminal's area, which the maximized card covers, and below a top
  * bar's control, which it does not. */
-function mount({ open, peek }: { open: string[]; peek?: PanePeek }) {
+function mount({ open, peek, floating }: { open: string[]; peek?: PanePeek; floating?: { stack: { open: string[]; shares: Record<string, number> }; onClose: () => void } }) {
   const area: { current: HTMLDivElement | null } = { current: null };
   let latest!: ReturnType<typeof usePanelStacks>;
   function Probe() {
@@ -66,6 +66,7 @@ function mount({ open, peek }: { open: string[]; peek?: PanePeek }) {
             frameKeys={{ onEscape: () => {}, onCycleRegion: () => {}, onMoveHistory: () => {}, onMoveConsoleSession: () => {} }}
             onDismiss={() => {}}
             maximizeArea={area}
+            floating={floating}
           />
         </div>
       </>,
@@ -96,6 +97,17 @@ it("offers no maximize on a card that only floats in", () => {
   const { container } = mount({ open: [], peek: { active: true, reveal: () => {}, keep: () => {}, leave: () => {} } });
   expect(container.querySelector("#panel-fake")).not.toBeNull();
   expect(container.querySelector("[aria-label='Maximize panel']")).toBeNull();
+});
+
+it("floats only the given panel in a window too narrow to dock it, closing it without touching the stored stack", () => {
+  const onClose = vi.fn();
+  const { container, stack, press } = mount({ open: ["files"], floating: { stack: { open: ["fake"], shares: {} }, onClose } });
+  expect(Array.from(container.querySelectorAll("[data-panel-card]"), (card) => card.id)).toEqual(["panel-fake"]);
+  expect(container.querySelector("[aria-label='Maximize panel']")).toBeNull();
+  expect(container.querySelector("[role=separator]")).toBeNull();
+  press("#panel-fake [aria-label='Close panel']");
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(stack().open).toEqual(["files"]);
 });
 
 it("lays the maximized card over the agent terminal's area, on a backdrop, the others left in the column, and puts it back as it was", () => {

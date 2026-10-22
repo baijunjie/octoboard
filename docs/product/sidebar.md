@@ -177,7 +177,8 @@ for the current scope (see "A console with nothing in it" in `docs/product/sessi
 - A row's **+**, Delete or Archive (see "Session rows" in `docs/product/sidebar-session-rows.md`) and action-menu
   buttons show while the row is hovered, holds keyboard focus, is the selected session, or has its menu open; they are
   still reached with Tab when hidden, and show once one of them has focus. They fade and open out as they appear, and
-  fade and close up as they go, briefly — at once where the system asks for reduced motion.
+  fade and close up as they go, briefly — at once where the system asks for reduced motion. On a device whose primary input cannot hover — a phone, or a tablet's
+  touch screen — they always show.
 - **Right-clicking** (or Control-clicking on macOS) a row that has an action menu opens that menu at the pointer, with
   the same entries as its action-menu button. This holds for a project row, a session row (a console session's
   included), the sidebar's header, a console's avatar on the rail (see "The console switcher" in

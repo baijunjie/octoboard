@@ -7,6 +7,7 @@ import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { pageOf } from "../gallery/fixtures/builders";
 import { PanelFrameProvider } from "../components/PanelHeader";
+import { focusLanding, focusLandingWithoutText } from "../components/regionFocus";
 import { PlatformProvider } from "../platform/react";
 import { applyDaemonEvent, createStateStore, DaemonProvider, type Daemon } from "../store";
 import { withReportScrollBridge } from "../website-preview/scrollBridge";
@@ -136,4 +137,13 @@ it("ignores another session's new page without replacing the current frame or mo
   await append("other-session");
   expect(container.querySelector("iframe")).toBe(frame);
   expect(document.activeElement).toBe(frame);
+});
+
+it("lands a tap's focus on the page, and F6's or a pointer's on the header's first enabled control", () => {
+  const { container } = renderReport();
+  expect(focusLandingWithoutText(container)).toBe(true);
+  expect(document.activeElement).toBe(container.querySelector("iframe"));
+  expect(focusLanding(container)).toBe(true);
+  expect(document.activeElement?.tagName).toBe("BUTTON");
+  expect(container.contains(document.activeElement)).toBe(true);
 });

@@ -424,3 +424,16 @@ it("drops paste after its destination changed or input became unavailable", () =
   controller.paste("stopped text", "s-new");
   expect(lastSocket().sent.filter((entry) => ArrayBuffer.isView(entry))).toEqual([]);
 });
+
+describe("keyboard focus on attaching a session the user picked", () => {
+  it.each([
+    [false, 2],
+    [true, 0],
+  ])("goes to the terminal unless the session was picked by a tap (tap: %s)", (touch, focuses) => {
+    const focus = vi.spyOn(term, "focus");
+    document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: touch ? "touch" : "mouse", bubbles: true }));
+    controller.attach("a", url("a"), true);
+    lastSocket().open();
+    expect(focus).toHaveBeenCalledTimes(focuses);
+  });
+});

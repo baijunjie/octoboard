@@ -236,3 +236,63 @@ export function usePaneDockMotion(
     },
   };
 }
+
+export interface FadeUp {
+  /** Whether the element is in the document: while `open`, and while it fades away after. */
+  rendered: boolean;
+  /** Whether it is at its place and opaque; false while it waits a painted frame to enter, and as it
+   * leaves. */
+  shown: boolean;
+  /** It is hidden at once, without a transition, to enter again from below. */
+  preparing: boolean;
+  onTransitionEnd: (event: React.TransitionEvent<HTMLElement>) => void;
+}
+
+/**
+ * The floating card's entrance and exit for an element shown while `open`: it fades in as it rises
+ * into its place by 4% of the card's height, and fades out as it sinks back, over `PANE_INSET_MS`
+ * (240ms) with the easing `cubic-bezier(0.2, 0, 0, 1)`, the caller's classes holding those values
+ * (a scrim only fades). It also enters as it
+ * mounts open, and enters again whenever `entry` changes while it stays open (another panel in its
+ * place). With reduced motion it comes and goes at once.
+ */
+export function useFadeUp(open: boolean, entry: unknown): FadeUp {
+  const [state, setState] = useState({ rendered: open, shown: false, pending: open });
+  const before = useRef<{ open: boolean; entry: unknown } | undefined>(undefined);
+
+  useLayoutEffect(() => {
+    const previous = before.current;
+    before.current = { open, entry };
+    if (previous && previous.open === open && (!open || previous.entry === entry)) return;
+    const reduce = prefersReducedMotion();
+    if (open) setState({ rendered: true, shown: reduce, pending: !reduce });
+    else if (previous) setState((current) => (reduce || !current.rendered ? { rendered: false, shown: false, pending: false } : { ...current, shown: false, pending: false }));
+  }, [open, entry]);
+
+  useEffect(() => {
+    if (!state.pending) return;
+    // Two frames leave the hidden element painted before its transition target is applied.
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => setState((current) => (current.pending ? { ...current, shown: true, pending: false } : current)));
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [state.pending]);
+
+  const leaving = state.rendered && !open;
+  useEffect(() => {
+    if (!leaving) return;
+    // A transition that never reports its end cannot leave the element in the document.
+    const timer = setTimeout(() => setState((current) => (current.shown ? current : { ...current, rendered: false })), PANE_INSET_MS + SPAN_END_SLACK_MS);
+    return () => clearTimeout(timer);
+  }, [leaving]);
+
+  return {
+    rendered: state.rendered || open,
+    shown: state.shown && open,
+    preparing: state.pending,
+    onTransitionEnd: (event) => {
+      if (event.target !== event.currentTarget || event.propertyName !== "opacity") return;
+      setState((current) => (current.shown || !current.rendered || open ? current : { ...current, rendered: false }));
+    },
+  };
+}

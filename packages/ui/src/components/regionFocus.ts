@@ -1,4 +1,4 @@
-import { setInteractionModality } from "react-aria";
+import { ringForAutomaticFocus, TEXT_ENTRY } from "../touchInput";
 
 /** A window region, named by its `data-region`. */
 export type Region = string;
@@ -13,6 +13,19 @@ export const FOCUSABLE =
  * else its first control a keyboard can reach; says whether focus is there now. */
 export function focusLanding(root: Element): boolean {
   const target = root.querySelector<HTMLElement>("[data-region-landing]") ?? root.querySelector<HTMLElement>(FOCUSABLE);
+  target?.focus();
+  return target != null && target.ownerDocument.activeElement === target;
+}
+
+/** Where a tap puts focus in `root`: the control it marks `data-touch-landing` (a report page), else
+ * where `focusLanding` would unless that is a field that takes text (the Terminal panel's shell,
+ * say), and then `root`'s first control that is not; says whether focus is there now. A tap must
+ * not focus such a field, which would raise the on-screen keyboard (`interactionIsTouch`). */
+export function focusLandingWithoutText(root: Element): boolean {
+  const landing = root.querySelector<HTMLElement>("[data-touch-landing]") ?? root.querySelector<HTMLElement>("[data-region-landing]");
+  const target = landing && !landing.matches(TEXT_ENTRY)
+    ? landing
+    : Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).find((control) => !control.matches(TEXT_ENTRY));
   target?.focus();
   return target != null && target.ownerDocument.activeElement === target;
 }
@@ -79,9 +92,10 @@ export function focusRegion(region: Region, focusTerminal: () => void): boolean 
  * wherever `focusTerminal` puts it, which for the selected session's terminal is the terminal; the empty
  * terminal and the welcome screen decline from `<body>`, so then the first of the sidebar and the rail that has
  * a control takes it, each landing where F6 would. With none to take it, focus stays on `<body>`. Keyboard modality
- * gives the fallback a visible focus ring even when a pointer acknowledged the alert. */
+ * gives the fallback a visible focus ring even when a pointer acknowledged the alert, except on a touch screen
+ * (`ringForAutomaticFocus`). */
 export function focusAfterLoss(focusTerminal: () => void): void {
-  setInteractionModality("keyboard");
+  ringForAutomaticFocus();
   if (focusOpenDialog()) return;
   focusTerminal();
   if (document.activeElement && document.activeElement !== document.body) return;

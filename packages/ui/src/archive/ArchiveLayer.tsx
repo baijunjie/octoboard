@@ -1,6 +1,6 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
 
-import { setInteractionModality } from "react-aria";
+import { ringForAutomaticFocus } from "../touchInput";
 import { useLatest } from "../components/useLatest";
 import { ArchiveView } from "./ArchiveView";
 
@@ -20,7 +20,7 @@ export function ArchiveLayer({ view, focusTerminal }: { view: View | undefined; 
   useLayoutEffect(() => {
     if (open || !retained) return;
     if (rootRef.current?.contains(document.activeElement) || document.activeElement === document.body) {
-      setInteractionModality("keyboard");
+      ringForAutomaticFocus();
       latestFocusTerminal.current();
     }
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");

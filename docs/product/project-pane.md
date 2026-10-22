@@ -25,8 +25,8 @@ explanation and retry controls remain in the pane afterwards (see "Error alerts"
   rows" in `docs/product/sidebar-project-rows.md`), in its focus mode's header, and on its heading in a console
   session's focus mode (see `docs/product/focus-mode.md`) — shows that project's project pane in Files mode, selecting,
   starting and resuming no session; it opens the Files panel (see "Opening and closing panels" in
-  `docs/product/right-pane-panels.md`). It is omitted while that project's Files panel is on screen, docked or
-  floating in, and offered otherwise: while the right pane belongs to another owner or while the Files panel is
+  `docs/product/right-pane-panels.md`). It is omitted while that project's Files panel is on screen, docked,
+  floating in or floating over the terminal, and offered otherwise: while the right pane belongs to another owner or while the Files panel is
   closed. This applies in Git mode too; choose the Files tab to return to the
   tree while the panel is already on screen.
 - **Selecting a project session** gives the right pane to its project, whose Files panel shows while it is open.
@@ -37,7 +37,8 @@ selected change when the branch moves (see "Following the selected session" in
 `docs/product/project-pane-git-mode.md`). Another project's session, or
 another project's Browse files, shows that project's own pane.
 
-When the right pane passes to another project while the Files panel is on screen, its header and content slide in
+When the right pane passes to another project while the Files panel is on screen, its header and content fade in
+where they stand
 (see "Switching projects under an open panel" in `docs/product/right-pane-panels.md`).
 
 The Files panel has **one header row**, its panel header (see "A panel's header" in
@@ -221,7 +222,8 @@ while no nonempty file-name filter is active (see "Filtering by file name" above
 - the first time the Files mode is shown after the project pane is put in the right pane, which lists it afresh;
 - when a folder is expanded, if it had been listed before;
 - on the header's **Refresh**;
-- **every 10 seconds** while the Files mode is on screen — the Files panel docked or floating in — and the window is
+- **every 10 seconds** while the Files mode is on screen — the Files panel docked, floating in or floating over the
+  terminal — and the window is
   visible, skipping a turn while a listing of the pane is still out;
 - when the window comes back to the front or becomes visible again, with the Files mode on screen, or when it comes
   back on screen — the Files panel opened or floating in, or the Files tab chosen —
@@ -262,7 +264,8 @@ menu at the pointer** (Control-click also works in the desktop app).
 - **The Git mode's grouping folders and commit rows have no button**, and neither does a row that says something about a folder instead
   of listing an entry (loading, empty, unreadable, cut short; see "Rows and the keyboard" above).
 - **The button shows while its row is hovered, holds keyboard focus, is the selected file or change, or has its menu
-  open**, and is reachable from the keyboard either way. In Files it fades and opens out as it appears, as the
+  open**, and always on a device whose primary input cannot hover — a phone, or a tablet's touch screen. It is
+  reachable from the keyboard either way. In Files it fades and opens out as it appears, as the
   sidebar's row controls do (see "Rows, names and keyboard focus" in `docs/product/sidebar.md`), and while hidden it
   takes up no width, so the entry's name has the room. In the Git mode's change list it keeps its room while hidden and
   only fades in, so the line counts before it do not move (see "Line counts" in

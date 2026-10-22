@@ -9,7 +9,6 @@ import {
   localizedPath,
   pagePaths,
   robotsTxt,
-  sitemapXml,
 } from "./seo/site-seo";
 import site from "./site.config";
 
@@ -32,7 +31,7 @@ for (const { code } of locales) {
 
 export default defineNuxtConfig({
   compatibilityDate: "2026-10-08",
-  modules: ["@nuxtjs/i18n"],
+  modules: ["@nuxtjs/i18n", "@nuxtjs/sitemap"],
   devtools: { enabled: false },
   telemetry: false,
   ssr: true,
@@ -88,6 +87,21 @@ export default defineNuxtConfig({
     // The client plugin uses the shared language matcher and remembers manual choices.
     detectBrowserLanguage: false,
   },
+  site: {
+    url: site.origin,
+    name: appConfig.name,
+    trailingSlash: true,
+  },
+  sitemap: {
+    // One sitemap whose entries point at each other with hreflang; otherwise the
+    // i18n integration splits it into one sitemap per language plus an index.
+    sitemaps: false,
+    // The error page is prerendered for the static host but is not a page to index.
+    exclude: ["/404", "/404/"],
+    // The sitemap lists pages and their language alternates only (docs/product/website.md,
+    // "Search indexing and agent-readable copies"); image entries would fall outside that.
+    discoverImages: false,
+  },
   hooks: {
     "nitro:init"(nitro) {
       nitro.hooks.hook("prerender:done", async () => {
@@ -116,10 +130,6 @@ export default defineNuxtConfig({
           writeFile(
             resolve(nitro.options.output.publicDir, "404.html"),
             fallback,
-          ),
-          writeFile(
-            resolve(nitro.options.output.publicDir, "sitemap.xml"),
-            sitemapXml(site.url),
           ),
           writeFile(
             resolve(nitro.options.output.publicDir, "robots.txt"),

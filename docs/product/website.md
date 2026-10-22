@@ -61,8 +61,10 @@ copy can be indexed beside its HTML page.
 Each entry carries an alternate for every language and an `x-default` alternate. The language value is
 the BCP-47 tag identified in "Pages and languages": Simplified Chinese is `zh-Hans` while its route
 prefix stays `zh`. `x-default` is the unprefixed English URL of that page. Every listed URL ends with
-a slash. The standalone product preview is not listed and requests `noindex`. The error page is not listed;
-see "Missing pages and errors".
+a slash. Entries carry no `lastmod` and no image entries. The standalone product preview is not listed and requests
+`noindex`. The error page is not listed; see "Missing pages and errors". `sitemap.xml` is the only sitemap: there is
+no sitemap index and no per-language sitemap. It references an XSL stylesheet published at `__sitemap__/style.xsl`
+under the deployment root, so a browser opening it shows its entries as a table.
 
 Each HTML homepage and privacy page, in every language, has an absolute canonical URL with a trailing slash, and
 hreflang alternates for the HTML versions, also with trailing slashes. `x-default` is again the
@@ -279,6 +281,11 @@ Restaurant order API project, with changes that calculate prices from an eligibl
 stock and prevent repeated requests from creating duplicate orders, alongside sample tests and promotion rules.
 These files and check counts are demonstration data.
 
+Every agent counts as installed in the preview, and the rail's account quota panel shows sample readings of each
+agent's default account: Claude Code on the Max plan and Codex on the Plus plan, each with a 5-hour and a Weekly
+window, and Grok Build on SuperGrok with a weekly credit pool. Their reset times count from when the preview loaded,
+so no visit finds a reset already past. These readings are demonstration data.
+
 The homepage embeds a complete desktop viewport scaled to fit its available width. The application fills the
 embedded viewport, with the sample-data explanation in a caption below it. Once ready, the embedded
 application accepts pointer and keyboard interaction, including its report and project panes, and is available to
@@ -310,7 +317,8 @@ glide. Visitors who prefer reduced motion get no glide.
 
 When the embedded preview's container is 800 pixels wide or narrower, the application uses that width in a
 640-pixel-high viewport. Both the embedded and standalone previews support the application's responsive layout;
-on narrow screens the sidebar is a drawer, while the report and Files panels dock beside the terminal. The overview
+on narrow screens the sidebar is a drawer, while the report and Files panels dock beside the terminal, or, on phones,
+float over it one at a time and close with a tap beside them. The overview
 scene shows the terminal with no panel open, the report scene opens its report panel, and the
 code-review scene opens the sample change in the diff viewer automatically, including on phones. The preview does
 not connect to a daemon, run real agents, read or change real project files, or retain its preferences after a reload.

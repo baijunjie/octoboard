@@ -12,7 +12,7 @@ let dockedBreakpointPxCache: number | undefined;
  * throw still only ever happens from a call site prepared for it, not as a side effect of
  * importing this module.
  *
- * Reached only from the state initialiser and the effect in `useIsNarrow`, never from its render
+ * Reached only from the state initialiser and the effect in `useMediaQuery`, never from its render
  * body: `getComputedStyle` is a side-effecting DOM read, and the throw above would otherwise come
  * out of a render rather than from a call site prepared for it. */
 function dockedBreakpointPx(): number {
@@ -42,15 +42,24 @@ function dockedQuery(): string {
  * sets react-aria's arrow keys and `aria-orientation`, not only their layout.
  */
 export function useIsNarrow(): boolean {
-  const [isNarrow, setIsNarrow] = useState(() => !window.matchMedia(dockedQuery()).matches);
+  return !useMediaQuery(dockedQuery);
+}
+
+/**
+ * Whether the window matches the media query `query` returns, kept current as the window changes.
+ * `query` is a function so a query built from what the stylesheet sets (`dockedQuery`) is read in
+ * the state initialiser and the effect, never in render, where its throw would not be expected. It
+ * is read once: what it is built from cannot change at runtime, so neither can the query.
+ */
+export function useMediaQuery(query: () => string): boolean {
+  const [matches, setMatches] = useState(() => window.matchMedia(query()).matches);
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia(dockedQuery());
-    const handleChange = () => setIsNarrow(!mediaQuery.matches);
+    const mediaQuery = window.matchMedia(query());
+    const handleChange = () => setMatches(mediaQuery.matches);
     mediaQuery.addEventListener("change", handleChange);
     return () => mediaQuery.removeEventListener("change", handleChange);
-    // The breakpoint cannot change at runtime, so the query this subscribes to cannot either.
   }, []);
 
-  return isNarrow;
+  return matches;
 }

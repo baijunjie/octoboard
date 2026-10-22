@@ -271,12 +271,13 @@ function ArchiveRow({
       {/* The actions and the dates move to a line of their own together, so a narrow pane still
           has the dates at the row's end with the actions beside them. */}
       <div className="ms-auto flex min-w-0 flex-wrap items-center justify-end gap-y-1">
-        {/* Shown while the row is hovered or holds focus, like the sidebar rows' controls.
+        {/* Shown while the row is hovered or holds focus, like the sidebar rows' controls, and
+            always on a device that cannot hover, where nothing would reveal them before a tap.
             Hidden by clipping to no width rather than removed, so they take no room from
             the title yet stay reachable with Tab; focus lifts the clip so the focus ring
             can paint. The gap before the dates sits inside the clip, so a hidden pair
             leaves none. */}
-        <div className="flex max-w-0 shrink-0 overflow-hidden opacity-0 transition-opacity group-hover:max-w-none group-hover:opacity-100 group-focus-within:max-w-none group-focus-within:overflow-visible group-focus-within:opacity-100">
+        <div className="flex max-w-0 shrink-0 overflow-hidden opacity-0 transition-opacity [@media(hover:none)]:max-w-none [@media(hover:none)]:overflow-visible [@media(hover:none)]:opacity-100 group-hover:max-w-none group-hover:opacity-100 group-focus-within:max-w-none group-focus-within:overflow-visible group-focus-within:opacity-100">
           <div className="sidebar-fills flex shrink-0 items-center pe-3">
             {/* Only this wrapper, padding-free, keeps a press from reaching the row. */}
             <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>

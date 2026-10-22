@@ -12,11 +12,14 @@ import { consoleOf, projectOf, sessionOf, snapshotState } from "./gallery/fixtur
 import { isolate } from "./i18n/isolate";
 import { PlatformProvider } from "./platform/react";
 import type { PlatformAdapter } from "./platform";
+import { PREFERENCE_KEYS } from "./preferenceKeys";
 import type { Project } from "./protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "./store";
 import { ThemeProvider } from "./theme";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+// Each test mounts the whole App, which a machine under load can take longer than the default 5s for.
+vi.setConfig({ testTimeout: 20_000 });
 
 vi.mock("react-aria", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-aria")>();
@@ -121,12 +124,54 @@ it.each([false, true])("has no toggle for the pane itself, only a panel's, which
   await press("Browse files");
   expect(document.querySelector('[data-region="topbar"] [aria-label$="project pane"]')).toBeNull();
   expect(toggle("Hide files panel")!.getAttribute("aria-expanded")).toBe("true");
-  // Docked at every width: a row sibling, not the fixed drawer or float.
+  // Not the fixed float of a hover: docked as a row sibling, or, in a window too narrow to dock it,
+  // over the terminal's area with no width handle and with the terminal keeping the whole width.
   expect(asidePane().classList.contains("fixed")).toBe(false);
+  expect(asidePane().classList.contains("absolute")).toBe(narrow);
+  expect(document.querySelector("[role=separator][data-pane=aside]") === null).toBe(narrow);
+  expect(asidePane().previousElementSibling!.classList.contains("min-w-0")).toBe(narrow);
   await press("Hide files panel");
   expect(toggle("Show files panel")!.getAttribute("aria-expanded")).toBe("false");
   await press("Show files panel");
   expect(toggle("Hide files panel")).not.toBeNull();
+});
+
+it("floats one panel at a time over the terminal in a window too narrow to dock it, closed by its toggle, a press beside it or Escape", async () => {
+  const { project } = mountApp(true);
+  const storedBefore = localStorage.getItem(PREFERENCE_KEYS.panelStacks);
+  // A closed panel fades away out of reach (inert) before it leaves: only the ones still open count.
+  const cards = () => Array.from(document.querySelectorAll("[data-panel-card]")).filter((card) => !card.closest("[inert]")).map((card) => card.id);
+  const area = () => document.querySelector("main")!.firstElementChild!;
+  const scrim = () => Array.from(document.querySelectorAll<HTMLElement>("button[aria-label='Close panel']:not([inert])")).find((button) => !button.closest("[data-panel-card]"));
+  await press("Show sessions");
+  await openProjectMenu(project.name);
+  await press("Browse files");
+  expect(asidePane().hasAttribute("data-floating-panel")).toBe(true);
+  expect(cards()).toEqual(["panel-files"]);
+  // The covered terminal takes no keystrokes.
+  expect(area().hasAttribute("inert")).toBe(true);
+  // Opening another panel closes the first; the toggles say which one is shown.
+  await press("Show terminal panel");
+  expect(cards()).toEqual(["panel-terminal"]);
+  expect(toggle("Hide terminal panel")!.getAttribute("aria-expanded")).toBe("true");
+  expect(toggle("Show files panel")!.getAttribute("aria-expanded")).toBe("false");
+  // Its toggle closes it rather than dismissing and reopening it.
+  await press("Hide terminal panel");
+  expect(cards()).toEqual([]);
+  expect(scrim()).toBeUndefined();
+  expect(area().hasAttribute("inert")).toBe(false);
+  await press("Show files panel");
+  expect(cards()).toEqual(["panel-files"]);
+  await act(async () => scrim()!.click());
+  expect(cards()).toEqual([]);
+  expect(toggle("Show files panel")).not.toBeNull();
+  await press("Show files panel");
+  await act(async () => {
+    document.querySelector<HTMLElement>("#panel-files")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  });
+  expect(cards()).toEqual([]);
+  // None of it closed anything in the stack kept for a wider window.
+  expect(localStorage.getItem(PREFERENCE_KEYS.panelStacks)).toBe(storedBefore);
 });
 
 it("floats the hidden pane in while the pointer rests on a toggle, and docks it when the toggle is pressed", async () => {

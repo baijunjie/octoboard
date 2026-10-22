@@ -76,7 +76,7 @@ export function AvatarField({
               handFocusOff(removeButton.current, uploadButton.current, false);
               onRemove();
             }}
-            className="absolute -end-1.5 -top-1.5 rounded-full opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100 motion-reduce:transition-none"
+            className="absolute -end-1.5 -top-1.5 rounded-full opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100 motion-reduce:transition-none"
           >
             <X className="size-3" />
           </Button>

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { readLocaleMessages, renderAgentFiles } from "../seo/agent-documents.ts";
@@ -10,8 +10,8 @@ import {
   markdownFile,
   ogLocaleAlternates,
   pageKind,
+  pagePaths,
   robotsTxt,
-  sitemapXml,
 } from "../seo/site-seo.ts";
 
 const siteUrl = "https://octoboard.dev/";
@@ -31,21 +31,36 @@ test("page paths keep the English home unprefixed and privacy as a sibling file"
   assert.equal(markdownFile("/zh-Hant/privacy/"), "zh-Hant/privacy.md");
 });
 
-test("robots allows search, retrieval, and training, and the sitemap names every language once", () => {
+test("robots allows search, retrieval, and training", () => {
   const robots = robotsTxt(siteUrl);
   assert.match(robots, /^User-agent: \*\nAllow: \/\n/);
   assert.match(robots, /Content-Signal: search=yes, ai-input=yes, ai-train=yes/);
   assert.match(robots, /Content-Usage: train-ai=y/);
   assert.equal(robots.includes("Disallow"), false);
   assert.match(robots, /Sitemap: https:\/\/octoboard\.dev\/sitemap\.xml/);
-
-  const sitemap = sitemapXml(siteUrl);
-  assert.match(sitemap, /hreflang="zh-Hans"/);
-  assert.match(sitemap, /hreflang="x-default"/);
-  assert.match(sitemap, /<loc>https:\/\/octoboard\.dev\/zh\/<\/loc>/);
-  assert.equal(sitemap.includes("/zh-Hans/"), false);
-  assert.equal(sitemap.includes("/404"), false);
 });
+
+// The sitemap comes from @nuxtjs/sitemap, so it is checked on the generated output of a
+// default-environment build (production origin, root base path).
+const generatedSitemap = new URL("../.output/public/sitemap.xml", import.meta.url);
+
+test(
+  "the generated sitemap names every language once and links its stylesheet",
+  {
+    skip: !existsSync(generatedSitemap)
+      ? "run pnpm --filter @octoboard/web build first"
+      : false,
+  },
+  () => {
+    const sitemap = readFileSync(generatedSitemap, "utf8");
+    assert.match(sitemap, /<\?xml-stylesheet type="text\/xsl" href="[^"]*\/__sitemap__\/style\.xsl"\?>/);
+    assert.equal(sitemap.match(/<url>/g)?.length, locales.length * pagePaths.length);
+    assert.match(sitemap, /hreflang="zh-Hans" href="https:\/\/octoboard\.dev\/zh\/"/);
+    assert.match(sitemap, /hreflang="x-default" href="https:\/\/octoboard\.dev\/"/);
+    assert.equal(sitemap.includes("/zh-Hans/"), false);
+    assert.equal(sitemap.includes("/404"), false);
+  },
+);
 
 test("each locale has a 1200 by 630 share image", () => {
   for (const locale of locales) {

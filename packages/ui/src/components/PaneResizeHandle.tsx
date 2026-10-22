@@ -45,7 +45,8 @@ const HIT_WIDTH = { sidebar: 6, aside: 24 } as const;
  * window: the nearest positioned ancestor must be the app root, as tall as the window, and no element
  * between them may be positioned. `App.tsx` renders it only while its pane is docked and shown. The
  * sidebar's is hidden below the `docked` breakpoint, where that pane is a fixed-width drawer; the
- * aside docks at every width.
+ * aside's is there wherever the aside docks, and gone in a window too narrow for that, where its
+ * panel floats over the terminal instead.
  */
 export function PaneResizeHandle({
   side,

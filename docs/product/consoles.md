@@ -86,7 +86,7 @@ technology announces it as a group named "Avatar", and the console's name beside
 While no image is picked it shows an upload glyph, so an optional field shows nothing that looks already filled in;
 pressing it opens the file picker. Once an image is picked the control shows the image, and a delete button sits over
 its corner: hidden at rest, shown while the mouse pointer is over the control or anything in it has keyboard focus,
-and shown outright where the pointer is coarse, since a touch has no hover to reveal it with and tapping the image
+and shown outright on a device whose primary input cannot hover, since a touch has no hover to reveal it with and tapping the image
 opens the file picker instead. Pressing the delete button puts the control back to the upload glyph, from where another
 image can be picked. The field does not show what the default avatar would look like: a console with no image is drawn
 as described above wherever the console appears, and the dialog does not preview it.

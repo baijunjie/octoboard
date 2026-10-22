@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { useLatest } from "../components/useLatest";
 import { isImeKey } from "../imeKey";
-import { useIsNarrow } from "./breakpoint";
+import { CANNOT_HOVER } from "../touchInput";
+import { useIsNarrow, useMediaQuery } from "./breakpoint";
 import { useDockedPanelVisible } from "./panelVisibility";
 import { type ConsolePeek, useConsolePeek } from "./useConsolePeek";
 import { MODAL_OPEN } from "./useRegionCycle";
@@ -164,7 +165,8 @@ export interface PaneToggles {
   sidebarShown: boolean;
   toggleSidebar: () => void;
   closeSidebar: () => void;
-  /** Closes every overlay that is open, the sidebar's drawer or a floating pane, as Escape does;
+  /** Closes every overlay that is open, the sidebar's drawer, a floating pane or the panel floating
+   * over the terminal in a window too narrow to dock the aside, as Escape does;
    * does nothing while none is, so focus inside a docked pane stays put. */
   dismissOverlays: () => void;
 }
@@ -176,32 +178,51 @@ export interface PaneToggles {
  * (`panelVisibility.ts`). Both states live in one place since the toggle sits in the window chrome,
  * and widening the window past the breakpoint has to be able to close the overlay.
  *
- * The aside has no toggle or drawer of its own: it is docked at every width while a panel is open
- * (`panels/stackState.ts`), and with none open it floats in over the terminal while the pointer
+ * The aside has no toggle or drawer of its own: it is docked while a panel is open
+ * (`panels/stackState.ts`), floating over the terminal instead only in a window too narrow to dock it
+ * (`useAsideFloats`), and with none open it floats in over the terminal while the pointer
  * rests on a panel kind's toggle (`asidePeek`), showing that panel; pressing the toggle docks it.
  * Likewise a hidden docked sidebar floats in from its toggle or a console's avatar on the rail
  * (`sidebarPeek`). Leaving a floating pane (or Escape) hides it again. The two never float
  * together: revealing one hides the other.
  *
  * `hasSidebar` is whether the sidebar is rendered at all (it is not while there is no console);
- * `asidePeekable` is whether the aside may float in now: something owns it and its column has no
- * panel in it (none open, or the one open maximized, which folds the column away); `focusTerminal` is where keyboard focus goes when the pane holding it is hidden.
+ * `asidePeekable` is whether the aside may float in now: something owns it, its column has no
+ * panel in it (none open, or the one open maximized, which folds the column away) and the window
+ * is wide enough to dock it (narrower, a panel opens only on a press). Neither pane floats in on a
+ * device whose primary input cannot hover. `focusTerminal` is where keyboard focus goes when the
+ * pane holding it is hidden.
+ * `drawer` is the drawer's open state when the caller keeps it, for what has to know it before this
+ * hook runs (`panels/useFloatingPanel.ts`); left out, the hook keeps its own.
  */
 export function usePaneToggles({
   hasSidebar,
   asidePeekable,
   focusTerminal,
+  floatingPanel = false,
+  closeFloatingPanel,
+  drawer,
 }: {
   hasSidebar: boolean;
   asidePeekable: boolean;
   focusTerminal: () => void;
+  /** A panel floats over the agent terminal in a window too narrow to dock the aside: an overlay
+   * like the drawer, which Escape and `dismissOverlays` close (`closeFloatingPanel`). */
+  floatingPanel?: boolean;
+  closeFloatingPanel?: () => void;
+  drawer?: readonly [boolean, (open: boolean) => void];
 }): PaneToggles {
+  const closeFloating = useLatest(closeFloatingPanel);
   const isNarrow = useIsNarrow();
+  // A device whose primary input cannot hover (a phone or a tablet's touch screen) floats no pane in:
+  // a tap on a toggle or an avatar is a press, never a rest of the pointer.
+  const canHover = !useMediaQuery(() => CANNOT_HOVER);
   const keyboardInput = useLatest(useFocusVisible().isFocusVisible);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const ownDrawer = useState(false);
+  const [sidebarOpen, setSidebarOpen] = drawer ?? ownDrawer;
   const [sidebarDocked, setSidebarDocked] = useDockedPanelVisible("sidebar");
-  const sidebarPeek = usePanePeek("sidebar", !isNarrow && !sidebarDocked && hasSidebar, focusTerminal);
-  const asidePeek = usePanePeek("aside", asidePeekable, focusTerminal, () => keyboardInput.current);
+  const sidebarPeek = usePanePeek("sidebar", canHover && !isNarrow && !sidebarDocked && hasSidebar, focusTerminal);
+  const asidePeek = usePanePeek("aside", canHover && asidePeekable, focusTerminal, () => keyboardInput.current);
   const revealPeek = (mine: PeekControl, other: PeekControl) => () => {
     if (!mine.peekable) return;
     other.hide();
@@ -217,8 +238,14 @@ export function usePaneToggles({
   // handed to the terminal first. This catches focus still inside the pane only because React
   // treats the media query's `change` event as discrete and runs this effect before the browser
   // applies the hidden pane's `docked:invisible` in that frame's style recalc.
+  //
+  // Narrowing below the breakpoint turns the docked sidebar into the closed drawer, out of reach
+  // (inert), so focus inside it is handed to the terminal before it falls to `<body>`.
   useEffect(() => {
-    if (isNarrow) return;
+    if (isNarrow) {
+      if (!sidebarOpen) releaseFocus("sidebar", focusTerminal);
+      return;
+    }
     if (!sidebarDocked) releaseFocus("sidebar", focusTerminal);
     setSidebarOpen(false);
   }, [isNarrow]);
@@ -236,7 +263,8 @@ export function usePaneToggles({
   };
 
   const dismissOverlays = () => {
-    if (!sidebarOpen && !sidebarPeek.active && !asidePeek.active) return;
+    if (!sidebarOpen && !sidebarPeek.active && !asidePeek.active && !floatingPanel) return;
+    if (floatingPanel) closeFloating.current?.();
     // Only a drawer that is open: closing one runs `releaseFocus`, which would pull focus out of a
     // docked pane that is not being hidden.
     if (sidebarOpen) closeSidebar();
@@ -287,7 +315,7 @@ export function usePaneToggles({
   // what `useRefocusIfLost` in `dialogs/Dialog.tsx` exists to prevent, so it is not worth a second
   // guard here.
   useEffect(() => {
-    if (!sidebarOpen && !sidebarPeek.active && !asidePeek.active) return;
+    if (!sidebarOpen && !sidebarPeek.active && !asidePeek.active && !floatingPanel) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       // An element marking itself `data-escape-topmost` is a floating panel over the drawer that
@@ -303,7 +331,7 @@ export function usePaneToggles({
     };
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [sidebarOpen, sidebarPeek.active, asidePeek.active]);
+  }, [sidebarOpen, sidebarPeek.active, asidePeek.active, floatingPanel]);
 
   return {
     sidebarOpen,

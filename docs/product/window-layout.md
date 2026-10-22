@@ -21,9 +21,10 @@ console exists.
 How the panes are arranged depends on one width, **1168 px**. At that width and above they sit side by side in a
 row, the layout the macOS window is always in; a sidebar the user has hidden there can still float in over the
 terminal for a moment. Below it the sidebar becomes an overlay drawer over the terminal, while the right pane stays
-docked beside the terminal, its width clamped; only a client with no window minimum of its own, such as the UI opened
-in a plain browser, can get there. With none of its panels open, the right pane can float a panel in over the
-terminal at any width.
+docked beside the terminal, its width clamped, down to **782 px**; below that one panel at a time floats over the
+terminal instead. Only a client with no window minimum of its own, such as the UI opened in a plain browser, can get
+below 1168 px. With none of its panels open, the right pane can float a panel in over the terminal at 782 px and
+wider.
 
 The right pane's cards and floating behavior are the same whoever owns it.
 
@@ -221,11 +222,12 @@ It runs, left to right:
   or closed (see "Hiding the sidebar" below). The start of the bar never becomes narrower than the
   buttons there — in the macOS application, that includes the clear space kept for the window buttons. Once the column no longer
   reaches past that start, the breadcrumb stays beside the sidebar toggle, which is also where it sits while the
-  sidebar is hidden. Below 1168 px it starts right after the sidebar toggle as well. Its end mirrors this, at every
-  width: while the right pane is shown, the breadcrumb's space ends where the right pane does, rather than running on
-  over it, and follows the pane's edge while it is resized. The end of the bar never becomes narrower than the
-  toggles there, so once the pane no longer reaches past them, and while the right pane is not shown, the
-  breadcrumb's space runs on to the toggles, or to the bar's end where there are none. A trail too long for its space fades out at its right edge, as in "Names too long for their space" in
+  sidebar is hidden. Below 1168 px it starts right after the sidebar toggle as well. Its end mirrors this: while the
+  right pane is docked, the breadcrumb's space ends where the right pane does, rather than running on over it, and
+  follows the pane's edge while it is resized. The end of the bar never becomes narrower than the toggles there, so
+  once the pane no longer reaches past them, and while the right pane is not docked — not shown, or a panel floating
+  over the terminal below 782 px — the breadcrumb's space runs on to the toggles, or to the bar's end where there are
+  none. A trail too long for its space fades out at its right edge, as in "Names too long for their space" in
   `docs/product/labels-and-tooltips.md`, and the status icon always stays visible. With no session selected there is
   no breadcrumb. While the archive view is open (see "The archive view" in `docs/product/archive-view.md`) the
   breadcrumb shows where that is instead, with no status icon: *console › project › Archived sessions*, *console ›
@@ -291,7 +293,8 @@ The rail runs from under the top bar to the window's bottom (or the connection b
     their quotas (see "The account quota panel on the rail" in `docs/product/account-quotas.md`);
   - **Settings**, which opens the settings dialog.
 
-The rail is the same at every width; below 1168 px it stays beside the sidebar's drawer, which opens past it.
+The rail is the same at every width; below 1168 px it stays beside the sidebar's drawer, which opens past it, and
+below 782 px beside a panel floating over the terminal. Neither dims it, and it stays usable while either is open.
 
 ### Pressing the chrome's controls
 
@@ -322,8 +325,9 @@ and Terminal panels.
   up to which of that owner's panels are open (see "What is remembered" in `docs/product/right-pane-panels.md`).
 - **Browse files**, when offered in a project's action menu (see "Opening a project's files" in
   `docs/product/project-pane.md`), gives the right pane to that project and opens its Files panel (see "Opening and
-  closing panels" in `docs/product/right-pane-panels.md`), which puts the pane on screen; below 1168 px it also closes
-  the sidebar's drawer. It selects, starts and resumes nothing: the selected session's terminal stays, and the
+  closing panels" in `docs/product/right-pane-panels.md`), which puts the pane on screen — below 782 px it floats the
+  Files panel over the terminal instead (see "Below 782 px: one panel floats over the terminal" in
+  `docs/product/right-pane-panels.md`); below 1168 px it also closes the sidebar's drawer. It selects, starts and resumes nothing: the selected session's terminal stays, and the
   breadcrumb still names it.
 - **Browse files while a console session's report panel is shown** puts the project's Files panel in its place.
   Selecting the console session again brings the report panel back, on its newest page; anything typed into a page's
@@ -374,11 +378,13 @@ changes the remembered width: when the window widens again, each pane gets its c
 A sidebar the user has hidden takes no width at all once it is hidden, and neither does one only floating in: its
 width goes to the terminal. While the sidebar's docked column is easing closed, it still takes the width it has
 reached (see "Hiding the sidebar" below). A right pane with none of its panels open, or with no owner, is not in the
-row, takes no width and stops holding back the sidebar's width; one only floating a panel in takes none either.
+row, takes no width and stops holding back the sidebar's width; one only floating a panel in takes none either, and
+nor does a panel floating over the terminal below 782 px.
 
 Anything that changes the terminal's size — resizing the window, resizing a pane, hiding or showing the sidebar, the
 right pane coming or going as its first panel opens or its last closes or with its owner — resizes the agent's
-terminal (see "Output, scrollback and size" in `docs/product/session-terminal.md`).
+terminal (see "Output, scrollback and size" in `docs/product/session-terminal.md`). A panel floating over the
+terminal below 782 px coming or going does not.
 
 ### Resizing the sidebar and the right pane
 
@@ -406,8 +412,9 @@ Both work the same way:
 
 The sidebar's handle is there only while the sidebar is shown in the row: not while it is hidden or floating in, and
 not below 1168 px, where the sidebar is a drawer; it is also absent while its column is easing open or closed. The
-right pane's handle is there whenever the right pane is docked, at every width, and not while a panel only floats in,
-nor while the pane's column is folded away under a maximized Terminal panel (see "Maximizing the Terminal panel" in
+right pane's handle is there whenever the right pane is docked, which is at 782 px and wider, and not while a panel
+only floats in, nor while a panel floats over the terminal below 782 px, nor while the pane's column is folded away
+under a maximized Terminal panel (see "Maximizing the Terminal panel" in
 `docs/product/right-pane-panels.md`). Its pointer target is 24 px wide, centred on the 8 px gap.
 
 **Each pane's chosen width is remembered per client**, in that client's own browser storage, as the appearance choice
@@ -424,10 +431,10 @@ and with no ease (see `docs/product/right-pane-panels.md`).
 Hiding the sidebar while it holds keyboard focus — a sidebar row reached with Tab, say — moves focus to the terminal,
 or to the top bar when no session is selected.
 
-At 1168 px and wider, hiding or showing the docked sidebar eases its column over **200 ms**, the same length as the
-overlay drawer's slide. Where the system asks for reduced motion, the column opens or closes at once. Pressing the
-toggle again while the column is still moving reverses the ease. Below 1168 px the sidebar is a drawer and slides
-laterally instead (see "Below 1168 px: the sidebar becomes a drawer" below).
+At 1168 px and wider, hiding or showing the docked sidebar eases its column over **200 ms**. Where the system asks
+for reduced motion, the column opens or closes at once. Pressing the toggle again while the column is still moving
+reverses the ease. Below 1168 px the sidebar is a drawer and fades up into place instead (see "Below 1168 px: the
+sidebar becomes a drawer" below).
 
 During the ease the sidebar stays a full-height column, from below the top bar to above the connection banner when
 that banner is shown, and does not become the rounded card in "A hidden pane floats in on hover" below. Its contents
@@ -447,7 +454,7 @@ and size" in `docs/product/session-terminal.md`).
 ### A hidden pane floats in on hover
 
 A pane that is not on screen can be brought up for a moment without showing it for good: a hidden sidebar at 1168 px
-and wider, and the right pane, at any width, while it has an owner and none of its panels is open, or only a maximized
+and wider, and the right pane, at 782 px and wider, while it has an owner and none of its panels is open, or only a maximized
 Terminal panel (see "Floating a panel in" in `docs/product/right-pane-panels.md`). This is a
 **floating pane**. The sidebar floats in as a card inset from the window chrome and the window's edges, with rounded
 corners, a hairline edge and the light card shadow (see "The window chrome and the content panel" above); the
@@ -470,9 +477,12 @@ full-height column (see "Hiding the sidebar" above).
 - **What brings up the right pane**: the mouse reaching a panel toggle in the top bar, at once, which floats that
   toggle's panel in (see "Floating a panel in" in `docs/product/right-pane-panels.md`). Nothing along the window's
   edge brings it up.
-- Touch and pen bring up neither.
-- **How it shows**: both cards fade from transparent to opaque while moving upward **6 px** into place over
-  **240 ms**, with the same `cubic-bezier(0.2, 0, 0, 1)` easing as switching consoles. Neither slides horizontally.
+- Touch and pen bring up neither, and on a device whose primary input cannot hover — a phone, or a tablet's touch
+  screen — neither floats in at all, whatever pointer is used: the sidebar is shown with its toggle and a panel
+  opened by pressing its toggle.
+- **How it shows**: both cards fade from transparent to opaque while rising into place by **4% of the card's own
+  height**, over **240 ms**, with the same `cubic-bezier(0.2, 0, 0, 1)` easing as switching consoles. The whole card
+  fades and rises together — its edge, fill, shadow and content. Neither slides horizontally.
   Where the system asks for reduced motion, they appear at once. Each uses the pane's chosen width — the right pane
   at most 92% of the window's width — with a shadow and no dimming behind it. It overlays the terminal, so
   **the terminal is not resized** and the agent is sent no size change.
@@ -482,8 +492,8 @@ full-height column (see "Hiding the sidebar" above).
     from the window's bottom (or the connection banner), and 8 px on the terminal's side.
   - A card's own headers are 8 px shorter than the docked sidebar's — the 8 px gap, the card's edge taking no space —
     so the line under a header stays level across the panel (see "The window chrome and the content panel" above).
-- **How it goes away**: 200 ms after the pointer has left it, the card fades out while moving downward 6 px over
-  240 ms, with the same easing as its entrance, or disappears at once where the system asks for reduced motion.
+- **How it goes away**: 200 ms after the pointer has left it, the card fades out while sinking back by 4% of its
+  height over 240 ms, with the same easing as its entrance, or disappears at once where the system asks for reduced motion.
   Having left means the pointer is on none of the card, the gap around it, or what brought it up in the top bar — the
   sidebar's toggle, or any panel toggle for the right pane — and, for the sidebar, none of the console avatars on the
   rail either. **The gap counts as part of the card**: the 8 px around the sidebar's card, and the gaps the right
@@ -511,8 +521,11 @@ full-height column (see "Hiding the sidebar" above).
   sidebar, until the pane is docked the toggle still reads "Show sessions"; the card goes away and its docked column
   eases open in the row; which console the column shows is in "Previewing a console from the rail" in
   `docs/product/console-switcher.md`. For the right pane, pressing the floating panel's toggle opens that panel and
-  docks the pane at once, with no animation (see "Floating a panel in" in `docs/product/right-pane-panels.md`).
-- There is no floating sidebar below 1168 px, and narrowing the window below it sends one away.
+  docks the pane at once, with no animation, or below 782 px floats it over the terminal instead (see "Floating a panel
+  in" in `docs/product/right-pane-panels.md`).
+- There is no floating sidebar below 1168 px, and narrowing the window below it sends one away. There is no floating
+  right pane below 782 px, where a pressed panel toggle floats its panel over the terminal instead (see "Below 782
+  px: one panel floats over the terminal" in `docs/product/right-pane-panels.md`).
 
 ## Below 1168 px: the sidebar becomes a drawer
 
@@ -521,18 +534,31 @@ one of its panels is open, the right pane share the content panel. The sidebar b
 them, **closed by default**:
 
 - The drawer has the same rounded corners, hairline edge and light card shadow as the floating panes. It keeps an **8 px gap**
-  from the top bar and from the window's bottom (or the connection banner when it is shown), slides in from behind the
-  rail and out behind it, never drawn over the rail, and keeps an 8 px gap from it when open. Its headers are 40 px
-  high (see "The window chrome and the content panel" above).
+  from the top bar, from the window's bottom (or the connection banner when it is shown) and from the rail, and is
+  never drawn over the rail. Its headers are 40 px high (see "The window chrome and the content panel" above).
+- It opens by fading in while rising into place by **4% of its own height**, and closes by fading out while sinking
+  back, over **240 ms** with the same `cubic-bezier(0.2, 0, 0, 1)` easing as a floating pane (see "A hidden pane
+  floats in on hover" above); its edge and shadow fade with it, and it does not slide sideways. Where the system asks
+  for reduced motion it opens and closes at once.
+  While it is closed, its exit included, it is out of reach: nothing in it takes a press, keyboard focus or the
+  attention of assistive technology.
 - The drawer is 280 px wide, also capped to the space after the rail minus two 8 px gaps, so it does not touch the
   opposite edge of the content panel on a narrow screen. The dimmed area behind the open drawer covers the content
-  panel, including the gaps, leaving the top bar, the rail and the banner's Retry usable.
+  panel, including the gaps, leaving the top bar, the rail and the banner's Retry usable. It fades in and out with
+  the drawer over the same 240 ms, at once where the system asks for reduced motion, and takes no presses while it
+  fades out.
 - It is opened and closed with the same toggle that hides and shows the sidebar at 1168 px and wider, at the top
   bar's start (see "The sidebar toggle and the panel toggles" above).
 - It closes on its toggle, on a press anywhere in the dimmed area beside it, or on `Escape`; Browse files and a right
-  pane floating in close it too (see "What the right pane shows" above).
+  pane floating in close it too (see "What the right pane shows" above), and so does a panel opened below 782 px.
+  Opening the drawer closes a panel floating over the terminal (see "Below 782 px: one panel floats over the
+  terminal" in `docs/product/right-pane-panels.md`).
   While it is open `Escape` closes it and **does not reach the running agent**; in a field in the drawer that holds
   text it only clears the field, and the next one closes the drawer.
+- **Selecting a session in the drawer closes it below 782 px**, so the session's terminal shows; from 782 px up to
+  1168 px the drawer stays open beside the terminal.
+- A dialog opened from a control pressed in the open drawer, or from a menu opened there, gives keyboard focus back
+  to that control in the drawer as it closes, rather than to the terminal behind the drawer.
 - Widening the window to 1168 px or more closes it, and so does the last console going, which leaves no sidebar (see
   `docs/product/welcome-screen.md`).
 - Closing the drawer while it holds keyboard focus moves focus to the terminal, and so does widening the window past
@@ -544,13 +570,15 @@ and widening the window again brings back the docked sidebar as the user last le
 Because the drawer overlays the terminal rather than pushing it aside, **opening or closing it never resizes the
 terminal**, so the running agent is never sent a terminal-size change by the drawer.
 
-**The right pane stays docked below 1168 px**, at the width the user chose, clamped so that the terminal keeps its
-**398 px** floor, about 40 columns. The right pane's minimum is **336 px while the Terminal panel is in its column**,
-and **320 px otherwise**; a maximized Terminal panel does not raise the Files panel's column minimum. This effective
-minimum does not rewrite the remembered width. Where the content panel is narrower than the terminal's floor plus
-the right pane's minimum (398 + 336 px, or 398 + 320 px: window widths below about 782 px or 766 px), or than the
-terminal's floor alone with no right pane, the row **scrolls horizontally** rather than squeezing the terminal
-further.
+**The right pane stays docked below 1168 px, down to 782 px**, at the width the user chose, clamped so that the
+terminal keeps its **398 px** floor, about 40 columns. The right pane's minimum is **336 px while the Terminal panel
+is in its column**, and **320 px otherwise**; a maximized Terminal panel does not raise the Files panel's column
+minimum. This effective minimum does not rewrite the remembered width. 782 px is the rail, the terminal's floor and
+the larger of those minimums side by side (48 + 398 + 336 px).
+
+**Below 782 px the right pane does not dock**: one panel at a time floats over the terminal, which takes the content
+panel's whole width with no minimum, so the row never scrolls sideways (see "Below 782 px: one panel floats over the
+terminal" in `docs/product/right-pane-panels.md`).
 
 ## Right-click menus
 
@@ -578,10 +606,9 @@ parts of the window:
   the right pane on the left; the content panel's rounded corner is its top right. The top bar's Back, Forward and
   sidebar toggle are at its right end, in mirrored order, the panel toggles at its left end, and the breadcrumb
   runs leftward from them, starting over the terminal's area while the sidebar is shown and ending where the right
-  pane does, on the window's left, while the right pane is shown, following each pane's inner edge while that pane is
+  pane does, on the window's left, while the right pane is docked, following each pane's inner edge while that pane is
   resized or eases, as in "The top bar" above.
-- The sidebar's drawer slides in from behind the rail. Floating cards keep their vertical fade and drift in either
-  reading direction.
+- The sidebar's drawer and the floating cards keep their vertical fade and drift in either reading direction.
 - Each resize handle stays on its pane's inner edge, the sidebar's left edge and the right pane's right one.
   Dragging toward the terminal still widens the pane, and so does the arrow key pointing away from the pane.
 - Settings and the other dialogs are mirrored the same way, and toasts sit at the bottom left. So is the file viewer's

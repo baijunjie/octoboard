@@ -152,7 +152,7 @@ interface TitleBarProps {
  * area: the other window controls are on the rail (`Rail.tsx`). The end is the reading direction's,
  * so under right-to-left it is at the window's left, where the bar's own padding keeps the macOS
  * window buttons clear (`BarFrame`). Above the `docked` breakpoint, the start segment tracks the
- * docked sidebar's clip (`.title-bar-start`); the end segment tracks the aside's at every width
+ * docked sidebar's clip (`.title-bar-start`); the end segment tracks the aside's while it is docked
  * (`.title-bar-end`), so the breadcrumb stays over the main area while either column eases open or
  * closed (the aside's does not ease).
  */
@@ -211,7 +211,7 @@ export function TitleBar({
       <div className="flex min-w-0 flex-1 items-center px-3">
         {viewTrail ? <Trail names={viewTrail} /> : selectedSession && <Breadcrumb session={selectedSession} />}
       </div>
-      {/* At every width, as wide as the docked aside and never narrower than its toggles, so the
+      {/* While the aside is docked, as wide as it and never narrower than its toggles, so the
           breadcrumb stops over the main area instead of running on above the aside. */}
       <div
         className="title-bar-end flex shrink-0 items-center justify-end"

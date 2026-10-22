@@ -431,10 +431,10 @@ html {
   }
 }
 
-/* The end segment likewise spans the docked aside (`--aside-span`), so the breadcrumb ends where the
-   aside begins, at every width as the aside docks in a narrow window too. It does not ease: the aside
-   docks and goes at once. Under right-to-left the
-   aside is at the window's left, where the bar's own padding already covers
+/* The end segment likewise spans the aside while it is docked (`--aside-span`), so the breadcrumb ends
+   where the aside begins, below the `docked` breakpoint too; a panel floating over the terminal on a
+   phone takes none of it. It does not ease: the aside docks and goes at once. Under right-to-left
+   the aside is at the window's left, where the bar's own padding already covers
    `--window-controls-inset` of it. */
 .title-bar-end {
   width: var(--aside-span, 0px);
@@ -693,16 +693,16 @@ html {
    difference meets WCAG 1.4.11's 3:1 for a state. */
 .toggle-button-group .toggle-button {
   --toggle-button-bg-selected: var(--app-accent);
-  --toggle-button-bg-selected-hover: color-mix(in oklab, var(--app-accent) 88%, black);
-  --toggle-button-bg-selected-pressed: color-mix(in oklab, var(--app-accent) 88%, black);
+  --toggle-button-bg-selected-hover: color-mix(in oklab, var(--app-accent) 84%, black);
+  --toggle-button-bg-selected-pressed: color-mix(in oklab, var(--app-accent) 84%, black);
   --toggle-button-fg-selected: var(--accent-foreground);
 }
 
 .dark .toggle-button-group .toggle-button,
 [data-theme="dark"] .toggle-button-group .toggle-button {
   --toggle-button-bg-selected: var(--accent-glyph);
-  --toggle-button-bg-selected-hover: color-mix(in oklab, var(--accent-glyph) 88%, white);
-  --toggle-button-bg-selected-pressed: color-mix(in oklab, var(--accent-glyph) 88%, white);
+  --toggle-button-bg-selected-hover: color-mix(in oklab, var(--accent-glyph) 84%, white);
+  --toggle-button-bg-selected-pressed: color-mix(in oklab, var(--accent-glyph) 84%, white);
   --toggle-button-fg-selected: var(--eclipse);
 }
 
@@ -1054,17 +1054,34 @@ html.pane-resizing * {
   --view-shift: -24px;
 }
 
-/* A panel's incoming content (a project's browser, a project's terminals), when the user switches
-   projects in a right pane that is already on screen (`panel-switch` on the panel's root and
-   `panel-switch-view` on what slides; a pane that docks or floats in plays none), keeps the pane's
-   geometry fixed. A surface-coloured veil fades instead of the content: ancestor opacity can blank
-   composited controls in WKWebView. The viewer stays outside this transformed content so its fixed
-   overlays keep the window as their frame. */
-@keyframes panel-switch-enter {
-  from { transform: translateX(var(--panel-switch-shift, 10px)); }
-  to { transform: translateX(0); }
+/* A right-pane card floating over the terminal (`AsidePane.tsx`, `data-card-motion`) rises into
+   place by 4% of its own height as its pane fades in, and sinks back as it fades out: the pane
+   carries the fade, each card the rise, so the card's frame, background and shadow move with its
+   content and the percentage is the card's. */
+[data-card-motion] [data-panel-card] {
+  transition: translate 240ms cubic-bezier(0.2, 0, 0, 1);
 }
 
+[data-card-motion="away"] [data-panel-card],
+[data-card-motion="preparing"] [data-panel-card] {
+  translate: 0 4%;
+}
+
+[data-card-motion="preparing"] [data-panel-card] {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-card-motion] [data-panel-card] {
+    transition: none;
+  }
+}
+
+/* A panel's incoming content (a project's browser, a project's terminals), when the user switches
+   projects in a right pane that is already on screen (`panel-switch` on the panel's root; a pane
+   that docks or floats in plays none), fades in where it stands, the pane's geometry fixed. A
+   surface-coloured veil fades away over it instead of the content fading: ancestor opacity can
+   blank composited controls in WKWebView. */
 @keyframes panel-switch-reveal {
   from { opacity: 1; }
   to { opacity: 0; }
@@ -1081,15 +1098,7 @@ html.pane-resizing * {
   inset-inline-end: 1.75rem;
 }
 
-.panel-switch:dir(rtl) {
-  --panel-switch-shift: -10px;
-}
-
 @media (prefers-reduced-motion: no-preference) {
-  .panel-switch > .panel-switch-view {
-    animation: panel-switch-enter 240ms cubic-bezier(0.2, 0, 0, 1);
-  }
-
   .panel-switch::after {
     content: "";
     position: absolute;
@@ -1144,7 +1153,7 @@ html.pane-resizing * {
 /* A vertical fade that also scrolls sideways (`components/scrollFade.tsx` sets the attribute while it
    does). HeroUI's mask keeps an opaque strip along the right edge for the vertical scrollbar and
    nothing along the bottom, so a horizontal scrollbar sits inside the fade's band and is dimmed with
-   the content (measured in Safari with always-shown scroll bars: 38% opacity 3px up from the bottom).
+   the content (measured in Safari with always-shown scroll bars: 34% opacity 3px up from the bottom).
    This gives the bottom the same opaque strip, and shortens the gradient layer by it. It is only for
    a scroller that has a horizontal scrollbar: reserved everywhere, the bottom strip of every faded
    surface would stop fading. The library writes each of the three properties as one declaration, so
@@ -1250,7 +1259,7 @@ html.pane-resizing * {
 .app-code[data-color="warning"] { --app-code-tone: var(--warning); }
 .app-code[data-color="danger"] { --app-code-tone: var(--app-danger); }
 .app-code[data-color]:not([data-color="default"]) {
-  background-color: color-mix(in oklab, var(--app-code-tone) 18%, transparent);
+  background-color: color-mix(in oklab, var(--app-code-tone) 14%, transparent);
   color: color-mix(in oklab, var(--app-code-tone) 40%, var(--foreground));
 }
 /* An inline literal is as large as the text it stands in, a field's 12px error included; HeroUI's

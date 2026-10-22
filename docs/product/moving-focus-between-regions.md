@@ -2,7 +2,7 @@
 
 How `F6` moves keyboard focus between the window's regions: the top bar, the rail, the panes (or the welcome screen
 standing in for them, see `docs/product/welcome-screen.md`), the connection banner and the toasts, whose places in the
-window are in `docs/product/window-layout.md`.
+window are in `docs/product/window-layout.md`; and where the window does not move focus after a tap.
 
 ## Moving focus between regions with F6
 
@@ -34,7 +34,8 @@ open, and from focus inside it they go as from focus in none of the regions, clo
 a pane that is only floating in, the right pane's panels when nothing owns the pane or none of its panels is open, a
 panel with nothing to take focus (a Files panel while it is still loading, see "Loading the project pane" in
 `docs/product/project-pane.md`), the terminal and the archive view while a maximized Terminal panel covers them (see
-"Maximizing the Terminal panel" in `docs/product/right-pane-panels.md`), and the terminal when no session is selected —
+"Maximizing the Terminal panel" in `docs/product/right-pane-panels.md`) or a panel floats over them below 782 px (see
+"Below 782 px: one panel floats over the terminal" in `docs/product/right-pane-panels.md`), and the terminal when no session is selected —
 unless its area is then offering a creation action, which makes it a stop (see "A console with nothing in it" in
 `docs/product/session-terminal.md`) — or while the archive view covers it.
 With no console the sidebar, the archive view, the terminal and the right pane are all skipped together, none of them
@@ -43,7 +44,7 @@ the welcome screen is the one skipped. The sidebar counts as shown when it is do
 or its drawer is open below that. A docked sidebar column that is still easing closed already counts as hidden, and
 one that is still easing open already counts as shown (see "The sidebar toggle and the panel toggles" in
 `docs/product/window-layout.md`). A right pane panel counts as shown while it is open, docked in the pane's column or
-maximized, at every width.
+maximized, or, below 782 px, while it floats over the terminal.
 
 Where focus lands in each region:
 
@@ -80,3 +81,24 @@ or no banner is shown, both keys leave focus where it is.
 **With a menu open**, both keys leave focus where it is, even when Retry is available or the menu is inside a dialog.
 The menu has to be dismissed before these keys reach Retry. A mouse press can still reach Retry without dismissing
 what is open (see "What an open dialog, menu or popover covers" in `docs/product/window-layout.md`).
+
+## Focus after a tap
+
+After a **tap** — an interaction whose press came from a finger — the window never puts keyboard focus in a field
+that takes text on its own, since that raises the on-screen keyboard over what was just shown, and a focus move it
+makes on its own shows no focus ring. A press with a mouse or a trackpad, or a key — a tablet's hardware keyboard
+included — keeps the rules described everywhere else, on any device. Before any interaction at all, the window
+treats a device whose primary input cannot hover, such as a phone, as if the last interaction were a tap.
+
+- **A session picked by a tap is shown without focusing its terminal**; a tap on the terminal focuses it.
+- **Focus handed to the terminal when what held it goes away or is hidden** — a panel closing, a pane going — is not
+  put in the terminal. While a maximized Terminal panel or a panel floating over the terminal covers it (see
+  "Maximizing the Terminal panel" and "Below 782 px: one panel floats over the terminal" in
+  `docs/product/right-pane-panels.md`), focus goes to that panel's first control that takes no text; otherwise to the
+  top bar's first enabled control.
+- **A panel that floats over the terminal opened by a tap** takes focus on its first control that takes no text: in
+  the Terminal panel a control of its header, not the shell; in the report panel the report page.
+- **Focus moved on the window's own initiative** — handed on as the part holding it goes away, returned after a press
+  elsewhere — shows no focus ring.
+
+`F6`, `Tab` and the controls themselves work as everywhere else.

@@ -120,6 +120,12 @@ and the Files tree's folder icons, all rely on it, so do not give such a control
 
 `preventFocusOnPress` only keeps a *mouse* press from taking focus; the control still has to be reachable.
 
+A control revealed only on hover or focus has to be reachable by touch too. `RowControls`
+(`packages/ui/src/components/RowControls.tsx`), which holds the hover-revealed actions of sidebar and Files rows, shows
+them at all times on a device whose primary input cannot hover (`CANNOT_HOVER` in `packages/ui/src/touchInput.ts`,
+written `[@media(hover:none)]:` in classes); the archive rows' Reopen and Delete and the avatar field's remove button
+carry the same rule, and so does any new hover-revealed control.
+
 **A table of fields is tabbed down its columns when a column is one unit.** In the console dialog's Advanced table each
 column is one session kind's pair, and its reasoning effort depends on its model, so Tab runs down a column before
 moving to the next, the same order the table takes when it stacks on a narrow window.
@@ -202,7 +208,11 @@ holds controls — a pane, a panel, an overlay — is marked `data-region` and a
 or F6 skips it and a keyboard user in the terminal has no way to reach it. A right pane panel is the exception: it
 reaches the hook through its `panels` argument (region `panel-<kind>`, in stacking order). While the Terminal panel
 is maximized it comes first among the panels, and the agent area it covers (the agent terminal or the archive view,
-made `inert`) is not a stop. A region lands F6 on its first control unless a control in it carries
+made `inert`) is not a stop. A panel floating over the agent terminal in a window too narrow to dock the right pane
+covers it the same way: the agent terminal is `inert` and not a stop while the panel is shown, focus moves into the
+panel when it is opened and back to the agent terminal when it closes (after a tap, never into a text field; see
+"Focus moved by a change the user did not make"), Escape closes it (standing aside inside a shell
+terminal, as below), and the dimmed strip beside it is a "Close panel" button. A region lands F6 on its first control unless a control in it carries
 `data-region-landing` (a Files panel that failed to load lands on Try again, not on its header's Close panel). `shown`
 follows whether a region holds a control, not whether its element is in the document: the terminal counts while a
 session is selected, and also while its empty state offers a creation action for the current context or the Add
@@ -298,6 +308,17 @@ ring follows how the press came; `HandOffOnUnmount` always sets it, its trigger 
 whose trigger is really a press — the change filter field closed from the header's toggle, which takes no focus
 itself — knowingly: focus lands on a control the user did not aim it at either way.
 
+After a tap (`interactionIsTouch` in `packages/ui/src/touchInput.ts`: the last press was a finger; a mouse, a trackpad
+or any key counts as not, so an iPad with a keyboard keeps the desktop rules) two things change. An automatic move does
+not turn the ring on — every such move asks `ringForAutomaticFocus`, F6 being the one exception, as a key — since there
+is no keyboard to follow it with, and a ring left on a top-bar control would also open its tooltip and leave it
+standing. And the window does not move focus into a terminal on its own initiative, since a terminal's text field
+raises the on-screen keyboard over the content the user tapped to see: a floating panel lands on its first control that
+takes no text (`focusLandingWithoutText`; the Report panel lands on its page, marked `data-touch-landing`), focus meant
+for the agent terminal goes to a covering panel's first such control or else the top bar's first control, so it never
+falls to `<body>`, and a tapped session pick does not focus the terminal. A tap on a text field still focuses it, and
+form dialogs still focus their first field, since the user opened them to fill in.
+
 A separator of collapsed lines taken off the screen is such a move: the bar for the run past a diff's last hunk goes
 once the daemon's reply says that hunk reaches the end of the file, and the hand-off to the code frame sets the
 modality itself. `handFocusOff` cannot be used there, since it looks at `document.activeElement` and cannot see into a
@@ -322,6 +343,11 @@ to the actions. The console dialog's Settings (`packages/ui/src/dialogs/ConsoleD
 that opened it, so closing Settings by its backdrop returns focus there even when Manage accounts was activated without
 taking focus. Both wait a frame past React Aria's restore and leave a restore that landed right alone; they act where
 focus is on `<body>`, and the login hand-off also where it is on its going button.
+
+A dialog opened by a press inside the sidebar's drawer is a third such case: the drawer is not modal and a tap does not
+move focus, so React Aria would restore focus to whatever held it behind the drawer. The window remembers the drawer
+control the press ended on (a menu's trigger, for a dialog opened from its menu) and focuses it as the dialog opens, so
+the restore lands back on it.
 
 A dialog's submit or confirm button that becomes disabled while it holds focus (a quota reading landing under an
 open dialog) hands focus to Cancel, also when WebKit has already blurred the button to `<body>`; a dialog that opens

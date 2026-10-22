@@ -8,7 +8,6 @@ import { GitBranch } from "lucide-react";
 import type { ActionMenuEntry } from "./components/ActionMenu";
 import { displayWirePath } from "./wirePath";
 import React, { useEffect, useRef, useState } from "react";
-import { setInteractionModality } from "react-aria";
 import { useShallow } from "zustand/react/shallow";
 import { errorPresentation } from "./errorPresentation";
 import { flushSync } from "react-dom";
@@ -22,7 +21,7 @@ import { ContentPanel } from "./components/ContentPanel";
 import { HandOffOnUnmount } from "./components/HandOffOnUnmount";
 import { PaneResizeHandle } from "./components/PaneResizeHandle";
 import { refocusIfLost } from "./components/refocusIfLost";
-import { focusLanding } from "./components/regionFocus";
+import { FOCUSABLE, focusLanding, focusLandingWithoutText, focusTopBar } from "./components/regionFocus";
 import { focusNewConsole, Rail } from "./components/Rail";
 import { Scrim } from "./components/Scrim";
 import { BareTitleBar, TitleBar } from "./components/TitleBar";
@@ -43,7 +42,7 @@ import { useOctoboardTheme } from "./theme";
 import type { AsideLayout } from "./layout/AsidePane";
 import { liveOwner, ownerAfterMove, ownerForSession, ownerKey, sameOwner, type AsideOwner } from "./layout/asideOwner";
 import { useIsNarrow } from "./layout/breakpoint";
-import { usePaneWidth } from "./layout/paneWidth";
+import { NARROW_TERMINAL_PANEL_ASIDE_MIN, useAsideFloats, usePaneWidth } from "./layout/paneWidth";
 import { columnSpan, isDockEasing, type DockPhase } from "./layout/paneDockMotion";
 import { type HeldChoices, useConsoleSwitchFollowUp } from "./layout/useConsoleSwitchFollowUp";
 import { usePaneToggles } from "./layout/usePaneToggles";
@@ -60,6 +59,7 @@ import { sessionDisplayTitle } from "./sessionLabel";
 import { PANEL_ENTRIES } from "./panels/panelRegistry";
 import { RightPane } from "./panels/RightPane";
 import { maximizedKind, openPanel, OWNER_KINDS, panelId, panelRegion, OWNER_TOGGLE_KINDS, restoreStack, shownKinds, shownPanelRegions, stackedKinds, toggleKind, type OwnerKind, type PanelKind } from "./panels/stackState";
+import { useFloatingPanel } from "./panels/useFloatingPanel";
 import { usePanelStacks } from "./panels/usePanelStacks";
 import { LoginPageOpener } from "./settings/AccountLogin";
 import { SettingsDialog } from "./settings/SettingsDialog";
@@ -79,6 +79,7 @@ import { useDaemon, useDaemonStore, useDaemonStoreEqual } from "./store";
 import { terminalEmptyState } from "./terminal/emptyState";
 import { startShellTerminal } from "./terminal/shellTerminals";
 import { TerminalPane, type TerminalPaneHandle } from "./terminal/TerminalPane";
+import { interactionIsTouch, ringForAutomaticFocus } from "./touchInput";
 import type { ViewedFile } from "./browser/TerminalFileViewer";
 import { nextWaitingSession, waitingSessionsInTreeOrder } from "./waiting";
 import { WelcomeScreen, type WelcomeScreenHandle } from "./WelcomeScreen";
@@ -137,12 +138,19 @@ export function App(): React.ReactElement {
   // Only one of the two is mounted: the welcome screen stands in for the terminal while there is no
   // console. While a maximized panel covers the agent terminal, focus meant for it goes where F6
   // lands in that panel instead. Read off the DOM rather than the state, so a hand-off that runs in
-  // the commit restoring the layout (the maximized panel closing) already finds the terminal
+  // the commit restoring the layout (the maximized or floating panel closing) already finds the terminal
   // uncovered: it comes before the pane in the tree, so its `inert` is gone by the time the panel's
   // own hand-off runs.
+  //
+  // After a tap it lands on nothing that takes text (`interactionIsTouch`): the terminal, or a
+  // shell terminal covering it, would raise the on-screen keyboard over what was just shown. It
+  // lands on a covering panel's first control that takes none, else on the top bar's first control,
+  // so focus still never falls to `<body>` from what is going away.
   const focusTerminal = () => {
-    const covering = agentAreaRef.current?.hasAttribute("inert") ? document.querySelector("[data-panel-maximized]") : null;
-    if (covering && focusLanding(covering)) return;
+    const touch = interactionIsTouch();
+    const covering = agentAreaRef.current?.hasAttribute("inert") ? document.querySelector("[data-panel-maximized], [data-floating-panel] [data-panel-card]") : null;
+    if (covering && (touch ? focusLandingWithoutText : focusLanding)(covering)) return;
+    if (touch) return focusTopBar();
     (terminalRef.current ?? welcomeRef.current)?.focus();
   };
 
@@ -197,7 +205,16 @@ export function App(): React.ReactElement {
   const { stacks: panelStacks, setStack: setPanelStack } = usePanelStacks();
   const ownerKind = asideOwner?.kind;
   const ownerOrder = ownerKind ? OWNER_KINDS[ownerKind] : [];
-  const ownerStack = ownerKind ? panelStacks[ownerKind] : undefined;
+  // Too narrow a window to dock the pane (a phone): one panel at a time floats over the agent
+  // terminal, which keeps the whole width (`useAsideFloats`, `panels/useFloatingPanel.ts`). The
+  // drawer's open state is kept here, as the floating panel has to know it before the pane toggles
+  // run.
+  const asideFloats = useAsideFloats();
+  const drawer = useState(false);
+  const floating = useFloatingPanel({ floats: asideFloats, owner: ownerKind, stacks: panelStacks, drawerOpen: drawer[0], focusTerminal });
+  const floatingShown = floating.kind !== undefined;
+  const storedStack = ownerKind ? panelStacks[ownerKind] : undefined;
+  const ownerStack = asideFloats && ownerKind ? { open: floating.kind ? [floating.kind] : [], shares: {} } : storedStack;
   const openPanels = ownerStack ? shownKinds(ownerStack, ownerOrder) : [];
   const paneShown = openPanels.length > 0;
   // A maximized panel (the Terminal panel's, `PanelStack.tsx`) leaves the pane's column and covers
@@ -209,14 +226,36 @@ export function App(): React.ReactElement {
   const columnShown = stackedPanels.length > 0;
   // With no card in the column (none open, or the one open maximized) a panel that is not open
   // floats in while the pointer rests on its toggle.
-  const panes = usePaneToggles({ hasSidebar: !noConsoles, asidePeekable: hasAside && !columnShown, focusTerminal });
+  const panes = usePaneToggles({
+    hasSidebar: !noConsoles,
+    // Below the width that floats panels over the terminal a panel opens only on a press.
+    asidePeekable: hasAside && !columnShown && !asideFloats,
+    focusTerminal,
+    floatingPanel: floatingShown,
+    closeFloatingPanel: floating.close,
+    drawer,
+  });
   const isNarrow = useIsNarrow();
+  const asideDocked = hasAside && columnShown && !asideFloats;
+  /** Floats `kind` of `owner`, out of the sidebar's drawer's way. */
+  const openFloating = (owner: OwnerKind, kind: PanelKind) => {
+    floating.open(owner, kind);
+    if (panes.sidebarOpen) panes.closeSidebar();
+  };
   const [peekKind, setPeekKind] = useState<PanelKind>();
   const filesOnScreen =
     ownerKind === "project" && (openPanels.includes("files") || (panes.asidePeek.active && peekKind === "files"));
   // A panel kind's toggle shows or hides its panel; pressing it while the pane floats in docks it.
   const togglePanel = (kind: PanelKind) => {
     if (!ownerKind || !ownerStack) return;
+    if (asideFloats) {
+      // A card floating in on hover is the one this opens, so it keeps focus where it lands.
+      panes.asidePeek.hide(false);
+      if (floating.kind === kind) return floating.close();
+      openFloating(ownerKind, kind);
+      if (kind === "terminal" && asideOwner?.kind === "project") void startShellTerminal(daemon, asideOwner.project, { ifNone: true });
+      return;
+    }
     // A card floating in docks in place, keeping focus, except beside a folded column, where it
     // floats in a pane of its own and is shown again in the docked one.
     panes.asidePeek.hide(paneShown && !columnShown);
@@ -224,6 +263,7 @@ export function App(): React.ReactElement {
     setPanelStack(ownerKind, next);
     // Opening the Terminal panel on a project with no terminal starts one; floating it in does not.
     const opened = !shownKinds(ownerStack, ownerOrder).includes(kind) && shownKinds(next, ownerOrder).includes(kind);
+    if (opened) floating.noteOpened(ownerKind, kind);
     if (kind === "terminal" && opened && asideOwner?.kind === "project") void startShellTerminal(daemon, asideOwner.project, { ifNone: true });
   };
   // A maximized panel is its owner kind's: once the pane passes to an owner of another kind (a
@@ -273,8 +313,8 @@ export function App(): React.ReactElement {
       rail: true,
       welcome: noConsoles,
       sidebar: !noConsoles && panes.sidebarShown,
-      archive: archiveOpen && !covered,
-      terminal: (selectedSession !== undefined || emptyHasAction) && !archiveOpen && !covered,
+      archive: archiveOpen && !covered && !floatingShown,
+      terminal: (selectedSession !== undefined || emptyHasAction) && !archiveOpen && !covered && !floatingShown,
       banner: connectionState === "reconnecting" || connectionState === "closed",
     },
     panels: shownPanelRegions(ownerStack, ownerKind),
@@ -287,23 +327,23 @@ export function App(): React.ReactElement {
   const [sidebarColumnPhase, setSidebarColumnPhase] = useState<DockPhase>(panes.sidebarDocked ? "open" : "closed");
   // A closing sidebar column keeps its width clamp until it leaves the row, so its content cannot
   // widen and reflow on the first frame. The sidebar is a column in the row only at and above the
-  // breakpoint, where it is docked; below it, a drawer, which takes no room from the aside that docks
-  // at every width.
-  // A narrow Shell header reserves room for a normal tab, its focus ring and every action.
-  const asideMin = isNarrow && stackedPanels.includes("terminal") ? 336 : 320;
+  // breakpoint, where it is docked; below it, a drawer, which takes no room from the aside beside it.
+  const asideMin = isNarrow && stackedPanels.includes("terminal") ? NARROW_TERMINAL_PANEL_ASIDE_MIN : 320;
   const sidebarWidth = usePaneWidth("sidebar", {
     sidebar: !noConsoles && !isNarrow && (panes.sidebarDocked || sidebarColumnPhase !== "closed"),
-    aside: hasAside && columnShown,
+    aside: asideDocked,
   }, isNarrow, asideMin);
   const asideWidth = usePaneWidth("aside", {
     sidebar: !noConsoles && !isNarrow && panes.sidebarDocked,
-    aside: hasAside && columnShown,
+    aside: asideDocked,
   }, isNarrow, asideMin);
   const asideLayout: AsideLayout = {
     width: asideWidth.width,
     minWidth: asideWidth.min,
     peek: paneShown ? undefined : panes.asidePeek,
     folded: paneShown && !columnShown,
+    overlay: asideFloats,
+    floatingKind: floating.kind,
   };
   // While the column is folded, a panel floats in a pane of its own (`RightPane`).
   const asideFloat = asideLayout.folded ? panes.asidePeek : undefined;
@@ -454,12 +494,37 @@ export function App(): React.ReactElement {
   // `create_console` is answered with a bare ack, so the console this window just created is
   // recognised as the one that was not there when its dialog opened, and the sidebar switches to it.
   const consolesBeforeNew = useRef<Set<string> | undefined>(undefined);
+  // The control last pressed in the sidebar's open drawer, or in a menu it opened. A tap does not
+  // move focus to what it presses, so a dialog it opens would otherwise give focus back, as it
+  // closes, to whatever held it before: the terminal behind the drawer.
+  const drawerPress = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!panes.sidebarOpen) return;
+    // Taken as the press ends, before the press's own handler runs: a pointer that goes down to
+    // scroll the drawer ends in a cancel, and records nothing.
+    const onPointerUp = (event: PointerEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest("[role=menu], [role=listbox]")) return;
+      drawerPress.current = target?.closest("[data-pane=sidebar]") ? target.closest<HTMLElement>(FOCUSABLE) : null;
+    };
+    document.addEventListener("pointerup", onPointerUp, true);
+    return () => {
+      document.removeEventListener("pointerup", onPointerUp, true);
+      drawerPress.current = null;
+    };
+  }, [panes.sidebarOpen]);
+
   const openDialog = (dialog: DialogRequest) => {
     // Nothing to offer without an agent that is added and installed; the controls are disabled already.
     const { agentAvailability, settings } = store.getState();
     if ((dialog.kind === "new-session" || dialog.kind === "new-console-session") && noAgentState(agentAvailability, settings.added_agents)) return;
     if (dialog.kind === "hand-off" && !pickableAgents(agentAvailability, settings.added_agents).some((agent) => agent !== dialog.session.agent)) return;
     if (dialog.kind === "new-console") consolesBeforeNew.current = new Set(consoles.keys());
+    // Opened from the open drawer, it hands focus back to what opened it there as it closes: focused
+    // before the dialog mounts, that is what the dialog restores focus to.
+    const trigger = drawerPress.current;
+    drawerPress.current = null;
+    if (panes.sidebarOpen && trigger?.isConnected && !document.activeElement?.closest("[data-pane=sidebar]")) trigger.focus({ preventScroll: true });
     setDialogRequest(dialog);
   };
   useEffect(() => {
@@ -507,7 +572,9 @@ export function App(): React.ReactElement {
   const browseProject = (project: Project) => {
     setProjectBrowserMode(project.id, "files");
     setOwnerByUser({ kind: "project", project: project.id });
+    if (asideFloats) return openFloating("project", "files");
     setPanelStack("project", openPanel(panelStacks.project, "files", OWNER_KINDS.project));
+    floating.noteOpened("project", "files");
     // The sidebar's drawer in a narrow window covers what was asked for.
     if (panes.sidebarOpen) panes.closeSidebar();
   };
@@ -579,7 +646,9 @@ export function App(): React.ReactElement {
   // The archive view is in the agent terminal's area, which a maximized panel covers: restoring
   // it is how the user sees what was asked for, whether opened or arrived at through the history.
   const revealArchive = () => {
-    if (ownerKind && ownerStack && maximizedKind(ownerStack, ownerOrder) !== undefined) setPanelStack(ownerKind, restoreStack(ownerStack), { persist: false });
+    if (ownerKind && storedStack && maximizedKind(storedStack, ownerOrder) !== undefined) setPanelStack(ownerKind, restoreStack(storedStack), { persist: false });
+    // So does a panel floating over that area.
+    floating.close();
   };
 
   const openArchive = (scope: ArchiveScope) => {
@@ -680,7 +749,13 @@ export function App(): React.ReactElement {
       setArchiveScope(target.archive);
       if (target.archive) revealArchive();
     },
-    focusTerminal,
+    // Focus a move leaves nowhere goes to the terminal, or, where that takes none (no session, or
+    // a touch screen, `focusTerminal`), to the top bar's first control.
+    focusTerminal: () => {
+      focusTerminal();
+      const active = document.activeElement;
+      if (!active || active === document.body || active.matches(":disabled")) focusTopBar();
+    },
   });
 
   // A press in the previewing sidebar makes its console current. The console change and that
@@ -726,7 +801,7 @@ export function App(): React.ReactElement {
     if (archivingStatus !== "archived") return;
     setArchivingId(undefined);
     if (document.activeElement !== document.body) return;
-    setInteractionModality("keyboard");
+    ringForAutomaticFocus();
     focusTerminal();
   }, [archivingStatus]);
   // A session being resumed still asks: archiving it would cut the resume short. So does one with
@@ -775,6 +850,13 @@ export function App(): React.ReactElement {
   // session, the focus, or write refs), so each is one function for good: the memoised rows are then
   // rendered again only for their own records.
   const stableSelectSession = useStableHandler((session: Session) => selectSession(session));
+  // On a phone the drawer covers most of the terminal: picking a session in it closes it, so the
+  // session's terminal is what shows (focused, except after a tap: `interactionIsTouch`). A wider
+  // window leaves it open, beside the terminal.
+  const stableSelectFromSidebar = useStableHandler((session: Session) => {
+    selectSession(session);
+    if (asideFloats && panes.sidebarOpen) panes.closeSidebar();
+  });
   const stableSwitchConsoleSession = useStableHandler(switchConsoleSession);
   const stableOpenConsoleSession = useStableHandler(openConsoleSession);
   const stableOpenDialog = useStableHandler(openDialog);
@@ -844,7 +926,7 @@ export function App(): React.ReactElement {
         onToggleSidebar={stableToggleSidebar}
         onSidebarToggleEnter={panes.sidebarPeek.reveal}
         onSidebarToggleLeave={panes.sidebarPeek.leave}
-        asideSpan={columnShown ? asideWidth.width : 0}
+        asideSpan={asideDocked ? asideWidth.width : 0}
         panelToggles={ownerKind ? OWNER_TOGGLE_KINDS[ownerKind].map((kind) => {
           const entry = PANEL_ENTRIES[kind];
           const open = openPanels.includes(kind);
@@ -904,13 +986,16 @@ export function App(): React.ReactElement {
                 from="[data-region=sidebar], [data-region=archive], [data-region=terminal], [data-region=aside], [data-region^=panel-]"
                 to={focusNewConsole}
               />
-              {panes.sidebarOpen && <Scrim label={t("app.closeSessions")} onClose={panes.closeSidebar} />}
+              <Scrim open={panes.sidebarOpen} label={t("app.closeSessions")} onClose={panes.closeSidebar} />
+              {/* A panel floating over the agent terminal is dismissed by a press beside it, as the
+                  drawer is; the top bar, with the panel's own toggle, stays out of it. */}
+              <Scrim open={floatingShown} label={t("panel.close")} onClose={floating.close} />
               <Sidebar
                 projects={projectList}
                 selectedSessionId={selectedSessionId}
                 shownConsole={shownConsole}
                 focus={previewing ? undefined : sidebarView.focus}
-                onSelectSession={stableSelectSession}
+                onSelectSession={stableSelectFromSidebar}
                 onSwitchConsoleSession={stableSwitchConsoleSession}
                 onOpenConsoleSession={stableOpenConsoleSession}
                 onOpenDialog={stableOpenDialog}
@@ -935,6 +1020,7 @@ export function App(): React.ReactElement {
                 onArchiveSession={stableArchiveSession}
                 onOpenSettings={stableOpenSettingsAt}
                 open={panes.sidebarOpen}
+                drawerAway={isNarrow && !panes.sidebarOpen}
                 peek={panes.sidebarDocked ? undefined : panes.sidebarPeek}
                 onPeekPress={stableCommitPreview}
                 onColumnPhase={setSidebarColumnPhase}
@@ -944,8 +1030,9 @@ export function App(): React.ReactElement {
                 <PaneResizeHandle side="sidebar" paneWidth={sidebarWidth} />
               )}
               {/* Below the `docked` breakpoint the terminal keeps a 398px floor beside the open
-                  aside's own floor; `overflow-x-auto` lets focus reveal either pane when their
-                  combined minimum exceeds the viewport. */}
+                  aside's own floor, and a window too narrow for both floats the aside over it
+                  (`asideFloats`) instead; `overflow-x-auto` stays a guard that lets focus reveal
+                  either pane should their combined minimum still exceed the viewport. */}
               <main className="relative flex min-w-0 flex-1 overflow-x-auto docked:overflow-visible">
                 {/* Takes the terminal's place in the row, so the archive covers the terminal alone, not the
                     aside beside it; the terminal fills it. Above the `docked` breakpoint the 520px basis
@@ -957,8 +1044,9 @@ export function App(): React.ReactElement {
                     sidebar is an overlay, while the open aside stays beside the terminal. The terminal
                     takes a much smaller floor: 398px is 40 columns at
                     the same ~9.2px/column plus the same padding allowance, under which the terminal stops
-                    being usable at all, so `overflow-x-auto` on `main` scrolls rather than squeezing it
-                    further. */}
+                    being usable at all. A window too narrow for that floor and the aside's (a phone)
+                    floats the aside over the terminal instead, and the terminal takes whatever width
+                    there is, so the row never scrolls. */}
                 {/* At the breakpoint it casts the content panel's soft shadow (`--panel-shadow`) over the
                     docked panes on either side, so the terminal reads as the layer above them. `z-1`
                     lifts it, with what it holds, over everything in the panes, the aside's positioned
@@ -968,7 +1056,7 @@ export function App(): React.ReactElement {
                     closed. The clip-path cuts it on the aside's side: the aside's cards sit apart from the
                     terminal across a gap of the terminal's own background, which a shadow would draw a
                     line in. */}
-                <div ref={agentAreaRef} inert={covered} className="relative flex min-h-0 min-w-[398px] flex-[1_1_398px] docked:z-1 docked:min-w-[520px] docked:flex-[1_1_520px] docked:shadow-(--panel-shadow) docked:[clip-path:inset(-12px_0_-12px_-12px)] docked:rtl:[clip-path:inset(-12px_-12px_-12px_0)]">
+                <div ref={agentAreaRef} inert={covered || floatingShown} className={`relative flex min-h-0 ${asideFloats ? "min-w-0 flex-1" : "min-w-[398px] flex-[1_1_398px]"} docked:z-1 docked:min-w-[520px] docked:flex-[1_1_520px] docked:shadow-(--panel-shadow) docked:[clip-path:inset(-12px_0_-12px_-12px)] docked:rtl:[clip-path:inset(-12px_-12px_-12px_0)]`}>
                   <ArchiveLayer
                     focusTerminal={focusTerminal}
                     view={archiveOpen && archiveConsole ? {
@@ -1033,10 +1121,11 @@ export function App(): React.ReactElement {
                     maximizeArea={agentAreaRef}
                     areaEasing={isDockEasing(sidebarColumnPhase)}
                     float={asideFloat}
+                    floating={asideFloats && ownerStack ? { stack: ownerStack, onClose: floating.close } : undefined}
                   />
                 )}
               </main>
-              {asideOwner && columnShown && (
+              {asideOwner && asideDocked && (
                 <>
                   {/* First among what goes away with the pane, so focus on its handle is still found. */}
                   <HandOffOnUnmount from="[role=separator][data-pane=aside]" to={focusTerminal} />

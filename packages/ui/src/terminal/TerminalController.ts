@@ -3,6 +3,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { type IBufferRange, Terminal } from "@xterm/xterm";
 
+import { interactionIsTouch } from "../touchInput";
 import { TerminalLinkColors } from "./linkColors";
 import { installPathLinks, type PathAnswer, type PathLinkCache, type PathLinkTarget } from "./pathLinks";
 import {
@@ -438,9 +439,9 @@ export class TerminalController {
 
   /**
    * The one state transition. Tears down any existing socket, resets the screen, connects to the
-   * new session's terminal stream, and — only when `userInitiated` — restores keyboard focus to
-   * xterm; atomically enough that nothing outside this method ever observes a mix of old and new
-   * session/socket/status/focus.
+   * new session's terminal stream, and — only when `userInitiated`, and not after a tap —
+   * restores keyboard focus to xterm; atomically enough that nothing outside this method ever
+   * observes a mix of old and new session/socket/status/focus.
    *
    * `userInitiated` separates a selection or a manual Reconnect click (focus belongs on the
    * terminal) from a backoff timer healing a dropped connection in the background (focus must stay
@@ -482,7 +483,7 @@ export class TerminalController {
       if (this.fitted || !this.options.fittedSizesOnly) this.sendResize(this.term.cols, this.term.rows);
       for (const data of this.pendingInput.splice(0)) socket.send(data);
       this.setStatus("open");
-      if (userInitiated) this.term.focus();
+      if (userInitiated && !interactionIsTouch()) this.term.focus();
     });
     socket.addEventListener("message", (ev) => {
       if (generation !== this.generation) return;
@@ -510,7 +511,10 @@ export class TerminalController {
       this.setStatus(everOpened ? "closed" : "not_running");
     });
 
-    if (userInitiated) {
+    // Picked by a tap, focus stays where it is: the terminal's hidden text field would raise the
+    // on-screen keyboard over the session just picked (`interactionIsTouch`); a tap on the
+    // terminal focuses it.
+    if (userInitiated && !interactionIsTouch()) {
       // Focus follows the session switch even while still connecting, so keystrokes typed during
       // the brief "connecting" window are queued (see sendInput below) instead of landing nowhere.
       this.term.focus();

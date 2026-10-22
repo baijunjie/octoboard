@@ -79,3 +79,23 @@ it("marks a fallback control with its focus ring even after a pointer acknowledg
   expect(document.activeElement).toBe(button);
   expect(button.hasAttribute("data-focus-visible")).toBe(true);
 });
+
+it("marks no focus ring on a fallback control after a tap", () => {
+  document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "touch", bubbles: true }));
+  onTestFinished(() => {
+    document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true }));
+  });
+  const container = addToBody("<div></div>");
+  const root = createRoot(container);
+  onTestFinished(() => act(() => root.unmount()));
+  function Sidebar() {
+    const focus = useFocusVisibleProps();
+    return createElement("div", { "data-region": "sidebar" }, createElement("button", { ...focus }, "Actions"));
+  }
+  act(() => root.render(createElement(Sidebar)));
+  act(() => setInteractionModality("pointer"));
+  act(() => focusAfterLoss(() => {}));
+  const button = container.querySelector("button")!;
+  expect(document.activeElement).toBe(button);
+  expect(button.hasAttribute("data-focus-visible")).toBe(false);
+});

@@ -1,4 +1,4 @@
-import { setInteractionModality } from "react-aria";
+import { ringForAutomaticFocus } from "../touchInput";
 
 /** Hands keyboard focus from `from` to `holder` itself when that is a tab stop, else to the button
  * inside it, when `from` holds focus: a control about to be taken away would otherwise drop focus
@@ -14,6 +14,6 @@ export function handFocusOff(
   showRing: boolean,
 ): void {
   if (!from?.contains(document.activeElement)) return;
-  if (showRing) setInteractionModality("keyboard");
+  if (showRing) ringForAutomaticFocus();
   (holder && holder.tabIndex >= 0 ? holder : holder?.querySelector("button"))?.focus();
 }

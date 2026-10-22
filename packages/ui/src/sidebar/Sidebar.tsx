@@ -9,7 +9,7 @@ import {
   SearchX,
   TriangleAlert,
 } from "lucide-react";
-import { setInteractionModality } from "react-aria";
+import { ringForAutomaticFocus } from "../touchInput";
 import React, { memo, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
@@ -82,6 +82,8 @@ interface SidebarProps extends SidebarHandlers {
    * shown or, with `peek`, hidden (`usePaneToggles` owns the state, resetting it once the window no
    * longer needs it). */
   open: boolean;
+  /** The drawer is closed below the `docked` breakpoint, its exit included: out of reach. */
+  drawerAway?: boolean;
   /** The hover reveal of the sidebar while the user has hidden it from the top bar. The card
    * (fixed, inset from the rail and the other chrome, rounded, edged) is only up
    * while this hover is, or while that card is sliding away. The rest of the time a hidden docked
@@ -110,6 +112,7 @@ export function Sidebar({
   shownConsole,
   focus,
   open,
+  drawerAway = false,
   peek,
   onPeekPress,
   onColumnPhase,
@@ -242,7 +245,7 @@ export function Sidebar({
           navRef.current?.querySelector<HTMLElement>("[data-focus-exit]")
         : navRef.current?.querySelector<HTMLElement>(`[data-flip="${CSS.escape(previousId ?? "")}"] [role=button]`);
       if (!target) return;
-      setInteractionModality("keyboard");
+      ringForAutomaticFocus();
       target.focus();
     }, 50);
     return () => clearTimeout(timer);
@@ -361,8 +364,9 @@ export function Sidebar({
         onTransitionEnd={dock.onColumnTransitionEnd}
       >
         <nav
-          // Below the `docked` breakpoint this is a fixed overlay, closed by default, slid on and off
-          // with `open`; at or above it the `docked:` variants in `drawerClass` put it back exactly
+          // Below the `docked` breakpoint this is a fixed overlay, closed by default, faded up into
+          // place and back down with `open`, and out of reach (inert) once closed, its exit
+          // included; at or above it the `docked:` variants in `drawerClass` put it back exactly
           // where it always was, a plain row sibling, regardless of `open`. With the docked sidebar
           // hidden, that column is clipped away; only a hover on a console's avatar (`dock.inset`)
           // makes it the fixed card. Drawers share that card's inset from the chrome.
@@ -374,6 +378,7 @@ export function Sidebar({
           // closes a drawer for. `data-pane` is how it finds this element to see whether it holds
           // focus.
           data-escape-scope
+          inert={drawerAway}
           ref={navRef}
           onFocus={(e) => {
             // A portalled menu's focus bubbles here through React and may never blur, so it counts only

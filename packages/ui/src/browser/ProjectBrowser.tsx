@@ -78,12 +78,12 @@ export function ProjectBrowser({
    * session. */
   selectedSessionId: string | undefined;
   /** The browser appears in a right pane that is already on screen, because the user switched
-   * projects: it slides in. Read once, as it mounts, so a pane that docks or floats in with it, or
-   * one it stays in, plays nothing. */
+   * projects: it fades in where it stands. Read once, as it mounts, so a pane that docks or floats
+   * in with it, or one it stays in, plays nothing. */
   switching?: boolean;
 }): React.ReactElement {
   const t = useT();
-  const [slides] = useState(switching);
+  const [fadesIn] = useState(switching);
   const tabScrollLabels = useTabScrollLabels();
   const browser = useProjectBrowserState(project.id);
   const mode = browser.mode;
@@ -240,11 +240,11 @@ export function ProjectBrowser({
   const loadingLabel = t(searching ? "browser.filter.searching" : "browser.loading");
   return (
     <>
-      <div className={`${slides ? "panel-switch " : ""}relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden`}>
+      <div className={`${fadesIn ? "panel-switch " : ""}relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden`}>
         <Tabs
           selectedKey={tab}
           onSelectionChange={(key) => browser.setMode(key === "changes" ? "git" : "files")}
-          className="panel-switch-view flex min-h-0 flex-1 flex-col gap-0"
+          className="flex min-h-0 flex-1 flex-col gap-0"
         >
           <PanelHeader
             prioritizeChildren

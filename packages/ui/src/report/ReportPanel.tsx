@@ -307,9 +307,13 @@ function PageFrame({
   return (
     <>
       <HandOffOnUnmount from={`[id="${frameId}"]`} to={handFocusToReport} />
+      {/* Where a tap's opening of the panel puts focus: on the page, its content. F6, and an
+          opening from a mouse or the keyboard, land on the header's first control instead, the
+          sandboxed page passing on only some of the window's shortcuts. */}
       <iframe
         id={frameId}
         ref={iframeRef}
+        data-touch-landing=""
         className="min-h-0 flex-1 border-0 bg-white"
         title={t("report.frameTitle")}
         sandbox="allow-scripts allow-forms"

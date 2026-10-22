@@ -43,13 +43,13 @@ it.each([
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** Mounts the hook in a window below or at and above the `docked` breakpoint, returning its latest
- * value and a way to re-render it with other panes present. The `matchMedia` stub is deliberately
- * query-blind (it answers `matches: !narrow` to every query), so the wide case does not exercise
- * the reduced-motion path. */
-function mountToggles(narrow: boolean, focusTerminal: () => void = () => {}) {
+ * value and a way to re-render it with other panes present. The `matchMedia` stub answers
+ * `matches: !narrow` to every query but the one for a device that cannot hover (`noHover`), so the
+ * wide case does not exercise the reduced-motion path. */
+function mountToggles(narrow: boolean, focusTerminal: () => void = () => {}, noHover = false) {
   document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
   vi.stubGlobal("matchMedia", (query: string) => ({
-    matches: !narrow,
+    matches: query === "(hover: none)" ? noHover : !narrow,
     media: query,
     addEventListener: () => {},
     removeEventListener: () => {},
@@ -200,4 +200,53 @@ it("leaves focus in a docked card when the aside stops being peekable as a colum
   expect(panes().asidePeek.active).toBe(false);
   expect(focusTerminal).not.toHaveBeenCalled();
   expect(document.activeElement).toBe(pane.querySelector("button"));
+});
+
+it("hands focus in the docked sidebar to the terminal when the window narrows it into the closed drawer", () => {
+  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
+  let narrow = false;
+  const listeners = new Set<() => void>();
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    get matches() {
+      return !narrow;
+    },
+    media: query,
+    addEventListener: (_: string, listener: () => void) => listeners.add(listener),
+    removeEventListener: (_: string, listener: () => void) => listeners.delete(listener),
+  }));
+  const sidebar = document.body.appendChild(document.createElement("nav"));
+  sidebar.setAttribute("data-pane", "sidebar");
+  const row = sidebar.appendChild(document.createElement("button"));
+  const focusTerminal = vi.fn();
+  function Probe() {
+    usePaneToggles({ hasSidebar: true, asidePeekable: false, focusTerminal });
+    return null;
+  }
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+    sidebar.remove();
+    document.documentElement.style.removeProperty("--breakpoint-docked");
+    localStorage.clear();
+  });
+  act(() => root.render(createElement(Probe)));
+  row.focus();
+  expect(focusTerminal).not.toHaveBeenCalled();
+  act(() => {
+    narrow = true;
+    for (const listener of [...listeners]) listener();
+  });
+  expect(focusTerminal).toHaveBeenCalledTimes(1);
+});
+
+it.each([true, false])("floats neither pane in on a device that cannot hover (narrow: %s)", (narrow) => {
+  const { panes } = mountToggles(narrow, () => {}, true);
+  act(() => panes().asidePeek.reveal());
+  expect(panes().asidePeek.active).toBe(false);
+  if (!narrow) {
+    act(() => panes().toggleSidebar());
+    expect(panes().sidebarPeek.peekable).toBe(false);
+  }
 });

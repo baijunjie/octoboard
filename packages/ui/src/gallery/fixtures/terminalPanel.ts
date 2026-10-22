@@ -151,6 +151,21 @@ export const terminalPanelScenarios: Scenario[] = [
     steps: [openWebsite, (ui) => ui.press(ui.t("shellTerminal.new"))],
   },
   {
+    id: "shell-panel-overlay-small-phone",
+    group: GROUP,
+    category: "normal",
+    title: "Terminal panel over the terminal on a small phone",
+    width: 360,
+    description:
+      "In a window 360px wide or less the Terminal card floats over the agent terminal, and the dimmed strip of the terminal beside it narrows from 48px to 24px to leave the card room: its header fits the Terminal name, the tab with its close mark, New terminal, the actions menu and Close panel with no Maximize panel, which a floating card does not offer. Escape closes the card only outside the shell: typing in the shell leaves it open. The width is fixed because the narrow strip exists only at 360px or less.",
+    state: stateOf(oneShell),
+    steps: [
+      (ui) => ui.press(ui.t("titleBar.sidebar.show")),
+      openWebsite,
+      (ui) => ui.press(ui.t("titleBar.terminal.show")),
+    ],
+  },
+  {
     id: "shell-panel-floating",
     group: GROUP,
     category: "normal",

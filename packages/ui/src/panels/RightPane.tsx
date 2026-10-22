@@ -27,6 +27,7 @@ export function RightPane({
   maximizeArea,
   areaEasing,
   float,
+  floating,
 }: {
   owner: AsideOwner;
   project: Project | undefined;
@@ -50,12 +51,15 @@ export function RightPane({
    * (`layout.folded`, its one open panel maximized): the panel floats in a pane of its own, the
    * folded one holding the maximized card, which has to stay where it is. */
   float?: AsideLayout["peek"];
+  /** In a window too narrow to dock the pane, the one panel floating over the agent terminal
+   * (`PanelStack`'s `floating`). */
+  floating?: React.ComponentProps<typeof PanelStack>["floating"];
 }): React.ReactElement {
   const shared = { owner, project, selectedSessionId, focusTerminal, peekKind, frameKeys, onViewFile, onDismiss, maximizeArea, areaEasing };
   return (
     <>
       <AsidePane layout={layout}>
-        <PanelStack {...shared} active={active} peek={layout.peek} />
+        {(peek) => <PanelStack {...shared} active={active} peek={peek} floating={floating} />}
       </AsidePane>
       {float && (
         <AsidePane layout={{ width: layout.width, peek: float }}>

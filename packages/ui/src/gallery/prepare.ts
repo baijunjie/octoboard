@@ -2,6 +2,12 @@ import type { Language } from "../i18n/languages";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
 import type { Preferences, Scenario } from "./scenario";
 
+/** A scenario's preference as its owner stores it: a structured one (the panel stacks) as the JSON
+ * its owner parses, anything else as its string. */
+export function storedPreference(value: NonNullable<Preferences[keyof Preferences]>): string {
+  return typeof value === "object" ? JSON.stringify(value) : String(value);
+}
+
 /**
  * Sets what the app reads from `localStorage` when its modules load to the scenario's starting
  * point, dropping whatever an earlier scenario or the dev app left. The scenario's page runs it
@@ -17,7 +23,7 @@ export function prepareStorage(scenario: Scenario, language: Language, theme: "l
     localStorage.setItem("heroui-theme", theme);
     localStorage.setItem(PREFERENCE_KEYS.language, language);
     for (const [name, value] of Object.entries(scenario.preferences ?? {})) {
-      if (value !== undefined) localStorage.setItem(PREFERENCE_KEYS[name as keyof Preferences], typeof value === "object" ? JSON.stringify(value) : String(value));
+      if (value !== undefined) localStorage.setItem(PREFERENCE_KEYS[name as keyof Preferences], storedPreference(value));
     }
   } catch {
     // Without storage the app starts from its defaults, in the system's language.

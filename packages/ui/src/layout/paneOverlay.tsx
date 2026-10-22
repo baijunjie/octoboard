@@ -28,47 +28,48 @@ const FLOATING_INSET =
 /** Drawers use the same card geometry as desktop peeks. Scope it below the breakpoint so the
  * docked sidebar can still ease as a full-height column without changing shape. */
 const DRAWER_FRAME =
-  "max-docked:top-[calc(var(--top-chrome-height)+var(--peek-gap))] max-docked:bottom-[calc(var(--bottom-chrome-height)+var(--peek-gap))] max-docked:[--pane-header-height:var(--pane-header-height-floating)] max-docked:rounded-xl max-docked:overflow-hidden max-docked:pointer-events-auto";
+  "max-docked:top-[calc(var(--top-chrome-height)+var(--peek-gap))] max-docked:bottom-[calc(var(--bottom-chrome-height)+var(--peek-gap))] max-docked:[--pane-header-height:var(--pane-header-height-floating)] max-docked:rounded-xl max-docked:overflow-hidden max-docked:pointer-events-auto max-docked:panel-edge max-docked:shadow-(--panel-card-shadow)";
 
-/** The sidebar is on the reading direction's start side, so under right-to-left it is on the right;
- * `translate-x-*` is physical, so the slide direction under `rtl:` is the opposite one. It is
- * anchored past the rail (`--rail-width` in `style.css`), so below the breakpoint it slides that
- * much further, including the inset and shadow, to get off screen entirely. The overlay is a card
- * inset by `--peek-gap` from the top bar, the bottom chrome and the rail. Mobile drawers clear the
- * rail and their shadows while sliding away. A card's headers take `--pane-header-height-floating`
- * (`style.css`) so that their bottom line lines up with the docked headers' in the same row;
- * `FLOATING_INSET` sets it for everything inside. */
+/** The sidebar is on the reading direction's start side, so under right-to-left it is on the right.
+ * It is anchored past the rail (`--rail-width` in `style.css`). The overlay is a card inset by
+ * `--peek-gap` from the top bar, the bottom chrome and the rail. A card's headers take
+ * `--pane-header-height-floating` (`style.css`) so that their bottom line lines up with the docked
+ * headers' in the same row; `FLOATING_INSET` sets it for everything inside. */
 const ANCHOR = "start-(--rail-width) max-docked:start-[calc(var(--rail-width)+var(--peek-gap))]";
-const CLOSED =
-  "-translate-x-[calc(100%+var(--rail-width)+var(--peek-gap)+2rem)] rtl:translate-x-[calc(100%+var(--rail-width)+var(--peek-gap)+2rem)]";
+/** The drawer below the breakpoint, open or away: it fades in as it rises into its place by 4% of
+ * its own height and fades out as it sinks back, over 240ms with the floating card's easing, its
+ * edge and shadow (`DRAWER_FRAME`) with it; `visibility` stays on until the exit has finished and
+ * then keeps the away drawer out of reach. */
+const DRAWER_OPEN = "max-docked:translate-y-0 max-docked:opacity-100";
+const DRAWER_AWAY = "max-docked:translate-y-[4%] max-docked:opacity-0 max-docked:invisible";
 const FLOATING_FRAME = `docked:start-[calc(var(--rail-width)+var(--peek-gap))] ${FLOATING_INSET}`;
 
 /**
  * The geometry of the sidebar's overlay forms (`Sidebar.tsx`): fixed between `style.css`'s
  * `--top-chrome-height` and `--bottom-chrome-height`, with a card inset from the surrounding
- * chrome and the rail. Drawers slide from the start side; desktop floating cards fade vertically.
+ * chrome and the rail. Drawers and desktop floating cards alike fade up into place and back down.
  * `open` is whether the drawer is open below the breakpoint. Callers add their own
- * width/flex classes on top of this string; the slide direction, what "closed" means and the
- * card's edge (the `panel-edge` hairline together with the `--panel-card-shadow` elevation, while it floats
- * or is an open drawer) are this function's job, not theirs.
+ * width/flex classes on top of this string; the motion, what "closed" means and the card's edge
+ * (the `panel-edge` hairline together with the `--panel-card-shadow` elevation) are this
+ * function's job, not theirs. A floating card carries the edge while it floats; the drawer carries
+ * it at all times below the breakpoint, so it fades with the card, and the fade and `invisible`
+ * hide it while the drawer is away.
  *
  * In `drawer` mode `docked:` turns the pane back into a plain row sibling — no fixed positioning,
- * no stacking context, no transition. `docked:translate-none` rather than `docked:translate-x-0`
- * (which still computes to a `translate` value other than `none`) is what keeps it from becoming a
- * stacking context and a containing block for fixed descendants at and above the breakpoint,
- * where the layout must stay exactly as it was before the pane had a `translate` at all. The
- * `rtl:` slide classes win over a plain `docked:` one, so the reset has an `rtl:` twin.
+ * no stacking context, no transition. The drawer's motion classes are all `max-docked:`, and
+ * `docked:translate-none` keeps `translate` at `none` at and above the breakpoint, so the pane is
+ * no stacking context and no containing block for fixed descendants there, where the layout must
+ * stay exactly as it was before the pane had a `translate` at all.
  *
  * In `floating` mode none of the `docked:` resets apply, and `peeking` takes the place of `open`
- * for whether the pane is on screen there. The card fades up from 6px below its resting position
- * and fades down when dismissed, with the console-switch view's easing. It is `invisible` while
- * away, so a faded card stays out of the tab order. Drawers are likewise invisible while away,
- * and their translation clears the card's shadow from the screen edge. A floating start pane is a `RailClip`'s child.
+ * for whether the pane is on screen there. The card fades up from 4% of its height below its
+ * resting position and fades down when dismissed, with the console-switch view's easing. It is `invisible` while
+ * away, so a faded card stays out of the tab order. Drawers are likewise invisible while away. A
+ * floating start pane is a `RailClip`'s child.
  *
- * Tailwind 4's `translate-x-*` utilities set the CSS `translate` property, not `transform`, so the
- * overlays transition `translate` and `visibility`, and floating cards also transition opacity;
- * visibility stays on until the exit finishes. Every form drops its transition under
- * `prefers-reduced-motion: reduce`.
+ * Tailwind 4's `translate-*` utilities set the CSS `translate` property, not `transform`, so the
+ * overlays transition `translate`, `opacity` and `visibility`; visibility stays on until the exit
+ * finishes. Every form drops its transition under `prefers-reduced-motion: reduce`.
  *
  * HeroUI's `Drawer` is not used: it is modal (everything outside is inert, focus is trapped, its
  * content is portalled and unmounted while closed). The sidebar has to be a non-modal row sibling
@@ -76,23 +77,22 @@ const FLOATING_FRAME = `docked:start-[calc(var(--rail-width)+var(--peek-gap))] $
  * still operable, focus staying on the terminal, and what it shows staying mounted.
  */
 export function drawerClass(mode: PaneMode, open: boolean, peeking = false): string {
-  const dockedReset = "docked:static docked:z-auto docked:translate-none docked:rtl:translate-none docked:transition-none";
+  const dockedReset = "docked:static docked:z-auto docked:translate-none docked:transition-none";
   const form =
     mode === "drawer"
-      ? `transition-[translate,visibility] ${dockedReset}`
-      : `transition-[translate,visibility] ${FLOATING_FRAME} docked:translate-x-0 docked:rtl:translate-x-0 docked:panel-edge docked:shadow-(--panel-card-shadow) docked:transition-[translate,opacity,visibility] docked:duration-240 docked:ease-[cubic-bezier(0.2,0,0,1)] ${peeking ? "docked:translate-y-0 docked:opacity-100 docked:pointer-events-auto" : "docked:translate-y-1.5 docked:opacity-0 docked:pointer-events-none docked:invisible"}`;
-  const base = "fixed bottom-(--bottom-chrome-height) top-(--top-chrome-height) z-40 duration-200 motion-reduce:transition-none";
-  return `${base} ${DRAWER_FRAME} ${ANCHOR} ${open ? "translate-x-0 max-docked:panel-edge max-docked:shadow-(--panel-card-shadow)" : `${CLOSED} max-docked:invisible`} ${form}`;
+      ? `max-docked:transition-[translate,opacity,visibility] max-docked:duration-240 max-docked:ease-[cubic-bezier(0.2,0,0,1)] max-docked:motion-reduce:transition-none ${dockedReset}`
+      : `${FLOATING_FRAME} docked:panel-edge docked:shadow-(--panel-card-shadow) docked:transition-[translate,opacity,visibility] docked:duration-240 docked:ease-[cubic-bezier(0.2,0,0,1)] docked:motion-reduce:transition-none ${peeking ? "docked:translate-y-0 docked:opacity-100 docked:pointer-events-auto" : "docked:translate-y-[4%] docked:opacity-0 docked:pointer-events-none docked:invisible"}`;
+  const base = "fixed bottom-(--bottom-chrome-height) top-(--top-chrome-height) z-40 motion-reduce:transition-none";
+  return `${base} ${DRAWER_FRAME} ${ANCHOR} ${open ? DRAWER_OPEN : DRAWER_AWAY} ${form}`;
 }
 
 /**
- * What a start-side overlay sits in: a zero-width fixed element
- * at the rail's end edge, clipped to the content side of that edge only (`clip-path` reaches past
- * the other three sides, so the pane's shadow is not cut), keeping the card and its shadow off the
- * rail and letting mobile drawers slide behind it. The rail paints nothing of its own on the translucent
- * macOS window, so stacking the pane beneath it would show it through. The wrapper takes no pointer
- * events, the pane (`drawerClass`) does, and the pane stays `fixed` itself:
- * a clip does not make its element a containing block. With the pane docked at the desktop
+ * What a start-side overlay sits in: a zero-width fixed element at the rail's end edge, clipped to
+ * the content side of that edge only (`clip-path` reaches past the other three sides, so the pane's
+ * shadow is not cut), keeping the card and its shadow off the rail. The rail paints nothing of its
+ * own on the translucent macOS window, so stacking the pane beneath it would show it through. The
+ * wrapper takes no pointer events, the pane (`drawerClass`) does, and the pane stays `fixed`
+ * itself: a clip does not make its element a containing block. With the pane docked at the desktop
  * breakpoint (`floating` false), the wrapper is `display: contents` and so is not there. It is always
  * rendered, so docking the pane does not remount what is in it.
  */

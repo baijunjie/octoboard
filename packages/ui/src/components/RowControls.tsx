@@ -34,7 +34,9 @@ export function RowIconLine({ icon, children, className = "" }: { icon?: React.R
  * the parent gap), leaving no empty column beside fixed icons when actions are hidden. Two buttons plus both gaps set the animation cap;
  * keyboard focus removes clipping so its ring can paint outside the box. A `reserve`d slot keeps
  * its width while the actions are hidden and only fades them in, for a row whose other content is
- * laid out against its end and must not slide when they show. */
+ * laid out against its end and must not slide when they show. On a device whose primary input
+ * cannot hover (a phone, a tablet's touch screen) they always show, as nothing there would reveal
+ * them before a tap. */
 export function RowControls({
   children,
   fixed,
@@ -58,8 +60,8 @@ export function RowControls({
           always
             ? ""
             : reserve
-              ? "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 group-data-selected:opacity-100 group-data-current:opacity-100 has-[[aria-expanded=true]]:opacity-100"
-              : "max-w-0 overflow-hidden opacity-0 group-hover:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] group-hover:opacity-100 group-focus-within:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] group-focus-within:overflow-visible group-focus-within:opacity-100 group-data-selected:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] group-data-selected:opacity-100 group-data-current:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] group-data-current:opacity-100 has-[[aria-expanded=true]]:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] has-[[aria-expanded=true]]:opacity-100"
+              ? "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 group-data-selected:opacity-100 group-data-current:opacity-100 has-[[aria-expanded=true]]:opacity-100 [@media(hover:none)]:opacity-100"
+              : "max-w-0 overflow-hidden opacity-0 [@media(hover:none)]:max-w-none [@media(hover:none)]:overflow-visible [@media(hover:none)]:opacity-100 group-hover:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] group-hover:opacity-100 group-focus-within:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] group-focus-within:overflow-visible group-focus-within:opacity-100 group-data-selected:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] group-data-selected:opacity-100 group-data-current:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] group-data-current:opacity-100 has-[[aria-expanded=true]]:max-w-[calc(var(--row-controls-max-width)+var(--row-controls-gap,0px))] has-[[aria-expanded=true]]:opacity-100"
         }`}
       >
         <RowIconGroup className={fixed ? "ps-(--row-control-gap)" : "ps-(--row-controls-gap,0px)"}>{children}</RowIconGroup>

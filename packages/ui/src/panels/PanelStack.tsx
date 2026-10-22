@@ -122,6 +122,7 @@ export function PanelStack({
   maximizeArea,
   areaEasing = false,
   floatOnly = false,
+  floating,
 }: {
   owner: AsideOwner;
   project: Project | undefined;
@@ -142,13 +143,26 @@ export function PanelStack({
   /** This stack is only the floating pane beside a folded column (`RightPane.tsx`): it shows the
    * hovered kind alone, whatever is open. */
   floatOnly?: boolean;
+  /** The window is too narrow to dock the pane (`AsidePane.tsx`): the stack shows `stack`, the one
+   * panel floating over the agent terminal (`useFloatingPanel.ts`), rather than the stored stack,
+   * which it leaves as it is; closing that panel calls `onClose`. No card is maximized there, as
+   * there is no area beside the pane left to cover. */
+  floating?: { stack: Stack; onClose: () => void };
 }): React.ReactElement {
   const t = useT();
   const order = OWNER_KINDS[owner.kind];
   const { stacks, setStack: setStackOf, persist } = usePanelStacks();
-  const stored = stacks[owner.kind];
+  // A panel floating over the terminal is kept while it fades away after closing (`AsidePane.tsx`
+  // unmounts the stack once it has gone), unless a hover's card has taken the pane meanwhile.
+  const floatingKind = floating ? shownKinds(floating.stack, order)[0] : undefined;
+  const ownerId = ownerKey(owner);
+  const [leaving, setLeaving] = useState<{ owner: string | undefined; kind: string }>();
+  if (floatingKind !== undefined && (floatingKind !== leaving?.kind || ownerId !== leaving?.owner)) setLeaving({ owner: ownerId, kind: floatingKind });
+  // Another owner's card is never shown for this one (Back or Forward while the pane fades away).
+  const keep = floating && floatingKind === undefined && leaving !== undefined && leaving.owner === ownerId && !peek?.active ? leaving.kind : undefined;
+  const base = floating ? (keep !== undefined ? { open: [keep], shares: {} } : floating.stack) : stacks[owner.kind];
   const setStack = (next: Stack, options?: { persist?: boolean }) => setStackOf(owner.kind, next, options);
-  const open = floatOnly ? [] : shownKinds(stored, order);
+  const open = floatOnly ? [] : shownKinds(base, order);
   // The kind a floating pane shows is taken while it floats in, and kept while it floats out, so a
   // stack emptied by closing its last docked panel shows nothing more on its way out (the pane goes
   // at once, but a float-out still fading would otherwise take the hovered kind's card).
@@ -158,7 +172,7 @@ export function PanelStack({
   } else if (peek?.active && peekKind !== undefined && order.includes(peekKind) && floatKind !== peekKind) {
     setFloatKind(peekKind);
   }
-  const stack: Stack = open.length > 0 ? stored : { open: floatKind ? [floatKind] : [], shares: {} };
+  const stack: Stack = open.length > 0 ? base : { open: floatKind ? [floatKind] : [], shares: {} };
   const kinds = shownKinds(stack, order);
   const stacked = stackedKinds(stack, order);
   const maximized = maximizedKind(stack, order);
@@ -198,14 +212,15 @@ export function PanelStack({
   // Restoring uncovers and moves nothing.
   const toggleMaximize = (kind: PanelKind) => {
     const card = containerRef.current?.querySelector(`#${panelId(kind)}`);
-    if (stored.maximized !== kind && card && maximizeArea.current?.contains(document.activeElement)) focusLanding(card);
-    setStack(toggleMaximized(stored, kind), { persist: false });
+    if (base.maximized !== kind && card && maximizeArea.current?.contains(document.activeElement)) focusLanding(card);
+    setStack(toggleMaximized(base, kind), { persist: false });
   };
   const available = heights.reduce((sum, height) => sum + height, 0);
 
   const close = (kind: PanelKind) => {
     if (open.length === 0) onDismiss();
-    else setStack(closePanel(stored, kind, order));
+    else if (floating) floating.onClose();
+    else setStack(closePanel(base, kind, order));
   };
 
   return (
@@ -236,10 +251,10 @@ export function PanelStack({
                   appearance="grip"
                   tooltip={t("pane.resize")}
                   onChange={(height, options) =>
-                    setStack(resizeBoundary(stored, position - 1, height, available, MIN_PANEL_HEIGHT, order), { persist: options?.commit !== false })
+                    setStack(resizeBoundary(base, position - 1, height, available, MIN_PANEL_HEIGHT, order), { persist: options?.commit !== false })
                   }
                   onCommit={persist}
-                  onReset={() => setStack(resetBoundary(stored, position - 1, order))}
+                  onReset={() => setStack(resetBoundary(base, position - 1, order))}
                   region={panelRegion(kinds[position - 1] as PanelKind)}
                   className="absolute inset-x-0 -inset-y-[calc((24px-var(--panel-stack-gap))/2)] z-10"
                 />
@@ -260,7 +275,7 @@ export function PanelStack({
               <PanelFrameProvider
                 value={{
                   // Not while only floating in: that card is a hover's preview, not part of the layout.
-                  canMaximize: entry.maximizable === true && peek === undefined,
+                  canMaximize: entry.maximizable === true && peek === undefined && !floating,
                   maximized: kind === maximized,
                   onToggleMaximized: () => toggleMaximize(kind as PanelKind),
                   onClose: () => close(kind as PanelKind),

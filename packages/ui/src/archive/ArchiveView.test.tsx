@@ -186,3 +186,13 @@ it("offers no lock or unlock control in the archive", () => {
   const { container } = renderArchiveView();
   expect(container.querySelector('button[aria-label="Lock"], button[aria-label^="Unlock "]')).toBeNull();
 });
+
+it("always shows a row's Reopen and Delete on a device that cannot hover, and reveals them on hover or focus otherwise", () => {
+  const { container } = renderArchiveView();
+  const row = container.querySelector<HTMLElement>("ul > li [role=button]")!;
+  const reopen = Array.from(row.querySelectorAll("button")).find((b) => b.textContent === "Reopen")!;
+  const clip = reopen.closest<HTMLElement>(".max-w-0")!;
+  expect(clip.className).toContain("[@media(hover:none)]:max-w-none [@media(hover:none)]:overflow-visible [@media(hover:none)]:opacity-100");
+  expect(clip.className).toContain("group-hover:max-w-none");
+  expect(clip.className).toContain("group-focus-within:max-w-none");
+});

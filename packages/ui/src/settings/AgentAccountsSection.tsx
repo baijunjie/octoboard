@@ -2,7 +2,7 @@ import { Button } from "../components/Button";
 import { Tabs } from "@heroui/react";
 import { Bot, LogIn, Pencil, Trash2, UserPlus } from "lucide-react";
 import React, { useContext, useEffect, useRef, useState } from "react";
-import { setInteractionModality } from "react-aria";
+import { ringForAutomaticFocus } from "../touchInput";
 
 import { AGENT_LABEL, defaultAccountName, isAgentUnavailable } from "../agents";
 import { ActionMenu, type ActionMenuEntry } from "../components/ActionMenu";
@@ -153,7 +153,7 @@ export function AgentAccountsSection(): React.ReactElement {
       }
       control.scrollIntoView?.({ block: "center" });
       // Focus lands from a press in another dialog, so the destination shows its ring.
-      setInteractionModality("keyboard");
+      ringForAutomaticFocus();
       control.focus();
       setShowingSharingOf(undefined);
     };
@@ -436,7 +436,7 @@ function useLoginFocusReturn(
         const focused = document.activeElement;
         if (!target || focused === target || (focused !== document.body && !opener?.contains(focused))) return;
         // The user did not ask for this move, so the destination shows its ring.
-        setInteractionModality("keyboard");
+        ringForAutomaticFocus();
         target.focus();
       });
     });

@@ -140,6 +140,13 @@ something special, which makes its presence look like the condition for answerin
 deletion, a binary change and a change past the patch budget with an `invalid_change` the real daemon never sends there.
 A factory parameter likewise carries the content a reply needs, not the right to ask for it.
 
+The public website's product preview is one more scenario over the same fixture daemon (`createPreviewScenario` in
+`packages/ui/src/website-preview/scenarios.ts`), but it is not among the gallery's scenarios, so neither
+`pnpm gallery:sweep` nor the guard test reads it, and the `agent-gallery` skill does not keep it in step. When a
+change makes something the preview shows draw on daemon state it did not before, give that scenario the state
+too and look at the preview itself (`pnpm --filter @octoboard/web dev`): left out, the feature renders empty
+there and nothing fails.
+
 ## A final capture does not verify earlier transient states
 
 Applies when visually verifying gallery interactions. A capture taken after setup shows only the view it leaves on

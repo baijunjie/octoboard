@@ -42,7 +42,8 @@ show" in `docs/product/focus-mode.md`.
   date block (to its left in a left-to-right language), which stays at the row's end, and the title gives up room for
   them, cut off if it must be. On a pane too narrow for one line, the date block moves onto a line of its own, still at
   the row's end; while the row is hovered or focused the buttons join it there, so such a row grows by a line when its
-  buttons appear. Reopen and Delete have filled backgrounds distinct from the hovered row; Delete uses a soft danger fill.
+  buttons appear. On a device whose primary input cannot hover — a phone, or a tablet's touch screen — they always
+  show. Reopen and Delete have filled backgrounds distinct from the hovered row; Delete uses a soft danger fill.
 - A session whose owner is **a project session listed here too** — an archived session of an archived lead session, or
   of any archived project session that had started sessions — is **inset under that owner**, with rounded connectors
   as in "Project rows" in `docs/product/sidebar-project-rows.md`, and follows it instead of being ranked against the

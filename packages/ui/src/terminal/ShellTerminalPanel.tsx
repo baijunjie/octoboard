@@ -50,8 +50,8 @@ export function ShellTerminalPanel({
   onViewFile,
 }: {
   project: Project;
-  /** The panel appears in a pane already on screen as the project changed under it: it slides in.
-   * Read once, as it mounts. */
+  /** The panel appears in a pane already on screen as the project changed under it: it fades in
+   * where it stands. Read once, as it mounts. */
   switching: boolean;
   /** The panel is being resized every frame: its views keep their size until this ends. */
   resizing?: boolean;
@@ -60,7 +60,7 @@ export function ShellTerminalPanel({
   const t = useT();
   const daemon = useDaemon();
   const tabScrollLabels = useTabScrollLabels();
-  const [slides] = useState(switching);
+  const [fadesIn] = useState(switching);
   const terminals = useProjectShellTerminals(project.id);
   const starting = useShellTerminalStarting(project.id);
   // The tab to show in place of each one closed from here, once it has gone: the tab after it,
@@ -218,11 +218,11 @@ export function ShellTerminalPanel({
 
   return (
     <>
-      <div ref={rootRef} className={`${slides ? "panel-switch " : ""}relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden`}>
+      <div ref={rootRef} className={`${fadesIn ? "panel-switch " : ""}relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden`}>
         <Tabs
           selectedKey={activeId ?? ""}
           onSelectionChange={(key) => select(String(key))}
-          className="panel-switch-view flex min-h-0 flex-1 flex-col gap-0"
+          className="flex min-h-0 flex-1 flex-col gap-0"
         >
           <PanelHeader
             title={t("panel.terminal.name")}

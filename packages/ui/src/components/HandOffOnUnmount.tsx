@@ -1,12 +1,12 @@
 import { useLayoutEffect } from "react";
-import { setInteractionModality } from "react-aria";
 
+import { ringForAutomaticFocus } from "../touchInput";
 import { useLatest } from "./useLatest";
 
 /** Renders nothing; when it unmounts while focus is inside `from`, calls `to` to move it. It is for
  * a hand-off whose trigger is a render rather than a call site, such as the daemon taking the last
  * console away. The user did not ask for the move, so the keyboard modality is set first and the
- * destination shows its focus ring.
+ * destination shows its focus ring, except on a touch screen (`ringForAutomaticFocus`).
  *
  * Put it first among the siblings that go away together. React unwinds a deleted subtree in order,
  * removing each host node from the document as it passes it and running the layout cleanups on the
@@ -22,7 +22,7 @@ export function HandOffOnUnmount({ from, to }: { from: string; to: () => void })
   useLayoutEffect(
     () => () => {
       if (!document.activeElement?.closest(from)) return;
-      setInteractionModality("keyboard");
+      ringForAutomaticFocus();
       latest.current();
     },
     [from],

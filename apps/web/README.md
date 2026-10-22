@@ -15,7 +15,8 @@ Run these commands from the repository root:
 - `pnpm --filter @octoboard/web dev` — builds the React product preview, then starts the website development server.
 - `pnpm --filter @octoboard/web check:locales` — checks language coverage, message keys and interpolation placeholders.
 - `pnpm --filter @octoboard/web typecheck` — prepares Nuxt and checks the website's TypeScript and Vue code.
-- `pnpm --filter @octoboard/web test` — runs the website's Node test.
+- `pnpm --filter @octoboard/web test` — runs the website's Node test; the sitemap check reads the generated output, so
+  it is skipped until `build` has run.
 - `pnpm --filter @octoboard/web build` — builds the React product preview and generates the static website in
   `apps/web/.output/public`.
 - `pnpm --filter @octoboard/web generate` — exposes the same static generation command for deployment.
@@ -27,12 +28,14 @@ Run these commands from the repository root:
 
 - [`apps/web/nuxt.config.ts`](nuxt.config.ts) owns public runtime configuration, local font loading, and the
   prerender hook. It passes the locale table from [`apps/web/seo/site-seo.ts`](seo/site-seo.ts) to
-  `@nuxtjs/i18n`, prerenders each localized home and privacy route from that table, and on `prerender:done`
-  writes `sitemap.xml`, `robots.txt`, `404.html`, and the agent files into the static output.
+  `@nuxtjs/i18n`, prerenders each localized home and privacy route from that table, configures `@nuxtjs/sitemap`
+  to emit the single `sitemap.xml` (with hreflang alternates built from the same table, and its XSL stylesheet
+  under `__sitemap__/`), and on `prerender:done` writes `robots.txt`, `404.html`, and the agent files into the
+  static output.
 - [`apps/web/seo/`](seo/) is ordinary project code imported by both the Vue app and `apps/web/nuxt.config.ts`.
   It is not Nuxt's `shared/` directory. A file placed there is externalized, so the import stays a `.ts`
   specifier that does not resolve and `nuxt generate` fails as the prerenderer starts.
-- [`apps/web/seo/site-seo.ts`](seo/site-seo.ts) owns locale registration, the XML sitemap, `robots.txt`, Open
+- [`apps/web/seo/site-seo.ts`](seo/site-seo.ts) owns locale registration, `robots.txt`, Open
   Graph locale values, canonical and Markdown path helpers, and JSON-LD construction.
 - [`apps/web/seo/page-outline.ts`](seo/page-outline.ts) lists the homepage features, steps, questions, and
   platforms, the hero agents (a name plus an icon file in [`apps/web/public/agents/`](public/agents/)), the
@@ -133,7 +136,8 @@ React preview at `preview/website-preview.html`, `sitemap.xml`,
 is `zh.md`). Privacy Markdown is `privacy.md` or `{route code}/privacy.md`. Routes use directory indexes so
 GitHub Pages can serve them without a runtime application server. The Nuxt configuration produces the
 standalone error document from the rendered error route, removing scripts and preload links. Both sitemaps
-cover only the home and privacy pages.
+cover only the home and privacy pages. `sitemap.xml` comes from `@nuxtjs/sitemap` and carries an
+XSL stylesheet so browsers render it as a table; `sitemap.md` is written by the agent files step.
 
 [`.github/workflows/website.yml`](../../.github/workflows/website.yml) runs on pushes to `main` and on manual
 dispatch. It reads the GitHub Pages origin and base path with `actions/configure-pages`. An `http` origin is

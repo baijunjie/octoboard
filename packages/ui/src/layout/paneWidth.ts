@@ -2,6 +2,7 @@ import { useState, useSyncExternalStore } from "react";
 
 import { createPersistedPreference } from "../persistedPreference";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
+import { useMediaQuery } from "./breakpoint";
 
 /** The two panes whose docked width the user can change. */
 export type PaneSide = "sidebar" | "aside";
@@ -16,10 +17,14 @@ const PANES = {
 
 /** The terminal pane's floor (the terminal's wrapper in `App.tsx`); the window's 1168px minimum is
  * this plus the rail, the sidebar's default and the aside's minimum. Below the `docked` breakpoint
- * the sidebar is a drawer and the floor drops to `NARROW_TERMINAL_FLOOR`, which the aside, docked
- * at every width, shares the row with. */
+ * the sidebar is a drawer and the floor drops to `NARROW_TERMINAL_FLOOR`, which the docked aside
+ * shares the row with until the window is too narrow for both (`useAsideFloats`). */
 const TERMINAL_FLOOR = 520;
 const NARROW_TERMINAL_FLOOR = 398;
+
+/** The aside's floor below the `docked` breakpoint while the Terminal panel is in its column: a
+ * narrow Shell header reserves room for a normal tab, its focus ring and every action. */
+export const NARROW_TERMINAL_PANEL_ASIDE_MIN = 336;
 
 /** The terminal's floor in a window narrower than the `docked` breakpoint or not. */
 function terminalFloor(narrow: boolean): number {
@@ -32,8 +37,9 @@ let railWidthPxCache: number | undefined;
 /** The left rail's width, which the panes' row does not have, read back out of `--rail-width` in
  * `style.css` rather than kept as a second literal here (as `breakpoint.ts` does for the
  * breakpoint). Throws if the stylesheet has not loaded yet, rather than guessing a width the
- * layout then disagrees with. Reached only from `usePaneWidth`'s state initialiser, never from the
- * snapshot read that runs on every render, so that throw comes from a call site prepared for it. */
+ * layout then disagrees with. Reached only from `usePaneWidth`'s state initialiser and from
+ * `useAsideFloats`'s media query (`useMediaQuery`), never from the snapshot read that runs on every render,
+ * so that throw comes from a call site prepared for it. */
 function railWidthPx(): number {
   if (railWidthPxCache !== undefined) return railWidthPxCache;
   const raw = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--rail-width"));
@@ -149,4 +155,21 @@ export function usePaneWidth(side: PaneSide, docked: DockedPanes, narrow: boolea
     persist: preference.persist,
     reset: () => preference.set(undefined),
   };
+}
+
+/** The narrowest window that docks the aside: the rail, the terminal's narrow floor and the aside's
+ * largest floor side by side. One width whichever panels are open, so opening the Terminal panel
+ * never moves the pane from beside the terminal to over it. */
+function asideDocksQuery(): string {
+  return `(min-width: ${railWidthPx() + NARROW_TERMINAL_FLOOR + NARROW_TERMINAL_PANEL_ASIDE_MIN}px)`;
+}
+
+/**
+ * Whether the window is too narrow to dock the aside beside the terminal (a phone): its open panels
+ * then float over the agent terminal's area instead of taking room from it, and the terminal keeps
+ * the whole width with no floor that would scroll the row. A media query rather than the viewport
+ * store above, so a resize re-renders only when the answer changes.
+ */
+export function useAsideFloats(): boolean {
+  return !useMediaQuery(asideDocksQuery);
 }

@@ -1,6 +1,9 @@
 import type { Language } from "../i18n/languages";
+import type { Agent, AgentAvailability } from "../protocol";
 import type { Scenario } from "../gallery/scenario";
+import { quotaOf, quotaWindow } from "../gallery/fixtures/quotas";
 import {
+  ALL_AGENTS,
   consoleOf,
   gitStatusOf,
   pageOf,
@@ -13,6 +16,33 @@ import { previewCopy as english } from "./locales/en";
 import { previewCopy as chinese } from "./locales/zh-Hans";
 
 export type PreviewScene = "overview" | "report" | "changes";
+
+/** Every agent installed, so each has a quota tab and the selected session its rail indicator. */
+const agentAvailability = new Map<Agent, AgentAvailability>(
+  ALL_AGENTS.map((agent) => [
+    agent,
+    { agent, availability: "available", default_account_dir: `/demo/.${agent}` },
+  ]),
+);
+
+/** Sample readings of each agent's default account. Their reset times count from when the page
+ * loaded, never from a fixed date, so no visit finds them already past. */
+function previewQuotas() {
+  return [
+    quotaOf("claude", null, "max", [
+      quotaWindow("session", 38, 2 * 60 + 17),
+      quotaWindow("weekly", 46, 3 * 24 * 60 + 5 * 60),
+    ]),
+    quotaOf("codex", null, "plus", [
+      quotaWindow("session", 21, 3 * 60 + 40),
+      quotaWindow("weekly", 29, 4 * 24 * 60 + 2 * 60),
+    ]),
+    quotaOf("grok", null, "SuperGrok", [
+      quotaWindow("credit_period", 31, 5 * 24 * 60 + 9 * 60),
+    ]),
+  ];
+}
+
 export const copyFor = (language: Language) =>
   language === "zh-Hans" ? chinese : english;
 
@@ -168,22 +198,33 @@ export function createPreviewScenario(
     group: "Focus mode",
     category: "normal",
     title: copy.demo,
-    state: snapshotState({
-      consoles: [workspace],
-      projects,
-      sessions: [coordinator, ...projectSessions],
-      pages: {
-        [coordinator.id]: [
-          pageOf("preview-report", coordinator.id, report(copy), 2),
-        ],
-      },
-      gitStatuses: projects.map((project) =>
-        gitStatusOf(project.id, {
-          branch: previewRepositories.get(project.id)!.branch,
-          ahead: 0,
-        }),
-      ),
-    }),
+    state: {
+      ...snapshotState({
+        consoles: [workspace],
+        projects,
+        sessions: [coordinator, ...projectSessions],
+        pages: {
+          [coordinator.id]: [
+            pageOf("preview-report", coordinator.id, report(copy), 2),
+          ],
+        },
+        gitStatuses: projects.map((project) =>
+          gitStatusOf(project.id, {
+            branch: previewRepositories.get(project.id)!.branch,
+            ahead: 0,
+          }),
+        ),
+        settings: {
+          auto_pull_repositories: false,
+          auto_delete_unresumable_archives: true,
+          added_agents: ALL_AGENTS,
+          default_clone_dir: "/demo",
+          accounts: [],
+        },
+        accountQuotas: previewQuotas(),
+      }),
+      agentAvailability,
+    },
     preferences: {
       sidebarConsole: workspace.id,
       sidebarWidth: scene === "overview" ? 360 : 310,
@@ -200,7 +241,7 @@ export function createPreviewScenario(
       async (ui) => {
         // Match the application's CSS breakpoint: the standalone demo also runs on phones, where
         // the sessions list is a drawer that has to be opened to select a session and closed to see
-        // the report or browser, which dock beside the terminal at every width.
+        // the report or browser, which dock beside the terminal, or float over it on a phone.
         const breakpoint = parseFloat(
           getComputedStyle(document.documentElement).getPropertyValue(
             "--breakpoint-docked",
@@ -212,7 +253,20 @@ export function createPreviewScenario(
         await ui.press(
           ui.session(scene === "changes" ? copy.review : coordinator.title),
         );
-        if (narrow) await ui.press(ui.t("titleBar.sidebar.hide"));
+        // On a phone picking the session closes the drawer already; between the two widths it stays.
+        const hide = ui.t("titleBar.sidebar.hide");
+        if (narrow && document.querySelector(`[aria-label="${hide}"]`))
+          await ui.press(hide);
+        // On a phone the drawer takes a floating panel away with it, so the scene's panel is
+        // opened again once the drawer has closed.
+        const show =
+          scene === "report"
+            ? ui.t("titleBar.report.show")
+            : scene === "changes"
+              ? ui.t("titleBar.files.show")
+              : undefined;
+        if (show && document.querySelector(`[aria-label="${show}"]`))
+          await ui.press(show);
       },
     ],
   };

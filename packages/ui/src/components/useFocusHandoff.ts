@@ -1,4 +1,4 @@
-import { setInteractionModality } from "react-aria";
+import { ringForAutomaticFocus } from "../touchInput";
 import { useEffect, useRef } from "react";
 
 import { focusTopBar } from "./regionFocus";
@@ -30,7 +30,7 @@ export function useFocusHandoff(restore: () => void): {
     if (!el || (el.isConnected && !el.matches(":disabled"))) return;
     held.current = null;
     if (document.activeElement !== document.body && document.activeElement !== el) return;
-    setInteractionModality("keyboard");
+    ringForAutomaticFocus();
     restore();
     if (document.activeElement === document.body) focusTopBar();
   });

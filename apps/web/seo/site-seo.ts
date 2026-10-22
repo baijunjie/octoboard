@@ -1,4 +1,4 @@
-// Locale registration, crawl rules, and structured data for the static site.
+// Locale registration, robots rules, and structured data for the static site.
 // Open Graph locale values use language_TERRITORY. The protocol does not accept a
 // bare language or a BCP-47 script tag such as zh-Hans, so each language is pinned
 // to its primary market.
@@ -197,37 +197,6 @@ export function ogLocaleAlternates(code: string): string[] {
   return locales
     .map((locale) => locale.ogLocale)
     .filter((value) => value !== current);
-}
-
-function xmlEscape(text: string): string {
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("<", "&lt;");
-}
-
-export function sitemapXml(siteUrl: string): string {
-  const entries = pagePaths.flatMap((path) => {
-    const alternate =
-      locales
-        .map(
-          ({ code, language }) =>
-            `<xhtml:link rel="alternate" hreflang="${language}" href="${xmlEscape(siteUrl + localizedPath(code, path))}"/>`,
-        )
-        .join("") +
-      `<xhtml:link rel="alternate" hreflang="x-default" href="${xmlEscape(siteUrl + path)}"/>`;
-    return locales.map(
-      ({ code }) =>
-        `<url><loc>${xmlEscape(siteUrl + localizedPath(code, path))}</loc>${alternate}</url>`,
-    );
-  });
-  return (
-    '<?xml version="1.0" encoding="UTF-8"?>\n' +
-    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" ' +
-    'xmlns:xhtml="http://www.w3.org/1999/xhtml">\n' +
-    entries.join("\n") +
-    "\n</urlset>\n"
-  );
 }
 
 // Search indexing, live AI retrieval, and model training are all allowed.
