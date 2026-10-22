@@ -38,6 +38,10 @@ use serde_json::{json, Value};
 
 use crate::protocol::{Agent, Role};
 
+pub(crate) use bindings::{
+    is_running, owner_from_now_on, owner_notice, running_or_leave, tell_now_or_leave, tell_released,
+};
+
 /// The key the adapters register the server under. It must not collide with a server the project
 /// defines: on Claude Code a colliding key means the *project's* definition is silently never
 /// spawned.
@@ -464,6 +468,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     HANDOVER_BRANCHES,
     SWITCH_SESSION_ACCOUNT,
     TRANSFER_SESSION,
+    RELEASE_SESSION,
     REQUEST_SESSION,
     LIST_SESSIONS,
     SHARE_INFO,
@@ -873,8 +878,8 @@ const TRANSFER_SESSION: ToolDef = ToolDef {
                   console, or a project session of the session's own project that can own \
                   sessions (unbound, or bound to a console session while keeping sessions of its \
                   own); a session that has sessions of its own can go only to a console session. \
-                  Both must be running. The session is told who its owner now is, and the new \
-                  owner is sent `note`.",
+                  The new owner must be running. The session is told who its owner now is, when it \
+                  next starts if it is not running, and the new owner is sent `note`.",
     schema: || {
         object_schema(
             json!({
@@ -890,6 +895,32 @@ const TRANSFER_SESSION: ToolDef = ToolDef {
                 },
             }),
             &["session", "to", "note"],
+        )
+    },
+};
+
+/// How an owner — a console session, or a project session that can own sessions — lets one of its
+/// sessions go, without the user: the session is its to release, and becomes the user's own.
+const RELEASE_SESSION: ToolDef = ToolDef {
+    name: "release_session",
+    description: "Release one of your sessions (`yours: true`) from its binding to you, when it \
+                  is not yours to drive any more: it has no owner afterwards and is the user's \
+                  own, taking work only from the user in its terminal. Needs no approval. It \
+                  stops reporting to anyone, becomes an ordinary unbound session that can start \
+                  and drive sessions of its own, and is no longer archived with you or by its \
+                  own `done` report. A lead session keeps the sessions it started, and the \
+                  branches the session is responsible for stay with it. A session is told it \
+                  has no owner now, when it next starts if it is not running, which replaces \
+                  what it was told of its owner when it was started.",
+    schema: || {
+        object_schema(
+            json!({
+                "session": {
+                    "type": "string",
+                    "description": "The id of the session of yours to release.",
+                },
+            }),
+            &["session"],
         )
     },
 };
@@ -1074,6 +1105,7 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     HANDOVER_BRANCHES,
     SWITCH_SESSION_ACCOUNT,
     TRANSFER_SESSION,
+    RELEASE_SESSION,
     BIND_TO_SESSION,
     REQUEST_SESSION,
     REPORT,
@@ -1365,6 +1397,7 @@ mod tests {
                 "handover_branches",
                 "switch_session_account",
                 "transfer_session",
+                "release_session",
                 "bind_to_session",
                 "request_session",
                 "report",
@@ -1397,6 +1430,7 @@ mod tests {
                 "handover_branches",
                 "switch_session_account",
                 "transfer_session",
+                "release_session",
                 "request_session",
                 "list_sessions",
                 "share_info",

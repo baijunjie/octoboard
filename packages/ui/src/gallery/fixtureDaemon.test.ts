@@ -487,6 +487,34 @@ describe("the fixture daemon's account directories", () => {
 });
 
 
+describe("the fixture daemon's session release", () => {
+  const hub = sessionOf("hub", "c", undefined, "Hub", "idle", { colour: "pink", ordinal: 1 });
+  const lead = sessionOf("lead", "c", "p", "Lead", "working", { bound_to: hub.id, pinned: true });
+  const child = sessionOf("child", "c", "p", "Child", "idle", { bound_to: lead.id });
+  const archived = sessionOf("old", "c", "p", "Old", "archived", { bound_to: hub.id });
+  const loner = sessionOf("loner", "c", "p", "Loner", "idle");
+  const state = snapshotState({ consoles: [consoleOf("c", "Main")], projects: [projectOf("p", "c", "Website")], sessions: [hub, lead, child, archived, loner] });
+  const scenario = { id: "release", group: "Sidebar sessions" as const, category: "normal" as const, title: "", state };
+
+  it("unbinds the session in any state, leaving what it owns bound to it", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await expect(daemon.request({ type: "release_session", session: lead.id })).resolves.toEqual({ type: "ack" });
+    await expect(daemon.request({ type: "release_session", session: archived.id })).resolves.toEqual({ type: "ack" });
+    const { sessions } = daemon.store.getState();
+    expect(sessions.get(lead.id)).toMatchObject({ status: "working", pinned: true, bound_to: undefined });
+    expect(sessions.get(archived.id)).toMatchObject({ status: "archived", bound_to: undefined });
+    expect(sessions.get(child.id)?.bound_to).toBe(lead.id);
+  });
+
+  it("refuses an unknown, a console and an unbound session", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await expect(daemon.request({ type: "release_session", session: "missing" })).rejects.toMatchObject({ code: "unknown_session" });
+    await expect(daemon.request({ type: "release_session", session: hub.id })).rejects.toMatchObject({ code: "internal_error" });
+    await expect(daemon.request({ type: "release_session", session: loner.id })).rejects.toMatchObject({ code: "internal_error" });
+    expect(daemon.store.getState().sessions.get(hub.id)).toEqual(hub);
+  });
+});
+
 describe("the fixture daemon's account switches", () => {
   const work = { id: "work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" };
   const session = sessionOf("s", "c", "p", "Release", "working", { model: "opus", effort: "high", bound_to: "hub" });

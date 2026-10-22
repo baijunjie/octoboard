@@ -101,10 +101,12 @@ besides the variables a project session's agent is given for its git (see "The l
   relates to other sessions: `new_session` for a session of its own where it has it, together with when to start one
   and how to choose the session a task goes to (see "Choosing the session a task goes to" in
   `docs/product/hub-orchestration.md`),
-  `handoff_session`, `switch_session_account`, `transfer_session` and `bind_to_session` where it has them,
+  `handoff_session`, `switch_session_account`, `transfer_session`, `release_session` and `bind_to_session` where it has them,
   `request_session` for a session that is nobody's, `get_account_quotas` for what each account's quota has left, and
   `list_sessions` and `share_info` for information. The text is written from who the session reports to when it
   launches, and says that what Octoboard tells it of a later change of owner replaces what it says (see "When a binding changes while a session runs" in
+  `docs/product/changing-session-owners.md`); a change made while the session was not running is told at its next
+  launch, ahead of that launch's own instruction (see "A change of owner told at the next launch" in
   `docs/product/changing-session-owners.md`). The role and the session's binding as it stands decide which tools the
   session is offered, so an unbound project session still has `report`, and calling it is refused while it is unbound
   (see `docs/product/reporting-to-owners.md` and "The unbound project session's tools" in

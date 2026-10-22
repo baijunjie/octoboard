@@ -1,11 +1,12 @@
 # Changing a session's owner
 
-A binding can change after a session was opened in two ways that sessions make themselves, neither of which asks the
-user: an owner hands a session of its own to another owner with `transfer_session`, and an unbound project session
-binds itself to an owner with `bind_to_session`. The rules and messages below are theirs. The one other change is a
-handoff to another agent — made by the user, or by an owner with `handoff_session` — which binds every session the
-original owns to the receiving session (see `docs/product/handing-off-sessions.md`). A binding is never cleared: a
-bound session does not become unbound again.
+A binding can change after a session was opened in three ways that sessions make themselves, none of which asks the
+user: an owner hands a session of its own to another owner with `transfer_session`, an owner releases a session of its
+own with `release_session`, and an unbound project session binds itself to an owner with `bind_to_session`. The user
+can release any bound session as well. The rules and messages below are theirs. The one other change is a handoff to
+another agent — made by the user, or by an owner with `handoff_session` — which binds every session the original owns
+to the receiving session (see `docs/product/handing-off-sessions.md`). A released session is unbound, and can be bound
+again like any unbound project session.
 Every connected window shows the change at once, the session moving to its new place in the sidebar and focus modes.
 
 ## Who can own a session
@@ -22,7 +23,7 @@ A session that has sessions of its own — archived ones included, since its own
 a console session: bound to a project session it could own none. A call that breaks a rule is refused, with the reason
 in prose, and changes nothing; so is one whose binding changed while it was being made — the session bound elsewhere
 meanwhile, it gained sessions of its own, or the owner can no longer own sessions — which says to look again before
-retrying. Both tools are also refused, changing nothing, while the session being rebound, or an owner involved — the
+retrying. `transfer_session` and `bind_to_session` are also refused, changing nothing, while the session being rebound, or an owner involved — the
 owner it is to be bound to, or a handover's earlier or new owner — is being started, resumed, handed off, switched to
 another account or having its owner changed; the reason says to look again once that is done.
 
@@ -37,9 +38,10 @@ a lead session.
 | `to` | yes | The new owner's session id. |
 | `note` | yes | The handover, for the new owner: what the session is doing, where it stands and what is left. |
 
-Besides the rules above, it is refused for a session that is not the caller's (as for `send_message`), for one with no
-process running — it is to be told of its new owner, so it has to be reopened first — and for handing a session to the
-caller itself.
+Besides the rules above, it is refused for a session that is not the caller's (as for `send_message`) and for handing
+a session to the caller itself. The session itself may be running or not; only the new owner must be running. One with
+no process running is told of its new owner when it next starts (see "A change of owner told at the next launch"
+below).
 
 Once handed over, the session is bound to the new owner and reports to it, and the caller no longer drives it. Nothing
 else is moved: the sessions bound to it stay bound to it. A lead session handed to a console session stays a lead
@@ -49,7 +51,7 @@ wherever it goes.
 Both sessions concerned are told, by messages written through the delivery every message takes (queued while one cannot
 take a message; see "Messages held until a session can take them" in `docs/product/message-delivery.md`):
 
-- **The session** is told its owner has changed — which session handed it over to which, by kind, id and title — that it
+- **The session**, when it is running, is told its owner has changed — which session handed it over to which, by kind, id and title — that it
   takes work only from the new owner, or from the user typing in its terminal, and reports to it with `report`, that
   this replaces what it was told of its owner when it was started, and that the earlier owner no longer drives it. A
   session that has lost the tools for owning sessions is also told it can no longer start or drive sessions, with the
@@ -65,11 +67,58 @@ reported on to its owner as usual (see "When a session does not report" in
 
 The call returns `session`, `owner` (the new owner's id), `owner_kind` (`console` or `project`) and a `note` saying the
 session now reports to the new owner and is no longer the caller's, and whether each of the two was told, will be told
-as soon as it can take a message, could not be told, with the reason, or was not told because the message was written
+as soon as it can take a message, is not running and will be told when it next starts (the session only), could not be
+told, with the reason, or was not told because the message was written
 into its input but its agent did not send it to the conversation — it is in the input box, or went to a view of the
 agent's background agents — the user having been told to check the session (see "A message written but not
 sent" in `docs/product/message-delivery.md`). When the new owner could not be told, the note says to tell it of the
 handover with `share_info`. Once the binding has changed the handover stands, whatever became of the messages.
+
+## Releasing a session from its owner
+
+`release_session` is offered to every session that can own sessions: a console session, an unbound project session and
+a lead session. It needs no approval.
+
+| Argument | Required | Contents |
+|---|---|---|
+| `session` | yes | The session to release: one of the caller's (`yours: true`). |
+
+The user can release any bound session, whoever its owner is, with **Unbind** in the sidebar's session menu (see
+"Session rows" in `docs/product/sidebar.md`), which asks for no confirmation; a refusal is shown as an error alert.
+
+A released session is an **ordinary unbound project session**, the user's own:
+
+- its binding is cleared, and a lead session is no longer one;
+- it takes work only from the user typing in its terminal, and `report` is refused for it, since it has nobody to
+  report to; no report is synthesised for it either;
+- it has the unbound project session's tools, so it can start and drive sessions of its own (see "The unbound project
+  session's tools" in `docs/product/hub-orchestration.md`), and it can be bound again with `bind_to_session`;
+- what it had stays with it: a released lead session keeps the sessions bound to it and goes on driving them, and the
+  branches the session is responsible for stay its own;
+- its former owner no longer drives it: archiving that owner no longer takes it along, and nothing archives it on a
+  `done` report.
+
+A session can be released whatever its state — running, interrupted or archived. The call is refused, with the reason
+in prose, and changes nothing, for a console session, which is never bound; for a session that is not bound; for a
+session that is not the caller's (the tool only); and while the session, or the owner it is bound to, is being started,
+resumed, handed off, switched to another account or having its owner changed, the reason saying to look again once that
+is done. One whose binding changed while it was being released is refused too, saying to look again before retrying.
+
+**The released session is told**, by a message written through the delivery every message takes (queued while it
+cannot take one; see "Messages held until a session can take them" in `docs/product/message-delivery.md`), that it has
+no owner now, having been released from the session it reported to, and is the user's own session; that it takes work
+only from the user typing in its terminal and is not to call `report`, which is refused for a session with no owner;
+that this replaces what it was told of its owner when it was started; and that it can start and drive sessions of its
+own with `new_session` and the tools that go with it, with the list of the Octoboard tools it now has. One with no
+process running is told when it next starts instead (see "A change of owner told at the next launch" below). Its former
+owner is told nothing.
+
+The call returns `session` and a `note` saying that the session has no owner now, is no longer the caller's, is the
+user's own session and no longer reports to the caller, and whether it was told, will be told as soon as it can take a
+message, is not running and will be told when it next starts, or was not told because the message was written into its
+input but its agent did not send it to the conversation, the user having been told to check the session (see "A
+message written but not sent" in `docs/product/message-delivery.md`). Once the binding is cleared the release stands,
+whatever became of the message.
 
 ## Binding an unbound session to an owner
 
@@ -112,13 +161,37 @@ could not be delivered is reported in the note, with the reason, and the caller 
 A session's role description is written when it launches, from who it reports to then, and two of the agents keep what
 a conversation was first given on every resume (see "What is injected on every launch" in
 `docs/product/launching-agents.md`). So a change of owner is told to the session in prose instead — in the message a
-handover or a handoff writes into it, or in the result of its own `bind_to_session` call — and its role description
-says that what
-Octoboard tells it of a later change replaces what it says of its owner.
+handover, a release or a handoff writes into it, or in the result of its own `bind_to_session` call, or, for a session
+that was not running, at its next launch (see "A change of owner told at the next launch" below) — and its role
+description says that what Octoboard tells it of a later change replaces what it says of its owner.
 
 The tools follow the binding as it stands. Octoboard checks every call against it, so a tool the session no longer has
 is refused even where its agent still lists it. The session's tool list itself is updated with the answer to its next
 call of any Octoboard tool, and its agent is told the list has changed (the MCP `tools/list_changed` notice); whether an
 agent reads the list again on that notice is the agent's own. Only two changes take tools away — binding to a project
 session, and a lead session handed to one — and they leave the bound session's set: `report`, `list_sessions`,
-`share_info`, `get_project` and `request_session`.
+`share_info`, `get_project` and `request_session`. A release gives a session that had the role of a bound one the
+unbound project session's tools.
+
+## A change of owner told at the next launch
+
+A session whose owner changes — by a release, a `transfer_session`, or a handoff that moves the sessions of the
+original (see "Who is told" in `docs/product/handing-off-sessions.md`) — while it has no process running, or whose
+message about the change could not be written, is **owed a notice** of it. The notice is kept with the session, across
+a restart of Octoboard, and is not part of the session record clients read.
+
+It is delivered when the session's process is next started — a resume, a reopen, or any other relaunch, such as one
+for a switch of account — ahead of anything else that launch hands it, in the same text as the launch's own
+instruction where there is one (an owner's `reopen_session` text, say): a Claude Code session resuming a conversation
+has it in its launch prompt, any other session as a message delivered once it can take one (see "Messages held until a session can take them" in
+`docs/product/message-delivery.md`).
+
+The notice is built at delivery, from the binding as it stands then, so a later change replaces an earlier one still
+owed and several changes end in one notice. A session that has an owner is told that its owner changed while it was
+not running, which session its owner is now, that it takes work only from it or from the user typing in its terminal
+and reports to it with `report`, and that this replaces what it was told of its owner when it was started; one with
+the role of a bound one is also told it can no longer start or drive sessions, with the list of the Octoboard tools it
+has. A session with no owner is told what a released session is told (see "Releasing a session from its owner" above).
+
+The notice is no longer owed once the launch has started the session's process. A launch that fails leaves it owed for
+the next one, so a session may be told of a change twice, but never not at all.

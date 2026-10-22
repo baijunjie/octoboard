@@ -94,6 +94,8 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            agent, keeping its conversation.\n\
          - `transfer_session` — hand a session of yours to another owner, with a note on where it \
            stands.\n\
+         - `release_session` — let a session of yours go: it has no owner afterwards and is the \
+           user's own.\n\
          - `request_session` — ask the user to start a session that is nobody's: in any project, \
            or a console session.\n\
          - `list_sessions` / `share_info` — the running sessions everywhere, and telling one of \
@@ -165,6 +167,9 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            session of this console, or a project session of that session's project that can own \
            sessions — without asking the user. A session with sessions of its own (a lead \
            session) can only go to a console session. It is no longer yours afterwards.\n\
+         - `release_session` unbinds a session of yours without asking the user: it is told it has \
+           no owner and becomes the user's own session, which no session drives, and it is no \
+           longer yours afterwards. Its branches stay with it.\n\
          - A project session nobody owns can bind itself to you and become yours. Its first \
            report says so; drive it like any session of yours. A session that comes with \
            sessions of its own keeps them and drives them itself: you can read those, not \

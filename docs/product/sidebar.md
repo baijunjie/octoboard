@@ -437,6 +437,11 @@ A session row's action menu offers:
   console session's row; an archived session has no such entry. Disabled while the session is *working* or
   *starting*, while it is locked, while no agent other than its own can be picked, and while the session's own
   account is having its sharing changed, with that reason.
+- **Unbind** — releases the session from its owner at once, without confirmation, leaving it the user's own, unbound
+  session (see "Releasing a session from its owner" in `docs/product/changing-session-owners.md`); its row then shows
+  it as unbound (see "Project rows" above and "The binding badge" below). Present only for a bound session's row — a
+  project session bound to a console session or to a project session; an archived session has no such entry. Disabled
+  while the session is *starting*. A refusal is shown as an error alert.
 - **Archive** — archives the session (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`). A
   session at its prompt or interrupted, with no unarchived session under it, is archived at once, unless a branch or
   worktree bound to it needs the user's word (see "The confirmation" in `docs/product/branch-and-worktree-cleanup.md`);

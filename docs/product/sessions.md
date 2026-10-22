@@ -51,9 +51,9 @@ narrower set of the orchestration tools, scoped to its own project: it can start
 and report to it, and drive them (see "The unbound project session's tools" in `docs/product/hub-orchestration.md`). A
 session it starts carries no binding badge and cannot start sessions of its own. A session's **owner** is the session
 it is bound to: a console session or a project session (an unbound session's own owner is the user). An owner can hand
-a session of its own to another owner, and an unbound project session can bind itself to one; bound to a console
-session while keeping the sessions it started, it is a **lead session**. Neither asks the user, and orchestration stays
-at most two levels deep (see "Lead sessions" in `docs/product/hub-orchestration.md` and
+a session of its own to another owner, or release it, leaving it unbound, and an unbound project session can bind itself
+to one; bound to a console session while keeping the sessions it started, it is a **lead session**. None of these asks
+the user, who can release a bound session too, and orchestration stays at most two levels deep (see "Lead sessions" in `docs/product/hub-orchestration.md` and
 `docs/product/changing-session-owners.md`).
 Every session, of whatever kind, can also list the other running sessions, in every console and project, and share
 information with any of them; it takes work only from its owner, and what comes from another session is information to
@@ -137,10 +137,10 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
   will carry (see "The binding badge" in `docs/product/sidebar.md`), or none. A chosen console session receives this
   session's reports, instead of the session staying outside the orchestration. A console with no such console session
   shows no choice at all, and the session is unbound. A session still starting is not offered because its launch may
-  yet fail and remove it; `open_session` refuses one named as the owner (`unknown_session`). A binding is never undone;
-  it changes afterwards only when the owner hands the session to another, or when an unbound session binds itself to
-  one. A session the console session itself starts is always bound to it, and one a project session starts is bound
-  to that project session; one started on another session's request is bound to nobody; see "Which sessions an owner
+  yet fail and remove it; `open_session` refuses one named as the owner (`unknown_session`). A binding can change
+  afterwards — the owner hands the session to another, an unbound session binds itself to one, or the owner or the
+  user releases the session, leaving it unbound; see `docs/product/changing-session-owners.md`. A session the console
+  session itself starts is always bound to it, and one a project session starts is bound to that project session; one started on another session's request is bound to nobody; see "Which sessions an owner
   drives" in
   `docs/product/hub-orchestration.md`. The choice is offered from the project list and the terminal's **New session** offer outside focus
   mode. Opened from a project's focus mode the dialog has no such field and the session is always unbound; opened from a console session's focus mode it

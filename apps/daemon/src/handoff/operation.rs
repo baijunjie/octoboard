@@ -313,9 +313,15 @@ async fn move_place_inner(
 
 /// Tells the receiving session what it took over, each moved session that its owner changed, and
 /// the owner that its session was handed off, unless that owner is `asked_by`, which made the call.
-/// A session without a process (an archived one, or an interrupted owner) cannot be told: a
-/// relaunch tells it who its owner is, and the owner learns of the new session from its list.
-async fn tell(state: &Arc<AppState>, original: &Session, moved: &Moved, asked_by: Option<&str>) {
+/// A moved session without a process (an archived or interrupted one) is told when it next starts,
+/// from its binding as it stands then; an owner without one learns of the new session from its
+/// list.
+pub(super) async fn tell(
+    state: &Arc<AppState>,
+    original: &Session,
+    moved: &Moved,
+    asked_by: Option<&str>,
+) {
     let receiving = &moved.receiving;
     let tool = |agent: Agent, name: &str| qualified_tool_name(agent, name);
     let owner = receiving
@@ -323,19 +329,33 @@ async fn tell(state: &Arc<AppState>, original: &Session, moved: &Moved, asked_by
         .as_deref()
         .and_then(|id| state.store.get_session(id).ok().flatten());
 
-    for session in moved.owned.iter().filter(|s| !s.status.is_dormant()) {
+    for owned in &moved.owned {
+        // Read again: what `Moved` holds is from the move, and the session may have started or
+        // ended since. One with no process is left owed the notice for its next launch.
+        let session = match state.store.get_session(&owned.id) {
+            Ok(Some(session)) => session,
+            Ok(None) => continue,
+            Err(err) => {
+                tracing::warn!(session = %owned.id, %err, "reading a moved session to tell it failed");
+                continue;
+            }
+        };
         let text = format!(
-            "{NOTICE_PREFIX}: your owner has changed. {from} was handed off to {to}, which \
-             is your owner from now on and took its place: take work only from it, or from the \
-             user typing in this terminal, and report to it with `{report}`. This replaces what you \
-             were told of your owner when you were started. `{from_id}` no longer drives you; it \
-             is archived.",
+            "{NOTICE_PREFIX}: your owner has changed. {from} was handed off to {to}, which took \
+             its place. {owner_now} This replaces what you were told of your owner when you \
+             were started. `{from_id}` no longer drives you; it is archived.",
             from = named_session(original),
             to = named_session(receiving),
-            report = tool(session.agent, "report"),
+            owner_now = crate::mcp::owner_from_now_on(session.agent, "It"),
             from_id = original.id,
         );
-        send(state, &session.id, text).await;
+        let told = match crate::mcp::running_or_leave(state, &session) {
+            Ok(running) => crate::mcp::tell_now_or_leave(state, &session.id, text, running).await,
+            Err(err) => Err(err),
+        };
+        if let Err(err) = told {
+            tracing::warn!(session = %session.id, %err, "telling a session of a handoff failed");
+        }
     }
 
     let to_tell = owner

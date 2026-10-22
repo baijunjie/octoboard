@@ -203,6 +203,10 @@ impl Store {
                 -- 1 for a lead session: a project session bound to a console session that can
                 -- still own sessions of its own (see `Session::lead`).
                 lead             INTEGER NOT NULL DEFAULT 0,
+                -- Above 0 while the session has a change of its owner it was not running to be
+                -- told of (one count per change): its next launch tells it, from the binding as
+                -- it then stands, and clears what it saw.
+                owner_notice_pending INTEGER NOT NULL DEFAULT 0,
                 -- Set only for a console session (`role = 'console'`); NULL for a project session.
                 colour           TEXT,
                 ordinal          INTEGER,
@@ -421,6 +425,12 @@ impl Store {
         if !column_exists(&conn, "sessions", "lead")? {
             conn.execute(
                 "ALTER TABLE sessions ADD COLUMN lead INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
+        if !column_exists(&conn, "sessions", "owner_notice_pending")? {
+            conn.execute(
+                "ALTER TABLE sessions ADD COLUMN owner_notice_pending INTEGER NOT NULL DEFAULT 0",
                 [],
             )?;
         }
@@ -1776,7 +1786,9 @@ impl Store {
     /// with `childless`, only while no session is bound to `id`: the two conditions that keep
     /// orchestration two levels deep cannot be undone by a binding that lands between the
     /// caller's check and this write. Returns the record as it now stands, or `None` when nothing
-    /// changed. What else `owner` may be is the caller's to check.
+    /// changed. What else `owner` may be is the caller's to check. With `owe_notice` the session is
+    /// marked owed a notice of its new owner ([`Self::mark_owner_notice`]) in the same statement,
+    /// so the change and the mark land together.
     pub fn set_binding(
         &self,
         id: &str,
@@ -1784,10 +1796,12 @@ impl Store {
         owner: &str,
         lead: bool,
         childless: bool,
+        owe_notice: bool,
     ) -> Result<Option<Session>> {
         let conn = self.lock();
         let changed = conn.execute(
-            "UPDATE sessions SET bound_to = ?3, lead = ?4
+            "UPDATE sessions SET bound_to = ?3, lead = ?4,
+                    owner_notice_pending = owner_notice_pending + ?8
              WHERE id = ?1 AND role = ?5 AND bound_to IS ?2
                AND EXISTS (SELECT 1 FROM sessions AS owner WHERE owner.id = ?3
                              AND (owner.role = ?6 OR owner.bound_to IS NULL OR owner.lead = 1))
@@ -1800,8 +1814,34 @@ impl Store {
                 lead,
                 enum_to_text(&Role::Project),
                 enum_to_text(&Role::Console),
-                childless
+                childless,
+                owe_notice
             ],
+        )?;
+        if changed == 0 {
+            return Ok(None);
+        }
+        Ok(conn
+            .query_row(
+                &format!("SELECT {SESSION_COLUMNS} FROM sessions WHERE id = ?1"),
+                params![id],
+                read_session,
+            )
+            .optional()?)
+    }
+
+    /// Unbinds the project session `id`, currently bound to `from`: `bound_to` cleared and `lead`
+    /// off, in one statement that matches only while `id` is still bound to `from`, so of two
+    /// changes racing for it only one lands. The sessions bound to `id` stay bound to it. Returns
+    /// the record as it now stands, or `None` when nothing changed. With `owe_notice` the session
+    /// is marked owed a notice ([`Self::mark_owner_notice`]) in the same statement.
+    pub fn clear_binding(&self, id: &str, from: &str, owe_notice: bool) -> Result<Option<Session>> {
+        let conn = self.lock();
+        let changed = conn.execute(
+            "UPDATE sessions SET bound_to = NULL, lead = 0,
+                    owner_notice_pending = owner_notice_pending + ?4
+             WHERE id = ?1 AND role = ?3 AND bound_to IS ?2",
+            params![id, from, enum_to_text(&Role::Project), owe_notice],
         )?;
         if changed == 0 {
             return Ok(None);
@@ -1860,6 +1900,44 @@ impl Store {
         self.lock().execute(
             "UPDATE sessions SET locked = ?2 WHERE id = ?1",
             params![id, locked],
+        )?;
+        Ok(())
+    }
+
+    /// Records that session `id` is owed a notice of a change of its owner: it was not running to
+    /// be told, and its next launch delivers it. Kept apart from the session record, which clients
+    /// read. The notice carries no text, since it is built from the binding at delivery, so a later
+    /// change replaces an earlier pending one. Each call counts up, which is what lets a launch
+    /// that delivered the notice clear only what it saw ([`Self::clear_owner_notice`]).
+    pub fn mark_owner_notice(&self, id: &str) -> Result<()> {
+        self.lock().execute(
+            "UPDATE sessions SET owner_notice_pending = owner_notice_pending + 1 WHERE id = ?1",
+            params![id],
+        )?;
+        Ok(())
+    }
+
+    /// The count of notices of a change of its owner session `id` is owed, 0 for none (see
+    /// [`Self::mark_owner_notice`]).
+    pub fn owner_notice_pending(&self, id: &str) -> Result<i64> {
+        Ok(self
+            .lock()
+            .query_row(
+                "SELECT owner_notice_pending FROM sessions WHERE id = ?1",
+                params![id],
+                |row| row.get(0),
+            )
+            .optional()?
+            .unwrap_or(0))
+    }
+
+    /// Clears the notice owed to session `id` if its count is still `seen`, the one a launch read
+    /// before it delivered the notice: a change marked since stays owed.
+    pub fn clear_owner_notice(&self, id: &str, seen: i64) -> Result<()> {
+        self.lock().execute(
+            "UPDATE sessions SET owner_notice_pending = 0
+             WHERE id = ?1 AND owner_notice_pending = ?2",
+            params![id, seen],
         )?;
         Ok(())
     }
@@ -4426,7 +4504,7 @@ mod tests {
 
         // The owner binds itself to a project session after the new session's owner was resolved.
         store
-            .set_binding("owner", None, "peer", false, true)
+            .set_binding("owner", None, "peer", false, true, false)
             .expect("binding")
             .expect("the owner had no sessions of its own");
         assert!(!store
@@ -4445,7 +4523,7 @@ mod tests {
         // The other order: with the child in place, the owner can no longer be bound to a project
         // session.
         assert!(store
-            .set_binding("free", None, "peer", false, true)
+            .set_binding("free", None, "peer", false, true, false)
             .expect("binding")
             .is_none());
 
@@ -4453,6 +4531,99 @@ mod tests {
         assert!(!store
             .insert_session_under_owner(&project_session("orphan", Some("nobody")), "nobody")
             .expect("insert"));
+    }
+
+    /// A database from before owner notices could be left pending gains the column in place, and
+    /// the count is marked, read and cleared by session, a clear naming the count it saw.
+    #[test]
+    fn the_owner_notice_flag_is_added_in_place_and_follows_the_session() {
+        let path = temp_db("owner-notice");
+        {
+            let store = Store::open(&path).expect("store");
+            store
+                .insert_console(&console(None, None, None))
+                .expect("console");
+            store.insert_session(&session(None)).expect("session");
+        }
+        {
+            let conn = Connection::open(&path).expect("database");
+            conn.execute("ALTER TABLE sessions DROP COLUMN owner_notice_pending", [])
+                .expect("the older shape");
+        }
+        let store = Store::open(&path).expect("reopened in place");
+        assert_eq!(store.owner_notice_pending("session-1").unwrap(), 0);
+        store.mark_owner_notice("session-1").unwrap();
+        let seen = store.owner_notice_pending("session-1").unwrap();
+        assert_eq!(seen, 1);
+        // A change marked after the launch read the count is not cleared by that launch.
+        store.mark_owner_notice("session-1").unwrap();
+        store.clear_owner_notice("session-1", seen).unwrap();
+        assert_eq!(store.owner_notice_pending("session-1").unwrap(), 2);
+        store.clear_owner_notice("session-1", 2).unwrap();
+        assert_eq!(store.owner_notice_pending("session-1").unwrap(), 0);
+        assert_eq!(store.owner_notice_pending("nobody").unwrap(), 0);
+    }
+
+    /// A binding is cleared only while the session is still bound to the owner the caller read,
+    /// and the sessions bound to it keep it.
+    #[test]
+    fn a_binding_is_cleared_only_while_it_is_still_the_one_read() {
+        let path = temp_db("clear-binding");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        store
+            .insert_session(&session(None))
+            .expect("console session");
+        store
+            .insert_session(&project_session("lead", None))
+            .expect("lead");
+        store
+            .insert_session(&project_session("child", Some("lead")))
+            .expect("child");
+        store
+            .set_binding("lead", None, "session-1", true, false, false)
+            .expect("binding")
+            .expect("lead bound");
+
+        assert!(store
+            .clear_binding("lead", "elsewhere", false)
+            .unwrap()
+            .is_none());
+        assert!(store
+            .clear_binding("child", "elsewhere", false)
+            .unwrap()
+            .is_none());
+        let cleared = store
+            .clear_binding("lead", "session-1", true)
+            .unwrap()
+            .expect("cleared");
+        assert_eq!((cleared.bound_to, cleared.lead), (None, false));
+        // The mark lands with the change, and only with a change that landed.
+        assert_eq!(store.owner_notice_pending("lead").unwrap(), 1);
+        assert_eq!(store.owner_notice_pending("child").unwrap(), 0);
+        store
+            .set_binding("lead", None, "session-1", false, false, true)
+            .unwrap()
+            .expect("bound again");
+        assert_eq!(store.owner_notice_pending("lead").unwrap(), 2);
+        assert!(store
+            .clear_binding("lead", "session-1", false)
+            .unwrap()
+            .is_some());
+        assert!(store
+            .clear_binding("lead", "session-1", true)
+            .unwrap()
+            .is_none());
+        assert_eq!(store.owner_notice_pending("lead").unwrap(), 2);
+        let child = store.get_session("child").unwrap().unwrap();
+        assert_eq!(child.bound_to.as_deref(), Some("lead"));
+        // A console session is never bound, so nothing to clear.
+        assert!(store
+            .clear_binding("session-1", "lead", false)
+            .unwrap()
+            .is_none());
     }
 
     /// A console session to feed [`Store::insert_console_session`]: a plain `role: Console` record

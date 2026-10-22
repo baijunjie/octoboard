@@ -115,7 +115,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   drives, and a session that reports to nobody archiving itself once everything under it is archived.
 - [Changing a session's owner](product/changing-session-owners.md) — how a binding changes while sessions run: who can
   own a session, handing a session to another owner with `transfer_session`, an unbound session binding itself with
-  `bind_to_session`, and what a running session is told when its binding changes and how its tools follow.
+  `bind_to_session`, releasing a session from its owner (`release_session` or the sidebar's Unbind), what a session is
+  told when its binding changes — at once, or at its next launch if it is not running — and how its tools follow.
 - [Reporting to an owner](product/reporting-to-owners.md) — how a bound session reports to its owner with `report`, the
   report synthesised when a session stops without reporting, and automatic archiving on a `done` report.
 - [Information between sessions](product/information-between-sessions.md) — listing the running sessions of every

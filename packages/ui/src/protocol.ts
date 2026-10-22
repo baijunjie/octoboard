@@ -1232,6 +1232,9 @@ export type RequestBody =
   | { type: "set_session_colour"; session: string; colour: ConsoleSessionColour }
   | { type: "send_message"; session: string; text: string }
   | { type: "rename_session"; session: string; title: string }
+  /** Unbinds a bound project session from its owner, whoever it is: it becomes the user's own,
+   * unbound session, keeping the sessions bound to it and its branches. */
+  | { type: "release_session"; session: string }
   | { type: "list_pages"; console_session: string }
   /** What a report panel form was submitted with. The page is named rather than the console
    * session: it is what the panel knows, and it names the console session the submission goes to.

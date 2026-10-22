@@ -109,6 +109,7 @@ pub async fn call(
         "get_account_quotas" => quotas::get_account_quotas(state, arguments),
         "share_info" => share_info(state, &session, arguments).await,
         "transfer_session" => bindings::transfer_session(state, &session, arguments).await,
+        "release_session" => bindings::release_session(state, &session, arguments).await,
         "bind_to_session" => bindings::bind_to_session(state, &session, arguments).await,
         "request_session" => request_session(state, &session, arguments).await,
         // Unreachable while the catalogue and this dispatch agree; a tool added to one and not the
@@ -2227,6 +2228,7 @@ pub(super) mod tests {
             ("starter", "show_page"),
             ("a", "report"),
             ("mine", "transfer_session"),
+            ("mine", "release_session"),
             ("mine", "handoff_session"),
             ("mine", "switch_session_account"),
             ("mine", "bind_to_session"),
@@ -2253,7 +2255,7 @@ pub(super) mod tests {
         let (state, dir) = peer_state(name);
         state
             .store
-            .set_binding("starter", None, "a", true, false)
+            .set_binding("starter", None, "a", true, false, false)
             .unwrap()
             .unwrap();
         (state, dir)

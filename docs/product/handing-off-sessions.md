@@ -222,9 +222,11 @@ receiving session.
 The sessions concerned are told by messages written through the delivery every message takes (see "Messages held
 until a session can take them" in `docs/product/message-delivery.md`):
 
-- **each moved session that has a process** is told that its owner has changed, which session took the original's
-  place, that it takes work only from it or from the user typing in its terminal and reports to it, that this replaces
-  what it was told of its owner when it was started, and that the original is archived;
+- **each moved session** is told that its owner has changed, which session took the original's place, that it takes
+  work only from it or from the user typing in its terminal and reports to it, that this replaces what it was told of
+  its owner when it was started, and that the original is archived; one with no process — interrupted or archived — is
+  told of its owner when it next starts instead (see "A change of owner told at the next launch" in
+  `docs/product/changing-session-owners.md`);
 - **the owner, when there is one and it has a process,** is told that its session was handed off to a session of
   another agent, which now reports to it and which it drives like any session of its own, and that the original is
   archived — unless the owner made the handoff itself with `handoff_session`, whose result tells it instead;
@@ -233,7 +235,7 @@ until a session can take them" in `docs/product/message-delivery.md`):
   has no owner and reports to the user; the branches it is now responsible for, or that they could not be moved and
   still name the original; and each session it now owns, with its status.
 
-A session with no process — interrupted or archived — is told nothing: a relaunch tells it who its owner is.
+An owner with no process — interrupted or archived — is told nothing.
 
 ## Messages for the original during a handoff
 

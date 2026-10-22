@@ -945,6 +945,15 @@ async fn handle_inner(
             Ok(None)
         }
 
+        RequestBody::ReleaseSession { session: id } => {
+            let (released, running) = release_session(state, &id, None)?;
+            // Nobody asked for the notice: a session that cannot be told now is still released.
+            if let Err(err) = mcp::tell_released(state, &released, running).await {
+                tracing::warn!(session = %id, %err, "telling a released session failed");
+            }
+            Ok(None)
+        }
+
         RequestBody::ListPages { console_session } => {
             let session = state.session_record(&console_session)?;
             if session.role != Role::Console {
@@ -3048,7 +3057,7 @@ pub fn bind_session(
     let lead = owner.role == Role::Console;
     let bound = state
         .store
-        .set_binding(session_id, None, owner_id, lead, !lead)?
+        .set_binding(session_id, None, owner_id, lead, !lead, false)?
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "the binding changed while it was being made — this session was bound, it gained \
@@ -3068,15 +3077,17 @@ pub fn bind_session(
 ///
 /// Refused, with the reason in prose and nothing changed, for the session or either owner under a
 /// claim (see [`claim_for_binding`], [`refuse_if_owner_claimed`]), a session that is not bound to
-/// `from_id`, one with no process running — it could not be told of its new owner — handing a
-/// session to the owner it already has, and an owner [`owner_refusal`] refuses. Returns the
-/// session as it is now bound, and its new owner as it was checked.
+/// `from_id`, handing a session to the owner it already has, and an owner [`owner_refusal`]
+/// refuses. Returns the session as it is now bound, its new owner as it was checked, and whether
+/// the session has a process to be told in; one that has none is left owed the notice for its
+/// next launch, decided while the claim is held and recorded by the binding write itself, as
+/// [`release_session`] does.
 pub fn transfer_session(
     state: &Arc<AppState>,
     session_id: &str,
     from_id: &str,
     to_id: &str,
-) -> Result<(Session, Session)> {
+) -> Result<(Session, Session, bool)> {
     let _claim = claim_for_binding(state, session_id)?;
     let session = state.session_record(session_id)?;
     if session.bound_to.as_deref() != Some(from_id) {
@@ -3087,22 +3098,18 @@ pub fn transfer_session(
     }
     refuse_if_owner_claimed(state, session_id, from_id)?;
     refuse_if_owner_claimed(state, session_id, to_id)?;
-    // A session with no process could not be told of its new owner.
-    if session.status.is_dormant() || state.live_session(&session.id).is_none() {
-        anyhow::bail!(
-            "`{session_id}` is not running, so it could not be told of its new owner: reopen it \
-             first"
-        );
-    }
     let owner = state.session_record(to_id)?;
     if let Some(reason) = owner_refusal(state, &session, &owner)? {
         anyhow::bail!(reason);
     }
     let lead = owner.role == Role::Console && session.lead;
     let to_project = owner.role == Role::Project;
+    // Decided here, under the claim, and recorded by the binding write itself when there is no
+    // process to tell.
+    let running = mcp::is_running(state, &session);
     let bound = state
         .store
-        .set_binding(session_id, Some(from_id), to_id, lead, to_project)?
+        .set_binding(session_id, Some(from_id), to_id, lead, to_project, !running)?
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "the binding changed while it was being handed over — `{session_id}` was bound \
@@ -3111,7 +3118,49 @@ pub fn transfer_session(
             )
         })?;
     state.publish_session(&bound);
-    Ok((bound, owner))
+    Ok((bound, owner, running))
+}
+
+/// Unbinds `session_id` from its owner, at the owner's request (`owner_id` names it) or the
+/// user's (`None`), and tells every client. The session becomes an ordinary unbound project
+/// session: `bound_to` and `lead` are cleared, and what it owns stays bound to it, so a lead
+/// session keeps its sessions. Its branches stay with it. Any running or dormant state will do.
+///
+/// Refused, with the reason in prose and nothing changed, for the session or its owner under a
+/// claim (see [`claim_for_binding`], [`refuse_if_owner_claimed`]), a console session, a session
+/// that is not bound, and, with `owner_id`, one not bound to it. Returns the session as it is
+/// now, and whether it has a process to be told in; one that has none is left owed the notice for
+/// its next launch, decided while the claim is held and recorded by the binding write itself.
+/// Telling a running one is the caller's.
+pub fn release_session(
+    state: &Arc<AppState>,
+    session_id: &str,
+    owner_id: Option<&str>,
+) -> Result<(Session, bool)> {
+    let _claim = claim_for_binding(state, session_id)?;
+    let session = state.session_record(session_id)?;
+    if session.role == Role::Console {
+        anyhow::bail!("a console session is never bound, so it has no owner to be released from");
+    }
+    let Some(current) = session.bound_to.as_deref() else {
+        anyhow::bail!("`{session_id}` is not bound to any owner, so there is nothing to release");
+    };
+    if let Some(owner) = owner_id.filter(|owner| *owner != current) {
+        anyhow::bail!("`{session_id}` is not bound to `{owner}`, so it is not its to release");
+    }
+    refuse_if_owner_claimed(state, session_id, current)?;
+    let running = mcp::is_running(state, &session);
+    let released = state
+        .store
+        .clear_binding(session_id, current, !running)?
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "the binding changed while it was being released — `{session_id}` was bound \
+                 elsewhere; look again before retrying"
+            )
+        })?;
+    state.publish_session(&released);
+    Ok((released, running))
 }
 
 /// Who `session` reports to, for the launch that tells it so: `None` for a session that launches
@@ -3441,6 +3490,22 @@ pub(crate) async fn relaunch_session_with(
         return Err(session_archived(id));
     }
 
+    // A change of owner the session was not running to be told of is told now, ahead of the
+    // instruction, from the binding as it stands: Claude Code and Grok replay what they were first
+    // told of their owner on every resume. Read and built with the refusals, before anything is
+    // written, and cleared only for the count seen here, so a change marked since stays owed.
+    let owed = state.store.owner_notice_pending(id)?;
+    let combined = if owed > 0 {
+        let notice = mcp::owner_notice(state, &session)?;
+        Some(match instruction {
+            Some(instruction) => format!("{notice}\n\n{instruction}"),
+            None => notice,
+        })
+    } else {
+        instruction.map(str::to_string)
+    };
+    let instruction = combined.as_deref();
+
     let previous_status = session.status;
     let previous_ended_at = session.ended_at;
     let cwd = session_cwd(state, &session)?;
@@ -3510,6 +3575,13 @@ pub(crate) async fn relaunch_session_with(
                 state.revoke_mcp_tokens(&session.id);
                 state.discard_outbox(&session.id);
                 return Err(session_archived(&session.id));
+            }
+            // The notice went out with the launch: a failure to clear it only means it is told
+            // once more at the next one.
+            if owed > 0 {
+                if let Err(err) = state.store.clear_owner_notice(&session.id, owed) {
+                    tracing::warn!(session = %session.id, %err, "clearing a delivered owner notice failed");
+                }
             }
             state.publish_session(&recorded);
             Ok(())
@@ -12084,7 +12156,6 @@ mod tests {
             ("plain", "hub", "starting-hub", "not running"),
             ("plain", "hub", "hub", "already bound"),
             ("plain", "hub", "plain", "its own owner"),
-            ("dormant", "hub", "hub-2", "not running"),
             ("starting", "hub", "hub-2", "being started"),
             ("child", "hub", "hub-2", "not bound to `hub`"),
         ] {
@@ -12095,17 +12166,17 @@ mod tests {
             assert_eq!((before.bound_to, before.lead), (after.bound_to, after.lead));
         }
 
-        let (lead, _) = transfer_session(&state, "lead", "hub", "hub-2").unwrap();
+        let (lead, ..) = transfer_session(&state, "lead", "hub", "hub-2").unwrap();
         assert_eq!((lead.bound_to.as_deref(), lead.lead), (Some("hub-2"), true));
         let child = state.store.get_session("child").unwrap().unwrap();
         assert_eq!(child.bound_to.as_deref(), Some("lead"));
 
-        let (plain, _) = transfer_session(&state, "plain", "hub", "peer").unwrap();
+        let (plain, ..) = transfer_session(&state, "plain", "hub", "peer").unwrap();
         assert_eq!(
             (plain.bound_to.as_deref(), plain.lead),
             (Some("peer"), false)
         );
-        let (spare, owner) = transfer_session(&state, "spare-lead", "hub", "peer").unwrap();
+        let (spare, owner, _) = transfer_session(&state, "spare-lead", "hub", "peer").unwrap();
         assert_eq!(
             (spare.bound_to.as_deref(), spare.lead),
             (Some("peer"), false)
@@ -12172,8 +12243,237 @@ mod tests {
 
         let (loner, _) = bind_session(&state, "loner", "hub").unwrap();
         assert_eq!(loner.bound_to.as_deref(), Some("hub"));
-        let (plain, _) = transfer_session(&state, "plain", "hub", "hub-2").unwrap();
+        let (plain, ..) = transfer_session(&state, "plain", "hub", "hub-2").unwrap();
         assert_eq!(plain.bound_to.as_deref(), Some("hub-2"));
+    }
+
+    /// A bound session, running or not, is released to an ordinary unbound project session: a
+    /// lead session keeps the sessions bound to it, and one the user releases needs no owner
+    /// named. Each refusal names its reason and changes nothing.
+    #[tokio::test]
+    async fn a_session_is_released_into_an_unbound_one_that_keeps_its_own_sessions() {
+        use SessionStatus::{Idle, Interrupted};
+        let (state, _dir, _live) = binding_fixture(
+            "release",
+            vec![
+                console_session("hub", Idle),
+                lead_session("lead", Idle, "hub"),
+                bound_session("child", Idle, "lead"),
+                bound_session("plain", Idle, "hub"),
+                bound_session("dormant", Interrupted, "hub"),
+                bound_session("by-user", Idle, "hub"),
+                project_session("loner", Agent::Claude, Idle),
+            ],
+            &["hub", "lead", "child", "plain", "by-user"],
+        );
+
+        for (session, owner, reason) in [
+            ("hub", Some("hub"), "never bound"),
+            ("loner", Some("hub"), "not bound to any owner"),
+            ("loner", None, "not bound to any owner"),
+            ("plain", Some("lead"), "not bound to `lead`"),
+            ("child", Some("hub"), "not bound to `hub`"),
+        ] {
+            let before = state.store.get_session(session).unwrap().unwrap();
+            let err = release_session(&state, session, owner).expect_err(reason);
+            assert!(err.to_string().contains(reason), "{session}: {err}");
+            let after = state.store.get_session(session).unwrap().unwrap();
+            assert_eq!((before.bound_to, before.lead), (after.bound_to, after.lead));
+        }
+
+        let (lead, _) = release_session(&state, "lead", Some("hub")).unwrap();
+        assert!(!lead.has_bound_role());
+        assert_eq!((lead.bound_to, lead.lead), (None, false));
+        let child = state.store.get_session("child").unwrap().unwrap();
+        assert_eq!(child.bound_to.as_deref(), Some("lead"));
+
+        let (plain, _) = release_session(&state, "plain", Some("hub")).unwrap();
+        assert_eq!((plain.bound_to, plain.lead), (None, false));
+        let (dormant, _) = release_session(&state, "dormant", Some("hub")).unwrap();
+        assert_eq!(dormant.bound_to, None);
+        let (by_user, _) = release_session(&state, "by-user", None).unwrap();
+        assert_eq!(by_user.bound_to, None);
+        let err = release_session(&state, "by-user", None).expect_err("already released");
+        assert!(err.to_string().contains("not bound to any owner"), "{err}");
+
+        // Unbound now, it can be bound again like any unbound project session.
+        let (rebound, _) = bind_session(&state, "plain", "hub").unwrap();
+        assert_eq!(rebound.bound_to.as_deref(), Some("hub"));
+    }
+
+    /// Relaunches the dormant session `id` with a stand-in launch, giving the launch prompt, the
+    /// messages queued for it and the flag's count afterwards, or the launch's failure.
+    async fn relaunch_stand_in(
+        state: &Arc<AppState>,
+        id: &str,
+        fail: bool,
+    ) -> Result<(Option<String>, Vec<String>)> {
+        use crate::test_support::{stand_in_launch, Launched, StandIn};
+        use std::sync::Mutex;
+        let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
+        let started = Arc::new(Mutex::new(Vec::<StandIn>::new()));
+        let claim = state.begin_launch(id).unwrap();
+        let launch = stand_in_launch(&started, &launches, || {});
+        relaunch_session_with(state, &claim, id, None, true, None, None, move |request| {
+            if fail {
+                anyhow::bail!("the agent could not start");
+            }
+            launch(request)
+        })
+        .await?;
+        let prompt = launches.lock().unwrap()[0].2.clone();
+        Ok((prompt, state.take_queued(id)))
+    }
+
+    fn dormant_with_conversation(id: &str, agent: Agent, owner: &str) -> Session {
+        Session {
+            agent,
+            agent_session_id: Some(format!("conversation-{id}")),
+            has_conversation: true,
+            ..bound_session(id, SessionStatus::Interrupted, owner)
+        }
+    }
+
+    /// A dormant session whose owner changed is told when it next starts: the notice is built at
+    /// launch from the binding as it stands, ahead of the launch's own instruction. A release and
+    /// a transfer leave one, a later change replaces an earlier pending notice, and once the
+    /// launch has delivered it nothing is left.
+    #[tokio::test]
+    async fn a_dormant_session_is_told_of_its_new_owner_when_it_next_starts() {
+        use SessionStatus::Idle;
+        let (state, _dir, _live) = binding_fixture(
+            "owner-notice",
+            vec![
+                console_session("hub", Idle),
+                console_session("hub-2", Idle),
+                dormant_with_conversation("released", Agent::Claude, "hub"),
+                dormant_with_conversation("handed", Agent::Claude, "hub"),
+                dormant_with_conversation("replaced", Agent::Claude, "hub"),
+            ],
+            &["hub", "hub-2"],
+        );
+
+        // A release leaves the notice owed, decided with the binding change.
+        let (released, running) = release_session(&state, "released", Some("hub")).unwrap();
+        assert!(!running);
+        assert!(mcp::tell_released(&state, &released, running)
+            .await
+            .unwrap()
+            .is_none());
+        assert_eq!(state.store.owner_notice_pending("released").unwrap(), 1);
+        let (prompt, _) = relaunch_stand_in(&state, "released", false).await.unwrap();
+        assert!(prompt.unwrap().contains("you have no owner now"));
+        assert_eq!(state.store.owner_notice_pending("released").unwrap(), 0);
+
+        // A transfer, which a session with no process takes.
+        let args = serde_json::json!({ "session": "handed", "to": "hub-2", "note": "carry on" });
+        let result = mcp::exec::call(&state, "hub", "transfer_session", args.as_object().unwrap())
+            .await
+            .unwrap();
+        assert!(
+            result["note"]
+                .as_str()
+                .unwrap()
+                .contains("will be told when it next starts"),
+            "{result}"
+        );
+        let (prompt, _) = relaunch_stand_in(&state, "handed", false).await.unwrap();
+        let prompt = prompt.unwrap();
+        assert!(prompt.contains("your owner has changed"), "{prompt}");
+        assert!(prompt.contains("`hub-2`"), "{prompt}");
+        assert_eq!(state.store.owner_notice_pending("handed").unwrap(), 0);
+
+        // A later change replaces the pending notice: it states the owner as it then stands.
+        release_session(&state, "replaced", Some("hub")).unwrap();
+        state
+            .store
+            .set_binding("replaced", None, "hub-2", true, false, false)
+            .unwrap()
+            .unwrap();
+        mcp::running_or_leave(&state, &state.session_record("replaced").unwrap()).unwrap();
+        let (prompt, _) = relaunch_stand_in(&state, "replaced", false).await.unwrap();
+        let prompt = prompt.unwrap();
+        assert!(prompt.contains("`hub-2`"), "{prompt}");
+        assert!(!prompt.contains("you have no owner now"), "{prompt}");
+        assert_eq!(state.store.owner_notice_pending("replaced").unwrap(), 0);
+    }
+
+    /// A launch that fails delivers nothing and keeps the notice owed, and a launch that is not a
+    /// Claude Code resume delivers it through the queue once the agent takes input.
+    #[tokio::test]
+    async fn a_failed_launch_keeps_the_notice_and_a_queued_launch_delivers_it() {
+        use SessionStatus::Idle;
+        let (state, _dir, _live) = binding_fixture(
+            "owner-notice-launch",
+            vec![
+                console_session("hub", Idle),
+                dormant_with_conversation("claude", Agent::Claude, "hub"),
+                dormant_with_conversation("codex", Agent::Codex, "hub"),
+            ],
+            &["hub"],
+        );
+        for id in ["claude", "codex"] {
+            release_session(&state, id, None).unwrap();
+        }
+
+        relaunch_stand_in(&state, "claude", true)
+            .await
+            .expect_err("the launch fails");
+        assert_eq!(state.store.owner_notice_pending("claude").unwrap(), 1);
+        assert!(state.take_queued("claude").is_empty());
+        assert_eq!(
+            state.store.get_session("claude").unwrap().unwrap().status,
+            SessionStatus::Interrupted
+        );
+        let (prompt, _) = relaunch_stand_in(&state, "claude", false).await.unwrap();
+        assert!(prompt.unwrap().contains("you have no owner now"));
+
+        let (prompt, queued) = relaunch_stand_in(&state, "codex", false).await.unwrap();
+        assert!(prompt.is_none());
+        assert_eq!(queued.len(), 1);
+        assert!(queued[0].contains("you have no owner now"), "{queued:?}");
+        assert_eq!(state.store.owner_notice_pending("codex").unwrap(), 0);
+    }
+
+    /// A session, or its owner, under a handoff or switch claim is not released, and nothing
+    /// changes; once the claim is released the same call goes through.
+    #[tokio::test]
+    async fn a_claimed_session_or_owner_is_not_released() {
+        use SessionStatus::Idle;
+        let (state, _dir, _live) = binding_fixture(
+            "release-claimed",
+            vec![
+                console_session("hub", Idle),
+                bound_session("plain", Idle, "hub"),
+            ],
+            &["hub", "plain"],
+        );
+
+        let claim = state.begin_switch("plain").unwrap();
+        let err = release_session(&state, "plain", Some("hub")).expect_err("session claimed");
+        assert!(err.to_string().contains("cannot change now"), "{err}");
+        drop(claim);
+
+        let claim = state.begin_switch("hub").unwrap();
+        let err = release_session(&state, "plain", None).expect_err("owner claimed");
+        assert!(
+            err.to_string().contains("cannot be bound to or moved from"),
+            "{err}"
+        );
+        assert_eq!(
+            state
+                .store
+                .get_session("plain")
+                .unwrap()
+                .unwrap()
+                .bound_to
+                .as_deref(),
+            Some("hub")
+        );
+        drop(claim);
+
+        let (released, _) = release_session(&state, "plain", None).unwrap();
+        assert_eq!(released.bound_to, None);
     }
 
     /// Every launch of a session — opening, resuming, reopening, a switch of its account — tells it

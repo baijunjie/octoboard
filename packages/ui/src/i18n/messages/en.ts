@@ -718,6 +718,7 @@ export const en = {
   "sidebar.session.switchAccount": "Switch account",
   "sidebar.session.manageAccounts": "Manage accounts…",
   "sidebar.session.handOff": "Hand off",
+  "sidebar.session.unbind": "Unbind",
   "sidebar.session.colour": "Colour",
   "sidebar.focus.enter": "Focus mode",
   "sidebar.focus.exit": "Leave focus mode",

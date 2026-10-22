@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 
+use super::operation::{tell, Moved};
 use super::*;
 use crate::branch_origin::session_branches::{self, Worktree};
 use crate::protocol::SessionStatus;
@@ -489,4 +490,36 @@ fn the_sweep_removes_packages_of_no_session_and_half_written_files() {
 
     assert!(kept.exists());
     assert!(!orphan.exists() && !partial.exists());
+}
+
+/// A session the handoff moved to the receiving session without a process, archived or
+/// interrupted, is left owed the notice of its new owner for its next launch.
+#[tokio::test]
+async fn a_moved_session_without_a_process_is_left_owed_the_notice_of_its_owner() {
+    let (state, dir) = app_state("handoff-owner-notice");
+    state.store.insert_console(&console(&dir)).unwrap();
+    let repo = repo_with("handoff-owner-notice-repo", &[(b"a.txt", b"one\n")]);
+    insert_project(&state, &repo);
+    let original = session("original", Agent::Claude, None);
+    let receiving = session("receiving", Agent::Codex, None);
+    let mut asleep = session("asleep", Agent::Claude, None);
+    asleep.bound_to = Some("receiving".to_owned());
+    asleep.status = SessionStatus::Interrupted;
+    let mut archived = session("archived", Agent::Claude, None);
+    archived.bound_to = Some("receiving".to_owned());
+    archived.status = SessionStatus::Archived;
+    for stored in [&original, &receiving, &asleep, &archived] {
+        state.store.insert_session(stored).unwrap();
+    }
+    let moved = Moved {
+        receiving,
+        owned: vec![asleep, archived],
+        branches: Ok(Vec::new()),
+    };
+
+    tell(&state, &original, &moved, None).await;
+
+    for id in ["asleep", "archived"] {
+        assert_eq!(state.store.owner_notice_pending(id).unwrap(), 1, "{id}");
+    }
 }

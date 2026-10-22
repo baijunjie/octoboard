@@ -194,13 +194,15 @@ confirmations, settings and sessions would each need an owner and an authorizati
   tools while still being told it is a project session. What it does instead is bounded. `request_session`, offered to
   every session, asks the user to start a session with no owner — in any project, or a console session — and only the
   user's approval starts it. `new_session` starts a session the caller owns, with no approval, where the caller
-  already has reach. A binding changes after launch only by a call of the session concerned: an owner hands a session
-  of its own to another owner with `transfer_session`, and an unbound project session binds itself to a console
-  session or a project session of its own project with `bind_to_session` (how a session that asked for a console
-  session comes to be driven by it). Because the caller's own tool call is what causes the change, the outcome can be
-  told to it in the call's result or a message and its fixed role description is left alone. The behaviour of a request
-  is in `docs/product/session-requests.md`, and the rules a binding keeps in "Who can own a session" in
-  `docs/product/changing-session-owners.md`.
+  already has reach. A binding changes after launch by a call of a session concerned, or by the user: an owner hands a
+  session of its own to another owner with `transfer_session` or releases it with `release_session`, an unbound
+  project session binds itself to a console session or a project session of its own project with `bind_to_session`
+  (how a session that asked for a console session comes to be driven by it), and the user releases a bound session
+  from the sidebar. The session's role description is fixed at its first launch, so the change is told to it in prose
+  instead — in the call's result or a message, or at its next launch if it is not running. The behaviour of a request
+  is in `docs/product/session-requests.md`, the rules a binding keeps in "Who can own a session" in
+  `docs/product/changing-session-owners.md`, and the deferred notice in "A change of owner told at the next launch"
+  there.
 - **A project session goes to the user directly for permissions and questions, not through the console session.**
   Relaying through the console session only creates confusion when several projects ask at once. "Needs a console
   session decision" (the agent calls `report(status: needs_decision)`) and "needs a user decision" (a permission
@@ -285,8 +287,8 @@ Entities: console, host, project, session, account, report, report-panel page, a
   pre-allocate an id.
 - `Session.bound_to` is the id of the session a session reports to — a console session, or an unbound project session
   or lead session of the same project — or unset. It is always set to the starting session for a session started
-  through `new_session`. Once set it is never cleared, but it can change: `transfer_session` hands a session to
-  another owner, and `bind_to_session` binds an unbound project session to an owner. An unbound project session bound
+  through `new_session`. It can change: `transfer_session` hands a session to another owner, `bind_to_session` binds
+  an unbound project session to an owner, and `release_session` clears it (and `lead`), leaving the session unbound. An unbound project session bound
   to a console session becomes a lead session: it keeps the sessions bound to it, so orchestration is at most two
   levels deep. `Session.lead` (stored, never sent to clients) marks such a session, because nothing else in the record
   tells a session bound later from one opened bound, and only the former keeps the unbound project session's role

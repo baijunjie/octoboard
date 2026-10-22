@@ -687,8 +687,9 @@ pub struct Session {
     /// so orchestration is at most two levels deep. Set when the session is created, and changed
     /// afterwards only by the session binding itself to an owner
     /// (`crate::coordinator::bind_session`) or by its owner handing it to another
-    /// (`crate::coordinator::transfer_session`); never cleared. A console session is never bound,
-    /// so this is always `None` for one of those. Reports are routed by this field
+    /// (`crate::coordinator::transfer_session`), and cleared when its owner or the user releases it
+    /// (`crate::coordinator::release_session`). A console session is never bound, so this is
+    /// always `None` for one of those. Reports are routed by this field
     /// (`crate::reporting::deliver_report`): a binding names who to report to directly, rather
     /// than asking whether the console happens to have one console session to find by lookup.
     pub bound_to: Option<String>,
@@ -1883,6 +1884,11 @@ pub enum RequestBody {
     RenameSession {
         session: String,
         title: String,
+    },
+    /// Unbinds a bound project session from its owner: it becomes the user's own, unbound session
+    /// (see `crate::coordinator::release_session`).
+    ReleaseSession {
+        session: String,
     },
     ListPages {
         console_session: String,

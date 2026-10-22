@@ -172,6 +172,11 @@ fn relationships(agent: Agent, owns: bool) -> String {
             transfer_session = tool("transfer_session"),
         ));
         lines.push(format!(
+            "- `{release_session}` lets a session of yours go: it has no owner afterwards and is \
+             the user's own, and you no longer drive it. It is told so. No approval is needed.",
+            release_session = tool("release_session"),
+        ));
+        lines.push(format!(
             "- While you are unbound, `{bind_to_session}` binds you to an owner — a console \
              session of this console, or a project session of this project that can own sessions \
              — and you become one of its sessions. Only a session with no sessions of its own can \

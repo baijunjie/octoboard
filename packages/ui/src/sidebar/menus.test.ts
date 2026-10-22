@@ -397,6 +397,17 @@ it("keeps a locked live session protected and offers unlocking", () => {
   expect(handlers.onSetLocked).toHaveBeenCalledWith(session, false);
 });
 
+it("offers unbinding only on a bound session that is not archived", () => {
+  const handlers = { onReleaseSession: vi.fn() } as unknown as SidebarHandlers;
+  const unbind = (session: Session) => sessionMenu(t, handlers, session, [], undefined).find((item) => typeof item === "object" && item.label === "Unbind");
+  expect(unbind(sessionOf("free", "c", "p", "Free", "idle"))).toBeUndefined();
+  const bound = sessionOf("bound", "c", "p", "Bound", "idle", { bound_to: "hub" });
+  (unbind(bound) as { onClick: () => void }).onClick();
+  expect(handlers.onReleaseSession).toHaveBeenCalledExactlyOnceWith(bound);
+  expect(unbind(sessionOf("new", "c", "p", "New", "starting", { bound_to: "hub" }))).toMatchObject({ disabled: true });
+  expect(unbind(sessionOf("gone", "c", "p", "Gone", "archived", { bound_to: "hub" }))).toBeUndefined();
+});
+
 it.each([false, true])("offers no lock controls on archived sessions, locked=%s", (locked) => {
   const session = sessionOf("archived", "c", "p", "Archived", "archived", { locked });
   const labels = sessionMenu(t, {} as SidebarHandlers, session, [], undefined).flatMap((item) => typeof item === "object" ? [item.label] : []);

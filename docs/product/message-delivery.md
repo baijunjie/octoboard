@@ -213,8 +213,8 @@ dialog discarded or a view took" below), and the tools' wording names both: the 
 to a view of the agent's background agents. How each tool words this, and what follows from it, is with the tool: the owner's `send_message` in "The
 console session's tools" in `docs/product/hub-orchestration.md`, `report` in `docs/product/reporting-to-owners.md`,
 `share_info` in `docs/product/information-between-sessions.md`, `transfer_session` in "Handing a session to another
-owner" and `bind_to_session` in "Binding an unbound session to an owner", both in
-`docs/product/changing-session-owners.md`. A sender whose message arrives while the session is held behind an unsent
+owner", `release_session` in "Releasing a session from its owner" and `bind_to_session` in "Binding an unbound session
+to an owner", all in `docs/product/changing-session-owners.md`. A sender whose message arrives while the session is held behind an unsent
 one is told it was queued, as for a session that cannot take a message. A sender already told its message was queued
 learns nothing more if that message is later left unsent; the notice is what reports it.
 

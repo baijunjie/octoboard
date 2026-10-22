@@ -15,11 +15,12 @@ const owned = [
 ];
 // A project session bound to no one that owns none and is responsible for no branch: nothing moves.
 const bare = sessionOf("s-handoff-bare", console_.id, api.id, "Add idempotency keys", "waiting_user", { started_at: minutesAgo(30) });
-// Sessions the menu cannot hand off now.
-const working = sessionOf("s-handoff-working", console_.id, web.id, "Fix the summary layout", "working", { started_at: minutesAgo(20) });
 // What the hub owns besides the lead: a live session and an archived one.
+const sibling = sessionOf("s-handoff-sibling", console_.id, web.id, "Update the dependencies", "idle", { bound_to: hub.id, started_at: minutesAgo(45) });
+// A bound session the menu cannot hand off now, though it can still be unbound.
+const working = sessionOf("s-handoff-working", console_.id, web.id, "Fix the summary layout", "working", { bound_to: sibling.id, started_at: minutesAgo(20) });
 const hubOwned = [
-  sessionOf("s-handoff-sibling", console_.id, web.id, "Update the dependencies", "idle", { bound_to: hub.id, started_at: minutesAgo(45) }),
+  sibling,
   sessionOf("s-handoff-hub-old", console_.id, api.id, "Earlier release check", "archived", { bound_to: hub.id, started_at: minutesAgo(180) }),
 ];
 
@@ -70,16 +71,25 @@ export const handoffScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Menu of an idle project session, Hand off offered",
-    description: "Hand off is enabled, between Copy session ID and the divider before Archive.",
+    description: "Hand off is enabled and Unbind follows it directly, before the divider and Archive; Unbind is offered because Hub owns the session. Choosing Unbind drops the session's binding badge, the dot in Hub's colour, so it reads as one of the project's own sessions, and the sessions it owns stay under it.",
     state,
     steps: [openMenu(lead.title)],
+  },
+  {
+    id: "sidebar-session-menu-unbound",
+    group: GROUP,
+    category: "normal",
+    title: "Menu of an unbound project session, no Unbind",
+    description: "Hand off is enabled and is followed directly by the divider and Archive: with no owner to be released from, there is no Unbind entry.",
+    state,
+    steps: [openMenu(bare.title)],
   },
   {
     id: "sidebar-console-session-menu-hand-off",
     group: GROUP,
     category: "normal",
     title: "Menu of an idle console session, Hand off offered",
-    description: "Hand off is enabled for a console session too, after Focus mode and before the divider.",
+    description: "Hand off is enabled for a console session too, after Focus mode and before the divider. A console session is never bound, so there is no Unbind.",
     state,
     steps: [openMenu(hub.title)],
   },
@@ -87,8 +97,8 @@ export const handoffScenarios: Scenario[] = [
     id: "sidebar-session-menu-hand-off-disabled",
     group: GROUP,
     category: "normal",
-    title: "Menu of a session in the middle of a turn, Hand off disabled",
-    description: "Hand off is greyed out while the session is in the middle of a turn, and Archive stays available.",
+    title: "Menu of a bound session in the middle of a turn, Hand off disabled",
+    description: "Hand off is greyed out while the session is in the middle of a turn, while Unbind right after it and Archive stay available.",
     state,
     steps: [openMenu(working.title)],
   },
