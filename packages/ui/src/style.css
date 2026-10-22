@@ -109,6 +109,18 @@
   --breakpoint-docked: 1168px;
 }
 
+/* Line heights for the sizes whose stock ratio comes to a hair under a whole pixel: `text-xs` is
+   `calc(1 / 0.75)`, which comes to 15.99996px at 12px. Blink keeps that as the 16px line it was
+   meant to be; WebKit truncates it to 15px, so with the stock ratio every `text-xs` line in WebKit
+   is a pixel short, and text centred in a box sits a pixel lower than in Chrome. Each ratio here is a hair over
+   the stock one, so the product lands just past the intended whole pixel and both engines use it.
+   `text-2xl` (`calc(2 / 1.5)`, 31.99999px at 24px) has the same flaw and is set too, for when it is
+   used; the other sizes' ratios already come out whole in both engines. */
+@theme {
+  --text-xs--line-height: 1.3334;
+  --text-2xl--line-height: 1.3334;
+}
+
 /* How thick the pieces of a groove and the hairline of a panel card are, which a display's density
    decides. A 1x display cannot draw half a pixel, so a groove's two lines would blend into one
    pixel of a single colour: there its dark line takes the whole 1px, the light one has none, and

@@ -66,6 +66,19 @@ surface colour over it instead: an `after:` pseudo-element with `after:pointer-e
 after:inset-0` and a translucent fill such as `bg-surface/55` on a `relative` container, as the sidebar's inactive
 projects in `packages/ui/src/sidebar/Sidebar.tsx` do.
 
+## A line height given as a ratio must not come a hair under a whole pixel
+
+When a line height is set as a ratio of the font size — a theme `--text-*--line-height` token, a `leading-[…]` or
+`text-*/[…]` utility, a `line-height` in plain CSS — check that font size × ratio does not land a hair under a whole
+pixel. WebKit (the app's WKWebView and Safari) drops such a line height to the pixel below, while Chrome keeps the whole
+pixel, so each line comes out a pixel short and text centred in a box sits a pixel lower in the app — with nothing to
+see while developing in Chrome. Tailwind's stock `text-xs` (`calc(1 / 0.75)`, 15.99996px at 12px) and `text-2xl` are
+cases of it; the project already overrides them in `packages/ui/src/style.css`'s `@theme`. Write a ratio a hair over
+the exact one instead (`1.3334`, never `calc(4 / 3)` or `1.33333`).
+
+When text in the app or Safari sits a pixel off from Chrome, compare the line box's height in the two engines first: a
+half-pixel text position on its own is not the cause, since both engines draw it on the same pixel rows.
+
 ## A style that follows a measurement is taken again on every commit, not only when an observer fires
 
 Where a component in `packages/ui` styles itself from a measurement of layout — whether a scroller overflows, which
