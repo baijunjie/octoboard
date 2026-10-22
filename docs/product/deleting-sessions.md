@@ -83,7 +83,7 @@ A session that has **never been used** is deleted rather than archived: its acti
 **Archive** — on its sidebar row and on its card in a focus mode, a console session's own card in its focus mode
 included. Delete is disabled while locked.
 Its row and card offer a Delete shortcut under the same conditions (see "Session rows" in
-`docs/product/sidebar.md`); this also applies to archived preview rows in focus mode.
+`docs/product/sidebar-session-rows.md`); this also applies to archived preview rows in focus mode.
 A session is unused, whatever its status, while all of these hold:
 
 - **It has no conversation yet.** The first prompt its agent reports as submitted makes it used for good, whether the

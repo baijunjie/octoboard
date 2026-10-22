@@ -141,7 +141,7 @@ account, why it cannot be chosen (see "A used-up account" below).
 
 A session row's **Switch account** submenu shows its accounts the same way: the same bar before each account's name,
 and the same words for assistive technology as the item's description, while its name stays the account's name (see
-"Session rows" in `docs/product/sidebar.md`).
+"Session rows" in `docs/product/sidebar-session-rows.md`).
 
 The two dialogs show the account picker even for an agent with only its default account (see the **Agent** field in
 "Opening a session" in `docs/product/sessions.md`), so that account carries its usage bar, and its note when used up,
@@ -204,7 +204,7 @@ The window does not offer what the daemon would refuse:
 - opening a session with defaults uses another account of the agent, or is unavailable when none is left (see "Opening
   a session with defaults" in `docs/product/sessions.md`);
 - a session row's **Switch account** submenu disables a used-up account (see "Session rows" in
-  `docs/product/sidebar.md`), and the switch confirmation refuses one (see "Confirming a switch" in
+  `docs/product/sidebar-session-rows.md`), and the switch confirmation refuses one (see "Confirming a switch" in
   `docs/product/switching-session-accounts.md`).
 
 Where it is said in short, under an account's name in a picker or a menu, it is shown on two lines: "Used up", and

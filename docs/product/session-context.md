@@ -59,10 +59,10 @@ the window rounded to the nearest whole percent, as its own status line computes
 a size beyond the window showing 100%. The chip's accessible name is one plain sentence carrying the same information
 in the same order.
 
-For where the sidebar-row chip appears, see "Session rows" in `docs/product/sidebar.md`; for the live-card chip, see
-"What both views show" in `docs/product/focus-mode.md`; for the archive submenus' chip, which has no tooltip there, see
-"The archive view" in `docs/product/sidebar.md`. Archive dates and the archive metadata block are described in
-"The archive view" in `docs/product/sidebar.md`.
+For where the sidebar-row chip appears, see "Session rows" in `docs/product/sidebar-session-rows.md`; for the live-card
+chip, see "What both views show" in `docs/product/focus-mode.md`; for the archive submenus' chip, which has no tooltip
+there, see "The archive view" in `docs/product/archive-view.md`. Archive dates and the archive metadata block are
+described in "The archive view" in `docs/product/archive-view.md`.
 
 ## When the context size refreshes
 

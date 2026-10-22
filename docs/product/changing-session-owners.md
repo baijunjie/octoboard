@@ -86,8 +86,8 @@ a lead session. It needs no approval.
 | `note` | no | A parting note for the released session: what it should know to carry on without its owner. Trimmed; a blank note is ignored, and one longer than 4000 characters is refused. |
 
 The user can release any bound session, whoever its owner is, with **Unbind** in the sidebar's session menu (see
-"Session rows" in `docs/product/sidebar.md`), which asks for no confirmation and takes no note; a refusal is shown as an
-error alert.
+"Session rows" in `docs/product/sidebar-session-rows.md`), which asks for no confirmation and takes no note; a refusal
+is shown as an error alert.
 
 A released session is an **ordinary unbound project session**, the user's own:
 

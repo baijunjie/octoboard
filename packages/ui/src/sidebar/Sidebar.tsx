@@ -101,9 +101,9 @@ interface SidebarProps extends SidebarHandlers {
 }
 
 /** The sidebar: one console at a time, the current one picked on the rail, or the one a hover on the rail previews (see
- * docs/product/sidebar.md), with its console sessions and projects — or, in focus mode, one project
- * or one console session alone. Expand/collapse state is purely local UI state; the daemon has no notion of
- * it. */
+ * docs/product/sidebar.md, and "Previewing a console from the rail" in docs/product/console-switcher.md), with its
+ * console sessions and projects — or, in focus mode, one project or one console session alone. Expand/collapse state
+ * is purely local UI state; the daemon has no notion of it. */
 export function Sidebar({
   projects,
   selectedSessionId,

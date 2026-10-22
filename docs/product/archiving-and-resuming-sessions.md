@@ -29,7 +29,8 @@ linked worktrees that have them checked out, where git can do so safely; its con
 locked worktrees, with the choice of taking them along (see `docs/product/branch-and-worktree-cleanup.md`).
 Archiving a session that is still *starting* stands: it is archived at once, and its agent's process is ended as soon
 as it comes up.
-An archived session keeps its pin, if it had one (see "Order of projects and sessions" in `docs/product/sidebar.md`).
+An archived session keeps its pin, if it had one (see "Order of projects and sessions" in
+`docs/product/order-of-projects-and-sessions.md`).
 
 Besides the user, four things archive a session: its owner, explicitly; a project session's own report saying the
 work is finished with nothing left open (see "Automatic archiving" in `docs/product/reporting-to-owners.md`); a
@@ -67,8 +68,8 @@ or, for a project session, by giving its conversation's session ID in the sessio
 the session is shown, still archived, with its history in place of its terminal (see
 `docs/product/session-history.md`), and is reopened by pressing "Reopen" on its terminal's card, in a focus mode's
 archived-row action menu (see "What both views show" in `docs/product/focus-mode.md`), in the archive view (see "The
-archive view" in `docs/product/sidebar.md`), or, for a project session, by giving its conversation's session ID in the
-session dialog's **Resume conversation** tab (see "Reopening an archived session from the tab" in
+archive view" in `docs/product/archive-view.md`), or, for a project session, by giving its conversation's session ID in
+the session dialog's **Resume conversation** tab (see "Reopening an archived session from the tab" in
 `docs/product/sessions.md`). Each relaunches the same agent in the same directory and reassembles everything Octoboard
 injects.
 An owner session resumes or reopens a session of its own with `reopen_session` (see "The console session's tools" in
@@ -184,9 +185,9 @@ deleted, or until Octoboard deletes them once their agent's conversation is prov
 sessions whose conversation is gone" in `docs/product/deleting-sessions.md`). They are listed most recently archived first, and reached:
 
 - from the project's "View archive" submenu, or for console sessions the console's "Archived console
-  sessions" submenu, as the archive preview described in "The archive view" in `docs/product/sidebar.md`;
+  sessions" submenu, as the archive preview described in "The archive view" in `docs/product/archive-view.md`;
 - from either focus mode, as that same preview, within that focus mode's scope;
 - from the archive view, with all of them.
 
-How each of those looks and behaves is in "Project rows" and "The archive view" in `docs/product/sidebar.md`, and in
-`docs/product/focus-mode.md`.
+How each of those looks and behaves is in "Project rows" in `docs/product/sidebar-project-rows.md`, "The archive view"
+in `docs/product/archive-view.md`, and `docs/product/focus-mode.md`.

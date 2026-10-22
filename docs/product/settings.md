@@ -54,7 +54,7 @@ Settings opens from:
   while the window has nothing to show yet (before the daemon's state has first arrived), while Settings is already
   open, and while another dialog or an action menu — a row's or a header's, its submenus included — is open;
 - a session row's **Switch account** submenu, whose last entry, **Manage accounts…**, opens it on the Agent accounts
-  section instead of the first (see "Session rows" in `docs/product/sidebar.md`);
+  section instead of the first (see "Session rows" in `docs/product/sidebar-session-rows.md`);
 - the **Manage accounts** button beside the title of the console dialog's Agent default accounts section, which opens
   it on the Agent accounts section above the console dialog, left open beneath it (see "Agent config directories" in
   `docs/product/consoles.md`);
@@ -133,7 +133,7 @@ and projects with no unarchived session still end the list — and what turning 
 full configuration export carries it (see "Application settings: `get_settings` and `update_settings`" in
 `docs/product/agent-settings-tools.md` and "The application settings a full export carries" in
 `docs/product/configuration-export-and-import.md`). The order under either state, and what else follows it, are in
-"Order of projects and sessions" in `docs/product/sidebar.md`.
+"Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`.
 
 ### Default clone directory
 

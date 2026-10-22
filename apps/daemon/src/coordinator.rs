@@ -3657,7 +3657,7 @@ pub(crate) async fn relaunch_session_with(
             // quietly move a session out of its project's Archive group. The recorded end time is
             // written back rather than left alone, since the relaunch above cleared it and
             // persisted that before launching; the archive is ordered and dated by it (see
-            // "The archive view" in `docs/product/sidebar.md`), so a session this attempt did not
+            // "The archive view" in `docs/product/archive-view.md`), so a session this attempt did not
             // change would otherwise jump to the top with an incorrect archive date.
             // Restore only this attempt's optimistic status: a newer archive, including its
             // own end time, must survive a launch failure.

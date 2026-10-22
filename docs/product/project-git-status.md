@@ -18,7 +18,7 @@ in `docs/product/project-git-actions.md`).
 
 At the end of a project's row — after the project's name, before the activity marker a collapsed project carries, a
 pinned project's pin button and the row's **+** and action-menu buttons (see "Project rows" in
-`docs/product/sidebar.md`) — sits a badge showing that
+`docs/product/sidebar-project-rows.md`) — sits a badge showing that
 project's git state. The same badge sits in focus mode's header, after the project's name (see "What both views
 show" in `docs/product/focus-mode.md`). It shows nothing at all while no status has arrived for the project yet, and
 nothing when the project's directory is not a git repository.
@@ -88,7 +88,7 @@ announced.
 ## When a project is checked
 
 **Only the projects of the current console** — the one the sidebar shows, see "The console switcher" in
-`docs/product/sidebar.md` — are checked, and they are checked:
+`docs/product/console-switcher.md` — are checked, and they are checked:
 
 - as soon as that console becomes the current one;
 - every five minutes for as long as it stays current;
@@ -99,7 +99,8 @@ announced.
 - and when the user chooses **Pull current branch** for it (see "Pulling one project by hand" below).
 
 A console that is not current has none of its projects checked, including one the floating sidebar is only
-previewing (see "Previewing a console from the rail" in `docs/product/sidebar.md`); switching to it checks them.
+previewing (see "Previewing a console from the rail" in `docs/product/console-switcher.md`); switching to it checks
+them.
 Nothing is checked while no client is connected either: the schedule belongs to the application's window, not to the
 daemon. Turning **Automatically pull repositories** on is not a check and is not limited this way; see "Turning the
 switch on" below.
@@ -231,10 +232,10 @@ modifies" in `docs/product/launching-agents.md`.
 
 A project's action menu offers **Pull current branch** under **Git** while the project's status says its directory is a
 git repository — so not before its first status has arrived (see "What one check does" above, and "Project rows" in
-`docs/product/sidebar.md` for where the menu is). It does not push. Choosing it closes the menu and starts the check
-without waiting; a success is not toasted. It runs that project's check right away and then fast-forwards the branch
-under exactly the rules above, whether or not **Automatically pull repositories** is on; choosing it is the consent
-the switch would otherwise give. The one-minute floor does not apply.
+`docs/product/sidebar-project-rows.md` for where the menu is). It does not push. Choosing it closes the menu and starts
+the check without waiting; a success is not toasted. It runs that project's check right away and then fast-forwards the
+branch under exactly the rules above, whether or not **Automatically pull repositories** is on; choosing it is the
+consent the switch would otherwise give. The one-minute floor does not apply.
 
 Pull current branch does not wait its turn behind the four at once (see "When a project is checked" above). If a
 check of the project is only waiting its turn — in a round of checks, or in the pass that turning **Automatically

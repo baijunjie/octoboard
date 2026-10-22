@@ -49,7 +49,8 @@ within it.
 Once it holds more than it can show, each of these fades at its edge:
 
 - the **sidebar's** list of console sessions and projects, a **focus mode's** cards and archived rows, and the
-  **archive view's** rows (see `docs/product/sidebar.md` and `docs/product/focus-mode.md`);
+  **archive view's** rows (see `docs/product/sidebar.md`, `docs/product/archive-view.md` and
+  `docs/product/focus-mode.md`);
 - the **rail's** column of console avatars;
 - the **welcome screen's** content (see "What the welcome screen shows" in `docs/product/welcome-screen.md`);
 - **every dialog's body**, and in Settings the panel holding the section on screen (see `docs/product/settings.md`);

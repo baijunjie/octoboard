@@ -7,11 +7,11 @@ it, as in a web browser (see "The top bar" in `docs/product/window-layout.md`).
 
 A place is what the window shows, taken together:
 
-- the current console (see "The console switcher" in `docs/product/sidebar.md`); a console the floating sidebar is
-  only previewing is not part of the place;
+- the current console (see "The console switcher" in `docs/product/console-switcher.md`); a console the floating sidebar
+  is only previewing is not part of the place;
 - the selected session, or none;
 - the focus mode the sidebar is in, if any (see `docs/product/focus-mode.md`);
-- the archive view and what it is for, while it is open (see "The archive view" in `docs/product/sidebar.md`).
+- the archive view and what it is for, while it is open (see "The archive view" in `docs/product/archive-view.md`).
 
 What the right pane shows is not part of a place: Browse files records no visit, and a move gives the right pane what
 selecting the session moved to would, or leaves it as it is when the selected session stays (see "What the right pane
@@ -23,12 +23,12 @@ menu, a session this window opened being selected, a keyboard shortcut. A change
 was is not recorded again.
 
 **Switching console is one visit**: the new current console together with the session it shows, the one last
-selected there or none (see "What switching console shows" in `docs/product/sidebar.md`). Back from it returns to the
-console before and the session that was selected there.
+selected there or none (see "What switching console shows" in `docs/product/console-switcher.md`). Back from it returns
+to the console before and the session that was selected there.
 
 A press inside the floating sidebar that makes the console it previews the current one (see "Previewing a console
-from the rail" in `docs/product/sidebar.md`) is one visit too: the console change together with the session the press
-goes on to select there, or, when it selects none, with the console's remembered session shown once the press has
+from the rail" in `docs/product/console-switcher.md`) is one visit too: the console change together with the session the
+press goes on to select there, or, when it selects none, with the console's remembered session shown once the press has
 ended. Back from it returns to where the window was before the press. A selection made after that press has ended is
 a visit of its own.
 

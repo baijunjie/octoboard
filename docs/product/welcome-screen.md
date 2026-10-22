@@ -13,7 +13,7 @@ has been detected on the machine.
 - A line explaining what a console is: that it holds the projects the user works in and the sessions they run in them.
 - A primary button, **New console**, which opens the same new-console dialog the rail's New console opens (see
   `docs/product/consoles.md`). A console created here becomes the current one as soon as it appears, as one created from
-  the rail does (see "The console switcher" in `docs/product/sidebar.md`).
+  the rail does (see "The console switcher" in `docs/product/console-switcher.md`).
 - Beside it, a secondary button, **Import configuration…**, which opens the import dialog for a configuration document
   exported on another machine (see "In the window" in `docs/product/configuration-export-and-import.md`) — the way a
   machine with nothing on it is set up from one that has. It is there only where the window can open a file, which the

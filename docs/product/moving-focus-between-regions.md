@@ -14,7 +14,7 @@ order:
 3. the welcome screen, only while there is no console, when it is the only region of the content panel (see
    `docs/product/welcome-screen.md`);
 4. the sidebar;
-5. the archive view, only while it is open (see "The archive view" in `docs/product/sidebar.md`);
+5. the archive view, only while it is open (see "The archive view" in `docs/product/archive-view.md`);
 6. the terminal;
 7. the right pane's panels, each a region of its own, in stacking order, except that a maximized Terminal panel
    comes first among them (see "Panels and keyboard focus" in `docs/product/right-pane-panels.md`);

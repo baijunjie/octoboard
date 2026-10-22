@@ -46,7 +46,7 @@ application buttons below. These are:
   `docs/product/window-layout.md`), and each panel toggle's also names its panel (see "The panel toggles in the top
   bar" in `docs/product/right-pane-panels.md`);
 - the rail's buttons — each console's avatar, whose tooltip is the console's name with what is going on in it folded
-  in, the same text as the name announced for it (see "The console switcher" in `docs/product/sidebar.md`), New
+  in, the same text as the name announced for it (see "The console switcher" in `docs/product/console-switcher.md`), New
   console, the waiting count, whose tooltip says how many sessions are waiting and that pressing it goes to the next
   one, Turn on notifications and Settings (the rail's Account quota button has none, as said below this list);
 - the ⋮ button that opens an action menu — a sidebar row's, the console's in the sidebar's header, the project's in
@@ -60,10 +60,10 @@ application buttons below. These are:
   button to expand projects with unarchived sessions or collapse all projects (see "Expanding and collapsing the
   listed projects" in the same doc), and focus mode's Leave focus mode;
 - the pin button of a pinned project or session, whose tooltip is a short "Unpin", while the name announced for it
-  also names what it unpins (see "Pinning" in `docs/product/sidebar.md`);
+  also names what it unpins (see "Pinning" in `docs/product/order-of-projects-and-sessions.md`);
 - the Delete or Archive shortcut of a session row, a focus mode's session card or its archive preview row, whose
   tooltip is a short "Delete" or "Archive", while the name announced for it also names the session it acts on
-  (see "Session rows" in `docs/product/sidebar.md`);
+  (see "Session rows" in `docs/product/sidebar-session-rows.md`);
 - the archive view's Close button and each of its rows' Delete button, whose tooltip names the session;
 - the three options of Settings' Appearance row — Light, Dark and System (see "Appearance" in
   `docs/product/settings.md`);
@@ -111,9 +111,9 @@ announced for each says what it resizes (see "Resizing the sidebar and the right
 
 While the docked sidebar is hidden at 1168 px and wider, a console's avatar opens its tooltip on keyboard focus only:
 resting the mouse on it floats the sidebar in instead (see "Previewing a console from the rail" in
-`docs/product/sidebar.md`). That card names the console at its top but not what is going on in it, so **a mouse user
-with the docked sidebar hidden never reads the avatar's tooltip**; what is going on is then read from the sessions the
-card lists, each with its own status glyph and that glyph's tooltip (see "Tooltips on indicators" below).
+`docs/product/console-switcher.md`). That card names the console at its top but not what is going on in it, so **a mouse
+user with the docked sidebar hidden never reads the avatar's tooltip**; what is going on is then read from the sessions
+the card lists, each with its own status glyph and that glyph's tooltip (see "Tooltips on indicators" below).
 
 ## Explanations in help tips
 
@@ -224,20 +224,20 @@ These are:
   it is named — the placements where no status text sits beside the glyph (see "Session statuses" in
   `docs/product/sessions.md`);
 - the activity marker, the mark standing for what is going on beneath a **collapsed project's row** in the sidebar
-  (see "Project rows" in `docs/product/sidebar.md`) and inside focus mode's **console-switch chip** (see "The switch
-  strip" in `docs/product/focus-mode.md`), whose tooltip says which activity it stands for, in the same words the name
-  of the row or chip around it folds in beside the project's or console session's own name. Beneath a collapsed
-  project's row that is one of three — a session waiting for the user, one working, one merely running — while a chip
-  only ever shows the first two of them. The same activity shown as a badge on a console's avatar in the rail adds no
-  tooltip of its own: the badge is decorative, and the avatar's own tooltip already says the activity, folded in beside
-  the console's name (see "The console switcher" in `docs/product/sidebar.md`). So one activity is worded two ways — on
-  its own in the marker's tooltip, folded into the name in the avatar's;
+  (see "Project rows" in `docs/product/sidebar-project-rows.md`) and inside focus mode's **console-switch chip** (see
+  "The switch strip" in `docs/product/focus-mode.md`), whose tooltip says which activity it stands for, in the same
+  words the name of the row or chip around it folds in beside the project's or console session's own name. Beneath a
+  collapsed project's row that is one of three — a session waiting for the user, one working, one merely running — while
+  a chip only ever shows the first two of them. The same activity shown as a badge on a console's avatar in the rail
+  adds no tooltip of its own: the badge is decorative, and the avatar's own tooltip already says the activity, folded in
+  beside the console's name (see "The console switcher" in `docs/product/console-switcher.md`). So one activity is
+  worded two ways — on its own in the marker's tooltip, folded into the name in the avatar's;
 - the binding badge, the coloured dot on a project session's row bound to a console session, whose tooltip names that
-  console session (see "The binding badge" in `docs/product/sidebar.md`);
+  console session (see "The binding badge" in `docs/product/sidebar-session-rows.md`);
 - a session's agent icon on its row, on a focus mode's card or archived row, on the archive view's row and on each
   session a confirmation lists among the ones it affects, whose tooltip names the agent and the account the session runs
   under, and on a session row or a focus mode card also the model and effort it runs with, as a labelled list (see
-  "Session rows" in `docs/product/sidebar.md`);
+  "Session rows" in `docs/product/sidebar-session-rows.md`);
 - a project's branch badge, on its sidebar row and in focus mode's header, which carries **one tooltip for the whole
   badge** rather than one per mark: resting the mouse on its state glyph, on the branch name or on either upstream
   count shows the same sentence, the one the badge's whole state is said in — the branch, each count while it is not

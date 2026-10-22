@@ -180,8 +180,8 @@ maximizing. `Escape` never restores it. The Terminal panel is also restored:
   terminal;
 - when the right pane passes to a console session or to no owner;
 - when an archive view is opened — View all in a project's "View archive" submenu, say (see "The archive view" in
-  `docs/product/sidebar.md`) — or arrived at by Back or Forward, so that the view it would cover shows. Going Back or
-  Forward anywhere else does not by itself restore it.
+  `docs/product/archive-view.md`) — or arrived at by Back or Forward, so that the view it would cover shows. Going Back
+  or Forward anywhere else does not by itself restore it.
 
 It stays maximized when the right pane passes to another project, showing that project's tabs, and when its last tab
 is closed, showing its empty state (see "Starting a terminal" in `docs/product/terminal-panel.md`).

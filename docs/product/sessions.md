@@ -20,11 +20,11 @@ console sessions section and the project list" in `docs/product/sidebar.md`).
 A console session's row follows a session row exactly — the same status glyph, its agent's icon, its title, a pin button
 when pinned, and selecting it resumes it when it is interrupted, as selecting an interrupted session's row does. Its
 action menu offers **Lock**/**Unlock**, **Pin**/**Unpin**, **Rename**, **Copy session ID** (see "Session rows" in
-`docs/product/sidebar.md`), **Colour** (see "The binding badge" in `docs/product/sidebar.md`), **Focus mode** (see
-`docs/product/focus-mode.md`), **Switch account**, **Hand off** and **Archive** — **Delete** in its place while the
-console session has never been used (see "Deleting an unused session" in `docs/product/deleting-sessions.md`); there is
-no Resume item, for the same reason. A console session's title is renameable, like a project session's; its default is
-under **Name** in "Opening a session" below.
+`docs/product/sidebar-session-rows.md`), **Colour** (see "The binding badge" in `docs/product/sidebar-session-rows.md`),
+**Focus mode** (see `docs/product/focus-mode.md`), **Switch account**, **Hand off** and **Archive** — **Delete** in its
+place while the console session has never been used (see "Deleting an unused session" in
+`docs/product/deleting-sessions.md`); there is no Resume item, for the same reason. A console session's title is
+renameable, like a project session's; its default is under **Name** in "Opening a session" below.
 
 The user archives a console session from its own row's menu, as any session is archived; the console session can also
 archive itself once every session under it is archived (see "A session archiving itself" in
@@ -43,7 +43,7 @@ belong to the console rather than to any project.
 
 A project session bound to a console session carries that console session's **binding badge**
 wherever it is listed, and the console session's own row shows the same colour (see "The binding
-badge" in `docs/product/sidebar.md`).
+badge" in `docs/product/sidebar-session-rows.md`).
 
 An **unbound** project session — one the user opened by hand without choosing a console session under **Report to**
 (see "Opening a session" below), or one started on another session's request that the user approved — is given a
@@ -73,7 +73,9 @@ sessions section, a project session under its project. Archived sessions are not
 others; they are reached from their project's action menu or, for a console session, the console header's
 action menu, and from the archive view. Everything about the sidebar — its rows and menus, the order sessions
 are listed in, pinning, the archive view and how selecting a session works — is in
-`docs/product/sidebar.md`; focus mode is in `docs/product/focus-mode.md`.
+`docs/product/sidebar.md`, `docs/product/sidebar-project-rows.md`, `docs/product/sidebar-session-rows.md`,
+`docs/product/order-of-projects-and-sessions.md` and `docs/product/archive-view.md`; focus mode is in
+`docs/product/focus-mode.md`.
 
 ## Opening a session
 
@@ -134,14 +136,14 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
   default account. Switching agents returns focus to the Agent picker.
 - **Report to** (project sessions only; a choice, "No console session" by default) — one of the console's console
   sessions that are neither archived nor still *starting*, the most recently started first, each shown beside its colour, the same one the session's binding badge
-  will carry (see "The binding badge" in `docs/product/sidebar.md`), or none. A chosen console session receives this
-  session's reports, instead of the session staying outside the orchestration. A console with no such console session
-  shows no choice at all, and the session is unbound. A session still starting is not offered because its launch may
-  yet fail and remove it; `open_session` refuses one named as the owner (`unknown_session`). A binding can change
-  afterwards — the owner hands the session to another, an unbound session binds itself to one, or the owner or the
-  user releases the session, leaving it unbound; see `docs/product/changing-session-owners.md`. A session the console
-  session itself starts is always bound to it, and one a project session starts is bound to that project session; one started on another session's request is bound to nobody; see "Which sessions an owner
-  drives" in
+  will carry (see "The binding badge" in `docs/product/sidebar-session-rows.md`), or none. A chosen console session
+  receives this session's reports, instead of the session staying outside the orchestration. A console with no such
+  console session shows no choice at all, and the session is unbound. A session still starting is not offered because
+  its launch may yet fail and remove it; `open_session` refuses one named as the owner (`unknown_session`). A binding
+  can change afterwards — the owner hands the session to another, an unbound session binds itself to one, or the owner
+  or the user releases the session, leaving it unbound; see `docs/product/changing-session-owners.md`. A session the
+  console session itself starts is always bound to it, and one a project session starts is bound to that project
+  session; one started on another session's request is bound to nobody; see "Which sessions an owner drives" in
   `docs/product/hub-orchestration.md`. The choice is offered from the project list and the terminal's **New session** offer outside focus
   mode. Opened from a project's focus mode the dialog has no such field and the session is always unbound; opened from a console session's focus mode it
   has none either, and shows a line saying the session reports to that console session instead, which is the binding
@@ -266,7 +268,7 @@ and accessible name say it opens the session **with defaults**. Pressing it then
 the dialog. These are:
 
 - the console header's **+**, New console session (see "The console header" in `docs/product/sidebar.md`);
-- each project row's **+** (see "Project rows" in `docs/product/sidebar.md`);
+- each project row's **+** (see "Project rows" in `docs/product/sidebar-project-rows.md`);
 - the header's **+** in a project's focus mode (see "A project's focus mode" in `docs/product/focus-mode.md`);
 - in a console session's focus mode, each project's own **+** and the header's **+** menu of projects, where the
   project chosen is opened with defaults (see "A console session's focus mode" in `docs/product/focus-mode.md`).
@@ -364,9 +366,9 @@ starts (see "The project's account, model and reasoning effort" in `docs/product
 select an account** is off (see that section in `docs/product/settings.md`), a session opened without changing the
 account picker runs under the project's account for its agent, or the console's, or the agent's default account when
 neither pins anything. The session's account is named in its agent icon's tooltip and its accessible session name
-(see "Session rows" in `docs/product/sidebar.md`), and on the line beside the agent icon of its focus mode card (see
-"What both views show" in `docs/product/focus-mode.md`); wherever the agent's name is shown, it carries no account
-suffix.
+(see "Session rows" in `docs/product/sidebar-session-rows.md`), and on the line beside the agent icon of its focus mode
+card (see "What both views show" in `docs/product/focus-mode.md`); wherever the agent's name is shown, it carries no
+account suffix.
 
 While the switch is on, a new session whose account was not named uses the account of that session's agent whose weekly
 quota resets soonest, among the accounts that can still open a session. An account the session names still wins,
@@ -747,11 +749,12 @@ session does not report" in `docs/product/reporting-to-owners.md`).
 **It has its own glyph and name** wherever a session's status is shown or said — its row, focus mode's card, the top
 bar's breadcrumb, a confirmation's list of sessions, the row's accessible name and the glyph's tooltip. **For project
 ranking and activity summaries, it counts as working**: the order of projects in the sidebar while it is ordered by
-status, a console's badge on the rail and a collapsed project's activity marker (see "Order of projects and sessions", "The console switcher" and
-"Project rows" in `docs/product/sidebar.md`), and a switch strip chip (see "The switch strip" in
+status, a console's badge on the rail and a collapsed project's activity marker (see "Order of projects and sessions" in
+`docs/product/order-of-projects-and-sessions.md`, "The console switcher" in `docs/product/console-switcher.md` and
+"Project rows" in `docs/product/sidebar-project-rows.md`), and a switch strip chip (see "The switch strip" in
 `docs/product/focus-mode.md`). Session lists ranked by status give it a separate place before working sessions,
-following "Order of projects and sessions" in `docs/product/sidebar.md`. The menu bar icon's menu lists it in a group of its own,
-after **Working** (see "The icon's menu" in `docs/product/menu-bar-icon.md`).
+following "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`. The menu bar icon's menu
+lists it in a group of its own, after **Working** (see "The icon's menu" in `docs/product/menu-bar-icon.md`).
 
 An owner's tools give the list with every session they describe (see "The console session's tools" in
 `docs/product/hub-orchestration.md`).
@@ -763,10 +766,10 @@ own row:
 
 - The session's row shows the raised hand. Its project row shows one while the project is collapsed,
   and its console's avatar on the rail carries one, the rail showing every console at once, so a
-  waiting session can be found whatever the sidebar is showing (see "The console switcher" and
-  "Project rows" in `docs/product/sidebar.md`). In a console session's focus mode, a console session's
-  chip in the switch strip shows one too while it or a session bound to it is waiting (see "The switch
-  strip" in `docs/product/focus-mode.md`).
+  waiting session can be found whatever the sidebar is showing (see "The console switcher" in
+  `docs/product/console-switcher.md` and "Project rows" in `docs/product/sidebar-project-rows.md`). In a console
+  session's focus mode, a console session's chip in the switch strip shows one too while it or a session bound to it is
+  waiting (see "The switch strip" in `docs/product/focus-mode.md`).
 - A system notification fires once as a session enters that state, naming the session by its title
   and the project it runs in — or the console whose console session it is. A session that is answered and later
   waits again notifies again. No notification permission is asked for: the application posts the
@@ -782,9 +785,9 @@ own row:
 - The rail carries the same count, as a raised hand and the number, shown only while at least one
   session is waiting. Pressing it selects the next waiting session after the selected one — console by
   console in the order the consoles were created, its console sessions before its projects' sessions,
-  and both in the sidebar's order (see "Order of projects and sessions" in `docs/product/sidebar.md`) —
-  and wraps from the last back to the first; when the selected session is not waiting, it selects the
-  first. The sidebar follows the session it selects (see "Selecting a session" in
+  and both in the sidebar's order (see "Order of projects and sessions" in
+  `docs/product/order-of-projects-and-sessions.md`) — and wraps from the last back to the first; when the selected
+  session is not waiting, it selects the first. The sidebar follows the session it selects (see "Selecting a session" in
   `docs/product/sidebar.md`).
 
 **Where the hand is the agent's own, the user answers in the session's terminal**, and the status leaves *waiting for
@@ -952,7 +955,8 @@ reading *working* while Codex sits at its prompt.
 Locking is the user's protection against archiving or deleting a session. Every session starts unlocked,
 including sessions already stored without a lock setting. The lock is shared by every client, survives a daemon
 restart, and stays set when the session is resumed or reopened. Locking does not change its position in a list,
-its status, or its binding. The controls are described in "Session lock controls" in `docs/product/sidebar.md`.
+its status, or its binding. The controls are described in "Session lock controls" in
+`docs/product/sidebar-session-rows.md`.
 Agents have no tool to lock or unlock a session.
 
 An archive or deletion that includes a locked session is refused with `session_locked`, identifying that session,

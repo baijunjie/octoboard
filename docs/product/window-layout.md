@@ -5,7 +5,7 @@ width and, under it, a narrow **rail** down the window's left edge (its right ed
 "Right-to-left layout" below). Everything else is the content panel, which holds up to three panes, left to right: the
 **sidebar**, showing one console's console sessions, projects and sessions (see `docs/product/sidebar.md`), the
 selected session's **terminal**, which the archive view covers while it is open (see "The archive view" in
-`docs/product/sidebar.md`), and the **right pane**, a stack of panel cards belonging to its owner: a console
+`docs/product/archive-view.md`), and the **right pane**, a stack of panel cards belonging to its owner: a console
 session's **report panel** (see `docs/product/report-panel.md`) or a project's **Files panel** (see
 `docs/product/project-pane.md`). The right pane is not there at all while it has no owner or none of its owner's panels
 is open (see "What the right pane shows" below and `docs/product/right-pane-panels.md`). The connection banner, while the daemon
@@ -57,7 +57,7 @@ appearances" in `docs/product/appearance.md`).
 
 **Every docked sidebar header inside the content panel is 48 px high** — the sidebar's console header and a focus
 mode's header (see `docs/product/sidebar.md` and `docs/product/focus-mode.md`) — and so is the archive view's header
-(see "The archive view" in `docs/product/sidebar.md`), so the lines under them run on as one line across the panel.
+(see "The archive view" in `docs/product/archive-view.md`), so the lines under them run on as one line across the panel.
 The top bar's 40 px is a tier of its own and no part of this. A floating sidebar, the sidebar's drawer and every card
 of the right pane are cards inset 8 px from the top bar (see "A hidden pane floats in on hover", "Below 1168 px: the
 sidebar becomes a drawer" and "The panel cards" in `docs/product/right-pane-panels.md`), and their headers are
@@ -227,9 +227,9 @@ It runs, left to right:
   toggles there, so once the pane no longer reaches past them, and while the right pane is not shown, the
   breadcrumb's space runs on to the toggles, or to the bar's end where there are none. A trail too long for its space fades out at its right edge, as in "Names too long for their space" in
   `docs/product/labels-and-tooltips.md`, and the status icon always stays visible. With no session selected there is
-  no breadcrumb. While the archive view is open (see "The archive view" in `docs/product/sidebar.md`) the breadcrumb
-  shows where that is instead, with no status icon: *console › project › Archived sessions*, *console › console
-  session › Archived bound sessions*, or *console › Archived console sessions*.
+  no breadcrumb. While the archive view is open (see "The archive view" in `docs/product/archive-view.md`) the
+  breadcrumb shows where that is instead, with no status icon: *console › project › Archived sessions*, *console ›
+  console session › Archived bound sessions*, or *console › Archived console sessions*.
 - At the **end of the bar**, the **panel toggles**: one per kind of panel the right pane's owner has, there only
   while the right pane has an owner (see "What the right pane shows" below), each showing or hiding its panel and so
   the right pane (see "The panel toggles in the top bar" in `docs/product/right-pane-panels.md`). The end is the
@@ -274,11 +274,11 @@ The rail runs from under the top bar to the window's bottom (or the connection b
 - **At the top, the consoles**: one avatar per console, in the order the consoles were created, the current console
   marked by a tile behind its avatar, then **New console**, which opens the new-console dialog (see
   `docs/product/consoles.md`). Choosing a console, what each avatar's badge says and what a right-click on one offers
-  are in "The console switcher" in `docs/product/sidebar.md`. While the docked sidebar is hidden, resting the mouse on
-  an avatar floats the sidebar in showing that console (see "A hidden pane floats in on hover" below). When there are
-  more consoles than fit, the avatars scroll, with no scrollbar drawn — so the fade at the column's edge is the only
-  sign there are more (see "The edge that hides content fades" in `docs/product/scrolling-surfaces.md`); New console
-  stays below them.
+  are in "The console switcher" in `docs/product/console-switcher.md`. While the docked sidebar is hidden, resting the
+  mouse on an avatar floats the sidebar in showing that console (see "A hidden pane floats in on hover" below). When
+  there are more consoles than fit, the avatars scroll, with no scrollbar drawn — so the fade at the column's edge is
+  the only sign there are more (see "The edge that hides content fades" in `docs/product/scrolling-surfaces.md`); New
+  console stays below them.
 - **At the bottom**, top to bottom:
   - the **waiting count**, a raised hand with the number of sessions waiting for the user in a badge at its top
     right, its top left under a right-to-left language (see "Right-to-left layout" below), shown only while at least
@@ -331,8 +331,8 @@ and Terminal panels.
 - **Making another console the current one** — pressing its avatar on the rail, pressing inside the floating sidebar
   while it previews that console, or a console created from this window appearing — gives the right pane to the own
   owner of the session the switch shows, the one last selected in that console; with no session shown there is no
-  right pane (see "What switching console shows" in `docs/product/sidebar.md`). A press inside the floating sidebar
-  that gives the right pane to something itself, as Browse files does, keeps what it gave it. Only previewing a
+  right pane (see "What switching console shows" in `docs/product/console-switcher.md`). A press inside the floating
+  sidebar that gives the right pane to something itself, as Browse files does, keeps what it gave it. Only previewing a
   console changes nothing here.
 - **Back and Forward** do not record the owner, which is not part of a place (see "What counts as a place" in
   `docs/product/navigation-history.md`). A move to another session gives the right pane to that session's own owner,
@@ -462,7 +462,8 @@ full-height column (see "Hiding the sidebar" above).
   crossing the rail on its way elsewhere does not make the card flash; the toggle is aimed at, so it has none.
   - **From the toggle the sidebar shows the current console**, whatever console a card was previewing just before.
   - **From an avatar it shows that console**, which need not be the current one; what that preview is and how a press
-    inside it makes the console current is in "Previewing a console from the rail" in `docs/product/sidebar.md`.
+    inside it makes the console current is in "Previewing a console from the rail" in
+    `docs/product/console-switcher.md`.
   - While the sidebar is out, moving onto another avatar shows that console at once, with no wait, and moving onto the
     toggle goes back to the current console. A pointer that only crosses the avatars brings nothing up, and the
     content panel's edge does not bring the sidebar up at all.
@@ -509,8 +510,8 @@ full-height column (see "Hiding the sidebar" above).
 - **Pressing the toggle** while the pane is floating shows it for good, and keyboard focus stays where it was. For the
   sidebar, until the pane is docked the toggle still reads "Show sessions"; the card goes away and its docked column
   eases open in the row; which console the column shows is in "Previewing a console from the rail" in
-  `docs/product/sidebar.md`. For the right pane, pressing the floating panel's toggle opens that panel and docks the
-  pane at once, with no animation (see "Floating a panel in" in `docs/product/right-pane-panels.md`).
+  `docs/product/console-switcher.md`. For the right pane, pressing the floating panel's toggle opens that panel and
+  docks the pane at once, with no animation (see "Floating a panel in" in `docs/product/right-pane-panels.md`).
 - There is no floating sidebar below 1168 px, and narrowing the window below it sends one away.
 
 ## Below 1168 px: the sidebar becomes a drawer
@@ -557,7 +558,7 @@ further.
 or editable text outside the terminal. In the terminal it shows no system menu. Anywhere else it shows nothing, unless
 what was clicked offers its own action menu: the sidebar's rows and headers open theirs at the pointer (see "Rows, names
 and keyboard focus" in `docs/product/sidebar.md`), and so do the consoles' avatars on the rail (see "The console
-switcher" in `docs/product/sidebar.md`). The project pane's file and change rows also open their own menu (see
+switcher" in `docs/product/console-switcher.md`). The project pane's file and change rows also open their own menu (see
 "A row's actions" in `docs/product/project-pane.md`). A report page follows the same rule (see "Right-click inside a page"
 in `docs/product/report-panel.md`).
 

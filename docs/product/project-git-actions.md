@@ -1,15 +1,17 @@
 # Project Git actions
 
-Three of the actions under **Git** in a project's action menu (see "Project rows" in `docs/product/sidebar.md`):
-**Push current branch**, **Switch branch** and **Restore file changes**. The menu's other action, **Pull current
-branch**, and the branch badge these actions update are in `docs/product/project-git-status.md`.
+Three of the actions under **Git** in a project's action menu (see "Project rows" in
+`docs/product/sidebar-project-rows.md`): **Push current branch**, **Switch branch** and **Restore file changes**. The
+menu's other action, **Pull current branch**, and the branch badge these actions update are in
+`docs/product/project-git-status.md`.
 
 ## Pushing the current branch
 
 **Push current branch**, under **Git** in the project's action menu, pushes that project's current branch and only
 that branch. It is offered only while the project's status says the directory is a git repository (see "Project
-rows" in `docs/product/sidebar.md`). Choosing it closes the menu at once. The push is waited on until `git push` has
-exited. When the push is accepted, the window that asked shows a notice toast saying the current branch was pushed.
+rows" in `docs/product/sidebar-project-rows.md`). Choosing it closes the menu at once. The push is waited on until
+`git push` has exited. When the push is accepted, the window that asked shows a notice toast saying the current branch
+was pushed.
 A refusal is an error alert worded from the code below. Pushing does not fetch and does not fast-forward, and a
 pull never pushes (see "Automatically pulling repositories" in `docs/product/project-git-status.md`). A local
 branch that is behind its upstream stays behind; if the remote rejects the update, the push fails and the branch
@@ -110,10 +112,10 @@ reported branch changes (see "Files and Git" in `docs/product/project-pane.md`).
 ## Restoring file changes
 
 **Restore file changes**, under **Git** in every project's action-menu placement, follows Switch branch
-after a separator (see "Project rows" in `docs/product/sidebar.md`). It opens a destructive confirmation dialog
-explaining that staged and unstaged tracked changes will be discarded, staged new files deleted, and untracked and
-ignored files kept, and that the discard cannot be undone. Cancelling makes no restore request. Confirming waits
-for the restore; success closes the dialog and raises a notice toast. A failure opens an error alert, leaving the
+after a separator (see "Project rows" in `docs/product/sidebar-project-rows.md`). It opens a destructive confirmation
+dialog explaining that staged and unstaged tracked changes will be discarded, staged new files deleted, and untracked
+and ignored files kept, and that the discard cannot be undone. Cancelling makes no restore request. Confirming waits for
+the restore; success closes the dialog and raises a notice toast. A failure opens an error alert, leaving the
 confirmation available for retry after acknowledgement.
 
 Restoration covers the project's own worktree: tracked files and the index are restored to the current commit,

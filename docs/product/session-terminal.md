@@ -335,12 +335,12 @@ The sidebar's empty lists stay compact alongside this panel (see "Empty rows" in
 - An **archived console session** does not satisfy the console-session condition outside focus mode; an interrupted
   console session does. Archived project sessions do not fill a project's focus-mode live list.
 - A selected session suppresses the panel. Switching console shows the session last selected in the console switched
-  to, or none (see "What switching console shows" in `docs/product/sidebar.md`), so a console with no remembered
-  session, a console just created among them, shows this panel for itself.
+  to, or none (see "What switching console shows" in `docs/product/console-switcher.md`), so a console with no
+  remembered session, a console just created among them, shows this panel for itself.
 - The console read is the **current** one, not the one the sidebar is previewing while the pointer rests on another
-  console's avatar on the rail (see "Previewing a console from the rail" in `docs/product/sidebar.md`).
+  console's avatar on the rail (see "Previewing a console from the rail" in `docs/product/console-switcher.md`).
 - **The archive view covering the terminal suppresses the creation offer**: while it is open, the underlying area
-  shows the no-session panel instead (see "The archive view" in `docs/product/sidebar.md`).
+  shows the no-session panel instead (see "The archive view" in `docs/product/archive-view.md`).
 - **Keyboard**: while the panel offers a creation button, the terminal's area is a stop in the `F6` cycle, and whatever
   hands keyboard focus to the terminal puts it on that button, just as with the cover's Reconnect button (see "Moving
   focus between regions with F6" in `docs/product/moving-focus-between-regions.md`). A panel with no button is skipped.

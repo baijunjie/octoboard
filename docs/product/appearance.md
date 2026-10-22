@@ -28,7 +28,7 @@ Everything the window shows follows the chosen appearance, including:
   and does not follow later appearance changes while it runs (see "Per-agent specifics a user will notice" in
   `docs/product/launching-agents.md`).
 - **A console session's colour**, shown in its own sidebar row and as the binding badge on every project
-  session bound to it (see "The binding badge" in `docs/product/sidebar.md`).
+  session bound to it (see "The binding badge" in `docs/product/sidebar-session-rows.md`).
   Each colour in the fixed palette of console session colours has its own light and dark value, so in either
   appearance every one still looks like its name; the swatches of the action menu's **Colour** submenu show the
   values of the appearance in force. The colour is decorative — the console session's name is always beside it, or in

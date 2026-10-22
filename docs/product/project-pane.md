@@ -22,9 +22,9 @@ explanation and retry controls remain in the pane afterwards (see "Error alerts"
 ## Opening a project's files
 
 - **Browse files**, in a project's action menu — on its row and by right-clicking it (see "Project
-  rows" in `docs/product/sidebar.md`), in its focus mode's header, and on its heading in a console session's focus mode
-  (see `docs/product/focus-mode.md`) — shows that project's project pane in Files mode, selecting, starting and
-  resuming no session; it opens the Files panel (see "Opening and closing panels" in
+  rows" in `docs/product/sidebar-project-rows.md`), in its focus mode's header, and on its heading in a console
+  session's focus mode (see `docs/product/focus-mode.md`) — shows that project's project pane in Files mode, selecting,
+  starting and resuming no session; it opens the Files panel (see "Opening and closing panels" in
   `docs/product/right-pane-panels.md`). It is omitted while that project's Files panel is on screen, docked or
   floating in, and offered otherwise: while the right pane belongs to another owner or while the Files panel is
   closed. This applies in Git mode too; choose the Files tab to return to the
@@ -105,9 +105,9 @@ behind it is shown (see "Errors" below).
 
 Within each folder, folders come first — a symbolic link leading to a folder inside the project counts as one — then
 everything else. Each group is ordered by name, case-insensitively and in natural order, so "item 2" comes before
-"item 10", as the sidebar orders names (see "Order of projects and sessions" in `docs/product/sidebar.md`). Two names
-that read the same are always kept in the same order. The file viewer moves through files in this same order (see
-"Moving between files" in `docs/product/file-viewer.md`).
+"item 10", as the sidebar orders names (see "Order of projects and sessions" in
+`docs/product/order-of-projects-and-sessions.md`). Two names that read the same are always kept in the same order. The
+file viewer moves through files in this same order (see "Moving between files" in `docs/product/file-viewer.md`).
 
 ### Rows and the keyboard
 

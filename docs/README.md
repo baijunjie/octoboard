@@ -74,14 +74,23 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   request): per-agent sources, Claude Code's context window from its status line and when it is missing, when the size
   is unknown or drops, the context-size chip and its Limit tooltip, refresh, and what
   happens on archiving, upgrading and account switches.
-- [Sidebar](product/sidebar.md) — one console at a time, picked on the rail's console switcher with each console's
-  activity badge and the session a switch brings back into the terminal, previewing another console from the rail
-  while the sidebar is hidden, the console header, the console sessions section and the project list, project and
-  session rows and their menus, the sessions bound to a project session listed under it, the binding badge a bound
-  session carries, keyboard focus on rows, the order of projects and sessions and pinning, filtering the project list
-  and folding every project from its heading, how the sidebar follows the selected session, how its view changes are
-  animated, the shared shape of the empty row a section with nothing to list takes, the archive view, and
-  right-clicking a row, header or rail avatar for its action menu (and where focus goes when the menu closes).
+- [Sidebar](product/sidebar.md) — the sidebar's frame: one console at a time, the console header, the console sessions
+  section and the project list, filtering the project list and folding every project from its heading, the shared
+  shape of the empty row a section with nothing to list takes, row names and keyboard focus, right-clicking a row,
+  header or rail avatar for its action menu (and where focus goes when the menu closes), how the sidebar follows the
+  selected session, and how its view changes are animated.
+- [Console switcher](product/console-switcher.md) — the rail's console avatars and each console's activity badge,
+  the current console and how it is remembered, the session a switch brings back into the terminal, and previewing
+  another console from the rail while the sidebar is hidden.
+- [Sidebar project rows](product/sidebar-project-rows.md) — a project's row: expanding and collapsing, its branch
+  badge and activity marker, its action menu and items, the sessions nested under it (a session bound to another of
+  its sessions listed under its owner), and opening the system file manager from it.
+- [Sidebar session rows](product/sidebar-session-rows.md) — a session's row: its glyph, agent tooltip, context chip,
+  action menu and Delete/Archive shortcut, the binding badge a bound session carries, and the session lock controls.
+- [Order of projects and sessions](product/order-of-projects-and-sessions.md) — how the sidebar orders projects and
+  sessions, the order when ordering by status is turned off, and pinning.
+- [Archive view](product/archive-view.md) — the full archive the sidebar's menus and focus mode lead to, and archive
+  previews: scope, rows, Reopen, Delete and Delete all, nesting, closing, animation and focus.
 - [Focus mode](product/focus-mode.md) — a project's and a console session's focus mode: what each view lists, where a
   lead session and the sessions under it are listed and where they are only counted, the switch strip of a console
   session's focus mode (its fixed chip order, the activity each chip carries, a click versus ⌃Tab / ⌃⇧Tab and which

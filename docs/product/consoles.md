@@ -72,9 +72,9 @@ editing and removing an account" in `docs/product/agent-accounts.md`).
 
 ## Avatar
 
-A console is drawn as a round avatar on the rail (see "The console switcher" in `docs/product/sidebar.md`). Without a
-custom image it is a network glyph on a coloured fill, one of seven, picked from the console's name: the same name
-always gets the same fill, two different names can still share one, and renaming a console can change its fill.
+A console is drawn as a round avatar on the rail (see "The console switcher" in `docs/product/console-switcher.md`).
+Without a custom image it is a network glyph on a coloured fill, one of seven, picked from the console's name: the same
+name always gets the same fill, two different names can still share one, and renaming a console can change its fill.
 Spaces and invisible characters around the name, and whether accented letters were typed precomposed or combined, do
 not change it. Each fill has its own light and dark value (see "What follows the choice" in
 `docs/product/appearance.md`).

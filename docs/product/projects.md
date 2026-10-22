@@ -8,10 +8,11 @@ described in `docs/product/sessions.md`, and carrying projects to another machin
 
 A project carries a name, an optional description (see "The project's description" below), the directory it points at,
 an optional default agent, how it was associated, the remote URL of the repository it points at (see "The project's
-remote URL" below), whether the user has pinned it (see "Order of projects and sessions" in `docs/product/sidebar.md`),
-any number of tags (see `docs/product/project-tags.md`), and — one set per agent — what it says about the account its
-sessions run under and an optional model and reasoning effort for them (see "The project's account, model and reasoning
-effort" below). Every project is bound to a host (see "Hosts" below).
+remote URL" below), whether the user has pinned it (see "Order of projects and sessions" in
+`docs/product/order-of-projects-and-sessions.md`), any number of tags (see `docs/product/project-tags.md`), and — one
+set per agent — what it says about the account its sessions run under and an optional model and reasoning effort for
+them (see "The project's account, model and reasoning effort" below). Every project is bound to a host (see "Hosts"
+below).
 
 A project also carries whether the user has given Octoboard permission to press any agent's trust confirmation for
 its directory without asking. A project starts without that permission, including one the console session associates;
@@ -237,18 +238,18 @@ a repository with no remote left.
 Only the name, the description, the default agent, the account, the model and the reasoning effort, and the tags can be
 changed, besides pinning and unpinning the project. The name is changed from the project's Rename or Project settings,
 everything else from Project settings, which opens the project dialog under that title (see "Project rows" in
-`docs/product/sidebar.md`). The description field follows the name, and the tags field sits between the description and
-the default agent: typing in it offers the tags already in use that the project lacks, in a list that opens below the
-field and stays open after a pick so several can be added in a row, and Enter adds what was typed as a tag, or the
-highlighted suggestion if there is one; leaving the field adds it too. The tags the project carries show inside the
-field, ahead of the text input, and wrap onto more lines as they grow, the field growing with them. Each is a picked tag
-(see "Picked tags" in `docs/product/project-tags.md`), and removing one, with its remove button or with Backspace or
-Delete while it has focus, puts the focus in the text input. Backspace in the empty text input removes the last tag, one
-per key press (holding it down does not keep removing). Clicking the field's empty area puts the focus in the text
-input. The same field is in the dialog that associates a project, and the tags chosen there go on every project that
-association creates. The association itself — the source and the directory — is fixed once the project exists; a project
-that should point somewhere else is removed (see `docs/product/removing-projects.md`) and associated again. The remote
-URL is not editable either, and saving an edit never overwrites it: Octoboard keeps that value in step with the
+`docs/product/sidebar-project-rows.md`). The description field follows the name, and the tags field sits between the
+description and the default agent: typing in it offers the tags already in use that the project lacks, in a list that
+opens below the field and stays open after a pick so several can be added in a row, and Enter adds what was typed as a
+tag, or the highlighted suggestion if there is one; leaving the field adds it too. The tags the project carries show
+inside the field, ahead of the text input, and wrap onto more lines as they grow, the field growing with them. Each is a
+picked tag (see "Picked tags" in `docs/product/project-tags.md`), and removing one, with its remove button or with
+Backspace or Delete while it has focus, puts the focus in the text input. Backspace in the empty text input removes the
+last tag, one per key press (holding it down does not keep removing). Clicking the field's empty area puts the focus in
+the text input. The same field is in the dialog that associates a project, and the tags chosen there go on every project
+that association creates. The association itself — the source and the directory — is fixed once the project exists; a
+project that should point somewhere else is removed (see `docs/product/removing-projects.md`) and associated again. The
+remote URL is not editable either, and saving an edit never overwrites it: Octoboard keeps that value in step with the
 repository itself (see "The project's remote URL" above).
 
 The name cannot be cleared: saving an empty name is rejected. The description can be emptied, which leaves the project

@@ -143,8 +143,8 @@ export function archivedSessionRows(sessions: Session[]): NestedSession[] {
 
 /** A console's live console sessions (not archived, and not one still starting), newest first.
  * Several may exist at once; this is the new-session dialog's list of owners to choose from, not
- * the sidebar's order (see "The console sessions section and the project list" in
- * `docs/product/sidebar.md` for that one, `compareSessions` via `liveSessions`). */
+ * the sidebar's order (see "Order of projects and sessions" in
+ * `docs/product/order-of-projects-and-sessions.md` for that one, `compareSessions` via `liveSessions`). */
 export function liveConsoleSessions(sessions: Session[], consoleId: string): Session[] {
   return sessions
     .filter((s) => s.console_id === consoleId && s.role === "console" && s.status !== "archived" && s.status !== "starting")

@@ -80,8 +80,8 @@ From top to bottom:
      is read, the mark adds nothing to it.
    - Within a group, sessions come in the order the sidebar lists them: console by console in the order the consoles
      were created, its console sessions before its projects' sessions, both in the sidebar's own order (see "Order of
-     projects and sessions" in `docs/product/sidebar.md`). Every console is included, not only the one the sidebar
-     shows.
+     projects and sessions" in `docs/product/order-of-projects-and-sessions.md`). Every console is included, not only
+     the one the sidebar shows.
    - Each session reads as its title and where it is — the project it runs in, or the console whose console session it
      is — worded as its system notification names it (see "The raised hand" in `docs/product/sessions.md`). A session
      titled after its project reads as the title alone rather than naming it twice. Like every other place, it reads

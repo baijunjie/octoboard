@@ -27,17 +27,17 @@ view stays below both the heading and the fade. The other scrolling rules are in
 fades" and "Scrolling a surface from the keyboard" in `docs/product/scrolling-surfaces.md`.
 
 The session lock button on live cards, a console session's own card included, follows
-"Session lock controls" in `docs/product/sidebar.md`.
+"Session lock controls" in `docs/product/sidebar-session-rows.md`.
 
 **Session cards**, in both: the status glyph with the status in words, the pin button when pinned (see "Pinning" in
-`docs/product/sidebar.md`), the session's action menu and, just before it, a Delete or Archive button
-(both always shown when available; see "Session rows" in `docs/product/sidebar.md` for when the
+`docs/product/order-of-projects-and-sessions.md`), the session's action menu and, just before it, a Delete or Archive
+button (both always shown when available; see "Session rows" in `docs/product/sidebar-session-rows.md` for when the
 shortcut is there and what it does), its title on one line, its agent's icon
 followed by the **model line**, and how long ago it was created at the trailing end of the agent line. The model line
 reads "<account> · <model> · <effort>". The account is the one the session runs under, named as in a session row's
-agent icon tooltip (see "Session rows" in `docs/product/sidebar.md`): the account's name, the default account's name,
-or a removed account's recorded directory; a removed account that recorded no directory leaves the line at
-"<model> · <effort>". "<model> · <effort>" is the model and reasoning effort the session runs with, as "The model and
+agent icon tooltip (see "Session rows" in `docs/product/sidebar-session-rows.md`): the account's name, the default
+account's name, or a removed account's recorded directory; a removed account that recorded no directory leaves the line
+at "<model> · <effort>". "<model> · <effort>" is the model and reasoning effort the session runs with, as "The model and
 effort a session is shown running with" in `docs/product/model-and-reasoning-effort.md` decides them, an unknown one
 reading **Default**, and reads **Default model** when neither is known; the agent's name is not shown on the card. The
 model line is one line that fades where it is cut off, with its full text as its tooltip while cut (see "Names too long
@@ -51,33 +51,35 @@ and agent lines share aligned leading icons and text starts. A title with a cons
 alignment;
 a title without one starts at the card’s leading content edge, with no empty icon space. Long titles follow "Names too long
 for their space" in `docs/product/labels-and-tooltips.md`. The agent's icon has the same tooltip as on a session row, listing the account,
-model and effort under the agent's name (see "Session rows" in `docs/product/sidebar.md`). Clicking a card selects the session. They are in the order of "Order of
-projects and sessions" in `docs/product/sidebar.md`. Cards have an opaque background distinct from the sidebar's,
-which stays opaque while they move, so text from other cards, the console-session summary or the archive does not
-show through them. Cards have no outline: each is set apart by the same soft shadow as the content panel's edges (see
-"The window chrome and the content panel" in `docs/product/window-layout.md`), and the selected card is outlined in
-the accent colour.
+model and effort under the agent's name (see "Session rows" in `docs/product/sidebar-session-rows.md`). Clicking a card
+selects the session. They are in the order of "Order of projects and sessions" in
+`docs/product/order-of-projects-and-sessions.md`. Cards have an opaque background distinct from the sidebar's, which
+stays opaque while they move, so text from other cards, the console-session summary or the archive does not show through
+them. Cards have no outline: each is set apart by the same soft shadow as the content panel's edges (see "The window
+chrome and the content panel" in `docs/product/window-layout.md`), and the selected card is outlined in the accent
+colour.
 
 A card for a session **bound to a project session the same view lists** is **inset under that session's card** and
-follows it, as a session row is under its owner's row (see "Project rows" in `docs/product/sidebar.md`). A connector
-runs from the owner's card across the gaps between cards, bending smoothly toward the middle of each child card
-and stopping at the last child. It follows the inset side under a right-to-left language. The owner's name in the
+follows it, as a session row is under its owner's row (see "Project rows" in `docs/product/sidebar-project-rows.md`). A
+connector runs from the owner's card across the gaps between cards, bending smoothly toward the middle of each child
+card and stopping at the last child. It follows the inset side under a right-to-left language. The owner's name in the
 card's accessible name carries the nesting to assistive technology. In a project's combined view, cards also identify the
 console session above them (see "A project's focus mode" below and "The binding badge" in
-`docs/product/sidebar.md`).
+`docs/product/sidebar-session-rows.md`).
 
 **Archived (n)**, in both, only while the view has archived sessions — with none, the section is not shown at all: the
-archive preview described in "The archive view" in `docs/product/sidebar.md`, each row showing its agent's icon
+archive preview described in "The archive view" in `docs/product/archive-view.md`, each row showing its agent's icon
 and its title on one compact line, with its context-size chip at the trailing end when the context size is known and above zero (see "The
 context-size chip" in `docs/product/session-context.md`). These preview rows show no creation or archive time. The heading
 counts every archived session in the view's scope, including those the preview leaves out. Clicking a row selects
 it while leaving it archived. Its action menu offers **Reopen**, which selects and resumes the session, then **Copy
-session ID** (see "Session rows" in `docs/product/sidebar.md`), and after a separator **Delete**, disabled while locked.
+session ID** (see "Session rows" in `docs/product/sidebar-session-rows.md`), and after a separator **Delete**, disabled
+while locked.
 A Delete shortcut immediately before the action-menu button appears for an unlocked unused session that is not still
-starting, under the same rules as "Session rows" in `docs/product/sidebar.md`. It takes the same deletion action as the
-menu (see "Deleting archived sessions" in `docs/product/deleting-sessions.md` for the confirmation rules). The menu and
-an available shortcut show with the row's other controls as described in "Rows, names and keyboard focus" in
-`docs/product/sidebar.md`. Reopening follows "Archiving, interruption and resuming" in
+starting, under the same rules as "Session rows" in `docs/product/sidebar-session-rows.md`. It takes the same deletion
+action as the menu (see "Deleting archived sessions" in `docs/product/deleting-sessions.md` for the confirmation rules).
+The menu and an available shortcut show with the row's other controls as described in "Rows, names and keyboard focus"
+in `docs/product/sidebar.md`. Reopening follows "Archiving, interruption and resuming" in
 `docs/product/archiving-and-resuming-sessions.md`. Whenever any archived session is left out — one under an archived
 owner, or one beyond the first ten — **View all** follows the preview as a row with the same alignment, hover feedback
 and keyboard focus treatment as the session rows; it opens the archive view and carries no count. When every archived
@@ -144,8 +146,9 @@ added and installed, the header's **+** is disabled and the empty row is plain t
   is while the list below scrolls. It is a session card as in "What both views show" above — status, title, agent,
   creation time and context size — with these differences: its title is preceded by the console session's own colour,
   decoratively, since the title names it; it never shows a pin button, even while the console session is pinned; and
-  its action menu is the console session's row's (see "Session rows" in `docs/product/sidebar.md`) without **Pin** /
-  **Unpin** and **Focus mode**. Its lock button while locked, and its Delete or Archive shortcut, are as on any card.
+  its action menu is the console session's row's (see "Session rows" in `docs/product/sidebar-session-rows.md`) without
+  **Pin** / **Unpin** and **Focus mode**. Its lock button while locked, and its Delete or Archive shortcut, are as on
+  any card.
   Pressing it selects the console session, showing its terminal and report panel, which the view has no other row
   for; right-clicking it opens its action menu. It is not counted in **Sessions (n)**.
 - **Sessions (n)**: the projects of the console that have a session bound to this console session which is not archived,
@@ -156,16 +159,17 @@ added and installed, the header's **+** is disabled and the empty row is plain t
   console session, to a project session that is not under this one, or to none, is not shown, and neither is a project
   with nothing under this console session. With none, a compact row saying there are no bound sessions takes their
   place, carrying no action of its own — the header's **+** below is the way to open one. Each project's name carries its pin
-  button while it is pinned (see "Pinning" in `docs/product/sidebar.md`), its own **+**, which opens a new session in
-  that project, and its action menu, which is the project row's without its Focus mode item — a project has no focus
-  mode to be entered from here — and keeps **Pin** / **Unpin**. That menu's **View archive** covers only the project's
-  share of this console session's archive: the project's archived sessions bound to this console session, or bound to
-  an archived lead session that is bound to it, previewed as any archive preview is (see "The archive view" in
-  `docs/product/sidebar.md`). The project's sessions bound to another console session or to none, and those of a lead
-  session that is still live, are not in it; with none in the share, the submenu shows only the disabled item saying
-  there are none. Its **View all**, offered whenever the share is nonempty, opens this console session's archive view
-  — the one **View all** under **Archived (n)** below opens — not the project's. The project's row in the full sidebar
-  keeps the project's whole archive in its menu. The project list's filter is not part of this view.
+  button while it is pinned (see "Pinning" in `docs/product/order-of-projects-and-sessions.md`), its own **+**, which
+  opens a new session in that project, and its action menu, which is the project row's without its Focus mode item — a
+  project has no focus mode to be entered from here — and keeps **Pin** / **Unpin**. That menu's **View archive** covers
+  only the project's share of this console session's archive: the project's archived sessions bound to this console
+  session, or bound to an archived lead session that is bound to it, previewed as any archive preview is (see "The
+  archive view" in `docs/product/archive-view.md`). The project's sessions bound to another console session or to none,
+  and those of a lead session that is still live, are not in it; with none in the share, the submenu shows only the
+  disabled item saying there are none. Its **View all**, offered whenever the share is nonempty, opens this console
+  session's archive view — the one **View all** under **Archived (n)** below opens — not the project's. The project's
+  row in the full sidebar keeps the project's whole archive in its menu. The project list's filter is not part of this
+  view.
 - **New session**: the header's **+** opens a menu of the console's projects, so that a project with nothing bound yet
   can be reached; choosing one opens the new-session dialog for it. The dialog has no "Report to" field, and shows a
   line saying the session reports to this console session, which it will be bound to. With the primary modifier held,
@@ -178,8 +182,8 @@ added and installed, the header's **+** is disabled and the empty row is plain t
 - **Archived (n)** counts the archived sessions under this console session — bound to it, or bound to an archived lead
   session that is bound to it (see "Lead sessions" in `docs/product/hub-orchestration.md`) — and **View all** opens
   the archive view scoped to them, including the sessions of archived lead sessions, which the preview leaves out
-  (see "The archive view" in `docs/product/sidebar.md`). An archived session of a lead session that is still live is
-  not here: it is in the lead session's project's archive alone.
+  (see "The archive view" in `docs/product/archive-view.md`). An archived session of a lead session that is still live
+  is not here: it is in the lead session's project's archive alone.
 
 ## The switch strip
 
@@ -188,11 +192,12 @@ console session's focus mode, and only while the console has at least two consol
 
 - **One chip per console session of the console that is not archived**, the one in focus included. The order is
   fixed: pinned ones first, then by when they were started, oldest first. It never follows their statuses, whether or
-  not the sidebar is ordered by status (see "Order of projects and sessions" in `docs/product/sidebar.md`), so a chip
-  stays where it is while what it shows changes; pinning or unpinning one moves its chip.
-- **A chip** shows the console session's colour (see "The binding badge" in `docs/product/sidebar.md`), its title,
-  faded out when too long with the full title then its tooltip, and what is going on in that console session and the
-  sessions bound to it: a waving hand while any of them is waiting for the user, otherwise the *working* glyph while
+  not the sidebar is ordered by status (see "Order of projects and sessions" in
+  `docs/product/order-of-projects-and-sessions.md`), so a chip stays where it is while what it shows changes; pinning or
+  unpinning one moves its chip.
+- **A chip** shows the console session's colour (see "The binding badge" in `docs/product/sidebar-session-rows.md`), its
+  title, faded out when too long with the full title then its tooltip, and what is going on in that console session and
+  the sessions bound to it: a waving hand while any of them is waiting for the user, otherwise the *working* glyph while
   any of them is working or working in background, otherwise nothing — a session merely running is not given a chip's room, so only those two
   markers can be seen here. The marker carries a **tooltip** saying which of the two it is, in the same words the
   chip's own name folds in beside the title (see "Tooltips on indicators" in

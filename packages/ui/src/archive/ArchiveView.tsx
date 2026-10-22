@@ -36,7 +36,7 @@ export interface ArchiveViewState {
  * Every archived session of a project, every archived console session of a console, or the
  * archived sessions under a console session (bound to it, or to an archived lead session bound to
  * it, each of those inset under that lead session), newest first: the full archive the sidebar's
- * menus and focus mode lead to ("The archive view" in docs/product/sidebar.md). It covers the
+ * menus and focus mode lead to ("The archive view" in docs/product/archive-view.md). It covers the
  * terminal while open, which stays mounted beneath it. The list is rendered a page at a time,
  * adding the next page as its end scrolls into view; a page is counted in rows, so a session inset
  * under a lead session is never shown before the lead session it is inset under. The records

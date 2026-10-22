@@ -1,9 +1,9 @@
 # Switching a session's account
 
 A session can be moved to another account of its own agent from its row's **Switch account** submenu (see "Session
-rows" in `docs/product/sidebar.md`); a console session is switched from its own row, among that session's own agent's
-accounts. The submenu is offered only when the agent has more than one account, and the user is asked
-to confirm. An owner moves a session of its own with the `switch_session_account` tool (see "Switching from an owner's
+rows" in `docs/product/sidebar-session-rows.md`); a console session is switched from its own row, among that session's
+own agent's accounts. The submenu is offered only when the agent has more than one account, and the user is asked to
+confirm. An owner moves a session of its own with the `switch_session_account` tool (see "Switching from an owner's
 tool" below). Both run the same switch, described from "What a switch does" on. A switch is made only when the user or
 an owner asks for one: Octoboard never switches a session on its own, not even off an account whose quota is used up.
 A session cannot be switched onto a used-up account (see "A used-up account" in `docs/product/account-quotas.md`).
@@ -19,7 +19,7 @@ changes the console's or projects' account defaults for future sessions.
 When the target account is used up (see "A used-up account" in `docs/product/account-quotas.md`), a danger callout at
 the top of the confirmation names the account, the quota it has used up and when it resets, and Confirm is disabled
 until the account is no longer used up. The submenu already disables such an account (see "Session rows" in
-`docs/product/sidebar.md`).
+`docs/product/sidebar-session-rows.md`).
 
 When the target account's last change of sharing is incomplete, Confirm, and each Retry, first asks the user whether
 to start on it, and nothing is switched when that is cancelled (see "Starting a session on an account whose last
