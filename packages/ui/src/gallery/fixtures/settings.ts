@@ -396,7 +396,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Browser General settings",
-    description: "The Language row follows Appearance, then Markdown style starts on Tailwind. The clone-directory explanation describes when the chosen directory is used; the path appears in the input. The archive-cleanup switch sits right below it, on, with the description that says what is deleted and when. The automatic-approval switch for session requests follows it and is the last row, off, with the description that starts with \"Once this is on\".",
+    description: "The Language row follows Appearance, then Markdown style starts on Tailwind. The clone-directory explanation describes when the chosen directory is used; the path appears in the input. The archive-cleanup switch sits right below it, on, with the description that says what is deleted and when. It is the last row.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -409,17 +409,6 @@ export const settingsScenarios: Scenario[] = [
     title: "General, archive cleanup switched off",
     description: "The archive-cleanup switch below the clone-directory row is off, and its description now starts with \"Once this is on\" instead of stating the behaviour.",
     state: { ...browserState, settings: { ...browserState.settings!, auto_delete_unresumable_archives: false } },
-    steps: [
-      (ui) => ui.press(ui.t("rail.settings")),
-    ],
-  },
-  {
-    id: "settings-general-auto-approve-on",
-    group: GROUP,
-    category: "normal",
-    title: "General, session requests approved automatically",
-    description: "The session-request switch below the archive-cleanup row is on, and its description now states the behaviour instead of starting with \"Once this is on\".",
-    state: { ...browserState, settings: { ...browserState.settings!, auto_approve_session_requests: true } },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
     ],
@@ -441,7 +430,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "General, run in the background offered (desktop app)",
-    description: "The desktop app's background row follows the session-request switch and starts off. Switch it on and off to read both descriptions.",
+    description: "The desktop app's background row follows the archive-cleanup row and starts off. Switch it on and off to read both descriptions.",
     state,
     backgroundRun: true,
     steps: [
@@ -485,6 +474,33 @@ export const settingsScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.permissions")),
+    ],
+  },
+  {
+    id: "settings-agent-permissions",
+    group: GROUP,
+    category: "normal",
+    title: "Agent permissions",
+    description: "The lead line sits under the section heading, above a rule that opens the two rows: the session-request switch, then the resume-request switch, both off. Each description starts with \"Once this is on\" and the resume one names reopening, resuming and resuming a conversation in a new session. Switch each on to read its other description; neither moves the other.",
+    state: browserState,
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.agentPermissions")),
+    ],
+  },
+  {
+    id: "settings-agent-permissions-on",
+    group: GROUP,
+    category: "normal",
+    title: "Agent permissions, both approved automatically",
+    description: "Both switches are on, and each description now states the behaviour instead of starting with \"Once this is on\".",
+    state: {
+      ...browserState,
+      settings: { ...browserState.settings!, auto_approve_session_requests: true, auto_approve_resume_requests: true },
+    },
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.agentPermissions")),
     ],
   },
   {

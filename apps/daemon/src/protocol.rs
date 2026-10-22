@@ -866,6 +866,10 @@ pub struct Settings {
     /// Whether a session's `request_session` call is approved without asking the user (see
     /// `session_request`). Off unless the user turned it on; only the user's own client changes it.
     pub auto_approve_session_requests: bool,
+    /// Whether a session's `request_resume_session` call is approved without asking the user, as
+    /// `auto_approve_session_requests` does for `request_session`, independently of it. Off unless
+    /// the user turned it on; only the user's own client changes it.
+    pub auto_approve_resume_requests: bool,
     /// Whether a new session whose account was left out runs on the account of its agent whose
     /// weekly quota resets soonest and still has some left. Off unless the user turned it on.
     /// When nothing ranks, the account is chosen as it is while this is off.
@@ -897,6 +901,7 @@ impl Default for Settings {
             auto_pull_repositories: false,
             auto_delete_unresumable_archives: true,
             auto_approve_session_requests: false,
+            auto_approve_resume_requests: false,
             auto_select_account: false,
             default_clone_dir: String::new(),
             accounts: Vec::new(),
@@ -1933,6 +1938,8 @@ pub enum RequestBody {
         auto_delete_unresumable_archives: Option<bool>,
         auto_approve_session_requests: Option<bool>,
         #[serde(default)]
+        auto_approve_resume_requests: Option<bool>,
+        #[serde(default)]
         auto_select_account: Option<bool>,
         /// A blank value goes back to the built-in default.
         default_clone_dir: Option<String>,
@@ -2430,21 +2437,38 @@ pub enum Event {
         path: String,
         trust_dir: Option<String>,
     },
-    /// A session asked with `request_session` for a session that has no owner, and its call is
-    /// waiting for the user's answer. Broadcast once, when the call is made, and sent again to a
-    /// client after each `snapshot`, oldest first, for every request still waiting.
+    /// A session asked with `request_session` for a session that has no owner, or with
+    /// `request_resume_session` to resume a conversation, and its call is waiting for the user's
+    /// answer. Broadcast once, when the call is made, and sent again to a client after each
+    /// `snapshot`, oldest first, for every request still waiting.
     SessionRequest {
         request_id: String,
         /// The requesting session.
         session: String,
+        /// What an approval does.
+        action: SessionRequestAction,
         /// Whether the session asked for would be a console session or a project session.
         role: Role,
-        /// The console the new session would be in.
+        /// The console the new session would be in, or the console of the session to bring back.
         console: String,
-        /// The project the new session would be in; null for a console session.
+        /// The project the new session would be in, or the project of the session to bring back;
+        /// null for a console session.
         project: Option<String>,
-        /// The agent the new session would run.
+        /// The agent the new session would run, or the agent of the session to bring back.
         agent: Agent,
+        /// For `reopen` and `resume`: the session an approval brings back. Null otherwise.
+        target: Option<String>,
+        /// For `reopen` and `resume`: the session the target reports to, which is where an approval
+        /// leaves it; null when it has no owner. Null otherwise.
+        owner: Option<String>,
+        /// For `reopen` and `resume`: the archived owners an approval brings back together with
+        /// the target, topmost first, as they stood when the request was made. Empty otherwise.
+        reopened_owners: Vec<String>,
+        /// For `resume_record`: the account that holds the conversation's record, null for the
+        /// agent's default account. Null otherwise.
+        account: Option<String>,
+        /// For `resume_record`: the conversation's id as the agent writes it. Null otherwise.
+        conversation: Option<String>,
         /// The branches an approval would hand to the new session, as wire paths below
         /// `refs/heads/`: ones the requesting session is responsible for, checked when it asked.
         /// Empty when the request hands none over.
@@ -3023,6 +3047,21 @@ impl Notice {
     }
 }
 
+/// What approving a `session_request` does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionRequestAction {
+    /// Starts a new session that has no owner, from the requester's brief.
+    Start,
+    /// Reopens the archived session that holds a conversation.
+    Reopen,
+    /// Resumes the interrupted session that holds a conversation.
+    Resume,
+    /// Opens a new session, with no owner, on an agent's own record of a conversation that no
+    /// session holds.
+    ResumeRecord,
+}
+
 /// Why a `session_request` stopped waiting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -3450,7 +3489,8 @@ pub mod error_code {
     /// [`DEFAULT_ACCOUNT_NAME`] unless the user named it).
     pub const CONFIG_DIR_TAKEN: &str = "config_dir_taken";
     /// An approval of a `session_request` whose session is no longer waiting for it — the request
-    /// was withdrawn or timed out — so nothing was started. `params` names the `session`.
+    /// was withdrawn or timed out — so its request was not carried out. `params` names the
+    /// `session`.
     pub const SESSION_REQUEST_NOT_WAITING: &str = "session_request_not_waiting";
     /// An answer to a `session_request` that has already been answered, from this client or
     /// another, or that the daemon does not know. Nothing changed, and nothing is wrong.
@@ -4706,12 +4746,14 @@ mod tests {
                 auto_pull_repositories,
                 auto_delete_unresumable_archives,
                 auto_approve_session_requests,
+                auto_approve_resume_requests,
                 auto_select_account,
                 default_clone_dir,
             } => (
                 auto_pull_repositories,
                 auto_delete_unresumable_archives,
                 auto_approve_session_requests,
+                auto_approve_resume_requests,
                 auto_select_account,
                 default_clone_dir,
             ),
@@ -4719,11 +4761,15 @@ mod tests {
         };
         assert_eq!(
             parsed(r#"{"type":"update_settings","auto_select_account":true}"#),
-            (None, None, None, Some(true), None)
+            (None, None, None, None, Some(true), None)
+        );
+        assert_eq!(
+            parsed(r#"{"type":"update_settings","auto_approve_resume_requests":true}"#),
+            (None, None, None, Some(true), None, None)
         );
         assert_eq!(
             parsed(r#"{"type":"update_settings"}"#),
-            (None, None, None, None, None)
+            (None, None, None, None, None, None)
         );
     }
 

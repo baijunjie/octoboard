@@ -25,7 +25,8 @@ in prose, and changes nothing; so is one whose binding changed while it was bein
 meanwhile, it gained sessions of its own, or the owner can no longer own sessions — which says to look again before
 retrying. `transfer_session` and `bind_to_session` are also refused, changing nothing, while the session being rebound, or an owner involved — the
 owner it is to be bound to, or a handover's earlier or new owner — is being started, resumed, handed off, switched to
-another account or having its owner changed; the reason says to look again once that is done.
+another account, having its branches handed over or having its owner changed; the reason says to look again once that
+is done.
 
 ## Handing a session to another owner
 
@@ -170,7 +171,7 @@ is refused even where its agent still lists it. The session's tool list itself i
 call of any Octoboard tool, and its agent is told the list has changed (the MCP `tools/list_changed` notice); whether an
 agent reads the list again on that notice is the agent's own. Only two changes take tools away — binding to a project
 session, and a lead session handed to one — and they leave the bound session's set: `report`, `list_sessions`,
-`share_info`, `get_project` and `request_session`. A release gives a session that had the role of a bound one the
+`share_info`, `get_project`, `get_account_quotas`, `request_session` and `request_resume_session`. A release gives a session that had the role of a bound one the
 unbound project session's tools.
 
 ## A change of owner told at the next launch

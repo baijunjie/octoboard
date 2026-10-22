@@ -26,7 +26,9 @@ to it. Three kinds of session can be an owner:
   keeping the sessions it had started (see "Lead sessions" below).
 
 Every session can also ask the user to start a session that is nobody's — in any project of any console, or a console
-session — which reports to the user and which the caller does not drive (see `docs/product/session-requests.md`).
+session — which reports to the user and which the caller does not drive (see `docs/product/session-requests.md`), and
+ask the user to resume a conversation by its id, which brings back the session that holds it whoever owns it, or opens
+a session that is nobody's on the agent's record of it (see `docs/product/requests-to-resume-a-conversation.md`).
 
 The sessions an owner starts are ordinary project sessions, described in `docs/product/sessions.md`. Archiving,
 resuming and deleting an owner follow the same rules whichever kind it is (see "Archiving, interruption and resuming"
@@ -37,9 +39,9 @@ below); a project session that can own sessions — an unbound one or a lead ses
 project for what it starts and drives (see "The unbound project session's tools" below); and a project session with
 the role of a bound one — bound to an owner and not a lead session — gets one tool back the other way, `report`, and
 cannot start or drive sessions. Every session, whatever its kind, also gets the two tools for sharing information with
-every other running session (see `docs/product/information-between-sessions.md`) and `request_session`; every project
-session also gets `get_project`, a read-only view of its own project's settings (see
-`docs/product/agent-settings-tools.md`); and every session gets `get_account_quotas`, a read of each account's plan
+every other running session (see `docs/product/information-between-sessions.md`), `request_session` and
+`request_resume_session`; every project session also gets `get_project`, a read-only view of its own project's settings
+(see `docs/product/agent-settings-tools.md`); and every session gets `get_account_quotas`, a read of each account's plan
 quota (see "Reading quotas from a session" in `docs/product/account-quotas.md`).
 **Which tools a session sees follows from its role, fixed for its lifetime, and from its binding as it stands**, which
 can change while the session runs (see `docs/product/changing-session-owners.md`). A console session cannot report, and
@@ -82,13 +84,14 @@ console sessions are listed, are in "Console sessions and project sessions" in
 | `transfer_session` | `session`, `to`, `note` | Hands one of the caller's sessions to another owner, without the user. See "Handing a session to another owner" in `docs/product/changing-session-owners.md`. |
 | `release_session` | `session` | Releases one of the caller's sessions from its binding, without the user: it becomes the user's own, unbound session. See "Releasing a session from its owner" in `docs/product/changing-session-owners.md`. |
 | `request_session` | `kind`, `project?`, `console?`, `brief`, `title?`, `agent?`, `account?`, `model?`, `effort?`, `branches?` | Asks the user to start a session that is nobody's. See `docs/product/session-requests.md`. |
+| `request_resume_session` | `conversation`, `project?`, `title?`, `model?`, `effort?` | Asks the user to resume a conversation by its id, as the session dialog's Resume conversation tab does; a console session has to name the project. See `docs/product/requests-to-resume-a-conversation.md`. |
 | `list_sessions`, `share_info` | see `docs/product/information-between-sessions.md` | As for every session. |
 | `get_account_quotas` | `agent?` | Each account's plan quota, read-only, as for every session. See "Reading quotas from a session" in `docs/product/account-quotas.md`. |
 | `show_page` | `html` | Pushes an HTML page to the calling console session's report panel, beside the console session's own terminal. Answers with the new page's id. See `docs/product/report-panel.md`. |
 
 A project is named either by its id or by its name where that name is unambiguous within the
 console; an ambiguous name is refused and asks for the id. A project of another console is refused, except by
-`request_session`, which may name any project.
+`request_session` and `request_resume_session`, which may name any project.
 
 `get_session` returns at most 8 KiB of the session's most recent output, with terminal escape
 sequences and cursor-control bytes stripped and runs of blank lines collapsed, so it is readable
@@ -136,7 +139,9 @@ session or to a project session, a console session, or the caller itself — the
 it, and change nothing.
 `archive_session` aimed at the caller itself is refused pointing to `archive_self` instead. `new_session` always binds the new
 session to the caller, so a console session cannot start one on another's behalf: it can hand one over afterwards with
-`transfer_session`, or ask the user for one that is nobody's with `request_session`. The reads are not narrowed because
+`transfer_session`, or ask the user for one that is nobody's with `request_session`. `request_resume_session` can bring
+back a session that is not the caller's, but only with the user's approval, and it stays whoever's it was (see
+`docs/product/requests-to-resume-a-conversation.md`). The reads are not narrowed because
 two console sessions can dispatch into the same project, and so the same working directory, at once; one that could not
 see the other's sessions would collide with them. The tool descriptions and the console session's instructions tell it
 that a session it does not own is somebody else's and is to be left alone.
@@ -168,6 +173,7 @@ own project and drive them, the way a console session drives its console's:
 | `release_session` | `session` | As the console session's. See "Releasing a session from its owner" in `docs/product/changing-session-owners.md`. |
 | `bind_to_session` | `owner`, `summary` | Binds the caller, while it is unbound, to an owner, without the user. Refused for a lead session, which is bound already. See "Binding an unbound session to an owner" in `docs/product/changing-session-owners.md`. |
 | `request_session` | as the console session's | Asks the user to start a session that is nobody's. See `docs/product/session-requests.md`. |
+| `request_resume_session` | `conversation`, `project?`, `title?`, `model?`, `effort?` | As the console session's; `project` defaults to the caller's own. See `docs/product/requests-to-resume-a-conversation.md`. |
 | `report` | as in `docs/product/reporting-to-owners.md` | Offered, but refused while the session is unbound: it has nobody to report to. A lead session's `report` is accepted and goes to its console session (see "Lead sessions" below). |
 | `list_sessions`, `share_info` | see `docs/product/information-between-sessions.md` | As for every session. |
 | `get_account_quotas` | `agent?` | Each account's plan quota, read-only, as for every session. See "Reading quotas from a session" in `docs/product/account-quotas.md`. |
@@ -185,7 +191,8 @@ itself, or a console session. For an unbound project session, `archive_session` 
 `archive_self` instead.
 
 A session a project session starts is bound to it, so it has the role of a bound one: it is offered `report`,
-`list_sessions`, `share_info`, `get_project`, `get_account_quotas` and `request_session`, and cannot start or drive
+`list_sessions`, `share_info`, `get_project`, `get_account_quotas`, `request_session` and `request_resume_session`, and
+cannot start or drive
 sessions of its own, nor read one with `get_session`. It reports to the project session that started it exactly as a
 console session's sessions report to their console session: see `docs/product/reporting-to-owners.md`.
 
@@ -266,7 +273,9 @@ created name; see `docs/product/session-titles.md`), stored trimmed. Left out or
 its goal** rather than from its project — the goal's first non-blank line, shortened to roughly 48 characters on a word
 boundary with an ellipsis — so several sessions dispatched into one project can be told apart in the menu.
 `handoff_session`'s `title` names the receiving session the same way; its default is described in "What the receiving
-session takes over" in `docs/product/handing-off-sessions.md`. `rename_session`'s `title` is a session's new name.
+session takes over" in `docs/product/handing-off-sessions.md`. `rename_session`'s `title` is a session's new name, and
+`request_resume_session`'s names the session it opens or renames the archived session it reopens (see "The call" in
+`docs/product/requests-to-resume-a-conversation.md`).
 
 Every one of these `title` arguments tells the agent to write the name in **the language the user converses with it
 in**, not that of the project, its docs and code, or a brief. A session that takes its work from an owner session

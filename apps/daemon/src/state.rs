@@ -228,7 +228,8 @@ pub struct AppState {
     /// The bounds every connection's browse requests share: how many reads run at once, and how
     /// many bytes their replies may hold before they are written.
     pub browse_gate: Arc<crate::browse::lane::Gate>,
-    /// The `request_session` calls waiting for the user's answer; see `crate::session_request`.
+    /// The `request_session` and `request_resume_session` calls waiting for the user's answer; see
+    /// `crate::session_request`.
     /// Held in memory only: no caller outlives the daemon.
     pub session_requests: crate::session_request::SessionRequests,
     /// The model lists read lately, per agent and account directory (`crate::agent_models`).
@@ -274,6 +275,15 @@ pub struct AppState {
     /// through a cascade or while a project directory is being moved to the Trash.
     session_removals: Mutex<usize>,
     shutdown: tokio::sync::Notify,
+}
+
+/// What a session's claim is held for (see [`AppState::claim_kind`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClaimKind {
+    /// Launching or resuming its process.
+    Launch,
+    /// An account switch, a handoff, a handover of branches or a binding change.
+    Switch,
 }
 
 /// Why nothing is written into a running session for now; see [`AppState::write_hold`].
@@ -684,9 +694,10 @@ impl AppState {
     /// Claims the session exclusively, as [`Self::begin_launch`] does but without needing its
     /// process down: it may be taken while the process is still running. It is the claim of
     /// every operation that must have the session to itself while it runs — an account switch,
-    /// which ends the process as its first step, a handoff, and a binding change — and it is held
-    /// for as long as the guard lives, so a resume, a launch, a delete and another holder are all
-    /// refused for that whole window. Fails only when a launch or another holder has it.
+    /// which ends the process as its first step, a handoff, a handover of branches, and a binding
+    /// change — and it is held for as long as the guard lives, so a resume, a launch, a delete and
+    /// another holder are all refused for that whole window. Fails only when a launch or another
+    /// holder has it.
     pub fn begin_switch(self: &Arc<Self>, id: &str) -> Result<LaunchClaim> {
         let mut live = self.live.write().expect("live sessions lock poisoned");
         if !live.launching.insert(id.to_string()) {
@@ -696,6 +707,7 @@ impl AppState {
                 &[("session", id)],
             ));
         }
+        live.switching.insert(id.to_string());
         drop(live);
         crate::shared_config::publish(self);
         Ok(LaunchClaim {
@@ -705,11 +717,10 @@ impl AppState {
     }
 
     fn release_launch(&self, id: &str) {
-        self.live
-            .write()
-            .expect("live sessions lock poisoned")
-            .launching
-            .remove(id);
+        let mut live = self.live.write().expect("live sessions lock poisoned");
+        live.launching.remove(id);
+        live.switching.remove(id);
+        drop(live);
         crate::shared_config::publish(self);
     }
 
@@ -830,12 +841,34 @@ impl AppState {
         live.sessions.contains_key(id) || live.launching.contains(id)
     }
 
-    /// Whether the session's claim is held (a launch, resume, switch, handoff or binding change is
-    /// under way). Unlike [`Self::has_process`] this is false for a session whose process is up
+    /// Whether the session's claim is held (a launch, resume, switch, handoff, handover of branches or
+    /// binding change is under way). Unlike [`Self::has_process`] this is false for a session whose process is up
     /// and whose claim is already released.
     pub fn is_launching(&self, id: &str) -> bool {
         let live = self.live.read().expect("live sessions lock poisoned");
         live.launching.contains(id)
+    }
+
+    /// The kind of claim held on the session, if any, read under one lock so a claim released
+    /// between two reads cannot make one kind look like the other.
+    pub fn claim_kind(&self, id: &str) -> Option<ClaimKind> {
+        let live = self.live.read().expect("live sessions lock poisoned");
+        if !live.launching.contains(id) {
+            return None;
+        }
+        Some(if live.switching.contains(id) {
+            ClaimKind::Switch
+        } else {
+            ClaimKind::Launch
+        })
+    }
+
+    /// Whether the session is held by a launch claim proper, one for launching or resuming its
+    /// process: in `launching` and not in `switching`, read under one lock so a claim released
+    /// between two reads cannot make one kind look like the other.
+    pub fn is_held_by_launch(&self, id: &str) -> bool {
+        let live = self.live.read().expect("live sessions lock poisoned");
+        live.launching.contains(id) && !live.switching.contains(id)
     }
 
     /// Whether any session matching is running or still being launched or resumed. Deleting a
@@ -2459,6 +2492,9 @@ impl AppState {
 struct LiveSessions {
     sessions: HashMap<String, Arc<LiveSession>>,
     launching: HashSet<String>,
+    /// The sessions in `launching` whose claim came from [`AppState::begin_switch`], so is not a
+    /// launch of their process.
+    switching: HashSet<String>,
     /// The accounts locked for a change of their sharing, by id.
     sharing_locks: HashMap<String, SharingLockEntry>,
 }

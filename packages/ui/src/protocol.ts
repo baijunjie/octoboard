@@ -54,6 +54,10 @@ export type SessionBranchTarget = Pick<SessionBranchItem, "kind" | "repository" 
 export type Agent = "claude" | "codex" | "grok";
 export type Role = "console" | "project";
 export type Origin = "console" | "user";
+/** What approving a `session_request` does. A client that does not know a value does not
+ * offer the request, and the daemon's timeout ends the call. */
+export const SESSION_REQUEST_ACTIONS = ["start", "reopen", "resume", "resume_record"] as const;
+export type SessionRequestAction = (typeof SESSION_REQUEST_ACTIONS)[number];
 export type SessionStatus = "starting" | "working" | "waiting_user" | "idle" | "interrupted" | "archived";
 export type HostKind = "local" | "ssh";
 export type ProjectSource = "local" | "parent" | "git";
@@ -589,6 +593,9 @@ export interface Settings {
    * dialog. On: a request that passes the daemon's checks is approved at once, without asking.
    * Optional only so that a state built without it reads as off; the daemon always sends it. */
   auto_approve_session_requests?: boolean;
+  /** `auto_approve_session_requests` for a session's `request_resume_session` call, independent of
+   * it. Optional only so that a state built without it reads as off; the daemon always sends it. */
+  auto_approve_resume_requests?: boolean;
   /** Off (the default): a new session uses the account the console or project resolves to. On: it
    * uses the account of that agent whose weekly quota resets soonest, so quota that is about to
    * reset is used before it is lost. Optional only so that a state built without it reads as off;
@@ -1248,16 +1255,17 @@ export type RequestBody =
   | { type: "confirm_trust"; session: string; remember: boolean; trust_parent_dir?: boolean }
   /** Stops trusting a directory; projects' own consents are untouched. */
   | { type: "remove_trusted_directory"; path: string }
-  /** The user's answer to a `session_request`: `approve` starts the session it describes, with no
-   * owner; a refusal, dismissing the dialog included, changes nothing. The first answer from any
-   * client wins; a later one is refused with `SESSION_REQUEST_ANSWERED`, or
+  /** The user's answer to a `session_request`: `approve` does what it describes (starts a session
+   * with no owner, brings back the session that holds a conversation, or opens one on a
+   * conversation's record); a refusal, dismissing the dialog included, changes nothing. The first
+   * answer from any client wins; a later one is refused with `SESSION_REQUEST_ANSWERED`, or
    * `SESSION_REQUEST_NOT_WAITING` when the session stopped waiting. An approval is answered with
-   * `session_opened` for the session it started, a refusal with `ack`. */
+   * `session_opened` for the session it started or brought back, a refusal with `ack`. */
   | { type: "answer_session_request"; request_id: string; approve: boolean }
   /** Each settable field is optional: absent means leave it as it is. Answered with `ack`;
    * broadcasts `settings_updated` only when something actually changed (the trusted-folders
    * pattern). */
-  | { type: "update_settings"; auto_pull_repositories?: boolean; auto_delete_unresumable_archives?: boolean; auto_approve_session_requests?: boolean; auto_select_account?: boolean; default_clone_dir?: string }
+  | { type: "update_settings"; auto_pull_repositories?: boolean; auto_delete_unresumable_archives?: boolean; auto_approve_session_requests?: boolean; auto_approve_resume_requests?: boolean; auto_select_account?: boolean; default_clone_dir?: string }
   /** Answered with `ack` at once; each reading that finishes arrives as `account_quotas_updated`.
    * Re-reads the quotas of the accounts it selects whose last attempt is older than the polling
    * interval, and also those whose last attempt is over 30 seconds old and which hold no windows
@@ -1539,22 +1547,41 @@ export type Event =
        * is offered only when it is not null. */
     trust_dir: string | null;
   }
-  /** A session asked for a session with no owner (`request_session`) and its call is waiting for
-   * the user's answer. Broadcast once, and sent again right after each `snapshot`, oldest first,
-   * for every request still waiting; a repeat is ignored. */
+  /** A session asked for a session with no owner (`request_session`), or to resume a conversation
+   * (`request_resume_session`), and its call is waiting for the user's answer. Broadcast once, and
+   * sent again right after each `snapshot`, oldest first, for every request still waiting; a
+   * repeat is ignored. */
   | {
     type: "session_request";
     request_id: string;
     /** The requesting session. */
     session: string;
+    /** What an approval does: `start` a new session with no owner, `reopen` the archived session
+     * that holds a conversation, `resume` the interrupted one, or open a new session on the agent's
+     * own record of a conversation no session holds (`resume_record`). */
+    action: SessionRequestAction;
     /** Whether the session asked for would be a console session or a project session. */
     role: Role;
-    /** The console the new session would be in. */
+    /** The console the new session would be in, or the console of the session to bring back. */
     console: string;
-    /** The project the new session would be in; null for a console session. */
+    /** The project the new session would be in, or the project of the session to bring back; null
+     * for a console session. */
     project: string | null;
-    /** The agent the new session would run. */
+    /** The agent the new session would run, or the agent of the session to bring back. */
     agent: Agent;
+    /** For `reopen` and `resume`: the session an approval brings back. Null otherwise. */
+    target: string | null;
+    /** For `reopen` and `resume`: the session the target reports to, null when it has none. Null
+     * otherwise. */
+    owner: string | null;
+    /** For `reopen` and `resume`: the archived owners that come back with the target, topmost
+     * first. Empty otherwise. */
+    reopened_owners: string[];
+    /** For `resume_record`: the account that holds the record, null for the agent's default
+     * account. Null otherwise. */
+    account: string | null;
+    /** For `resume_record`: the conversation's id. Null otherwise. */
+    conversation: string | null;
     /** The branches an approval would hand to the new session, as wire paths below `refs/heads/`;
      * empty when the request hands none over. */
     branches: string[];
@@ -1776,7 +1803,7 @@ export const TRUST_REFUSED_CODES: readonly string[] = [
 export const TRUST_NOT_WAITING = "trust_not_waiting";
 
 /** An approval of a session request whose session is no longer waiting for it (withdrawn, or
- * timed out): nothing was started, which the user is told in a toast. */
+ * timed out): nothing was carried out, which the user is told in a toast. */
 export const SESSION_REQUEST_NOT_WAITING = "session_request_not_waiting";
 
 /** An answer to a session request already answered, here or from another client: nothing is

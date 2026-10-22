@@ -19,10 +19,10 @@ to any session: changing a project's directory, source, host or remote URL; givi
 permission; removing a project; creating or deleting a console; setting or removing a console's avatar; reading, setting
 or clearing a console's console session instructions (see "Console session instructions" in `docs/product/consoles.md`);
 adding, editing or removing an account; adding or removing a trusted folder; reading or changing whether session
-requests are approved automatically (see "Approving requests automatically" in `docs/product/session-requests.md`),
-since a session could otherwise approve its own requests. Each of those stays the user's own, in the UI. Nor do the
-tools reach what a window keeps for itself rather than the daemon, such as the appearance, Markdown style and
-language.
+requests or resume requests are approved automatically (see "Approving requests automatically" in
+`docs/product/session-requests.md`), since a session could otherwise approve its own requests. Each of those stays the
+user's own, in the UI. Nor do the tools reach what a window keeps for itself rather than the daemon, such as the
+appearance, Markdown style and language.
 
 The console session's instructions tell it that projects, its console and the application settings belong to the
 user: it changes one only when asked to, says what it changed, and treats accounts and trusted folders as read-only.
@@ -156,15 +156,15 @@ working directory. Neither the avatar itself nor the console's console session i
 
 `update_settings` takes `auto_pull_repositories`, `auto_delete_unresumable_archives`, `auto_select_account` and
 `default_clone_dir`, under the rules of the same settings in Settings: the switches take `true` or `false`, a clone
-directory must be absolute or start with `~/`, and a blank one goes back to the built-in default. A refused value
-leaves the others unapplied too. An `auto_approve_session_requests` argument is ignored — the setting stays as it is,
-`get_settings` never lists it, and the rest of the call applies as usual. Turning `auto_pull_repositories` on
-fast-forwards the projects already known to be behind at once, as turning the switch on in Settings does, which
-changes files in the user's repositories. Turning `auto_delete_unresumable_archives` on deletes nothing at once, and
-turning it off stops a deletion pass under way, exactly as the switch in Settings does. Turning `auto_select_account`
-on or off changes no session already open; it is read when a later `new_session`, `request_session` or
-`handoff_session` leaves the account out (see "Which account a session uses" in `docs/product/sessions.md`). The call
-answers as `get_settings` does.
+directory must be absolute or start with `~/`, and a blank one goes back to the built-in default. A refused value leaves
+the others unapplied too. An `auto_approve_session_requests` or `auto_approve_resume_requests` argument is ignored — the
+setting stays as it is, `get_settings` never lists either, and the rest of the call applies as usual. Turning
+`auto_pull_repositories` on fast-forwards the projects already known to be behind at once, as turning the switch on in
+Settings does, which changes files in the user's repositories. Turning `auto_delete_unresumable_archives` on deletes
+nothing at once, and turning it off stops a deletion pass under way, exactly as the switch in Settings does. Turning
+`auto_select_account` on or off changes no session already open; it is read when a later `new_session`,
+`request_session` or `handoff_session` leaves the account out (see "Which account a session uses" in
+`docs/product/sessions.md`). The call answers as `get_settings` does.
 
 ## When a change takes effect
 

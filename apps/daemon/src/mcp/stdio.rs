@@ -150,7 +150,7 @@ impl ServerHandler for OctoboardMcp {
         // finish in the daemon: the daemon stops serving a call whose connection goes, and a
         // `new_session` or a `report` cut off part-way would leave its work half done.
         let cancelled = async {
-            if request.name == WITHDRAWN_ON_CANCEL {
+            if WITHDRAWN_ON_CANCEL.contains(&&*request.name) {
                 context.ct.cancelled().await;
             } else {
                 std::future::pending::<()>().await;
@@ -207,9 +207,9 @@ enum Forwarded {
     Cancelled,
 }
 
-/// The tool whose call the daemon has to learn the agent cancelled: a session request waits in
+/// The tools whose call the daemon has to learn the agent cancelled: a session request waits in
 /// front of the user, and is withdrawn when its call's connection to the daemon goes.
-const WITHDRAWN_ON_CANCEL: &str = "request_session";
+const WITHDRAWN_ON_CANCEL: &[&str] = &["request_session", "request_resume_session"];
 
 /// Forwards one call to the daemon and waits for its answer, unless `cancelled` completes first —
 /// for a call the agent cancels (`notifications/cancelled`, which cancels the call's context). A

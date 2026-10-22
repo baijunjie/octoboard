@@ -116,9 +116,9 @@ fn session_choice_guidance(agent: Agent) -> String {
 /// them: which tool makes a session one's own, whether to start sessions and which one a piece of
 /// work goes to (for a session that can own some), the ones that move a session to another agent,
 /// another account or another owner, the one that moves branches between sessions, the one that
-/// binds this session to an owner, which one makes a session nobody's, the read of the accounts'
-/// quotas (for a session that owns none, which has no other line naming it), then information,
-/// which needs none.
+/// binds this session to an owner, which one makes a session nobody's, the one that resumes a
+/// conversation on the user's approval, the read of the accounts' quotas (for a session that owns
+/// none, which has no other line naming it), then information, which needs none.
 fn relationships(agent: Agent, owns: bool) -> String {
     let tool = |name: &str| qualified_tool_name(agent, name);
     let mut lines = Vec::new();
@@ -191,6 +191,23 @@ fn relationships(agent: Agent, owns: bool) -> String {
          or a console session. It reports to the user, not to you; the call waits for the user's \
          answer, and nothing is started without it.",
         request_session = tool("request_session"),
+    ));
+    let beyond_reopen = if owns {
+        format!(
+            " Unlike `{}`, which needs no approval, it can resume any session, and",
+            tool("reopen_session")
+        )
+    } else {
+        " It can resume any session, and".to_string()
+    };
+    lines.push(format!(
+        "- `{request_resume_session}` asks the user to resume a conversation by its agent \
+         conversation id, as they can in the new-session dialog: the session that holds it comes \
+         back, or a session that is nobody's is opened on the agent's own record of it. Use it \
+         only when the user asked for that conversation to be resumed.{beyond_reopen} what it \
+         resumes is not yours to drive; the call waits for the user's answer, and nothing is \
+         resumed without it.",
+        request_resume_session = tool("request_resume_session"),
     ));
     if !owns {
         lines.push(format!(

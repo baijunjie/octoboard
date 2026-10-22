@@ -71,6 +71,10 @@ archive view" in `docs/product/sidebar.md`), or, for a project session, by givin
 session dialog's **Resume conversation** tab (see "Reopening an archived session from the tab" in
 `docs/product/sessions.md`). Each relaunches the same agent in the same directory and reassembles everything Octoboard
 injects.
+An owner session resumes or reopens a session of its own with `reopen_session` (see "The console session's tools" in
+`docs/product/hub-orchestration.md`); any other session can ask the user to resume or reopen a project session, by its
+conversation's session ID, with `request_resume_session` (see `docs/product/requests-to-resume-a-conversation.md`). Both
+relaunch it as above.
 
 - Where the agent has a stored conversation, that conversation is resumed.
 - A session that **nobody ever typed into** has no stored conversation on the agent's side; resuming it opens a fresh

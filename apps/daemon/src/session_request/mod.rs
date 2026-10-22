@@ -1,20 +1,26 @@
 //! A session's request for a session the user has to approve: the `request_session` call, which
 //! waits while the user is asked, the requests the daemon holds meanwhile, and what the user's
-//! answer does.
+//! answer does. `request_resume_session` is the same request with another thing to approve: the
+//! [`Action`] a request carries says whether an approval starts a new session, brings back the
+//! session that holds a conversation, or opens a session on an agent's own record of one, and
+//! everything else (the queue, the hand, the waiver, the withdrawal, the answer) is shared.
 //!
 //! **The confirmation is the enforcement.** An approved request puts a session with no owner in
-//! any project, or a console session that dispatches into every project of its console, on the
-//! word of a model, so nothing here acts on a call by itself: the request is broadcast for a
-//! dialog, the call waits, and only an approval starts anything. A rule in a prompt could be
-//! ignored by the model; this cannot. The one exception is the user's own standing approval, the
-//! setting described next, which only the user's client can change.
+//! any project, or a console session that dispatches into every project of its console, or a
+//! conversation the user did not name back into a session, on the word of a model, so nothing
+//! here acts on a call by itself: the request is broadcast for a dialog, the call waits, and only
+//! an approval starts anything. A rule in a prompt could be ignored by the model; this cannot. The
+//! one exception is the user's own standing approval, the setting described next, which only the
+//! user's client can change.
 //!
-//! **The user can waive the dialog.** While the application setting `auto_approve_session_requests`
-//! is on, a request that passed every pre-check is approved at once, through the same
-//! [`carry_out`] an approval from the dialog takes: nothing is broadcast, no hand goes up, and the
-//! session is started, the branches handed over and the outcome told exactly as for an approval.
-//! That runs in a task of its own, so a call cancelled meanwhile does not interrupt it. The
-//! setting is read when the call is made, so a request already waiting stays in its dialog.
+//! **The user can waive the dialog.** While the application setting for the kind of request is on
+//! (`auto_approve_session_requests` for `request_session`, `auto_approve_resume_requests` for
+//! `request_resume_session`, independent of each other), a request that passed every pre-check
+//! is approved at once, through the same [`carry_out`] an approval from the dialog takes: nothing
+//! is broadcast, no hand goes up, and the session is started or brought back, the branches handed
+//! over and the outcome told exactly as for an approval. That runs in a task of its own, so a call
+//! cancelled meanwhile does not interrupt it. The setting is read when the call is made, so a
+//! request already waiting stays in its dialog.
 //!
 //! **A request lives until it is answered, times out or is withdrawn.** It is held in memory only
 //! ([`SessionRequests`] on `AppState`) and sent again to a client after each `snapshot`, like a
@@ -34,8 +40,9 @@
 //! of its request. The turn that message starts is credited as reported, since it only reads an
 //! outcome the caller already has. The turn Claude Code starts on the result of a backgrounded
 //! `request_session` call is not: there the caller's round really continues, and its end is a
-//! report its owner is owed.
+//! report its owner is owed. The same holds for `request_resume_session`.
 
+mod outcome;
 #[cfg(test)]
 mod tests;
 
@@ -49,17 +56,20 @@ use serde_json::{json, Value};
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
-use crate::branch_origin::handover::{
-    branch_noun_and_pronoun, move_branches, named_branches, Handed, Handover,
-};
+use crate::branch_origin::handover::{move_branches, Handover};
 use crate::coordinator::{self, OpenRequest};
-use crate::mcp::{qualified_tool_name, tool_by_name};
+use crate::mcp::qualified_tool_name;
 use crate::protocol::{
-    error_code, now_millis, Agent, CodedError, Event, Role, Session, SessionRequestEnding,
+    error_code, now_millis, Agent, CodedError, Event, Role, Session, SessionRequestAction,
+    SessionRequestEnding, SessionStatus,
 };
 use crate::reporting::{self, WhenBlocked};
-use crate::sharing::{one_line, place_of};
 use crate::state::AppState;
+
+pub(crate) use outcome::branch_outcome;
+use outcome::{
+    approval_wording, outcome_note, record_outcome_note, resume_outcome_note, resume_result,
+};
 
 /// How long a call waits for the user's answer. Octoboard's own value, for every agent alike, and
 /// kept below `mcp::stdio`'s `CALL_TIMEOUT` with room left for an approval given at the last
@@ -114,18 +124,46 @@ struct Ended {
     how: SessionRequestEnding,
 }
 
-/// One request: what the dialog is told of it, and the session an approval opens.
+/// What an approval does, as the request was made.
+pub(crate) enum Action {
+    /// Starts a session, unbound, from `open`, and moves `handover`'s branches to it.
+    Start {
+        open: OpenRequest,
+        handover: Option<Handover>,
+    },
+    /// Brings back the archived or interrupted session `target`, which holds the conversation;
+    /// `archived` is which it was when the request was made, which is what the dialog words the
+    /// question by. Its owner stays as it is, and an archived owner comes back with it
+    /// (`reopened_owners`, as they stood when the request was made, which is what the dialog
+    /// lists). `rename` is the name to give an archived session once it is back.
+    Resume {
+        target: String,
+        archived: bool,
+        owner: Option<String>,
+        reopened_owners: Vec<String>,
+        rename: Option<String>,
+    },
+    /// Opens a session, unbound, from `open`, which continues the agent's own record of the
+    /// conversation `conversation` that no session holds.
+    ResumeRecord {
+        open: OpenRequest,
+        conversation: String,
+    },
+}
+
+/// One request: what the dialog is told of it, and what an approval does.
 struct Request {
     id: String,
     /// The requesting session.
     session: String,
     requested_at: i64,
-    /// The session to open, unbound.
-    open: OpenRequest,
-    /// The agent the session would run, settled when the request was made.
+    /// The agent the session would run, settled when the request was made; for a resume, the
+    /// agent of the target or of the record.
     agent: Agent,
-    /// The branches an approval hands to the session, if the request names any.
-    handover: Option<Handover>,
+    /// Where the session is, or would be.
+    console: String,
+    project: Option<String>,
+    action: Action,
     /// Whether the approval is Octoboard's own, under the user's setting, rather than the user's
     /// answer to the dialog. Only the wording of the outcome differs.
     automatic: bool,
@@ -134,25 +172,87 @@ struct Request {
 impl Request {
     /// Whether the session asked for is a console session, which is opened without a project.
     fn role(&self) -> Role {
-        match self.open.project_id {
+        match self.project {
             Some(_) => Role::Project,
             None => Role::Console,
         }
     }
 
+    /// The tool the request was made with, as the outcome message names it.
+    fn tool(&self) -> &'static str {
+        match self.action {
+            Action::Start { .. } => "request_session",
+            Action::Resume { .. } | Action::ResumeRecord { .. } => "request_resume_session",
+        }
+    }
+
+    /// How the user's approval is worded in the outcome, by the request's kind.
+    fn approval(&self) -> &'static str {
+        approval_wording(self.automatic, &self.action)
+    }
+
+    /// What a request that came to nothing says was left undone.
+    fn untouched(&self) -> &'static str {
+        match self.action {
+            Action::Start { .. } => "nothing was started",
+            Action::Resume { .. } | Action::ResumeRecord { .. } => "nothing was resumed",
+        }
+    }
+
     fn event(&self) -> Event {
+        let mut target = None;
+        let mut owner = None;
+        let mut reopened_owners = Vec::new();
+        let mut account = None;
+        let mut conversation = None;
+        let mut branches = Vec::new();
+        let action = match &self.action {
+            Action::Start { handover, .. } => {
+                branches = handover
+                    .as_ref()
+                    .map(|handover| handover.branches.clone())
+                    .unwrap_or_default();
+                SessionRequestAction::Start
+            }
+            Action::Resume {
+                target: session,
+                archived,
+                owner: reports_to,
+                reopened_owners: owners,
+                ..
+            } => {
+                target = Some(session.clone());
+                owner = reports_to.clone();
+                reopened_owners = owners.clone();
+                if *archived {
+                    SessionRequestAction::Reopen
+                } else {
+                    SessionRequestAction::Resume
+                }
+            }
+            Action::ResumeRecord {
+                open,
+                conversation: id,
+            } => {
+                account = open.account.clone().flatten();
+                conversation = Some(id.clone());
+                SessionRequestAction::ResumeRecord
+            }
+        };
         Event::SessionRequest {
             request_id: self.id.clone(),
             session: self.session.clone(),
+            action,
             role: self.role(),
-            console: self.open.console_id.clone(),
-            project: self.open.project_id.clone(),
+            console: self.console.clone(),
+            project: self.project.clone(),
             agent: self.agent,
-            branches: self
-                .handover
-                .as_ref()
-                .map(|handover| handover.branches.clone())
-                .unwrap_or_default(),
+            target,
+            owner,
+            reopened_owners,
+            account,
+            conversation,
+            branches,
             requested_at: self.requested_at,
         }
     }
@@ -388,46 +488,89 @@ pub async fn ask_for_session(
     automatic: bool,
     limit: Duration,
 ) -> Result<Value> {
-    let opener = state.clone();
-    ask_for_session_with(
+    ask_to_approve(
         state,
         caller,
-        open,
-        handover,
+        Action::Start { open, handover },
         automatic,
         limit,
-        move |request| async move { coordinator::open_session(&opener, request).await },
     )
     .await
 }
 
-/// [`ask_for_session`], starting the session through `launch`: `coordinator::open_session`
-/// outside the tests, which cannot launch an agent.
-pub(crate) async fn ask_for_session_with<F, Fut>(
+/// The ask both `request_session` and `request_resume_session` come to: asks the user to approve
+/// `action` and waits up to `limit` for the answer, as [`ask_for_session`] does. What it could
+/// never be carried out for is refused before the user is asked: here for a session to start and
+/// for the session a record would open, and by the caller for a session that holds the
+/// conversation (`mcp::resume_request` judges it).
+pub(crate) async fn ask_to_approve(
     state: &Arc<AppState>,
     caller: &Session,
-    open: OpenRequest,
-    handover: Option<Handover>,
+    action: Action,
+    automatic: bool,
+    limit: Duration,
+) -> Result<Value> {
+    let opener = state.clone();
+    let resumer = state.clone();
+    ask_with(
+        state,
+        caller,
+        action,
+        automatic,
+        limit,
+        move |request| async move { coordinator::open_session(&opener, request).await },
+        move |id| resume_through_coordinator(resumer, id),
+    )
+    .await
+}
+
+/// Brings a session back as the user's own resume does: no instruction, and no window appearance
+/// to match, since an approval is not a window's.
+async fn resume_through_coordinator(state: Arc<AppState>, id: String) -> Result<()> {
+    coordinator::resume_session(&state, &id, None, None).await
+}
+
+/// [`ask_to_approve`], starting a session through `launch` and bringing one back through
+/// `resume`: `coordinator::open_session` and `coordinator::resume_session` outside the tests,
+/// which cannot launch an agent.
+pub(crate) async fn ask_with<F, Fut, R, RFut>(
+    state: &Arc<AppState>,
+    caller: &Session,
+    action: Action,
     automatic: bool,
     limit: Duration,
     launch: F,
+    resume: R,
 ) -> Result<Value>
 where
     F: FnOnce(OpenRequest) -> Fut + Send + 'static,
     Fut: Future<Output = Result<Session>> + Send + 'static,
+    R: FnOnce(String) -> RFut + Send + 'static,
+    RFut: Future<Output = Result<()>> + Send + 'static,
 {
-    let agent = coordinator::check_open(state, &open).await?;
+    let (agent, console, project) = match &action {
+        Action::Start { open, .. } | Action::ResumeRecord { open, .. } => (
+            coordinator::check_open(state, open).await?,
+            open.console_id.clone(),
+            open.project_id.clone(),
+        ),
+        Action::Resume { target, .. } => {
+            let target = state.session_record(target)?;
+            (target.agent, target.console_id, target.project_id)
+        }
+    };
     let request = Request {
         id: Uuid::new_v4().to_string(),
         session: caller.id.clone(),
         requested_at: now_millis(),
-        open,
         agent,
-        handover,
+        console,
+        project,
+        action,
         automatic,
     };
     if automatic {
-        return approve_automatically(state, request, launch).await;
+        return approve_automatically(state, request, launch, resume).await;
     }
     wait_for_answer(state, caller, request, limit).await
 }
@@ -438,26 +581,31 @@ where
 /// The carrying out is a task of its own: the call is cancelled by dropping it (see
 /// `mcp::stdio`), and a launch or a handover interrupted halfway would leave a session unsettled
 /// and the caller never told. The call only waits for the task, and dropping it cancels nothing.
-async fn approve_automatically<F, Fut>(
+async fn approve_automatically<F, Fut, R, RFut>(
     state: &Arc<AppState>,
     request: Request,
     launch: F,
+    resume: R,
 ) -> Result<Value>
 where
     F: FnOnce(OpenRequest) -> Fut + Send + 'static,
     Fut: Future<Output = Result<Session>> + Send + 'static,
+    R: FnOnce(String) -> RFut + Send + 'static,
+    RFut: Future<Output = Result<()>> + Send + 'static,
 {
     let (replaced, approving) = state.session_requests.approve_directly(state, &request)?;
     withdraw_replaced(state, replaced);
     let state = state.clone();
     let carrying_out = tokio::spawn(async move {
         let _approving = approving;
-        let approved = carry_out(&state, &request, launch).await.map_err(|err| {
-            anyhow!(
-                "this request for a session was approved automatically, but it could not be \
-                 carried out: {err:#}"
-            )
-        })?;
+        let approved = carry_out(&state, &request, launch, resume)
+            .await
+            .map_err(|err| {
+                anyhow!(
+                    "this request for a session was approved automatically, but it could not be \
+                     carried out: {err:#}"
+                )
+            })?;
         tell_the_caller(&state, &approved.caller_id, approved.message).await;
         Ok(approved.result)
     });
@@ -477,6 +625,7 @@ async fn wait_for_answer(
     limit: Duration,
 ) -> Result<Value> {
     let request_id = request.id.clone();
+    let untouched = request.untouched();
     let event = request.event();
     let (answer, mut answered) = oneshot::channel();
     let replaced = state.session_requests.hold(request, answer)?;
@@ -506,7 +655,7 @@ async fn wait_for_answer(
             if !timed_out.is_empty() {
                 bail!(
                     "the user did not respond to this request for a session within {} minutes, \
-                     so it was dropped: nothing was started. {DO_NOT_ASK_AGAIN}",
+                     so it was dropped: {untouched}. {DO_NOT_ASK_AGAIN}",
                     limit.as_secs() / 60,
                 );
             }
@@ -519,8 +668,7 @@ async fn wait_for_answer(
         Ok(Ok(result)) => Ok(result),
         Ok(Err(reason)) => Err(anyhow!(reason)),
         Err(_) => bail!(
-            "this request for a session was withdrawn before the user answered it: nothing was \
-             started"
+            "this request for a session was withdrawn before the user answered it: {untouched}"
         ),
     }
 }
@@ -529,29 +677,35 @@ async fn wait_for_answer(
 /// the request stops waiting the moment it is taken, so an answer for one already answered, timed
 /// out or withdrawn changes nothing and is refused with a code saying which.
 ///
-/// An approval returns the session it started.
+/// An approval returns the session it started or brought back.
 pub async fn answer(
     state: &Arc<AppState>,
     request_id: &str,
     approve: bool,
 ) -> Result<Option<Session>> {
-    answer_with(state, request_id, approve, |request| {
-        coordinator::open_session(state, request)
-    })
+    answer_with_resume(
+        state,
+        request_id,
+        approve,
+        |request| coordinator::open_session(state, request),
+        |id| resume_through_coordinator(state.clone(), id),
+    )
     .await
 }
 
-/// [`answer`], starting the session through `launch`: `coordinator::open_session` outside the
-/// tests, which cannot launch an agent.
-pub(crate) async fn answer_with<F, Fut>(
+/// [`answer`], starting a session through `launch` and bringing one back through `resume`.
+pub(crate) async fn answer_with_resume<F, Fut, R, RFut>(
     state: &Arc<AppState>,
     request_id: &str,
     approve: bool,
     launch: F,
+    resume: R,
 ) -> Result<Option<Session>>
 where
     F: FnOnce(OpenRequest) -> Fut,
     Fut: Future<Output = Result<Session>>,
+    R: FnOnce(String) -> RFut,
+    RFut: Future<Output = Result<()>>,
 {
     let how = if approve {
         SessionRequestEnding::Approved
@@ -570,11 +724,12 @@ where
     announce_closed(state, std::slice::from_ref(&waiting), how);
     if !approve {
         let _ = waiting.answer.send(Err(format!(
-            "the user refused this request for a session: nothing was started. {DO_NOT_ASK_AGAIN}"
+            "the user refused this request for a session: {}. {DO_NOT_ASK_AGAIN}",
+            waiting.request.untouched()
         )));
         return Ok(None);
     }
-    match carry_out(state, &waiting.request, launch).await {
+    match carry_out(state, &waiting.request, launch, resume).await {
         Ok(approved) => {
             // The call may be gone by now, so the outcome is also written into the session, after
             // the result so that a call still waiting has it first.
@@ -597,152 +752,187 @@ where
 struct Approved {
     result: Value,
     caller_id: String,
+    /// The session the approval started or brought back, or found running.
     started: Session,
     message: String,
 }
 
-/// Carries out an approval: starts the session the caller described, unbound, then hands it the
-/// branches the request names. The caller keeps running, and does not own what it asked for.
-async fn carry_out<F, Fut>(state: &Arc<AppState>, request: &Request, launch: F) -> Result<Approved>
+/// Carries out an approval. A start opens the session the caller described, unbound, then hands
+/// it the branches the request names. A resume brings back the session that holds the
+/// conversation, or opens one on the record of it. The caller keeps running, and does not own
+/// what it asked for.
+async fn carry_out<F, Fut, R, RFut>(
+    state: &Arc<AppState>,
+    request: &Request,
+    launch: F,
+    resume: R,
+) -> Result<Approved>
 where
     F: FnOnce(OpenRequest) -> Fut,
     Fut: Future<Output = Result<Session>>,
+    R: FnOnce(String) -> RFut,
+    RFut: Future<Output = Result<()>>,
 {
     let caller = state.session_record(&request.session)?;
     // Withdrawn when its process ended, but that can land while the answer is on its way.
     if caller.status.is_dormant() || !state.has_process(&caller.id) {
         return Err(not_waiting(&caller.id));
     }
-    let started = launch(request.open.clone()).await?;
-    let handed = hand_over_branches(state, request, &caller, &started).await;
-    let note = outcome_note(state, &caller, &started, handed.as_ref(), request.automatic);
+    let (started, result, note) = match &request.action {
+        Action::Start { open, handover } => {
+            let started = launch(open.clone()).await?;
+            let handed = match handover {
+                Some(handover) => Some(move_branches(state, handover, &caller, &started).await),
+                None => None,
+            };
+            let note = outcome_note(
+                state,
+                &caller,
+                &started,
+                handed.as_ref(),
+                request.approval(),
+            );
+            let result = json!({
+                "session": started.id,
+                "role": started.role,
+                "agent": started.agent,
+                "title": started.title,
+                "console": started.console_id,
+                "project": started.project_id,
+                "note": note,
+            });
+            (started, result, note)
+        }
+        Action::ResumeRecord { open, .. } => {
+            let started = launch(open.clone()).await?;
+            let note = record_outcome_note(state, &caller, &started, request.approval());
+            let result = resume_result("opened", &started, &[], None, &note);
+            (started, result, note)
+        }
+        Action::Resume { target, rename, .. } => {
+            bring_back(state, request, &caller, target, rename.as_deref(), resume).await?
+        }
+    };
     let message = format!(
         "{OUTCOME_OPENING} `{}` call. {note} If that call already returned this, there is nothing \
          more to do about it.",
-        qualified_tool_name(caller.agent, "request_session")
+        qualified_tool_name(caller.agent, request.tool())
     );
     Ok(Approved {
-        result: json!({
-            "session": started.id,
-            "role": started.role,
-            "agent": started.agent,
-            "title": started.title,
-            "console": started.console_id,
-            "project": started.project_id,
-            "note": note,
-        }),
+        result,
         caller_id: caller.id,
         started,
         message,
     })
 }
 
-/// Moves the branches the request names to the session it started, each only if the caller is
-/// still its responsible session. The session is running by now, so a failure to move is not one
-/// of the approval: it is told to the caller instead.
-async fn hand_over_branches(
+/// Brings back `target`, which held the conversation when the request was made: reopens or
+/// resumes it through `resume`, with the owners it brings back, then gives it the name asked for.
+/// What it was found as now decides what is done: one that is running by now has nothing to
+/// resume, which is told rather than failed, and a name is given only to a session this reopened
+/// from the archive. A name that cannot be given is told too, since the session is back by then.
+async fn bring_back<R, RFut>(
     state: &Arc<AppState>,
     request: &Request,
     caller: &Session,
-    started: &Session,
-) -> Option<Handed> {
-    let handover = request.handover.as_ref()?;
-    Some(move_branches(state, handover, caller, started).await)
-}
-
-/// What a session is told of the session it asked for, in the call's result and in the message
-/// alike: where it was started, that it reports to the user, what became of the branches it asked
-/// to hand over, and what that leaves the caller able to do with the session — share information,
-/// read it where the caller can read sessions, and bind itself to it where the caller could.
-fn outcome_note(
-    state: &Arc<AppState>,
-    caller: &Session,
-    started: &Session,
-    handed: Option<&Handed>,
-    automatic: bool,
-) -> String {
-    let tool = |name: &str| qualified_tool_name(caller.agent, name);
-    let has = |name: &str| tool_by_name(caller.role, caller.has_bound_role(), name).is_some();
-    let place = place_of(state, started);
-    let kind = started.role.kind();
-    let reads = if has("get_session") {
-        format!(", and `{}` reads it", tool("get_session"))
-    } else {
-        String::new()
+    target: &str,
+    rename: Option<&str>,
+    resume: R,
+) -> Result<(Session, Value, String)>
+where
+    R: FnOnce(String) -> RFut,
+    RFut: Future<Output = Result<()>>,
+{
+    let before = state.session_record(target)?;
+    let mut action = match before.status {
+        SessionStatus::Archived => "reopened",
+        status if status.is_dormant() => "resumed",
+        _ => "already_running",
     };
-    let can_bind =
-        has("bind_to_session") && caller.bound_to.is_none() && can_own(state, caller, started);
-    let bind = if can_bind {
-        format!(
-            " Should you want it to drive your work instead, `{}` with `owner` set to `{}` makes \
-             you its session; that call's result tells you what then changes.",
-            tool("bind_to_session"),
-            started.id
-        )
+    let owners = if action == "already_running" {
+        Vec::new()
     } else {
-        String::new()
+        coordinator::archived_owners(state, target)?
     };
-    let branches = handed.map(branch_outcome).unwrap_or_default();
-    let approval = if automatic {
-        "Octoboard approved the request automatically, as the user has chosen to have session \
-         requests approved without asking"
-    } else {
-        "The user approved the request"
-    };
-    format!(
-        "{approval}: Octoboard started the {kind} session `{id}` (\"{title}\", \
-         {agent}){place}, with your brief as its opening prompt. It has no owner: it reports to \
-         the user, not to you. It is not yours to drive — you cannot instruct, archive or reopen \
-         it. Follow the user's direction on whether to continue your own work or end after the \
-         handover.{branches} `{share_info}` tells it something that touches its work{reads}.{bind}",
-        id = started.id,
-        title = one_line(&started.title),
-        agent = started.agent.label(),
-        share_info = tool("share_info"),
-    )
-}
-
-/// What became of the branches a request handed over, as a sentence or two for the outcome note,
-/// each opening with a space.
-pub(crate) fn branch_outcome(handed: &Handed) -> String {
-    let mut text = String::new();
-    match handed {
-        Handed::Moved(handed) => {
-            if !handed.moved.is_empty() {
-                let (_, them) = branch_noun_and_pronoun(&handed.moved);
-                text.push_str(&format!(
-                    " Handed over to it: {}. It is now the session responsible for {them} and you \
-                     no longer are.",
-                    named_branches(&handed.moved)
-                ));
+    if action != "already_running" {
+        if let Err(err) = resume(target.to_string()).await {
+            if refused_as_running(state, &err, target)? {
+                action = "already_running";
+            } else {
+                return Err(err);
             }
-            if !handed.unmoved.is_empty() {
-                let (them, they, were, stay) = match handed.unmoved.as_slice() {
-                    [_] => ("it", "It", "it was", "stays as it was"),
-                    _ => ("them", "They", "they were", "stay as they were"),
-                };
-                text.push_str(&format!(
-                    " Not handed over, because by then you were no longer responsible for {them} \
-                     or {were} gone: {}. {they} {stay}.",
-                    named_branches(&handed.unmoved)
-                ));
-            }
-        }
-        Handed::Failed(branches) => {
-            let (_, them) = branch_noun_and_pronoun(branches);
-            text.push_str(&format!(
-                " Octoboard could not record the handover of {}, so you are still responsible for \
-                 {them}.",
-                named_branches(branches)
-            ));
         }
     }
-    text
+    let mut renamed = None;
+    let mut rename_failure = None;
+    if let Some(title) = rename {
+        if action != "reopened" {
+            renamed = Some(false);
+            rename_failure = Some(format!(
+                "only a session reopened from the archive is renamed, and this one was {}",
+                if action == "resumed" {
+                    "not archived"
+                } else {
+                    "already running"
+                }
+            ));
+        } else if state.session_record(target)?.title != title {
+            match coordinator::rename_session(state, target, title) {
+                Ok(_) => renamed = Some(true),
+                Err(err) => {
+                    renamed = Some(false);
+                    rename_failure = Some(format!("{err:#}"));
+                }
+            }
+        }
+    }
+    // Read again: the resume and the rename changed what the session records.
+    let session = state.session_record(target)?;
+    // The owners the resume reopened: those it listed that are no longer archived.
+    let reopened_owners: Vec<String> = if action == "already_running" {
+        Vec::new()
+    } else {
+        owners
+            .into_iter()
+            .filter(|id| {
+                matches!(
+                    state.store.get_session(id),
+                    Ok(Some(owner)) if owner.status != SessionStatus::Archived
+                )
+            })
+            .collect()
+    };
+    let note = resume_outcome_note(
+        state,
+        caller,
+        &session,
+        action,
+        &reopened_owners,
+        rename_failure.as_deref(),
+        request.approval(),
+    );
+    let result = resume_result(action, &session, &reopened_owners, renamed, &note);
+    Ok((session, result, note))
 }
 
-/// Whether `owner` could own `session` right now, by the rules a binding keeps.
-fn can_own(state: &Arc<AppState>, session: &Session, owner: &Session) -> bool {
-    matches!(coordinator::owner_refusal(state, session, owner), Ok(None))
+/// Whether a resume of `target` was refused because the session is running, or its launch is
+/// under way, which the user's own resume counts as done. A refusal for a claim that is not a
+/// launch of `target` (an archived owner's, or one held for an account switch, a handoff, a
+/// handover of branches or a binding change) counts only when `target` is found out of its
+/// dormant status by now; otherwise the approval could not be carried out.
+fn refused_as_running(state: &Arc<AppState>, err: &anyhow::Error, target: &str) -> Result<bool> {
+    let Some(coded) = err.downcast_ref::<CodedError>() else {
+        return Ok(false);
+    };
+    let for_target = coded.params.get("session").map(String::as_str) == Some(target);
+    let launching = match coded.code {
+        error_code::SESSION_ALREADY_RUNNING => for_target,
+        // A switch's claim raises the same code as a launch's. A claim gone by now falls through
+        // to the dormant re-check.
+        error_code::SESSION_ALREADY_STARTING => for_target && state.is_held_by_launch(target),
+        _ => return Ok(false),
+    };
+    Ok(launching || !state.session_record(target)?.status.is_dormant())
 }
 
 /// How an approval's outcome written into the caller's session opens, which is what tells the turn
@@ -769,8 +959,7 @@ async fn tell_the_caller(state: &Arc<AppState>, caller_id: &str, message: String
 fn not_waiting(session_id: &str) -> anyhow::Error {
     CodedError::raised(
         error_code::SESSION_REQUEST_NOT_WAITING,
-        "this session is no longer waiting for an answer, so the session it asked for was not \
-         started",
+        "this session is no longer waiting for an answer, so its request was not carried out",
         &[("session", session_id)],
     )
 }
@@ -780,7 +969,7 @@ fn not_waiting(session_id: &str) -> anyhow::Error {
 fn already_answered() -> anyhow::Error {
     CodedError::raised(
         error_code::SESSION_REQUEST_ANSWERED,
-        "this is not a waiting request to start a session: it was answered already",
+        "this is not a waiting session request: it was answered already",
         &[],
     )
 }

@@ -100,11 +100,12 @@ besides the variables a project session's agent is given for its git (see "The l
   first (see "Lead sessions" in `docs/product/hub-orchestration.md`). Every project session's text also sets out how it
   relates to other sessions: `new_session` for a session of its own where it has it, together with when to start one
   and how to choose the session a task goes to (see "Choosing the session a task goes to" in
-  `docs/product/hub-orchestration.md`),
-  `handoff_session`, `switch_session_account`, `transfer_session`, `release_session` and `bind_to_session` where it has them,
-  `request_session` for a session that is nobody's, `get_account_quotas` for what each account's quota has left, and
-  `list_sessions` and `share_info` for information. The text is written from who the session reports to when it
-  launches, and says that what Octoboard tells it of a later change of owner replaces what it says (see "When a binding changes while a session runs" in
+  `docs/product/hub-orchestration.md`), `handoff_session`, `switch_session_account`, `transfer_session`,
+  `release_session` and `bind_to_session` where it has them, `request_session` for a session that is nobody's,
+  `request_resume_session` for resuming a conversation the user asked for, `get_account_quotas` for what each account's
+  quota has left, and `list_sessions` and `share_info` for information. The text is written from who the session
+  reports to when it launches, and says that what Octoboard tells it of a later change of owner replaces what it says
+  (see "When a binding changes while a session runs" in
   `docs/product/changing-session-owners.md`); a change made while the session was not running is told at its next
   launch, ahead of that launch's own instruction (see "A change of owner told at the next launch" in
   `docs/product/changing-session-owners.md`). The role and the session's binding as it stands decide which tools the
@@ -482,7 +483,7 @@ A window asks for a launch when it opens a session (with the new-session dialog 
 one to another account or hands one off, and it sends the appearance its Light, Dark or System choice has resolved to
 at that moment (see "Light, dark and follow the system" in `docs/product/appearance.md`). No window is behind a launch an
 agent asks for through Octoboard's tools (opening or reopening a session, handing one off, switching one to another
-account), a session opened by an approved session request, or an archived owner relaunched on the way while a session
+account), a session opened, reopened or resumed by an approved session request, or an archived owner relaunched on the way while a session
 is resumed.
 
 The appearance is taken at each launch and not kept with the session: a running Grok session keeps the theme it was

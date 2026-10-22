@@ -128,11 +128,16 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   instruction passed as the launch prompt, what the owners' tools report as held, a message a dialog discarded or a view
   of background agents took, and a write that only partly lands.
 - [Session requests](product/session-requests.md) — how any session asks with `request_session` for a session that has
-  no owner, in any project or as a console session: who is offered the tool, its arguments and the refusals before the
-  user is asked, the setting that approves requests automatically without a dialog, the 8-minute wait and the raised
-  hand, each agent's own time limit, how a request ends (approval, refusal, time limit, withdrawal), what approval
-  does, handing the requester's branches over to the new session with `branches`, the outcome message, and the
-  confirmation dialog.
+  no owner, in any project or as a console session, and what it shares with `request_resume_session`: who is offered
+  the tool, its arguments and the refusals before the user is asked, the setting that approves requests automatically
+  without a dialog, the 8-minute wait and the raised hand, each agent's own time limit, how a request ends (approval,
+  refusal, time limit, withdrawal), what approval does, handing the requester's branches over to the new session with
+  `branches`, the outcome message, and the confirmation dialog.
+- [Requests to resume a conversation](product/requests-to-resume-a-conversation.md) — how a session asks the user with
+  `request_resume_session` to resume a conversation by its session ID, with what the Resume conversation tab can and
+  cannot do: who has the tool, its arguments, the refusals before the user is asked, what approval does (reopened,
+  resumed, opened on an agent's record, already running) and its result, approvals that fail, and the confirmation
+  dialog's variants with the warning for an account whose sharing change is incomplete.
 - [Settings tools for agents](product/agent-settings-tools.md) — which settings a console session can read and change
   through its tools (projects, its own console, the application-wide settings), the read-only `get_project` every
   project session has, the `accounts` and `launch` argument shapes, when a change takes effect, and what is never
@@ -240,9 +245,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   window's own appearance), where the choice is kept, and why a report page stays on a light surface either way.
 - [Settings](product/settings.md) — the Settings dialog: how it opens (the rail, and the macOS menu's Settings… /
   ⌘, and when that is ignored), how it closes and where focus goes, its General (Appearance, Language, the default
-  clone directory, automatically approving session requests and, in the macOS application alone, keeping Octoboard
-  running in the background), Git, Agent accounts, Trusted folders, Permissions, Notifications and Configuration
-  (exporting and importing the configuration document, where the window can save and open files) sections.
+  clone directory and, in the macOS application alone, keeping Octoboard running in the background), Git, Agent
+  accounts, Trusted folders, Permissions, Agent permissions (automatically approving session requests and resume
+  requests, each its own switch), Notifications and Configuration (exporting and importing the configuration
+  document, where the window can save and open files) sections.
 - [Agent accounts](product/agent-accounts.md) — Settings' Agent accounts section: the added agents list (how it is
   first filled, the undecided state, where it applies), the agent strip and its not-installed warning, Add agent,
   reordering and removing an agent, the empty state, the default account and renaming it, owned accounts and their

@@ -112,6 +112,9 @@ pub async fn call(
         "release_session" => bindings::release_session(state, &session, arguments).await,
         "bind_to_session" => bindings::bind_to_session(state, &session, arguments).await,
         "request_session" => request_session(state, &session, arguments).await,
+        "request_resume_session" => {
+            super::resume_request::request_resume_session(state, &session, arguments).await
+        }
         // Unreachable while the catalogue and this dispatch agree; a tool added to one and not the
         // other should say so rather than look like a refusal.
         _ => bail!("`{tool}` is announced but not implemented"),
@@ -1805,10 +1808,12 @@ pub(super) mod tests {
                 Ok(started)
             }
         };
-        session_request::answer_with(state, &request_id, true, launch)
-            .await
-            .unwrap()
-            .unwrap();
+        session_request::answer_with_resume(state, &request_id, true, launch, |_| async {
+            bail!("nothing is resumed here")
+        })
+        .await
+        .unwrap()
+        .unwrap();
         call.await.unwrap().expect("approved");
         let task = task
             .lock()
@@ -3190,20 +3195,26 @@ pub(super) mod tests {
         }
     }
 
-    /// The automatic approval of session requests is the user's alone: an agent can neither read it
-    /// nor change it through the settings tools, whatever it passes.
+    /// The automatic approval of session requests and of resume requests is the user's alone: an
+    /// agent can neither read either nor change either through the settings tools, whatever it
+    /// passes.
     #[tokio::test]
-    async fn the_automatic_approval_of_session_requests_is_out_of_the_agents_reach() {
+    async fn the_automatic_approvals_are_out_of_the_agents_reach() {
         let (state, _dir) = settings_state("app-settings-auto-approve");
         let listed = call(&state, "a", "get_settings", &arguments(json!({})))
             .await
             .unwrap();
         assert!(listed.get("auto_approve_session_requests").is_none());
+        assert!(listed.get("auto_approve_resume_requests").is_none());
 
         for (stored, passed) in [(false, true), (true, false)] {
             state
                 .store
                 .set_auto_approve_session_requests(stored)
+                .unwrap();
+            state
+                .store
+                .set_auto_approve_resume_requests(stored)
                 .unwrap();
             let updated = call(
                 &state,
@@ -3211,14 +3222,17 @@ pub(super) mod tests {
                 "update_settings",
                 &arguments(json!({
                     "auto_approve_session_requests": passed,
+                    "auto_approve_resume_requests": passed,
                     "default_clone_dir": "/tmp/clones",
                 })),
             )
             .await
             .unwrap();
             assert!(updated.get("auto_approve_session_requests").is_none());
+            assert!(updated.get("auto_approve_resume_requests").is_none());
             assert_eq!(updated["default_clone_dir"], "/tmp/clones");
             assert_eq!(state.store.auto_approve_session_requests().unwrap(), stored);
+            assert_eq!(state.store.auto_approve_resume_requests().unwrap(), stored);
         }
     }
 

@@ -389,8 +389,8 @@ export const zhHans: Translation<"other"> = {
   "daemon.trust_home_unknown": "无法确定家目录，因此无法据此检查任何文件夹。",
   "daemon.trust_not_waiting": "此会话已不再在智能体的信任确认处等待。",
   "daemon.console_session_trust_not_asked": "控制台会话的信任确认由 {appName} 直接按下，无需询问。",
-  "daemon.session_request_not_waiting": "此会话已不再等待回应，因此它请求的会话没有启动。",
-  "daemon.session_request_answered": "这项启动会话的请求已得到回应。",
+  "daemon.session_request_not_waiting": "此会话已不再等待回应，因此它的请求没有执行。",
+  "daemon.session_request_answered": "这项请求已得到回应。",
   "daemon.binary_not_found": "在已快照的 shell 环境的 {pathVar} 中找不到 {binary}。",
   "daemon.shell_environment_timeout.summary": "无法获取 shell 环境。",
   "daemon.shell_environment_timeout":
@@ -1310,6 +1310,25 @@ export const zhHans: Translation<"other"> = {
   },
   "dialog.sessionRequest.confirm": "启动会话",
   "dialog.sessionRequest.refuse": "拒绝",
+  "dialog.sessionRequest.reopen.title": "重新打开会话？",
+  "dialog.sessionRequest.reopen.confirm": "重新打开会话",
+  "dialog.sessionRequest.resume.title": "恢复会话？",
+  "dialog.sessionRequest.resume.confirm": "恢复会话",
+  "dialog.sessionRequest.record.title": "恢复对话？",
+  "dialog.sessionRequest.record.confirm": "恢复对话",
+  "dialog.sessionRequest.question.reopen":
+    "{requester} 请求重新打开会话 {session}（{agent}，账户 {account}，位于控制台 {console} 的项目 {project}）。{reports}",
+  "dialog.sessionRequest.question.resume":
+    "{requester} 请求恢复已中断的会话 {session}（{agent}，账户 {account}，位于控制台 {console} 的项目 {project}）。{reports}",
+  "dialog.sessionRequest.question.record":
+    "{requester} 请求在控制台 {console} 的项目 {project} 中新建一个 {agent} 会话（账户 {account}），恢复对话 {conversation}。新会话将向你汇报。",
+  "dialog.sessionRequest.reportsTo.user": "该会话向你汇报。",
+  "dialog.sessionRequest.reportsTo.owner": "该会话向 {owner} 汇报。",
+  "dialog.sessionRequest.withOwners": "{question}{owners}",
+  "dialog.sessionRequest.reopenedOwners": {
+    other: "它已归档的所有者 {owners} 也将一并重新打开。",
+  },
+  "dialog.sessionRequest.incomplete": "{account} 上次共享更改未完成，其配置和对话可能不完整。",
 
   "directoryPicker.path": "目录路径",
   "directoryPicker.go": "前往",
@@ -1428,6 +1447,7 @@ export const zhHans: Translation<"other"> = {
   "settings.section.accounts": "智能体账户",
   "settings.section.trustedFolders": "受信任的文件夹",
   "settings.section.permissions": "权限",
+  "settings.section.agentPermissions": "智能体行为权限",
   "settings.section.notifications": "通知",
   "settings.section.configuration": "配置",
   "settings.appearance.label": "外观",
@@ -1448,11 +1468,17 @@ export const zhHans: Translation<"other"> = {
     "开启后，智能体不再保留已归档会话的对话时，将自动删除该会话。{appName} 每次启动时检查一次，之后约每天检查一次。置顶和锁定的会话会保留。",
   "settings.archiveCleanup.description.on":
     "智能体不再保留已归档会话的对话时，将自动删除该会话。{appName} 每次启动时检查一次，之后约每天检查一次。置顶和锁定的会话会保留。",
-  "settings.autoApprove.label": "自动批准会话请求",
-  "settings.autoApprove.description.off":
+  "settings.agentPermissions.lead": "选择会话可以在不征得你同意的情况下执行哪些操作。",
+  "settings.autoApproveSession.label": "自动批准会话请求",
+  "settings.autoApproveSession.description.off":
     "开启后，会话可以直接启动向你汇报的新会话，无需先征得你的同意。新会话除你之外没有其他所有者。",
-  "settings.autoApprove.description.on":
+  "settings.autoApproveSession.description.on":
     "会话可以直接启动向你汇报的新会话，无需先征得你的同意。新会话除你之外没有其他所有者。",
+  "settings.autoApproveResume.label": "自动批准恢复请求",
+  "settings.autoApproveResume.description.off":
+    "开启后，会话可以直接重新打开或恢复某个会话，或在新会话中恢复某段对话，无需先征得你的同意。被重新打开或恢复的会话保留原有的所有者，已归档的所有者也会一并重新打开；以这种方式新启动的会话除你之外没有其他所有者。",
+  "settings.autoApproveResume.description.on":
+    "会话可以直接重新打开或恢复某个会话，或在新会话中恢复某段对话，无需先征得你的同意。被重新打开或恢复的会话保留原有的所有者，已归档的所有者也会一并重新打开；以这种方式新启动的会话除你之外没有其他所有者。",
   "settings.autoSelect.label": "自动选择账户",
   "settings.autoSelect.description.off":
     "开启后，新建会话会使用周额度最快重置的账户，以免即将重置的额度被浪费。",

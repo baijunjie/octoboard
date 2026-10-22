@@ -576,33 +576,7 @@ async fn handle_inner(
             project,
             agent_session_id,
         } => {
-            if state.store.get_project(&project)?.is_none() {
-                return Err(CodedError::unknown_project(&project));
-            }
-            let id = parse_conversation_id(&agent_session_id)?;
-            let location = match state.store.session_by_agent_session_id(&id, None)? {
-                Some(holder) => held_conversation(&holder, &project),
-                None => {
-                    // An undecided list offers every agent, as `refuse_unless_agent_added` does.
-                    let added = state.store.added_agents()?;
-                    let agents: Vec<Agent> = Agent::ALL
-                        .into_iter()
-                        .filter(|agent| agent_is_available(state, *agent))
-                        .filter(|agent| added.as_ref().is_none_or(|list| list.contains(agent)))
-                        .collect();
-                    let accounts = state.store.list_accounts()?;
-                    tokio::task::spawn_blocking(move || {
-                        find_conversation_to_resume(
-                            &agents,
-                            &accounts,
-                            &id,
-                            env_shell::launch_snapshot,
-                        )
-                    })
-                    .await??
-                    .unwrap_or(ConversationLocation::NotFound)
-                }
-            };
+            let location = locate_conversation(state, &project, &agent_session_id).await?;
             Ok(Some(Event::ConversationLocated {
                 id: request_id,
                 location,
@@ -1005,6 +979,7 @@ async fn handle_inner(
             auto_pull_repositories,
             auto_delete_unresumable_archives,
             auto_approve_session_requests,
+            auto_approve_resume_requests,
             auto_select_account,
             default_clone_dir,
         } => {
@@ -1014,6 +989,7 @@ async fn handle_inner(
                     auto_pull_repositories,
                     auto_delete_unresumable_archives,
                     auto_approve_session_requests,
+                    auto_approve_resume_requests,
                     auto_select_account,
                     default_clone_dir,
                 },
@@ -2200,7 +2176,7 @@ fn checked_resume_id(
 /// `id` as the agents write a conversation id, lowercase and hyphenated, which is how a record is
 /// looked for and stored however the user typed it; refused with `resume_id_invalid` when it is no
 /// UUID.
-fn parse_conversation_id(id: &str) -> Result<String> {
+pub(crate) fn parse_conversation_id(id: &str) -> Result<String> {
     match Uuid::parse_str(id) {
         Ok(parsed) => Ok(parsed.hyphenated().to_string()),
         Err(_) => Err(CodedError::raised(
@@ -2289,6 +2265,39 @@ fn locate_conversation_to_resume(
         Err(err) => err,
     })?;
     Ok(shell_env)
+}
+
+/// Where the conversation `agent_session_id` is held, for the project `project` asking, as the
+/// new-session dialog's Resume tab and the `request_resume_session` tool both ask it: a session
+/// that records it first, whatever its agent or project, else the on-disk record in the default
+/// account and every account of each agent that is available and added. Refused with
+/// `unknown_project` for a `project` that does not exist and `resume_id_invalid` for an id that is
+/// no UUID. Reads the disk only.
+pub(crate) async fn locate_conversation(
+    state: &Arc<AppState>,
+    project: &str,
+    agent_session_id: &str,
+) -> Result<ConversationLocation> {
+    if state.store.get_project(project)?.is_none() {
+        return Err(CodedError::unknown_project(project));
+    }
+    let id = parse_conversation_id(agent_session_id)?;
+    if let Some(holder) = state.store.session_by_agent_session_id(&id, None)? {
+        return Ok(held_conversation(&holder, project));
+    }
+    // An undecided list offers every agent, as `refuse_unless_agent_added` does.
+    let added = state.store.added_agents()?;
+    let agents: Vec<Agent> = Agent::ALL
+        .into_iter()
+        .filter(|agent| agent_is_available(state, *agent))
+        .filter(|agent| added.as_ref().is_none_or(|list| list.contains(agent)))
+        .collect();
+    let accounts = state.store.list_accounts()?;
+    Ok(tokio::task::spawn_blocking(move || {
+        find_conversation_to_resume(&agents, &accounts, &id, env_shell::launch_snapshot)
+    })
+    .await??
+    .unwrap_or(ConversationLocation::NotFound))
 }
 
 /// Where a conversation is held that `holder` records, for the project `project` asking: an
@@ -2995,12 +3004,13 @@ pub(crate) fn owner_refusal(
 /// if it changes meanwhile: the owner read at the start (`bound_to` in the `OpenRequest` for a
 /// bound role, `lead_of` for a lead session, [`owner_of`] for the switch's relaunch). Taken before
 /// the session is read, so what is checked after it holds until the write; refused in prose when
-/// a launch, a resume, a handoff, a switch or another binding change of it is under way.
+/// a launch, a resume, a handoff, a handover of branches, a switch or another binding change of it
+/// is under way.
 fn claim_for_binding(state: &Arc<AppState>, session_id: &str) -> Result<crate::state::LaunchClaim> {
     state.begin_switch(session_id).map_err(|_| {
         anyhow::anyhow!(
-            "`{session_id}` is being started, resumed, handed off, switched to another account or \
-             having its owner changed, so its owner cannot change now: look again once that is \
+            "`{session_id}` is being started, resumed, handed off, switched to another account, \
+             having its branches handed over or having its owner changed, so its owner cannot change now: look again once that is \
              done"
         )
     })
@@ -3312,6 +3322,28 @@ async fn resume_session_with(
     .await
 }
 
+/// Refuses, before a request to resume `id` is put to the user, what [`resume_session`] would
+/// refuse for a conversation its agent no longer has (`conversation_unresumable`), with nothing
+/// changed. Returns the archived owners a resume brings back with it, topmost first.
+pub(crate) async fn check_can_resume(state: &Arc<AppState>, id: &str) -> Result<Vec<String>> {
+    check_can_resume_with(state, id, env_shell::launch_snapshot).await
+}
+
+/// [`check_can_resume`] with the login-shell snapshot supplied by the caller, which tests stub.
+pub(crate) async fn check_can_resume_with(
+    state: &Arc<AppState>,
+    id: &str,
+    shell_snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
+) -> Result<Vec<String>> {
+    let shell = tokio::task::spawn_blocking(shell_snapshot).await??;
+    let owners = archived_owners(state, id)?;
+    let target = check_resumable(state, id, &shell).await?;
+    if target.judgement.resumability == agent_records::Resumability::Unresumable {
+        return Err(conversation_unresumable(&target.session));
+    }
+    Ok(owners)
+}
+
 /// A session and what [`check_resumable`] found of its conversation.
 struct Checked {
     session: Session,
@@ -3412,7 +3444,7 @@ fn needs_reopening(state: &Arc<AppState>, owner: &str) -> Result<bool> {
 /// The archived owners a dormant session brings back before itself, topmost first: its owner when
 /// that is archived, then that owner's owner when that is archived too, stopping at the first that
 /// is not (or is not on record). Empty for a session that is not dormant.
-fn archived_owners(state: &Arc<AppState>, id: &str) -> Result<Vec<String>> {
+pub(crate) fn archived_owners(state: &Arc<AppState>, id: &str) -> Result<Vec<String>> {
     let session = state.session_record(id)?;
     let mut owners = Vec::new();
     let mut next = session.bound_to.filter(|_| session.status.is_dormant());
@@ -5562,6 +5594,7 @@ pub struct SettingsChanges {
     pub auto_pull_repositories: Option<bool>,
     pub auto_delete_unresumable_archives: Option<bool>,
     pub auto_approve_session_requests: Option<bool>,
+    pub auto_approve_resume_requests: Option<bool>,
     pub auto_select_account: Option<bool>,
     /// Blank text goes back to the built-in default.
     pub default_clone_dir: Option<String>,
@@ -5574,6 +5607,7 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         auto_pull_repositories,
         auto_delete_unresumable_archives,
         auto_approve_session_requests,
+        auto_approve_resume_requests,
         auto_select_account,
         default_clone_dir,
     } = changes;
@@ -5596,6 +5630,9 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     }
     if let Some(value) = auto_approve_session_requests {
         changed |= state.store.set_auto_approve_session_requests(value)?;
+    }
+    if let Some(value) = auto_approve_resume_requests {
+        changed |= state.store.set_auto_approve_resume_requests(value)?;
     }
     if let Some(value) = auto_select_account {
         changed |= state.store.set_auto_select_account(value)?;
@@ -10803,6 +10840,36 @@ mod tests {
             .await
             .expect_err("no cwd");
         assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
+    }
+
+    /// The check made before a request to resume is put to the user raises what the reopen would
+    /// raise for a conversation the agent no longer has, changes nothing, and otherwise names the
+    /// archived owners that would come back with the session.
+    #[tokio::test]
+    async fn the_check_before_asking_to_resume_refuses_a_conversation_that_is_gone() {
+        let (state, dir) = console_with_project_and_accounts("coordinator-check-can-resume");
+        let account = dir.join("claude-a");
+        std::fs::create_dir_all(account.join("projects")).unwrap();
+        let mut owner = archived_with_conversation("owner", Agent::Claude, &account);
+        owner.agent_session_id = Some("owner-conversation".to_string());
+        state.store.insert_session(&owner).unwrap();
+        let mut held = archived_with_conversation("s", Agent::Claude, &account);
+        held.bound_to = Some("owner".to_string());
+        state.store.insert_session(&held).unwrap();
+
+        let err = check_can_resume_with(&state, "s", stub_shell(&dir))
+            .await
+            .expect_err("no transcript");
+        assert_eq!(code_of(&err), error_code::CONVERSATION_UNRESUMABLE);
+        assert_still_archived_at_5(&state, "s");
+
+        let transcript = account.join(format!("projects/work/{AGENT_ID}.jsonl"));
+        std::fs::create_dir_all(transcript.parent().unwrap()).unwrap();
+        std::fs::write(&transcript, "{}\n").unwrap();
+        let owners = check_can_resume_with(&state, "s", stub_shell(&dir))
+            .await
+            .unwrap();
+        assert_eq!(owners, ["owner"]);
     }
 
     /// Only proven absence refuses: a Grok session folder missing locally may be restored by Grok.

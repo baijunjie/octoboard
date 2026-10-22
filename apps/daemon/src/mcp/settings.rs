@@ -124,8 +124,9 @@ pub(super) fn update_settings(
                 arguments,
                 "auto_delete_unresumable_archives",
             )?,
-            // Never settable by an agent: it would let a session approve its own requests.
+            // Neither is settable by an agent: either would let a session approve its own requests.
             auto_approve_session_requests: None,
+            auto_approve_resume_requests: None,
             auto_select_account: optional_bool(arguments, "auto_select_account")?,
             default_clone_dir: raw_text(arguments, "default_clone_dir")?,
         },

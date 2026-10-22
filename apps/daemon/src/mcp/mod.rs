@@ -30,6 +30,7 @@ pub mod exec;
 mod handoff;
 mod handover;
 mod quotas;
+mod resume_request;
 pub mod role;
 mod settings;
 pub mod stdio;
@@ -470,6 +471,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     TRANSFER_SESSION,
     RELEASE_SESSION,
     REQUEST_SESSION,
+    REQUEST_RESUME_SESSION,
     LIST_SESSIONS,
     SHARE_INFO,
     GET_ACCOUNT_QUOTAS,
@@ -988,6 +990,36 @@ const REQUEST_SESSION: ToolDef = ToolDef {
     schema: request_session_schema,
 };
 
+/// How every session, of whatever kind, has a conversation resumed that it does not own: through a
+/// confirmation the user gives, with what the new-session dialog's Resume conversation tab gives
+/// the user and the same limits.
+const REQUEST_RESUME_SESSION: ToolDef = ToolDef {
+    name: "request_resume_session",
+    description: "Ask the user to resume a conversation by its id — the agent's own conversation \
+                  id (a UUID, in any spelling), not an Octoboard session id — as the user does in \
+                  the new-session dialog's Resume conversation tab, with the same limits. If a \
+                  session of the project holds the conversation, it is brought back: an archived \
+                  session is reopened (and renamed, with `title`), and an interrupted one \
+                  resumed, continuing its conversation, with the owner it has (it may come back \
+                  with its archived owners). It stays that owner's, or the user's: you do not own \
+                  it and cannot drive it. If a session that is already running holds it there is \
+                  nothing to resume, and the call is refused. If no session holds the \
+                  conversation but an agent's own record of it is on this machine, a new session \
+                  that is nobody's is opened on it, on the agent and account that hold the \
+                  record, and it reports to the user. A conversation held by a session of another \
+                  project, or by a console session, is refused. Where you have `reopen_session`, \
+                  it reopens only sessions that are yours and needs no approval; this can resume \
+                  any session. No text can be passed along, so afterwards `share_info` tells the \
+                  session what you need. The user is asked first, and the call waits for their \
+                  answer, for several minutes at most — unless the user has chosen to have such \
+                  requests approved automatically, in which case the result says so and the call \
+                  does not wait. Use it only when the user asked for that conversation to be \
+                  resumed, or you have been told to carry on work whose conversation they named. \
+                  A refusal, or no answer in time, comes back as an error and changes nothing. If \
+                  their intent is unclear, ask before acting.",
+    schema: request_resume_session_schema,
+};
+
 /// What every session may read of the plan quota each account has left, to choose an account or
 /// an agent before one runs dry.
 const GET_ACCOUNT_QUOTAS: ToolDef = ToolDef {
@@ -1027,7 +1059,8 @@ const GET_ACCOUNT_QUOTAS: ToolDef = ToolDef {
 
 /// A project session that reports to another session has the one tool it answers through, the
 /// two it shares information with, the read of its project, the read of the accounts' quotas, and
-/// the request for a session with no owner.
+/// the two requests the user approves: for a session with no owner, and for a conversation to be
+/// resumed.
 const BOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     REPORT,
     LIST_SESSIONS,
@@ -1035,6 +1068,7 @@ const BOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     GET_PROJECT,
     GET_ACCOUNT_QUOTAS,
     REQUEST_SESSION,
+    REQUEST_RESUME_SESSION,
 ];
 
 /// A project session that can own sessions — unbound, or a lead session — drives its own project
@@ -1108,6 +1142,7 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     RELEASE_SESSION,
     BIND_TO_SESSION,
     REQUEST_SESSION,
+    REQUEST_RESUME_SESSION,
     REPORT,
     LIST_SESSIONS,
     SHARE_INFO,
@@ -1163,6 +1198,51 @@ fn request_session_schema() -> Value {
     });
     schema["required"] = json!(["kind", "brief"]);
     schema
+}
+
+/// The schema of `request_resume_session`.
+fn request_resume_session_schema() -> Value {
+    object_schema(
+        json!({
+            "conversation": {
+                "type": "string",
+                "description": "The agent's conversation id: a UUID, in any spelling (the \
+                                Session ID the agent shows). An Octoboard session id is not \
+                                one.",
+            },
+            "project": {
+                "type": "string",
+                "description": "The project the conversation is resumed in: its id, or its name \
+                                when that is unambiguous. Defaults to this session's own \
+                                project; a console session has to give it. A conversation held \
+                                by a session of another project is refused.",
+            },
+            "title": {
+                "type": "string",
+                "description": format!(
+                    "The name of the session. For a new session opened on the agent's record, \
+                     left out it is named for its project. For an archived session that holds \
+                     the conversation, it is renamed to this after it is reopened. Refused for \
+                     an interrupted session, which keeps its name. {NAMING_LANGUAGE}"
+                ),
+            },
+            "model": {
+                "type": "string",
+                "description": "Only when no session holds the conversation, which opens a new \
+                                session: overrides its model; blank is the agent's own default. \
+                                A session that holds the conversation keeps its own, and the \
+                                call is refused if this is given.",
+            },
+            "effort": {
+                "type": "string",
+                "description": "Only when no session holds the conversation, which opens a new \
+                                session: overrides its reasoning effort; blank is the agent's \
+                                own default. A session that holds the conversation keeps its \
+                                own, and the call is refused if this is given.",
+            },
+        }),
+        &["conversation"],
+    )
 }
 
 /// The schema of `new_session`. `with_project` is for the console session, which chooses a
@@ -1379,7 +1459,8 @@ mod tests {
                 "share_info",
                 "get_project",
                 "get_account_quotas",
-                "request_session"
+                "request_session",
+                "request_resume_session"
             ]
         );
         assert_eq!(
@@ -1400,6 +1481,7 @@ mod tests {
                 "release_session",
                 "bind_to_session",
                 "request_session",
+                "request_resume_session",
                 "report",
                 "list_sessions",
                 "share_info",
@@ -1432,6 +1514,7 @@ mod tests {
                 "transfer_session",
                 "release_session",
                 "request_session",
+                "request_resume_session",
                 "list_sessions",
                 "share_info",
                 "get_account_quotas",
@@ -1492,6 +1575,7 @@ mod tests {
                 "handoff_session",
                 "new_session",
                 "rename_session",
+                "request_resume_session",
                 "request_session"
             ]
         );

@@ -430,8 +430,8 @@ export const en = {
   "daemon.trust_home_unknown": "The home directory could not be determined, so no folder can be checked against it.",
   "daemon.trust_not_waiting": "This session is no longer waiting at its agent's trust confirmation.",
   "daemon.console_session_trust_not_asked": "{appName} presses a console session's trust confirmation without asking.",
-  "daemon.session_request_not_waiting": "This session is no longer waiting for an answer, so the session it asked for was not started.",
-  "daemon.session_request_answered": "This request to start a session has already been answered.",
+  "daemon.session_request_not_waiting": "This session is no longer waiting for an answer, so its request was not carried out.",
+  "daemon.session_request_answered": "This request has already been answered.",
   "daemon.binary_not_found": "{binary} was not found on {pathVar} in the snapshotted shell environment.",
   "daemon.shell_environment_timeout.summary": "The shell environment could not be captured.",
   "daemon.shell_environment_timeout":
@@ -1434,6 +1434,27 @@ export const en = {
   },
   "dialog.sessionRequest.confirm": "Start session",
   "dialog.sessionRequest.refuse": "Refuse",
+  "dialog.sessionRequest.reopen.title": "Reopen a session?",
+  "dialog.sessionRequest.reopen.confirm": "Reopen session",
+  "dialog.sessionRequest.resume.title": "Resume a session?",
+  "dialog.sessionRequest.resume.confirm": "Resume session",
+  "dialog.sessionRequest.record.title": "Resume a conversation?",
+  "dialog.sessionRequest.record.confirm": "Resume conversation",
+  "dialog.sessionRequest.question.reopen":
+    "{requester} asks to reopen the session {session}, a {agent} session on {account} in the project {project} of the console {console}. {reports}",
+  "dialog.sessionRequest.question.resume":
+    "{requester} asks to resume the interrupted session {session}, a {agent} session on {account} in the project {project} of the console {console}. {reports}",
+  "dialog.sessionRequest.question.record":
+    "{requester} asks to resume the conversation {conversation} in a new {agent} session on {account}, in the project {project} of the console {console}. The new session would report to you.",
+  "dialog.sessionRequest.reportsTo.user": "It reports to you.",
+  "dialog.sessionRequest.reportsTo.owner": "It reports to {owner}.",
+  "dialog.sessionRequest.withOwners": "{question} {owners}",
+  "dialog.sessionRequest.reopenedOwners": {
+    one: "Its archived owner {owners} would be reopened with it.",
+    other: "Its archived owners {owners} would be reopened with it.",
+  },
+  "dialog.sessionRequest.incomplete":
+    "The last sharing change of {account} did not finish, so its configuration and conversations may be incomplete.",
 
   "directoryPicker.path": "Directory path",
   "directoryPicker.go": "Go",
@@ -1570,6 +1591,7 @@ export const en = {
   "settings.section.accounts": "Agent accounts",
   "settings.section.trustedFolders": "Trusted folders",
   "settings.section.permissions": "Permissions",
+  "settings.section.agentPermissions": "Agent permissions",
   "settings.section.notifications": "Notifications",
   "settings.section.configuration": "Configuration",
   "settings.appearance.label": "Appearance",
@@ -1591,11 +1613,17 @@ export const en = {
     "Once this is on, an archived session is deleted automatically when its agent no longer keeps its conversation. {appName} checks each time it starts, then about once a day. Pinned and locked sessions are kept.",
   "settings.archiveCleanup.description.on":
     "An archived session is deleted automatically when its agent no longer keeps its conversation. {appName} checks each time it starts, then about once a day. Pinned and locked sessions are kept.",
-  "settings.autoApprove.label": "Automatically approve session requests",
-  "settings.autoApprove.description.off":
+  "settings.agentPermissions.lead": "Choose what sessions may do without asking you first.",
+  "settings.autoApproveSession.label": "Automatically approve session requests",
+  "settings.autoApproveSession.description.off":
     "Once this is on, a session can start a session that reports to you without asking you first. Nobody owns the new session but you.",
-  "settings.autoApprove.description.on":
+  "settings.autoApproveSession.description.on":
     "A session can start a session that reports to you without asking you first. Nobody owns the new session but you.",
+  "settings.autoApproveResume.label": "Automatically approve resume requests",
+  "settings.autoApproveResume.description.off":
+    "Once this is on, a session can reopen or resume a session, or resume a conversation in a new session, without asking you first. A reopened or resumed session keeps its owner, and its archived owners are reopened with it. A new session started this way is owned by nobody but you.",
+  "settings.autoApproveResume.description.on":
+    "A session can reopen or resume a session, or resume a conversation in a new session, without asking you first. A reopened or resumed session keeps its owner, and its archived owners are reopened with it. A new session started this way is owned by nobody but you.",
   "settings.autoSelect.label": "Automatically select an account",
   "settings.autoSelect.description.off":
     "Once this is on, a new session uses the account whose weekly quota resets soonest, so quota that is about to reset is used before it is lost.",

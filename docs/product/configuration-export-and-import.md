@@ -170,10 +170,11 @@ Three, each under its own key:
   that says turning it on is its own, not the one used for automatic pull: a new session then uses the account whose
   weekly quota resets soonest.
 
-**Automatically approve session requests** (see "Approving requests automatically" in
-`docs/product/session-requests.md`) is never carried, unlike the other application-wide switches, and an import never
-applies it — not even from a document that holds the key `auto_approve_session_requests`, which the inspection does not
-report either — so a shared document cannot turn on the approval of session requests without asking.
+**Automatically approve session requests** and **Automatically approve resume requests** (see "Approving requests
+automatically" in `docs/product/session-requests.md`) are never carried, unlike the other application-wide switches,
+and an import never applies either — not even from a document that holds the key `auto_approve_session_requests` or
+`auto_approve_resume_requests`, which the inspection does not report either — so a shared document cannot turn on the
+approval of either kind of request without asking.
 
 A single console's document carries no application settings at all. The settings that belong to one machine or to its
 accounts stay out of every document (see "What is not configuration and never travels" above).

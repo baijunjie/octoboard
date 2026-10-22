@@ -8,8 +8,9 @@ as a whole does so in a paragraph under its heading, and no section heading has 
 row in "Git", on each agent's default account and on the permission-approval headings in Agent accounts (see "Approval
 modes" and "The default account" in
 `docs/product/agent-accounts.md`, and "Explanations in help tips" in `docs/product/labels-and-tooltips.md`). The
-sections, in order, are **General**, **Git**, **Agent accounts**, **Trusted folders**, **Permissions**,
-**Notifications** and **Configuration**; the dialog opens on General unless it was asked to open on another section.
+sections, in order, are **General**, **Git**, **Agent accounts**, **Trusted folders**, **Permissions**, **Agent
+permissions**, **Notifications** and **Configuration**; the dialog opens on General unless it was asked to open on
+another section.
 
 A console session can read the default clone directory, the automatic pulling of repositories, the automatic deletion of
 archived sessions whose conversation is gone, automatic account selection, the agent accounts (without their
@@ -98,9 +99,8 @@ every path is shown in full.
 ## General
 
 Small app-wide settings: an **Appearance** row, a **Language** row, a **Markdown style** row, a **Default clone
-directory** row, then an **Automatically delete archived sessions whose conversation is gone** row, an
-**Automatically approve session requests** row, and last, in the macOS application only, a **Keep running in the
-background** row.
+directory** row, then an **Automatically delete archived sessions whose conversation is gone** row, and last, in the
+macOS application only, a **Keep running in the background** row.
 
 ### Appearance
 
@@ -148,24 +148,14 @@ sessions are kept. The value is kept by the daemon, so every window shows the sa
 runs and what turning the switch off or on changes are in "Deleting archived sessions whose conversation is gone" in
 `docs/product/deleting-sessions.md`.
 
-### Automatically approve session requests
-
-A switch, **off to begin with** — installations from before the switch existed included: whether a session's request
-for a session that is nobody's is approved without asking the user. While the switch is off the row's description says
-what turning it on will do, and while it is on it says what is happening now: a session can start a session that
-reports to the user without asking first, and nobody owns the new session but the user. The value is kept by the
-daemon, so every window shows the same, and this row is the only way to change it. What an automatic approval does,
-what turning the switch on changes, and why neither agents nor a configuration document can change it are in
-"Approving requests automatically" in `docs/product/session-requests.md`.
-
 ### Keep running in the background
 
 A switch, the section's last row, labelled for what turning it on does: keep Octoboard running in the background when
 the window is closed. It is **off to begin with**, so closing the window quits.
 
 **Only the macOS application has this row.** A browser has no native window to close into the background, so the row
-is absent there — the section then ends with the Automatically approve session requests row. In the macOS
-application this row sits directly under that switch.
+is absent there — the section then ends with the Automatically delete archived sessions whose conversation is gone
+row. In the macOS application this row sits directly under that switch.
 
 The row's description says what the choice means and never mentions quitting, which the label already carries: while
 the switch is off it says what turning it on will do, and while it is on it says what is happening now — closing the
@@ -198,8 +188,8 @@ A switch, **off to begin with** — installations from before the switch existed
 account was not named uses the account of its agent whose weekly quota resets soonest. While the switch is off the
 row's description says what turning it on will do, and while it is on it says what is happening now: a new session uses
 the account whose weekly quota resets soonest, so quota that is about to reset is used before it is lost. The daemon
-stores it as `auto_select_account` and keeps it, so every window shows the same. Unlike **Automatically approve session
-requests**, a console session may read and change it, and a full configuration export carries it (see "Application
+stores it as `auto_select_account` and keeps it, so every window shows the same. Unlike the switches in Agent
+permissions, a console session may read and change it, and a full configuration export carries it (see "Application
 settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The application settings
 a full export carries" in `docs/product/configuration-export-and-import.md`). Which account is chosen, and who applies
 the choice, are in "Which account a session uses" in `docs/product/sessions.md`. Turning it on or off changes no
@@ -273,6 +263,32 @@ keeps no refusal for.
 line saying that permissions can only be managed in the macOS application. Where a desktop shell is there but the read
 of the grants fails, it says instead that Octoboard could not read which permissions it has been granted. Until the
 first read comes back the section shows neither line and nothing else either.
+
+## Agent permissions
+
+What a session may do without asking the user first. A paragraph under the heading says as much, above two rows:
+**Automatically approve session requests**, then **Automatically approve resume requests**. The section is the same in
+every client. Each switch is kept by the daemon, so every window shows the same, and its row is the only way to change
+it; turning one on or off leaves the other as it is. What an automatic approval does, what turning a switch on changes,
+and why neither agents nor a configuration document can change either switch are in "Approving requests
+automatically" in `docs/product/session-requests.md`.
+
+### Automatically approve session requests
+
+A switch, **off to begin with** — installations from before the switch existed included: whether a session's
+`request_session` call, its request for a session that is nobody's, is approved without asking the user. While the
+switch is off the row's description says what turning it on will do, and while it is on it says what is happening now:
+a session can start a session that reports to the user without asking first, and nobody but the user owns the new
+session.
+
+### Automatically approve resume requests
+
+A switch, **off to begin with** — installations from before the switch existed included: whether a session's
+`request_resume_session` call, its request to resume a conversation, is approved without asking the user (see
+`docs/product/requests-to-resume-a-conversation.md`). While the switch is off the row's description says what turning
+it on will do, and while it is on it says what is happening now: a session can reopen or resume a session, or resume a
+conversation in a new session, without asking first; a reopened or resumed session keeps its owner and has its
+archived owners reopened with it; and a new session started this way is owned by nobody but the user.
 
 ## Notifications
 

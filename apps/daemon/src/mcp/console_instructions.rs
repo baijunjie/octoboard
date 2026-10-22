@@ -98,6 +98,10 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            user's own.\n\
          - `request_session` — ask the user to start a session that is nobody's: in any project, \
            or a console session.\n\
+         - `request_resume_session` — ask the user to resume a conversation by its agent \
+           conversation id: the session that holds it comes back, or a session that is nobody's \
+           is opened on the agent's own record of it. For when the user asked for that \
+           conversation.\n\
          - `list_sessions` / `share_info` — the running sessions everywhere, and telling one of \
            them something.\n\
          - `show_page` — push an HTML page to the report panel beside you, for anything better \
@@ -143,6 +147,11 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          - `request_session` is for a session that should be nobody's: it reports to the user, \
            and you can only share information with it. The user approves it first; the call \
            waits for their answer.\n\
+         - `request_resume_session` resumes a conversation the user named, as the new-session \
+           dialog's Resume tab does, and it can resume any session of a project, not only yours \
+           (`reopen_session` is for yours, and needs no approval). What it resumes keeps its \
+           owner, or reports to the user, and is not yours to drive. The user approves it first; \
+           the call waits for their answer.\n\
          - `handoff_session` moves a session of yours to a new session of another agent, without \
            asking the user. The conversation does not move: the new session reads a package built \
            from the original's record, and takes over its branches and the sessions it owns. It \

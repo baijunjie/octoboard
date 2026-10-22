@@ -6,9 +6,15 @@ in `docs/product/hub-orchestration.md`). It can be a project session in any proj
 session. A session the caller wants to drive itself is one its `new_session` starts, which needs no approval; a
 request is for a session that should be nobody's, or for one in a place `new_session` does not reach.
 
-**The user's confirmation is enforced by Octoboard, not by a prompt.** Nothing is started on the call alone: the call
-waits while the user is asked, and only the user's approval starts anything — or the user's standing approval, where
-they have chosen to have session requests approved automatically (see "Approving requests automatically" below).
+A session's `request_resume_session` call is a session request too, asking the user to resume a conversation by its id
+(see `docs/product/requests-to-resume-a-conversation.md`). The two share the approval, automatic approval (each under a
+setting of its own), the wait, the ways a request ends, the rule of one request per session and the outcome
+message, which this doc describes; the rest of it is `request_session`'s.
+
+**The user's confirmation is enforced by Octoboard, not by a prompt.** Nothing is started or resumed on the call
+alone: the call waits while the user is asked, and only the user's approval acts — or the user's standing approval,
+where they have chosen to have requests of that kind approved automatically (see "Approving requests automatically"
+below).
 
 ## Who is offered the tool
 
@@ -58,9 +64,11 @@ cannot hand over (see "Handing branches over" below).
 
 ## Approving requests automatically
 
-The application setting **Automatically approve session requests** (see "Automatically approve session requests" in
-`docs/product/settings.md`) is **off by default**. While it is on, a call that passes every check made before the user
-is asked is **approved at once**, without asking:
+Each kind of request has an application setting of its own, both **off by default** and independent of each other:
+**Automatically approve session requests** for `request_session` and **Automatically approve resume requests** for
+`request_resume_session` (see "Automatically approve session requests" and "Automatically approve resume requests" in
+`docs/product/settings.md`). While a call's own setting is on, the call, once it passes every check made before the
+user is asked, is **approved at once**, without asking:
 
 - **No one is asked.** No confirmation dialog is shown in any window, the session does not read *waiting for the user*
   and raises no hand, and no notification is fired. The call does not wait for an answer, so nothing in "Waiting for
@@ -70,25 +78,27 @@ is asked is **approved at once**, without asking:
   returns the same result and the same outcome message is written into the caller's session. The only difference in
   what is said is who approved: the paragraph opening the new session's prompt, and the result's note, say the request
   was approved automatically under the user's setting to approve session requests without asking, rather than by the
-  user. An automatic approval that cannot be carried out fails as described in "When an approval cannot be carried
-  out" below.
-- **The setting is read once, when the call is made.** A request already waiting in its dialog when the setting is
-  turned on stays there, waiting for the user's answer; turning the setting off does not stop an automatic approval
+  user; for a `request_resume_session` the note names the user's setting to approve resume requests without asking.
+  An automatic approval that cannot be carried out fails as described in "When an approval cannot be carried out"
+  below. A `request_resume_session` approved this way reopens, resumes or opens what its approval from the dialog
+  would, archived owners included (see "On approval" in `docs/product/requests-to-resume-a-conversation.md`).
+- **The call's setting is read once, when the call is made.** A request already waiting in its dialog when its setting
+  is turned on stays there, waiting for the user's answer; turning the setting off does not stop an automatic approval
   already being carried out.
 - **The rules on one request per session still hold** (see "How a request ends" below): an automatic request takes
   the place of a request the same session has waiting, which is withdrawn — its dialog closes and the hand comes down —
   and a call made while an approval of the same session's earlier request is being carried out is refused.
 - **Carrying the approval out does not depend on the call.** Once the call is approved, cancelling it — the user
   pressing Escape in the agent mid-call, the agent cancelling the call over MCP, or the call's connection to the
-  daemon dropping — does not stop it: the session is still started, the branches still handed over, and the outcome
-  message still reaches the caller's session.
+  daemon dropping — does not stop it: the session is still started or brought back, the branches still handed over,
+  and the outcome message still reaches the caller's session.
 
-The tool's description tells the agent that the call waits for the user's answer unless the user has chosen to have
+Each tool's description tells the agent that the call waits for the user's answer unless the user has chosen to have
 such requests approved automatically, in which case the result says so and the call does not wait.
 
-Only the user changes the setting, in Settings. An agent can neither read nor change it through the settings tools
-(see "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`), so a
-session cannot approve its own requests, and a configuration document neither carries nor applies it (see "The
+Only the user changes either setting, in Settings. An agent can neither read nor change either through the settings
+tools (see "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`), so
+a session cannot approve its own requests, and a configuration document neither carries nor applies either (see "The
 application settings a full export carries" in `docs/product/configuration-export-and-import.md`).
 
 ## Waiting for the answer
@@ -148,8 +158,8 @@ connected window.
 
 | Ending | What the call returns | What changes |
 |---|---|---|
-| The user approves | The result described under "On approval" below. | The session is started, as described there. |
-| The user refuses — the **Refuse** button, Escape or the dialog's close button | A tool error in fixed prose saying the user refused the request and nothing was started; it ends by telling the agent not to ask again unless the user tells it to, to tell the user in its terminal what it wanted the session for, and to follow the user's direction on continuing its own work or leaving handover notes and ending. | Nothing. |
+| The user approves | The result described under "On approval" below; for `request_resume_session`, under "On approval" in `docs/product/requests-to-resume-a-conversation.md`. | The session is started, or brought back, as described there. |
+| The user refuses — the **Refuse** button, Escape or the dialog's close button | A tool error in fixed prose saying the user refused the request and nothing was started (for `request_resume_session`, nothing was resumed); it ends by telling the agent not to ask again unless the user tells it to, to tell the user in its terminal what it wanted the session for, and to follow the user's direction on continuing its own work or leaving handover notes and ending. | Nothing. |
 | Nobody answers within the time limit | A tool error of the same shape, saying the user did not respond within the limit. | Nothing. |
 | The request is withdrawn | A tool error saying the request was withdrawn before the user answered and nothing was started, where the call is still there to receive it. | Nothing. |
 
@@ -160,11 +170,12 @@ A request is **withdrawn** on the signals Octoboard sees for every agent alike:
 - the caller's process ends — it is interrupted, archived, deleted or exits;
 - the call's connection to the daemon is dropped;
 - the agent cancels the call over MCP, which gets it a tool error saying the call was cancelled. This holds for
-  `request_session` only: a cancelled call of any other Octoboard tool is left to finish in the daemon;
+  `request_session` and `request_resume_session` only: a cancelled call of any other Octoboard tool is left to finish
+  in the daemon;
 - the same session makes another request.
 
-**A session has at most one request waiting.** A new request takes the place of the one the session already has
-waiting, which is withdrawn; the hand stays up through the change.
+**A session has at most one request waiting**, of either tool. A new request takes the place of the one the session
+already has waiting, which is withdrawn; the hand stays up through the change.
 
 A request made while an approval of the same session's earlier request — from the dialog or automatic — is being
 carried out is refused, saying the earlier request has just been approved and is being carried out, and that its
@@ -272,7 +283,8 @@ the caller is still responsible for them.
 **An approval's outcome is also written into the caller's session as a message**, after the call's result, through
 the delivery every message takes (see "Messages held until a session can take them" in
 `docs/product/message-delivery.md`). It carries the same note as the result, says it is from Octoboard about the
-`request_session` call, and that there is nothing more to do if the call already returned it. This is how a caller
+call that made the request, naming its tool — `request_session` or `request_resume_session` — and that there is
+nothing more to do if the call already returned it. This is how a caller
 whose agent gave up on the call by a time limit of its own, without any signal reaching Octoboard, still learns what
 came of its request (see "Waiting for the answer" above).
 
@@ -288,8 +300,9 @@ is not spared: that turn is reported on as any other, whether the caller continu
 When an approval cannot be carried out, nothing is started and no branch is handed over, the call returns a tool
 error saying the user approved but it could not be carried out, with the reason, and the window that approved shows
 the reason in an error alert about the requesting session. For an automatic approval the error says instead that the
-request was approved automatically but could not be carried out, and no window shows an alert. It is for one of these
-reasons:
+request was approved automatically but could not be carried out, and no window shows an alert. For a
+`request_session` it is for one of these reasons (a `request_resume_session`'s, and the session its alert is about, are
+in "When an approval cannot be carried out" in `docs/product/requests-to-resume-a-conversation.md`):
 
 - the caller's process ended before the session could be started, which gives the same error as an approval after a
   withdrawal (see "The confirmation dialog" below);
@@ -299,7 +312,9 @@ reasons:
 
 ## The confirmation dialog
 
-A plain confirmation titled "Start a session?", with two buttons, **Refuse** and **Start session**.
+For a `request_session`, a plain confirmation titled "Start a session?", with two buttons, **Refuse** and **Start
+session**; what a `request_resume_session`'s says is in "The confirmation dialog" in
+`docs/product/requests-to-resume-a-conversation.md`.
 
 - **One sentence says who asks and for what.** It names the requesting session by its displayed name (see
   "Displayed names" in `docs/product/session-titles.md`; its id where the window does not know the session) and where
@@ -319,7 +334,7 @@ A plain confirmation titled "Start a session?", with two buttons, **Refuse** and
   session for is for the requesting session to say, in its own terminal.
 - The text wraps anywhere, so a long unbroken title or branch name does not widen the dialog.
 
-It behaves as follows:
+Every session request's dialog behaves as follows:
 
 - **Keyboard focus starts on the dialog itself** rather than on a button, for each request it shows, so Enter answers
   nothing until the user moves focus onto a control (see "Where keyboard focus starts in a confirmation" in
@@ -333,6 +348,9 @@ It behaves as follows:
 - **The first answer from any window wins** and closes the dialog everywhere. The dialog closes as soon as the daemon
   takes the answer, before the session has started. An answer that arrives after another window's is ignored without
   a message.
-- **An approval that comes too late** — the request was withdrawn or timed out — starts nothing, and an error alert about the
-  requesting session says it is no longer waiting for an answer, so the session it asked for was not started. A
-  refusal that comes too late shows nothing.
+- **An approval that comes too late** — the request was withdrawn or timed out — does nothing, and an error alert about
+  the requesting session says it is no longer waiting for an answer, so its request was not carried out. A refusal that
+  comes too late shows nothing.
+- **A request the window cannot describe is not offered**: one asking for something this version of the application
+  does not know, or lacking what its kind needs to be described. No dialog is shown for it, and its call ends when the
+  wait runs out (see "Waiting for the answer" above).

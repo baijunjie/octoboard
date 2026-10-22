@@ -96,6 +96,29 @@ pub(crate) fn named_session(session: &Session) -> String {
     )
 }
 
+/// Who a session reports to, as the records say.
+pub(crate) enum ReportsTo {
+    /// Bound to nobody: it reports to the user.
+    User,
+    /// Bound to this session, its owner.
+    Session(Box<Session>),
+    /// Bound to a session whose record cannot be read.
+    Unreadable,
+}
+
+/// Who `session` reports to.
+pub(crate) fn reports_to(state: &Arc<AppState>, session: &Session) -> ReportsTo {
+    match session
+        .bound_to
+        .as_deref()
+        .map(|id| state.store.get_session(id))
+    {
+        Some(Ok(Some(owner))) => ReportsTo::Session(Box::new(owner)),
+        Some(_) => ReportsTo::Unreadable,
+        None => ReportsTo::User,
+    }
+}
+
 /// Where `session` runs, for a message to name it: ` in the project "…"`, or ` in the console "…"`
 /// for a console session, and nothing when the record is gone.
 pub(crate) fn place_of(state: &Arc<AppState>, session: &Session) -> String {

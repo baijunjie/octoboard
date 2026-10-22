@@ -1,5 +1,7 @@
+import type { Account, Settings } from "../../protocol";
+import type { SessionRequest } from "../../store";
 import type { Scenario } from "../scenario";
-import { SAMPLE, consoleOf, projectOf, sessionOf, snapshotState } from "./builders";
+import { ALL_AGENTS, SAMPLE, consoleOf, projectOf, sessionOf, snapshotState } from "./builders";
 import { SHELL_TIMEOUT } from "./shellTimeout";
 
 const TRUST = "Trust prompts and toasts";
@@ -26,6 +28,57 @@ const trustSessions = sessions.filter((session) => session.id !== "s-api-1").map
 const requestingConsole = consoleOf("c-requester", "Release coordination");
 // A linked worktree of the Search API repository, which Octoboard has as a project of its own.
 const worktreeProject = projectOf("p-api-experiments", console_.id, "Search API experiments");
+
+/** What `requestOf` takes of one kind of request: all of it but what the daemon always sends and the scenarios rarely
+ * vary, with the branches optional. Distributed over the kinds, so each action asks for exactly its own fields. */
+type RequestFields<Request> = Request extends unknown
+  ? Omit<Request, "requestId" | "branches" | "requestedAt"> & { branches?: string[] }
+  : never;
+
+/** A session request as the store holds it for what the daemon sent: the fields every request carries are set, and
+ * `fields` gives the rest, which the contract requires per action (a request that starts a session carries no target,
+ * owner, conversation or account, and no archived owners). */
+const requestOf = (fields: RequestFields<SessionRequest>): SessionRequest => ({
+  requestId: "r-1",
+  branches: [],
+  requestedAt: 1,
+  ...fields,
+});
+
+// The accounts the requests that resume a conversation name: Work, and Client, whose last sharing change did not finish.
+const accounts: Account[] = [
+  { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
+  { id: "a-client", agent: "claude", name: "Client", config_dir: "/Users/dev/.claude-client", share_default_config_incomplete: true },
+];
+const resumeSettings: Settings = {
+  auto_pull_repositories: false,
+  auto_delete_unresumable_archives: true,
+  added_agents: ALL_AGENTS,
+  default_clone_dir: "/Users/dev/Projects",
+  accounts,
+};
+const onAccount = (account: Account) => ({ account_id: account.id, config_dir: account.config_dir });
+
+// Sessions a request to reopen or resume names: an archived one that reports to an archived console session, an
+// interrupted one on Work, an archived one on Client, and a chain whose names have no break opportunity: the target and
+// its owner are project sessions of Search API, the owner a lead session that reports to an archived console session.
+const archivedOwner = sessionOf("s-owner-archived", console_.id, undefined, "Release coordinator", "archived");
+const reopenTarget = sessionOf("s-reopen-target", console_.id, api.id, "Add idempotency keys", "archived", { bound_to: archivedOwner.id });
+const resumeTarget = sessionOf("s-resume-target", console_.id, web.id, "Port the importer to the new parser", "interrupted", onAccount(accounts[0]));
+const incompleteTarget = sessionOf("s-reopen-client", console_.id, web.id, "Verify the migration", "archived", onAccount(accounts[1]));
+const LONG_NAME = "Review-the-release-readiness-checklist-for-the-production-deployment-compatibility-and-rollback-plan";
+const longTop = sessionOf("s-owner-top", console_.id, undefined, `${LONG_NAME}-coordinator`, "archived");
+const longOwner = sessionOf("s-owner-long", console_.id, api.id, `${LONG_NAME}-owner`, "archived", { bound_to: longTop.id });
+const longTarget = sessionOf("s-reopen-long", console_.id, api.id, `${LONG_NAME}-worker`, "archived", { bound_to: longOwner.id });
+const resumeSessions = [...sessions, archivedOwner, reopenTarget, resumeTarget, incompleteTarget, longTop, longOwner, longTarget];
+const waiting = (id: string) => (session: (typeof sessions)[number]) => session.id === id ? { ...session, status: "waiting_user" as const } : session;
+const resumeState = (requesting: string, request: SessionRequest, settings?: Settings) => snapshotState({
+  consoles: [console_],
+  projects: [web, api, grokProject],
+  sessions: resumeSessions.map(waiting(requesting)),
+  sessionRequests: [request],
+  settings,
+});
 
 export const noticeScenarios: Scenario[] = [
   {
@@ -73,16 +126,7 @@ export const noticeScenarios: Scenario[] = [
         ? { ...s, status: "waiting_user" as const, terminal_title: "Remove the redundant details" }
         : s),
       sessionRequests: [
-        {
-          requestId: "r-1",
-          session: "s-web-1",
-          role: "project",
-          console: console_.id,
-          project: web.id,
-          agent: "claude",
-          branches: [],
-          requestedAt: 1,
-        },
+        requestOf({ action: "start", session: "s-web-1", role: "project", console: console_.id, project: web.id, agent: "claude" }),
       ],
     }),
   },
@@ -101,16 +145,15 @@ export const noticeScenarios: Scenario[] = [
         ...(s.id === "s-api-1" ? { terminal_title: "Deduplicate retried writes" } : {}),
       })),
       sessionRequests: [
-        {
-          requestId: "r-1",
+        requestOf({
+          action: "start",
           session: "s-api-1",
           role: "project",
           console: console_.id,
           project: worktreeProject.id,
           agent: "grok",
           branches: ["feature/saved-searches", "fix/coverage-at-100%25", "feature/rework-the-suggestion-index-so-that-prefixes-are-matched-before-fuzzy-candidates"],
-          requestedAt: 1,
-        },
+        }),
       ],
     }),
   },
@@ -125,18 +168,131 @@ export const noticeScenarios: Scenario[] = [
       projects: [web, api, grokProject],
       sessions: sessions.map((s) => (s.id === SAMPLE.consoleSession.id ? { ...s, status: "waiting_user" } : s)),
       sessionRequests: [
-        {
-          requestId: "r-1",
-          session: SAMPLE.consoleSession.id,
-          role: "console",
-          console: console_.id,
-          project: null,
-          agent: "codex",
-          branches: [],
-          requestedAt: 1,
-        },
+        requestOf({ action: "start", session: SAMPLE.consoleSession.id, role: "console", console: console_.id, project: null, agent: "codex" }),
       ],
     }),
+  },
+  {
+    id: "session-request-reopen",
+    group: TRUST,
+    category: "normal",
+    title: "Request to reopen an archived session with its owner",
+    description: "A session in Website asks to reopen Add idempotency keys, an archived Claude Code session of Search API on the default account. The question names the session, its account, project and console as chips, says it reports to its owner (named) and that the owner, archived too, would be reopened with it. The title and the confirm button say Reopen.",
+    state: resumeState("s-web-1", requestOf({
+      session: "s-web-1",
+      action: "reopen",
+      role: "project",
+      console: console_.id,
+      project: api.id,
+      agent: "claude",
+      target: reopenTarget.id,
+      owner: archivedOwner.id,
+      reopenedOwners: [archivedOwner.id],
+    })),
+  },
+  {
+    id: "session-request-resume",
+    group: TRUST,
+    category: "normal",
+    title: "Request to resume an interrupted session",
+    description: "The console session asks to resume Port the importer to the new parser, an interrupted Claude Code session of Website on the account Work. It has no owner, so the question ends in that it reports to you. The title and the confirm button say Resume.",
+    state: resumeState(SAMPLE.consoleSession.id, requestOf({
+      session: SAMPLE.consoleSession.id,
+      action: "resume",
+      role: "project",
+      console: console_.id,
+      project: web.id,
+      agent: "claude",
+      target: resumeTarget.id,
+      reopenedOwners: [],
+    }), resumeSettings),
+  },
+  {
+    id: "session-request-resume-record",
+    group: TRUST,
+    category: "normal",
+    title: "Request to continue a conversation only an account's record holds",
+    description: "A session in Search API asks to continue a conversation no session holds, kept in the record of the account Work in Website. The question gives the conversation's id as a code chip, then the agent, account, project and console, and says the new session would report to you. The title says Resume a conversation and the confirm button Resume conversation.",
+    state: resumeState("s-api-1", requestOf({
+      session: "s-api-1",
+      action: "resume_record",
+      role: "project",
+      console: console_.id,
+      project: web.id,
+      agent: "claude",
+      account: "a-work",
+      conversation: "3f9d2c1e-6b47-4a85-9e0d-71c2a8b45f16",
+    }), resumeSettings),
+  },
+  {
+    id: "session-request-resume-record-default",
+    group: TRUST,
+    category: "normal",
+    title: "Request to continue a conversation the default account's record holds",
+    description: "As the previous one, for a Codex conversation kept in the record of Codex's default account, which the question names Default, in Search API.",
+    state: resumeState("s-web-1", requestOf({
+      session: "s-web-1",
+      action: "resume_record",
+      role: "project",
+      console: console_.id,
+      project: api.id,
+      agent: "codex",
+      account: null,
+      conversation: "0199c3a2-7e41-7b52-9d0e-4f6a1c85b2d7",
+    })),
+  },
+  {
+    id: "session-request-reopen-long-names",
+    group: TRUST,
+    category: "normal",
+    title: "Request to reopen a session whose owners have long names",
+    description: "The reopened session and both archived owners it would bring back have names with no break opportunity, which wrap inside their chips and the sentence; the owners are listed in the plural form, topmost first, and the one it reports to is named after \"reports to\".",
+    state: resumeState("s-web-1", requestOf({
+      session: "s-web-1",
+      action: "reopen",
+      role: "project",
+      console: console_.id,
+      project: api.id,
+      agent: "claude",
+      target: longTarget.id,
+      owner: longOwner.id,
+      reopenedOwners: [longTop.id, longOwner.id],
+    })),
+  },
+  {
+    id: "session-request-reopen-incomplete",
+    group: TRUST,
+    category: "exceptional",
+    title: "Request to reopen a session on an account whose sharing change did not finish",
+    description: "Reopening Verify the migration would launch it on Client, whose last sharing change did not finish, so a warning line sits between the question and the buttons, naming the account and saying its configuration and conversations may be incomplete. The buttons stay Refuse and Reopen session: the dialog itself is the confirmation.",
+    state: resumeState("s-api-1", requestOf({
+      session: "s-api-1",
+      action: "reopen",
+      role: "project",
+      console: console_.id,
+      project: web.id,
+      agent: "claude",
+      target: incompleteTarget.id,
+      reopenedOwners: [],
+    }), resumeSettings),
+  },
+  {
+    id: "session-request-reopen-unknown",
+    group: TRUST,
+    category: "exceptional",
+    title: "Request to reopen a session the app does not know",
+    description: "The session to reopen is not among the sessions this app has, so the question gives its id as a code chip where the name would be and a dash chip where its account would be. The owner it reports to is named as usual.",
+    state: resumeState("s-web-1", requestOf({
+      session: "s-web-1",
+      action: "reopen",
+      role: "project",
+      console: console_.id,
+      project: api.id,
+      agent: "claude",
+      target: "s-reopen-unknown",
+      owner: SAMPLE.consoleSession.id,
+      reopenedOwners: [],
+    })),
   },
   {
     id: "toast-error",

@@ -453,6 +453,16 @@ describe("the fixture daemon's settings and trusted folders", () => {
     expect(daemon.store.getState().settings.auto_approve_session_requests).toBe(true);
     await daemon.request({ type: "update_settings", auto_approve_session_requests: false });
     expect(daemon.store.getState().settings.auto_approve_session_requests).toBe(false);
+    expect(daemon.store.getState().settings.auto_approve_resume_requests).toBeUndefined();
+    await daemon.request({ type: "update_settings", auto_approve_resume_requests: true });
+    expect(daemon.store.getState().settings.auto_approve_resume_requests).toBe(true);
+    expect(daemon.store.getState().settings.auto_approve_session_requests).toBe(false);
+    await daemon.request({ type: "update_settings", auto_approve_session_requests: true });
+    expect(daemon.store.getState().settings.auto_approve_resume_requests).toBe(true);
+    await daemon.request({ type: "update_settings", auto_approve_resume_requests: false });
+    expect(daemon.store.getState().settings.auto_approve_resume_requests).toBe(false);
+    expect(daemon.store.getState().settings.auto_approve_session_requests).toBe(true);
+    await daemon.request({ type: "update_settings", auto_approve_session_requests: false });
     expect(exportedDocument(daemon.store.getState()).settings).not.toHaveProperty("auto_select_account");
     await daemon.request({ type: "update_settings", auto_select_account: true });
     expect(daemon.store.getState().settings.auto_select_account).toBe(true);

@@ -167,3 +167,31 @@ it("keeps the shell terminals a snapshot lists and the broadcasts change, and dr
   client.onEvents!([{ type: "project_deleted", project: "q" }]);
   expect(daemon.store.getState().shellTerminals.size).toBe(0);
 });
+
+it("keeps what a session request says it does, and drops it when it closes", () => {
+  const daemon = createDaemon("http://localhost:1234");
+  const base = { type: "session_request" as const, session: "s", role: "project" as const, console: "c", project: "p", agent: "claude" as const, branches: [], requested_at: 1 };
+  const resume: Event = {
+    ...base, request_id: "r-1", action: "reopen", target: "t", owner: "o", reopened_owners: ["o"], account: null, conversation: null,
+  };
+  const start: Event = { ...base, request_id: "r-2", action: "start", target: null, owner: null, reopened_owners: [], account: null, conversation: null, requested_at: 2 };
+  client.onEvents!([start, resume, resume]);
+  const [first, second] = daemon.store.getState().sessionRequests;
+  if (first.action !== "reopen") throw new Error("expected a reopen");
+  expect([first.requestId, first.target, first.owner, first.reopenedOwners]).toEqual(["r-1", "t", "o", ["o"]]);
+  expect([second.requestId, second.action]).toEqual(["r-2", "start"]);
+  client.onEvents!([{ type: "session_request_closed", request_id: "r-1", reason: "approved" }]);
+  expect(daemon.store.getState().sessionRequests.map((r) => r.requestId)).toEqual(["r-2"]);
+});
+
+it("does not offer a session request that lacks what its action needs or has an action it does not know", () => {
+  const daemon = createDaemon("http://localhost:1234");
+  const base = { type: "session_request" as const, session: "s", role: "project" as const, console: "c", project: "p", agent: "claude" as const, branches: [], requested_at: 1, owner: null, reopened_owners: [], target: null, account: null, conversation: null };
+  client.onEvents!([
+    { ...base, request_id: "r-1", action: "reopen" },
+    { ...base, request_id: "r-2", action: "resume" },
+    { ...base, request_id: "r-3", action: "resume_record" },
+    { ...base, request_id: "r-4", action: "from_the_future" as never },
+  ]);
+  expect(daemon.store.getState().sessionRequests).toEqual([]);
+});

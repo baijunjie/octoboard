@@ -1,8 +1,11 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
 
 use super::*;
 use crate::branch_origin::{self, repo_key, repository_of};
-use crate::protocol::{Console, Origin, Project, ProjectAccount, ProjectSource, SessionStatus};
+use crate::protocol::{
+    Console, Origin, Project, ProjectAccount, ProjectSource, SessionRequestAction, SessionStatus,
+};
 use crate::store::LOCAL_HOST_ID;
 use crate::test_support::{
     app_state, branch_made_by, idle_stand_in, output_containing, repo_with, running, ScratchDir,
@@ -257,13 +260,19 @@ impl Launcher {
     }
 }
 
+/// Stands in for `coordinator::resume_session` where a request that starts a session is answered:
+/// nothing there brings a session back.
+async fn never_resumed(_id: String) -> Result<()> {
+    bail!("no session is brought back here")
+}
+
 async fn answer_by(
     launcher: &Arc<Launcher>,
     request_id: &str,
     approve: bool,
 ) -> Result<Option<Session>> {
     let open = |request| launcher.clone().open(request);
-    answer_with(&launcher.state, request_id, approve, open).await
+    answer_with_resume(&launcher.state, request_id, approve, open, never_resumed).await
 }
 
 /// A call's outcome, waited for no longer than `PATIENCE`.
@@ -415,7 +424,7 @@ async fn a_call_made_while_its_approval_is_carried_out_is_refused() {
     };
     let approval = tokio::spawn({
         let state = state.clone();
-        async move { answer_with(&state, &request_id, true, launch).await }
+        async move { answer_with_resume(&state, &request_id, true, launch, never_resumed).await }
     });
     entered_rx.await.unwrap();
 
@@ -968,14 +977,17 @@ async fn ask_automatically(
     let caller = launcher.state.session_record(caller).unwrap();
     let launcher_for_launch = launcher.clone();
     let open = move |request| launcher_for_launch.open(request);
-    ask_for_session_with(
+    ask_with(
         &launcher.state,
         &caller,
-        asked,
-        handover,
+        Action::Start {
+            open: asked,
+            handover,
+        },
         true,
         ANSWER_TIME_LIMIT,
         open,
+        never_resumed,
     )
     .await
 }
@@ -1003,6 +1015,10 @@ async fn an_automatic_approval_starts_the_session_without_asking() {
     let note = result["note"].as_str().unwrap();
     assert!(
         note.starts_with("Octoboard approved the request automatically"),
+        "{note}"
+    );
+    assert!(
+        note.contains("session requests approved without asking"),
         "{note}"
     );
     assert!(!note.contains("The user approved"), "{note}");
@@ -1089,14 +1105,17 @@ async fn an_automatic_approval_replaces_a_waiting_request_and_respects_an_approv
                 let _ = released.await;
                 Err(anyhow!("not launched"))
             };
-            ask_for_session_with(
+            ask_with(
                 &state,
                 &caller,
-                asked(CONSOLE, None),
-                None,
+                Action::Start {
+                    open: asked(CONSOLE, None),
+                    handover: None,
+                },
                 true,
                 ANSWER_TIME_LIMIT,
                 launch,
+                never_resumed,
             )
             .await
         }
@@ -1138,14 +1157,17 @@ async fn an_automatic_approval_carries_on_when_the_call_is_dropped() {
     let call = tokio::spawn({
         let state = state.clone();
         async move {
-            ask_for_session_with(
+            ask_with(
                 &state,
                 &caller,
-                asked(CONSOLE, Some("project-1")),
-                None,
+                Action::Start {
+                    open: asked(CONSOLE, Some("project-1")),
+                    handover: None,
+                },
                 true,
                 ANSWER_TIME_LIMIT,
                 launch,
+                never_resumed,
             )
             .await
         }
@@ -1168,4 +1190,747 @@ async fn an_automatic_approval_carries_on_when_the_call_is_dropped() {
         "{message}"
     );
     assert_eq!(launcher.launched.load(Ordering::SeqCst), 1);
+}
+
+const CONVERSATION: &str = "11111111-2222-3333-4444-555555555555";
+
+/// A dormant session of `project-1` that holds a conversation, reporting to `bound_to`.
+fn holder(id: &str, status: SessionStatus, bound_to: Option<&str>) -> Session {
+    Session {
+        status,
+        title: "Old work".to_string(),
+        bound_to: bound_to.map(str::to_string),
+        agent_session_id: Some(CONVERSATION.to_string()),
+        ended_at: Some(1),
+        ..project_session(id)
+    }
+}
+
+/// Stands in for `coordinator::resume_session`, which would launch a real agent: moves the session
+/// out of its dormant status, and counts the calls.
+struct Resumer {
+    state: Arc<AppState>,
+    resumed: Mutex<Vec<String>>,
+}
+
+impl Resumer {
+    fn new(state: &Arc<AppState>) -> Arc<Self> {
+        Arc::new(Self {
+            state: state.clone(),
+            resumed: Mutex::new(Vec::new()),
+        })
+    }
+
+    async fn resume(self: Arc<Self>, id: String) -> Result<()> {
+        let before = self.state.session_record(&id)?.status;
+        self.resumed.lock().unwrap().push(id.clone());
+        self.state
+            .store
+            .update_session_lifecycle_if(&id, before, SessionStatus::Idle, None)?;
+        Ok(())
+    }
+
+    fn resumed(&self) -> Vec<String> {
+        self.resumed.lock().unwrap().clone()
+    }
+}
+
+fn resuming(target: &str, status: SessionStatus, rename: Option<&str>) -> Action {
+    Action::Resume {
+        target: target.to_string(),
+        archived: status == SessionStatus::Archived,
+        owner: None,
+        reopened_owners: Vec::new(),
+        rename: rename.map(str::to_string),
+    }
+}
+
+/// Makes the call for `action` as `caller` with the stand-ins, waits for its dialog if it asks,
+/// and returns the call with the request's event.
+async fn ask_to_resume(
+    launcher: &Arc<Launcher>,
+    resumer: &Arc<Resumer>,
+    caller: &str,
+    action: Action,
+    automatic: bool,
+) -> tokio::task::JoinHandle<Result<Value>> {
+    let state = launcher.state.clone();
+    let caller = state.session_record(caller).unwrap();
+    let (launcher, resumer) = (launcher.clone(), resumer.clone());
+    tokio::spawn(async move {
+        ask_with(
+            &state,
+            &caller,
+            action,
+            automatic,
+            ANSWER_TIME_LIMIT,
+            move |request| launcher.open(request),
+            move |id| resumer.resume(id),
+        )
+        .await
+    })
+}
+
+async fn event_of(state: &Arc<AppState>, caller: &str) -> Event {
+    let deadline = std::time::Instant::now() + PATIENCE;
+    loop {
+        if let Some(event) = pending_events(state).into_iter().find(
+            |event| matches!(event, Event::SessionRequest { session, .. } if session == caller),
+        ) {
+            return event;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the request never waited"
+        );
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+}
+
+async fn answer_resuming(
+    launcher: &Arc<Launcher>,
+    resumer: &Arc<Resumer>,
+    request_id: &str,
+    approve: bool,
+) -> Result<Option<Session>> {
+    answer_with_resume(
+        &launcher.state,
+        request_id,
+        approve,
+        |request| launcher.clone().open(request),
+        |id| resumer.clone().resume(id),
+    )
+    .await
+}
+
+/// The dialog is told which session an approval brings back, whom it reports to and which owners
+/// come back with it; an approval reopens it, renames it, leaves its owner as it was, and tells the
+/// caller, by the name of the tool it called. Refusing changes nothing.
+#[tokio::test]
+async fn an_approval_reopens_the_session_that_holds_the_conversation() {
+    let (state, _dir) = fixture("resume-reopen");
+    state
+        .store
+        .insert_session(&holder("boss", SessionStatus::Archived, None))
+        .unwrap();
+    state
+        .store
+        .insert_session(&holder("held", SessionStatus::Archived, Some("boss")))
+        .unwrap();
+    let asker = running(&state, "asker");
+    let (launcher, resumer) = (Launcher::new(&state), Resumer::new(&state));
+    let action = Action::Resume {
+        target: "held".to_string(),
+        archived: true,
+        owner: Some("boss".to_string()),
+        reopened_owners: vec!["boss".to_string()],
+        rename: Some("Refund flow".to_string()),
+    };
+
+    let refused = ask_to_resume(&launcher, &resumer, "asker", action, false).await;
+    let event = event_of(&state, "asker").await;
+    let Event::SessionRequest {
+        action,
+        role,
+        project,
+        target,
+        owner,
+        reopened_owners,
+        account,
+        conversation,
+        ..
+    } = &event
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        (
+            *action,
+            *role,
+            project.as_deref(),
+            target.as_deref(),
+            owner.as_deref()
+        ),
+        (
+            SessionRequestAction::Reopen,
+            Role::Project,
+            Some("project-1"),
+            Some("held"),
+            Some("boss")
+        )
+    );
+    assert_eq!(reopened_owners, &["boss".to_string()]);
+    assert_eq!((account, conversation), (&None, &None));
+    answer_resuming(&launcher, &resumer, &request_id_of(&event), false)
+        .await
+        .unwrap();
+    let err = outcome_of(refused).await.expect_err("refused");
+    assert!(err.to_string().contains("nothing was resumed"), "{err}");
+    assert!(resumer.resumed().is_empty());
+    assert_eq!(status_of(&state, "held"), SessionStatus::Archived);
+
+    let action = Action::Resume {
+        target: "held".to_string(),
+        archived: true,
+        owner: Some("boss".to_string()),
+        reopened_owners: vec!["boss".to_string()],
+        rename: Some("Refund flow".to_string()),
+    };
+    let call = ask_to_resume(&launcher, &resumer, "asker", action, false).await;
+    let event = event_of(&state, "asker").await;
+    let session = answer_resuming(&launcher, &resumer, &request_id_of(&event), true)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(session.id, "held");
+    let result = outcome_of(call).await.unwrap();
+    assert_eq!(
+        (
+            result["action"].as_str(),
+            result["session"].as_str(),
+            result["title"].as_str()
+        ),
+        (Some("reopened"), Some("held"), Some("Refund flow"))
+    );
+    assert_eq!(
+        (&result["owner"], &result["renamed"]),
+        (&json!("boss"), &json!(true))
+    );
+    let note = result["note"].as_str().unwrap();
+    assert!(note.contains("reports to its owner `boss`"), "{note}");
+    assert!(note.contains("mcp__octoboard__share_info"), "{note}");
+    assert_eq!(resumer.resumed(), ["held"]);
+    let held = state.session_record("held").unwrap();
+    assert_eq!(
+        (held.status, held.bound_to.as_deref(), held.title.as_str()),
+        (SessionStatus::Idle, Some("boss"), "Refund flow")
+    );
+    let message = output_containing(&asker, "mcp__octoboard__request_resume_session");
+    assert!(message.contains("Message from Octoboard"), "{message}");
+}
+
+/// An interrupted session is resumed, not reopened, and keeps being the user's own.
+#[tokio::test]
+async fn an_approval_resumes_an_interrupted_holder() {
+    let (state, _dir) = fixture("resume-interrupted");
+    state
+        .store
+        .insert_session(&holder("held", SessionStatus::Interrupted, None))
+        .unwrap();
+    let _asker = running(&state, "asker");
+    let (launcher, resumer) = (Launcher::new(&state), Resumer::new(&state));
+
+    let call = ask_to_resume(
+        &launcher,
+        &resumer,
+        "asker",
+        resuming("held", SessionStatus::Interrupted, None),
+        false,
+    )
+    .await;
+    let event = event_of(&state, "asker").await;
+    assert!(matches!(
+        event,
+        Event::SessionRequest {
+            action: SessionRequestAction::Resume,
+            ..
+        }
+    ));
+    answer_resuming(&launcher, &resumer, &request_id_of(&event), true)
+        .await
+        .unwrap();
+    let result = outcome_of(call).await.unwrap();
+    assert_eq!(result["action"], "resumed");
+    assert!(result["owner"].is_null());
+    assert!(result.get("renamed").is_none());
+    assert!(result["note"]
+        .as_str()
+        .unwrap()
+        .contains("reports to the user, as before"));
+}
+
+/// A session that is running by the time of the approval is left alone: nothing is resumed or
+/// renamed, and the result says so, whether it was seen running or the resume found it so.
+#[tokio::test]
+async fn an_approval_finding_the_session_running_does_nothing() {
+    let (state, _dir) = fixture("resume-already-running");
+    state
+        .store
+        .insert_session(&holder("held", SessionStatus::Archived, None))
+        .unwrap();
+    let _asker = running(&state, "asker");
+    let (launcher, resumer) = (Launcher::new(&state), Resumer::new(&state));
+
+    let call = ask_to_resume(
+        &launcher,
+        &resumer,
+        "asker",
+        resuming("held", SessionStatus::Archived, Some("Refund flow")),
+        false,
+    )
+    .await;
+    let event = event_of(&state, "asker").await;
+    // Brought back by the user meanwhile.
+    resumer.clone().resume("held".to_string()).await.unwrap();
+    resumer.resumed.lock().unwrap().clear();
+    answer_resuming(&launcher, &resumer, &request_id_of(&event), true)
+        .await
+        .unwrap();
+    let result = outcome_of(call).await.unwrap();
+    assert_eq!(result["action"], "already_running");
+    assert_eq!(result["renamed"], false);
+    let note = result["note"].as_str().unwrap();
+    assert!(note.contains("did nothing"), "{note}");
+    assert!(note.contains("could not be renamed"), "{note}");
+    assert!(resumer.resumed().is_empty());
+    assert_eq!(state.session_record("held").unwrap().title, "Old work");
+
+    // The resume itself finding it running, as a click of the user's own would.
+    state
+        .store
+        .update_session_lifecycle_if(
+            "held",
+            SessionStatus::Idle,
+            SessionStatus::Interrupted,
+            None,
+        )
+        .unwrap();
+    let call = ask_to_resume(
+        &launcher,
+        &resumer,
+        "asker",
+        resuming("held", SessionStatus::Interrupted, None),
+        false,
+    )
+    .await;
+    let event = event_of(&state, "asker").await;
+    let answered = answer_with_resume(
+        &state,
+        &request_id_of(&event),
+        true,
+        |request| launcher.clone().open(request),
+        |id| async move {
+            Err(CodedError::raised(
+                error_code::SESSION_ALREADY_RUNNING,
+                "running",
+                &[("session", &id)],
+            ))
+        },
+    )
+    .await;
+    assert!(answered.unwrap().is_some());
+    assert_eq!(outcome_of(call).await.unwrap()["action"], "already_running");
+}
+
+/// A refusal for the launch claim of an archived owner is not the session running: the approval
+/// could not be carried out and says so, unless the session itself came back meanwhile.
+#[tokio::test]
+async fn an_owners_launch_claim_is_not_the_session_running() {
+    let (state, _dir) = fixture("resume-owner-claim");
+    state
+        .store
+        .insert_session(&holder("boss", SessionStatus::Archived, None))
+        .unwrap();
+    state
+        .store
+        .insert_session(&holder("held", SessionStatus::Archived, Some("boss")))
+        .unwrap();
+    let _asker = running(&state, "asker");
+    let (launcher, resumer) = (Launcher::new(&state), Resumer::new(&state));
+    let claimed = || {
+        CodedError::raised(
+            error_code::SESSION_ALREADY_STARTING,
+            "starting",
+            &[("session", "boss")],
+        )
+    };
+
+    let call = ask_to_resume(
+        &launcher,
+        &resumer,
+        "asker",
+        resuming("held", SessionStatus::Archived, None),
+        false,
+    )
+    .await;
+    let event = event_of(&state, "asker").await;
+    let err = answer_with_resume(
+        &state,
+        &request_id_of(&event),
+        true,
+        |request| launcher.clone().open(request),
+        |_| async { Err(claimed()) },
+    )
+    .await
+    .expect_err("not carried out");
+    assert!(err.to_string().contains("starting"), "{err}");
+    let told = outcome_of(call).await.expect_err("not carried out");
+    assert!(
+        told.to_string().contains("could not be carried out"),
+        "{told}"
+    );
+    assert_eq!(status_of(&state, "held"), SessionStatus::Archived);
+
+    // The session itself came back while the owner's claim was refused.
+    let call = ask_to_resume(
+        &launcher,
+        &resumer,
+        "asker",
+        resuming("held", SessionStatus::Archived, None),
+        false,
+    )
+    .await;
+    let event = event_of(&state, "asker").await;
+    let came_back = resumer.clone();
+    answer_with_resume(
+        &state,
+        &request_id_of(&event),
+        true,
+        |request| launcher.clone().open(request),
+        |id| async move {
+            came_back.resume(id).await?;
+            Err(claimed())
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(outcome_of(call).await.unwrap()["action"], "already_running");
+}
+
+/// A refusal for the claim of an account switch, a handoff or a binding change on the session
+/// itself is not a launch under way: the session is still dormant, so the approval could not be
+/// carried out. A launch claim of the user's own resume still counts as done.
+#[tokio::test]
+async fn a_switch_holding_the_session_is_not_a_launch_of_it() {
+    let (state, _dir) = fixture("resume-switch-claim");
+    state
+        .store
+        .insert_session(&holder("held", SessionStatus::Archived, None))
+        .unwrap();
+    let _asker = running(&state, "asker");
+    let (launcher, resumer) = (Launcher::new(&state), Resumer::new(&state));
+    let refused_by = |state: Arc<AppState>| {
+        move |id: String| async move {
+            // What a resume is told by the claim, whoever holds it.
+            Err::<(), _>(state.begin_launch(&id).map(drop).unwrap_err())
+        }
+    };
+
+    let switch = state.begin_switch("held").unwrap();
+    let call = ask_to_resume(
+        &launcher,
+        &resumer,
+        "asker",
+        resuming("held", SessionStatus::Archived, None),
+        false,
+    )
+    .await;
+    let event = event_of(&state, "asker").await;
+    let err = answer_with_resume(
+        &state,
+        &request_id_of(&event),
+        true,
+        |request| launcher.clone().open(request),
+        refused_by(state.clone()),
+    )
+    .await
+    .expect_err("not carried out");
+    assert_eq!(code_of(&err), Some(error_code::SESSION_ALREADY_STARTING));
+    let told = outcome_of(call).await.expect_err("not carried out");
+    assert!(
+        told.to_string().contains("could not be carried out"),
+        "{told}"
+    );
+    assert_eq!(status_of(&state, "held"), SessionStatus::Archived);
+    drop(switch);
+
+    // A launch of the session, as the user's own resume of it.
+    let launch = state.begin_launch("held").unwrap();
+    let call = ask_to_resume(
+        &launcher,
+        &resumer,
+        "asker",
+        resuming("held", SessionStatus::Archived, None),
+        false,
+    )
+    .await;
+    let event = event_of(&state, "asker").await;
+    answer_with_resume(
+        &state,
+        &request_id_of(&event),
+        true,
+        |request| launcher.clone().open(request),
+        refused_by(state.clone()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(outcome_of(call).await.unwrap()["action"], "already_running");
+    drop(launch);
+}
+
+/// A refusal for a switch claim that is gone by the time it is judged is not read as a launch of
+/// the target: with the session still dormant, the approval could not be carried out.
+#[tokio::test]
+async fn a_switch_claim_gone_meanwhile_is_not_a_launch_of_the_target() {
+    let (state, _dir) = fixture("resume-switch-claim-gone");
+    state
+        .store
+        .insert_session(&holder("held", SessionStatus::Archived, None))
+        .unwrap();
+    let switch = state.begin_switch("held").unwrap();
+    let refusal = state.begin_launch("held").map(drop).unwrap_err();
+    drop(switch);
+    assert!(!refused_as_running(&state, &refusal, "held").unwrap());
+
+    let launch = state.begin_launch("held").unwrap();
+    assert!(refused_as_running(&state, &refusal, "held").unwrap());
+    drop(launch);
+}
+
+/// The archived owners a resume brings back are told, by id, in the result and the note.
+#[tokio::test]
+async fn an_approval_that_brings_the_owner_back_says_so() {
+    let (state, _dir) = fixture("resume-owners-back");
+    state
+        .store
+        .insert_session(&holder("boss", SessionStatus::Archived, None))
+        .unwrap();
+    state
+        .store
+        .insert_session(&holder("held", SessionStatus::Archived, Some("boss")))
+        .unwrap();
+    let _asker = running(&state, "asker");
+    let (launcher, resumer) = (Launcher::new(&state), Resumer::new(&state));
+
+    let call = ask_to_resume(
+        &launcher,
+        &resumer,
+        "asker",
+        resuming("held", SessionStatus::Archived, None),
+        false,
+    )
+    .await;
+    let event = event_of(&state, "asker").await;
+    let stand_in = resumer.clone();
+    let owner_state = state.clone();
+    answer_with_resume(
+        &state,
+        &request_id_of(&event),
+        true,
+        |request| launcher.clone().open(request),
+        |id| async move {
+            // As `resume_session` does: the owner first, then the session.
+            owner_state.store.update_session_lifecycle_if(
+                "boss",
+                SessionStatus::Archived,
+                SessionStatus::Idle,
+                None,
+            )?;
+            stand_in.resume(id).await
+        },
+    )
+    .await
+    .unwrap();
+    let result = outcome_of(call).await.unwrap();
+    assert_eq!(result["reopened_owners"], json!(["boss"]));
+    let note = result["note"].as_str().unwrap();
+    assert!(
+        note.contains("archived owners were reopened with it: `boss`"),
+        "{note}"
+    );
+}
+
+/// A resume the agent refuses is the failure of an approved request, which the caller is told, with
+/// the session as it was.
+#[tokio::test]
+async fn a_resume_that_fails_is_told_to_the_caller() {
+    let (state, _dir) = fixture("resume-fails");
+    state
+        .store
+        .insert_session(&holder("held", SessionStatus::Archived, None))
+        .unwrap();
+    let _asker = running(&state, "asker");
+    let (launcher, resumer) = (Launcher::new(&state), Resumer::new(&state));
+
+    let call = ask_to_resume(
+        &launcher,
+        &resumer,
+        "asker",
+        resuming("held", SessionStatus::Archived, Some("Refund flow")),
+        false,
+    )
+    .await;
+    let event = event_of(&state, "asker").await;
+    let err = answer_with_resume(
+        &state,
+        &request_id_of(&event),
+        true,
+        |request| launcher.clone().open(request),
+        |_| async { Err(anyhow!("the agent is gone")) },
+    )
+    .await
+    .expect_err("fails");
+    assert!(err.to_string().contains("the agent is gone"), "{err}");
+    let told = outcome_of(call).await.expect_err("fails");
+    assert!(
+        told.to_string()
+            .contains("approved this request for a session, but it could not be carried out"),
+        "{told}"
+    );
+    let held = state.session_record("held").unwrap();
+    assert_eq!(
+        (held.status, held.title.as_str()),
+        (SessionStatus::Archived, "Old work")
+    );
+}
+
+/// A conversation only an agent's record holds opens an unbound session on that record: the dialog
+/// is told the account and the conversation, and a session that came to hold the conversation
+/// meanwhile makes the approval fail rather than a second session start.
+#[tokio::test]
+async fn an_approval_opens_a_session_on_the_record() {
+    let (state, _dir) = fixture("resume-record");
+    let asker = running(&state, "asker");
+    let (launcher, resumer) = (Launcher::new(&state), Resumer::new(&state));
+    let record = || Action::ResumeRecord {
+        open: OpenRequest {
+            task: None,
+            origin: Origin::User,
+            title: Some("Refunds".to_string()),
+            resume_agent_session_id: Some(CONVERSATION.to_string()),
+            ..asked(CONSOLE, Some("project-1"))
+        },
+        conversation: CONVERSATION.to_string(),
+    };
+
+    let call = ask_to_resume(&launcher, &resumer, "asker", record(), false).await;
+    let event = event_of(&state, "asker").await;
+    assert!(matches!(
+        &event,
+        Event::SessionRequest {
+            action: SessionRequestAction::ResumeRecord,
+            target: None,
+            account: None,
+            conversation: Some(conversation),
+            project: Some(project),
+            ..
+        } if conversation == CONVERSATION && project == "project-1"
+    ));
+    let started = answer_resuming(&launcher, &resumer, &request_id_of(&event), true)
+        .await
+        .unwrap()
+        .unwrap();
+    let result = outcome_of(call).await.unwrap();
+    assert_eq!(
+        (result["action"].as_str(), result["session"].as_str()),
+        (Some("opened"), Some(started.id.as_str()))
+    );
+    assert!(result["owner"].is_null());
+    let note = result["note"].as_str().unwrap();
+    assert!(note.contains("It has no owner"), "{note}");
+    assert!(state
+        .session_record(&started.id)
+        .unwrap()
+        .bound_to
+        .is_none());
+    output_containing(&asker, "mcp__octoboard__request_resume_session");
+
+    // Another session came to hold the conversation before the approval: the launch refuses.
+    let call = ask_to_resume(&launcher, &resumer, "asker", record(), false).await;
+    let event = event_of(&state, "asker").await;
+    let err = answer_with_resume(
+        &state,
+        &request_id_of(&event),
+        true,
+        |_| async {
+            Err(CodedError::raised(
+                error_code::CONVERSATION_IN_SESSION,
+                "already held",
+                &[],
+            ))
+        },
+        |id| resumer.clone().resume(id),
+    )
+    .await
+    .expect_err("fails");
+    assert!(err.to_string().contains("already held"), "{err}");
+    outcome_of(call).await.expect_err("fails");
+}
+
+/// With the setting on, a resume is approved at once as a start is: no dialog, the same outcome.
+#[tokio::test]
+async fn an_automatic_approval_resumes_without_asking() {
+    let (state, _dir) = fixture("resume-automatic");
+    state
+        .store
+        .insert_session(&holder("held", SessionStatus::Archived, None))
+        .unwrap();
+    let asker = running(&state, "asker");
+    let (launcher, resumer) = (Launcher::new(&state), Resumer::new(&state));
+    let mut events = state.subscribe();
+
+    let call = ask_to_resume(
+        &launcher,
+        &resumer,
+        "asker",
+        resuming("held", SessionStatus::Archived, None),
+        true,
+    )
+    .await;
+    let result = outcome_of(call).await.unwrap();
+    assert_eq!(result["action"], "reopened");
+    let note = result["note"].as_str().unwrap();
+    assert!(
+        note.starts_with("Octoboard approved the request automatically"),
+        "{note}"
+    );
+    assert!(
+        note.contains("resume requests approved without asking"),
+        "{note}"
+    );
+    assert!(pending_events(&state).is_empty());
+    assert!(!state.session_requests.lock().approving.contains("asker"));
+    let message = output_containing(&asker, "mcp__octoboard__request_resume_session");
+    assert!(
+        message.contains("approved the request automatically"),
+        "{message}"
+    );
+    while let Ok(event) = events.try_recv() {
+        assert!(
+            !matches!(
+                event,
+                Event::SessionRequest { .. } | Event::SessionRequestClosed { .. }
+            ),
+            "no dialog is opened or closed"
+        );
+    }
+}
+
+/// With the setting on, a record's session opens at once too, and the note names the resume
+/// setting, as for a session brought back.
+#[tokio::test]
+async fn an_automatic_approval_opens_a_session_on_the_record() {
+    let (state, _dir) = fixture("resume-record-automatic");
+    running(&state, "asker");
+    let (launcher, resumer) = (Launcher::new(&state), Resumer::new(&state));
+    let record = Action::ResumeRecord {
+        open: OpenRequest {
+            task: None,
+            origin: Origin::User,
+            title: Some("Refunds".to_string()),
+            resume_agent_session_id: Some(CONVERSATION.to_string()),
+            ..asked(CONSOLE, Some("project-1"))
+        },
+        conversation: CONVERSATION.to_string(),
+    };
+
+    let call = ask_to_resume(&launcher, &resumer, "asker", record, true).await;
+    let result = outcome_of(call).await.unwrap();
+    assert_eq!(result["action"], "opened");
+    let note = result["note"].as_str().unwrap();
+    assert!(
+        note.contains("resume requests approved without asking"),
+        "{note}"
+    );
+    assert!(pending_events(&state).is_empty());
 }
