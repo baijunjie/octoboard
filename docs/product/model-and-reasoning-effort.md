@@ -67,7 +67,7 @@ it, since it applies whichever tab is shown, is the console session instructions
 instructions" in `docs/product/consoles.md`).
 
 An unset picker is empty, showing a placeholder instead of a value. The placeholder stands for the agent's own setting,
-except in the project dialog, where it stands for what the project inherits: "Inherit from console", naming the
+except in the project dialog, where it stands for what the project inherits: "Same as console", with a badge naming the
 console's project session value for that agent — a model by its name in the list where the list holds it — or saying
 it is the agent's own setting when the console sets none. A picked value is cleared, back to that placeholder, by
 clicking the picker's × button, or by pressing Backspace or Delete while its list is closed and its trigger has

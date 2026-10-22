@@ -13,19 +13,18 @@ import React from "react";
  * select's fill, and above 8:1 on a dialog, popover or tooltip. A comma that only assistive technology reads keeps the name and the value apart, which
  * `separated={false}` leaves out for a badge with no name before it. `overflow` lets the badge
  * shrink for text that may be long: `"wrap"` breaks it inside a long word (a path in a tooltip,
- * which cannot run past its width), `"truncate"` clips it with an ellipsis on one line (a value
- * beside the controls of a field). `dir` is the direction of that text where it is not the UI's. */
+ * which cannot run past its width). `dir` is the direction of that text where it is not the UI's. */
 export function StatusBadge({ children, className = "", separated = true, overflow, dir }: {
   children: React.ReactNode;
   className?: string;
   separated?: boolean;
-  overflow?: "wrap" | "truncate";
+  overflow?: "wrap";
   dir?: "ltr" | "auto";
 }): React.ReactElement {
   return (
     <>
       {separated && <span className="sr-only">, </span>}
-      <span dir={dir} className={`${overflow === "wrap" ? "min-w-0 rounded-lg [overflow-wrap:anywhere]" : overflow === "truncate" ? "min-w-0 truncate rounded-full" : "shrink-0 whitespace-nowrap rounded-full"} bg-[color-mix(in_oklab,var(--app-muted)_16%,transparent)] px-2 py-0.5 text-xs leading-4 text-[color-mix(in_oklab,var(--foreground)_80%,transparent)] ring-1 ring-inset ring-[color-mix(in_oklab,var(--app-muted)_28%,transparent)] ${className}`}>{children}</span>
+      <span dir={dir} className={`${overflow === "wrap" ? "min-w-0 rounded-lg [overflow-wrap:anywhere]" : "shrink-0 whitespace-nowrap rounded-full"} bg-[color-mix(in_oklab,var(--app-muted)_16%,transparent)] px-2 py-0.5 text-xs leading-4 text-[color-mix(in_oklab,var(--foreground)_80%,transparent)] ring-1 ring-inset ring-[color-mix(in_oklab,var(--app-muted)_28%,transparent)] ${className}`}>{children}</span>
     </>
   );
 }

@@ -128,21 +128,21 @@ A project may carry its own default agent, or leave it unset to follow its conso
 (see `docs/product/consoles.md`). The selection order for a new session is in "Which agent a session uses" in
 `docs/product/sessions.md`.
 
-The project dialog, both when associating and when editing a project, offers "unset" as an "Inherit from console" choice
-listed first and preselected for a new project (a parent directory preselects "Detect from files" instead); it names the
-agent the console's default for project sessions currently resolves to — the console's default for console sessions
-while the one for project sessions is unset — shown with that agent's icon dimmed, or is a bare "Inherit from console"
-when the console is not known. Choosing a specific agent stores it as the project's own default. The agents listed
+The project dialog, both when associating and when editing a project, offers "unset" as a "Same as console" choice
+listed first and preselected for a new project (a parent directory preselects "Detect from files" instead); a badge after
+it names the agent the console's default for project sessions currently resolves to — the console's default for console
+sessions while the one for project sessions is unset — with that agent's icon shown dimmed, or it is a bare "Same as
+console" when the console is not known. Choosing a specific agent stores it as the project's own default. The agents listed
 follow "Which agents the agent pickers list" in `docs/product/consoles.md`.
 
 Associating a project with no default agent given looks at the directory's top level once and stores the agent it is
 set up for as the project's own default, shown and editable in Project settings like any chosen one. For a single
 directory or a git URL the form has already done this before submitting and shows the result preselected in the field
-(a choice made by hand stays only until the path or URL changes, which reads it again); "Inherit from console" chosen
+(a choice made by hand stays only until the path or URL changes, which reads it again); "Same as console" chosen
 after that means none, and the project follows the console's default for project sessions. For a parent directory
 there is no pre-read, and the field offers one more choice, "Detect from files", listed first and selected on arriving
 at that source (and given up when the source changes): each repository found is detected on its own at association, and
-one that cannot be decided follows the console's default for project sessions. "Inherit from console" keeps its meaning
+one that cannot be decided follows the console's default for project sessions. "Same as console" keeps its meaning
 of following that default with no detection, and choosing an agent applies it to every repository found. For this source
 a line under the field says that an agent chosen here applies to every repository, and a "?" beside the field's label
 explains the detect choice: what it looks for in each repository — `CLAUDE.md`, `AGENTS.md` and agent folders such as
@@ -176,10 +176,10 @@ names and effort levels are each agent's own, and a session reads only the set o
 The project dialog, both when associating and when editing a project, joins the account picker to the **Default agent**
 field as a single field, the way the session dialog joins its Agent field to one, and holds the same collapsed
 **Advanced** section. All of it belongs to the agent the Default agent field currently settles on — the agent picked,
-or the agent "Inherit from console" names while the field is on it — so switching that field shows another agent's
+or the agent "Same as console" names while the field is on it — so switching that field shows another agent's
 set, and what was set for an agent no longer shown is kept and still saved. The account picker lists, in this order,
-the inherited entry, named after the account the console resolves to for that agent (the agent's default account when
-the console pins none) and marked as coming from the console; the agent's default account, named as it is everywhere
+the inherited entry, "Same as console", with a badge naming the account the console resolves to for that agent (the
+agent's default account when the console pins none); the agent's default account, named as it is everywhere
 else; and then that agent's own accounts. It is offered only when that agent has an account of its own. A project whose
 named account is no longer stored shows the inherited entry, and keeps what it has stored until another entry is
 picked.

@@ -14,8 +14,11 @@ export type Option<T extends string> = {
   labelContent?: React.ReactNode;
   lang?: string;
   icon?: React.ReactNode;
-  /** A status badge after the label ("Not added"), which never shrinks: the label gives way first. */
+  /** A status badge after the label ("Not added"), which never shrinks: the label gives way first (unless `badgeInLabel`). */
   badge?: string;
+  /** Draws `badge` inside the label's fade, so the two give way together: for a badge that completes
+   * the label ("Same as console" and the value that resolves to) rather than qualifying it. */
+  badgeInLabel?: boolean;
   isDisabled?: boolean;
 } & (
   | { detail?: undefined; reason?: undefined }
@@ -31,6 +34,28 @@ export type Option<T extends string> = {
 
 /** The fade of a disabled option's name and icon, which the row itself keeps off when it has a reason to show. */
 const FADED = "opacity-(--disabled-opacity)";
+
+/** An option's label, followed by its badge when the badge is drawn inside the label's fade. In the
+ * tooltip of a clipped label the badge wraps, as the tooltip's width is bounded. */
+function OptionText({ label, badge, inTooltip }: { label: React.ReactNode; badge?: string; inTooltip?: boolean }): React.ReactElement {
+  return <>{label}{badge && <StatusBadge dir="auto" overflow={inTooltip ? "wrap" : undefined} className="ms-2 inline-block align-middle">{badge}</StatusBadge>}</>;
+}
+
+/** An option's label in its fade, with the badge inside it when there is one, and the same text as the
+ * tooltip of a clipped label. */
+function FadeLabel({ label, badge, lang, className, as }: {
+  label: React.ReactNode;
+  badge?: string;
+  lang?: string;
+  className: string;
+  as?: "span";
+}): React.ReactElement {
+  return (
+    <FadeOverflow as={as} lang={lang} dir="auto" className={className} titleWhenClipped={<OptionText label={label} badge={badge} inTooltip />}>
+      <OptionText label={label} badge={badge} />
+    </FadeOverflow>
+  );
+}
 
 /** A single-choice dropdown over a fixed list of options. An option's `lang` marks its text as being
  * in a language other than the UI's; its `icon` is drawn before its text, in the list and in the
@@ -87,7 +112,7 @@ export function OptionSelect<T extends string>({
   /** With `hideLabel`, the ids of elements elsewhere on the page that name the field. */
   labelledBy?: string;
   /** A status badge after the placeholder, for a placeholder that names what the empty choice stands for.
-   * Unlike an option's badge it gives way when it is long, clipped with an ellipsis before the clear button. */
+   * It completes the placeholder, so it is drawn as an option's `badgeInLabel` badge is. */
   placeholderBadge?: string;
 } & (
   | { value: T; onChange: (value: T) => void; placeholder?: undefined }
@@ -96,6 +121,7 @@ export function OptionSelect<T extends string>({
   const descriptionId = useId();
   const current = options.find((option) => option.value === value);
   const badge = current ? current.badge : placeholderBadge;
+  const badgeInLabel = current ? current.badgeInLabel : true;
   const hasReason = options.some((option) => option.reason);
   return (
     // HeroUI's variant for a field on a surface: every one of these sits in a dialog.
@@ -149,12 +175,8 @@ export function OptionSelect<T extends string>({
         <Select.Value className="flex min-w-0 flex-1 items-center gap-2 text-clip">
           {() => <>
             {current?.icon && <span aria-hidden="true" className="flex shrink-0">{current.icon}</span>}
-            <FadeOverflow as="span" lang={current?.lang} dir="auto" className={!badge ? "min-w-0 flex-1" : current ? "min-w-0" : "shrink-0"} titleWhenClipped={current?.labelContent ?? current?.label ?? placeholder}>
-              {current?.labelContent ?? current?.label ?? placeholder}
-            </FadeOverflow>
-            {/* A placeholder's own words are short and say what the field does, so its badge (an
-                inherited value that can be a long model id) is what gives way. */}
-            {badge && <StatusBadge dir={current ? undefined : "auto"} overflow={current ? undefined : "truncate"}>{badge}</StatusBadge>}
+            <FadeLabel as="span" lang={current?.lang} className={!badge || badgeInLabel ? "min-w-0 flex-1" : "min-w-0"} label={current?.labelContent ?? current?.label ?? placeholder} badge={badgeInLabel ? badge : undefined} />
+            {badge && !badgeInLabel && <StatusBadge>{badge}</StatusBadge>}
           </>}
         </Select.Value>
         {placeholder !== undefined && <Select.ClearButton />}
@@ -186,19 +208,15 @@ export function OptionSelect<T extends string>({
                 </span>
               )}
               {option.detail ? (
-                <span className={`flex min-w-0 flex-col ${option.badge ? "" : "flex-1"}`}>
-                  <FadeOverflow lang={option.lang} dir="auto" className={option.isDisabled && option.reason ? `min-w-0 ${FADED}` : "min-w-0"} titleWhenClipped={option.labelContent ?? option.label}>
-                    {option.labelContent ?? option.label}
-                  </FadeOverflow>
+                <span className={`flex min-w-0 flex-col ${option.badge && !option.badgeInLabel ? "" : "flex-1"}`}>
+                  <FadeLabel lang={option.lang} className={option.isDisabled && option.reason ? `min-w-0 ${FADED}` : "min-w-0"} label={option.labelContent ?? option.label} badge={option.badgeInLabel ? option.badge : undefined} />
                   <Description className="sr-only">{option.detail}</Description>
                   {option.reason && <span aria-hidden="true" className="text-xs text-app-muted"><ReasonText reason={option.reason} /></span>}
                 </span>
               ) : (
-                <FadeOverflow lang={option.lang} dir="auto" className={option.badge ? "min-w-0" : "min-w-0 flex-1"} titleWhenClipped={option.labelContent ?? option.label}>
-                  {option.labelContent ?? option.label}
-                </FadeOverflow>
+                <FadeLabel lang={option.lang} className={option.badge && !option.badgeInLabel ? "min-w-0" : "min-w-0 flex-1"} label={option.labelContent ?? option.label} badge={option.badgeInLabel ? option.badge : undefined} />
               )}
-              {option.badge && <StatusBadge>{option.badge}</StatusBadge>}
+              {option.badge && !option.badgeInLabel && <StatusBadge>{option.badge}</StatusBadge>}
               <ListBox.ItemIndicator />
             </ListBox.Item>
           ))}

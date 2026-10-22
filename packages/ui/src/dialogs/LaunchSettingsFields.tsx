@@ -51,7 +51,7 @@ export type LaunchModels = ReturnType<typeof useLaunchModels>;
  * resolves to, or the agent's own setting while that is none. */
 function inherited(t: Translate, value: string | null): { placeholder: string; placeholderBadge: string } {
   return {
-    placeholder: t("dialog.agentSettings.inherit"),
+    placeholder: t("dialog.agentSettings.sameAsConsole"),
     placeholderBadge: value || t("dialog.agentSettings.inheritOwn"),
   };
 }

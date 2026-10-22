@@ -113,7 +113,7 @@ const avatarState = snapshotState({
 });
 
 // A project that carries a stored account and launch settings for its agent, beside a console that
-// refers to another account, so the project's account picker names what "Inherit" resolves to.
+// refers to another account, so the project's account picker names what "Same as console" resolves to.
 const configured = projectOf("p-configured", console_.id, "Configured Site", {
   default_agent: "claude",
   claude_account_id: { kind: "account", id: "a-work" },
@@ -136,6 +136,16 @@ const onDefault = projectOf("p-default-account", console_.id, "Default Account S
 const onDefaultState = snapshotState({
   consoles: [{ ...console_, claude_account_id: "a-personal" }],
   projects: [onDefault],
+  sessions: [],
+  settings: accountsState.settings,
+});
+
+// A project that sets nothing of its own, under a console that names an account and carries a long
+// project session model and effort: everything it shows resolves through "Same as console".
+const inheriting = projectOf("p-inheriting", console_.id, "Inheriting Site");
+const inheritingState = snapshotState({
+  consoles: [{ ...console_, claude_account_id: "a-personal", claude_project_session_model: RETIRED_MODEL, claude_project_session_effort: RETIRED_EFFORT }],
+  projects: [inheriting],
   sessions: [],
   settings: accountsState.settings,
 });
@@ -1251,17 +1261,14 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
-    state: {
-      ...dialogState,
-      consoles: new Map([...dialogState.consoles, [console_.id, { ...dialogState.consoles.get(console_.id)!, claude_project_session_model: RETIRED_MODEL, claude_project_session_effort: RETIRED_EFFORT }]]),
-    },
+    state: inheritingState,
     id: "dialog-edit-project-inherited-launch-settings",
     group: "Projects",
     category: "normal",
-    title: "Project settings inheriting console launch settings",
-    description: "Model reads Inherit from console with a grey badge after it naming the console's project session model, which is too long for the field and ends in an ellipsis before the chevron; Reasoning effort inherits the console's long retained value. Both values mix scripts and keep their own reading order.",
+    title: "Project settings that follow the console throughout",
+    description: "Default agent and its account, side by side, both read Same as console with a grey badge after it naming what it stands for (Claude Code; the console's long account name). The field is too narrow for either whole: the badge fades out with the label at the clipped edge rather than standing apart. Advanced does the same: Model and Reasoning effort read Same as console followed by the console's long retained value, mixing scripts and keeping its own reading order.",
     steps: [
-      (ui) => projectActions(ui, onDefault.name),
+      (ui) => projectActions(ui, inheriting.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
     ],
@@ -1272,7 +1279,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Project account choices",
-    description: "Inherited, default and long named accounts coexist. The inherited option is the console's account name with a grey From the console badge after it, which stays clear of the fade. Hover a clipped account option to reveal its text as a marquee.",
+    description: "Same as console, default and long named accounts coexist. The first option's grey badge names the console's account and is too long for the list: it fades out with the label at the clipped edge. Hover a clipped account option to reveal its text as a marquee.",
     steps: [
       (ui) => projectActions(ui, onDefault.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),
@@ -1294,7 +1301,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Add project in a console with its own project session agent",
-    description: "Inherit from console carries a grey Codex badge, the console's project session agent rather than its Claude Code console sessions, beside a faded Codex icon. Grok Build, missing, is not offered.",
+    description: "Same as console carries a grey Codex badge, the console's project session agent rather than its Claude Code console sessions, beside a faded Codex icon. Grok Build, missing, is not offered.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
@@ -1311,7 +1318,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Project default agent with only some agents added",
-    description: "The open Default agent list offers Codex then Claude Code, the order the agents were added in, after Inherit from console and Detect from files. The project still names Grok Build, which is not added, so it stays selected at the foot, with a grey Not added badge after its name in the option as well as in the field, and unselectable.",
+    description: "The open Default agent list offers Codex then Claude Code, the order the agents were added in, after Same as console and Detect from files. The project still names Grok Build, which is not added, so it stays selected at the foot, with a grey Not added badge after its name in the option as well as in the field, and unselectable.",
     steps: [
       (ui) => projectActions(ui, removedAgentProject.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),

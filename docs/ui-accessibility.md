@@ -50,13 +50,15 @@ foreground colour instead of dimming. Preserve this shared visual treatment as a
 layout, selection and keyboard behaviour.
 
 A status mark such as "Not added" or "Not installed", and any other qualifier after a name (a session's account in its
-agent mark's tooltip where that names only the agent and its account, "From the console", an inherited value, "Not in the list"), is a badge after the name, never
-parenthesised text in the name's own style. It is the shared `StatusBadge`: a muted-tint fill with a hairline ring, its
-text at 80% foreground so it keeps at least 4.5:1 on every surface it sits on (fields, dialogs, popovers, tooltips,
-sidebar rows and cards), and a screen-reader-only comma between name and qualifier. A user-typed value in it takes
-`dir="auto"` and a path `dir="ltr"`; where its room is bounded (a tooltip, a select trigger) it wraps or truncates
-instead of overflowing. The session context-size indicator is the same badge on its own, without the comma. An agent row that cannot be picked is dimmed by its name taking the
-secondary text colour (still at least 4.5:1) and its icon fading; the text is never faded below AA by opacity.
+agent mark's tooltip where that names only the agent and its account, "Not in the list"), is a badge after the name,
+never parenthesised text in the name's own style. It is the shared `StatusBadge`: a muted-tint fill with a hairline
+ring, its text at 80% foreground so it keeps at least 4.5:1 on every surface it sits on (fields, dialogs, popovers,
+tooltips, sidebar rows and cards), and a screen-reader-only comma between name and qualifier. A user-typed value in it
+takes `dir="auto"` and a path `dir="ltr"`; in a tooltip, whose width is bounded, it wraps instead of overflowing. A
+badge that completes its name rather than qualifying it ("Same as console" and the value that resolves to) sits inside
+the name's fade in a select and is clipped together with it. The session context-size indicator is the same badge on its
+own, without the comma. An agent row that cannot be picked is dimmed by its name taking the secondary text colour (still
+at least 4.5:1) and its icon fading; the text is never faded below AA by opacity.
 
 A select option or menu item that cannot be chosen and says why (an account whose quota is used up) keeps the reason
 line under its name at full opacity and fades only its name and icon with HeroUI's `--disabled-opacity`, instead of

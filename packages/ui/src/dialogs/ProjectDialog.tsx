@@ -26,7 +26,7 @@ import { AgentAccountField } from "./AgentAccountField";
 import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "./Dialog";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
-import { OptionSelect } from "./OptionSelect";
+import { OptionSelect, type Option } from "./OptionSelect";
 import { TagsInput } from "./TagsInput";
 import { TextAreaInput } from "./TextAreaInput";
 import { TextInput } from "./TextInput";
@@ -74,7 +74,7 @@ export function ProjectDialog({
   const t = useT();
   const { request } = useDaemon();
   const owner = useDaemonStore((s) => s.consoles.get(consoleId));
-  // The agent "Inherit from console" resolves to: what a project session of the console is of when
+  // The agent "Same as console" resolves to: what a project session of the console is of when
   // its project names none.
   const consoleAgent = owner && projectSessionAgent(owner);
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
@@ -158,7 +158,7 @@ export function ProjectDialog({
   const { shown, attempt } = useSubmitValidation();
 
   // The agent the account and the launch settings belong to: the one picked, else the console's
-  // project session agent for "Inherit from console", and none for "Detect from files", which
+  // project session agent for "Same as console", and none for "Detect from files", which
   // stands for a different agent per repository.
   const agent = defaultAgent === "detect" ? undefined : defaultAgent === "" ? consoleAgent : defaultAgent;
   const accountField = agent && AGENT_ACCOUNT_FIELD[agent];
@@ -184,7 +184,7 @@ export function ProjectDialog({
           type: "update_project",
           project: editing.id,
           name: name || undefined,
-          // "" ("Inherit from console") means following the console's default, which on the wire
+          // "" ("Same as console") means following the console's default, which on the wire
           // is an explicit `null` (clear), never an omitted field — omitting it means "leave
           // whatever was there alone" instead.
           default_agent: defaultAgent === "" || defaultAgent === "detect" ? null : defaultAgent,
@@ -204,7 +204,7 @@ export function ProjectDialog({
           remote_url: source === "git" ? remoteUrl : undefined,
           name: addsParent ? undefined : name || undefined,
           default_agent: defaultAgent === "" || defaultAgent === "detect" ? undefined : defaultAgent,
-          // What the form shows is what is stored: "Inherit from console" is not detected again,
+          // What the form shows is what is stored: "Same as console" is not detected again,
           // whether it was preselected after a pre-read or chosen; only "Detect from files" is.
           detect_default_agent: defaultAgent === "detect" ? undefined : false,
           ...changedAgentFields("create", sent, initial),
@@ -217,15 +217,16 @@ export function ProjectDialog({
     });
   };
 
-  // `""` is "Inherit from console": the project sets none and follows its console's project session
+  // `""` is "Same as console": the project sets none and follows its console's project session
   // agent (the "Which agent a session uses" section of docs/product/sessions.md); the option names
-  // that agent, its icon faded, so it says what it resolves to.
-  const defaultAgentOptions: { value: Agent | "" | "detect"; label: string; icon?: React.ReactNode; badge?: string }[] = [
+  // that agent in a badge, its icon faded, so it says what it resolves to.
+  const defaultAgentOptions: Option<Agent | "" | "detect">[] = [
     ...(addsParent ? [{ value: "detect" as const, label: t("dialog.project.agentDetect") }] : []),
     {
       value: "",
-      label: t("dialog.project.agentInheritBare"),
+      label: t("dialog.agentSettings.sameAsConsole"),
       badge: consoleAgent && AGENT_LABEL[consoleAgent],
+      badgeInLabel: true,
       icon: consoleAgent && <AgentIcon agent={consoleAgent} className="size-4 opacity-50" />,
     },
     ...agentIconPickerOptions(t, agentAvailability, addedAgents, defaultAgent === "" || defaultAgent === "detect" ? undefined : defaultAgent),
@@ -339,8 +340,9 @@ export function ProjectDialog({
                 options: [
                   {
                     value: accountValue(INHERIT),
-                    label: ownAccounts.find((account) => account.id === consoleAccountId)?.name ?? defaultAccountName(t, defaultNames, agent),
-                    badge: t("dialog.project.accountInheritBadge"),
+                    label: t("dialog.agentSettings.sameAsConsole"),
+                    badge: ownAccounts.find((account) => account.id === consoleAccountId)?.name ?? defaultAccountName(t, defaultNames, agent),
+                    badgeInLabel: true,
                   },
                   { value: accountValue({ kind: "default" }), label: defaultAccountName(t, defaultNames, agent) },
                   ...ownAccounts.map((account) => ({ value: accountValue({ kind: "account", id: account.id }), label: account.name })),

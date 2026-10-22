@@ -19,7 +19,7 @@ export type DetectionQuery = Extract<RequestBody, { type: "detect_directory_agen
 /**
  * Asks the daemon which agent the project the user is entering is set up for (`detect_directory_agent`
  * or `probe_git_remote`), once `delayMs` has passed without `query` changing, and hands the answer
- * to `onDetected` (`""` for none, the "Inherit from console" value of the form). Only the latest query's answer
+ * to `onDetected` (`""` for none, the "Same as console" value of the form). Only the latest query's answer
  * counts: a reply for one the user has since changed, or for a dialog that has closed, is dropped.
  * `query` is `undefined` while there is nothing to ask.
  */
