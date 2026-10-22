@@ -1506,6 +1506,8 @@ export const en = {
     "Turns on {setting}, which is currently off. {appName} then deletes such archived sessions by itself.",
   "configuration.import.settings.autoSelectAccount.turnsOn":
     "Turns on {setting}, which is currently off. A new session then uses the account whose weekly quota resets soonest.",
+  "configuration.import.settings.sidebarOrder.turnsOn":
+    "Turns on {setting}, which is currently off. Sessions and projects in the sidebar then move as their status changes.",
   "configuration.import.settings.turnsOff": "Turns off {setting}, which is currently on.",
   "configuration.import.settings.alreadyOn":
     "{setting} is on in the file and already on, so applying changes nothing.",
@@ -1613,6 +1615,11 @@ export const en = {
     "Once this is on, an archived session is deleted automatically when its agent no longer keeps its conversation. {appName} checks each time it starts, then about once a day. Pinned and locked sessions are kept.",
   "settings.archiveCleanup.description.on":
     "An archived session is deleted automatically when its agent no longer keeps its conversation. {appName} checks each time it starts, then about once a day. Pinned and locked sessions are kept.",
+  "settings.sidebarOrder.label": "Order the sidebar by status",
+  "settings.sidebarOrder.description.off":
+    "Sessions are listed newest first and projects by name, pinned ones first, so one waiting for you or at work does not move up. Projects with no unarchived session end the list. Once this is on, sessions and projects move as their status changes, so the ones waiting for you come first after the pinned ones.",
+  "settings.sidebarOrder.description.on":
+    "Sessions and projects move as their status changes, so the ones waiting for you come first after the pinned ones. Projects with no unarchived session end the list.",
   "settings.agentPermissions.lead": "Choose what sessions may do without asking you first.",
   "settings.autoApproveSession.label": "Automatically approve session requests",
   "settings.autoApproveSession.description.off":

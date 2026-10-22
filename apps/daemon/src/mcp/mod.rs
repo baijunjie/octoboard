@@ -345,9 +345,9 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
         name: "get_settings",
         description: "The application-wide settings: `auto_pull_repositories`, \
                       `auto_delete_unresumable_archives`, `auto_select_account`, \
-                      `default_clone_dir`, the `accounts` (each agent also has a default account, \
-                      listed with the id `default`), and the `trusted_directories`. Accounts and \
-                      trusted directories are read-only here.",
+                      `sidebar_order_by_status`, `default_clone_dir`, the `accounts` (each agent \
+                      also has a default account, listed with the id `default`), and the \
+                      `trusted_directories`. Accounts and trusted directories are read-only here.",
         schema: || object_schema(json!({}), &[]),
     },
     ToolDef {
@@ -379,6 +379,13 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                                         resets soonest, among accounts that can still open a \
                                         session. When none does, the account is the one used \
                                         while the setting is off.",
+                    },
+                    "sidebar_order_by_status": {
+                        "type": "boolean",
+                        "description": "Whether the user's sidebar orders sessions and projects by \
+                                        status. When off, it ranks none by status: sessions go \
+                                        pinned first, then most recently started; projects keep \
+                                        the active-first grouping, then pinned, then name.",
                     },
                     "default_clone_dir": {
                         "type": "string",

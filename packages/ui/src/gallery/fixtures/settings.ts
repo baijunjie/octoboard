@@ -21,6 +21,7 @@ const browserState: Scenario["state"] = {
   settings: {
     auto_pull_repositories: false,
     auto_delete_unresumable_archives: true,
+    sidebar_order_by_status: true,
     added_agents: ["claude", "codex"],
     default_clone_dir: "/Users/dev/Projects",
     accounts: [
@@ -396,7 +397,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Browser General settings",
-    description: "The Language row follows Appearance, then Markdown style starts on Tailwind. The clone-directory explanation describes when the chosen directory is used; the path appears in the input. The archive-cleanup switch sits right below it, on, with the description that says what is deleted and when. It is the last row.",
+    description: "The Language row follows Appearance, then Markdown style starts on Tailwind. The \"Order the sidebar by status\" switch follows it, on, with the description that says sessions and projects move as their status changes. The clone-directory explanation describes when the chosen directory is used; the path appears in the input. The archive-cleanup switch sits right below it, on, with the description that says what is deleted and when. It is the last row.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -409,6 +410,17 @@ export const settingsScenarios: Scenario[] = [
     title: "General, archive cleanup switched off",
     description: "The archive-cleanup switch below the clone-directory row is off, and its description now starts with \"Once this is on\" instead of stating the behaviour.",
     state: { ...browserState, settings: { ...browserState.settings!, auto_delete_unresumable_archives: false } },
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+    ],
+  },
+  {
+    id: "settings-general-sidebar-order-off",
+    group: GROUP,
+    category: "normal",
+    title: "General, sidebar status ordering switched off",
+    description: "The \"Order the sidebar by status\" switch below Markdown style is off, and its description now says sessions are listed newest first and projects by name, pinned ones first, before ending with \"Once this is on\". Switch it on and off to read both descriptions; the sidebar re-orders at once (see Console sessions, ordering by status switched off).",
+    state: { ...browserState, settings: { ...browserState.settings!, sidebar_order_by_status: false } },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
     ],

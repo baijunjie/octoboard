@@ -70,6 +70,9 @@ it("reports the setting this machine has now as the scenario's own state has it"
     if (typeof inspection.settings!.auto_select_account === "boolean") {
       expect(inspection.settings!.current_auto_select_account, id).toBe(machine!.auto_select_account ?? false);
     }
+    if (typeof inspection.settings!.sidebar_order_by_status === "boolean") {
+      expect(inspection.settings!.current_sidebar_order_by_status, id).toBe(machine!.sidebar_order_by_status ?? true);
+    }
   }
 });
 
@@ -147,6 +150,9 @@ it("reports application settings only for a document that carries them", () => {
       expect(result.settings_applied.auto_delete_unresumable_archives, id).toBe(inspection.settings.auto_delete_unresumable_archives);
       if (typeof inspection.settings.auto_select_account === "boolean") {
         expect(result.settings_applied.auto_select_account, id).toBe(inspection.settings.auto_select_account);
+      }
+      if (typeof inspection.settings.sidebar_order_by_status === "boolean") {
+        expect(result.settings_applied.sidebar_order_by_status, id).toBe(inspection.settings.sidebar_order_by_status);
       }
     }
   }

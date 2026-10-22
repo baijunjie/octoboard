@@ -18,6 +18,7 @@ vi.mock("./AppearanceSetting", () => ({ AppearanceSetting: () => null }));
 vi.mock("./LanguageSetting", () => ({ LanguageSetting: () => null }));
 vi.mock("./CloneDirSetting", () => ({ CloneDirSetting: () => null }));
 vi.mock("./ArchiveCleanupSetting", () => ({ ArchiveCleanupSetting: () => null }));
+vi.mock("./SidebarOrderSetting", () => ({ SidebarOrderSetting: () => null }));
 
 function Sync() {
   useBackgroundRunSync();

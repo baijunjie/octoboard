@@ -601,6 +601,11 @@ export interface Settings {
    * reset is used before it is lost. Optional only so that a state built without it reads as off;
    * the daemon always sends it. */
   auto_select_account?: boolean;
+  /** On (the default): the sidebar ranks sessions and projects by status, so a row moves when its
+   * status changes. Off: neither is ranked by status; a project still drops to the inactive group at
+   * the end when its last unarchived session is archived, and leaves it when one is opened again.
+   * Optional only so that a state built without it reads as on; the daemon always sends it. */
+  sidebar_order_by_status?: boolean;
   /** Where a `git` association clones into when no directory is named: the one the user set, or
    * `~/Projects` expanded while none is. Always an absolute path. */
   default_clone_dir: string;
@@ -687,6 +692,8 @@ export interface DocumentSettings {
   auto_delete_unresumable_archives?: boolean | null;
   /** Absent in a file exported before the setting existed; applying then leaves it as it is. */
   auto_select_account?: boolean | null;
+  /** Absent in a file exported before the setting existed; applying then leaves it as it is. */
+  sidebar_order_by_status?: boolean | null;
 }
 
 /** What `export_configuration` answers and a user keeps as a file. The client saves it as it is
@@ -763,6 +770,10 @@ export interface InspectedSettings {
   auto_select_account?: boolean | null;
   /** This machine's value. Absent when the reply predates the setting. */
   current_auto_select_account?: boolean;
+  /** Absent when the document predates the setting. */
+  sidebar_order_by_status?: boolean | null;
+  /** This machine's value. Absent when the reply predates the setting. */
+  current_sidebar_order_by_status?: boolean;
 }
 
 /** An `error` reply's `code`, `params` and `message`, for something an import could not do. */
@@ -1265,7 +1276,7 @@ export type RequestBody =
   /** Each settable field is optional: absent means leave it as it is. Answered with `ack`;
    * broadcasts `settings_updated` only when something actually changed (the trusted-folders
    * pattern). */
-  | { type: "update_settings"; auto_pull_repositories?: boolean; auto_delete_unresumable_archives?: boolean; auto_approve_session_requests?: boolean; auto_approve_resume_requests?: boolean; auto_select_account?: boolean; default_clone_dir?: string }
+  | { type: "update_settings"; auto_pull_repositories?: boolean; auto_delete_unresumable_archives?: boolean; auto_approve_session_requests?: boolean; auto_approve_resume_requests?: boolean; auto_select_account?: boolean; sidebar_order_by_status?: boolean; default_clone_dir?: string }
   /** Answered with `ack` at once; each reading that finishes arrives as `account_quotas_updated`.
    * Re-reads the quotas of the accounts it selects whose last attempt is older than the polling
    * interval, and also those whose last attempt is over 30 seconds old and which hold no windows

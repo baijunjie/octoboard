@@ -19,6 +19,6 @@ it("counts the waiting sessions the tree lists, and leaves out those of a consol
   const consoles = new Map([main, other].map((c) => [c.id, c]));
   const projects = new Map([[web.id, web]]);
   const count = countWaitingInTree(consoles, projects, new Map(sessions.map((s) => [s.id, s])));
-  expect(count).toBe(waitingSessionsInTreeOrder([main, other], [web], sessions).length);
+  expect(count).toBe(waitingSessionsInTreeOrder([main, other], [web], sessions, true).length);
   expect(count).toBe(2);
 });

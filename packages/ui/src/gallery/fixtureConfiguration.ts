@@ -94,6 +94,7 @@ export function exportedDocument(state: State, consoleId?: string): Configuratio
         auto_pull_repositories: state.settings.auto_pull_repositories,
         auto_delete_unresumable_archives: state.settings.auto_delete_unresumable_archives,
         ...(typeof state.settings.auto_select_account === "boolean" && { auto_select_account: state.settings.auto_select_account }),
+        ...(typeof state.settings.sidebar_order_by_status === "boolean" && { sidebar_order_by_status: state.settings.sidebar_order_by_status }),
       },
     }),
     consoles,

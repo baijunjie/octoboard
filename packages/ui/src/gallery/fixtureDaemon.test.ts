@@ -469,6 +469,12 @@ describe("the fixture daemon's settings and trusted folders", () => {
     await daemon.request({ type: "update_settings", auto_pull_repositories: true });
     expect(daemon.store.getState().settings.auto_select_account).toBe(true);
     expect(exportedDocument(daemon.store.getState()).settings?.auto_select_account).toBe(true);
+    expect(exportedDocument(daemon.store.getState()).settings).not.toHaveProperty("sidebar_order_by_status");
+    await daemon.request({ type: "update_settings", sidebar_order_by_status: false });
+    expect(daemon.store.getState().settings.sidebar_order_by_status).toBe(false);
+    await daemon.request({ type: "update_settings", auto_pull_repositories: true });
+    expect(daemon.store.getState().settings.sidebar_order_by_status).toBe(false);
+    expect(exportedDocument(daemon.store.getState()).settings?.sidebar_order_by_status).toBe(false);
     await daemon.request({ type: "remove_trusted_directory", path: "~/work/../code" });
     expect(daemon.store.getState().trustedDirectories).toEqual([]);
   });

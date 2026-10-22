@@ -19,6 +19,7 @@ import {
   compareSessions,
   hasBoundSessions,
   isUnusedSession,
+  ordersByStatus,
 } from "../sidebar/order";
 import { useDaemon, useDaemonStore } from "../store";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -301,6 +302,7 @@ export function RequestedDialog({
   const t = useT();
   const { request, toastNotice } = useDaemon();
   const sessions = useDaemonStore((s) => s.sessions);
+  const byStatus = useDaemonStore((s) => ordersByStatus(s.settings));
   const dialog = "session" in requestedDialog && requestedDialog.kind !== "rename-session"
     ? { ...requestedDialog, session: sessions.get(requestedDialog.session.id) ?? requestedDialog.session }
     : requestedDialog;
@@ -351,7 +353,7 @@ export function RequestedDialog({
       // Read live: a session that starts or stops while the dialog is open joins or leaves the list.
       const running = Array.from(sessions.values())
         .filter((s) => s.project_id === dialog.project.id && isLive(s.status))
-        .sort(compareSessions);
+        .sort((a, b) => compareSessions(a, b, byStatus));
       return <DeleteProjectDialog project={dialog.project} running={running} onClose={onClose} />;
     }
     case "new-console-session":

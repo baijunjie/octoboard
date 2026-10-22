@@ -47,7 +47,7 @@ import { consoleMenu, projectMenu } from "./menus";
 import { NewSessionButton } from "./NewSessionButton";
 import { useNoAgentToStart } from "./useNewSessionMode";
 import { SessionActions } from "./SessionActions";
-import { archivedSessions, consoleActivity, INACTIVE_PROJECT_RANK, liveSessionRows, liveSessions, projectRank, sortProjectsByRank } from "./order";
+import { archivedSessions, consoleActivity, INACTIVE_PROJECT_RANK, liveSessionRows, liveSessions, ordersByStatus, projectRank, sortProjectsByRank } from "./order";
 import { type FilterUpdate, isFiltering, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterSummary } from "./ProjectFilter";
 import { pinAfterFoldAction, projectFoldControl, reconcileExpandPins, type ProjectFoldControl } from "./projectFold";
 import { NESTED_RAIL_CLASS, NESTED_ROW_CLASS, NestedBranch, LockButton, PinButton, RowIconButton, RowLabel, STICKY_HEADING_HEIGHT, StickySectionHeading, TreeRow } from "./rows";
@@ -472,6 +472,7 @@ function ConsoleBody({
   const t = useT();
   const listRef = useFlip<HTMLDivElement>();
   const ranks = useProjectRanks(projects);
+  const byStatus = useDaemonStore((s) => ordersByStatus(s.settings));
   // Only the project holding the selected session is told which one it is, so a selection moving
   // between two sessions renders those projects alone.
   const selectedProjectId = useSessionProjectId(selectedSessionId);
@@ -485,6 +486,7 @@ function ConsoleBody({
   const ordered = sortProjectsByRank(
     projects.filter((p) => matchesFilter(p, filter.keyword, filter.tags)),
     rankOf,
+    byStatus,
   );
   const foldIds = ordered
     .filter((p) => foldControl === "collapse" || rankOf.get(p.id) !== INACTIVE_PROJECT_RANK)
@@ -616,6 +618,7 @@ function ConsoleSessionsSection({
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   const consoleSessions = useOwnerSessions(thisConsole.id);
+  const byStatus = useDaemonStore((s) => ordersByStatus(s.settings));
   // With no agent added and installed, starting a console session would only be refused by the
   // daemon the moment it tried — so the action is disabled here instead, and `agents.noneAdded` (an
   // installed agent waits to be added) or `agents.noneFound` (none is installed) is shown. It is
@@ -624,7 +627,7 @@ function ConsoleSessionsSection({
   // agent removed, or a `PATH` change) stays live and keeps `liveSessions` from being empty.
   const noAgents = noAgentState(agentAvailability, addedAgents);
   const blocked = noAgents !== undefined;
-  const live = liveSessions(consoleSessions);
+  const live = liveSessions(consoleSessions, byStatus);
   const openNew = () => handlers.onOpenConsoleSession(thisConsole);
 
   return (
@@ -753,7 +756,8 @@ const ProjectNode = memo(function ProjectNode({
   // session leaves this row, its menu and its rows alone.
   const sessions = useProjectSessions(project.id);
   const rowRef = useRef<HTMLDivElement>(null);
-  const rows = liveSessionRows(sessions);
+  const byStatus = useDaemonStore((s) => ordersByStatus(s.settings));
+  const rows = liveSessionRows(sessions, byStatus);
   const lastRootIndex = rows.reduce((last, row, index) => row.under ? last : index, -1);
   const archived = archivedSessions(sessions);
   const activity = consoleActivity(sessions);

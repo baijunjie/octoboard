@@ -3237,9 +3237,9 @@ pub(super) mod tests {
     }
 
     /// The settings listing names every agent's default account, never an account's directory, and
-    /// the only writes are to the four settings a console session may change.
+    /// the only writes are to the five settings a console session may change.
     #[tokio::test]
-    async fn settings_are_listed_without_directories_and_four_of_them_are_writable() {
+    async fn settings_are_listed_without_directories_and_five_of_them_are_writable() {
         let (state, _dir) = settings_state("app-settings");
         let updated = call(
             &state,
@@ -3274,6 +3274,7 @@ pub(super) mod tests {
             .unwrap();
         assert_eq!(read["auto_delete_unresumable_archives"], false);
         assert_eq!(read["auto_select_account"], false);
+        assert_eq!(read["sidebar_order_by_status"], true);
         let selected = call(
             &state,
             "a",
@@ -3284,6 +3285,16 @@ pub(super) mod tests {
         .unwrap();
         assert_eq!(selected["auto_select_account"], true);
         assert!(state.store.auto_select_account().unwrap());
+        let ordered = call(
+            &state,
+            "a",
+            "update_settings",
+            &arguments(json!({ "sidebar_order_by_status": false })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(ordered["sidebar_order_by_status"], false);
+        assert!(!state.store.sidebar_order_by_status().unwrap());
         assert_eq!(read["accounts"].as_array().unwrap().len(), 4);
         assert_eq!(read["accounts"][0]["id"], "default");
         assert_eq!(read["accounts"][0]["default"], true);

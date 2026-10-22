@@ -273,6 +273,7 @@ impl Store {
                 auto_approve_session_requests INTEGER NOT NULL DEFAULT 0,
                 auto_approve_resume_requests INTEGER NOT NULL DEFAULT 0,
                 auto_select_account INTEGER NOT NULL DEFAULT 0,
+                sidebar_order_by_status INTEGER NOT NULL DEFAULT 1,
                 -- NULL until the user sets one; see `Store::default_clone_dir`.
                 default_clone_dir      TEXT,
                 -- NULL until the list is first decided; see `Store::added_agents`.
@@ -384,6 +385,13 @@ impl Store {
             conn.execute(
                 "ALTER TABLE settings \
                  ADD COLUMN auto_select_account INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
+        if !column_exists(&conn, "settings", "sidebar_order_by_status")? {
+            conn.execute(
+                "ALTER TABLE settings \
+                 ADD COLUMN sidebar_order_by_status INTEGER NOT NULL DEFAULT 1",
                 [],
             )?;
         }
@@ -1148,6 +1156,7 @@ impl Store {
             auto_approve_session_requests: self.auto_approve_session_requests()?,
             auto_approve_resume_requests: self.auto_approve_resume_requests()?,
             auto_select_account: self.auto_select_account()?,
+            sidebar_order_by_status: self.sidebar_order_by_status()?,
             default_clone_dir: self.default_clone_dir()?,
             accounts: self.list_accounts()?,
             added_agents: self.added_agents()?,
@@ -1332,6 +1341,24 @@ impl Store {
         let changed = self.lock().execute(
             "UPDATE settings SET auto_select_account = ?2 \
              WHERE id = ?1 AND auto_select_account != ?2",
+            params![SETTINGS_ID, value],
+        )?;
+        Ok(changed > 0)
+    }
+
+    pub fn sidebar_order_by_status(&self) -> Result<bool> {
+        Ok(self.lock().query_row(
+            "SELECT sidebar_order_by_status FROM settings WHERE id = ?1",
+            params![SETTINGS_ID],
+            |row| row.get(0),
+        )?)
+    }
+
+    /// Whether the setting actually changed.
+    pub fn set_sidebar_order_by_status(&self, value: bool) -> Result<bool> {
+        let changed = self.lock().execute(
+            "UPDATE settings SET sidebar_order_by_status = ?2 \
+             WHERE id = ?1 AND sidebar_order_by_status != ?2",
             params![SETTINGS_ID, value],
         )?;
         Ok(changed > 0)
@@ -4508,6 +4535,31 @@ mod tests {
         drop(store);
         let store = Store::open(&path).expect("store");
         assert!(!store.auto_select_account().unwrap());
+    }
+
+    /// Ordering the sidebar by status is on in a fresh database and in one from before the
+    /// setting existed, round-trips, and a repeat write reports no change.
+    #[test]
+    fn the_sidebar_order_by_status_setting_defaults_on_and_round_trips() {
+        let path = temp_db("sidebar-order-by-status-setting");
+        let store = Store::open(&path).expect("store");
+        assert!(store.get_settings().unwrap().sidebar_order_by_status);
+
+        assert!(store.set_sidebar_order_by_status(false).unwrap());
+        assert!(!store.set_sidebar_order_by_status(false).unwrap());
+        assert!(!store.sidebar_order_by_status().unwrap());
+        assert!(store.set_sidebar_order_by_status(true).unwrap());
+
+        store
+            .lock()
+            .execute(
+                "ALTER TABLE settings DROP COLUMN sidebar_order_by_status",
+                [],
+            )
+            .unwrap();
+        drop(store);
+        let store = Store::open(&path).expect("store");
+        assert!(store.sidebar_order_by_status().unwrap());
     }
 
     /// The default clone directory is the built-in one until set, a blank value goes back to it,

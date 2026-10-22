@@ -312,6 +312,30 @@ const projectArchiveInConsoleState = {
   ]),
 };
 
+// A console session whose focus mode lists three projects, with ordering by status switched off:
+// the groups follow the projects' names, and the cards the order the sessions started in, pinned
+// first. Switched on, Docs (idle only) would come last and the waiting cards first in their groups,
+// after the pinned one.
+const orderConsole = consoleOf("c-order", "Main");
+const orderHub = sessionOf("s-order-hub", orderConsole.id, undefined, "Hub", "idle", { colour: "teal", started_at: minutesAgo(400) });
+const orderDocs = projectOf("p-order-docs", orderConsole.id, "Docs");
+const orderSearch = projectOf("p-order-search", orderConsole.id, "Search API");
+const orderSite = projectOf("p-order-site", orderConsole.id, "Website");
+const orderOffState = snapshotState({
+  consoles: [orderConsole],
+  projects: [orderDocs, orderSearch, orderSite],
+  sessions: [
+    orderHub,
+    sessionOf("s-order-1", orderConsole.id, orderDocs.id, "Proofread the guide", "idle", { bound_to: orderHub.id, started_at: minutesAgo(30) }),
+    sessionOf("s-order-2", orderConsole.id, orderSearch.id, "Fix the rounding of partial results", "waiting_user", { bound_to: orderHub.id, started_at: minutesAgo(50) }),
+    sessionOf("s-order-3", orderConsole.id, orderSearch.id, "Write the migration", "idle", { bound_to: orderHub.id, started_at: minutesAgo(10) }),
+    sessionOf("s-order-4", orderConsole.id, orderSite.id, "Refresh the landing page", "working", { bound_to: orderHub.id, started_at: minutesAgo(5) }),
+    sessionOf("s-order-5", orderConsole.id, orderSite.id, "Compress the hero images", "idle", { bound_to: orderHub.id, started_at: minutesAgo(25), pinned: true }),
+    sessionOf("s-order-6", orderConsole.id, orderSite.id, "Check the dark theme", "waiting_user", { bound_to: orderHub.id, started_at: minutesAgo(60) }),
+  ],
+  settings: { ...settings, accounts: [], sidebar_order_by_status: false },
+});
+
 export const focusScenarios: Scenario[] = [
   {
     id: "sidebar-session-hierarchy",
@@ -427,6 +451,15 @@ export const focusScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.session("Hub")),
     ],
+  },
+  {
+    id: "focus-console-session-order-by-status-off",
+    group: GROUP,
+    category: "normal",
+    title: "Console session focus, ordering by status switched off",
+    state: orderOffState,
+    preferences: { sidebarConsole: orderConsole.id, sidebarFocus: `consoleSession:${orderHub.id}` },
+    description: "The project groups follow the projects' names, Docs, Search API, Website, although Docs has only an idle card and the other two have a card waiting for you. Within each group the cards follow when they started, newest first, with nothing ranked by status: Write the migration comes before the waiting Fix the rounding of partial results, and in Website the pinned Compress the hero images stays on top, followed by Refresh the landing page and the waiting Check the dark theme.",
   },
   {
     id: "focus-console-session-drawer",

@@ -64,6 +64,7 @@ type SettingMessage =
   | "configuration.import.settings.turnsOn"
   | "configuration.import.settings.archiveCleanup.turnsOn"
   | "configuration.import.settings.autoSelectAccount.turnsOn"
+  | "configuration.import.settings.sidebarOrder.turnsOn"
   | "configuration.import.settings.turnsOff"
   | "configuration.import.settings.alreadyOn"
   | "configuration.import.settings.alreadyOff";
@@ -293,6 +294,9 @@ export function ImportReview({
       )}
       {typeof settings.auto_select_account === "boolean" && typeof settings.current_auto_select_account === "boolean" && (
         <SettingNote label={t("settings.autoSelect.label")} wanted={settings.auto_select_account} current={settings.current_auto_select_account} turnsOn="configuration.import.settings.autoSelectAccount.turnsOn" />
+      )}
+      {typeof settings.sidebar_order_by_status === "boolean" && typeof settings.current_sidebar_order_by_status === "boolean" && (
+        <SettingNote label={t("settings.sidebarOrder.label")} wanted={settings.sidebar_order_by_status} current={settings.current_sidebar_order_by_status} turnsOn="configuration.import.settings.sidebarOrder.turnsOn" />
       )}
     </>
   );

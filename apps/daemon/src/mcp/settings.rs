@@ -106,6 +106,7 @@ pub(super) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
         "auto_pull_repositories": state.store.auto_pull_repositories()?,
         "auto_delete_unresumable_archives": state.store.auto_delete_unresumable_archives()?,
         "auto_select_account": state.store.auto_select_account()?,
+        "sidebar_order_by_status": state.store.sidebar_order_by_status()?,
         "default_clone_dir": state.store.default_clone_dir()?,
         "accounts": listed,
         "trusted_directories": state.store.trusted_directories()?,
@@ -128,6 +129,7 @@ pub(super) fn update_settings(
             auto_approve_session_requests: None,
             auto_approve_resume_requests: None,
             auto_select_account: optional_bool(arguments, "auto_select_account")?,
+            sidebar_order_by_status: optional_bool(arguments, "sidebar_order_by_status")?,
             default_clone_dir: raw_text(arguments, "default_clone_dir")?,
         },
     )?;

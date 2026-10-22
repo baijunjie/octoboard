@@ -98,9 +98,9 @@ every path is shown in full.
 
 ## General
 
-Small app-wide settings: an **Appearance** row, a **Language** row, a **Markdown style** row, a **Default clone
-directory** row, then an **Automatically delete archived sessions whose conversation is gone** row, and last, in the
-macOS application only, a **Keep running in the background** row.
+Small app-wide settings: an **Appearance** row, a **Language** row, a **Markdown style** row, an **Order the sidebar
+by status** row, a **Default clone directory** row, then an **Automatically delete archived sessions whose conversation
+is gone** row, and last, in the macOS application only, a **Keep running in the background** row.
 
 ### Appearance
 
@@ -120,6 +120,20 @@ How a rendered Markdown document in the project pane's file viewer looks, chosen
 **Tailwind**, **GitHub**, **Newsprint** and **LaTeX**. The styles are named for what they are modelled on, so their
 names are proper names, the same in every language. What each style looks like, which one is the default and where
 the choice is kept are in "A Markdown file as a document" in `docs/product/file-viewer.md`.
+
+### Order the sidebar by status
+
+A switch, **on to begin with** — installations from before the switch existed included: whether the sidebar ranks
+sessions and projects by their status, so that the ones waiting for the user come first after the pinned ones. While
+the switch is on the row's description says what is happening now: sessions and projects move as their status changes,
+and projects with no unarchived session end the list. While it is off the description says how the sidebar is ordered
+instead — sessions newest first and projects by name, pinned ones first, so nothing moves up for waiting or working,
+and projects with no unarchived session still end the list — and what turning it on will do. The daemon stores it as
+`sidebar_order_by_status` and keeps it, so every window shows the same. A console session may read and change it, and a
+full configuration export carries it (see "Application settings: `get_settings` and `update_settings`" in
+`docs/product/agent-settings-tools.md` and "The application settings a full export carries" in
+`docs/product/configuration-export-and-import.md`). The order under either state, and what else follows it, are in
+"Order of projects and sessions" in `docs/product/sidebar.md`.
 
 ### Default clone directory
 

@@ -28,6 +28,7 @@ const menuOf = (sessions: Session[], quota: StatusItemQuotaSource = NO_QUOTA) =>
     sessions,
     consoleMap: new Map(consoles.map((c) => [c.id, c])),
     projectMap: new Map(projects.map((p) => [p.id, p])),
+    byStatus: true,
   });
 
 const inProject = (id: string, status: SessionStatus, title = id, terminal_title?: string) =>

@@ -31,6 +31,8 @@ export interface StatusItemMenuSource {
   sessions: Session[];
   consoleMap: Map<string, Console>;
   projectMap: Map<string, Project>;
+  /** Whether the sidebar ranks by status (`ordersByStatus`), which this menu's order follows. */
+  byStatus: boolean;
   quota: StatusItemQuotaSource;
   selectedSessionId?: string;
   currentConsoleId?: string;
@@ -42,8 +44,8 @@ export interface StatusItemMenuSource {
  * the user. */
 export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource): StatusItemMenuDraft {
   const { consoles, projects, sessions, consoleMap, projectMap, quota } = source;
-  const byStatus = SECTION_ORDER.map((status) => ({ status, listed: sessionsInTreeOrder(consoles, projects, sessions, (s) => sessionStatusKind(s) === status) }));
-  const sections = byStatus.flatMap(({ status, listed }): StatusItemSection[] => {
+  const perStatus = SECTION_ORDER.map((status) => ({ status, listed: sessionsInTreeOrder(consoles, projects, sessions, (s) => sessionStatusKind(s) === status, source.byStatus) }));
+  const sections = perStatus.flatMap(({ status, listed }): StatusItemSection[] => {
     if (listed.length === 0) return [];
     const items: StatusItemEntry[] = listed
       .slice(0, MAX_PER_SECTION)
@@ -69,6 +71,6 @@ export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource):
     open: t("statusItem.open"),
     quit: t("menu.quit"),
     // Taken from the listed sessions, so the dot never shows over a menu with no waiting section.
-    attention: byStatus.some(({ status, listed }) => status === "waiting_user" && listed.length > 0),
+    attention: perStatus.some(({ status, listed }) => status === "waiting_user" && listed.length > 0),
   };
 }

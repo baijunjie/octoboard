@@ -995,6 +995,7 @@ async fn handle_inner(
             auto_approve_session_requests,
             auto_approve_resume_requests,
             auto_select_account,
+            sidebar_order_by_status,
             default_clone_dir,
         } => {
             update_settings(
@@ -1005,6 +1006,7 @@ async fn handle_inner(
                     auto_approve_session_requests,
                     auto_approve_resume_requests,
                     auto_select_account,
+                    sidebar_order_by_status,
                     default_clone_dir,
                 },
             )?;
@@ -5628,6 +5630,7 @@ pub struct SettingsChanges {
     pub auto_approve_session_requests: Option<bool>,
     pub auto_approve_resume_requests: Option<bool>,
     pub auto_select_account: Option<bool>,
+    pub sidebar_order_by_status: Option<bool>,
     /// Blank text goes back to the built-in default.
     pub default_clone_dir: Option<String>,
 }
@@ -5641,6 +5644,7 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         auto_approve_session_requests,
         auto_approve_resume_requests,
         auto_select_account,
+        sidebar_order_by_status,
         default_clone_dir,
     } = changes;
     // Checked before anything is written, so a refused directory leaves the other field unapplied
@@ -5668,6 +5672,9 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     }
     if let Some(value) = auto_select_account {
         changed |= state.store.set_auto_select_account(value)?;
+    }
+    if let Some(value) = sidebar_order_by_status {
+        changed |= state.store.set_sidebar_order_by_status(value)?;
     }
     if let Some(value) = default_clone_dir {
         changed |= state.store.set_default_clone_dir(value.as_deref())?;

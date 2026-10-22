@@ -68,7 +68,7 @@ import { useSettingsDialog } from "./settings/useSettingsDialog";
 import { belongsToFocus, focusAfterSelect, focusFor, focusKey, KEY_SWITCH_SELECTION, resolveFocus, shortcutOutcome } from "./sidebar/focus";
 import { useFocusShortcut } from "./sidebar/focusShortcut";
 import { useLastSessionPerConsole } from "./sidebar/lastSessionPerConsole";
-import { archiveNeedsConfirmation, consoleSessionAbove, switchStrip } from "./sidebar/order";
+import { archiveNeedsConfirmation, consoleSessionAbove, ordersByStatus, switchStrip } from "./sidebar/order";
 import { useSession, useWaitingCount } from "./sessions/useSessions";
 import { indexSessions, sessionsOf } from "./sessions/sessionIndex";
 import { Sidebar } from "./sidebar/Sidebar";
@@ -766,7 +766,7 @@ export function App(): React.ReactElement {
 
   const waitingCount = useWaitingCount();
   const selectNextWaiting = () => {
-    const next = nextWaitingSession(waitingSessionsInTreeOrder(consoleList, projectList, allSessions()), selectedSessionId);
+    const next = nextWaitingSession(waitingSessionsInTreeOrder(consoleList, projectList, allSessions(), ordersByStatus(store.getState().settings)), selectedSessionId);
     if (next) selectSession(next);
   };
 

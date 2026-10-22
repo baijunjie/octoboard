@@ -1372,6 +1372,7 @@ export const zhHans: Translation<"other"> = {
   "configuration.import.settings.turnsOn": "开启 {setting}（目前为关闭）。之后 {appName} 会自动拉取你的仓库。",
   "configuration.import.settings.archiveCleanup.turnsOn": "开启 {setting}（目前为关闭）。之后 {appName} 会自动删除对话已丢失的已归档会话。",
   "configuration.import.settings.autoSelectAccount.turnsOn": "开启 {setting}（目前为关闭）。之后新建会话会使用周额度最快重置的账户。",
+  "configuration.import.settings.sidebarOrder.turnsOn": "开启 {setting}（目前为关闭）。之后侧边栏中的会话和项目会随状态变化移动位置。",
   "configuration.import.settings.turnsOff": "关闭 {setting}（目前为开启）。",
   "configuration.import.settings.alreadyOn": "文件中 {setting} 为开启，当前也已开启，因此应用后不会有任何变化。",
   "configuration.import.settings.alreadyOff": "文件中 {setting} 为关闭，当前也已关闭，因此应用后不会有任何变化。",
@@ -1468,6 +1469,11 @@ export const zhHans: Translation<"other"> = {
     "开启后，智能体不再保留已归档会话的对话时，将自动删除该会话。{appName} 每次启动时检查一次，之后约每天检查一次。置顶和锁定的会话会保留。",
   "settings.archiveCleanup.description.on":
     "智能体不再保留已归档会话的对话时，将自动删除该会话。{appName} 每次启动时检查一次，之后约每天检查一次。置顶和锁定的会话会保留。",
+  "settings.sidebarOrder.label": "侧边栏按状态排序",
+  "settings.sidebarOrder.description.off":
+    "会话按启动时间从新到旧排列，项目按名称排列，置顶的排在最前，等待你处理或正在工作的不会因此上移；没有未归档会话的项目排在最后。开启后，会话和项目会随状态变化移动位置，除置顶项外，等待你处理的排在最前。",
+  "settings.sidebarOrder.description.on":
+    "会话和项目会随状态变化移动位置，除置顶项外，等待你处理的排在最前。没有未归档会话的项目排在最后。",
   "settings.agentPermissions.lead": "选择会话可以在不征得你同意的情况下执行哪些操作。",
   "settings.autoApproveSession.label": "自动批准会话请求",
   "settings.autoApproveSession.description.off":

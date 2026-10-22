@@ -36,7 +36,7 @@ import { NewSessionButton } from "./NewSessionButton";
 import { NewSessionMenu } from "./NewSessionMenu";
 import { useNoAgentToStart } from "./useNewSessionMode";
 import { SessionActions } from "./SessionActions";
-import { archivePreviewSessions, archivedSessions, boundArchivedSessions, boundElsewhere, consoleSessionAbove, focusGroupRows, focusGroups, liveSessionRows, type NestedSession, notUnderConsoleSession, switchStrip, type SwitchStripEntry } from "./order";
+import { archivePreviewSessions, archivedSessions, boundArchivedSessions, boundElsewhere, consoleSessionAbove, focusGroupRows, focusGroups, liveSessionRows, type NestedSession, notUnderConsoleSession, ordersByStatus, switchStrip, type SwitchStripEntry } from "./order";
 import { projectFocusIncludeConsoleSessions } from "./projectFocusPreference";
 import { NESTED_INSET_CLASS, LockButton, PinButton, RowLabel, STICKY_HEADING_HEIGHT, StickySectionHeading, TreeRow } from "./rows";
 import type { SidebarHandlers } from "./types";
@@ -118,11 +118,12 @@ export function ProjectFocusView({
   // `useShallow` is needed.
   const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
   const includeConsoleSessions = projectFocusIncludeConsoleSessions.useValue();
-  const live = liveSessionRows(includeConsoleSessions ? sessions : notUnderConsoleSession(sessions, owners));
+  const byStatus = useDaemonStore((s) => ordersByStatus(s.settings));
+  const live = liveSessionRows(includeConsoleSessions ? sessions : notUnderConsoleSession(sessions, owners), byStatus);
   const byId = new Map(sessions.map((session) => [session.id, session]));
   const consoleOwner = (session: Session) => consoleSessionAbove(session, (id) => byId.get(id) ?? owners.get(id));
   const archived = archivedSessions(sessions);
-  const elsewhere = boundElsewhere(sessions, owners);
+  const elsewhere = boundElsewhere(sessions, owners, byStatus);
   const noAgentToStart = useNoAgentToStart();
   const newSession = (): NewSessionRequest => ({ kind: "new-session", console: parentConsole, project, binding: { kind: "unbound" } });
   const viewAll = () => handlers.onOpenArchive({ console: project.console_id, project: project.id });
@@ -222,7 +223,8 @@ export function ConsoleSessionFocusView({
   // Only the group holding the selected session is told which one it is, so a selection moving
   // between two sessions renders those groups alone.
   const selectedProjectId = useSessionProjectId(selectedSessionId);
-  const groups = focusGroups(projects, sessions, consoleSession.id);
+  const byStatus = useDaemonStore((s) => ordersByStatus(s.settings));
+  const groups = focusGroups(projects, sessions, consoleSession.id, byStatus);
   const liveCount = groups.reduce((sum, group) => sum + group.sessions.length, 0);
   const archived = boundArchivedSessions(sessions, consoleSession.id);
   const newSession = (project: Project): NewSessionRequest => ({ kind: "new-session", console: parentConsole, project, binding: { kind: "bound", to: consoleSession } });
@@ -383,7 +385,7 @@ const FocusProjectGroup = memo(function FocusProjectGroup({
   const { store } = useDaemon();
   // Read as `ProjectFocusView` does, for the Git submenu.
   const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
-  const boundHere = useDaemonStoreEqual((s) => focusGroupRows(sessionsOf(indexSessions(s.sessions).byConsole, parentConsole.id), project, consoleSessionId));
+  const boundHere = useDaemonStoreEqual((s) => focusGroupRows(sessionsOf(indexSessions(s.sessions).byConsole, parentConsole.id), project, consoleSessionId, ordersByStatus(s.settings)));
   const sessions = useProjectSessions(project.id);
   const archived = boundArchivedSessions(sessions, consoleSessionId);
   const newSessionHere = (): NewSessionRequest | undefined => {

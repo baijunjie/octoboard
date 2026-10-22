@@ -746,11 +746,11 @@ session does not report" in `docs/product/reporting-to-owners.md`).
 
 **It has its own glyph and name** wherever a session's status is shown or said — its row, focus mode's card, the top
 bar's breadcrumb, a confirmation's list of sessions, the row's accessible name and the glyph's tooltip. **For project
-ranking and activity summaries, it counts as working**: the order of projects in the sidebar, a console's badge on the
-rail and a collapsed project's activity marker (see "Order of projects and sessions", "The console switcher" and
+ranking and activity summaries, it counts as working**: the order of projects in the sidebar while it is ordered by
+status, a console's badge on the rail and a collapsed project's activity marker (see "Order of projects and sessions", "The console switcher" and
 "Project rows" in `docs/product/sidebar.md`), and a switch strip chip (see "The switch strip" in
-`docs/product/focus-mode.md`). Session lists give it a separate place before working sessions, following
-"Order of projects and sessions" in `docs/product/sidebar.md`. The menu bar icon's menu lists it in a group of its own,
+`docs/product/focus-mode.md`). Session lists ranked by status give it a separate place before working sessions,
+following "Order of projects and sessions" in `docs/product/sidebar.md`. The menu bar icon's menu lists it in a group of its own,
 after **Working** (see "The icon's menu" in `docs/product/menu-bar-icon.md`).
 
 An owner's tools give the list with every session they describe (see "The console session's tools" in

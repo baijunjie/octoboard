@@ -155,7 +155,7 @@ list of added agents and the names the user gave the default accounts (see "Adde
 
 ### The application settings a full export carries
 
-Three, each under its own key:
+Four, each under its own key:
 
 - **Automatically pull repositories** (see "Automatically pulling repositories" in
   `docs/product/project-git-status.md`), under `auto_pull_repositories`. An import also reads it from a document that
@@ -169,6 +169,10 @@ Three, each under its own key:
   stored value unchanged. The import review notes the setting only when the document carries it as a boolean. The line
   that says turning it on is its own, not the one used for automatic pull: a new session then uses the account whose
   weekly quota resets soonest.
+- **Order the sidebar by status** (see that section in `docs/product/settings.md`), under `sidebar_order_by_status`. A
+  document exported before the setting existed does not carry it, and applying that document's settings leaves the
+  stored value unchanged. The import review notes the setting only when the document carries it as a boolean; its line
+  that says turning it on is its own: sessions and projects in the sidebar then move as their status changes.
 
 **Automatically approve session requests** and **Automatically approve resume requests** (see "Approving requests
 automatically" in `docs/product/session-requests.md`) are never carried, unlike the other application-wide switches,

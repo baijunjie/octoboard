@@ -61,6 +61,10 @@ pub struct DocumentSettings {
     /// as it is.
     #[serde(default)]
     pub auto_select_account: Option<bool>,
+    /// Absent in a document exported before the setting existed: importing it leaves the setting
+    /// as it is.
+    #[serde(default)]
+    pub sidebar_order_by_status: Option<bool>,
 }
 
 /// A reference to an account: its name, which is unique within its agent. The agent is the one
@@ -169,6 +173,7 @@ pub fn build(store: &Store, console: Option<&str>) -> Result<ConfigurationDocume
             auto_pull_repositories: store.auto_pull_repositories()?,
             auto_delete_unresumable_archives: Some(store.auto_delete_unresumable_archives()?),
             auto_select_account: Some(store.auto_select_account()?),
+            sidebar_order_by_status: Some(store.sidebar_order_by_status()?),
         }),
     };
 
@@ -444,6 +449,7 @@ mod tests {
                 auto_pull_repositories: true,
                 auto_delete_unresumable_archives: Some(false),
                 auto_select_account: Some(false),
+                sidebar_order_by_status: Some(true),
             })
         );
         assert_eq!(

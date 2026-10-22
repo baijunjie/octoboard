@@ -183,6 +183,8 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
         settingLine(t("settings.archiveCleanup.label"), result.settings_applied.auto_delete_unresumable_archives)}
       {typeof result.settings_applied?.auto_select_account === "boolean" &&
         settingLine(t("settings.autoSelect.label"), result.settings_applied.auto_select_account)}
+      {typeof result.settings_applied?.sidebar_order_by_status === "boolean" &&
+        settingLine(t("settings.sidebarOrder.label"), result.settings_applied.sidebar_order_by_status)}
       {result.settings_error && (
         <CodeToneContext value="danger">
           <div className="flex min-w-0 flex-col gap-3">

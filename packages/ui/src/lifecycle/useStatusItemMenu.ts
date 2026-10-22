@@ -4,6 +4,7 @@ import { useLatest } from "../components/useLatest";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import type { Session } from "../protocol";
+import { ordersByStatus } from "../sidebar/order";
 import { useDaemon } from "../store";
 import { withIcons } from "./statusItemIcons";
 import { buildStatusItemMenu } from "./statusItemMenu";
@@ -33,8 +34,8 @@ interface UseStatusItemMenuOptions {
  * while open, so what that brings lands in the menu's next update.
  *
  * It follows the store through a subscription of its own rather than through props, so the menu is
- * rebuilt on each change of the consoles, projects, sessions, accounts, added agents, availability or quotas
- * without rendering anything.
+ * rebuilt on each change of the consoles, projects, sessions, accounts, added agents, the sidebar's
+ * ordering setting, availability or quotas without rendering anything.
  */
 export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, onSessionChosen }: UseStatusItemMenuOptions): void {
   const { statusItem } = usePlatform();
@@ -59,6 +60,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
         sessions: Array.from(sessions.values()),
         consoleMap: consoles,
         projectMap: projects,
+        byStatus: ordersByStatus(settings),
         // Countdowns and ages are as of this push, which the clock alone also causes (`nextQuotaTick`).
         quota: { language, now, accounts: settings.accounts, addedAgents: settings.added_agents, defaultAccountNames: settings.default_account_names, agentAvailability, accountQuotas },
       });
@@ -84,6 +86,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
         state.projects !== previous.projects ||
         state.sessions !== previous.sessions ||
         state.settings.accounts !== previous.settings.accounts ||
+        state.settings.sidebar_order_by_status !== previous.settings.sidebar_order_by_status ||
         state.settings.added_agents !== previous.settings.added_agents ||
         state.settings.default_account_names !== previous.settings.default_account_names ||
         state.agentAvailability !== previous.agentAvailability ||

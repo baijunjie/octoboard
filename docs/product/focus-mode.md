@@ -187,9 +187,9 @@ The switch strip moves between the console's console sessions without leaving fo
 console session's focus mode, and only while the console has at least two console sessions that are not archived.
 
 - **One chip per console session of the console that is not archived**, the one in focus included. The order is
-  fixed: pinned ones first, then by when they were started, oldest first. Unlike the console sessions section, it does
-  not follow their statuses, so a chip stays where it is while what it shows changes; pinning or unpinning one moves
-  its chip.
+  fixed: pinned ones first, then by when they were started, oldest first. It never follows their statuses, whether or
+  not the sidebar is ordered by status (see "Order of projects and sessions" in `docs/product/sidebar.md`), so a chip
+  stays where it is while what it shows changes; pinning or unpinning one moves its chip.
 - **A chip** shows the console session's colour (see "The binding badge" in `docs/product/sidebar.md`), its title,
   faded out when too long with the full title then its tooltip, and what is going on in that console session and the
   sessions bound to it: a waving hand while any of them is waiting for the user, otherwise the *working* glyph while

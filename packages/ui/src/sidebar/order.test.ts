@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { consoleOf } from "../gallery/fixtures/builders";
 import type { Project, Session, SessionStatus } from "../protocol";
-import { archiveNeedsConfirmation, countsAsWorking, isUnusedSession, consoleActivity, INACTIVE_PROJECT_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, sortProjects, switchStrip } from "./order";
+import { archiveNeedsConfirmation, countsAsWorking, isUnusedSession, consoleActivity, INACTIVE_PROJECT_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, ordersByStatus, sessionsInTreeOrder, sortProjects, switchStrip } from "./order";
 
 const session = (id: string, status: SessionStatus, started_at: number, pinned = false, bound_to?: string): Session => ({
   id,
@@ -35,6 +36,14 @@ const project = (id: string, name: string, pinned = false): Project => ({
   grok_account_id: { kind: "inherit" },
 });
 
+describe("ordersByStatus", () => {
+  it("orders by status unless the settings turn it off, a daemon that does not say counting as on", () => {
+    expect(ordersByStatus({})).toBe(true);
+    expect(ordersByStatus({ sidebar_order_by_status: true })).toBe(true);
+    expect(ordersByStatus({ sidebar_order_by_status: false })).toBe(false);
+  });
+});
+
 describe("liveSessions", () => {
   it("puts pinned first, then a raised hand, idle, work and interrupted, newest first within a status", () => {
     const ordered = liveSessions([
@@ -47,6 +56,18 @@ describe("liveSessions", () => {
       session("pinned", "interrupted", 0, true),
     ]);
     expect(ordered.map((s) => s.id)).toEqual(["pinned", "waiting", "new-idle", "old-idle", "working", "interrupted"]);
+  });
+
+  it("puts pinned first, then newest first, whatever the status, when the sidebar does not order by status", () => {
+    const ordered = liveSessions([
+      session("old-waiting", "waiting_user", 1),
+      session("interrupted", "interrupted", 9),
+      session("working", "working", 5),
+      session("archived", "archived", 10),
+      session("pinned-old", "working", 0, true),
+      session("pinned-new", "interrupted", 2, true),
+    ], false);
+    expect(ordered.map((s) => s.id)).toEqual(["pinned-new", "pinned-old", "interrupted", "working", "old-waiting"]);
   });
 
   it("counts a session that is still starting as a running one, not as no session at all", () => {
@@ -222,6 +243,37 @@ describe("sortProjects", () => {
     expect(projectRank(sessions.archived)).toBe(INACTIVE_PROJECT_RANK);
     expect(projectRank([])).toBe(INACTIVE_PROJECT_RANK);
   });
+
+  it("keeps active projects first and pinned first within each group, but ranks none by status, when the sidebar does not order by status", () => {
+    const sessions: Record<string, Session[]> = {
+      b: [session("b1", "working", 1)],
+      c: [session("c1", "waiting_user", 1)],
+      d: [session("d1", "interrupted", 1)],
+      p: [session("p1", "interrupted", 1)],
+      x: [session("x1", "archived", 1)],
+    };
+    const ordered = sortProjects(
+      [project("d", "delta"), project("x", "xray"), project("b", "beta"), project("z", "zulu", true), project("c", "charlie"), project("p", "papa", true), project("a", "alpha")],
+      (p) => sessions[p.id] ?? [],
+      false,
+    );
+    expect(ordered.map((p) => p.id)).toEqual(["p", "b", "c", "d", "z", "a", "x"]);
+  });
+});
+
+describe("sessionsInTreeOrder", () => {
+  it("walks the projects and sessions in the order the sidebar shows, with or without ranking by status", () => {
+    const consoles = [consoleOf("c", "Main")];
+    const projects = [project("a", "alpha"), project("b", "beta")];
+    const sessions = [
+      { ...session("a-old", "idle", 1), project_id: "a" },
+      { ...session("a-new", "working", 2), project_id: "a" },
+      { ...session("b-waiting", "waiting_user", 3), project_id: "b" },
+    ];
+    const ids = (byStatus: boolean) => sessionsInTreeOrder(consoles, projects, sessions, () => true, byStatus).map((s) => s.id);
+    expect(ids(true)).toEqual(["b-waiting", "a-old", "a-new"]);
+    expect(ids(false)).toEqual(["a-new", "a-old", "b-waiting"]);
+  });
 });
 
 describe("notUnderConsoleSession", () => {
@@ -254,6 +306,21 @@ describe("liveSessionRows", () => {
       ["unbound", undefined],
       ["pinned-under-unbound", "unbound"],
       ["under-unbound", "unbound"],
+    ]);
+  });
+
+  it("ranks each level by pin and start alone when the sidebar does not order by status", () => {
+    const rows = liveSessionRows([
+      session("owner", "waiting_user", 1),
+      session("newer", "interrupted", 9),
+      session("under-old", "waiting_user", 2, false, "owner"),
+      session("under-new", "interrupted", 3, false, "owner"),
+    ], false);
+    expect(rows.map((row) => [row.session.id, row.under?.id])).toEqual([
+      ["newer", undefined],
+      ["owner", undefined],
+      ["under-new", "owner"],
+      ["under-old", "owner"],
     ]);
   });
 
@@ -299,6 +366,13 @@ describe("boundElsewhere", () => {
     const summary = boundElsewhere(sessions, owners);
     expect(summary && { count: summary.count, owners: summary.owners.map((o) => [o.owner.id, o.count]) }).toEqual(expected);
   });
+
+  it("names the owners newest first, whatever their status, when the sidebar does not order by status", () => {
+    const busy = new Map([{ ...owner("hub-old", 1), status: "waiting_user" as const }, owner("hub-new", 2)].map((o) => [o.id, o]));
+    const sessions = [session("a", "idle", 1, false, "hub-old"), session("b", "idle", 2, false, "hub-new")];
+    expect(boundElsewhere(sessions, busy)?.owners.map((o) => o.owner.id)).toEqual(["hub-old", "hub-new"]);
+    expect(boundElsewhere(sessions, busy, false)?.owners.map((o) => o.owner.id)).toEqual(["hub-new", "hub-old"]);
+  });
 });
 
 describe("focusGroups", () => {
@@ -321,6 +395,13 @@ describe("focusGroups", () => {
       ["b", [["b-mine", undefined]]],
       ["a", [["a-mine", undefined], ["a-under-mine", "a-mine"]]],
     ]);
+    const byName = focusGroups(
+      [project("a", "alpha"), project("b", "beta")],
+      [in_("a-mine", "a", "idle", "hub"), in_("b-mine", "b", "working", "hub")],
+      "hub",
+      false,
+    );
+    expect(byName.map((g) => g.project.id)).toEqual(["a", "b"]);
   });
 });
 
