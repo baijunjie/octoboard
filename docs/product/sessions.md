@@ -338,11 +338,12 @@ file" in `docs/product/launching-agents.md`.
 
 The same order settles the agent everywhere a session's agent is not given outright: the session dialog's initial
 choice, a session opened with defaults, and a session of a project associated with "Detect from files" whose directory
-named no agent (see "The project's default agent" in `docs/product/projects.md`). A session that another session starts
-itself without naming an agent — with `new_session`, or with `request_session` in the caller's own console — runs the
-caller's own agent instead, and falls back to this order only when that agent cannot open a session; a session request
-for another console follows this order (see "The agent and account of a session a session starts" in
-`docs/product/hub-orchestration.md`).
+named no agent (see "The project's default agent" in `docs/product/projects.md`). A session that a project session
+starts itself without naming an agent — with `new_session`, or with `request_session` in the caller's own console —
+runs the caller's own agent instead, and so does a console session's request for a console session in its own console;
+either falls back to this order only when that agent cannot open a session. A session a console session starts in a
+project, and a session request for another console, follow this order (see "The agent and account of a session a
+session starts" in `docs/product/hub-orchestration.md`).
 
 A session's agent is fixed for its lifetime. Resuming or reopening a session always relaunches the same agent —
 session records belong to a specific agent and cannot be moved across agents.

@@ -52,10 +52,13 @@ give every agent, with `null` for an unset value.
 
 **The default agent and account settings do not decide what a session's own sessions run on.** The tools describe a
 project's `default_agent` and `accounts`, a console's `default_agent`, `project_session_agent` and `accounts`, and what
-`get_console` and `get_project` return, as applying to sessions opened without a choice. They say that a session another
-session starts itself — with `new_session`, or with `request_session` in that session's own console — runs on that
-session's own agent, and that a left-out account is chosen as "The agent and account of a session a session starts" in
-`docs/product/hub-orchestration.md` describes. They tell the caller to name another only when the user asked for it.
+`get_console` and `get_project` return, as applying to sessions opened without a choice. They say that a session a
+project session starts itself — with `new_session`, or with `request_session` in its own console — runs on that
+session's own agent unless it chooses another; that one a console session starts for a project — with `new_session` or
+`request_session` — runs on the project's default agent; that a console session's request for a console session runs on
+the requester's own agent; and that a left-out account is chosen as "The agent and account of a session a session
+starts" in `docs/product/hub-orchestration.md` describes. They tell a console session to name another agent or account
+only when the user asked for it.
 
 ## A project's settings
 

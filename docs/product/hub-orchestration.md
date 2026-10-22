@@ -67,7 +67,7 @@ console sessions are listed, are in "Console sessions and project sessions" in
 | `update_project` | `project`, `name?`, `description?`, `tags?`, `add_tags?`, `remove_tags?`, `pinned?`, `default_agent?`, `accounts?`, `launch?` | Changes one of this console's projects' settings. See "Changing a project: `update_project`" in `docs/product/agent-settings-tools.md`. |
 | `get_console`, `update_console` | — / `name?`, `default_agent?`, `project_session_agent?`, `accounts?`, `launch?`, `project_session_launch?` | Reads or changes the calling console session's own console. See "The console's own settings: `get_console` and `update_console`" in `docs/product/agent-settings-tools.md`. |
 | `get_settings`, `update_settings` | — / `auto_pull_repositories?`, `auto_delete_unresumable_archives?`, `auto_select_account?`, `default_clone_dir?` | Reads or changes the application-wide settings. See "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`. |
-| `new_session` | `project`, `brief`, `title?`, `agent?`, `account?`, `model?`, `effort?` | Starts a session in one of this console's projects, bound to the calling console session for its whole life, and hands it the brief as its opening prompt. Needs no approval. `title` names the session (see "Naming the sessions a session starts" below). `agent`, `account`, `model` and `effort` choose those for that one session, as the session dialog's choices do (see "Opening a session" in `docs/product/sessions.md`): `account` is an account by id or name, or `default` for the agent's default account, and must belong to the agent the session will run; a blank `model` or `effort` is the agent's own default, and any other must be one the agent offers (see "The Advanced section" in `docs/product/model-and-reasoning-effort.md`). Left out, `agent` follows the caller's own; a left-out `account` is chosen as "The agent and account of a session a session starts" below describes. Answers with the new session's id and its agent. Refused, with the reason in prose, when the session's resolved agent has been determined unavailable on this machine — never while that determination is still pending — or is not added, or when the account it would run on has used up its quota (see "Opening a session" in `docs/product/sessions.md`). |
+| `new_session` | `project`, `brief`, `title?`, `agent?`, `account?`, `model?`, `effort?` | Starts a session in one of this console's projects, bound to the calling console session for its whole life, and hands it the brief as its opening prompt. Needs no approval. `title` names the session (see "Naming the sessions a session starts" below). `agent`, `account`, `model` and `effort` choose those for that one session, as the session dialog's choices do (see "Opening a session" in `docs/product/sessions.md`): `account` is an account by id or name, or `default` for the agent's default account, and must belong to the agent the session will run; a blank `model` or `effort` is the agent's own default, and any other must be one the agent offers (see "The Advanced section" in `docs/product/model-and-reasoning-effort.md`). Left out, `agent` is the project's default agent, not the caller's own; a left-out `account` is chosen as "The agent and account of a session a session starts" below describes. Answers with the new session's id and its agent. Refused, with the reason in prose, when the session's resolved agent has been determined unavailable on this machine — never while that determination is still pending — or is not added, or when the account it would run on has used up its quota (see "Opening a session" in `docs/product/sessions.md`). |
 | `send_message` | `session`, `text` | Appends an instruction to a running session of the caller's. Answers with `delivered`, true only when it was written and not left unsent, and a `note` saying it was delivered, that it was queued, or that it was written into the session's input but its agent did not send it to the conversation — it is in the input box, or went to a view of the agent's background agents (see "A message written but not sent" and "A message a dialog discarded or a view took" in `docs/product/message-delivery.md`); the last two each say not to send it again. A session that a change of its account's sharing is restarting accepts it too, and holds it for the resumed process (see "Messages sent during the restart are held" in `docs/product/sharing-the-default-configuration.md`). |
 | `get_session` | `session` | The record of any session, of any console — status, title, agent, whether it is a console session, its console and project, which session owns it and whether that owner is a console session or a project session (or that it is unbound), whether it is the caller's, timestamps — plus a tail of what it has printed. |
 | `rename_session` | `session`, `title` | Changes the title of one of the caller's sessions, under the rules of "Renaming a session" in `docs/product/sessions.md`. Answers with the session's record. |
@@ -275,26 +275,38 @@ choose: Octoboard does not check it, and the daemon does not know the language o
 A session that a session starts itself — with `new_session`, or with `request_session` — runs on the agent and account
 below unless the call names others. In the caller's own console the caller's own agent takes the place of the default
 the project and console set (see "Which agent a session uses" in `docs/product/sessions.md`), which applies only where
-the caller's own cannot. The account does not always follow the caller.
+the caller's own cannot — except that a session a console session starts in a project always takes that default. The
+account does not always follow the caller.
 
-- **The agent.** Left out, and only in the caller's own console, `agent` is the caller's own agent, unless that agent
-  has been determined unavailable on this machine or is not on the list of added agents; then it is settled as for a
-  session opened without a choice. In another console a left-out `agent` is that console's and its project's, as for a
-  session opened without a choice.
+- **The agent.** Left out, `agent` is settled by who calls and where the session is:
+  - A project session's `new_session`, and its `request_session` in its own console, run the caller's own agent,
+    unless that agent has been determined unavailable on this machine or is not on the list of added agents; then it
+    is settled as for a session opened without a choice.
+  - A console session's `new_session`, and its `request_session` for a project session, run the project's default
+    agent — the project's own, else its console's default agent for project sessions — as for a session opened without
+    a choice, and never follow the caller's own agent.
+  - A console session's `request_session` for a console session in its own console runs the caller's own agent, with
+    the same fallback as a project session's.
+  - In another console a left-out `agent` is that console's and its project's, as for a session opened without a
+    choice.
 - **The account.** An `account` the call names is used as given, including `default`, which chooses the agent's default
   account and does not fall through to a project pin. Left out or blank, while **Automatically select an account** is
   on (see that section in `docs/product/settings.md`), it is the account of the session's agent whose weekly quota
   resets soonest, among accounts that can still open a session — the same pick the new-session dialog makes, ranked as
   in "Which account a session uses" in `docs/product/sessions.md`. That pick applies in the caller's own console and in
   another. When the setting is off, or no account ranks: in the caller's own console, it is the caller's own account,
-  the agent's default account included, when the session is of the caller's own agent and that account can still open a
+  the agent's default account included, when the session is of the caller's own agent — named, or settled on, as when a
+  project's default agent is the console session's own — and that account can still open a
   session. The caller's account is passed over, silently, when it no longer exists or is used up by the reading the
   daemon holds (see "A used-up account" in `docs/product/account-quotas.md`). Then, and for a session of another agent,
   the account is the project's for that agent, else the console's. In another console, when none ranks, the account is
   the project's, else the console's, and never the caller's. The call is refused only when the account it settles on
   is used up as well (see "Opening a session" in `docs/product/sessions.md`).
-- **Named ones win.** An `agent` or `account` the call names is used as given. The tools' descriptions tell the caller
-  to name either only when the user asked for it.
+- **Named ones win.** An `agent` or `account` the call names is used as given. A console session's tools, and every
+  session's `request_session`, tell the caller to name either only when the user asked for it. A project session's
+  `new_session` also lets it name another agent unasked when it judges that agent fits the work better and an account
+  of it can open a session, and another account when that is the way to reach that agent (see "Choosing the session a
+  task goes to" below).
 - **The model and reasoning effort** are not the caller's: left out, they are inherited as for any new session of that
   agent (see "Which model and reasoning effort a session uses" in `docs/product/sessions.md`).
 
@@ -309,8 +321,9 @@ an owner's tool" in `docs/product/handing-off-sessions.md`).
 
 A session started with `new_session` is always bound to the session that started it — a console session, or a
 project session that is unbound or a lead session — so it reports to it, and it is that owner's for its whole life:
-the owner instructs it, archives it once it is done and reopens it when it has another closely related task and room
-for it (see "Choosing the session a task goes to" below). A session started on a
+the owner instructs it, archives it once it is done and reopens it when it has another task — for a project session
+that owns it, another closely related task with room for it (see "Choosing the session a task goes to" below). A
+session started on a
 `request_session`, once approved, is bound to nobody: it reports to the user, and neither the session that
 asked for it nor that session's owner drives it (see `docs/product/session-requests.md`). A session **the user opens by
 hand is not bound**, unless they choose a console session under "Report to" in the session dialog (see "Opening a
@@ -329,20 +342,29 @@ A console session itself never reports anywhere, and neither does an unbound pro
 
 ## Choosing the session a task goes to
 
-A console session's instruction file and the role description of a project session that can own sessions — an unbound
-one or a lead session — tell the owner how to choose the session a task goes to. A project session with the role of a
-bound one owns none and is not told. This is guidance to the agent; Octoboard does not enforce it:
+The role description of a project session that can own sessions — an unbound one or a lead session — tells it when to
+start sessions of its own and which session a piece of work goes to. A console session is not told: it works out which
+project a request belongs to and does not concern itself with how a project's work is split among sessions. A project
+session with the role of a bound one owns none and is not told either. This is guidance to the agent; Octoboard does not
+enforce it:
 
-- Weigh how related the task is to what a session already holds, and how much of its context is used — `context` in
-  `get_session` and `list_sessions` (see "The console session's tools" above), judged by `tokens` when the window is
-  not known.
-- Give a task to an existing session only when it is closely related to that session's work and the session still has
-  room. Reopening an archived session for another task is held to the same condition, which `new_session`'s tool
-  description repeats.
-- Start a new session for an unrelated task, or when the related session's context is heavily used: about 60% of its
+- An ordinary task needs no sessions of its own: the project session does it itself, with subagents where they help.
+- It starts sessions only for a large requirement that can be developed in parallel on several branches, which it
+  splits across them and coordinates, or for a kind of work another agent handles better than its own, when an account
+  of that agent can open a session — `get_account_quotas` shows which can. The text names no agent.
+- Weigh how related a piece of work is to what a session already holds, and how much of its context is used —
+  `context` in `get_session` and `list_sessions` (see "The console session's tools" above), judged by `tokens` when the
+  window is not known.
+- Give a piece to an existing session only when it is closely related to that session's work and the session still has
+  room. Reopening an archived session for another task is held to the same condition, which the role description's line
+  on `new_session` and the tool's description repeat.
+- Start a new session for an unrelated piece, or when the related session's context is heavily used: about 60% of its
   window.
 - Split independent pieces of work across sessions rather than queuing them on one.
 - Wrap up and archive a session near a full context rather than handing it more.
+
+For work another agent handles better, it may name that agent in `new_session` without the user having asked (see "The
+agent and account of a session a session starts" above).
 
 ## A session archiving itself
 

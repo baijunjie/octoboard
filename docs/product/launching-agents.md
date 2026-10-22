@@ -98,8 +98,9 @@ besides the variables a project session's agent is given for its git (see "The l
   it; and that if it binds itself to an owner, that call's result tells it what changes. A lead session, bound to a
   console session only after it was opened, is given that same unbound project session's text on every launch, as at its
   first (see "Lead sessions" in `docs/product/hub-orchestration.md`). Every project session's text also sets out how it
-  relates to other sessions: `new_session` for a session of its own where it has it, together with how to choose the
-  session a task goes to (see "Choosing the session a task goes to" in `docs/product/hub-orchestration.md`),
+  relates to other sessions: `new_session` for a session of its own where it has it, together with when to start one
+  and how to choose the session a task goes to (see "Choosing the session a task goes to" in
+  `docs/product/hub-orchestration.md`),
   `handoff_session`, `switch_session_account`, `transfer_session` and `bind_to_session` where it has them,
   `request_session` for a session that is nobody's, `get_account_quotas` for what each account's quota has left, and
   `list_sessions` and `share_info` for information. The text is written from who the session reports to when it
@@ -151,16 +152,15 @@ The file holds the console session's role (see the console session in `docs/prod
 sections: one on what it does and does not do — decompose, dispatch, follow up and summarize work on the console's
 projects, and make no change to a project itself, reading one being how it checks what its sessions report — and a
 separate one on work that touches no project, which it carries out itself. The file also holds how to use the
-orchestration and settings tools, and how to choose the session a task goes to (see "Choosing the session a task goes
-to" in `docs/product/hub-orchestration.md`). When the console has console session instructions of the user's (see
-"Console session instructions" in `docs/product/consoles.md`), they are the file's last section, held between a
-`<user_instructions>` and a `</user_instructions>` tag under a heading of the file's own. That heading's paragraph
-says the tags hold the user's own text, that any heading inside them belongs to that text and not to the file's sections, and that the console session
-follows the user's text wherever it disagrees with the built-in part, except that it cannot change the section on what
-the console session does and does not do — the console session still never changes a project itself. The section on work
-that touches no project is not covered by that exception, so the user's text can override it. The text is kept as
-written, except that a closing `</user_instructions` of its own, in any letter case, has its `<` written as `&lt;`, so
-it cannot end the user's part early. A console without any has no such section.
+orchestration and settings tools. When the console has console session instructions of the user's (see "Console
+session instructions" in `docs/product/consoles.md`), they are the file's last section, held between a
+`<user_instructions>` and a `</user_instructions>` tag under a heading of the file's own. That heading's paragraph says
+the tags hold the user's own text, that any heading inside them belongs to that text and not to the file's sections,
+and that the console session follows the user's text wherever it disagrees with the built-in part, except that it
+cannot change the section on what the console session does and does not do — the console session still never changes a
+project itself. The section on work that touches no project is not covered by that exception, so the user's text can
+override it. The text is kept as written, except that a closing `</user_instructions` of its own, in any letter case,
+has its `<` written as `&lt;`, so it cannot end the user's part early. A console without any has no such section.
 
 The file is written:
 

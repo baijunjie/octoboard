@@ -343,11 +343,15 @@ fn session_in(
     );
 
     // Only in the caller's own console does a session follow the caller's agent and account:
-    // another console is set up apart, and its sessions run on what it and its projects set.
+    // another console is set up apart, and its sessions run on what it and its projects set. A
+    // console session does not follow its own agent into a project either: the project's default
+    // agent is what its sessions run on, unless the call names one.
     let in_own_console = caller.console_id == console.id;
+    let follows_callers_agent =
+        in_own_console && !(caller.role == Role::Console && project.is_some());
     let agent = match optional_agent(arguments, "agent")? {
         Some(agent) => Some(agent),
-        None if in_own_console && coordinator::agent_can_open(state, caller.agent)? => {
+        None if follows_callers_agent && coordinator::agent_can_open(state, caller.agent)? => {
             Some(caller.agent)
         }
         None => None,
@@ -3454,7 +3458,7 @@ pub(super) mod tests {
         assert!(readable_output(&raw).starts_with("ok "));
     }
 
-    /// A Codex console session `a` on the account `codex-work`, in a console whose sessions
+    /// A Codex project session `a` on the account `codex-work`, in a console whose sessions
     /// otherwise default to Claude Code on the default account.
     fn codex_caller_state(name: &str) -> (Arc<AppState>, ScratchDir, Session) {
         let (state, dir) = shared_console_state(name);
@@ -3473,6 +3477,8 @@ pub(super) mod tests {
             .unwrap();
         let caller = Session {
             agent: Agent::Codex,
+            role: Role::Project,
+            project_id: Some("project-1".to_string()),
             account_id: Some("codex-work".to_string()),
             config_dir: Some("/tmp/codex-work".to_string()),
             ..state.session_record("a").unwrap()
@@ -3522,6 +3528,57 @@ pub(super) mod tests {
         assert_eq!(
             agent_and_account(&state, &caller, "console-1", "project-1", named),
             (Some(Agent::Codex), Some(None))
+        );
+    }
+
+    /// A console session does not carry its own agent and account into a project: a session it
+    /// starts there runs on the project's default agent unless the call names one, and on the
+    /// caller's account only when that is the caller's own agent too.
+    #[test]
+    fn a_console_session_starts_sessions_on_the_projects_default_agent() {
+        let (state, _dir, project_caller) = codex_caller_state("console-caller-default-agent");
+        let caller = Session {
+            role: Role::Console,
+            project_id: None,
+            ..project_caller.clone()
+        };
+        let project = state.store.get_project("project-1").unwrap().unwrap();
+        let console = state.store.get_console("console-1").unwrap().unwrap();
+        let expected = coordinator::session_agent(None, Some(&project), &console);
+        assert_ne!(expected, Agent::Codex);
+
+        // An omitted agent resolves later, from the project: the request names none.
+        assert_eq!(
+            agent_and_account(&state, &caller, "console-1", "project-1", json!({})),
+            (None, None)
+        );
+        // An explicit agent wins, and the caller's account goes with its own agent only.
+        let codex = json!({ "agent": "codex" });
+        assert_eq!(
+            agent_and_account(&state, &caller, "console-1", "project-1", codex),
+            (Some(Agent::Codex), Some(Some("codex-work".to_string())))
+        );
+        let claude = json!({ "agent": "claude" });
+        assert_eq!(
+            agent_and_account(&state, &caller, "console-1", "project-1", claude),
+            (Some(Agent::Claude), None)
+        );
+        // A project session keeps following its own agent.
+        assert_eq!(
+            agent_and_account(&state, &project_caller, "console-1", "project-1", json!({})).0,
+            Some(Agent::Codex)
+        );
+        // A project whose default agent is the caller's own brings the caller's account along.
+        state
+            .store
+            .update_project(&Project {
+                default_agent: Some(Agent::Codex),
+                ..project
+            })
+            .unwrap();
+        assert_eq!(
+            agent_and_account(&state, &caller, "console-1", "project-1", json!({})),
+            (None, Some(Some("codex-work".to_string())))
         );
     }
 

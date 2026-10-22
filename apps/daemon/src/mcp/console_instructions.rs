@@ -15,10 +15,10 @@ use anyhow::{Context, Result};
 use crate::protocol::{Agent, CodedError, Console};
 use crate::store::Store;
 
-/// The console session's own guidance, before any addition of the user's, up to the bullet
-/// `role::session_choice_guidance` writes. It names the tools without a prefix because it is one
-/// file read by every agent, and each shows the same tools under its own prefix.
-const CONSOLE_SESSION_INSTRUCTIONS_HEAD: &str = "# Octoboard console session\n\
+/// The console session's own guidance, before any addition of the user's. It names the tools
+/// without a prefix because it is one file read by every agent, and each shows the same tools
+/// under its own prefix.
+const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          \n\
          You are the console session of an Octoboard console: a control board over agent sessions \
          in several projects. The user brings you a request, you work out which project it belongs \
@@ -67,14 +67,14 @@ const CONSOLE_SESSION_INSTRUCTIONS_HEAD: &str = "# Octoboard console session\n\
            and `context`, `acceptance` and `constraints` wherever you actually have something to \
            say; an empty field is omitted from the session's opening prompt rather than sent \
            blank. Name it with `title`, in the language the user converses with you in, not \
-           that of the project, its docs and code. It runs on your own agent. While \
+           that of the project, its docs and code. It runs on the project's default agent. While \
            **Automatically select an account** is on (an application setting; see `get_settings`), \
            a left-out account is the one of the session's agent whose weekly quota resets \
            soonest and that can still open a session. When none does, your own account is used \
-           only for your own agent when that account can still open a session; any other takes \
-           the account its project, else its console, sets. Name another agent or account only \
-           when the user asked for them. Returns the session's id. The session is yours for its \
-           whole life.\n\
+           only when the session's agent is your own and that account can still open a session; \
+           any other takes the account its project, else its console, sets. Name another agent \
+           or account only when the user asked for them. Returns the session's id. The session is \
+           yours for its whole life.\n\
          - `send_message` — the next instruction for a session already running.\n\
          - `get_session` — a session's status and a tail of its output; it reads any session, in \
            any console.\n\
@@ -136,12 +136,8 @@ const CONSOLE_SESSION_INSTRUCTIONS_HEAD: &str = "# Octoboard console session\n\
          ## How sessions relate\n\
          \n\
          - A session `new_session` starts is yours: you drive its whole life — instruct it, \
-           archive it when it is done, reopen it when it has another closely related task and \
-           room for it. No approval is needed.\n";
-
-/// The rest of the built-in guidance, after the bullet `role::session_choice_guidance` writes: the
-/// other ways sessions relate, then "## Reporting to the user".
-const CONSOLE_SESSION_INSTRUCTIONS_TAIL: &str = "\
+           archive it when it is done, reopen it when it has another task. No approval is \
+           needed.\n\
          - `request_session` is for a session that should be nobody's: it reports to the user, \
            and you can only share information with it. The user approves it first; the call \
            waits for their answer.\n\
@@ -221,19 +217,16 @@ fn escape_close_tag(text: &str) -> String {
 /// inside the user tags. The text is kept as written, except that a closing tag of its own is
 /// escaped, so it cannot end the user's part early and have what follows read as Octoboard's.
 pub fn console_session_instructions(user_prompt: Option<&str>) -> String {
-    let choice = super::role::session_choice_guidance(None);
     let handover = super::role::handover_guidance(None);
-    let instructions =
-        format!("{CONSOLE_SESSION_INSTRUCTIONS_HEAD}{choice}\n{CONSOLE_SESSION_INSTRUCTIONS_TAIL}");
     match user_prompt {
         Some(prompt) => {
             let prompt = escape_close_tag(prompt);
             format!(
-                "{instructions}\n\n{handover}\n\n\
+                "{CONSOLE_SESSION_INSTRUCTIONS}\n\n{handover}\n\n\
                  {USER_SECTION}{USER_OPEN_TAG}\n{prompt}\n{USER_CLOSE_TAG}\n"
             )
         }
-        None => format!("{instructions}\n\n{handover}\n"),
+        None => format!("{CONSOLE_SESSION_INSTRUCTIONS}\n\n{handover}\n"),
     }
 }
 
@@ -372,16 +365,23 @@ mod tests {
         assert!(!text.contains("octoboard__"));
     }
 
-    /// The file tells the console session how to choose the session a task goes to, with the
-    /// bullet in the section on how sessions relate and the tools named without a prefix.
+    /// A console session does not care what a project's tasks are, only which project they belong
+    /// to, so how to split a project's work among sessions is not its to decide.
     #[test]
-    fn the_instruction_file_tells_how_to_choose_a_session_for_a_task() {
+    fn the_instruction_file_leaves_splitting_a_projects_tasks_to_its_sessions() {
         let text = console_session_instructions(None);
-        let bullet = super::super::role::session_choice_guidance(None);
-        assert!(bullet.contains("about 60% of its window"));
-        let related = text.split("## How sessions relate").nth(1).unwrap();
-        assert!(related.contains(&bullet));
-        assert!(related.contains("- `request_session` is for a session that should be nobody's"));
+        assert!(!text.contains("Choose which session gets a task"));
+        assert!(!text.contains("60%"));
+        assert!(!text.contains("closely related"));
+    }
+
+    /// A session the console starts in a project runs on the project's default agent, not the
+    /// console session's own.
+    #[test]
+    fn a_session_started_for_a_project_runs_on_the_projects_default_agent() {
+        let text = console_session_instructions(None);
+        assert!(text.contains("It runs on the project's default agent."));
+        assert!(!text.contains("It runs on your own agent"));
     }
 
     /// The text of the instruction file's section under `heading`, up to the next section.

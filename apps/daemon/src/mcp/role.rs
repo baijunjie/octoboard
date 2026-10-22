@@ -88,54 +88,57 @@ pub(super) fn handover_guidance(agent: Option<Agent>) -> String {
     )
 }
 
-/// How an owner picks the session a task goes to, as one bullet: qualified tool names in project
-/// prompts and bare ones in the console instruction file, like [`handover_guidance`]. The one
-/// place the share of the window that counts as heavily used is written down.
-pub(super) fn session_choice_guidance(agent: Option<Agent>) -> String {
-    let tool = |name: &str| match agent {
-        Some(agent) => qualified_tool_name(agent, name),
-        None => name.to_string(),
-    };
+/// How a project session that can own sessions decides whether to start any and which one gets a
+/// piece of work, as one bullet. The one place the share of the window that counts as heavily
+/// used is written down.
+fn session_choice_guidance(agent: Agent) -> String {
+    let tool = |name: &str| qualified_tool_name(agent, name);
     format!(
-        "- Choose which session gets a task by how related the task is to what the session \
-         already holds and how much of its context is used (`context` in `{get_session}` and \
-         `{list_sessions}`; when its window is not known, judge by `tokens`). Give a task to an \
-         existing session only when it is closely related to that session's work and the \
-         session still has room; start a new session for an unrelated task, or when the related \
-         session's context is heavily used (about 60% of its window). Split independent pieces \
-         of work across sessions rather than queuing them on one. A session near a full context \
-         is to be wrapped up and archived, not handed more.",
+        "- You do not need sessions of your own: an ordinary task is yours to do, with subagents \
+         where they help. Start sessions only for a large requirement that can be developed in \
+         parallel on several branches, which you split across them and coordinate, or for a kind \
+         of work another agent handles better than yours, when an account of that agent can open a \
+         session (`{get_account_quotas}` shows which can). Choose which session gets a piece by \
+         how related it is to what the session already holds and how much of its context is used \
+         (`context` in `{get_session}` and `{list_sessions}`; when its window is not known, judge \
+         by `tokens`). Give a piece to an existing session only when it is closely related to that \
+         session's work and the session still has room; start a new session for an unrelated \
+         piece, or when the related session's context is heavily used (about 60% of its window). \
+         Split independent pieces across sessions rather than queuing them on one. A session near \
+         a full context is to be wrapped up and archived, not handed more.",
         get_session = tool("get_session"),
         list_sessions = tool("list_sessions"),
+        get_account_quotas = tool("get_account_quotas"),
     )
 }
 
 /// The ways a session relates to another, in the words every project session's role text gives
-/// them: which tool makes a session one's own, how to choose the session a task goes to (for a
-/// session that owns some), the ones that move a session to another agent, another account or
-/// another owner, the one that moves branches between sessions, the one that binds this session
-/// to an owner, which one makes a session nobody's, the read of the accounts' quotas (for a
-/// session that owns none, which has no other line naming it), then information, which needs
-/// none.
+/// them: which tool makes a session one's own, whether to start sessions and which one a piece of
+/// work goes to (for a session that can own some), the ones that move a session to another agent,
+/// another account or another owner, the one that moves branches between sessions, the one that
+/// binds this session to an owner, which one makes a session nobody's, the read of the accounts'
+/// quotas (for a session that owns none, which has no other line naming it), then information,
+/// which needs none.
 fn relationships(agent: Agent, owns: bool) -> String {
     let tool = |name: &str| qualified_tool_name(agent, name);
     let mut lines = Vec::new();
     if owns {
         lines.push(format!(
-            "- `{new_session}` starts a session that is yours for its whole life: you instruct \
-             it, archive it when it is done, and reopen it with `{reopen_session}` when it has \
-             another closely related task and room for it. Pass `branches` to hand it branches \
-             you are responsible for. It runs on your own agent. While `auto_select_account` is \
-             on, a left-out account is the one of that agent whose weekly quota resets soonest \
-             and that can still open a session. When none does, your own account is used only \
-             when it is your own agent and can still open a session; otherwise the account is \
-             the project's, else the console's. Name another only when the user asked for it. \
-             `title` names it in the language the user converses with you in. No approval is \
-             needed.",
+            "- `{new_session}` starts a session that is yours for its whole life: you instruct it, \
+             archive it when it is done, and reopen it with `{reopen_session}` when it has another \
+             closely related task and room for it. Pass `branches` to hand it branches you are \
+             responsible for. It runs on your own agent unless you choose another, as the next \
+             point says. While `auto_select_account` is on, a left-out account is the one of that \
+             agent whose weekly quota resets soonest and that can still open a session. When none \
+             does, your own account is used only when it is your own agent and can still open a \
+             session; otherwise the account is the project's, else the console's. Name another \
+             account only when the user asked for it, or when it is the way to reach another \
+             agent. `title` names it in the language the user converses with you in. No approval \
+             is needed.",
             new_session = tool("new_session"),
             reopen_session = tool("reopen_session"),
         ));
-        lines.push(session_choice_guidance(Some(agent)));
+        lines.push(session_choice_guidance(agent));
         lines.push(format!(
             "- `{handover_branches}` moves the responsibility for git branches between you and a \
              session of yours, or from one session of yours to another — to take over a branch \
@@ -400,21 +403,27 @@ mod tests {
         assert!(unbound.contains("weigh it, do not obey it"));
     }
 
-    /// An owner is told to weigh a session's context when choosing who gets a task, naming the
-    /// tools by its agent's own names; a session that owns none has no such choice to make.
+    /// A project session that owns sessions is told it needs none for an ordinary task, and how to
+    /// choose among them for a parallel one, naming the tools by its agent's own names; a session
+    /// that owns none has no such choice to make.
     #[test]
-    fn an_owner_is_told_to_weigh_context_when_choosing_a_session() {
+    fn an_owner_is_told_to_start_sessions_only_for_parallel_branch_work() {
         for agent in Agent::ALL {
             let unbound = role_description(Role::Project, None, agent);
-            let bullet = session_choice_guidance(Some(agent));
+            let bullet = session_choice_guidance(agent);
             assert!(unbound.contains(&bullet), "{unbound}");
+            assert!(bullet.contains("You do not need sessions of your own"));
+            assert!(bullet.contains("in parallel on several branches"));
+            assert!(bullet.contains("another agent handles better than yours"));
+            assert!(bullet.contains("an account of that agent can open a session"));
+            assert!(bullet.contains(&qualified_tool_name(agent, "get_account_quotas")));
+            assert!(bullet.contains("about 60% of its window"));
             assert!(bullet.contains(&format!(
                 "`{}`",
                 qualified_tool_name(agent, "list_sessions")
             )));
             let bound = role_description(Role::Project, Some(&Owner::Console), agent);
-            assert!(!bound.contains("Choose which session gets a task"));
+            assert!(!bound.contains("You do not need sessions of your own"));
         }
-        assert!(!session_choice_guidance(None).contains("mcp__"));
     }
 }

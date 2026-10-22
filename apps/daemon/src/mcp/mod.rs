@@ -108,18 +108,21 @@ const NAMING_LANGUAGE: &str = "Write it in the language the user converses with 
      rather than from the user directly, use the user's language as your owner passes it on, else \
      the language of your owner's messages.";
 
-/// What every default agent and account setting says of the sessions a session starts itself,
-/// which follow the session rather than the setting. A macro so the read tools' `&'static str`
-/// descriptions can take it with `concat!`.
+/// What every default agent and account setting says of the sessions a session starts itself:
+/// which follow the starting session, and which the project's default agent. A macro so the read
+/// tools' `&'static str` descriptions can take it with `concat!`.
 macro_rules! started_by_a_session {
     () => {
-        "A session that another session starts itself (`new_session`, or `request_session` in \
-         that session's own console) runs on that session's own agent. While \
-         `auto_select_account` is on, a left-out account is the one of that agent whose weekly \
-         quota resets soonest and that can still open a session. When none does, that session's \
-         own account is used only when it is the same agent and can still open a session; \
-         otherwise the account is the project's for the agent, else the console's. Name another \
-         only when the user asked for it."
+        "A session a project session starts itself (`new_session`, or `request_session` in its \
+         own console) runs on that session's own agent unless it chooses another, and one a \
+         console session starts for a project (`new_session` or `request_session`) on the \
+         project's default agent; a console session's request for a console session runs on the \
+         requester's own agent. While `auto_select_account` is on, a left-out account is the one \
+         of that agent whose weekly quota resets soonest and that can still open a session. When \
+         none does, the starting session's own account is used only when it is the same agent \
+         and can still open a session; otherwise the account is the project's for the agent, \
+         else the console's. A console session names another agent or account only when the user \
+         asked for it."
     };
 }
 
@@ -387,19 +390,19 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
         description: "Start a session in one of this console's projects and hand it a task. It is \
                       yours for its whole life: it reports to this console session, its owner, and \
                       you instruct it with `send_message`, archive it once it is done and reopen \
-                      it with `reopen_session` when it has another closely related task and room \
-                      for it. Needs no approval. Returns the new session's id. The brief is \
-                      rendered into the session's opening prompt; `title` names the session in the \
-                      language the user converses with you in. It runs on your own agent. While \
+                      it with `reopen_session` when it has another task. Needs no approval. \
+                      Returns the new session's id. The brief is rendered into the session's \
+                      opening prompt; `title` names the session in the language the user converses \
+                      with you in. It runs on the project's default agent. While \
                       `auto_select_account` is on, a left-out account is the one of the session's \
                       agent whose weekly quota resets soonest and that can still open a session. \
-                      When none does, your own account is used only for your own agent when that \
-                      account can still open a session; any other takes the account its project, \
-                      else its console, sets. Name another only when the user asked for it. Use \
-                      this when you should keep directing the session and receiving its reports. \
-                      To hand your own work to a peer in the next session, use `request_session`; \
-                      if the user only wants handover notes and an end, leave the notes and end. \
-                      Ask the user if their intent is unclear.",
+                      When none does, your own account is used only when the session's agent is \
+                      your own and that account can still open a session; any other takes the \
+                      account its project, else its console, sets. Name another only when the user \
+                      asked for it. Use this when you should keep directing the session and \
+                      receiving its reports. To hand your own work to a peer in the next session, \
+                      use `request_session`; if the user only wants handover notes and an end, \
+                      leave the notes and end. Ask the user if their intent is unclear.",
         schema: || new_session_schema(true),
     },
     SEND_MESSAGE,
@@ -926,31 +929,31 @@ const REQUEST_SESSION: ToolDef = ToolDef {
     name: "request_session",
     description: "Ask the user to start a session that is nobody's — neither yours nor your \
                   owner's: it reports to the user, and you and it can only exchange information \
-                  (`share_info`). It can be a project session in any project of any console, or \
-                  a console session. A session you want to drive yourself is one `new_session` \
-                  starts, where you have it. The user is asked first, and the call waits for \
-                  their answer, for several minutes at most — unless the user has chosen to \
-                  have such requests approved automatically, in which case the result says so \
-                  and the call does not wait. On approval Octoboard starts it \
-                  with your brief as its opening prompt; follow the user's direction on whether \
-                  your own work ends after the handover. Use this for a peer to continue your \
-                  current work in the next session. If the user only wants handover notes and an \
-                  end, leave the notes and end without starting a session. If their intent is \
-                  unclear, ask before acting. A refusal, or no answer in time, comes back as an \
-                  error and changes nothing. When handing over work on a branch you are \
-                  responsible for, pass it in `branches`: the user is shown them, and on \
-                  approval the new session becomes responsible for them in your place. Leave \
-                  `branches` out when you are only working on whatever branch is checked out. \
-                  `title` names the session in the language the user converses with you in. In \
-                  your own console it runs on your own agent. While `auto_select_account` is on, \
-                  a left-out account is the one of the session's agent whose weekly quota resets \
-                  soonest and that can still open a session. When none does, your own account is \
-                  used in your own console only for your own agent when that account can still \
-                  open a session; any other session takes the account its project, else its \
-                  console, sets. Otherwise a session in your own console of your own agent runs \
-                  on your own account, unless that account's quota is used up, and any other \
-                  takes the account its project, else its console, sets. Pass an account only \
-                  when the user asked for one.",
+                  (`share_info`). It can be a project session in any project of any console, or a \
+                  console session. A session you want to drive yourself is one `new_session` \
+                  starts, where you have it. The user is asked first, and the call waits for their \
+                  answer, for several minutes at most — unless the user has chosen to have such \
+                  requests approved automatically, in which case the result says so and the call \
+                  does not wait. On approval Octoboard starts it with your brief as its opening \
+                  prompt; follow the user's direction on whether your own work ends after the \
+                  handover. Use this for a peer to continue your current work in the next session. \
+                  If the user only wants handover notes and an end, leave the notes and end \
+                  without starting a session. If their intent is unclear, ask before acting. A \
+                  refusal, or no answer in time, comes back as an error and changes nothing. When \
+                  handing over work on a branch you are responsible for, pass it in `branches`: \
+                  the user is shown them, and on approval the new session becomes responsible for \
+                  them in your place. Leave `branches` out when you are only working on whatever \
+                  branch is checked out. `title` names the session in the language the user \
+                  converses with you in. In your own console it runs on your own agent, or on the \
+                  project's default agent when a project is named from a console session. While \
+                  `auto_select_account` is on, a left-out account is the one of the session's \
+                  agent whose weekly quota resets soonest and that can still open a session. When \
+                  none does, your own account is used in your own console only for your own agent \
+                  when that account can still open a session; any other session takes the account \
+                  its project, else its console, sets. Otherwise a session in your own console of \
+                  your own agent runs on your own account, unless that account's quota is used up, \
+                  and any other takes the account its project, else its console, sets. Pass an \
+                  account only when the user asked for one.",
     schema: request_session_schema,
 };
 
@@ -1020,18 +1023,20 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
                       soonest and that can still open a session. When none does, your own account \
                       is used only when it is your own agent and can still open a session; \
                       otherwise the account is the project's, else the console's. Name another \
-                      agent or account only when the user asked for it; any available agent can be \
-                      chosen then. Returns the new session's id. The brief is rendered into the \
-                      session's opening prompt; `title` names the session in the language the user \
-                      converses with you in. A session started this way cannot start sessions of \
-                      its own, and only this project is available; a session elsewhere, or one \
-                      that should not report to you, is one `request_session` asks the user for. \
-                      To give the new session a branch you are responsible for, pass it in \
-                      `branches`; `handover_branches` moves the branches of any session of yours \
-                      later. Use this only when you should keep directing the session and \
-                      receiving its reports. To hand your own work to a peer in the next session, \
-                      use `request_session`; if the user only wants handover notes and an end, \
-                      leave the notes and end. Ask the user if their intent is unclear.",
+                      account only when the user asked for it, or when it is the way to reach \
+                      another agent. Name another agent only when the user asked for it or when \
+                      you judge it fits the work better and an account of it can open a session. \
+                      Returns the new session's id. The brief is rendered into the session's \
+                      opening prompt; `title` names the session in the language the user converses \
+                      with you in. A session started this way cannot start sessions of its own, \
+                      and only this project is available; a session elsewhere, or one that should \
+                      not report to you, is one `request_session` asks the user for. To give the \
+                      new session a branch you are responsible for, pass it in `branches`; \
+                      `handover_branches` moves the branches of any session of yours later. Use \
+                      this only when you should keep directing the session and receiving its \
+                      reports. To hand your own work to a peer in the next session, use \
+                      `request_session`; if the user only wants handover notes and an end, leave \
+                      the notes and end. Ask the user if their intent is unclear.",
         schema: || new_session_schema(false),
     },
     SEND_MESSAGE,
@@ -1099,8 +1104,9 @@ fn request_session_schema() -> Value {
     });
     schema["properties"]["agent"]["description"] = json!(
         "The agent the session runs. Left out, it is your own agent for a session in your own \
-         console, and the agent the other console (and its project) sets for one elsewhere. Pass \
-         one only when the user asked for it."
+         console, or the project's default agent when you are a console session and name a \
+         project, and the agent the other console (and its project) sets for one elsewhere. \
+         Pass one only when the user asked for it."
     );
     schema["properties"]["account"]["description"] = json!(
         "The account the session runs on: an account's id or name, or `default` for the agent's \
@@ -1161,8 +1167,14 @@ fn new_session_schema(with_project: bool) -> Value {
         "agent": {
             "type": "string",
             "enum": ["claude", "codex", "grok"],
-            "description": "The agent the session runs. Left out, it is your own agent. Pass \
-                            another only when the user asked for it.",
+            "description": if with_project {
+                "The agent the session runs. Left out, it is the project's default agent. Pass \
+                 another only when the user asked for it."
+            } else {
+                "The agent the session runs. Left out, it is your own agent. Pass another only \
+                 when the user asked for it, or when you judge it fits the work better and an \
+                 account of it can open a session."
+            },
         },
         "account": {
             "type": "string",
@@ -1176,8 +1188,9 @@ fn new_session_schema(with_project: bool) -> Value {
                  account its project (else its console) sets, is used only when none does. \
                  Otherwise a session of your own agent runs on your own account, unless that \
                  account's quota is used up, and any other takes the account its project (else \
-                 its console) sets for the agent. Pass one only when the user asked for it.",
-                if with_project { " (see `get_settings`)" } else { "" }
+                 its console) sets for the agent. Pass one only when the user asked for it{}.",
+                if with_project { " (see `get_settings`)" } else { "" },
+                if with_project { "" } else { ", or when it is the way to reach another agent" }
             ),
         },
         "model": {
@@ -1288,6 +1301,31 @@ fn object_schema(properties: Value, required: &[&str]) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A project session that owns sessions may choose another agent for work that fits it better,
+    /// where a console session starts another agent's session only when the user asked: both the
+    /// tool's description and its `agent` argument say so.
+    #[test]
+    fn only_a_project_session_may_choose_another_agent_unasked() {
+        let text = |role| {
+            let tool = tool_by_name(role, false, "new_session").unwrap();
+            let schema = (tool.schema)();
+            (
+                tool.description.to_string(),
+                schema["properties"]["agent"]["description"]
+                    .as_str()
+                    .unwrap()
+                    .to_string(),
+            )
+        };
+        let (description, agent) = text(Role::Project);
+        assert!(description.contains("fits the work better"));
+        assert!(agent.contains("fits the work better"));
+        let (description, agent) = text(Role::Console);
+        assert!(!description.contains("fits the work better"));
+        assert!(!agent.contains("fits the work better"));
+        assert!(agent.contains("only when the user asked for it"));
+    }
 
     /// What a session is offered follows from its role and whether it is bound: only a session that
     /// can own sessions starts, hands over or drives them, only an unbound one binds itself, only a
