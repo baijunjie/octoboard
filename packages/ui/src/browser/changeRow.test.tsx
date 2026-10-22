@@ -70,6 +70,17 @@ it.each(["flat", "tree"] as const)("%s: names every status a change can have fro
   expect(vi.getTimerCount()).toBe(0);
 });
 
+it("keeps the name and the detail in one fading line, and the line counts and the actions button out of it", () => {
+  const { container } = render("flat", [change("unstaged", "d/counted.ts", { added: 3, removed: 1 })]);
+  const row = rowOf(container, "counted.ts");
+  const line = row.querySelector<HTMLElement>(".overflow-hidden")!;
+  expect(line.textContent).toBe("counted.tsd");
+  expect(line.querySelector("[dir=ltr][aria-hidden=true]")).toBeNull();
+  expect(row.querySelector("[dir=ltr][aria-hidden=true]")?.textContent).toBe("+3-1");
+  expect(line.querySelector("button")).toBeNull();
+  expect(row.querySelector("button")).not.toBeNull();
+});
+
 it.each(["flat", "tree"] as const)("%s: opens nothing from the file name or from the detail", (layout) => {
   const { container, settle } = render(layout);
   const row = rowOf(container, "renamed.ts");

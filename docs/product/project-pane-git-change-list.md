@@ -215,8 +215,10 @@ shows on keyboard focus (see "Tooltips on indicators" in `docs/product/labels-an
 stays out of the accessibility tree, as the icon does, which costs nothing: assistive technology hears a row as its name, its status in
 words and what follows the name, its line counts included.
 
-A name, or what follows it, too long for its row fades out, with its full text as its tooltip (see "Names too
-long for their space" in `docs/product/labels-and-tooltips.md`), each on the part of the row it belongs to.
+A name and what follows it are one line, which fades out as a whole where the row cuts it and runs as one marquee
+while the pointer is over it (see "Names too long for their space" in `docs/product/labels-and-tooltips.md`). While it
+is cut, its tooltip gives the name and what follows it, each on a line of its own. The line counts stay at the row's
+end, outside that line.
 
 - **Up** and **Down** move through the rows — commit rows and folder rows included — and the section headings between
   them (see "Folding a section" below), **Home** and **End** through the rows alone, and typing a name's first letters

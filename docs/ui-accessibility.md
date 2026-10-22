@@ -496,7 +496,7 @@ visible "not usable" line carries the rest.
 A clipped name, heading or detail scrolls only while the pointer is over its own text region. Independent labels
 within a row, card or header have independent hover regions; pointing at neighbouring text, an indicator, padding
 or an action button must not start their marquees. A branch and its upstream counts may scroll together when they
-form one text line.
+form one text line, as may a changed file's name and the folder or rename detail after it.
 
 Each run scrolls at reading speed, holds at the far edge for three seconds, then returns to its
 resting position in about 200 milliseconds. The first reading pass starts after a 600 millisecond
@@ -559,8 +559,8 @@ tooltip repeat the row's visible name, and composing it out of a fragment is wor
 
 The anchored shape takes the hover from its caller rather than listening for one itself, so it can be scoped to a
 single mark wherever that mark can carry the pointer handlers: the Git mode's change row hands it the hover from the
-status letter alone and anchors it to the letter, and the rest of the row — the name, the detail — keeps its own
-tooltips.
+status letter alone and anchors it to the letter, and the rest of the row — the name and the detail, as one line —
+keeps its own tooltip.
 
 Where such an indicator carries a tooltip of its own, that name goes **on the tooltip's trigger**, not on an element
 nested inside it: react-aria describes the trigger, so a name one level in leaves the description attached to a

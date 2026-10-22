@@ -266,15 +266,15 @@ accounts says they are not usable (see "The agent strip" in `docs/product/agent-
 
 A single-line name or label too long for its space — a sidebar row's name, a focus mode session card's title, the top
 bar's breadcrumb, a session listed in a confirmation, the report panel's page timestamp, a name in a project pane's file
-tree or its header, a name or what follows it in the Git mode's change list, a commit's subject on its commit row there,
-a branch's name in its branch selector, a picked tag's label (see "Picked tags" in `docs/product/project-tags.md`) and
-the project filter's strip of conditions in the sidebar's Projects heading, which counts as one label (see "Filtering
-the project list" in `docs/product/sidebar.md`) — fades out where it is cut off rather than ending in an ellipsis. The
-same holds for action-menu items and submenu names, a select's current choice or placeholder and its listed options,
-directory-picker rows, each line of a focus mode's header — the console's name and the project's name in a project's
-focus mode, the console's name alone in a console session's — the archive view's heading and count, the model line on a
-focus mode card and the agent name on a full archive row. A fixed session-owner label and a diff's collapsed-line label
-follow the same fade and marquee rules.
+tree or its header, a name and what follows it in the Git mode's change list (one label together), a commit's subject on
+its commit row there, a branch's name in its branch selector, a picked tag's label (see "Picked tags" in
+`docs/product/project-tags.md`) and the project filter's strip of conditions in the sidebar's Projects heading, which
+counts as one label (see "Filtering the project list" in `docs/product/sidebar.md`) — fades out where it is cut off
+rather than ending in an ellipsis. The same holds for action-menu items and submenu names, a select's current choice or
+placeholder and its listed options, directory-picker rows, each line of a focus mode's header — the console's name and
+the project's name in a project's focus mode, the console's name alone in a console session's — the archive view's
+heading and count, the model line on a focus mode card and the agent name on a full archive row. A fixed session-owner
+label and a diff's collapsed-line label follow the same fade and marquee rules.
 
 Except for the report timestamp, clipped text then has its full text as its tooltip — for the project filter's strip,
 its conditions drawn as the same tags the strip shows (see "Filtering the project list" in `docs/product/sidebar.md`),

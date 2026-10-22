@@ -85,26 +85,28 @@ export function changeRowText(
 }
 
 /** What a change's row shows: its icon, its status mark, its file's name and the detail beside it,
- * and at its end the lines it adds and removes and the button of the row's actions. The button
- * keeps its room while hidden, so the counts do not move when it shows. Host actions use the live
- * directory of the list even when the change itself names versions in commits. */
+ * and at its end the lines it adds and removes and the button of the row's actions. The name and
+ * the detail are one line that fades out as a whole where the row cuts it, with a tooltip saying
+ * each, one to a line, while it is cut. The button keeps its room while hidden, so the counts do
+ * not move when it shows. Host actions use the live directory of the list even when the change
+ * itself names versions in commits. */
 export function ChangeRowBody({ item, name, detail, contextTargetRef }: { item: ChangeItem; name: string; detail: string; contextTargetRef: React.RefObject<HTMLElement | null> }): React.ReactElement {
   const prose = pathDetail(item);
   const shownDetail = prose ? <Message id={prose.id} params={{ path: <InlineChip monospace size="inherit">{prose.path}</InlineChip> }} /> : detail;
+  const tooltip = detail !== "" ? (
+    <>
+      <span dir="auto" className="block">{name}</span>
+      <span dir="auto" className="block">{shownDetail}</span>
+    </>
+  ) : name;
   return (
     <>
       <ChangeIcon item={item} />
       <ChangeStatusChip status={item.status} />
-      <FadeOverflow as="span" dir="auto" className="min-w-0 shrink" titleWhenClipped={name}>
-        {name}
+      <FadeOverflow as="span" className="flex min-w-0 flex-1 items-center gap-1.5" titleWhenClipped={tooltip}>
+        <span dir="auto" className="shrink-0">{name}</span>
+        {detail !== "" && <span dir="auto" className="shrink-0 text-xs text-app-muted">{shownDetail}</span>}
       </FadeOverflow>
-      {detail !== "" ? (
-        <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1 text-xs text-app-muted" titleWhenClipped={shownDetail}>
-          {shownDetail}
-        </FadeOverflow>
-      ) : (
-        <span className="flex-1" />
-      )}
       <LineCounts item={item} />
       <RowActions reserve contextTargetRef={contextTargetRef} path={item.path} name={name} />
     </>
@@ -114,8 +116,8 @@ export function ChangeRowBody({ item, name, detail, contextTargetRef }: { item: 
 /** The lines a change adds and removes, at the end of its row: `+N` in green and `-M` in red, each
  * left out when it is none. It is a visual duplicate of what the row's accessible name says
  * (`changeRowText`), so it stays out of the accessibility tree, and it keeps its order and its
- * digits whatever the text direction, as a diff's own gutter does. It never shrinks: the name gives
- * way first. */
+ * digits whatever the text direction, as a diff's own gutter does. It never shrinks: the line of the
+ * name and its detail gives way first. */
 function LineCounts({ item }: { item: ChangeItem }): React.ReactElement | null {
   const language = useCurrentLanguage();
   const stats = lineStats(item);
