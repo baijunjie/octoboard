@@ -350,7 +350,9 @@ pub(super) async fn tell(
             from_id = original.id,
         );
         let told = match crate::mcp::running_or_leave(state, &session) {
-            Ok(running) => crate::mcp::tell_now_or_leave(state, &session.id, text, running).await,
+            Ok(running) => {
+                crate::mcp::tell_now_or_leave(state, &session.id, text, running, None).await
+            }
             Err(err) => Err(err),
         };
         if let Err(err) = told {

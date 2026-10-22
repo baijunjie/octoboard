@@ -10,14 +10,17 @@ use std::sync::Arc;
 use anyhow::Result;
 use serde_json::{json, Map, Value};
 
-use crate::coordinator;
+use crate::coordinator::{self, Released};
 use crate::protocol::{Agent, Role, Session};
 use crate::reporting::{self, Delivery, ReportStatus, WhenBlocked, NOTICE_PREFIX};
 use crate::sharing;
 use crate::state::AppState;
 
-use super::args::required_str;
+use super::args::{optional_string, required_str};
 use super::exec::resolve_owned_session;
+
+/// The most characters of the parting note of a `release_session`.
+const MAX_NOTE_CHARS: usize = 4000;
 
 /// The tools a project session has, with the role of a bound one or not, by the names its agent
 /// shows them, for telling a session whose binding has just changed what it has.
@@ -69,7 +72,8 @@ pub(crate) fn owner_from_now_on(agent: Agent, owner: &str) -> String {
 
 /// Whether `session` has a process to write into. Decided by the one who changes its owner, while
 /// it holds the claim a launch needs, and handed to [`tell_now_or_leave`]; a session with none is
-/// left owed a notice for its next launch (see [`owner_notice`]).
+/// left owed a notice for its next launch (see [`owner_notice`]). Also what decides whether a
+/// former owner is told of a release by the user ([`tell_former_owner`]).
 pub(crate) fn is_running(state: &Arc<AppState>, session: &Session) -> bool {
     !session.status.is_dormant() && state.live_session(&session.id).is_some()
 }
@@ -87,12 +91,15 @@ pub(crate) fn running_or_leave(state: &Arc<AppState>, session: &Session) -> Resu
 /// Writes `text` into the session `id`, queued while it cannot take a message, when `running` says
 /// it has a process (see [`running_or_leave`]); `None` is a session left to be told when it next
 /// starts. A write that fails, a process that ended meanwhile say, leaves the notice for the next
-/// launch too: it is built then from the binding as it stands, so telling twice does no harm.
+/// launch too: it is built then from the binding as it stands, so telling twice does no harm. A
+/// `note`, the parting words of a release, is kept with the notice that is left owed, as long as
+/// the session is still unbound.
 pub(crate) async fn tell_now_or_leave(
     state: &Arc<AppState>,
     id: &str,
     text: String,
     running: bool,
+    note: Option<&str>,
 ) -> Result<Option<Delivery>> {
     if !running {
         return Ok(None);
@@ -101,7 +108,10 @@ pub(crate) async fn tell_now_or_leave(
         Ok(delivery) => Ok(Some(delivery)),
         Err(err) => {
             tracing::debug!(session = %id, %err, "telling a session of its owner failed");
-            state.store.mark_owner_notice(id)?;
+            match note {
+                Some(note) => state.store.mark_owner_notice_with_note(id, note)?,
+                None => state.store.mark_owner_notice(id)?,
+            }
             Ok(None)
         }
     }
@@ -114,7 +124,9 @@ pub(crate) async fn tell_now_or_leave(
 /// on every resume.
 pub(crate) fn owner_notice(state: &Arc<AppState>, session: &Session) -> Result<String> {
     let Some(owner_id) = &session.bound_to else {
-        return Ok(released_text(session));
+        // The note of the release is told only while the release is the latest change of owner.
+        let note = state.store.owner_notice_note(&session.id)?;
+        return Ok(released_text(session, note.as_deref()));
     };
     // An owner no longer on record is named by its id alone, as a report to it would be.
     let owner = match state.store.get_session(owner_id)? {
@@ -184,7 +196,7 @@ pub(super) async fn transfer_session(
     // Neither message credits the turn it starts: if the moved session or its new owner carries on
     // and stops without reporting, the report Octoboard synthesises is the safety net, and it is
     // wanted there.
-    let child = tell_now_or_leave(state, &moved.id, to_session, running).await;
+    let child = tell_now_or_leave(state, &moved.id, to_session, running, None).await;
     let told_owner =
         reporting::write_message_off_runtime(state, &owner.id, to_owner, WhenBlocked::Queue)
             .await
@@ -212,25 +224,68 @@ pub(super) async fn transfer_session(
 
 /// Tells the project session `released`, just released from its owner, that it has none: its role
 /// description, recorded when it was launched, still says whose it is. Queued while the session
-/// cannot take a message; one with no process is told when it next starts (see [`owner_notice`]).
+/// cannot take a message; one with no process is told when it next starts (see [`owner_notice`]),
+/// with the former owner's parting `note` if the release stored one.
 pub(crate) async fn tell_released(
     state: &Arc<AppState>,
     released: &Session,
     running: bool,
+    note: Option<&str>,
 ) -> Result<Option<Delivery>> {
-    tell_now_or_leave(state, &released.id, released_text(released), running).await
+    tell_now_or_leave(
+        state,
+        &released.id,
+        released_text(released, note),
+        running,
+        note,
+    )
+    .await
 }
 
-/// The notice of a release.
-fn released_text(released: &Session) -> String {
+/// Tells the former owner `owner_id` that the user released `released` from it, when it has a
+/// process to be told in: one that has none is not told, and a later attempt by it to drive the
+/// session is refused as not its own. Queued while it cannot take a message. Only the user's
+/// release is told this way, since an owner that releases a session knows.
+pub(crate) async fn tell_former_owner(
+    state: &Arc<AppState>,
+    owner_id: &str,
+    released: &Session,
+) -> Result<Option<Delivery>> {
+    let Some(owner) = state.store.get_session(owner_id)? else {
+        return Ok(None);
+    };
+    if !is_running(state, &owner) {
+        return Ok(None);
+    }
+    let text = format!(
+        "{NOTICE_PREFIX}: the user released {released} from you. It is no longer yours: it has \
+         no owner now and answers only to the user, so you can no longer drive it, send it \
+         messages or archive it, and it does not report to you. Do not count on it any more, and \
+         treat any work you handed it as left with the user.",
+        released = sharing::named_session(released),
+    );
+    reporting::write_message_off_runtime(state, owner_id, text, WhenBlocked::Queue)
+        .await
+        .map(Some)
+}
+
+/// The notice of a release, ending with the former owner's parting `note` when there is one.
+fn released_text(released: &Session, note: Option<&str>) -> String {
     let tool = |name: &str| super::qualified_tool_name(released.agent, name);
+    let note = match note {
+        Some(note) => format!(
+            " Your former owner left this note:\n\n{note}\n— end of the note —",
+            note = sharing::quote(note),
+        ),
+        None => String::new(),
+    };
     format!(
         "{NOTICE_PREFIX}: you have no owner now. You were released from the session you \
          reported to, and you are the user's own session: take work only from the user typing in \
          this terminal, and do not call `{report}`, which is refused for a session with no owner. \
          This replaces what you were told of your owner when you were started. You can start and \
          drive sessions of your own with `{new_session}` and the tools that go with it; of \
-         Octoboard's tools you now have {tools}.",
+         Octoboard's tools you now have {tools}.{note}",
         report = tool("report"),
         new_session = tool("new_session"),
         tools = project_tools(released.agent, false),
@@ -238,15 +293,28 @@ fn released_text(released: &Session) -> String {
 }
 
 /// Releases a session of the caller's from its binding; see `coordinator::release_session`. The
-/// session is told it has no owner now, and the caller learns from the result what became of it.
+/// session is told it has no owner now, with the caller's `note` if it gave one, and the caller
+/// learns from the result what became of it.
 pub(super) async fn release_session(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
     let session = resolve_owned_session(state, caller, required_str(arguments, "session")?)?;
-    let (released, running) = coordinator::release_session(state, &session.id, Some(&caller.id))?;
-    let delivery = tell_released(state, &released, running).await;
+    // Normalised here, once: trimmed, and none when blank.
+    let note = optional_string(arguments, "note");
+    if note
+        .as_ref()
+        .is_some_and(|note| note.chars().count() > MAX_NOTE_CHARS)
+    {
+        anyhow::bail!("`note` is longer than {MAX_NOTE_CHARS} characters; shorten it");
+    }
+    let Released {
+        session: released,
+        running,
+        ..
+    } = coordinator::release_session(state, &session.id, Some(&caller.id), note.as_deref())?;
+    let delivery = tell_released(state, &released, running, note.as_deref()).await;
     Ok(json!({
         "session": released.id,
         "note": format!(
@@ -354,7 +422,7 @@ mod tests {
     use super::*;
     use crate::mcp::exec::call;
     use crate::mcp::exec::tests::{arguments, peer_state};
-    use crate::test_support::{output_containing, running};
+    use crate::test_support::{fake_live_session, heard_after_marker, output_containing, running};
 
     /// A handover moves the session to its new owner, tells it whose it now is, and sends the new
     /// owner the note, quoted; the session is the new owner's to drive from then on, not the old
@@ -419,7 +487,7 @@ mod tests {
     async fn a_release_tells_the_session_it_has_no_owner() {
         let (state, _dir) = peer_state("release");
         let of_a = running(&state, "of-a");
-        let _a = running(&state, "a");
+        let a = running(&state, "a");
         let _starter = running(&state, "starter");
         let _mine = running(&state, "mine");
 
@@ -440,7 +508,7 @@ mod tests {
             &state,
             "a",
             "release_session",
-            &arguments(json!({ "session": "of-a" })),
+            &arguments(json!({ "session": "of-a", "note": "  " })),
         )
         .await
         .unwrap();
@@ -454,6 +522,9 @@ mod tests {
             told.contains("do not call `mcp__octoboard__report`"),
             "{told}"
         );
+        // A blank note adds nothing, and the owner that released it is not told what it did.
+        assert!(!told.contains("former owner left"), "{told}");
+        assert!(!heard_after_marker(&state, &a).contains("released"));
 
         let err = call(
             &state,
@@ -464,6 +535,96 @@ mod tests {
         .await
         .expect_err("nobody's now");
         assert!(err.to_string().contains("not yours"), "{err}");
+    }
+
+    /// A note given with a release reaches the released session, quoted and marked as its former
+    /// owner's, in the message that tells it it has no owner now.
+    #[tokio::test]
+    async fn a_release_passes_the_owners_note_on() {
+        let (state, _dir) = peer_state("release-note");
+        state
+            .store
+            .set_binding("other-project", None, "a", false, false, false)
+            .unwrap()
+            .unwrap();
+        // A terminal holds no more than 1024 bytes of input that nothing reads, which this message
+        // is longer than: this stand-in reads it all.
+        let released = fake_live_session(
+            "other-project",
+            Agent::Claude,
+            80,
+            24,
+            "stty -icanon; echo ready; cat",
+        );
+        state.register_live(released.clone());
+        crate::session::spawn_reader_thread(released.clone(), 8 * 1024);
+        output_containing(&released, "ready");
+        let _a = running(&state, "a");
+
+        call(
+            &state,
+            "a",
+            "release_session",
+            &arguments(
+                json!({ "session": "other-project", "note": " Finish the retries.\nThen stop. " }),
+            ),
+        )
+        .await
+        .unwrap();
+        let told = output_containing(&released, "Then stop.");
+        assert!(told.contains("you have no owner now"), "{told}");
+        assert!(told.contains("Your former owner left this note:"), "{told}");
+        assert!(told.contains("> Finish the retries."), "{told}");
+        assert!(told.contains("> Then stop."), "{told}");
+        // Told in the message, so nothing is left owed.
+        assert_eq!(
+            state.store.owner_notice_pending("other-project").unwrap(),
+            0
+        );
+        assert_eq!(
+            state.store.owner_notice_note("other-project").unwrap(),
+            None
+        );
+    }
+
+    /// A note over the cap is refused in prose before anything changes; one at the cap goes
+    /// through.
+    #[tokio::test]
+    async fn a_release_refuses_a_note_that_is_too_long() {
+        let (state, _dir) = peer_state("release-note-cap");
+        let _a = running(&state, "a");
+        let _of_a = running(&state, "of-a");
+
+        let too_long = "x".repeat(MAX_NOTE_CHARS + 1);
+        let err = call(
+            &state,
+            "a",
+            "release_session",
+            &arguments(json!({ "session": "of-a", "note": too_long })),
+        )
+        .await
+        .expect_err("too long");
+        assert!(
+            err.to_string()
+                .contains(&format!("{MAX_NOTE_CHARS} characters")),
+            "{err}"
+        );
+        let session = state.store.get_session("of-a").unwrap().unwrap();
+        assert_eq!(session.bound_to.as_deref(), Some("a"));
+
+        let at_cap = "x".repeat(MAX_NOTE_CHARS);
+        call(
+            &state,
+            "a",
+            "release_session",
+            &arguments(json!({ "session": "of-a", "note": at_cap })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            state.store.get_session("of-a").unwrap().unwrap().bound_to,
+            None
+        );
     }
 
     /// A session that binds itself to a project session becomes an ordinary bound one: the owner

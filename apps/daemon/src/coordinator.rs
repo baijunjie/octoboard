@@ -920,10 +920,24 @@ async fn handle_inner(
         }
 
         RequestBody::ReleaseSession { session: id } => {
-            let (released, running) = release_session(state, &id, None)?;
-            // Nobody asked for the notice: a session that cannot be told now is still released.
-            if let Err(err) = mcp::tell_released(state, &released, running).await {
+            let Released {
+                session: released,
+                running,
+                former_owner,
+            } = release_session(state, &id, None, None)?;
+            // Nobody asked for the notices: a session that cannot be told now is still released,
+            // and each notice is told, and its failure logged, on its own.
+            let (told, told_owner) = tokio::join!(
+                mcp::tell_released(state, &released, running, None),
+                mcp::tell_former_owner(state, &former_owner, &released),
+            );
+            if let Err(err) = told {
                 tracing::warn!(session = %id, %err, "telling a released session failed");
+            }
+            if let Err(err) = told_owner {
+                tracing::warn!(
+                    session = %former_owner, %err, "telling the owner of a released session failed"
+                );
             }
             Ok(None)
         }
@@ -3131,6 +3145,17 @@ pub fn transfer_session(
     Ok((bound, owner, running))
 }
 
+/// What [`release_session`] did.
+#[derive(Debug)]
+pub struct Released {
+    /// The session as it is now.
+    pub session: Session,
+    /// Whether it has a process to be told in.
+    pub running: bool,
+    /// The owner it was released from.
+    pub former_owner: String,
+}
+
 /// Unbinds `session_id` from its owner, at the owner's request (`owner_id` names it) or the
 /// user's (`None`), and tells every client. The session becomes an ordinary unbound project
 /// session: `bound_to` and `lead` are cleared, and what it owns stays bound to it, so a lead
@@ -3139,14 +3164,17 @@ pub fn transfer_session(
 /// Refused, with the reason in prose and nothing changed, for the session or its owner under a
 /// claim (see [`claim_for_binding`], [`refuse_if_owner_claimed`]), a console session, a session
 /// that is not bound, and, with `owner_id`, one not bound to it. Returns the session as it is
-/// now, and whether it has a process to be told in; one that has none is left owed the notice for
-/// its next launch, decided while the claim is held and recorded by the binding write itself.
-/// Telling a running one is the caller's.
+/// now, whether it has a process to be told in, and the owner it was released from, read under the
+/// claim; one that has no process is left owed the notice for its next launch, decided while the
+/// claim is held and recorded by the binding write itself, with the owner's parting `note` (given
+/// only by an owner, already trimmed and not blank). Telling a running one, and the owner, is the
+/// caller's.
 pub fn release_session(
     state: &Arc<AppState>,
     session_id: &str,
     owner_id: Option<&str>,
-) -> Result<(Session, bool)> {
+    note: Option<&str>,
+) -> Result<Released> {
     let _claim = claim_for_binding(state, session_id)?;
     let session = state.session_record(session_id)?;
     if session.role == Role::Console {
@@ -3162,7 +3190,7 @@ pub fn release_session(
     let running = mcp::is_running(state, &session);
     let released = state
         .store
-        .clear_binding(session_id, current, !running)?
+        .clear_binding(session_id, current, !running, note)?
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "the binding changed while it was being released — `{session_id}` was bound \
@@ -3170,7 +3198,11 @@ pub fn release_session(
             )
         })?;
     state.publish_session(&released);
-    Ok((released, running))
+    Ok(Released {
+        session: released,
+        running,
+        former_owner: current.to_string(),
+    })
 }
 
 /// Who `session` reports to, for the launch that tells it so: `None` for a session that launches
@@ -12342,25 +12374,33 @@ mod tests {
             ("child", Some("hub"), "not bound to `hub`"),
         ] {
             let before = state.store.get_session(session).unwrap().unwrap();
-            let err = release_session(&state, session, owner).expect_err(reason);
+            let err = release_session(&state, session, owner, None).expect_err(reason);
             assert!(err.to_string().contains(reason), "{session}: {err}");
             let after = state.store.get_session(session).unwrap().unwrap();
             assert_eq!((before.bound_to, before.lead), (after.bound_to, after.lead));
         }
 
-        let (lead, _) = release_session(&state, "lead", Some("hub")).unwrap();
+        let lead = release_session(&state, "lead", Some("hub"), None)
+            .unwrap()
+            .session;
         assert!(!lead.has_bound_role());
         assert_eq!((lead.bound_to, lead.lead), (None, false));
         let child = state.store.get_session("child").unwrap().unwrap();
         assert_eq!(child.bound_to.as_deref(), Some("lead"));
 
-        let (plain, _) = release_session(&state, "plain", Some("hub")).unwrap();
+        let plain = release_session(&state, "plain", Some("hub"), None)
+            .unwrap()
+            .session;
         assert_eq!((plain.bound_to, plain.lead), (None, false));
-        let (dormant, _) = release_session(&state, "dormant", Some("hub")).unwrap();
+        let dormant = release_session(&state, "dormant", Some("hub"), None)
+            .unwrap()
+            .session;
         assert_eq!(dormant.bound_to, None);
-        let (by_user, _) = release_session(&state, "by-user", None).unwrap();
+        let by_user = release_session(&state, "by-user", None, None).unwrap();
+        assert_eq!(by_user.former_owner, "hub");
+        let by_user = by_user.session;
         assert_eq!(by_user.bound_to, None);
-        let err = release_session(&state, "by-user", None).expect_err("already released");
+        let err = release_session(&state, "by-user", None, None).expect_err("already released");
         assert!(err.to_string().contains("not bound to any owner"), "{err}");
 
         // Unbound now, it can be bound again like any unbound project session.
@@ -12421,9 +12461,13 @@ mod tests {
         );
 
         // A release leaves the notice owed, decided with the binding change.
-        let (released, running) = release_session(&state, "released", Some("hub")).unwrap();
+        let Released {
+            session: released,
+            running,
+            ..
+        } = release_session(&state, "released", Some("hub"), None).unwrap();
         assert!(!running);
-        assert!(mcp::tell_released(&state, &released, running)
+        assert!(mcp::tell_released(&state, &released, running, None)
             .await
             .unwrap()
             .is_none());
@@ -12451,7 +12495,7 @@ mod tests {
         assert_eq!(state.store.owner_notice_pending("handed").unwrap(), 0);
 
         // A later change replaces the pending notice: it states the owner as it then stands.
-        release_session(&state, "replaced", Some("hub")).unwrap();
+        release_session(&state, "replaced", Some("hub"), None).unwrap();
         state
             .store
             .set_binding("replaced", None, "hub-2", true, false, false)
@@ -12480,7 +12524,7 @@ mod tests {
             &["hub"],
         );
         for id in ["claude", "codex"] {
-            release_session(&state, id, None).unwrap();
+            release_session(&state, id, None, None).unwrap();
         }
 
         relaunch_stand_in(&state, "claude", true)
@@ -12502,6 +12546,169 @@ mod tests {
         assert_eq!(state.store.owner_notice_pending("codex").unwrap(), 0);
     }
 
+    /// The parting note of an owner that releases a session that is not running is kept with the
+    /// owed notice and told at the next launch, while the release is still the latest change of
+    /// owner: a later transfer or bind drops it, and a blank note is not kept.
+    #[tokio::test]
+    async fn a_dormant_release_keeps_the_parting_note_for_the_next_launch() {
+        use SessionStatus::Idle;
+        let (state, _dir, _live) = binding_fixture(
+            "release-note",
+            vec![
+                console_session("hub", Idle),
+                console_session("hub-2", Idle),
+                dormant_with_conversation("noted", Agent::Claude, "hub"),
+                dormant_with_conversation("blank", Agent::Claude, "hub"),
+                dormant_with_conversation("moved", Agent::Claude, "hub"),
+                dormant_with_conversation("rebound", Agent::Claude, "hub"),
+            ],
+            &["hub", "hub-2"],
+        );
+
+        let Released {
+            session: noted,
+            running,
+            ..
+        } = release_session(&state, "noted", Some("hub"), Some("Pick up at step 3.")).unwrap();
+        assert!(!running);
+        assert!(
+            mcp::tell_released(&state, &noted, running, Some("Pick up at step 3."))
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(
+            state.store.owner_notice_note("noted").unwrap().as_deref(),
+            Some("Pick up at step 3.")
+        );
+        let (prompt, _) = relaunch_stand_in(&state, "noted", false).await.unwrap();
+        let prompt = prompt.unwrap();
+        assert!(prompt.contains("you have no owner now"), "{prompt}");
+        assert!(
+            prompt.contains("Your former owner left this note:"),
+            "{prompt}"
+        );
+        assert!(prompt.contains("> Pick up at step 3."), "{prompt}");
+        assert_eq!(state.store.owner_notice_pending("noted").unwrap(), 0);
+        assert_eq!(state.store.owner_notice_note("noted").unwrap(), None);
+
+        // The tool drops a blank note before the release.
+        let args = serde_json::json!({ "session": "blank", "note": "   " });
+        mcp::exec::call(&state, "hub", "release_session", args.as_object().unwrap())
+            .await
+            .unwrap();
+        assert_eq!(state.store.owner_notice_note("blank").unwrap(), None);
+        let (prompt, _) = relaunch_stand_in(&state, "blank", false).await.unwrap();
+        let prompt = prompt.unwrap();
+        assert!(prompt.contains("you have no owner now"), "{prompt}");
+        assert!(!prompt.contains("former owner left"), "{prompt}");
+
+        // A transfer or a bind after the release makes the note stale, so it is dropped.
+        release_session(&state, "moved", Some("hub"), Some("Pick up at step 3.")).unwrap();
+        let (moved, _) = bind_session(&state, "moved", "hub-2").unwrap();
+        assert_eq!(moved.bound_to.as_deref(), Some("hub-2"));
+        assert_eq!(state.store.owner_notice_note("moved").unwrap(), None);
+        release_session(&state, "rebound", Some("hub"), Some("Pick up at step 3.")).unwrap();
+        state
+            .store
+            .set_binding("rebound", None, "hub-2", true, false, true)
+            .unwrap()
+            .unwrap();
+        assert_eq!(state.store.owner_notice_note("rebound").unwrap(), None);
+        for id in ["moved", "rebound"] {
+            let (prompt, _) = relaunch_stand_in(&state, id, false).await.unwrap();
+            let prompt = prompt.unwrap();
+            assert!(prompt.contains("`hub-2`"), "{prompt}");
+            assert!(!prompt.contains("Pick up at step 3."), "{prompt}");
+        }
+    }
+
+    /// A release whose message cannot be written to a session that was running, its process gone
+    /// meanwhile, leaves the notice owed with the parting note, and the note still goes at launch.
+    #[tokio::test]
+    async fn a_failed_write_after_a_release_keeps_the_note_owed() {
+        use SessionStatus::Idle;
+        let (state, _dir, _live) = binding_fixture(
+            "release-note-failed-write",
+            vec![
+                console_session("hub", Idle),
+                dormant_with_conversation("gone", Agent::Claude, "hub"),
+            ],
+            &["hub"],
+        );
+
+        // Judged running, as at the release, but no process is there to write to.
+        let released = release_session(&state, "gone", Some("hub"), Some("Mind step 3."))
+            .unwrap()
+            .session;
+        state.store.clear_owner_notice("gone", 1).unwrap();
+        assert!(
+            mcp::tell_released(&state, &released, true, Some("Mind step 3."))
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(state.store.owner_notice_pending("gone").unwrap(), 1);
+        let (prompt, _) = relaunch_stand_in(&state, "gone", false).await.unwrap();
+        let prompt = prompt.unwrap();
+        assert!(prompt.contains("> Mind step 3."), "{prompt}");
+    }
+
+    /// A release by the user tells the owner the session was released from, when the owner is
+    /// running: a dormant one is not told, and a later attempt by it to drive the session is refused
+    /// as not its own. The released session is told as for any release.
+    #[tokio::test]
+    async fn a_release_by_the_user_tells_a_running_owner() {
+        use crate::test_support::{heard_after_marker, output_containing, running};
+        use SessionStatus::{Idle, Interrupted};
+        let (state, _dir, _live) = binding_fixture(
+            "release-by-user",
+            vec![
+                console_session("hub", Idle),
+                console_session("hub-2", Interrupted),
+                Session {
+                    title: "Retry audit".to_string(),
+                    ..bound_session("plain", Idle, "hub")
+                },
+                bound_session("orphan", Idle, "hub-2"),
+            ],
+            &[],
+        );
+        let hub = running(&state, "hub");
+        let _plain = running(&state, "plain");
+        let _orphan = running(&state, "orphan");
+        let release = |session: &str| {
+            handle(
+                &state,
+                None,
+                RequestBody::ReleaseSession {
+                    session: session.to_string(),
+                },
+            )
+        };
+
+        release("plain").await.unwrap();
+        let told = output_containing(&hub, "released");
+        assert!(told.contains("`plain`"), "{told}");
+        assert!(told.contains("Retry audit"), "{told}");
+        assert!(told.contains("no longer drive it"), "{told}");
+        assert!(told.contains("left with the user"), "{told}");
+        assert_eq!(
+            state.store.get_session("plain").unwrap().unwrap().bound_to,
+            None
+        );
+
+        // Nothing is owed to a dormant owner, and the release goes through.
+        release("orphan").await.unwrap();
+        assert_eq!(
+            state.store.get_session("orphan").unwrap().unwrap().bound_to,
+            None
+        );
+        assert_eq!(state.store.owner_notice_pending("hub-2").unwrap(), 0);
+        assert!(state.take_queued("hub-2").is_empty());
+        assert!(!heard_after_marker(&state, &hub).contains("`orphan`"));
+    }
+
     /// A session, or its owner, under a handoff or switch claim is not released, and nothing
     /// changes; once the claim is released the same call goes through.
     #[tokio::test]
@@ -12517,12 +12724,12 @@ mod tests {
         );
 
         let claim = state.begin_switch("plain").unwrap();
-        let err = release_session(&state, "plain", Some("hub")).expect_err("session claimed");
+        let err = release_session(&state, "plain", Some("hub"), None).expect_err("session claimed");
         assert!(err.to_string().contains("cannot change now"), "{err}");
         drop(claim);
 
         let claim = state.begin_switch("hub").unwrap();
-        let err = release_session(&state, "plain", None).expect_err("owner claimed");
+        let err = release_session(&state, "plain", None, None).expect_err("owner claimed");
         assert!(
             err.to_string().contains("cannot be bound to or moved from"),
             "{err}"
@@ -12539,7 +12746,9 @@ mod tests {
         );
         drop(claim);
 
-        let (released, _) = release_session(&state, "plain", None).unwrap();
+        let released = release_session(&state, "plain", None, None)
+            .unwrap()
+            .session;
         assert_eq!(released.bound_to, None);
     }
 

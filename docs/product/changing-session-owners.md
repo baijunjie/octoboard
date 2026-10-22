@@ -83,9 +83,11 @@ a lead session. It needs no approval.
 | Argument | Required | Contents |
 |---|---|---|
 | `session` | yes | The session to release: one of the caller's (`yours: true`). |
+| `note` | no | A parting note for the released session: what it should know to carry on without its owner. Trimmed; a blank note is ignored, and one longer than 4000 characters is refused. |
 
 The user can release any bound session, whoever its owner is, with **Unbind** in the sidebar's session menu (see
-"Session rows" in `docs/product/sidebar.md`), which asks for no confirmation; a refusal is shown as an error alert.
+"Session rows" in `docs/product/sidebar.md`), which asks for no confirmation and takes no note; a refusal is shown as an
+error alert.
 
 A released session is an **ordinary unbound project session**, the user's own:
 
@@ -101,18 +103,27 @@ A released session is an **ordinary unbound project session**, the user's own:
 
 A session can be released whatever its state — running, interrupted or archived. The call is refused, with the reason
 in prose, and changes nothing, for a console session, which is never bound; for a session that is not bound; for a
-session that is not the caller's (the tool only); and while the session, or the owner it is bound to, is being started,
-resumed, handed off, switched to another account or having its owner changed, the reason saying to look again once that
-is done. One whose binding changed while it was being released is refused too, saying to look again before retrying.
+session that is not the caller's, or with a `note` longer than 4000 characters (the tool only); and while the session,
+or the owner it is bound to, is being started, resumed, handed off, switched to another account or having its owner
+changed, the reason saying to look again once that is done. One whose binding changed while it was being released is refused too, saying to look again before retrying.
 
 **The released session is told**, by a message written through the delivery every message takes (queued while it
 cannot take one; see "Messages held until a session can take them" in `docs/product/message-delivery.md`), that it has
 no owner now, having been released from the session it reported to, and is the user's own session; that it takes work
 only from the user typing in its terminal and is not to call `report`, which is refused for a session with no owner;
 that this replaces what it was told of its owner when it was started; and that it can start and drive sessions of its
-own with `new_session` and the tools that go with it, with the list of the Octoboard tools it now has. One with no
-process running is told when it next starts instead (see "A change of owner told at the next launch" below). Its former
-owner is told nothing.
+own with `new_session` and the tools that go with it, with the list of the Octoboard tools it now has. A release made
+with a `note` ends that message with the note, marked as its former owner's, every line quoted, followed by a closing
+line. One with no process running is told when it next starts instead, and so is one whose message could not be
+written; the note is kept with what it is owed (see "A change of owner told at the next launch" below).
+
+**The former owner is told only of the user's release**: an owner that releases a session itself is sent nothing, since
+it made the call. When the user releases a session, its former owner, if it has a process running, is told by a message
+written through the same delivery (queued while it cannot take one) which session the user released from it — by
+kind, id and title — that the session has no owner now and answers only to the user, so it can no longer drive it,
+send it messages or archive it, and the session does not report to it; that it should no longer count on the session;
+and that any work it handed the session is left with the user. A former owner with no process running is not told,
+then or later; a later attempt by it to drive the session is refused as for any session that is not its own.
 
 The call returns `session` and a `note` saying that the session has no owner now, is no longer the caller's, is the
 user's own session and no longer reports to the caller, and whether it was told, will be told as soon as it can take a
@@ -192,7 +203,10 @@ owed and several changes end in one notice. A session that has an owner is told 
 not running, which session its owner is now, that it takes work only from it or from the user typing in its terminal
 and reports to it with `report`, and that this replaces what it was told of its owner when it was started; one with
 the role of a bound one is also told it can no longer start or drive sessions, with the list of the Octoboard tools it
-has. A session with no owner is told what a released session is told (see "Releasing a session from its owner" above).
+has. A session with no owner is told what a released session is told (see "Releasing a session from its owner" above),
+with the parting note of the release that left it unbound, where that release was made with one and is still the
+latest change of the session's owner: a later change of owner — the session binding itself to an owner, say — drops
+the note, and a note kept for a message that could not be written is kept only while the session is still unbound.
 
-The notice is no longer owed once the launch has started the session's process. A launch that fails leaves it owed for
-the next one, so a session may be told of a change twice, but never not at all.
+The notice, and any note kept with it, is no longer owed once the launch has started the session's process. A launch
+that fails leaves it owed for the next one, so a session may be told of a change twice, but never not at all.

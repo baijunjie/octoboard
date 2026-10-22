@@ -40,7 +40,8 @@ use serde_json::{json, Value};
 use crate::protocol::{Agent, Role};
 
 pub(crate) use bindings::{
-    is_running, owner_from_now_on, owner_notice, running_or_leave, tell_now_or_leave, tell_released,
+    is_running, owner_from_now_on, owner_notice, running_or_leave, tell_former_owner,
+    tell_now_or_leave, tell_released,
 };
 
 /// The key the adapters register the server under. It must not collide with a server the project
@@ -913,13 +914,22 @@ const RELEASE_SESSION: ToolDef = ToolDef {
                   own `done` report. A lead session keeps the sessions it started, and the \
                   branches the session is responsible for stay with it. A session is told it \
                   has no owner now, when it next starts if it is not running, which replaces \
-                  what it was told of its owner when it was started.",
+                  what it was told of its owner when it was started. An optional `note` is \
+                  passed on to it as your parting words, so say there what it should know to \
+                  carry on without you.",
     schema: || {
         object_schema(
             json!({
                 "session": {
                     "type": "string",
                     "description": "The id of the session of yours to release.",
+                },
+                "note": {
+                    "type": "string",
+                    "description": "Optional. A parting note for the session, passed on as \
+                                    yours when it is told it has no owner now: what it should \
+                                    know to carry on without you. A blank note is ignored, and \
+                                    one over 4000 characters is refused.",
                 },
             }),
             &["session"],
