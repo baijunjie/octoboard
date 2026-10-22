@@ -556,22 +556,20 @@ as carrying it instead, and each leaves the mark without one:
   tooltip is deliberately held back — while hovering the avatar floats the hidden sidebar in instead. It would also
   put a second indicator trigger inside a real `<button>`, which this standard keeps as one exception, below.
 
-The agent icon is such a mark wherever the text beside it does not name the agent. On a sidebar session row and a focus
-mode's card its tooltip names the agent, then lists the account, the model and the effort the session runs with, each
-under its label: on the row it is the only route on screen to all four, and on the card, whose line beside the icon
-writes out the account, model and effort, the only one to the agent. The one place the text beside the icon does
-name the agent is an archive view's row, and the tooltip stays there too: a meaning the window has settled does not come
-and go placement by placement, which is also why the card's list is the row's, and it adds the account the text leaves
-out. The agent and the account are also in the
-session row's accessible name, or in visually hidden text where there is no row name, and the accessible name of a
-card or a sidebar session row ends with its model and effort as well, since the row is one button and nothing inside it is
-announced.
+The agent icon is such a mark wherever the text beside it does not name the agent. On a sidebar session row, a focus
+mode's archived row, a focus mode's card and an archive view's row its tooltip names the agent, then lists the account,
+the model and the effort the session runs with, each under its label: on the two former it is the only route on screen
+to all four, and on the card and the archive row, whose line beside the icon writes out the account, model and effort,
+the only one to the agent. The list is the same in every placement: a meaning the window has settled does not come and
+go placement by placement. The agent and the account are also in the session row's accessible name, or in visually
+hidden text where there is no row name, and the accessible name of each of these four ends with its model and effort
+as well, since the row is one button and nothing inside it is announced.
 
 One gap is left open on purpose: no mark on a menu's transient surface carries a tooltip — a clipped path label in a
 menu item does carry its own through the anchored shape, as in the Switch account submenu, but no indicator there
 does — so the agent icon beside each session in the archive submenu says which agent it is to nobody, its `svg`
 being `aria-hidden` as well. The agent is read from the archive view's own rows instead, where that icon carries its
-tooltip and the agent is written out beside it. The context-size chip at the end of those archive items is drawn
+tooltip and the agent is in the row's accessible name. The context-size chip at the end of those archive items is drawn
 without its tooltip too (`SessionContextLabel`'s `plain`); it keeps its `role="img"` name, which the menu item's own
 name takes in after the title, so the size is still read there.
 

@@ -3,7 +3,6 @@ import { Archive, RotateCcw, Trash2, X } from "lucide-react";
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "../components/Button";
-import { AGENT_LABEL } from "../agents";
 import { SessionAgentIcon } from "../components/SessionAgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
@@ -16,9 +15,11 @@ import { useLatest } from "../components/useLatest";
 import type { DialogRequest } from "../dialogs/dialogRequest";
 import { useEscapeWhileTooltipOpen } from "../dialogs/useEscapeWhileTooltipOpen";
 import { isolate } from "../i18n/isolate";
+import { joinPhrases } from "../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Account, Console, Project, Session, Settings } from "../protocol";
-import { sessionAriaLabel, sessionDisplayTitle } from "../sessionLabel";
+import { sessionAccountModelLine, sessionAriaLabel, sessionDisplayTitle } from "../sessionLabel";
+import { inheritedLaunch, sessionModelEffort, sessionModelLabel } from "../sessionModel";
 import { archivedSessionRows, boundArchivedSessions } from "../sidebar/order";
 import { NESTED_ROW_CLASS, TreeRow } from "../sidebar/rows";
 import { useFlip } from "../sidebar/useFlip";
@@ -47,6 +48,8 @@ export function ArchiveView({
   project,
   boundTo,
   sessions,
+  consoles,
+  projects,
   accounts,
   defaultNames,
   selectedSessionId,
@@ -68,6 +71,9 @@ export function ArchiveView({
   /** The scope's sessions; only the archived ones are listed, or, with `boundTo`, only the ones
    * archived and under it. */
   sessions: Session[];
+  /** Every console and project, for the model and effort a row's session inherits where it set none. */
+  consoles: Map<string, Console>;
+  projects: Map<string, Project>;
   /** Every stored account, to name the one each row's session ran under. */
   accounts: Account[];
   /** The names the user gave the default accounts, by agent. */
@@ -199,6 +205,8 @@ export function ArchiveView({
                 <ArchiveRow
                   session={session}
                   under={under}
+                  consoles={consoles}
+                  projects={projects}
                   accounts={accounts}
                   defaultNames={defaultNames}
                   selected={session.id === selectedSessionId}
@@ -223,10 +231,13 @@ export function ArchiveView({
 /** One row of the list: selects the session (`onSelect`), and holds the Reopen and Delete actions,
  * whose presses must not also select it. Its accessible name is the session's own
  * (`sessionAriaLabel`, which also says which lead session it was archived under, the inset alone
- * being no words); its context size and dates are its description. */
+ * being no words), then its model and effort, which the agent line shows only visually; the
+ * account is already in the first part. Its context size and dates are its description. */
 function ArchiveRow({
   session,
   under,
+  consoles,
+  projects,
   accounts,
   defaultNames,
   selected,
@@ -236,6 +247,8 @@ function ArchiveRow({
 }: {
   session: Session;
   under?: Session;
+  consoles: Map<string, Console>;
+  projects: Map<string, Project>;
   accounts: Account[];
   defaultNames: Settings["default_account_names"];
   selected: boolean;
@@ -248,22 +261,25 @@ function ArchiveRow({
   const contextId = useId();
   const datesId = useId();
   const context = hasVisibleContext(session.context);
+  const launch = sessionModelEffort(session, inheritedLaunch(session, consoles, projects));
+  const modelLabel = sessionModelLabel(t, session.agent, launch);
+  const agentLine = sessionAccountModelLine(t, session, accounts, defaultNames, modelLabel);
   return (
     <TreeRow
-      ariaLabel={sessionAriaLabel(t, language, session, accounts, under, defaultNames)}
+      ariaLabel={joinPhrases(language, [sessionAriaLabel(t, language, session, accounts, under, defaultNames), modelLabel])}
       describedBy={context ? `${contextId} ${datesId}` : datesId}
       selected={selected}
       onActivate={() => onSelect(session)}
       className="min-h-12 flex-wrap items-center gap-x-3 gap-y-1 px-2 py-2"
     >
-      <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} />
+      <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} />
       <div className="min-w-24 flex-1">
         <FadeOverflow dir="auto" className="text-sm" titleWhenClipped={sessionDisplayTitle(t, session)}>
           {sessionDisplayTitle(t, session)}
         </FadeOverflow>
         <div className="flex min-w-0 items-center gap-2 text-xs text-app-muted">
-          <FadeOverflow className="min-w-0" titleWhenClipped={AGENT_LABEL[session.agent]}>
-            <span aria-hidden="true">{AGENT_LABEL[session.agent]}</span>
+          <FadeOverflow className="min-w-0" titleWhenClipped={agentLine}>
+            <span aria-hidden="true">{agentLine}</span>
           </FadeOverflow>
           {context && <span id={contextId}><SessionContextLabel context={session.context} /></span>}
         </div>

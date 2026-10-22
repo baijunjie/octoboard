@@ -236,7 +236,7 @@ These are:
   console session (see "The binding badge" in `docs/product/sidebar-session-rows.md`);
 - a session's agent icon on its row, on a focus mode's card or archived row, on the archive view's row and on each
   session a confirmation lists among the ones it affects, whose tooltip names the agent and the account the session runs
-  under, and on a session row or a focus mode card also the model and effort it runs with, as a labelled list (see
+  under, and everywhere but in a confirmation also the model and effort it runs with, as a labelled list (see
   "Session rows" in `docs/product/sidebar-session-rows.md`);
 - a project's branch badge, on its sidebar row and in focus mode's header, which carries **one tooltip for the whole
   badge** rather than one per mark: resting the mouse on its state glyph, on the branch name or on either upstream
@@ -273,7 +273,7 @@ counts as one label (see "Filtering the project list" in `docs/product/sidebar.m
 rather than ending in an ellipsis. The same holds for action-menu items and submenu names, a select's current choice or
 placeholder and its listed options, directory-picker rows, each line of a focus mode's header — the console's name and
 the project's name in a project's focus mode, the console's name alone in a console session's — the archive view's
-heading and count, the model line on a focus mode card and the agent name on a full archive row. A fixed session-owner
+heading and count, the model line on a focus mode card and on a full archive row. A fixed session-owner
 label and a diff's collapsed-line label follow the same fade and marquee rules.
 
 Except for the report timestamp, clipped text then has its full text as its tooltip — for the project filter's strip,
@@ -296,11 +296,10 @@ not the branch name is cut (see "The branch badge" in `docs/product/project-git-
 
 - The pointer has to be over the label itself. In sidebar rows, focus headers and session cards, and archive headers
   and rows, each text label runs independently: a project's name and branch name, a console name and focus
-  title, a session title and its model line or agent name, or an archive heading and count do not start one another's
+  title, a session title and its model line, or an archive heading and count do not start one another's
   marquee.
   Pointing at a status or agent icon, a branch glyph or upstream count, a row or header button, or the surrounding
-  space starts none of those labels. Context-size chips and time fields remain separate from the model line's and the
-  agent name's marquees.
+  space starts none of those labels. Context-size chips and time fields remain separate from the model line's marquee.
 - An action-menu item or submenu item, a select's option or directory-picker row runs its one label while the pointer
   is anywhere over that item or row. A select's current choice or placeholder runs while the pointer is over its
   trigger, and a picked tag while it is over the tag. The project filter's strip of conditions runs as a whole while

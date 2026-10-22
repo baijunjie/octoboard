@@ -24,17 +24,16 @@ a session is shown running with" in `docs/product/model-and-reasoning-effort.md`
 account (the name the user gave it, else **Default**; see "The default account" in `docs/product/agent-accounts.md`),
 or, for a removed account, the directory the session recorded, shown left to right. A removed account that recorded no
 directory has no Account row. A long value wraps inside the tooltip rather than running past it. The tooltip shows on
-pointer hover only, and the icon adds no tab stop. The same tooltip is on focus mode's session cards (see "What both
-views show" in `docs/product/focus-mode.md`). The row's accessible name names the agent with its account and ends with
-the model and effort, read as "<model> · <effort>" (or **Default model** when neither is known).
+pointer hover only, and the icon adds no tab stop. The same tooltip is on focus mode's session cards and archived rows (see
+"What both views show" in `docs/product/focus-mode.md`) and the archive view's rows (see "The archive view" in
+`docs/product/archive-view.md`). The row's accessible name names the agent with its account and ends with
+the model and effort, read as "<model> · <effort>" (or **Default model** when neither is known); a focus mode archived
+row's accessible name ends the same way.
 
-On focus mode's archived rows (see "What both views show" in `docs/product/focus-mode.md`), the archive view's rows
-(see "The archive view" in `docs/product/archive-view.md`) and sessions listed in a confirmation, the agent icon's
-tooltip is shorter: the agent's name followed by the account as a small grey badge (the badge described in "Which agents
-the agent pickers list" in `docs/product/consoles.md`), with no badge for a removed account that recorded no directory;
-it shows the same account, and wraps a long one, as above. Focus mode cards and the archive view's rows retain the
-account in their accessible names; confirmations provide the agent and account as hidden accessible text beside the
-icon.
+On sessions listed in a confirmation, the agent icon's tooltip is shorter: the agent's name followed by the account as
+a small grey badge (the badge described in "Which agents the agent pickers list" in `docs/product/consoles.md`), with
+no badge for a removed account that recorded no directory; it shows the same account, and wraps a long one, as above.
+Confirmations provide the agent and account as hidden accessible text beside the icon.
 
 A session row's action menu offers:
 

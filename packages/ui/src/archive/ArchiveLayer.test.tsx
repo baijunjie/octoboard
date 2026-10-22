@@ -21,7 +21,7 @@ function mount() {
   const terminal = document.body.appendChild(document.createElement("button"));
   const root = createRoot(container);
   const focusTerminal = () => terminal.focus();
-  const view = { console: console_, sessions: [], accounts: [], defaultNames: undefined, onSelect() {}, onReopen() {}, onOpenDialog() {}, dialogOpen: false, onClose() {} };
+  const view = { console: console_, sessions: [], consoles: new Map(), projects: new Map(), accounts: [], defaultNames: undefined, onSelect() {}, onReopen() {}, onOpenDialog() {}, dialogOpen: false, onClose() {} };
   const show = (open: boolean) => act(() => root.render(<ArchiveLayer view={open ? view : undefined} focusTerminal={focusTerminal} />));
   onTestFinished(() => {
     act(() => root.unmount());

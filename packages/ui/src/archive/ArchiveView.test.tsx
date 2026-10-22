@@ -13,6 +13,7 @@ import {
   unboundArchived,
   underArchivedLead,
 } from "../gallery/fixtures/archive";
+import { AGENT_CONSOLE_PROJECT_EFFORT_FIELD, AGENT_CONSOLE_PROJECT_MODEL_FIELD } from "../agents";
 import { expectIndependentMarquees, stubMarquee } from "../components/marqueeTestSupport";
 import { isolate } from "../i18n/isolate";
 import type { DialogRequest } from "../dialogs/dialogRequest";
@@ -49,6 +50,8 @@ function renderArchiveView(
         console={console_}
         boundTo={boundConsoleSession}
         sessions={sessions}
+        consoles={new Map([[console_.id, console_]])}
+        projects={new Map()}
         accounts={[]}
         defaultNames={undefined}
         onSelect={() => {}}
@@ -101,6 +104,27 @@ it("lists the sessions archived under a lead session after it, inset, and names 
     [boundArchived[2].title, false],
   ]);
   expect(rows[2].querySelector("[role=button]")?.getAttribute("aria-label")).toContain(`Bound to ${isolate(archivedLead.title)}`);
+});
+
+it("shows a row's account, model and effort beside its agent mark, which its accessible name ends with", () => {
+  const observed: Session = { ...boundArchived[0], observed_model: "claude-opus-5-5", observed_effort: "high" };
+  const { container } = renderArchiveView(undefined, undefined, [observed]);
+  const row = container.querySelector<HTMLElement>("ul > li:has(button)")!;
+  expect(row.textContent).toContain(`${isolate("Default")} · ${isolate("Opus 5.5")} · ${isolate("high")}`);
+  expect(row.textContent).not.toContain("Claude Code");
+  expect(row.querySelector("[role=button]")?.getAttribute("aria-label")?.endsWith(`${isolate("Opus 5.5")} · ${isolate("high")}`)).toBe(true);
+});
+
+it("shows the model and effort a row's session inherits from its console where it set and showed none", () => {
+  const session = boundArchived[0];
+  const owner = { ...console_, [AGENT_CONSOLE_PROJECT_MODEL_FIELD[session.agent]]: "claude-sonnet-5-5", [AGENT_CONSOLE_PROJECT_EFFORT_FIELD[session.agent]]: "low" };
+  const { container } = renderArchiveView(undefined, undefined, [session], { consoles: new Map([[owner.id, owner]]) });
+  expect(container.querySelector("ul > li:has(button)")?.textContent).toContain(`${isolate("Sonnet 5.5")} · ${isolate("low")}`);
+});
+
+it("says a row's session runs the default model where nothing names one", () => {
+  const { container } = renderArchiveView(undefined, undefined, [boundArchived[0]]);
+  expect(container.querySelector("ul > li:has(button)")?.textContent).toContain(`${isolate("Default")} · Default model`);
 });
 
 it("selects a row's session when the row is pressed or given Enter, but not when Reopen or Delete is", () => {

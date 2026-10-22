@@ -367,7 +367,8 @@ select an account** is off (see that section in `docs/product/settings.md`), a s
 account picker runs under the project's account for its agent, or the console's, or the agent's default account when
 neither pins anything. The session's account is named in its agent icon's tooltip and its accessible session name
 (see "Session rows" in `docs/product/sidebar-session-rows.md`), and on the line beside the agent icon of its focus mode
-card (see "What both views show" in `docs/product/focus-mode.md`); wherever the agent's name is shown, it carries no
+card (see "What both views show" in `docs/product/focus-mode.md`) and of its row in the archive view (see "The archive
+view" in `docs/product/archive-view.md`); wherever the agent's name is shown, it carries no
 account suffix.
 
 While the switch is on, a new session whose account was not named uses the account of that session's agent whose weekly

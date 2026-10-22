@@ -30,9 +30,15 @@ show" in `docs/product/focus-mode.md`.
   while there is at least one, and a **Close** button. Which project, console session or console it is for is shown in
   the top bar's breadcrumb (see "The top bar" in `docs/product/window-layout.md`).
 - The list is in the order the sessions were archived, most recent first. It shows 30 rows and adds 30 more each time
-  its end is scrolled into view. Each row shows the session's agent's icon, its title, and its agent's name,
-  followed by its context-size chip when the context size is known and above zero (see "The context-size chip" in
-  `docs/product/session-context.md`). At the trailing end, a metadata block shows only dates: the archive date first,
+  its end is scrolled into view. Each row shows the session's agent's icon, its title and, under the title, its
+  **model line**, followed by its context-size chip when the context size is known and above zero (see "The context-size chip" in
+  `docs/product/session-context.md`). The model line reads as a focus mode session card's does — the account the
+  session runs under, then its model and reasoning effort — and the agent's name is not shown on the row (see "What
+  both views show" in `docs/product/focus-mode.md`); it fades where it is cut off, with its full text as its tooltip
+  while cut (see "Names too long for their space" in `docs/product/labels-and-tooltips.md`). The agent icon's tooltip
+  lists the account, model and effort under the agent's name, as on a session row (see "Session rows" in
+  `docs/product/sidebar-session-rows.md`). The row's accessible name ends with "<model> · <effort>" alone, as a focus
+  mode session card's does. At the trailing end, a metadata block shows only dates: the archive date first,
   when known, then the creation date, each identified by its meaning. These are absolute dates with year, month, day,
   hour and minute, formatted in the current language and the client's local time zone. An unknown archive date is
   omitted; the creation date never stands in for it. Archive previews show no dates. The date block sits

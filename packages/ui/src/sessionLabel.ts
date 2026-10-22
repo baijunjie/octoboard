@@ -122,6 +122,13 @@ export function sessionAgentLabel(t: Translate, session: Session, accounts: Acco
   return account === undefined ? agent : t("session.agentAccount", { agent, account: isolate(account) });
 }
 
+/** The line beside a session's agent mark: the account it runs under, then `modelLabel` (see
+ * `sessionModelLabel`). The agent is left to the mark. */
+export function sessionAccountModelLine(t: Translate, session: Session, accounts: Account[], defaultNames: Settings["default_account_names"], modelLabel: string): string {
+  const account = sessionAccountName(t, session, accounts, defaultNames);
+  return account === undefined ? modelLabel : t("session.accountModelEffort", { account: isolate(account), modelEffort: modelLabel });
+}
+
 /** A session row's accessible name: the row is one button, so its icons are not announced, and the
  * title, agent and its account, status and pin all have to be in this. `owner` is the session this
  * (project) session is bound to, and naming it here is what tells assistive technology who it

@@ -142,9 +142,11 @@ Neither a missing list nor one still being fetched stops the dialog from being s
 ## The model and effort a session is shown running with
 
 Where a session's model and reasoning effort are shown — the model line of focus mode's session cards (see "What both
-views show" in `docs/product/focus-mode.md`), the agent icon's tooltip on those cards and on a session row in the
-sidebar, and that row's accessible name (see "Session rows" in `docs/product/sidebar-session-rows.md`) — each of the two
-is decided on its own, taking the first of these that gives a value:
+views show" in `docs/product/focus-mode.md`) and of the archive view's rows (see "The archive view" in
+`docs/product/archive-view.md`), the agent icon's tooltip and the accessible name of those cards and rows, of focus
+mode's archived rows and of a session row in the sidebar (see "Session rows" in
+`docs/product/sidebar-session-rows.md`) — each of the two is decided
+on its own, taking the first of these that gives a value:
 
 1. what the agent's own records show the session running with (below);
 2. for the effort only, where the records show the model the session runs but no effort, the level the agent runs that

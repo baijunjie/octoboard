@@ -1064,6 +1064,8 @@ export function App(): React.ReactElement {
                       project: archiveProject,
                       boundTo: archiveBoundTo,
                       sessions: archiveSessions,
+                      consoles,
+                      projects,
                       accounts,
                       defaultNames: defaultAccountNames,
                       selectedSessionId,

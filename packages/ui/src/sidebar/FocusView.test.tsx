@@ -142,6 +142,16 @@ it("a card shows its account before the model line, which its accessible name en
   unmount();
 });
 
+it("an archived row's accessible name ends with its model line", () => {
+  const archived = sessionOf("web-archived-observed", main.id, web.id, "Observed then archived", "archived", { observed_model: "claude-opus-5-5", observed_effort: "high", ended_at: 1 });
+  const { container, unmount } = mount((h) => (
+    <ProjectFocusView handlers={h} console={main} project={web} sessions={[archived]} owners={owners} />
+  ));
+  const label = sessionLabels(container).find((l) => l.includes("Observed then archived"));
+  expect(label?.endsWith(`${isolate("Opus 5.5")} · ${isolate("high")}`)).toBe(true);
+  unmount();
+});
+
 it("a console session's focus mode shows only its projects and sessions", () => {
   const { container, text, handlers, unmount } = mount((h) => (
     <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web, api]} sessions={sessions} />

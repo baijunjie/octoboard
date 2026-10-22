@@ -23,7 +23,7 @@ import { joinPhrases } from "../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
-import { activityLabelKey, sessionAccountName, sessionAriaLabel, sessionDisplayTitle, sessionStatusKind, statusLabel } from "../sessionLabel";
+import { activityLabelKey, sessionAccountModelLine, sessionAriaLabel, sessionDisplayTitle, sessionStatusKind, statusLabel } from "../sessionLabel";
 import { inheritedLaunch, sessionModelEffort, sessionModelLabel } from "../sessionModel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 import { useHasBoundSessions, useProjectSessions, useSessionProjectId } from "../sessions/useSessions";
@@ -591,8 +591,7 @@ const SessionCard = memo(function SessionCard({
   const inherited = useDaemonStoreEqual((s) => inheritedLaunch(session, s.consoles, s.projects));
   const launch = sessionModelEffort(session, inherited);
   const modelLabel = sessionModelLabel(t, session.agent, launch);
-  const account = sessionAccountName(t, session, accounts, defaultNames);
-  const agentLine = account === undefined ? modelLabel : t("session.accountModelEffort", { account: isolate(account), modelEffort: modelLabel });
+  const agentLine = sessionAccountModelLine(t, session, accounts, defaultNames, modelLabel);
   // The row is one button, so the model line beside the agent's mark reaches assistive technology
   // only through the row's name, where it comes last; the account is already in its first part.
   const name = [sessionAriaLabel(t, language, session, accounts, under ?? consoleOwner, defaultNames)];
@@ -661,15 +660,18 @@ function ArchivedRow({
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const rowRef = useRef<HTMLDivElement>(null);
+  const inherited = useDaemonStoreEqual((s) => inheritedLaunch(session, s.consoles, s.projects));
+  const launch = sessionModelEffort(session, inherited);
   return (
     <TreeRow
       ref={rowRef}
       describedBy={hasVisibleContext(session.context) ? metadataId : undefined}
-      ariaLabel={sessionAriaLabel(t, language, session, accounts, undefined, defaultNames)}
+      // The model and effort are in the agent mark's tooltip only, so the row's name carries them too.
+      ariaLabel={joinPhrases(language, [sessionAriaLabel(t, language, session, accounts, undefined, defaultNames), sessionModelLabel(t, session.agent, launch)])}
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
     >
-      <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} />
+      <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} />
       <RowLabel title={sessionDisplayTitle(t, session)} className="min-w-0 flex-1">
         <span className="text-app-muted">{sessionDisplayTitle(t, session)}</span>
       </RowLabel>
