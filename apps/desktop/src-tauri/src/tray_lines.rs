@@ -4,10 +4,11 @@
 //! (`finish_menu` in `tray.rs`, the first time it opens after each rebuild), the lines that
 //! cannot be chosen become views: a session section's heading (`heading_row`) is its picture and
 //! its text in the secondary colour; in a submenu (`dress_submenu`) an account's header is one
-//! line of the same in the small size of a section header, a note one line at the menu's size,
-//! and a window's row is its name and its detail (right-aligned, secondary colour) over a bar
-//! the shell draws; a 5-hour window with the account-wide weekly one is a single row (`meter_row`)
-//! of the 5-hour row, a thinner bar beneath its bar, and the weekly name and detail under that.
+//! line of the same in the small size of a section header, with when its reading was taken
+//! right-aligned, a note one line at the menu's size, and a window's row is its name and its
+//! detail (right-aligned, secondary colour) over a bar the shell draws; a 5-hour window with the
+//! account-wide weekly one is a single row (`meter_row`) of the 5-hour row, a thinner bar beneath
+//! its bar, and the weekly name and detail under that.
 //!
 //! A row is read by assistive technology as its menu item alone: the item keeps the whole phrase
 //! as its title, and nothing inside the row is an accessibility element. The texts are therefore
@@ -226,7 +227,8 @@ fn row_view(width: f64, height: f64, mtm: MainThreadMarker) -> Retained<NSView> 
 }
 
 /// A name at the left and a detail right-aligned at the right of one line, the detail in the
-/// secondary colour and the name in `name_colour`; the line a window's bar sits beneath.
+/// secondary colour and the name in `name_colour`, both `small` or at the menu's size; the line a
+/// window's bar sits beneath, or an account's header.
 struct TextLine {
     name: Retained<RowText>,
     detail: Retained<RowText>,
@@ -236,9 +238,15 @@ struct TextLine {
 }
 
 impl TextLine {
-    fn new(name: &str, detail: &str, name_colour: &NSColor, mtm: MainThreadMarker) -> Self {
-        let name = RowText::new(name, name_colour, false, mtm);
-        let detail = RowText::new(detail, &NSColor::secondaryLabelColor(), false, mtm);
+    fn new(
+        name: &str,
+        detail: &str,
+        name_colour: &NSColor,
+        small: bool,
+        mtm: MainThreadMarker,
+    ) -> Self {
+        let name = RowText::new(name, name_colour, small, mtm);
+        let detail = RowText::new(detail, &NSColor::secondaryLabelColor(), small, mtm);
         let (name_size, detail_size) = (name.frame().size, detail.frame().size);
         Self {
             height: name_size.height.max(detail_size.height),
@@ -293,7 +301,7 @@ fn window_row(
     agent: AgentKind,
     mtm: MainThreadMarker,
 ) -> Retained<NSView> {
-    let line = TextLine::new(name, detail, &NSColor::labelColor(), mtm);
+    let line = TextLine::new(name, detail, &NSColor::labelColor(), false, mtm);
     let width = line.width.max(MIN_WIDTH);
     let height = TEXT_TOP + line.height + TEXT_TO_BAR + BAR_HEIGHT + BAR_BOTTOM;
     let row = row_view(width, height, mtm);
@@ -311,11 +319,18 @@ fn meter_row(
     agent: AgentKind,
     mtm: MainThreadMarker,
 ) -> Retained<NSView> {
-    let session_line = TextLine::new(&session.name, &session.detail, &NSColor::labelColor(), mtm);
+    let session_line = TextLine::new(
+        &session.name,
+        &session.detail,
+        &NSColor::labelColor(),
+        false,
+        mtm,
+    );
     let weekly_line = TextLine::new(
         &weekly.name,
         &weekly.detail,
         &NSColor::secondaryLabelColor(),
+        false,
         mtm,
     );
     let width = session_line.width.max(weekly_line.width).max(MIN_WIDTH);
@@ -354,6 +369,19 @@ fn single_line_row(string: &str, small: bool, mtm: MainThreadMarker) -> Retained
     let row = row_view(width, size.height + LINE_PAD * 2.0, mtm);
     line_text.setFrameOrigin(NSPoint::new(INSET, LINE_PAD));
     row.addSubview(&line_text);
+    row
+}
+
+/// An account's header: one line of small secondary text, its title at the left and, when there is
+/// one, when its reading was taken right-aligned.
+fn header_row(title: &str, detail: Option<&str>, mtm: MainThreadMarker) -> Retained<NSView> {
+    let Some(detail) = detail else {
+        return single_line_row(title, true, mtm);
+    };
+    let line = TextLine::new(title, detail, &NSColor::secondaryLabelColor(), true, mtm);
+    let width = line.width.max(MIN_WIDTH);
+    let row = row_view(width, line.height + LINE_PAD * 2.0, mtm);
+    line.place(&row, width, LINE_PAD);
     row
 }
 
@@ -408,7 +436,9 @@ pub fn dress_submenu(menu: &NSMenu, items: &[SubmenuItem], mtm: MainThreadMarker
     for (item, model) in menu.itemArray().iter().zip(items) {
         match model {
             SubmenuItem::Separator => {}
-            SubmenuItem::Header { title } => item.setView(Some(&single_line_row(title, true, mtm))),
+            SubmenuItem::Header { title, detail, .. } => {
+                item.setView(Some(&header_row(title, detail.as_deref(), mtm)))
+            }
             SubmenuItem::Note { text } => item.setView(Some(&single_line_row(text, false, mtm))),
             SubmenuItem::Window {
                 name,

@@ -54,7 +54,7 @@ function windowParts(t: Translate, source: StatusItemQuotaSource, window: QuotaW
   };
 }
 
-/** One account's lines: its header with the plan (and, for a current reading, how long ago it was read),
+/** One account's lines: its header with the plan (and, for a current reading, how long ago it was read, at its right),
  * then per window a row (the shell draws its bar), or a single note when there is nothing current to show.
  * The 5-hour window and the account-wide weekly one are one two-layer item, as in Settings. */
 function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent, account: Account | null): StatusItemSubmenuItem[] {
@@ -67,10 +67,14 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
   if (quota.windows.length === 0) return [{ kind: "header", title }, { kind: "note", text: t(isNotLoggedIn(quota.unavailable) ? "statusItem.quota.notLoggedIn" : "quota.unavailable") }];
   const age = formatRelativeTime(source.language, quota.fetched_at, source.now);
   // The out-of-date note says when the reading was taken, so the header does not.
-  const lines: StatusItemSubmenuItem[] = [{
+  const justNow = isJustNow(quota.fetched_at, source.now);
+  const header: StatusItemSubmenuItem = quota.unavailable ? { kind: "header", title } : {
     kind: "header",
-    title: quota.unavailable ? title : isJustNow(quota.fetched_at, source.now) ? t("statusItem.quota.updatedNow", { header: title }) : t("statusItem.quota.updated", { header: title, age }),
-  }];
+    title,
+    detail: justNow ? t("quota.updatedNow") : t("quota.updated", { age }),
+    label: justNow ? t("statusItem.quota.updatedNow", { header: title }) : t("statusItem.quota.updated", { header: title, age }),
+  };
+  const lines: StatusItemSubmenuItem[] = [header];
   if (quota.unavailable) lines.push({ kind: "note", text: t("quota.stale", { age }) });
   const layers = twoLayerWindows(quota.windows);
   for (const window of orderedQuotaWindows(quota.windows)) {

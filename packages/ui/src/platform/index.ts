@@ -200,7 +200,9 @@ export interface StatusItemSubmenu {
 /** What a submenu holds. The shell draws a window's bar, so the menu carries what it needs to,
  * and a line cannot be chosen. */
 export type StatusItemSubmenuItem =
-  | { kind: "header"; title: string }
+  /** An account's line: `title` at the left and, right-aligned, `detail` (when its reading was taken) when
+   * there is one. `label`, when given, is the whole line as one phrase, for assistive technology. */
+  | { kind: "header"; title: string; detail?: string; label?: string }
   /** A window's name and, right-aligned, its detail, with a bar of `fraction` (0 to 1) beneath in
    * `agent`'s colour. `label` is the whole line as one phrase, for assistive technology. */
   | { kind: "window"; name: string; detail: string; label: string; fraction: number; agent: Agent }

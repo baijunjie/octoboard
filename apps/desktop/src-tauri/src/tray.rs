@@ -163,16 +163,21 @@ pub struct MeterLayer {
     pub fraction: f64,
 }
 
-/// What a submenu holds, none of it choosable: an account's header, a quota window's row with
-/// the bar the shell draws (`fraction` of it filled, in the colour of `agent`), the 5-hour and weekly
-/// windows as one two-layer meter, a note, and the rules between accounts. `label` is a window's
-/// (or a meter's) whole line as one phrase: its menu item's title, which is what assistive technology
-/// reads.
+/// What a submenu holds, none of it choosable: an account's header (with when its reading was
+/// taken), a quota window's row with the bar the shell draws (`fraction` of it filled, in the colour
+/// of `agent`), the 5-hour and weekly windows as one two-layer meter, a note, and the rules between
+/// accounts. `label` is a line's whole phrase (for a header, when it says more than `title`): its
+/// menu item's title, which is what assistive technology reads.
 #[derive(Clone, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum SubmenuItem {
     Header {
         title: String,
+        /// When the account's reading was taken, drawn right-aligned on its line.
+        #[serde(default)]
+        detail: Option<String>,
+        #[serde(default)]
+        label: Option<String>,
     },
     Window {
         name: String,
@@ -198,7 +203,7 @@ impl SubmenuItem {
     /// draw it as a row, and what assistive technology reads for every row drawn.
     fn text(&self) -> Option<&str> {
         match self {
-            Self::Header { title } => Some(title),
+            Self::Header { title, label, .. } => Some(label.as_deref().unwrap_or(title)),
             Self::Window { label, .. } | Self::Meter { label, .. } => Some(label),
             Self::Note { text } => Some(text),
             Self::Separator => None,
@@ -901,7 +906,8 @@ mod tests {
         ],
         "submenus": [
             {"title": "Codex quota", "icon": "codex", "items": [
-                {"kind": "header", "title": "Default · Plus"},
+                {"kind": "header", "title": "Default · Plus", "detail": "Updated 1 minute ago",
+                 "label": "Default · Plus · updated 1 minute ago"},
                 {"kind": "window", "name": "5-hour", "detail": "82% remaining · resets in 1h",
                  "label": "5-hour 82% remaining · resets in 1h", "fraction": 0.82, "agent": "codex"},
                 {"kind": "meter",
@@ -965,7 +971,7 @@ mod tests {
         assert_eq!(
             texts,
             vec![
-                Some("Default · Plus"),
+                Some("Default · Plus · updated 1 minute ago"),
                 Some("5-hour 82% remaining · resets in 1h"),
                 Some("5-hour 82% remaining · resets in 1h, Weekly 40% remaining · resets in 2d"),
                 None,

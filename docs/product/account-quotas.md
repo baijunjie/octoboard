@@ -104,10 +104,10 @@ owns" in `docs/product/agent-accounts.md`). Beneath the account each window has:
   appearance.
 
 How long ago the reading was taken is shown in small muted text at the end of a line — the account's directory line
-in Settings, its name line in the rail's panel, which shows no directories: "Updated just now" under a minute,
-otherwise "Updated 3 minutes ago" (in hours or days once it is that old). It is shown only for a current reading with
-windows; when the latest reading failed, the out-of-date line (see "Quota states" below) says when the windows were
-last read instead.
+in Settings, its name line in the rail's panel (which shows no directories), and its header in the menu bar icon's
+quota submenu: "Updated just now" under a minute, otherwise "Updated 3 minutes ago" (in hours or days once it is that
+old). It is shown only for a current reading with windows; when the latest reading failed, the out-of-date line (see
+"Quota states" below) says when the windows were last read instead.
 
 **A window whose reset time has passed** is shown as **100% remaining**, its bar full, until a newer reading arrives,
 while its countdown reads "resets now". This holds wherever a quota is drawn or stated: Settings, the rail's panel, the

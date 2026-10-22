@@ -130,12 +130,12 @@ describe("buildStatusItemMenu quota submenus", () => {
     ...patch,
   });
   const source = (patch: Partial<StatusItemQuotaSource>): StatusItemQuotaSource => ({ ...NO_QUOTA, ...patch });
-  /** Each line as the text it shows: a header's title, a window's name and detail, a note's text. */
+  /** Each line as the text it shows: a header's title and detail, a window's name and detail, a note's text. */
   const labels = (menu: ReturnType<typeof menuOf>, index = 0) =>
     menu.submenus[index].items.map((item) => {
       switch (item.kind) {
         case "header":
-          return item.title;
+          return item.detail ? `${item.title} | ${item.detail}` : item.title;
         case "window":
           return `${item.name} | ${item.detail}`;
         case "meter":
@@ -192,11 +192,11 @@ describe("buildStatusItemMenu quota submenus", () => {
     expect([...iconKeysOf(menu)]).toEqual(expect.arrayContaining(["agent:claude", "agent:grok"]));
   });
 
-  it("lists an account's plan and age, then a row per window with its fraction, agent and whole line", () => {
+  it("lists an account's plan with its age at the right, then a row per window with its fraction, agent and whole line", () => {
     const reading = quotaOf("claude", null, { windows: [window({}), window({ kind: "weekly_model", label: "Fable", used_percent: 5, resets_at: null })] });
     const menu = menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [reading] }));
     expect(menu.submenus[0].items).toEqual([
-      { kind: "header", title: "Default · Max · updated 1 minute ago" },
+      { kind: "header", title: "Default · Max", detail: "Updated 1 minute ago", label: "Default · Max · updated 1 minute ago" },
       {
         kind: "window",
         name: "5-hour",
@@ -219,7 +219,7 @@ describe("buildStatusItemMenu quota submenus", () => {
   it("joins the 5-hour and the account-wide weekly window into one two-layer item read once", () => {
     const menu = menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [quotaOf("claude", null)] }));
     expect(menu.submenus[0].items).toEqual([
-      { kind: "header", title: "Default · Max · updated 1 minute ago" },
+      { kind: "header", title: "Default · Max", detail: "Updated 1 minute ago", label: "Default · Max · updated 1 minute ago" },
       {
         kind: "meter",
         session: { name: "5-hour", detail: "82% remaining · resets in 1h 57m", fraction: 0.82 },
@@ -233,7 +233,7 @@ describe("buildStatusItemMenu quota submenus", () => {
   it("says a reading under a minute old was taken just now", () => {
     const reading = quotaOf("claude", null, { fetched_at: NOW - 10_000 });
     const menu = menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [reading] }));
-    expect(menu.submenus[0].items[0]).toEqual({ kind: "header", title: "Default · Max · updated just now" });
+    expect(menu.submenus[0].items[0]).toEqual({ kind: "header", title: "Default · Max", detail: "Updated just now", label: "Default · Max · updated just now" });
   });
 
   it("keeps a lone weekly window, or a model's, as a row of its own", () => {
@@ -266,10 +266,10 @@ describe("buildStatusItemMenu quota submenus", () => {
       accountQuotas: [quotaOf("codex", null, { plan: null, windows: [window({})] }), quotaOf("codex", "a1", { plan: "pro_lite", windows: [window({ used_percent: 100 })] })],
     }));
     expect(labels(menu)).toEqual([
-      "Default · updated 1 minute ago",
+      "Default | Updated 1 minute ago",
       "5-hour | 82% remaining · resets in 1h 57m",
       "---",
-      `${isolate("Work")} · Pro Lite · updated 1 minute ago`,
+      `${isolate("Work")} · Pro Lite | Updated 1 minute ago`,
       "5-hour | 0% remaining · resets in 1h 57m",
     ]);
   });
