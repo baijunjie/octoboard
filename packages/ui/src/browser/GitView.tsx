@@ -140,7 +140,7 @@ function Notice({ notice, projectRoots }: { notice: ChangesNotice; projectRoots:
             failedText={t("git.changes.copyWorktreePathFailed")}
             size="xs"
             variant="ghost"
-            className="relative ms-1 -my-1 align-top after:absolute after:-inset-0.5 after:content-['']"
+            className="ms-1 -my-1 align-top"
           />
         </>
       );
