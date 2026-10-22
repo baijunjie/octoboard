@@ -23,7 +23,7 @@ import { joinPhrases } from "../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
-import { activityLabelKey, sessionAriaLabel, sessionDisplayTitle, sessionStatusKind, statusLabel } from "../sessionLabel";
+import { activityLabelKey, sessionAccountName, sessionAriaLabel, sessionDisplayTitle, sessionStatusKind, statusLabel } from "../sessionLabel";
 import { inheritedLaunch, sessionModelEffort, sessionModelLabel } from "../sessionModel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 import { useHasBoundSessions, useProjectSessions, useSessionProjectId } from "../sessions/useSessions";
@@ -557,9 +557,10 @@ function ArchivedList({
   );
 }
 
-/** A session in focus mode: its status put into words, its title on one fading line, the model and
- * reasoning effort it runs with beside its agent's mark (the agent and account are in the mark's
- * tooltip), and when it started. The combined project view also names and marks its console owner.
+/** A session in focus mode: its status put into words, its title on one fading line, the account it
+ * runs under and the model and reasoning effort it runs with beside its agent's mark (the mark's
+ * tooltip lists the agent, account, model and effort), and when it started. The combined project
+ * view also names and marks its console owner.
  * `under`, the project session this one is bound to and is inset below, goes into its accessible name,
  * which is what carries that nesting to assistive technology. `own` is the console session's own
  * card in its focus mode: it shows its own colour as a plain mark, has no pin button, and its menu
@@ -588,9 +589,12 @@ const SessionCard = memo(function SessionCard({
   const hasBound = useHasBoundSessions(session.id);
   const rowRef = useRef<HTMLDivElement>(null);
   const inherited = useDaemonStoreEqual((s) => inheritedLaunch(session, s.consoles, s.projects));
-  const modelLabel = sessionModelLabel(t, session.agent, sessionModelEffort(session, inherited));
+  const launch = sessionModelEffort(session, inherited);
+  const modelLabel = sessionModelLabel(t, session.agent, launch);
+  const account = sessionAccountName(t, session, accounts, defaultNames);
+  const agentLine = account === undefined ? modelLabel : t("session.accountModelEffort", { account: isolate(account), modelEffort: modelLabel });
   // The row is one button, so the model line beside the agent's mark reaches assistive technology
-  // only through the row's name, where it comes last.
+  // only through the row's name, where it comes last; the account is already in its first part.
   const name = [sessionAriaLabel(t, language, session, accounts, under ?? consoleOwner, defaultNames)];
   if (under && consoleOwner) name.push(t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, consoleOwner)) }));
   const showPin = session.pinned && !own;
@@ -622,15 +626,15 @@ const SessionCard = memo(function SessionCard({
         </FadeOverflow>
       </div>
       <RowIconLine
-        icon={<SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} />}
+        icon={<SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} />}
         className="text-xs text-app-muted"
       >
         <FadeOverflow
           as="span"
           className="min-w-0 flex-1"
-          titleWhenClipped={modelLabel}
+          titleWhenClipped={agentLine}
         >
-          {modelLabel}
+          {agentLine}
         </FadeOverflow>
         <div className="flex shrink-0 items-center gap-2">
           {hasVisibleContext(session.context) && <div id={metadataId}><SessionContextLabel context={session.context} /></div>}

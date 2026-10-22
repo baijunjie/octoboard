@@ -38,11 +38,36 @@ function withoutIsolates(text: string): string {
   return text.replace(/[\u2066-\u2069]/g, "");
 }
 
-/** The text of a session agent mark's tooltip: the agent's name, then the account as a badge, whose
- * comma only assistive technology reads (`StatusBadge`). */
+/** The text of a session agent mark's tooltip that has no list: the agent's name, then the account as
+ * a badge, whose comma only assistive technology reads (`StatusBadge`). */
 function agentTooltipText(agent: string, account: string | undefined): string {
   return account === undefined ? agent : `${agent}, ${account}`;
 }
+
+/** What a session agent mark's labelled-list tooltip says, as `Claude Code | Account: Work | Model:
+ * Opus 5.5 | Effort: high`: the agent's name, then each label with its value, in the window's language,
+ * with the account left out for a session that recorded none. */
+function agentDetailsText(t: Ui["t"], agent: string, details: AgentDetails): string {
+  const rows = [
+    ...(details.account === undefined ? [] : [[t("session.agentTooltip.account"), details.account]]),
+    [t("session.agentTooltip.model"), details.model],
+    [t("session.agentTooltip.effort"), details.effort],
+  ];
+  return [agent, ...rows.map(([label, value]) => `${label}: ${value}`)].join(" | ");
+}
+
+/** The same text read off the open tooltip: the first line of the box holding the list is the agent, and each `dt` pairs with its
+ * `dd`. A tooltip with no list reads as its whole text, which no expectation matches. */
+function shownAgentDetails(tooltip: Element | null): string {
+  const list = tooltip?.querySelector("dl");
+  if (!tooltip || !list) return withoutIsolates(tooltip?.textContent ?? "").trim();
+  const agent = list.parentElement?.firstElementChild?.textContent ?? "";
+  const rows = Array.from(list.querySelectorAll("dt"), (term) => `${term.textContent}: ${term.nextElementSibling?.textContent ?? ""}`);
+  return withoutIsolates([agent, ...rows].join(" | ")).trim();
+}
+
+/** The values a session agent mark's list tooltip shows. */
+export type AgentDetails = { account?: string; model: string; effort: string };
 
 /** The name a region or panel is given by `aria-labelledby` (the text of the element it names) or `aria-label`, with
  * bidi isolates removed and trimmed; `undefined` where it has neither. */
@@ -246,11 +271,12 @@ export interface Ui {
    * status glyph does not, so a card or row with no size (hidden, or none reported) fails there,
    * naming `row`. The step then fails if the tooltip that opens does not carry that heading. */
   hoverSessionContext: (row: Matcher) => Promise<void>;
-  /** Moves the pointer onto the agent's mark of the focus mode card named `row` (`session(title)`)
-   * and leaves it there, as `hoverIndicator` does, for the tooltip that names `agent` and, as a
-   * badge after it, `account` (none for a session that recorded no account). The mark is the card's
-   * last tooltip trigger drawn as a bare glyph; it fails if the tooltip that opens is any other. */
-  hoverSessionAgent: (row: Matcher, agent: string, account?: string) => Promise<void>;
+  /** Moves the pointer onto the agent's mark of the session row or focus mode card named `row`
+   * (`session(title)`) and leaves it there, as `hoverIndicator` does, for the tooltip that names `agent`
+   * and lists the account (`details.account`, left out for a session that recorded none), the model and
+   * the effort. The mark is the last tooltip trigger drawn as a bare glyph; it fails if the tooltip that
+   * opens says anything else. */
+  hoverSessionAgent: (row: Matcher, agent: string, details: AgentDetails) => Promise<void>;
   /** Moves the pointer onto the project filter's conditions on the Projects heading's line and
    * leaves it there, as `hoverIndicator` does, for the tooltip that carries the whole filter. The
    * strip is the box around the keyword and tag groups; it carries a tooltip only while it is
@@ -704,16 +730,16 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
         throw new Error(`The context size of ${String(row)} did not open its tooltip, which starts with ${heading.trim()}: ${shown === "" ? "no tooltip" : shown} is up`);
       }
     },
-    async hoverSessionAgent(row, agent, account) {
-      const tooltip = agentTooltipText(agent, account);
+    async hoverSessionAgent(row, agent, details) {
+      const tooltip = agentDetailsText(t, agent, details);
       await hover(
         () =>
           Array.from(find(row)?.querySelectorAll<HTMLElement>("[role=presentation]") ?? [])
             .filter((trigger) => trigger.firstElementChild?.matches("svg[aria-hidden=true]"))
             .at(-1),
-        `No session card matching ${String(row)} with an agent mark to hover`,
+        `No session row or card matching ${String(row)} with an agent mark to hover`,
       );
-      const shown = withoutIsolates(doc.querySelector("[role=tooltip]")?.textContent ?? "").trim();
+      const shown = shownAgentDetails(doc.querySelector("[role=tooltip]"));
       if (shown !== tooltip) {
         throw new Error(`The agent mark of ${String(row)} has no tooltip "${tooltip}": its last tooltip is ${shown ? `"${shown}"` : "none"}`);
       }

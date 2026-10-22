@@ -243,10 +243,10 @@ it("lists a project session's own sessions under it, and the binding badge only 
   // The lead session is ranked against the unbound session as ever (idle before interrupted) and
   // its own sessions follow it, ranked among themselves (idle before working).
   expect(rows.map((row) => row.getAttribute("aria-label"))).toEqual([
-    `${isolate("Rework the gallery")} session, Claude Code (${isolate("Default")}), Awaiting instructions, Bound to ${isolate("Hub")}`,
-    `${isolate("Chase the flaky test")} session, Claude Code (${isolate("Default")}), Awaiting instructions, Bound to ${isolate("Rework the gallery")}`,
-    `${isolate("Measure the first paint")} session, Claude Code (${isolate("Default")}), Working, Bound to ${isolate("Rework the gallery")}`,
-    `${isolate("Tidy the changelog")} session, Claude Code (${isolate("Default")}), Interrupted`,
+    `${isolate("Rework the gallery")} session, Claude Code (${isolate("Default")}), Awaiting instructions, Bound to ${isolate("Hub")}, Default model`,
+    `${isolate("Chase the flaky test")} session, Claude Code (${isolate("Default")}), Awaiting instructions, Bound to ${isolate("Rework the gallery")}, Default model`,
+    `${isolate("Measure the first paint")} session, Claude Code (${isolate("Default")}), Working, Bound to ${isolate("Rework the gallery")}, Default model`,
+    `${isolate("Tidy the changelog")} session, Claude Code (${isolate("Default")}), Interrupted, Default model`,
   ]);
   const badges = rows.map((row) => row.querySelector(".session-colour-dot") !== null);
   expect(badges).toEqual([true, false, false, false]);

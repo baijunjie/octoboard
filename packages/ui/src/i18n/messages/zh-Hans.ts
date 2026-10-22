@@ -496,9 +496,13 @@ export const zhHans: Translation<"other"> = {
   "statusItem.quota.windowNoReset": "{window}剩余 {percent}%",
 
   "session.agentAccount": "{agent}（{account}）",
+  "session.accountModelEffort": "{account} · {modelEffort}",
   "session.modelEffort": "{model} · {effort}",
   "session.modelEffort.unknownItem": "默认",
   "session.modelEffort.default": "默认模型",
+  "session.agentTooltip.account": "账户",
+  "session.agentTooltip.model": "模型",
+  "session.agentTooltip.effort": "推理强度",
   "session.defaultName": "{name} 会话",
   "session.displayTitle": "{title}｜{name}",
   "session.withLocation": "{session}，{location}",

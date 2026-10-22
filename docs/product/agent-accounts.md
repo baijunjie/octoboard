@@ -135,8 +135,10 @@ not part of a configuration export (see "What is not configuration and never tra
 The name the user gave is what the default account is called everywhere it is named: in this section, the rail's
 account quota panel, the console, project and session dialogs' account pickers (see "Agent config directories" in
 `docs/product/consoles.md` for how the console dialog names it), a session row's Switch account submenu,
-the tooltip and accessible name of a session's agent icon in the sidebar, focus mode, the archive view and
-confirmations, the menu bar icon's quota submenus, and what a console session's settings tools answer (see "Application
+the agent icon's tooltip and the accessible name of a session in the sidebar, the archive view and confirmations, a
+focus mode card's model line, agent icon tooltip and accessible name, the agent icon's tooltip and the accessible name
+of focus mode's archived rows, the menu
+bar icon's quota submenus, and what a console session's settings tools answer (see "Application
 settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and
 `docs/product/switching-session-accounts.md`).
 

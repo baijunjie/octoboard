@@ -45,6 +45,15 @@ export function sessionModelEffort(session: Session, inherited: LaunchPair): Lau
   };
 }
 
+/** The model's short name and the effort as separate values, for the labelled list of a session's
+ * agent tooltip. A value not known reads as the default. */
+export function sessionModelValues(t: Translate, agent: Agent, launch: LaunchPair): { model: string; effort: string } {
+  return {
+    model: launch.model === null ? t("session.modelEffort.unknownItem") : modelDisplayName(t, agent, launch.model),
+    effort: launch.effort ?? t("session.modelEffort.unknownItem"),
+  };
+}
+
 /** "Opus 5.5 · high" for the line beside a session's agent mark. An item not known reads as the
  * default, and a session with neither known says so once. */
 export function sessionModelLabel(t: Translate, agent: Agent, launch: LaunchPair): string {

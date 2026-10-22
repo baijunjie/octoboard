@@ -49,8 +49,8 @@ and the agent tabs in the console dialog's Advanced section keep their labels fu
 foreground colour instead of dimming. Preserve this shared visual treatment as an explicit product choice, while retaining the component's
 layout, selection and keyboard behaviour.
 
-A status mark such as "Not added" or "Not installed", and any other qualifier after a name (a session's account in
-its agent mark's tooltip, "From the console", an inherited value, "Not in the list"), is a badge after the name, never
+A status mark such as "Not added" or "Not installed", and any other qualifier after a name (a session's account in its
+agent mark's tooltip where that names only the agent and its account, "From the console", an inherited value, "Not in the list"), is a badge after the name, never
 parenthesised text in the name's own style. It is the shared `StatusBadge`: a muted-tint fill with a hairline ring, its
 text at 80% foreground so it keeps at least 4.5:1 on every surface it sits on (fields, dialogs, popovers, tooltips,
 sidebar rows and cards), and a screen-reader-only comma between name and qualifier. A user-typed value in it takes
@@ -528,13 +528,16 @@ as carrying it instead, and each leaves the mark without one:
   tooltip is deliberately held back — while hovering the avatar floats the hidden sidebar in instead. It would also
   put a second indicator trigger inside a real `<button>`, which this standard keeps as one exception, below.
 
-The agent icon is such a mark wherever the text beside it does not name the agent. A focus mode's card puts the model line
-there, so the icon's tooltip, which names the agent and the account the session runs under, is the only route on screen to
-both. The one place the text beside the icon does name the agent is an archive view's row, and the tooltip stays there
-too: a meaning the window has settled does not come and go placement by placement, and it adds the account the text
-leaves out. The agent and the account are also in the session row's accessible name, or in visually hidden text where
-there is no row name, and a card's accessible name carries the model line as well, since the row is one button and
-nothing inside it is announced.
+The agent icon is such a mark wherever the text beside it does not name the agent. On a sidebar session row and a focus
+mode's card its tooltip names the agent, then lists the account, the model and the effort the session runs with, each
+under its label: on the row it is the only route on screen to all four, and on the card, whose line beside the icon
+writes out the account, model and effort, the only one to the agent. The one place the text beside the icon does
+name the agent is an archive view's row, and the tooltip stays there too: a meaning the window has settled does not come
+and go placement by placement, which is also why the card's list is the row's, and it adds the account the text leaves
+out. The agent and the account are also in the
+session row's accessible name, or in visually hidden text where there is no row name, and the accessible name of a
+card or a sidebar session row ends with its model and effort as well, since the row is one button and nothing inside it is
+announced.
 
 One gap is left open on purpose: no mark on a menu's transient surface carries a tooltip — a clipped path label in a
 menu item does carry its own through the anchored shape, as in the Switch account submenu, but no indicator there
@@ -544,7 +547,9 @@ tooltip and the agent is written out beside it.
 
 **A tooltip is worded from the string that already names the mark**, not from one of its own: the same string where
 it names the mark on its own, so the two cannot drift apart (a session's agent mark shows that string's two parts, the
-agent and its account, as text and a `StatusBadge`, reading the same once the badge's comma is spoken); its own key only where the only string naming it folds
+agent and its account, as text and a `StatusBadge`, reading the same once the badge's comma is spoken; where it also
+lists the model and the effort, the account joins them as a labelled list under the agent, since a bare value such as
+"high" does not say what it is, and the labels are the tooltip's own keys); its own key only where the only string naming it folds
 it into the name of what carries it ("{name}, a session is waiting for you"), since reusing that would make the
 tooltip repeat the row's visible name, and composing it out of a fragment is worse to translate.
 
@@ -673,8 +678,9 @@ A name, title or control label referenced within visible prose, headings, descri
 non-monospace `InlineChip` at `inherit` size, with `dir="auto"` and wrapping, instead of quotation marks. This includes
 fixed agent and product names when they are references within copy. Whole entity and control labels, structured
 entity/path rows, and foreign source, terminal and report layouts keep their established presentation.
-A session's model line — its model and reasoning effort beside the agent mark — is such a whole metadata label: it
-is plain text without chips, shown as the same isolated string its accessible name ends with. So is the agent's name
+A focus card's model line — the account, then the model and reasoning effort, beside the agent mark — is such a whole
+metadata label: it is plain text without chips. Its model and effort are the same isolated string the card's
+accessible name ends with; the account is not repeated there, the name already carrying it with the agent. So is the agent's name
 heading the agent mark's tooltip: it names the mark rather than being referenced within prose.
 Plain-text surfaces, including accessible names, native labels, announcements and system notifications, retain
 readable text without chip markup. Isolate references at the sentence boundary where needed, as specified under

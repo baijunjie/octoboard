@@ -548,9 +548,13 @@ export const en = {
   "statusItem.quota.windowNoReset": "{window} {percent}% remaining",
 
   "session.agentAccount": "{agent} ({account})",
+  "session.accountModelEffort": "{account} · {modelEffort}",
   "session.modelEffort": "{model} · {effort}",
   "session.modelEffort.unknownItem": "Default",
   "session.modelEffort.default": "Default model",
+  "session.agentTooltip.account": "Account",
+  "session.agentTooltip.model": "Model",
+  "session.agentTooltip.effort": "Effort",
   "session.defaultName": "{name} session",
   "session.displayTitle": "{title}｜{name}",
   "session.withLocation": "{session} — {location}",

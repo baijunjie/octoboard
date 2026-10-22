@@ -4,6 +4,7 @@ import React, { act } from "react";
 import { useHover } from "react-aria";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
+import type { LaunchPair } from "../agents";
 import { Button } from "../components/Button";
 import { change, changeViewFixture, mountRows } from "../browser/browserTestSupport";
 import { ChangeList } from "../browser/ChangeList";
@@ -27,12 +28,13 @@ import { gitStatusOf, sessionOf } from "./fixtures/builders";
 import { createUi } from "./interact";
 
 /** The tooltip of a Claude Code session's agent mark, drawn by the app's own `SessionAgentTooltip`: the
- * agent's name, then the account the session runs under as a badge. */
-function agentTooltip(account: string): React.ReactElement {
+ * agent's name, then the account the session runs under as a badge or, given `launch`, a list of the
+ * account, model and effort (as a sidebar row's and a focus card's are). */
+function agentTooltip(account: string, launch?: LaunchPair): React.ReactElement {
   const stored: Account = { id: "account", agent: "claude", name: account, config_dir: "/Users/dev/.claude-work" };
   return (
     <LanguageProvider>
-      <SessionAgentTooltip session={sessionOf("s-tooltip", "c", "p", "Tooltip", "idle", { account_id: stored.id })} accounts={[stored]} defaultNames={undefined} />
+      <SessionAgentTooltip session={sessionOf("s-tooltip", "c", "p", "Tooltip", "idle", { account_id: stored.id })} accounts={[stored]} defaultNames={undefined} launch={launch} />
     </LanguageProvider>
   );
 }
@@ -108,7 +110,7 @@ function mountWindow(): void {
         <div>
           <StatusIcon status="idle" decorative />
         </div>
-        <AgentIcon agent="claude" tooltip={agentTooltip("Work")} />
+        <AgentIcon agent="claude" tooltip={agentTooltip("Work", { model: "claude-opus-5-5", effort: "high" })} />
       </div>
     </>,
   );
@@ -267,26 +269,24 @@ it("hoverCalloutAgent fails for an agent icon with no tooltip", async () => {
   expect(openTooltip()).toBeNull();
 });
 
-it("hoverSessionAgent puts up the agent and account of the card it names", async () => {
+it("hoverSessionAgent puts up the agent and the account, model and effort listed for the card it names", async () => {
   mountWindow();
-  await settledLive(createUi(document, "en").hoverSessionAgent(row("Card"), "Claude Code", "Work"));
-  expect(openTooltip()?.textContent).toBe("Claude Code, Work");
+  await settledLive(createUi(document, "en").hoverSessionAgent(row("Card"), "Claude Code", { account: "Work", model: "Opus 5.5", effort: "high" }));
+  expect(openTooltip()?.querySelector("dl")?.textContent).toBe("AccountWorkModelOpus 5.5Efforthigh");
   release(document.querySelector('[aria-label^="Card"] [role=presentation]')!);
 });
 
 it("hoverSessionAgent fails where the tooltip is not the one it was told", async () => {
   mountWindow();
-  const done = expect(createUi(document, "en").hoverSessionAgent(row("Card"), "Claude Code", "Home")).rejects.toThrow(
-    /has no tooltip "Claude Code, Home": its last tooltip is "Claude Code, Work"/,
+  await expect(settledLive(createUi(document, "en").hoverSessionAgent(row("Card"), "Claude Code", { account: "Home", model: "Opus 5.5", effort: "high" }))).rejects.toThrow(
+    /has no tooltip "Claude Code \| Account: Home \| Model: Opus 5.5 \| Effort: high": its last tooltip is "Claude Code \| Account: Work \| Model: Opus 5.5 \| Effort: high"/,
   );
-  await vi.advanceTimersByTimeAsync(3000);
-  await done;
   release(document.querySelector('[aria-label^="Card"] [role=presentation]')!);
 });
 
 it("hoverSessionAgent fails for a card with no agent mark", async () => {
   mountWindow();
-  const done = expect(createUi(document, "en").hoverSessionAgent(row("Docs"), "Claude Code", "Work")).rejects.toThrow(/with an agent mark to hover/);
+  const done = expect(createUi(document, "en").hoverSessionAgent(row("Docs"), "Claude Code", { account: "Work", model: "Opus 5.5", effort: "high" })).rejects.toThrow(/with an agent mark to hover/);
   await vi.advanceTimersByTimeAsync(6000);
   await done;
   expect(openTooltip()).toBeNull();

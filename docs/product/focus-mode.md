@@ -34,11 +34,15 @@ The session lock button on live cards, a console session's own card included, fo
 (both always shown when available; see "Session rows" in `docs/product/sidebar.md` for when the
 shortcut is there and what it does), its title on one line, its agent's icon
 followed by the **model line**, and how long ago it was created at the trailing end of the agent line. The model line
-reads "<model> · <effort>" — the model and reasoning effort the session runs with, as "The model and effort a session
-is shown running with" in `docs/product/model-and-reasoning-effort.md` decides them — and reads **Default model** when
-neither is known; the agent's name is not shown on the card. The model line is one line that fades where it is cut off,
-with its full text as its tooltip while cut (see "Names too long for their space" in
-`docs/product/labels-and-tooltips.md`), and the card's accessible name ends with the same text. Resuming or
+reads "<account> · <model> · <effort>". The account is the one the session runs under, named as in a session row's
+agent icon tooltip (see "Session rows" in `docs/product/sidebar.md`): the account's name, the default account's name,
+or a removed account's recorded directory; a removed account that recorded no directory leaves the line at
+"<model> · <effort>". "<model> · <effort>" is the model and reasoning effort the session runs with, as "The model and
+effort a session is shown running with" in `docs/product/model-and-reasoning-effort.md` decides them, an unknown one
+reading **Default**, and reads **Default model** when neither is known; the agent's name is not shown on the card. The
+model line is one line that fades where it is cut off, with its full text as its tooltip while cut (see "Names too long
+for their space" in `docs/product/labels-and-tooltips.md`). The card's accessible name ends with "<model> · <effort>"
+alone: the account is already named beside the agent in it, as in a session row's accessible name. Resuming or
 reopening does not reset the creation time. When the context size is known and above zero, its chip appears immediately
 before the creation time on that same agent line and updates while the session runs (see "The context-size chip" in
 `docs/product/session-context.md`), set apart from the creation time by spacing alone; without the chip, the trailing
@@ -46,8 +50,8 @@ block contains creation time alone. The model line has no adjacent separator. Th
 and agent lines share aligned leading icons and text starts. A title with a console-session colour dot shares that
 alignment;
 a title without one starts at the card’s leading content edge, with no empty icon space. Long titles follow "Names too long
-for their space" in `docs/product/labels-and-tooltips.md`. The agent's icon has a tooltip, as on a session row (see
-"Session rows" in `docs/product/sidebar.md`). Clicking a card selects the session. They are in the order of "Order of
+for their space" in `docs/product/labels-and-tooltips.md`. The agent's icon has the same tooltip as on a session row, listing the account,
+model and effort under the agent's name (see "Session rows" in `docs/product/sidebar.md`). Clicking a card selects the session. They are in the order of "Order of
 projects and sessions" in `docs/product/sidebar.md`. Cards have an opaque background distinct from the sidebar's,
 which stays opaque while they move, so text from other cards, the console-session summary or the archive does not
 show through them. Cards have no outline: each is set apart by the same soft shadow as the content panel's edges (see

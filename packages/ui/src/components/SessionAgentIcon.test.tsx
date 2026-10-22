@@ -42,3 +42,25 @@ it("shows the agent alone for a removed account that recorded no directory", () 
   const container = mount(<SessionAgentTooltip session={sessionOf("s", "c", "p", "T", "idle", { account_id: "gone" })} accounts={accounts} defaultNames={undefined} />);
   expect(container.textContent).toBe("Claude Code");
 });
+
+it("lists the account, model and effort under their labels when given the launch", () => {
+  const container = mount(<SessionAgentTooltip session={sessionOf("s", "c", "p", "T", "idle", { account_id: "w" })} accounts={accounts} defaultNames={undefined} launch={{ model: "claude-opus-5-5", effort: "high" }} />);
+  const rows = Array.from(container.querySelectorAll("dt")).map((dt) => [dt.textContent, dt.nextElementSibling?.textContent]);
+  expect(container.firstElementChild?.firstElementChild?.textContent).toBe("Claude Code");
+  expect(rows).toEqual([["Account", "Work"], ["Model", "Opus 5.5"], ["Effort", "high"]]);
+});
+
+it("lists a recorded path left to right, and each unknown value as the default", () => {
+  const path = `/Users/someone/.config/${"deeply-nested-directory/".repeat(8)}claude`;
+  const container = mount(<SessionAgentTooltip session={sessionOf("s", "c", "p", "T", "idle", { account_id: "gone", config_dir: path })} accounts={accounts} defaultNames={undefined} launch={{ model: null, effort: null }} />);
+  const value = container.querySelector<HTMLElement>("code")!.parentElement!;
+  expect(value.tagName).toBe("DD");
+  expect(value.getAttribute("dir")).toBe("ltr");
+  expect(value.className).toContain("[overflow-wrap:anywhere]");
+  expect(Array.from(container.querySelectorAll("dd")).slice(1).map((dd) => dd.textContent)).toEqual(["Default", "Default"]);
+});
+
+it("leaves the account row out for a removed account that recorded no directory", () => {
+  const container = mount(<SessionAgentTooltip session={sessionOf("s", "c", "p", "T", "idle", { account_id: "gone" })} accounts={accounts} defaultNames={undefined} launch={{ model: "claude-opus-5-5", effort: "high" }} />);
+  expect(Array.from(container.querySelectorAll("dt")).map((dt) => dt.textContent)).toEqual(["Model", "Effort"]);
+});

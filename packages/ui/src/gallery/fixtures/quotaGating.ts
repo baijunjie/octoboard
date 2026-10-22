@@ -380,14 +380,13 @@ export const quotaGatingScenarios: Scenario[] = [
     group: FOCUS_GROUP,
     category: "normal",
     title: "Quick create when the inherited account is used up",
-    description: "Website would run on Work, whose quota is used up, so a quick create (pressed here with the modifier) runs the new session on Default, the account with quota left. Its card is selected and its agent mark's tooltip names Claude Code and Default.",
+    description: "Website would run on Work, whose quota is used up, so a quick create (pressed here with the modifier) runs the new session on Default, the account with quota left. Its card is selected and its line beside the agent mark opens with Default.",
     state: launchState([onWork], claudeQuotas),
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${onWork.id}` },
     steps: [
       (ui) => ui.pressWithModifier(ui.t("sidebar.project.openSession")),
-      // The new card slides in before it can be hovered.
+      // The new card slides in before the view is settled.
       (ui) => ui.wait(600),
-      (ui) => ui.hoverSessionAgent(ui.session(ui.t("session.defaultName", { name: onWork.name })), "Claude Code", ui.t("settings.accounts.defaultName")),
     ],
   },
   {

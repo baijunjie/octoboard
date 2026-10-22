@@ -4,7 +4,7 @@ import { consoleOf, projectOf, sessionOf } from "./gallery/fixtures/builders";
 import { format } from "./i18n/catalog";
 import type { Translate } from "./i18n/catalog";
 import { isolate } from "./i18n/isolate";
-import { inheritedLaunch, modelDisplayName, sessionModelEffort, sessionModelLabel } from "./sessionModel";
+import { inheritedLaunch, modelDisplayName, sessionModelEffort, sessionModelValues, sessionModelLabel } from "./sessionModel";
 
 const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as never, args[0] as never)) as Translate;
 
@@ -75,5 +75,17 @@ describe("sessionModelLabel", () => {
     expect(sessionModelLabel(t, "grok", { model: "grok-4.7", effort: null })).toBe(`${isolate("grok-4.7")} · Default`);
     expect(sessionModelLabel(t, "claude", { model: null, effort: "high" })).toBe(`Default · ${isolate("high")}`);
     expect(sessionModelLabel(t, "claude", { model: null, effort: null })).toBe("Default model");
+  });
+});
+
+describe("sessionModelValues", () => {
+  it("gives the model's short name and the effort as separate values", () => {
+    expect(sessionModelValues(t, "claude", { model: "claude-opus-5-5", effort: "xhigh" })).toEqual({ model: "Opus 5.5", effort: "xhigh" });
+  });
+
+  it("names each unknown value as the default", () => {
+    expect(sessionModelValues(t, "grok", { model: "grok-4.7", effort: null })).toEqual({ model: "grok-4.7", effort: "Default" });
+    expect(sessionModelValues(t, "claude", { model: null, effort: "high" })).toEqual({ model: "Default", effort: "high" });
+    expect(sessionModelValues(t, "claude", { model: null, effort: null })).toEqual({ model: "Default", effort: "Default" });
   });
 });

@@ -362,8 +362,10 @@ reference. A project leaves the account to the console for every agent it inheri
 starts (see "The project's account, model and reasoning effort" in `docs/product/projects.md`). While **Automatically
 select an account** is off (see that section in `docs/product/settings.md`), a session opened without changing the
 account picker runs under the project's account for its agent, or the console's, or the agent's default account when
-neither pins anything. The session's account is identified by its agent icon's tooltip and its accessible session name,
-without an account suffix in visible session metadata (see "Session rows" in `docs/product/sidebar.md`).
+neither pins anything. The session's account is named in its agent icon's tooltip and its accessible session name
+(see "Session rows" in `docs/product/sidebar.md`), and on the line beside the agent icon of its focus mode card (see
+"What both views show" in `docs/product/focus-mode.md`); wherever the agent's name is shown, it carries no account
+suffix.
 
 While the switch is on, a new session whose account was not named uses the account of that session's agent whose weekly
 quota resets soonest, among the accounts that can still open a session. An account the session names still wins,

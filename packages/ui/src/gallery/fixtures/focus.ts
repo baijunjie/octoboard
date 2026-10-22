@@ -188,6 +188,10 @@ const observedLaunches: Record<string, Partial<Session>> = {
   "s-3a": { model: null, effort: null },
 };
 
+// The account "Profile the slow query" ran under is no longer stored, so its line beside the agent's
+// mark opens with the directory the session recorded, a path far longer than the line is wide.
+const REMOVED_ACCOUNT_DIR = "/Users/dev/.claude-accounts/production-release-coordination-and-regression-review-account";
+
 // Long bound titles exercise the single-line fade and full-title hover without displacing the owner badge.
 const combinedState = {
   ...scrollingFocusState,
@@ -200,7 +204,8 @@ const combinedState = {
   sessions: new Map([...scrollingFocusState.sessions].map(([id, session]) => [id, {
     ...session,
     ...observedLaunches[id],
-    account_id: id === "s-2" ? "a-long" : id === "s-lead-2" ? "a-release" : session.account_id,
+    account_id: id === "s-2" ? "a-long" : id === "s-lead-2" ? "a-release" : id === "s-3b" ? "a-removed" : session.account_id,
+    config_dir: id === "s-3b" ? REMOVED_ACCOUNT_DIR : session.config_dir,
     terminal_title: id === "s-2"
       ? "Fix the rounding of partial search results and preserve precision across every supported currency"
       : id === "s-lead-2"
@@ -209,12 +214,18 @@ const combinedState = {
   }])),
 };
 
-// The account "Add idempotency keys" ran under is no longer stored, so its tooltip falls back to the
-// directory the session recorded, a path far longer than the tooltip is wide.
-const REMOVED_ACCOUNT_DIR = "/Users/dev/.claude-accounts/production-release-coordination-and-regression-review-account";
+// The account the sidebar row's tooltip names is no longer stored, so it falls back to the directory
+// the session recorded, a path far longer than the tooltip is wide. The session launched with the
+// agent's defaults, so the tooltip's model and effort both read Default.
 const removedAccountState = {
-  ...combinedState,
-  sessions: new Map([...combinedState.sessions].map(([id, session]) => [id, id === "s-1" ? { ...session, account_id: "a-removed", config_dir: REMOVED_ACCOUNT_DIR } : session])),
+  ...state,
+  sessions: new Map([...state.sessions!].map(([id, session]) => [id, id === lead.id ? { ...session, account_id: "a-removed", config_dir: REMOVED_ACCOUNT_DIR, model: null, effort: null } : session])),
+};
+
+// The sidebar row of Rework the result ranking, which runs under Work, reports the model and effort it ran with.
+const observedModelState = {
+  ...state,
+  sessions: new Map([...state.sessions!].map(([id, session]) => [id, id === lead.id ? { ...session, observed_model: "claude-opus-5-5", observed_effort: "high" } : session])),
 };
 
 // "Add idempotency keys" is a Claude session. A session's context size comes with a window only once its agent
@@ -237,6 +248,7 @@ const runningInBackgroundState = {
   ]),
 };
 
+const rankingRow = (ui: Ui) => ui.session(ui.t("session.displayTitle", { title: "Compare ranking strategies", name: "Rework the result ranking" }));
 const addIdempotencyKeys = (ui: Ui) => ui.session(ui.t("session.displayTitle", { title: "Prevent duplicate API requests", name: "Add idempotency keys" }));
 
 const hierarchyState = {
@@ -296,6 +308,26 @@ export const focusScenarios: Scenario[] = [
     description: "At the sidebar’s 280px minimum width, context-size chips follow console, project and nested session titles, staying visible beside long clipped titles; a zero or missing size leaves no chip. Hover a chip for its heading with the exact count. The console header keeps New console session immediately before its actions menu. Scroll the sidebar: Console sessions stays pinned until Projects pushes it away, then Projects and its controls stay above the fade. Rounded branches join each project session to its nested sessions and end at the last child. Binding dots and pins stay visible while action menus hide. Hover or focus a row to compare the evenly spaced controls, then unpin a session to see the remaining controls close together. An Archive button precedes the menu only on a session that archives without confirmation: idle or interrupted, with no unarchived session bound under it, like Rework the retry loop. The pinned, locked Profile the slow query shows a persistent Unlock icon without a lock border, and its menu offers Unlock with Archive disabled. The unused but locked Draft the release notes has no Delete shortcut, and its menu offers Unlock with Delete disabled. Set Modifier to Held to see the console header's and each project row's new-session buttons as the bolt that creates with defaults.",
   },
   {
+    id: "sidebar-session-agent-tooltip",
+    group: "Sidebar sessions",
+    category: "normal",
+    title: "Session row agent mark tooltip",
+    description: "The pointer rests on the Claude Code mark of Rework the result ranking. The tooltip names the agent, then lists the account the session runs under, its model and its effort, each under its label: Work, Opus 5.5 and high. Compare the labels' muted colour with the values.",
+    state: observedModelState,
+    preferences: { sidebarConsole: console_.id },
+    steps: [(ui) => ui.hoverSessionAgent(rankingRow(ui), AGENT_LABEL.claude, { account: "Work", model: "Opus 5.5", effort: "high" })],
+  },
+  {
+    id: "sidebar-session-agent-tooltip-removed-account",
+    group: "Sidebar sessions",
+    category: "normal",
+    title: "Session row agent mark tooltip with a removed account",
+    description: "The pointer rests on the Claude Code mark of Rework the result ranking, whose account was removed and which was launched with the agent's defaults. The tooltip names the agent, then lists the directory the session recorded as its account, with Default as both model and effort; the long path breaks onto further lines under its label instead of running past the tooltip's edge.",
+    state: removedAccountState,
+    preferences: { sidebarConsole: console_.id },
+    steps: [(ui) => ui.hoverSessionAgent(rankingRow(ui), AGENT_LABEL.claude, { account: REMOVED_ACCOUNT_DIR, model: ui.t("session.modelEffort.unknownItem"), effort: ui.t("session.modelEffort.unknownItem") })],
+  },
+  {
     id: "focus-project",
     group: GROUP,
     category: "normal",
@@ -315,7 +347,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project focus including console sessions",
     state: combinedState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}`, projectFocusIncludeConsoleSessions: true },
-    description: "The metadata line shows the agent's mark, the model and effort on its left, and a compact context-size chip, a grey pill (80% foreground on a light tint with a hairline ring), and the creation age on its right. A zero or missing context size omits the chip without adding a row. The model and effort, not the agent's name, follow the mark: Add idempotency keys reads Opus 5.5 · high, the Codex session under Rework the result ranking gpt-6.1-sol · xhigh, Watch the ranking build (also Codex, its records naming a model but no effort) gpt-6.1-sol · medium rather than Default, Document the retry policy (Grok) grok-4.7 · high, and Rework the retry loop Haiku 4.5 with a Default effort. Write the migration follows the project's own setting, Sonnet · medium, as do the other cards left unchanged; Check the index sizes, launched with the agent's defaults, reads Default model. Bound cards keep status, owner and agent marks in one column, with owner badges before long single-line titles. Hover a badge for the owner's name. Titles scroll only when their text is hovered, and titles without a badge start at the content edge. Nested cards inherit their owner's colour. Rounded branches connect the single child under Write the migration and the three under Rework the result ranking. A vertical rail crosses the card gaps and stops at the last child's centre, with none beside top-level cards. Arabic mirrors the branches. Pinned cards come first, then Waiting for you, Awaiting instructions, Working in background, Working and Interrupted. The older migration watcher precedes the newer Document the retry policy, while pinned Add idempotency keys stays above the unpinned cards. Under Rework the result ranking, the older Watch the ranking build precedes the newer Chase the flaky test.",
+    description: "The metadata line shows the agent's mark, the account, model and effort on its left, and a compact context-size chip, a grey pill (80% foreground on a light tint with a hairline ring), and the creation age on its right. A zero or missing context size omits the chip without adding a row. The account, model and effort, not the agent's name, follow the mark (hovering the mark lists them under labels), the account first and a card on an agent's default account reading Default: Add idempotency keys reads Work · Opus 5.5 · high, the Codex session under Rework the result ranking Default · gpt-6.1-sol · xhigh, Watch the ranking build (also Codex, its records naming a model but no effort) Default · gpt-6.1-sol · medium rather than a Default effort, Document the retry policy (Grok) Default · grok-4.7 · high, and Rework the retry loop Default · Haiku 4.5 with a Default effort. Write the migration follows the project's own setting, Default · Sonnet · medium, as do the other cards left unchanged; Check the index sizes, launched with the agent's defaults, reads Default · Default model. Where the account name is long (Fix the rounding of partial results, Review search result first paint timing) or a removed account leaves a recorded directory (Profile the slow query), the line fades out before the model; the directory reads left to right. Bound cards keep status, owner and agent marks in one column, with owner badges before long single-line titles. Hover a badge for the owner's name. Titles scroll only when their text is hovered, and titles without a badge start at the content edge. Nested cards inherit their owner's colour. Rounded branches connect the single child under Write the migration and the three under Rework the result ranking. A vertical rail crosses the card gaps and stops at the last child's centre, with none beside top-level cards. Arabic mirrors the branches. Pinned cards come first, then Waiting for you, Awaiting instructions, Working in background, Working and Interrupted. The older migration watcher precedes the newer Document the retry policy, while pinned Add idempotency keys stays above the unpinned cards. Under Rework the result ranking, the older Watch the ranking build precedes the newer Chase the flaky test.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Compare ranking strategies", name: "Rework the result ranking" }))),
     ],
@@ -325,20 +357,10 @@ export const focusScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Agent mark tooltip",
-    description: "The pointer rests on the Claude Code mark of Add idempotency keys. The tooltip names the agent and, in a grey badge after it, the account the session runs under: Claude Code and Work.",
+    description: "The pointer rests on the Claude Code mark of Add idempotency keys. The tooltip names the agent, then lists the account the session runs under, its model and its effort, each under its label: Work, Opus 5.5 and high, the same as the line beside the mark.",
     state: combinedState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}`, projectFocusIncludeConsoleSessions: true },
-    steps: [(ui) => ui.hoverSessionAgent(addIdempotencyKeys(ui), AGENT_LABEL.claude, "Work")],
-  },
-  {
-    id: "focus-agent-tooltip-removed-account",
-    group: GROUP,
-    category: "normal",
-    title: "Agent mark tooltip with a removed account",
-    description: "The pointer rests on the Claude Code mark of Add idempotency keys, whose account was removed. The tooltip names the agent and, in a grey badge after it, the directory the session recorded; the long path breaks onto further lines inside the badge instead of running past the tooltip's edge.",
-    state: removedAccountState,
-    preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}`, projectFocusIncludeConsoleSessions: true },
-    steps: [(ui) => ui.hoverSessionAgent(addIdempotencyKeys(ui), AGENT_LABEL.claude, REMOVED_ACCOUNT_DIR)],
+    steps: [(ui) => ui.hoverSessionAgent(addIdempotencyKeys(ui), AGENT_LABEL.claude, { account: "Work", model: "Opus 5.5", effort: "high" })],
   },
   {
     id: "focus-console-session",

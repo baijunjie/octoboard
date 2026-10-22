@@ -28,6 +28,7 @@ import { StatusIcon } from "../components/StatusIcon";
 import type { NewSessionRequest } from "../dialogs/dialogRequest";
 import { withGitBadge } from "../gitStatusLabel";
 import { isolate } from "../i18n/isolate";
+import { joinPhrases } from "../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import { drawerClass, PANE_ID, RailClip, usePanePeekPointer } from "../layout/paneOverlay";
 import type { PaneWidth } from "../layout/paneWidth";
@@ -36,8 +37,9 @@ import type { PanePeek } from "../layout/usePaneToggles";
 import { effectiveTags, matchesFilter, tagVocabulary } from "../projectFiltering";
 import type { Console, Project, Session } from "../protocol";
 import { activityLabelKey, sessionAriaLabel, sessionDisplayTitle, sessionStatusKind } from "../sessionLabel";
+import { inheritedLaunch, sessionModelEffort, sessionModelLabel } from "../sessionModel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
-import { useDaemonStore } from "../store";
+import { useDaemonStore, useDaemonStoreEqual } from "../store";
 import { BindingBadge } from "./BindingBadge";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { GitBadge } from "./GitBadge";
@@ -864,17 +866,20 @@ const SessionRow = memo(function SessionRow({
   const owner = under ?? (bound?.role === "console" ? bound : undefined);
   const rowRef = useRef<HTMLDivElement>(null);
   const badgeOwner = session.role === "console" ? session : owner?.role === "console" ? owner : undefined;
+  const inherited = useDaemonStoreEqual((s) => inheritedLaunch(session, s.consoles, s.projects));
+  const launch = sessionModelEffort(session, inherited);
   return (
     <TreeRow
       ref={rowRef}
       describedBy={hasVisibleContext(session.context) ? metadataId : undefined}
-      ariaLabel={sessionAriaLabel(t, language, session, accounts, owner, defaultNames)}
+      // The model and effort are in the agent mark's tooltip only, so the row's name carries them too.
+      ariaLabel={joinPhrases(language, [sessionAriaLabel(t, language, session, accounts, owner, defaultNames), sessionModelLabel(t, session.agent, launch)])}
       selected={selected}
       locked={session.locked}
       onActivate={() => handlers.onSelectSession(session)}
     >
       <StatusIcon status={sessionStatusKind(session)} decorative withTooltip />
-      <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} />
+      <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} />
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <RowLabel title={sessionDisplayTitle(t, session)} className="min-w-0">{sessionDisplayTitle(t, session)}</RowLabel>
         {hasVisibleContext(session.context) && <span id={metadataId} className="shrink-0"><SessionContextLabel context={session.context} /></span>}

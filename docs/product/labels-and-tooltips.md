@@ -235,8 +235,9 @@ These are:
 - the binding badge, the coloured dot on a project session's row bound to a console session, whose tooltip names that
   console session (see "The binding badge" in `docs/product/sidebar.md`);
 - a session's agent icon on its row, on a focus mode's card or archived row, on the archive view's row and on each
-  session a confirmation lists among the ones it affects, whose tooltip names the agent and the account the session
-  runs under (see "Session rows" in `docs/product/sidebar.md`);
+  session a confirmation lists among the ones it affects, whose tooltip names the agent and the account the session runs
+  under, and on a session row or a focus mode card also the model and effort it runs with, as a labelled list (see
+  "Session rows" in `docs/product/sidebar.md`);
 - a project's branch badge, on its sidebar row and in focus mode's header, which carries **one tooltip for the whole
   badge** rather than one per mark: resting the mouse on its state glyph, on the branch name or on either upstream
   count shows the same sentence, the one the badge's whole state is said in — the branch, each count while it is not
