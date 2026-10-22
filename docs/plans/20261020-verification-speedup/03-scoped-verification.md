@@ -9,7 +9,13 @@
 
 ## Technical design
 
-- [ ] Scope rules, from the paths changed since the merge base with the target branch:
+- [ ] Diff base for scoping: the tree of the branch's last passing verification (the one its verify-once stamp
+      records), or the merge base with the target branch when the branch has no pass yet; when the recorded tree can no
+      longer be read (garbage-collected after a rebase or squash), run the full suite. After a rebase that brings
+      in new code, the merge base moves past that code, so diffing against it would leave the brought-in code out of
+      scope, while `CLAUDE.md` "Before delivery" requires re-running on the whole current content, the brought-in
+      code included; diffing against the last passing tree keeps it in scope.
+- [ ] Scope rules, from the paths changed since the diff base:
   - Rust steps: Rust sources, Cargo manifests and lockfile, the toolchain file, the daemon's test data, the desktop
     shell, the shared app configuration.
   - Desktop tests: the desktop shell, root Cargo files, the shared app configuration, the toolchain file (the desktop
@@ -19,7 +25,7 @@
   - Documentation only: lint and format checks only.
 - [ ] Order: format, lint and type checks first; tests and gallery sweep after; stop at the first failure.
 - [ ] Verify-once stamp: the commit's tree, the lockfile and the toolchain identify a pass; a matching stamp skips the
-      run.
+      run. Each branch also keeps the tree of its last pass, as the diff base for scoping.
 - [ ] A flag to force the full suite.
 
 ## Implementation plan
