@@ -78,7 +78,8 @@ passing it on to the user) decide before going on; do not decide for yourself.
 ### Before starting work
 
 - Make sure the branch is up to date first: fetch only the branch the current branch merges back into (no need to
-  fetch everything), then check whether the current branch is behind it, and align it before doing anything else.
+  fetch everything), then check whether the current branch is behind it, and align it before doing anything else;
+  aligning never rewrites the history of a branch that has been pushed and is not exclusively yours.
 - Pick up the project context via the `agent-docs` skill.
 
 ### Before delivery
@@ -94,17 +95,29 @@ At delivery:
 
 1. **Gallery**: bring the gallery up to date and run the quick check via the `agent-gallery` skill; whether to do it
    and what scope to run is up to its judgement.
-2. **Static checks**: run the project's agreed quality-check commands (formatting, type checking, lint and so
-   on) and confirm they report nothing. Skip this if the project has no such commands.
-3. **Change check**: review this round's changes via the `agent-change-check` skill; if you changed code in
-   response to the findings, re-run the static checks and the affected tests first, then have it reviewed
-   again. Only move on once the review passes, or the remaining findings have been handed to the user.
-4. **Documentation update**: when this round's changes call for updating the docs that later readers rely on,
-   update them via the `agent-docs` skill; if aligning with the docs changed code, re-run the static checks
-   and the affected tests.
-5. **UI preview**: preview for the user via the `agent-gallery` skill; whether to preview and whether to wait for
-   confirmation is up to its judgement; before the branch is handed over, this round's changes are abandoned, or the
-   working copy is deleted, clean up via that skill.
+2. **Change check**: review this round's changes via the `agent-change-check` skill; only move on once the review
+   passes, or the user has settled the remaining findings and the changes they decided on have been made.
+3. **Documentation update**: when this round's changes call for updating the docs that later readers rely on,
+   update them via the `agent-docs` skill.
+4. **UI preview**: preview for the user via the `agent-gallery` skill; whether to preview and whether to wait for
+   confirmation is up to its judgement.
+5. **Formatting and checks**: first run the project's agreed formatting commands to rewrite the code, then run all
+   of the project's agreed checks — format checks, type checking, lint, build, tests — and confirm they all pass;
+   if they do not, fix and re-run all of the checks. Skip any the project has not agreed on.
+
+The full formatting and checks run only in the "Formatting and checks" step, before the final commit and delivery
+(push, PR or merge); the earlier steps do not run them separately (the related tests a step runs to confirm its
+own change do not count).
+
+- **You changed behavior, logic or UI again** (in response to the change check, to preview feedback, to pass the
+  checks, or while resolving conflicts): walk this new change through again from the first relevant step; purely
+  mechanical fixes such as formatting or type annotations do not go through again.
+- **The same content is not re-run**: if the content has not changed since the self-check (such as only
+  squashing), a later push, PR or merge does not redo it; if a rebase or merge brought in someone else's new code,
+  re-run formatting and checks on the whole current content, the brought-in code included, not only the original
+  change.
+- **Clean-up**: after formatting and checks pass, and before the branch is merged or a PR is opened, clean up via
+  the `agent-gallery` skill; do the same before this round's changes are abandoned or the working copy is deleted.
 
 ### This project
 

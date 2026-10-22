@@ -45,7 +45,7 @@ passing it on to the user) decide before going on; do not decide for yourself.
   deleted, write this placeholder line back:
 
   ```
-  (None yet. Project-specific steps are written here one per entry, anchored on the step names above, e.g. "After 'Static checks': ..." or "Skip condition for 'Static checks': ...".)
+  (None yet. Project-specific steps are written here one per entry, anchored on the step names above, e.g. "Before 'Formatting and checks': ..." or "Skip condition for 'Formatting and checks': ...".)
   ```
 - When another skill or installer needs to register a step, it must also go through this skill to edit the "This
   project" subsection — it must not write workflow content into the instruction file itself.
