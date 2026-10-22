@@ -106,6 +106,16 @@ session working in background, the work it left running, each entry with `id` an
 message like any session awaiting instructions, but its work is not over (see "Working in background" in
 `docs/product/sessions.md`).
 
+Each of these records also carries `context`, the session's context size as the window shows it (see "Session context
+size" in `docs/product/session-context.md`): an object with `tokens`, plus `window` and `used_percent` — the share of
+the window in use as a whole percentage, by the agent's own accounting as in "The context-size chip" there — only once
+a context window is known, both keys left out otherwise. It is `null` while the context size is unknown: before the
+agent's records show one, and for Claude Code after a compaction until the next request.
+
+```json
+"context": {"tokens": 120000, "window": 200000, "used_percent": 60}
+```
+
 The `status` these records carry is the one the window shows: a running session reads `waiting_user` while a
 folder-trust confirmation that needs the user, a Codex action title or a screen only the user can answer holds it there,
 whatever its agent last reported (see "What the statuses are derived from" in `docs/product/sessions.md`), and one that
@@ -299,7 +309,8 @@ an owner's tool" in `docs/product/handing-off-sessions.md`).
 
 A session started with `new_session` is always bound to the session that started it — a console session, or a
 project session that is unbound or a lead session — so it reports to it, and it is that owner's for its whole life:
-the owner instructs it, archives it once it is done and reopens it when it has another task. A session started on a
+the owner instructs it, archives it once it is done and reopens it when it has another closely related task and room
+for it (see "Choosing the session a task goes to" below). A session started on a
 `request_session`, once approved, is bound to nobody: it reports to the user, and neither the session that
 asked for it nor that session's owner drives it (see `docs/product/session-requests.md`). A session **the user opens by
 hand is not bound**, unless they choose a console session under "Report to" in the session dialog (see "Opening a
@@ -315,6 +326,23 @@ that is unbound, or bound to any other session, is not this one's to drive: it c
 to leave it alone and is refused if it tries to act on it.
 
 A console session itself never reports anywhere, and neither does an unbound project session.
+
+## Choosing the session a task goes to
+
+A console session's instruction file and the role description of a project session that can own sessions — an unbound
+one or a lead session — tell the owner how to choose the session a task goes to. A project session with the role of a
+bound one owns none and is not told. This is guidance to the agent; Octoboard does not enforce it:
+
+- Weigh how related the task is to what a session already holds, and how much of its context is used — `context` in
+  `get_session` and `list_sessions` (see "The console session's tools" above), judged by `tokens` when the window is
+  not known.
+- Give a task to an existing session only when it is closely related to that session's work and the session still has
+  room. Reopening an archived session for another task is held to the same condition, which `new_session`'s tool
+  description repeats.
+- Start a new session for an unrelated task, or when the related session's context is heavily used: about 60% of its
+  window.
+- Split independent pieces of work across sessions rather than queuing them on one.
+- Wrap up and archive a session near a full context rather than handing it more.
 
 ## A session archiving itself
 

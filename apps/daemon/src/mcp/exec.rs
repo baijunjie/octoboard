@@ -1046,6 +1046,10 @@ pub(crate) fn describe_session(
         // What an idle session has left running in the background: it takes a message like any
         // idle session, but its work is not over. Empty for every other status.
         "background_tasks": state.shown_background_tasks(session),
+        // How full the session's context window is, as the UI shows it: owners weigh it when
+        // choosing which session gets a task. Null while no size is known: before the session's
+        // first report, and after a compaction until its next request.
+        "context": session.context,
         "role": session.role,
         "console": session.console_id,
         "project": session.project_id,
@@ -3404,6 +3408,30 @@ pub(super) mod tests {
             ..session
         };
         assert_eq!(describe(&working), json!([]));
+    }
+
+    /// An owner choosing a session for a task reads how full its context is from the description:
+    /// the figures the UI shows, or null before any was reported.
+    #[test]
+    fn a_description_carries_the_sessions_context() {
+        let (state, _dir) = crate::test_support::app_state("mcp-exec-describe-context");
+        state.store.insert_console(&console()).unwrap();
+        let caller = console_session("hub");
+        let session = crate::test_support::project_session("s", Agent::Claude, SessionStatus::Idle);
+        assert!(describe_session(&state, &session, &caller).unwrap()["context"].is_null());
+
+        let used = Session {
+            context: Some(crate::protocol::SessionContext {
+                tokens: 120_000,
+                window: Some(200_000),
+                used_percent: Some(60),
+            }),
+            ..session
+        };
+        assert_eq!(
+            describe_session(&state, &used, &caller).unwrap()["context"],
+            json!({"tokens": 120_000, "window": 200_000, "used_percent": 60})
+        );
     }
 
     #[test]

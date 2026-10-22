@@ -123,28 +123,42 @@ macro_rules! started_by_a_session {
     };
 }
 
+/// What every description of a session says of its `context`. A macro so the read tools'
+/// `&'static str` descriptions can take it with `concat!`.
+macro_rules! session_context_field {
+    () => {
+        "`context` is how much of its context window the session has used: `tokens`, plus \
+         `window` and `used_percent` once the window is known. It is null while no size is \
+         known: before the session's first report, and after a compaction until its next \
+         request."
+    };
+}
+
 const STARTED_BY_A_SESSION: &str = started_by_a_session!();
 
 const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     ToolDef {
         name: "list_projects",
-        description: "List this console's projects: name, host, directory, source, remote URL \
-                      (credentials removed), pin, the tags and the description (what the project \
-                      is for) the user gave each, the settings (`default_agent`, `accounts`, \
-                      `launch`; see `update_project`), whether the \
-                      user has `trust_consent`ed to Octoboard pressing the agent's folder-trust \
-                      confirmation (read-only), and the sessions currently running in each — \
-                      every session of the console, whichever session owns it. Each carries `owner`, the \
-                      session it reports to, `owner_kind` (a `console` or a `project` session) \
-                      and `yours`; a project session with `owner: null` is unbound, which the user \
-                      opened themselves and kept outside the orchestration. A session with \
-                      `yours: false` is not this caller's to drive — it is unbound, or reports \
-                      to a different session — leave it alone. An idle session with a \
-                      non-empty `background_tasks` takes messages like any idle session but still \
-                      has work running in the background. \
-                      A non-null `writes_held` says why messages for a running session are \
-                      queued rather than written into it, whatever its `status` reads; \
-                      `queued_messages` counts them.",
+        description: concat!(
+            "List this console's projects: name, host, directory, source, remote URL \
+             (credentials removed), pin, the tags and the description (what the project \
+             is for) the user gave each, the settings (`default_agent`, `accounts`, \
+             `launch`; see `update_project`), whether the \
+             user has `trust_consent`ed to Octoboard pressing the agent's folder-trust \
+             confirmation (read-only), and the sessions currently running in each — \
+             every session of the console, whichever session owns it. Each carries `owner`, the \
+             session it reports to, `owner_kind` (a `console` or a `project` session) \
+             and `yours`; a project session with `owner: null` is unbound, which the user \
+             opened themselves and kept outside the orchestration. A session with \
+             `yours: false` is not this caller's to drive — it is unbound, or reports \
+             to a different session — leave it alone. An idle session with a \
+             non-empty `background_tasks` takes messages like any idle session but still \
+             has work running in the background. \
+             A non-null `writes_held` says why messages for a running session are \
+             queued rather than written into it, whatever its `status` reads; \
+             `queued_messages` counts them. ",
+            session_context_field!()
+        ),
         schema: || object_schema(json!({}), &[]),
     },
     ToolDef {
@@ -370,43 +384,44 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     },
     ToolDef {
         name: "new_session",
-        description: "Start a session in one of this console's projects and hand it a task. It \
-                      is yours for its whole life: it reports to this console session, its \
-                      owner, and you instruct it with `send_message`, archive it once it is done \
-                      and reopen it with `reopen_session` when it has another task. Needs no \
-                      approval. Returns the new session's id. The brief is rendered into the \
-                      session's opening prompt; `title` names the session in the language the \
-                      user converses with you in. It runs on your own agent. While \
+        description: "Start a session in one of this console's projects and hand it a task. It is \
+                      yours for its whole life: it reports to this console session, its owner, and \
+                      you instruct it with `send_message`, archive it once it is done and reopen \
+                      it with `reopen_session` when it has another closely related task and room \
+                      for it. Needs no approval. Returns the new session's id. The brief is \
+                      rendered into the session's opening prompt; `title` names the session in the \
+                      language the user converses with you in. It runs on your own agent. While \
                       `auto_select_account` is on, a left-out account is the one of the session's \
                       agent whose weekly quota resets soonest and that can still open a session. \
                       When none does, your own account is used only for your own agent when that \
                       account can still open a session; any other takes the account its project, \
                       else its console, sets. Name another only when the user asked for it. Use \
-                      this when you should keep \
-                      directing the session and receiving its reports. To hand your own work to \
-                      a peer in the \
-                      next session, use `request_session`; if the user only wants handover notes \
-                      and an end, leave the notes and end. Ask the user if their intent is \
-                      unclear.",
+                      this when you should keep directing the session and receiving its reports. \
+                      To hand your own work to a peer in the next session, use `request_session`; \
+                      if the user only wants handover notes and an end, leave the notes and end. \
+                      Ask the user if their intent is unclear.",
         schema: || new_session_schema(true),
     },
     SEND_MESSAGE,
     ToolDef {
         name: "get_session",
-        description: "The session's status, plus a tail of what it has printed (a session that \
-                      has ended keeps its last output; `null` if none was kept). Use it to \
-                      follow up; a session that is waiting for the user must be left alone until \
-                      they have answered. Any session can be read, of any console, but one with \
-                      `yours: false` is \
-                      not this caller's to act on, whether it is unbound (`owner: null` on a \
-                      project session) or reports to a different session, console or project: \
-                      leave it alone. `owner` says whose it is, `owner_kind` whether that is a \
-                      console or a project session, and `role` whether the session itself is a \
-                      console session. An idle session with a non-empty `background_tasks` takes \
-                      messages like any idle session but still has work running in the background. \
-                      A non-null `writes_held` says why messages for a running session are \
-                      queued rather than written into it, whatever its `status` reads; \
-                      `queued_messages` counts them.",
+        description: concat!(
+            "The session's status, plus a tail of what it has printed (a session that \
+             has ended keeps its last output; `null` if none was kept). Use it to \
+             follow up; a session that is waiting for the user must be left alone until \
+             they have answered. Any session can be read, of any console, but one with \
+             `yours: false` is \
+             not this caller's to act on, whether it is unbound (`owner: null` on a \
+             project session) or reports to a different session, console or project: \
+             leave it alone. `owner` says whose it is, `owner_kind` whether that is a \
+             console or a project session, and `role` whether the session itself is a \
+             console session. An idle session with a non-empty `background_tasks` takes \
+             messages like any idle session but still has work running in the background. \
+             A non-null `writes_held` says why messages for a running session are \
+             queued rather than written into it, whatever its `status` reads; \
+             `queued_messages` counts them. ",
+            session_context_field!()
+        ),
         schema: || {
             object_schema(
                 json!({
@@ -422,10 +437,13 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     ARCHIVE_SELF,
     ToolDef {
         name: "list_archived",
-        description: "List the archived sessions of one project, whichever session owns \
-                      them. Each carries its `owner`, `owner_kind` and `yours`, so an earlier \
-                      one of yours can be reopened instead of starting over. A session with \
-                      `yours: false` is somebody else's: leave it alone.",
+        description: concat!(
+            "List the archived sessions of one project, whichever session owns \
+             them. Each carries its `owner`, `owner_kind` and `yours`, so an earlier \
+             one of yours can be reopened instead of starting over. A session with \
+             `yours: false` is somebody else's: leave it alone. ",
+            session_context_field!()
+        ),
         schema: || {
             object_schema(
                 json!({
@@ -783,19 +801,22 @@ const REPORT: ToolDef = ToolDef {
 /// framed by which tool sent it: an instruction comes from its owner, and information from anyone.
 const LIST_SESSIONS: ToolDef = ToolDef {
     name: "list_sessions",
-    description: "List the running sessions other than this one, in every console and project, \
-                  console sessions included: id, title, agent, status, `role` (a console or a \
-                  project session), `console`, `project` (null for a console session), and \
-                  `owner` (the session it reports to, `owner_kind` saying whether that is a \
-                  console or a project session; null when nobody owns it and it reports to the \
-                  user). `yours` marks a session that reports to you, and `your_owner` the \
-                  session you report to, which is also given at the top level. Use it to find \
-                  who to share information with, or an owner to hand a session to or bind to. An \
-                  idle session with a non-empty `background_tasks` takes messages like any idle \
-                  session but still has work running in the background. \
-                  A non-null `writes_held` says why messages for a running session are \
-                  queued rather than written into it, whatever its `status` reads; \
-                  `queued_messages` counts them.",
+    description: concat!(
+        "List the running sessions other than this one, in every console and project, \
+         console sessions included: id, title, agent, status, `role` (a console or a \
+         project session), `console`, `project` (null for a console session), and \
+         `owner` (the session it reports to, `owner_kind` saying whether that is a \
+         console or a project session; null when nobody owns it and it reports to the \
+         user). `yours` marks a session that reports to you, and `your_owner` the \
+         session you report to, which is also given at the top level. Use it to find \
+         who to share information with, or an owner to hand a session to or bind to. An \
+         idle session with a non-empty `background_tasks` takes messages like any idle \
+         session but still has work running in the background. \
+         A non-null `writes_held` says why messages for a running session are \
+         queued rather than written into it, whatever its `status` reads; \
+         `queued_messages` counts them. ",
+        session_context_field!()
+    ),
     schema: || object_schema(json!({}), &[]),
 };
 
@@ -993,22 +1014,21 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
         description: "Start a session in this project and hand it a task. It is yours for its \
                       whole life: it reports to this session, its owner, and you instruct it with \
                       `send_message`, archive it once it is done and reopen it with \
-                      `reopen_session` when it has another task. Needs no approval. It runs on \
-                      your own agent. While `auto_select_account` is on, a left-out account is \
-                      the one of that agent whose weekly quota resets soonest and that can still \
-                      open a session. When none does, your own account is used only when it is \
-                      your own agent and can still open a session; otherwise the account is the \
-                      project's, else the console's. Name another agent or account only when the \
-                      user asked for it; any available agent can be chosen then. Returns the new \
-                      session's id. The \
-                      brief is rendered into the session's opening prompt; `title` names the \
-                      session in the \
-                      language the user converses with you in. A session started this way cannot \
-                      start sessions of its own, and only this project is available; a session \
-                      elsewhere, or one that should not report to you, is one `request_session` \
-                      asks the user for. To give the new session a branch you are responsible for, \
-                      pass it in `branches`; `handover_branches` moves the branches of any session \
-                      of yours later. Use this only when you should keep directing the session and \
+                      `reopen_session` when it has another closely related task and room for it. \
+                      Needs no approval. It runs on your own agent. While `auto_select_account` is \
+                      on, a left-out account is the one of that agent whose weekly quota resets \
+                      soonest and that can still open a session. When none does, your own account \
+                      is used only when it is your own agent and can still open a session; \
+                      otherwise the account is the project's, else the console's. Name another \
+                      agent or account only when the user asked for it; any available agent can be \
+                      chosen then. Returns the new session's id. The brief is rendered into the \
+                      session's opening prompt; `title` names the session in the language the user \
+                      converses with you in. A session started this way cannot start sessions of \
+                      its own, and only this project is available; a session elsewhere, or one \
+                      that should not report to you, is one `request_session` asks the user for. \
+                      To give the new session a branch you are responsible for, pass it in \
+                      `branches`; `handover_branches` moves the branches of any session of yours \
+                      later. Use this only when you should keep directing the session and \
                       receiving its reports. To hand your own work to a peer in the next session, \
                       use `request_session`; if the user only wants handover notes and an end, \
                       leave the notes and end. Ask the user if their intent is unclear.",
@@ -1017,17 +1037,20 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     SEND_MESSAGE,
     ToolDef {
         name: "get_session",
-        description: "The session's status, plus a tail of what it has printed (a session that \
-                      has ended keeps its last output; `null` if none was kept). Any session can \
-                      be read, in any project or console, but one with `yours: false` is not \
-                      yours to act on, whether nobody owns it (`owner: null`) or it reports to a \
-                      different session: leave it alone. `owner` says whose it is and \
-                      `owner_kind` whether that is a console or a project session. An idle \
-                      session with a non-empty `background_tasks` takes messages like any idle \
-                      session but still has work running in the background. \
-                      A non-null `writes_held` says why messages for a running session are \
-                      queued rather than written into it, whatever its `status` reads; \
-                      `queued_messages` counts them.",
+        description: concat!(
+            "The session's status, plus a tail of what it has printed (a session that \
+             has ended keeps its last output; `null` if none was kept). Any session can \
+             be read, in any project or console, but one with `yours: false` is not \
+             yours to act on, whether nobody owns it (`owner: null`) or it reports to a \
+             different session: leave it alone. `owner` says whose it is and \
+             `owner_kind` whether that is a console or a project session. An idle \
+             session with a non-empty `background_tasks` takes messages like any idle \
+             session but still has work running in the background. \
+             A non-null `writes_held` says why messages for a running session are \
+             queued rather than written into it, whatever its `status` reads; \
+             `queued_messages` counts them. ",
+            session_context_field!()
+        ),
         schema: || {
             object_schema(
                 json!({

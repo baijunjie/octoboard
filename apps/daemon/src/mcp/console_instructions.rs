@@ -15,10 +15,10 @@ use anyhow::{Context, Result};
 use crate::protocol::{Agent, CodedError, Console};
 use crate::store::Store;
 
-/// The console session's own guidance, before any addition of the user's. It names the tools
-/// without a prefix because it is one file read by every agent, and each shows the same tools
-/// under its own prefix.
-const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
+/// The console session's own guidance, before any addition of the user's, up to the bullet
+/// `role::session_choice_guidance` writes. It names the tools without a prefix because it is one
+/// file read by every agent, and each shows the same tools under its own prefix.
+const CONSOLE_SESSION_INSTRUCTIONS_HEAD: &str = "# Octoboard console session\n\
          \n\
          You are the console session of an Octoboard console: a control board over agent sessions \
          in several projects. The user brings you a request, you work out which project it belongs \
@@ -136,8 +136,12 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          ## How sessions relate\n\
          \n\
          - A session `new_session` starts is yours: you drive its whole life — instruct it, \
-           archive it when it is done, reopen it when it has another task. No approval is \
-           needed.\n\
+           archive it when it is done, reopen it when it has another closely related task and \
+           room for it. No approval is needed.\n";
+
+/// The rest of the built-in guidance, after the bullet `role::session_choice_guidance` writes: the
+/// other ways sessions relate, then "## Reporting to the user".
+const CONSOLE_SESSION_INSTRUCTIONS_TAIL: &str = "\
          - `request_session` is for a session that should be nobody's: it reports to the user, \
            and you can only share information with it. The user approves it first; the call \
            waits for their answer.\n\
@@ -217,16 +221,19 @@ fn escape_close_tag(text: &str) -> String {
 /// inside the user tags. The text is kept as written, except that a closing tag of its own is
 /// escaped, so it cannot end the user's part early and have what follows read as Octoboard's.
 pub fn console_session_instructions(user_prompt: Option<&str>) -> String {
+    let choice = super::role::session_choice_guidance(None);
     let handover = super::role::handover_guidance(None);
+    let instructions =
+        format!("{CONSOLE_SESSION_INSTRUCTIONS_HEAD}{choice}\n{CONSOLE_SESSION_INSTRUCTIONS_TAIL}");
     match user_prompt {
         Some(prompt) => {
             let prompt = escape_close_tag(prompt);
             format!(
-                "{CONSOLE_SESSION_INSTRUCTIONS}\n\n{handover}\n\n\
+                "{instructions}\n\n{handover}\n\n\
                  {USER_SECTION}{USER_OPEN_TAG}\n{prompt}\n{USER_CLOSE_TAG}\n"
             )
         }
-        None => format!("{CONSOLE_SESSION_INSTRUCTIONS}\n\n{handover}\n"),
+        None => format!("{instructions}\n\n{handover}\n"),
     }
 }
 
@@ -365,13 +372,26 @@ mod tests {
         assert!(!text.contains("octoboard__"));
     }
 
+    /// The file tells the console session how to choose the session a task goes to, with the
+    /// bullet in the section on how sessions relate and the tools named without a prefix.
+    #[test]
+    fn the_instruction_file_tells_how_to_choose_a_session_for_a_task() {
+        let text = console_session_instructions(None);
+        let bullet = super::super::role::session_choice_guidance(None);
+        assert!(bullet.contains("about 60% of its window"));
+        let related = text.split("## How sessions relate").nth(1).unwrap();
+        assert!(related.contains(&bullet));
+        assert!(related.contains("- `request_session` is for a session that should be nobody's"));
+    }
+
     /// The text of the instruction file's section under `heading`, up to the next section.
-    fn section(heading: &str) -> &'static str {
-        CONSOLE_SESSION_INSTRUCTIONS
+    fn section(heading: &str) -> String {
+        console_session_instructions(None)
             .split(heading)
             .nth(1)
             .and_then(|rest| rest.split("\n## ").next())
             .unwrap_or_else(|| panic!("no section {heading}"))
+            .to_string()
     }
 
     /// Only work on a project goes through a session: work that touches no project the console
