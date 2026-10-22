@@ -37,7 +37,7 @@ use crate::protocol::Role;
 /// The limit that ends a call forwarded to the daemon. Generous on purpose: `add_project` with a
 /// `git` source runs a `git clone`, which is minutes on a large repository. A launch may raise an
 /// agent's own shorter limit above this one, so that this one decides; how the limits are ordered
-/// is in apps/daemon/PROTOCOL.md's "`POST /mcp/:token`" section.
+/// is in apps/daemon/PROTOCOL.md's "`POST /mcp/:token` — Octoboard's MCP tools" section.
 pub(crate) const CALL_TIMEOUT: Duration = Duration::from_secs(600);
 
 /// Runs the server until the agent closes the connection.

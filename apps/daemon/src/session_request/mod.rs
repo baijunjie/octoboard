@@ -76,7 +76,7 @@ use outcome::{
 /// moment to be carried out — launching the session included — before that forwarding gives up.
 /// An agent's own limit is not obeyed; the launch sets it above that forwarding limit instead,
 /// whichever side the agent's own default falls on (apps/daemon/PROTOCOL.md's
-/// "`POST /mcp/:token`" section has the ordering).
+/// "`POST /mcp/:token` — Octoboard's MCP tools" section has the ordering).
 pub const ANSWER_TIME_LIMIT: Duration = Duration::from_secs(8 * 60);
 
 const _: () = assert!(ANSWER_TIME_LIMIT.as_secs() < crate::mcp::stdio::CALL_TIMEOUT.as_secs());

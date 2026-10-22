@@ -74,8 +74,8 @@ without it.
 
 ## Build daemon test fixtures from Git 2.36's commands
 
-The daemon supports Git 2.36 and later (`apps/daemon/PROTOCOL.md`, "Browse"), but the Mac it is developed on has a
-newer git, so a fixture that needs a newer one passes every local run and fails only on an older host. The Debian
+The daemon supports Git 2.36 and later (`apps/daemon/PROTOCOL.md`, "Git invocation"), but the Mac it is developed on
+has a newer git, so a fixture that needs a newer one passes every local run and fails only on an older host. The Debian
 bookworm Rust image (git 2.39) is the oldest run available, and it checks 2.39, not the floor. So a fixture uses only
 commands and options Git 2.36 has: an empty-branch worktree, for one, is `worktree add --detach` then
 `checkout --orphan`, not `worktree add --orphan` (2.42).

@@ -503,9 +503,10 @@ export class TerminalController {
       if (generation !== this.generation) return;
       // The daemon closes at once, after at most the saved output, when the session's process is
       // not running — that is a status to display and offer resume for, not a dropped connection
-      // (apps/daemon/PROTOCOL.md, "GET /ws/term/:session"). It is also what a *reconnect*
-      // gets if it loses a race against the session genuinely ending, so callers must not treat
-      // this alone as proof the process is gone — only the session's own stored status says that.
+      // (apps/daemon/PROTOCOL.md, "`GET /ws/term/:session` — terminal stream"). It is also what a
+      // *reconnect* gets if it loses a race against the session genuinely ending, so callers must
+      // not treat this alone as proof the process is gone — only the session's own stored status
+      // says that.
       this.setStatus(everOpened ? "closed" : "not_running");
     });
 

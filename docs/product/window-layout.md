@@ -59,8 +59,8 @@ appearances" in `docs/product/appearance.md`).
 mode's header (see `docs/product/sidebar.md` and `docs/product/focus-mode.md`) — and so is the archive view's header
 (see "The archive view" in `docs/product/archive-view.md`), so the lines under them run on as one line across the panel.
 The top bar's 40 px is a tier of its own and no part of this. A floating sidebar, the sidebar's drawer and every card
-of the right pane are cards inset 8 px from the top bar (see "A hidden pane floats in on hover", "Below 1168 px: the
-sidebar becomes a drawer" and "The panel cards" in `docs/product/right-pane-panels.md`), and their headers are
+of the right pane are cards inset 8 px from the top bar (see "A hidden pane floats in on hover" and "Below 1168 px: the
+sidebar becomes a drawer" below, and "The panel cards" in `docs/product/right-pane-panels.md`), and their headers are
 **40 px** — shorter by that 8 px inset, the card's edge taking no space — so the line under a card's header stays
 level with the line under the headers docked beside it; the text in a card's header therefore sits 4 px lower than
 theirs.

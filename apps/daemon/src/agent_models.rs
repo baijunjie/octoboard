@@ -1,7 +1,8 @@
 //! The models an agent currently offers, for the dialogs that let the user choose one. Nothing is
 //! hard-coded per version: Claude Code resolves its own aliases, and the other two agents are
-//! asked for their catalogues. What each agent offers is measured in
-//! `docs/agent-cli-reference.md` ("Model and reasoning effort") and summarised here.
+//! asked for their catalogues. What each agent offers is measured in the
+//! "Model and reasoning effort" note of each agent's section ("Claude Code", "Codex",
+//! "Grok Build") in `docs/agent-cli-reference.md`, and summarised here.
 //!
 //! - **Claude Code** has no list command, but its `best`, `opus`, `sonnet` and `haiku` aliases
 //!   always resolve to the newest model of their family from its own catalogue, and `best` falls

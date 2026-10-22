@@ -856,7 +856,7 @@ pub struct ShellTerminal {
 
 /// The app-wide user settings the daemon stores, and the account list alongside them: a record
 /// that already grows without a new request shape or a new event for every addition, which is
-/// where the accounts belong too (see "Reusable capabilities" in `04-accounts-storage.md`).
+/// why the accounts live here rather than in a record of their own.
 #[derive(Debug, Clone, Serialize)]
 pub struct Settings {
     pub auto_pull_repositories: bool,

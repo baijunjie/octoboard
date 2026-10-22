@@ -78,11 +78,11 @@ prompt — is queued as above until the confirmation can no longer be on screen:
   that has been, before those 30 seconds or after them, holds its messages until Grok's screen no longer shows it, or
   until a hook report arrives;
 - for Codex, which reports nothing until its first prompt, until Octoboard's watch for the confirmation ends with none
-  shown — at the first terminal title Codex sets, once its session has started; when that watch ends is in
-  "Recognition is limited to the start of a session" in `docs/product/folder-trust.md`. Once a confirmation is shown,
-  they are held until Octoboard's press of it succeeds, a hook report arrives, or the person's own answer in the
-  terminal is seen to replace it on screen. A Codex session that neither sets a terminal title nor sends a hook report
-  holds its messages for as long as it runs: they are never let through on time alone.
+  shown — at the first terminal title Codex sets, once its session has started; when that watch ends is in "How a
+  confirmation is pressed" in `docs/product/folder-trust.md`. Once a confirmation is shown, they are held until
+  Octoboard's press of it succeeds, a hook report arrives, or the person's own answer in the terminal is seen to
+  replace it on screen. A Codex session that neither sets a terminal title nor sends a hook report holds its messages
+  for as long as it runs: they are never let through on time alone.
 
 The user's own typing in the session's terminal is never held. A client's direct request to write into a session
 (`send_message` in the daemon's client protocol) is refused instead of queued, with the error code

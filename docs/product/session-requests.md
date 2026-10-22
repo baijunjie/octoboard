@@ -337,7 +337,7 @@ session**; what a `request_resume_session`'s says is in "The confirmation dialog
 Every session request's dialog behaves as follows:
 
 - **Keyboard focus starts on the dialog itself** rather than on a button, for each request it shows, so Enter answers
-  nothing until the user moves focus onto a control (see "Where keyboard focus starts in a confirmation" in
+  nothing until the user moves focus onto a control (see "What an open dialog, menu or popover covers" in
   `docs/product/window-layout.md`).
 - **One dialog at a time.** Requests wait in one line, shown oldest first by when they were made, after any waiting
   folder-trust prompts (see "The trust dialog" in `docs/product/folder-trust.md`). A request already on screen stays

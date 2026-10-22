@@ -2,9 +2,10 @@ import type { Translate } from "./i18n/catalog";
 import type { AgentModel } from "./protocol";
 
 // How each agent takes a model and an effort, and what it does with one it cannot honour, is in
-// docs/agent-cli-reference.md under each agent's "Model and reasoning effort" heading. What the
-// console and project dialogs offer is not kept here: the daemon lists it when the dialog asks
-// (`list_agent_models`), so it cannot go stale in this source.
+// the "Model and reasoning effort" note of each agent's section ("Claude Code", "Codex",
+// "Grok Build") in docs/agent-cli-reference.md. What the console and project dialogs offer is not
+// kept here: the daemon lists it when the dialog asks (`list_agent_models`), so it cannot go stale
+// in this source.
 
 /** One entry of a launch-setting picker. */
 export type LaunchSettingOption = { value: string; label: string; badge?: string };

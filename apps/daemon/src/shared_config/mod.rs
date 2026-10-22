@@ -9,8 +9,8 @@
 //! launched, resumed or switched to. Nothing carries a change out later; one that fails is left
 //! as it is, marked incomplete, for the user to ask again. Before every launch of a session of a
 //! sharing account, the links an agent replaced are repaired. What the directory operations do is
-//! `link.rs`'s; the whole contract is the "Sharing the default configuration" list of
-//! `apps/daemon/PROTOCOL.md`.
+//! `link.rs`'s; the whole contract is the "Sharing the default configuration" list under "Records"
+//! in `apps/daemon/PROTOCOL.md`.
 
 mod change;
 mod cli_reads;

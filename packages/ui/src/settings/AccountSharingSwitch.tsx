@@ -22,8 +22,7 @@ const TIGHT_CHIP = "leading-[1.2]!";
 /** An account's Share default configuration switch (see "The sharing choice" in
  * `docs/product/sharing-the-default-configuration.md`), shown for every account but the agent's default one. A
  * change is carried out at once, so the switch is either free or unavailable, and says which. Unavailable, it stays
- * focusable and describes itself, so a keyboard user hears why (see "A button that is unavailable for a reason" in
- * `docs/ui-accessibility.md`):
+ * focusable and describes itself, so a keyboard user hears why (see "Buttons" in `docs/ui-accessibility.md`):
  * - free: a caption of what turning it on does, or of what is the case now;
  * - unavailable while sessions of the account run or start under its directory, or it is being signed in
  *   (`in_use`), saying so;

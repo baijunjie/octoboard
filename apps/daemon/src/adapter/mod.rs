@@ -124,10 +124,11 @@ pub struct LaunchSpec<'a> {
 /// falls on. Derived from `CALL_TIMEOUT` so it stays above it if that is raised. The margin covers
 /// a call in normal operation, not a daemon that stalls partway through a response: `CALL_TIMEOUT`
 /// bounds each read, not the call. Why the ordering matters is in apps/daemon/PROTOCOL.md's
-/// "`POST /mcp/:token`" section; what each agent does when its own limit passes, and so what the
-/// setting prevents, is in that agent's section of `docs/agent-cli-reference.md`. Every agent takes
-/// it per server, so no other MCP server of the user's is touched. Claude Code has none to set: it
-/// moves a long call to the background rather than ending it.
+/// "`POST /mcp/:token` — Octoboard's MCP tools" section; what each agent does when its own limit
+/// passes, and so what the setting prevents, is in that agent's section of
+/// `docs/agent-cli-reference.md`. Every agent takes it per server, so no other MCP server of the
+/// user's is touched. Claude Code has none to set: it moves a long call to the background rather
+/// than ending it.
 ///
 /// Each adapter's tests pin the resulting number, so a change to `CALL_TIMEOUT` is not finished by
 /// updating those tests: the new value has to hold for every agent, against what that agent's
