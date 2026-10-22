@@ -28,7 +28,7 @@ Removing a project asks for confirmation. **Sessions of the project that are sti
 The confirmation also carries an option to **also move the project folder to the Trash**, unticked each time the
 confirmation opens, with a hint that the whole folder goes, including anything not committed to Git, and that it can
 be recovered from the Trash. Ticking it makes the message say the folder is moved to the Trash; for the confirm
-button's label, see "What a confirmation's confirm button names" in `docs/product/window-layout.md`. Ticking it also
+button's label, see "What an open dialog, menu or popover covers" in `docs/product/window-layout.md`. Ticking it also
 lists the worktrees outside the folder, and the branches, that go with it, and offers locked worktrees under a choice
 of their own (see "With a project's folder moved to the Trash" in `docs/product/branch-and-worktree-cleanup.md`).
 While a removal runs, the button shows as pending and the option cannot be changed.

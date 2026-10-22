@@ -148,7 +148,7 @@ all the sessions deleted at once — are also moved to the Trash; a confirmation
 "The confirmation" in `docs/product/branch-and-worktree-cleanup.md` for the other consequence lines). Unticked, used
 sessions' agent records are kept; for a bulk deletion, every session's agent records are kept. Either way the
 confirmation's message says that the project's files are kept. How ticking the option changes the confirm button's
-label is set in "What a confirmation's confirm button names" in `docs/product/window-layout.md`. While a deletion runs,
+label is set in "What an open dialog, menu or popover covers" in `docs/product/window-layout.md`. While a deletion runs,
 the button shows as pending and the confirmation stays open until it has finished, including moving the records when
 the option is ticked; the option cannot be changed meanwhile.
 

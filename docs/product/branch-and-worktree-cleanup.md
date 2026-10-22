@@ -84,7 +84,7 @@ worktree is named by its path, with the home directory written as `~`, and the b
   or that many locked worktrees, uncommitted changes included. A confirmation that had no warning gets one at the first
   tick, saying that the action has additional consequences.
 - **How a ticked option changes the confirm button** — its label, and for archiving its danger colour — is set in
-  "What a confirmation's confirm button names" in `docs/product/window-layout.md`.
+  "What an open dialog, menu or popover covers" in `docs/product/window-layout.md`.
 - **A choice holds for the list it was made over.** A list that changes while the confirmation is open — a session
   joining the scope, say — unchecks its checkbox again, so nothing the user has not seen listed is forced.
 - **A force goes only as far as the user was shown.** An item forced is removed only while it still stands as it was
