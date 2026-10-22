@@ -1,7 +1,9 @@
+import { Disclosure } from "@heroui/react";
 import React from "react";
+import { useShallow } from "zustand/react/shallow";
 
 import { DaemonRequestError } from "../daemon-client";
-import { daemonParams, DETAIL_BLOCK_CODES, RECOVERY_CODES, hasTrustDiagnostic, leftBranchGroups, leftBranchItems, leftBranchName, richMessageCode, runningSessionIds, type LeftBranchItem } from "../daemonMessage";
+import { daemonParams, DETAIL_BLOCK_CODES, RECOVERY_CODES, hasTrustDiagnostic, leftBranchGroups, leftBranchItems, leftBranchName, richMessageCode, sharingFailureItems, sharingStateKey, sharingCauseGroups, sharingCauseKey, sharingFixKey, hasSharingReason, sharingReasonKey, sharingItemLabel, runningSessionIds, type LeftBranchItem, type SharingFailureItem } from "../daemonMessage";
 import { hasCodeParams, hasShellTimeoutDetails, type ErrorPresentation } from "../errorPresentation";
 import { errorText } from "../errorText";
 import { globalParam, isMessageKey } from "../i18n/catalog";
@@ -95,21 +97,133 @@ function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?:
   const trustDiagnostic = hasTrustDiagnostic(error.code, error.params);
   const trustReason = `daemon.trust_reason.${error.params.reason_code}.summary`;
   if (trustDiagnostic && isMessageKey(trustReason)) params.reason = <Message id={trustReason} params={{} as never} />;
-  const diagnostic = (DETAIL_BLOCK_CODES.has(error.code) || trustDiagnostic) && error.params.detail ? <DiagnosticBlock>{error.params.detail}</DiagnosticBlock> : null;
+  // A sharing failure says why in a line or two and folds the raw diagnostics away behind Details, whether it names
+  // entries or only says why the change could not start (the failure's `detail`, or a repair's own message).
+  const sharing = sharingFailureItems(error.code, error.params);
+  const sharingFailure = error.code === "account_sharing_failed" || error.code === "account_sharing_repair_failed";
+  const rawReason = error.code === "account_sharing_failed" ? error.params.detail : error.message;
+  const sharingDetails = sharing
+    ? <SharingFailures items={sharing} />
+    : sharingFailure && hasSharingReason(error.params.cause, rawReason)
+      ? <div className="flex min-w-0 flex-col gap-2"><p><SharingFailureReason cause={error.params.cause} detail={rawReason} /></p><SharingDetails items={[]} detail={rawReason} /></div>
+      : null;
+  const diagnostic = !sharingFailure && (DETAIL_BLOCK_CODES.has(error.code) || trustDiagnostic) && error.params.detail ? <DiagnosticBlock>{error.params.detail}</DiagnosticBlock> : null;
   const recoveryId = `daemon.${error.code}.recovery`;
   const recovery = RECOVERY_CODES.has(error.code) && isMessageKey(recoveryId) ? <p><Message id={recoveryId} params={params as never} /></p> : null;
   const nestedDetails = structuredNested && part !== "summary" ? <DaemonErrorMessage error={nested} part="details" /> : null;
-  if (part === "details") return <>{diagnostic}{recovery}{nestedDetails}</>;
+  if (part === "details") return <>{sharingDetails}{diagnostic}{recovery}{nestedDetails}</>;
   // One element, so a container that lays its children out as flex items (an alert's column) keeps
   // the sentence whole instead of making each run of text and each literal an item of its own.
   const sentence = <span><Message id={id} params={params as never} /></span>;
-  if (part === "summary" || (!diagnostic && !recovery && !nestedDetails)) return sentence;
+  if (part === "summary" || (!sharingDetails && !diagnostic && !recovery && !nestedDetails)) return sentence;
   return (
     <div className="flex min-w-0 flex-col gap-2">
       {sentence}
+      {sharingDetails}
       {diagnostic}
       {recovery}
       {nestedDetails}
+    </div>
+  );
+}
+
+/** The names of the sessions with these ids, read through a selector that changes only when one of those names does. */
+function useSessionTitles(items: SharingFailureItem[]): (id: string) => string | undefined {
+  const ids = [...new Set(items.flatMap((item) => item.sessions))];
+  const titles = useErrorRecords(useShallow((s) => ids.map((id) => s.sessions.get(id)?.title)));
+  return (id) => titles[ids.indexOf(id)];
+}
+
+/** A reason a sharing change did not finish with what to do about it after it. The catalog joins the two, since what
+ * stands between two sentences is the language's to say. */
+function SharingReason({ reason, fix }: { reason: React.ReactNode; fix?: ReturnType<typeof sharingFixKey> }): React.ReactElement {
+  return fix ? <Message id="daemon.sharing.withFix" params={{ cause: reason, fix: <Message id={fix} /> }} /> : <>{reason}</>;
+}
+
+/** Why a change failed as a whole, with no entry to name, and what to do about it: the cause's own line, or, for a
+ * cause with none (`other`), pointing at the raw reason in Details when there is one. Nothing when there is neither. */
+export function SharingFailureReason({ cause, detail }: { cause?: string; detail?: string }): React.ReactElement | null {
+  const reasonKey = sharingReasonKey(cause);
+  if (reasonKey) return <SharingReason reason={<Message id={reasonKey} />} fix={sharingFixKey(cause)} />;
+  return detail ? <Message id="daemon.sharing.fix.other" /> : null;
+}
+
+/** What a sharing failure left, said short: one line per cause naming the entries it hit ("You do not have permission
+ * to change skills/ and 2 more."), a conversation by the name of a session that records it. Lines are spans, so the
+ * summary fits where only inline content may go (an `Alert.Description`). Each line goes on with what to do about its
+ * cause. */
+export function SharingCauseSummary({ items }: { items: SharingFailureItem[] }): React.ReactElement {
+  const title = useSessionTitles(items);
+  return (
+    <span className="flex min-w-0 flex-col gap-1">
+      {sharingCauseGroups(items).map((group) => {
+        const chips = group.items.map((item, at) => {
+          const label = sharingItemLabel(item, title);
+          return <InlineChip key={at} dir={label.session ? "auto" : "ltr"} monospace={!label.session} wrap size="inherit">{label.text}</InlineChip>;
+        });
+        const phrase = chips.length === 1 ? chips[0] : <Message id="daemon.sharing.items" params={{ first: chips[0], count: chips.length - 1 }} />;
+        return <span key={group.cause}><SharingReason reason={<Message id={sharingCauseKey(group.cause)} params={{ items: phrase, count: chips.length } as never} />} fix={sharingFixKey(group.cause)} /></span>;
+      })}
+    </span>
+  );
+}
+
+/** What the system said, as small code that runs on after the sentence it belongs to; a message of several lines keeps
+ * them in a block under it. Compact, so a row stays one line. */
+function RawDiagnostic({ children }: { children: string }): React.ReactElement {
+  return children.trim().includes("\n")
+    ? <div className="mt-1"><DiagnosticBlock>{children}</DiagnosticBlock></div>
+    : <>{" "}<InlineChip dir="ltr" monospace wrap size="inherit">{children}</InlineChip></>;
+}
+
+/** The raw side of a sharing failure, folded away behind Details: each entry with what it was left as and what the
+ * system said of it, or, with no entry, the one reason the change could not start. Nothing at all when there is
+ * nothing raw. */
+export function SharingDetails({ items, detail }: { items: SharingFailureItem[]; detail?: string }): React.ReactElement | null {
+  const t = useT();
+  const language = useCurrentLanguage();
+  const title = useSessionTitles(items);
+  if (items.length === 0 && !detail) return null;
+  return (
+    <Disclosure className="min-w-0 max-w-full">
+      <Disclosure.Trigger className="flex items-center gap-1 text-sm font-medium text-foreground">
+        {t("branchCleanup.details")}
+        <Disclosure.Indicator className="ms-0" />
+      </Disclosure.Trigger>
+      <Disclosure.Content>
+        <Disclosure.Body className="px-0 pb-0 pt-1">
+          {items.length === 0 ? <RawDiagnostic>{detail!}</RawDiagnostic> : (
+            <ul className="ms-4 flex min-w-0 list-disc flex-col gap-1">
+              {items.map((item, index) => {
+                const state = t(sharingStateKey(item));
+                const name = <InlineChip dir="ltr" monospace wrap size="inherit">{item.item}</InlineChip>;
+                return (
+                  <li key={index}>
+                    <span>{item.sessions.length === 0
+                      ? <Message id="daemon.sharing.item.summary" params={{ item: name, state }} />
+                      : <Message id="daemon.sharing.conversation.summary" params={{
+                        item: name,
+                        sessions: joinNodes(language, item.sessions, (id, key) => <InlineChip key={key} dir={title(id) !== undefined ? "auto" : "ltr"} monospace={title(id) === undefined} wrap size="inherit">{title(id) ?? id}</InlineChip>),
+                        state,
+                      }} />}</span>
+                    {item.detail && <RawDiagnostic>{item.detail}</RawDiagnostic>}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Disclosure.Body>
+      </Disclosure.Content>
+    </Disclosure>
+  );
+}
+
+/** The cause lines with the folded diagnostics under them. */
+function SharingFailures({ items }: { items: SharingFailureItem[] }): React.ReactElement {
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      <SharingCauseSummary items={items} />
+      <SharingDetails items={items} />
     </div>
   );
 }

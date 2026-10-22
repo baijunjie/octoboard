@@ -23,6 +23,7 @@ import type { NewSessionBinding } from "./dialogRequest";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
 import { ResumeConversationFields } from "./ResumeConversationFields";
 import { useCloseWhenBlocked } from "./useCloseWhenBlocked";
+import { useConfirmIncompleteLaunch } from "./useConfirmIncompleteLaunch";
 import { useLaunchChoice } from "./useLaunchChoice";
 import { useResumeTarget, type ResumeTarget } from "./useResumeTarget";
 import { openSessionRequest } from "./openSessionRequest";
@@ -125,6 +126,7 @@ export function SessionDialog({
   // A refusal of the conversation to resume, with the ID and (for a record) the agent and account it refused.
   const [refusal, setRefusal] = useState<{ error: DaemonRequestError; id: string; record?: string }>();
   const { error, busy, run } = useDialogAction();
+  const { confirmLaunch, confirmation } = useConfirmIncompleteLaunch(onClose);
 
   // A resumed conversation is always a plain session, so choosing to resume takes the choice of
   // owner away; a session fixed to its owner never offers the choice in the first place.
@@ -138,9 +140,9 @@ export function SessionDialog({
   const { target } = resume;
   const record = target?.kind === "record" ? target : undefined;
 
-  const { choice, blocked, usedUp, overrides, agentOptions, setPickedAgent, account: accountField, launch } = useLaunchChoice(parentConsole, project, undefined, record);
-  // A used-up account only matters for a session about to be opened on it, not for resuming one that has its own.
-  const quotaUsedUp = !resuming || record ? usedUp : undefined;
+  const { choice, blocked, unavailable, overrides, agentOptions, setPickedAgent, account: accountField, launch } = useLaunchChoice(parentConsole, project, undefined, record);
+  // A used-up account or one changing its sharing only matters for a session about to be opened on it, not for resuming one that has its own.
+  const accountUnavailable = !resuming || record ? unavailable : undefined;
 
   // The select is shown from the moment there is a console session to offer and stays mounted
   // for the rest of the dialog's life, even if the list later empties, leaving "none" alone: it is
@@ -195,7 +197,9 @@ export function SessionDialog({
       resumeFieldRef.current?.querySelector("input")?.focus();
       return;
     }
-    void run(async () => {
+    // A running session is only gone to; any other launch starts on the session's own account or the chosen one.
+    const launchAccount = target && target.kind !== "record" ? (target.kind === "running" ? undefined : target.session.account_id) : choice.account;
+    void confirmLaunch(launchAccount, () => void run(async () => {
       setRefusal(undefined);
       if (target && target.kind !== "record") {
         // The session continues its own conversation, so only a name the user changed to another
@@ -228,7 +232,7 @@ export function SessionDialog({
       if (!reply) return;
       if (reply.type === "session_opened") onOpened(reply.session.id);
       onClose();
-    });
+    }));
   };
 
   // The Name field of a session about to be opened, in the New tab, on the Resume tab once an
@@ -289,10 +293,10 @@ export function SessionDialog({
       onClose={onClose}
       submitLabel={t(target ? SUBMIT_LABEL[target.kind] : "dialog.session.open")}
       busy={busy}
-      submitDisabled={blocked || fixedOwnerGone || quotaUsedUp !== undefined || (resuming && resume.idProblem === undefined && target === undefined)}
+      submitDisabled={blocked || fixedOwnerGone || accountUnavailable !== undefined || (resuming && resume.idProblem === undefined && target === undefined)}
       onSubmit={submit}
     >
-      {quotaUsedUp && <ErrorAlert title={quotaUsedUp.title} announce>{quotaUsedUp.description}</ErrorAlert>}
+      {accountUnavailable && <ErrorAlert title={accountUnavailable.title} announce>{accountUnavailable.description}</ErrorAlert>}
       {resumable && (
         <Tabs selectedKey={conversation} onSelectionChange={(key) => {
           setSwitched(true);
@@ -337,6 +341,9 @@ export function SessionDialog({
       )}
       {!resumable && sharedFields}
       <DialogError message={error} />
+      {/* Inside this dialog's tree, though it shows in its own layer: a focus scope that is not
+          nested in the one beneath it is bounced back to it. */}
+      {confirmation}
     </Dialog>
   );
 }

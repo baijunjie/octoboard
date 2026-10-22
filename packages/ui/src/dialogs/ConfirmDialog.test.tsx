@@ -22,7 +22,7 @@ function fakeDaemon(): Daemon {
 }
 
 /** Renders a confirmation and takes it down when the test finishes. */
-function mount(props: { destructive?: boolean; typeToConfirm?: string }): void {
+function mount(props: { destructive?: boolean; typeToConfirm?: string; hideCancel?: boolean; confirmDisabled?: boolean }): void {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -67,4 +67,25 @@ it("shows the localized confirmation example and keeps the literal and editable 
   });
   expect(input.value).toBe("delete");
   expect(document.body.querySelector<HTMLButtonElement>("button[type=submit]")!.disabled).toBe(false);
+});
+
+const labels = () => Array.from(document.body.querySelectorAll("[role=alertdialog] button")).map((button) => button.textContent).filter(Boolean);
+const closeButton = () => document.body.querySelector("[role=alertdialog] button[aria-label=Close]");
+
+it("shows Cancel and the close button by default", () => {
+  mount({});
+  expect(labels()).toEqual(["Cancel", "Archive"]);
+  expect(closeButton()).not.toBeNull();
+});
+
+it("with hideCancel, only Confirm remains, focused, and the close button stays", () => {
+  mount({ hideCancel: true });
+  expect(labels()).toEqual(["Archive"]);
+  expect(document.activeElement?.matches("button[type=submit]")).toBe(true);
+  expect(closeButton()).not.toBeNull();
+});
+
+it("with hideCancel and Confirm disabled, focus is on the dialog rather than the page", () => {
+  mount({ hideCancel: true, confirmDisabled: true });
+  expect(document.activeElement?.matches("[role=alertdialog]")).toBe(true);
 });

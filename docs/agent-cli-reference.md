@@ -24,12 +24,13 @@ account" notes under "Moving a conversation to another config directory", were m
 2.1.302**, **Codex 0.162.1** and **Grok Build 1.0.62**. What "Codex resume from aged rollouts" says was measured on
 **Codex 0.162.1**. What "Sharing a configuration directory between accounts" says was measured on 2026-10-20 on **Claude
 Code 2.1.304**, **Codex 0.162.1** and **Grok Build 1.0.62**. The Grok Build chain-following note and the per-session
-`config.toml` copy note in that section were measured on 2026-10-21 on **Grok Build 1.0.62**. What "Signing in a
-config directory without a terminal" says was measured on 2026-10-19 on **Claude Code 2.1.303**, **Codex 0.162.1** and
-**Grok Build 1.0.62**. What "Writing
-into a running session" says about invisible characters was read from the executable of, and measured on, **Claude Code
-2.1.304** on 2026-10-20. All three rewrite their hook surface, their payload fields, their configuration layering and
-their on-disk layout on upgrade, so check a detail here against the installed version before relying on it.
+`config.toml` copy note in that section, including plugin switches, and the Grok Build section's notes on what startup
+saves of the model and effort and on theme saves with `GROK_THEME` set, were measured on 2026-10-21 on **Grok Build
+1.0.62**. What "Signing in a config directory without a terminal" says was measured on 2026-10-19 on **Claude Code
+2.1.303**, **Codex 0.162.1** and **Grok Build 1.0.62**. What "Writing into a running session" says about invisible
+characters was read from the executable of, and measured on, **Claude Code 2.1.304** on 2026-10-20. All three rewrite
+their hook surface, their payload fields, their configuration layering and their on-disk layout on upgrade, so check a
+detail here against the installed version before relying on it.
 
 How Octoboard's status mapping handles these traps is encoded in `apps/daemon/src/hooks.rs`; the product behavior
 built on them is in the product docs.
@@ -592,8 +593,12 @@ the session title, and a prediction of the user's next line. Inference for one m
 every model's.
 
 **Model and reasoning effort**: `--model <id>` and `--reasoning-effort <level>`, placed after the `--rules` pair and
-before the positional task. Grok persists some session settings back into `config.toml`; the per-session `GROK_HOME`
-farm keeps `config.toml` as a copy, so a flag cannot leak into the user's own configuration.
+before the positional task. In a fullscreen TUI (1.0.62), startup alone persists these as `[models] default` and
+`default_reasoning_effort`; a headless `-p` run did not. An explicit `/model other-local high` changed both keys in the
+TUI. A launch's own model chosen again cannot be told from its startup save. The per-session `GROK_HOME` keeps
+`config.toml` as a real copy; what Octoboard carries from it, and why the model passed at launch and the effort are
+left out, is under "Grok itself rewrites the per-session `config.toml` copy" in "Sharing a configuration directory
+between accounts".
 
 **Theme** (Grok Build 1.0.62, from `grok --help`, the strings in the executable and Grok's own theming guide): there is
 **no `--theme` flag**. The environment variable `GROK_THEME` (or `LC_GROK_THEME`) forces a theme and outranks
@@ -603,6 +608,13 @@ terminal's own colours) and `auto`. On a local macOS desktop `auto` follows the 
 (`AppleInterfaceStyle`), not the terminal's background, and picks the `auto_light_theme` / `auto_dark_theme` themes
 (`grokday` / `groknight` by default). A dark theme on a light terminal leaves the cells Grok paints with the terminal's
 default colour showing through as light holes between dark bands.
+
+With `GROK_THEME=groknight`, `grokday` or `auto`, fullscreen startup left `[ui] theme` unchanged, including leaving
+the key absent when it was absent initially (1.0.62, scratch homes, fake API key and a local model stub). A model
+change also left it unchanged. Explicit `/theme tokyonight` and `/theme grokday` saved those names even with
+`GROK_THEME=grokday`; selecting the environment's own theme is still an explicit save. So a saved `[ui] theme` is
+always the user's choice, and Octoboard carries it without filtering out the injected name (see "Grok itself rewrites
+the per-session `config.toml` copy").
 
 **Discovering models** (Grok Build 1.0.50): Grok has **no alias or "latest" indirection** either. `grok models` prints
 to stdout the login line, a blank line, `Default model: <id>`, a blank line, `Available models:` and then one bullet
@@ -1044,16 +1056,18 @@ exist and one created empty:
   `Not logged in` on stderr and exits 1 for the empty home, and `Error loading configuration: CODEX_HOME points to …`
   with exit 1 for the missing one. The empty home is not left empty: the app server writes its databases, `skills/`
   and `installation_id` into it.
-- **Grok Build does not tell the two apart, and creates a missing directory.** `grok agent --no-leader stdio` creates
-  it (`config.toml`, `README.md`, `docs/`, `logs/`, `sessions/` and lock files) and then answers `_x.ai/billing`
-  for either with `{"jsonrpc":"2.0","id":2,"error":{"code":-32000,"message":"Authentication
-  required","data":"Authentication required to fetch billing data"}}`. The `initialize` reply in a home with no login
-  has `agentCapabilities.auth` `{}`, `authMethods` `[{"id":"grok.com","name":"Grok","description":"Sign in with
-  Grok"}]` and `_meta.defaultAuthMethodId` `null`. What those fields hold once signed in was not measured, so they are
-  not yet a signal. A home whose stored sign-in has expired (grok 1.0.62) answers `_x.ai/billing` with a generic
-  error and the cause only in `data`: `{"jsonrpc":"2.0","id":2,"error":{"code":-32603,"message":"Internal
-  error","data":"Billing service error: Invalid or expired credentials (auth_kind=bearer,
-  x_xai_token_auth=xai-grok-cli, upstream=PermissionDenied, reason=no auth context)"}}`.
+- **Grok Build does not tell the two apart, and creates a missing directory.** `grok agent --no-leader stdio` creates it
+  (`config.toml`, `README.md`, `docs/`, `logs/`, `sessions/` and lock files; on 1.0.62 also `installed-plugins/`, and on
+  a home that already has a `config.toml` it appends `[marketplace] default_skills_installs_purged = true`, writing
+  through a symlink) and then answers `_x.ai/billing` for either with
+  `{"jsonrpc":"2.0","id":2,"error":{"code":-32000,"message":"Authentication required","data":"Authentication required to
+  fetch billing data"}}`. The `initialize` reply in a home with no login has `agentCapabilities.auth` `{}`,
+  `authMethods` `[{"id":"grok.com","name":"Grok","description":"Sign in with Grok"}]` and `_meta.defaultAuthMethodId`
+  `null`. What those fields hold once signed in was not measured, so they are not yet a signal. A home whose stored
+  sign-in has expired (grok 1.0.62) answers `_x.ai/billing` with a generic error and the cause only in `data`:
+  `{"jsonrpc":"2.0","id":2,"error":{"code":-32603,"message":"Internal error","data":"Billing service error: Invalid or
+  expired credentials (auth_kind=bearer, x_xai_token_auth=xai-grok-cli, upstream=PermissionDenied, reason=no auth
+  context)"}}`.
 
 So "the directory is missing" can only be told reliably by looking for the directory before the probe runs. Codex is the
 only one that refuses a missing directory; Claude Code and Grok Build quietly recreate it, empty, and then report it as
@@ -1312,10 +1326,21 @@ target).
   farm pointed at A. The one-link results in the table above still hold. A two-link chain was not measured for
   `config.toml`, `trusted_folders.toml` or `/settings` as a `pager.toml` writer. `/theme` writes `[ui] theme` into
   `config.toml`, not into `pager.toml`.
-- **An Octoboard per-session home copies `config.toml`** (same probe, 1.0.62). `grok mcp add --scope user` and the
-  TUI command `/theme` rewrote only that copy (new inode: the server block, or `[ui] theme`, added). D's
-  `config.toml` and A's link to it were unchanged. A `grok` run directly against the account home, where
-  `config.toml` is a link, still updates D (the table's `grok mcp add -s user` row).
+- **Grok itself rewrites the per-session `config.toml` copy** (1.0.62). `grok mcp add --scope user` and the TUI command
+  `/theme` replaced that copy (new inode: the server block, or `[ui] theme`, added). Grok's write alone left D's file
+  and A's link unchanged. Octoboard keeps the copy to contain its injected MCP block, then, after the process exits and
+  before removing the session home, merges these changes onto the source link's resolved target: `ui.theme`,
+  `plugins.enabled`, `plugins.disabled`, and `models.default` unless it equals the `--model` the launch passed (startup
+  saves that one; see "Model and reasoning effort" in the Grok Build section), with no exception when no model was
+  passed. Plugin install/enable/disable writes the two string arrays, each carried whole; explicit empty arrays are
+  carried too. Other UI keys, marketplace startup state, reasoning effort, custom-model definitions, credentials and MCP
+  servers are not carried. Only values changed from the pre-launch copy are eligible. A plain source file has no
+  writeback; a link removed, broken or redirected to another target before exit is skipped. The account's link stays in
+  place. Different fields changed by two sessions in the same daemon are merged; for the same field the last publishing
+  exit wins, while an unchanged session writes nothing. An external edit saved before this merge is retained outside
+  those changes. External writers do not take the daemon's lock, so an edit concurrent with its read and replacement can
+  race. A failed writeback is logged and does not stop removal of the session home. A `grok` run directly against the
+  linked account file still updates D itself (the table's `grok mcp add -s user` row).
 - **Grok's `disabled-hooks` is keyed by hook source**, e.g. `global/octoboard:session_start[0].hooks[0]`. Switching
   Octoboard's hook off in one session writes the entry into the source home's file, silencing it in every later session
   from that home; with the file linked, that is every sharing account.
@@ -1474,8 +1499,8 @@ ran, even in a control); loading of `workflows/`, `themes/`, `hooks/`, `agent-me
 the install refusal for a symlinked `plugins/`; Claude Code 2.1.274. Codex: a link on a future `state_6.sqlite`;
 `plugins/`, `agents/`, `themes/`, `hooks.json` through a link; whether rollouts reference `generated_images/`; a rule's
 effect on a real tool call; whether a daemon holding a thread notices another home changing the shared row; `prompts/`
-on other versions. Grok: whether `--reasoning-effort` writes into `config.toml`; two processes on one session;
-loading of `personas/`, `workflows/`, `lsp.json`, `settings.json`, `sandbox.toml`, `statusline.sh`.
+on other versions. Grok: two processes on one session; loading of `personas/`, `workflows/`, `lsp.json`,
+`settings.json`, `sandbox.toml`, `statusline.sh`.
 
 ## Codex resume from aged rollouts
 
@@ -1787,17 +1812,19 @@ Octoboard recognizes it in the terminal output and presses it; what pressing it 
   terminal is told apart.
 - **Grok Build** shows its confirmation only when the folder holds content its trust gates, such as an `AGENTS.md`,
   whether or not it is a git repository, so a console directory holding an instruction file is asked about too. The
-  screen reads "Do you trust the contents of this directory?", "Grok Build may run or modify contents in this
-  directory, posing security risks.", "Yes, proceed y" and "No, quit n", with no cursor; `y` or Enter accepts, and a
-  decline exits. Grok writes `[folders."<canonical cwd>"]` with `trusted = true` and `decided_at` into
-  `$GROK_HOME/trusted_folders.toml`, saving by replacing the file, so against Octoboard's per-session `GROK_HOME` the
-  entry lands only in the session's copy and a symlink there is replaced rather than followed; no setting moves the
-  store. Octoboard therefore carries that one entry, unchanged, into the user's own store, after its own press and after
-  the person answers in the terminal alike, holding the `trusted_folders.toml.lock` Grok keeps beside it. Grok locks
-  that same file before it replaces the store (measured on 1.0.50: with an exclusive `flock` held on it elsewhere, an
-  accepted confirmation wrote nothing until it was released), and Octoboard's lock is exclusive, so the two writes
-  exclude each other. `SessionStart` fires right after the press. While it waits, Grok animates its logo at about
-  2 KB/s, so the first drawing soon leaves any window of recent output and the terminal is never quiet.
+  screen reads "Do you trust the contents of this directory?", "Grok Build may run or modify contents in this directory,
+  posing security risks.", "Yes, proceed y" and "No, quit n", with no cursor; `y` or Enter accepts, and a decline exits.
+  Grok writes `[folders."<canonical cwd>"]` with `trusted = true` and `decided_at` (an integer of Unix seconds) into
+  `$GROK_HOME/trusted_folders.toml`; on 1.0.62, if the existing store does not parse (a string `decided_at`, say), an
+  accepted confirmation fails with "Couldn't save folder trust: the trust store could not be read…" and Grok exits. It
+  saves by replacing the file, so against Octoboard's per-session `GROK_HOME` the entry lands only in the session's copy
+  and a symlink there is replaced rather than followed; no setting moves the store. Octoboard therefore carries that one
+  entry, unchanged, into the user's own store, after its own press and after the person answers in the terminal alike,
+  holding the `trusted_folders.toml.lock` Grok keeps beside it. Grok locks that same file before it replaces the store
+  (measured on 1.0.50: with an exclusive `flock` held on it elsewhere, an accepted confirmation wrote nothing until it
+  was released), and Octoboard's lock is exclusive, so the two writes exclude each other. `SessionStart` fires right
+  after the press. While it waits, Grok animates its logo at about 2 KB/s, so the first drawing soon leaves any window
+  of recent output and the terminal is never quiet.
 
 ### Writing into a running session
 

@@ -392,7 +392,7 @@ async fn a_handoff_that_is_refused_changes_nothing() {
             approval_reviewer: None,
             approval_mode: None,
             share_default_config: false,
-            share_default_config_pending: false,
+            share_default_config_incomplete: false,
         })
         .unwrap();
     let before = fixture.snapshot();

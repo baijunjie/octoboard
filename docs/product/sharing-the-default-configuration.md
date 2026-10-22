@@ -5,10 +5,13 @@ config directory that can be shared — configuration and conversation history a
 into the directory the agent's default account resolves to, the **default directory** (see "Agent config directories"
 in `docs/product/consoles.md`). Something installed once is then seen by every account that shares, and a
 conversation is in one place whichever of those accounts runs it. The login stays the account's own, so accounts that
-share still run side by side, each signed in as itself.
+share still run side by side, each signed in as itself. That is why accounts do not simply share one directory with
+only the credentials swapped: every running session would follow each swap, and one session rotating its refresh token
+would invalidate the copy stored for another account.
 
-The choice is the daemon's: a client reads it on the account and sets it with the protocol request
-`set_account_sharing`. The window offers no control for it.
+The user changes the choice with **Share default configuration** on the account in Settings' Agent accounts section
+(see "Sharing the default configuration" in `docs/product/agent-accounts.md`). A client reads it on the account and
+sets it with the protocol request `set_account_sharing`.
 
 ## The sharing choice
 
@@ -19,11 +22,18 @@ resolves to the default directory under another spelling. The account carries tw
 | Value | Meaning |
 |---|---|
 | `share_default_config` | Whether the account shares the default configuration. |
-| `share_default_config_pending` | The account's directory has not been brought in line with that choice yet: the change is waiting for nothing to run under the directory, or carrying it out failed. |
+| `share_default_config_incomplete` | The last change toward that choice did not finish: it failed part-way, or the daemon stopped while carrying it out. |
 
 Both start false and survive a daemon restart. Like the account itself, the choice stays on this machine. A change is
-recorded as soon as it is asked for, and every client is told when the choice changes and again when the change has
-been carried out. Asking again for the value already recorded retries a change still pending.
+recorded, with `share_default_config_incomplete` set, as soon as it starts, and the flag is cleared when the change
+completes; every client is told both times. A failed change does not reset the recorded choice. Only the user clears
+an incomplete change: by asking again for the value already recorded, which carries the change out again, or by
+asking for the opposite one. The window's switch offers only the first: while the change is incomplete it shows the
+position from before the change, so turning it asks for the recorded value again. The exception is turning sharing on
+that failed because the default directory has moved (`default_moved`), which a retry cannot mend: the switch then
+offers the opposite (see "Sharing the default configuration" in `docs/product/agent-accounts.md`). Asking for the
+value recorded on an account whose last change is complete does nothing. An account that an earlier version of
+Octoboard marked as having a change pending, to be carried out later, reads as incomplete.
 
 Each link leads to the default entry's fully resolved target, not to the entry itself: when the default directory's
 own `settings.json` is a link to a dotfiles copy, say, the account's link leads to the dotfiles copy, so a save made
@@ -88,8 +98,8 @@ An entry is left unchanged and reported when the account's conversation history 
 (what it leads to is not the account's to move), or when the default directory's entry leads back into the account's
 directory.
 
-A retry after the agent's default directory has moved is refused: the links already made lead into the one recorded
-when the change started. Turning sharing off and on again shares the new one.
+A retry after the agent's default directory has moved is refused, with the cause `default_moved`: the links already
+made lead into the one recorded when the change started. Turning sharing off and on again shares the new one.
 
 ## Turning sharing off
 
@@ -132,22 +142,85 @@ Every other conversation — one run from a terminal, or by another account — 
 
 ## When a change is carried out
 
-Only while **nothing runs under the account's directory**: none of its sessions running or being started (a session
-of the account, or one holding its directory), and no agent CLI that Octoboard runs there to read the account's plan
-quota or its models or to sign it in. Such a CLI that starts while a change is being carried out waits for it.
+**A change is carried out at once, or refused,** and once started it runs to its result; it cannot be cancelled. It must
+not move files under anything running in the account's directory. Only **working** sessions refuse it — sessions of the
+account, or holding its directory, that are in the middle of a turn, idle with background work still running, waiting
+for the user's answer (a permission prompt, a question, a session request, or anything else only the user can answer
+that shows the session as waiting for the user — its folder-trust confirmation, a Codex action title, or a screen of its
+agent's own such as Claude Code's "Resume this conversation?"; see "What the statuses are derived from" in
+`docs/product/sessions.md`), holding a message of Octoboard's that is queued, being written, or was left unsent in its
+input box, or being started, resumed, switched, handed off or having their owner changed — and a sign-in of the account.
+While any of these runs, `set_account_sharing` is refused with `account_in_use`, with nothing stopped or recorded; the
+refusal carries how many working sessions there are (`sessions`) and whether a sign-in runs (`signing_in`). Octoboard's
+short agent CLI reads of the account, of its plan quota and of its models, do not refuse a change: the change waits for
+those running to end, and one that starts meanwhile waits for the change. A sign-in that starts while a change runs
+waits for it too. The request is answered once the whole sequence below has ended.
 
-- **At once**, when `set_account_sharing` finds nothing running; the request is answered once the change is done.
-  Otherwise the change stays pending and the request is answered at once.
-- **Before the account's next session starts or resumes**, or a session is switched to the account, at a moment
-  nothing else runs there; the session being launched does not count. When something else still runs, the session
-  launches with the directory as it stands and the change keeps waiting.
-- **A switch carries out its target's pending change before it ends the session's process**, so a refusal leaves the
-  session running, and makes sure again once the process has ended, before the conversation is copied in (see "When a
-  switch fails" in `docs/product/switching-session-accounts.md`).
+**Idle sessions are ended and resumed around the change.** A session that is idle — at its prompt, waiting for the
+user's next message, with nothing on screen only the user can answer and nothing running in the background — does not
+refuse a change. The change goes through these phases, in order, each told in the account's sharing state:
 
-**A change that fails is not rolled back.** It stays pending, is tried again on the next request or launch, and is
-answered with `account_sharing_failed`, which refuses the launch, resume or switch that tried it. The error lists each
-entry that was not brought in line, what it was left as and why:
+1. **Waiting.** Changes of different accounts of the same agent do not overlap: the change first waits for the
+   agent's other sharing work — another account's change, a launch's repair, a switch's copy — to finish. The idle
+   sessions stay usable meanwhile.
+2. **Stopping.** In one step, the account's sessions are judged again and its idle ones claimed; one that has turned
+   working meanwhile refuses the change with `account_in_use`, with nothing stopped or recorded. Otherwise the idle
+   sessions' processes are ended, and each is waited for. One that does not end in time stops the change, with
+   nothing recorded or changed (`sharing_session_did_not_stop`, naming the account and the session); the sessions
+   already ended are resumed.
+3. **Changing.** The choice is recorded and the entries are brought in line.
+4. **Resuming.** The ended sessions are resumed on their conversations, as resuming a session does, whatever the
+   change's outcome, onto the directory as it then stands. One archived, deleted or ended by itself meanwhile is not
+   resumed. One whose relaunch fails is left *interrupted*, to be resumed by hand; one whose process was never seen
+   to end (only beside a `sharing_session_did_not_stop` answer) may still be running and is not relaunched. Either
+   is told as a `sharing_resume_failed` notice, shown as a notice toast (see `docs/product/toasts.md`) naming the
+   account and saying which of the two happened; the change itself stands.
+
+   A session is resumed with no prompt, so a Claude Code session whose prompt cache has gone cold may come back at
+   "Resume this conversation?" (`claude_resume_at_launch`, see "Messages held until a session can take them" in
+   `docs/product/message-delivery.md`); it then waits for the user to answer that screen, and the messages held for it
+   are written once it is answered.
+
+Waiting and stopping are left out when there is nothing to wait for or to stop, and resuming when nothing was
+stopped. While its process is down, an ended session reads as *starting* everywhere, not *interrupted*: in every
+client, and in the agents' session tools, whose `list_sessions` lists it among the running sessions.
+
+**Messages sent during the restart are held.** A message Octoboard is asked to send to a claimed session is held from
+the moment it is claimed and written into the resumed process. If the session is not resumed, the held messages are
+dropped: told by the `sharing_messages_dropped` notice about the session when it was not relaunched, and covered by
+the `sharing_resume_failed` notice when its relaunch failed. `sharing_messages_dropped` is shown as an error alert
+saying that messages held back for a session while its account's sharing changed were dropped because the session was
+not restarted; its next step says that the messages were never written to a terminal and that the session may not be
+running, and asks the user to resume the session if it is still needed and send the messages again. The messages were
+never part-written into a terminal, so the notice says nothing of an input line.
+
+**A draft typed but not sent is lost.** Text the user has typed into an idle session's terminal without sending it
+cannot be seen by Octoboard, so it does not make the session count as working, and it is lost when the session's
+process is ended for the change; a prompt submitted straight into the terminal in the moment before the process ends
+has its turn ended.
+
+**A change stopped before it records its choice keeps the earlier failure.** The account's last `failure` stays as it
+was while a change waits or stops sessions, and after one refused or stopped before its choice is recorded; it is
+cleared once the choice is recorded.
+
+**The account is locked while its change runs**, from the check through the resume of its idle sessions. Each of
+these is refused with `account_sharing_in_progress` until it ends:
+
+- opening a session on the account, and launching or resuming one of its sessions (other than the change's own
+  resumes);
+- switching a session from the account or to it (see "When a switch fails" in
+  `docs/product/switching-session-accounts.md`);
+- handing a session off from the account, or to a receiving session on it;
+- removing the account or pointing it at another directory;
+- a second `set_account_sharing` for it.
+
+**Nothing is carried out later.** No launch, resume or switch carries out or retries a change, and the daemon launches
+a session of an account whose last change is incomplete all the same (see "Repair before every launch" below); the
+window asks the user first (see "Starting a session on an account whose last change is incomplete" below).
+
+**A change that fails is not rolled back.** The account stays `share_default_config_incomplete`, and the request is
+answered with `account_sharing_failed`, which lists each entry that was not brought in line, what it was left as, why
+in a word (`cause`) and why in the system's own text (`detail`):
 
 | Left as | Meaning |
 |---|---|
@@ -157,11 +230,107 @@ entry that was not brought in line, what it was left as and why:
 | `linked` | still a link into the default directory |
 | `absent` | not there at all |
 
-An entry about a conversation names the agent's id of it and the Octoboard sessions that record it. The list is empty
-when the change could not start at all.
+| Cause | Covers |
+|---|---|
+| `permission_denied` | not allowed to change a file or directory, or a read-only volume |
+| `busy` | a file in use by another process, or a database locked by one |
+| `not_found` | a file or directory gone |
+| `no_space` | the volume or a quota full, or a file too large |
+| `conflict` | something in the way or not what it has to be: an entry already there, a link leading elsewhere, a directory where a file is expected or the other way round |
+| `default_moved` | the agent's default directory is no longer the one the links lead into or sharing was started into; turning sharing off, then on again, shares the new one |
+| `other` | anything else |
 
-The outcome is recorded only for the directory the change was carried out on: an account pointed at another directory
-meanwhile stays pending, for its new one.
+A failure reported by Codex's thread database is classed by the database's own code: busy or locked is `busy`, a
+permission or read-only failure `permission_denied`, a full disk `no_space`, and anything else, a database file not
+found or too large included, `other`. An entry that met problems of different kinds is `other`, and so is a change
+that found the account changed while it ran.
+
+An entry about a conversation names the agent's id of it and the Octoboard sessions that record it. The list is empty
+when the change could not start at all, and the error's `detail` then says why. The error's own `cause` says the same
+of the change as a whole: the cause its entries share (`other` when they differ), or why it could not start when there
+are none.
+
+**How the window shows the entries.** Wherever a sharing failure is shown — at the account's switch, in an error alert,
+in a repair notice — its entries are said in plain language, one line per cause, each naming the entries it hit
+compactly: the first by name and the rest as a count ("no permission to change `skills/` and 1 more"), and going on, on
+the same line, with what to do about that cause. A conversation is named by a session that records it, under its current
+name. The rest is behind a collapsed **Details** disclosure: each entry on one row with what it was left as, in the
+interface language, a conversation naming the sessions that record it, and what the system said of it after that as
+small inline code; what the system said in several lines is shown as a block under its row instead. With no entry
+listed, the reason the change as a whole failed, from its `cause`, stands in place of the lines when it is one of the
+named causes, followed in the same way by what to do about it; when it is not (`other`, none, or one this client does
+not know) but there is an original diagnostic, a line saying to see Details stands there alone. Details holds the
+original diagnostic. No raw diagnostic is shown outside Details.
+
+| Cause | What the window says to do |
+|---|---|
+| `permission_denied` | check that the files and folders involved can be changed and are not locked |
+| `busy` | close other programs using the files involved, such as an agent in a terminal, an editor or a sync tool |
+| `no_space` | free up disk space |
+| `conflict` | move or rename the conflicting items |
+| `other` | see Details |
+| `not_found`, `default_moved` | nothing is added |
+
+A failed change of the switch is shown at the account's switch, in every window and nowhere else (see "Sharing the
+default configuration" in `docs/product/agent-accounts.md`). A failure that refuses removing or repointing the
+account is shown in an error alert (see `docs/product/error-alerts.md`): its short explanation says that the change
+did not finish and nothing was rolled back, followed by the entries as above; its next step is to resolve what is
+reported, then turn the account's switch off again to try once more.
+
+A refusal is shown in an error alert: `account_in_use` says how many of the account's sessions are working, or that
+it is being signed in, and `account_still_sharing` that sharing cannot be turned off while one of its sessions is
+working or it is being signed in; both ask to wait for the working sessions to finish and any sign-in to end, then to
+try again; `account_sharing_in_progress` asks to wait for the change to finish, saying that its progress is shown at
+the account's switch; `sharing_session_did_not_stop` names the session that did not stop in time, says sharing was
+not changed, and asks to try again, ending that session in its terminal first if it keeps running.
+
+## The account's sharing state
+
+Every client is told each account's sharing state with the `account_sharing` event, sent whenever any of it changes,
+and given every account's current state on connecting. Each part is absent when it has nothing to say; an account the
+client has been told nothing of has nothing in use, no change running and no failure.
+
+| Part | What it says |
+|---|---|
+| `in_use` | `sessions`, how many of the account's sessions are working under its directory, and `signing_in`, whether it is being signed in: what `account_in_use` refuses a change for. |
+| `idle_sessions` | How many of the account's sessions are idle: those a change ends and resumes. |
+| `progress` | Present while a change runs: its direction (`share`); its `phase`, `waiting`, `stopping`, `changing` or `resuming`; the entries processed so far (`done`) out of `total`, none before `changing` and all of them once `resuming`; and `item`, the entry being processed — an entry of the list in "What is shared", or, turning sharing off, the agent's id of a conversation being taken back. `item` is present only while `changing`, from the first entry on: it is absent while the change waits for short agent CLI reads. |
+| `failure` | The last change of the account that failed since the daemon started: its direction (`share`), its `cause`, the entries it left (`items`) and `detail`, as in `account_sharing_failed`. Cleared when the next change records its choice; a change refused or stopped before that leaves it. |
+
+A failure is not kept across a daemon restart: an account whose last change is incomplete then has
+`share_default_config_incomplete` set and no `failure`.
+
+## Starting a session on an account whose last change is incomplete
+
+The daemon starts sessions on an account whose last change is incomplete as on any other, its directory left as it
+stands. The window asks first: when the user starts a session on such an account while no change of it runs (a running
+change refuses the launch, see "When a change is carried out" above), a confirmation asks whether to start on the
+account, named in its title, and says that the account's last sharing change did not finish, so its configuration and
+conversations may be incomplete. It has no Cancel button: its buttons are **View in Settings** and **Start anyway**, the
+primary one, on which keyboard focus starts. Closing it — with the dialog's close button or Escape — cancels the launch
+and sends nothing; when it stands over another dialog, Escape closes only the question, leaving that dialog open. **View
+in Settings** sends nothing either: it closes the question, and the dialog it was asked from when there is one (the
+session dialog, the handoff dialog, the switch confirmation), and opens Settings on its Agent accounts section, on the
+account's agent's tab, with the account's sharing switch scrolled into view and focused; the warning under the switch
+says what did not finish (see "Sharing the default configuration" in `docs/product/agent-accounts.md`). When the account
+is no longer found there, Settings opens on the section all the same. **Start anyway** closes the question at once and
+sends the request as it would have gone without it; its refusal or failure is shown where it would have been.
+
+The account asked about is the one the session would run on. The question comes:
+
+- opening a session from the session dialog, on the account chosen, a new session on a found conversation included;
+- opening a session with defaults (see "Opening a session with defaults" in `docs/product/sessions.md`), on the
+  account it would open on;
+- resuming an interrupted session or reopening an archived one — by selecting it, with Resume or Reopen wherever they
+  are offered, or from the session dialog's **Resume conversation** tab — on the session's own account; going to a
+  session already running asks nothing;
+- switching sessions onto the account, after the switch confirmation's Confirm, and again on each Retry; switching a
+  session away from the account asks nothing;
+- handing a session off onto the account, after **Hand off**.
+
+An account whose last change is complete is never asked about, nor is the default account, which has no sharing. A
+launch Octoboard starts by itself, such as the resumes around a change (see "When a change is carried out" above),
+does not ask, and neither does approving a session another session asked for, whose account Octoboard picks.
 
 ## Repair before every launch
 
@@ -175,33 +344,48 @@ whose account's directory shares — an account switch's relaunch included — e
   sharing on (a file the default directory lacks is skipped, a directory it lacks is created there). A directory the
   account holds as a real directory of its own is left alone.
 
-Nothing is repaired while turning sharing off is pending, or when the agent's default directory is no longer the one
+Nothing is repaired while the account's last change is incomplete, in either direction: its directory is left as it
+is for the user to retry the change. Nothing is repaired either when the agent's default directory is no longer the one
 the links lead into. A session that holds another directory than its account's (the account was repointed after the
 session was opened) takes nothing from the account's sharing.
 
 **A repair never holds the launch up.** What it cannot fix, a default directory that has moved included, is told to
-clients as an `account_sharing_repair_failed` notice about the session, listing the entries as `account_sharing_failed`
-does, and the session launches all the same. A Codex `state_<n>.sqlite` in the account's directory other than the one
-shared is told on every launch as an `unshared_state_database` notice: that account's threads are kept apart from the
-other accounts' from then on.
+clients as an `account_sharing_repair_failed` notice about the session, carrying a `cause` and listing the entries as
+`account_sharing_failed` does (none when the directory could not be checked at all, or when the default directory has
+moved, with the cause `default_moved`), and the session launches all the same. A Codex `state_<n>.sqlite` in the
+account's directory other than the one shared is told on every launch as an `unshared_state_database` notice: that
+account's threads are kept apart from the other accounts' from then on.
+
+The window presents a repair failure as a notice toast (see `docs/product/toasts.md`) explaining that the session
+started with the directory as it stands. The affected entries, or with none listed the reason from the notice's
+`cause`, are shown as for a failed change, by cause with what to do and **Details** (see "When a change is carried
+out" above), the notice's original message standing for the original diagnostic behind Details. The notice does not
+require acknowledgement or stop the session.
 
 ## Claude Code's auto memory
 
 Claude Code writes its auto memory into `projects/<key>/memory/` without asking only when the path is spelled inside
 the account's own directory; through a linked `projects/` it asks, or refuses outright in a headless run. A session of
 a Claude Code account whose directory shares is therefore launched with `CLAUDE_CODE_REMOTE_MEMORY_DIR` set to the
-default directory, fully resolved, which keeps memory where the default account keeps it and restores the exemption.
-No other session gets it, and it is set for that launch only, never written into the account's `settings.json`. It is
-an undocumented internal variable of Claude Code's, and it is not in effect when the account is run from a terminal.
+default directory its links lead into, fully resolved, which keeps memory where the default account keeps it and
+restores the exemption. For an account whose last change is incomplete, in either direction, the variable is set only
+while the account's `projects/` currently links into that directory. No other session gets it, and it is set for
+that launch only, never written into the account's `settings.json`. It is an undocumented internal variable of Claude
+Code's, and it is not in effect when the account is run from a terminal.
 
 ## Removing or repointing a sharing account
 
-Removing an account that shares, or has a change of sharing pending, turns its sharing off first; so does pointing it
-at another directory, the sharing being undone in the directory it was carried out on, after which the account does
-not share. Either is refused with `account_still_sharing` while anything runs under the account's directory, and with
-`account_sharing_failed` when turning sharing off does not complete — sharing then stays turned off, pending — and
-the account is left as it was. A rename changes nothing, and so does respelling the directory in another letter case
-on macOS, where directories compare without regard to case.
+Removing an account that shares, or whose last change of sharing is incomplete, turns its sharing off first; so does
+pointing it at another directory, the sharing being undone in the directory it was carried out on, after which the
+account's choice is off. Sharing is turned off at once, under the account's lock and with its progress told, as
+`set_account_sharing` turns it off, its idle sessions ended and resumed around it the same way. Either is refused
+with `account_still_sharing` while sessions of the account are working under its directory (one of its idle sessions
+turning working before it was ended included) or it is being signed in, with `sharing_session_did_not_stop` when an
+idle session's process does not end in time, with `account_sharing_in_progress` while a change of its sharing runs
+(for any account, sharing or not), and with `account_sharing_failed` when turning sharing off does not
+complete — the choice then stays off, incomplete — and the account is left in place, on its directory. A rename
+changes nothing, and so does respelling the directory in another letter case on macOS, where directories compare
+without regard to case.
 
 ## The sessions of a sharing account
 
@@ -210,5 +394,5 @@ on macOS, where directories compare without regard to case.
   user will notice" in `docs/product/launching-agents.md`.
 - A switch between two accounts whose links lead to the same conversation files copies nothing (see "Carrying the
   conversation" in `docs/product/switching-session-accounts.md`).
-- Deleting one moves its agent records to the Trash from the default directory only while the account shares with no
-  change pending (see "Moving the agent's own records to the Trash" in `docs/product/deleting-sessions.md`).
+- Deleting one moves its agent records to the Trash from the default directory only while the account shares with its
+  last change complete (see "Moving the agent's own records to the Trash" in `docs/product/deleting-sessions.md`).

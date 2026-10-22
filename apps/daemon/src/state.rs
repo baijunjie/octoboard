@@ -237,9 +237,10 @@ pub struct AppState {
     pub account_quotas: crate::account_quotas::AccountQuotas,
     /// The logins running now, one per account (`crate::account_login`). Held in memory only.
     pub account_logins: crate::account_login::AccountLogins,
-    /// Serializes carrying out and repairing the accounts' sharing of the default configuration
-    /// (`crate::shared_config`).
-    pub account_sharing: crate::shared_config::Locks,
+    /// What the accounts' changes of sharing of the default configuration hold: one lock per
+    /// agent over the default directory, and each account's progress and last failure
+    /// (`crate::shared_config`). Held in memory only.
+    pub account_sharing: crate::shared_config::Sharing,
     /// The shell terminals running, or exited and not yet closed (`crate::shell_terminal`). Held in
     /// memory only: each is a process of this daemon's.
     pub shell_terminals: crate::shell_terminal::ShellTerminals,
@@ -293,6 +294,9 @@ pub enum WriteHold {
     AgentError,
     /// The session is being handed off to another agent.
     Handoff,
+    /// The session is being restarted for a change of its account's sharing, and is resumed
+    /// afterwards.
+    SharingChange,
     /// A message written into it was not sent and is still in its input box.
     UnsentMessage,
 }
@@ -306,6 +310,7 @@ impl WriteHold {
             Self::AgentAction => "agent_action",
             Self::AgentError => "agent_error",
             Self::Handoff => "handoff",
+            Self::SharingChange => "sharing_change",
             Self::UnsentMessage => "unsent_message",
         }
     }
@@ -365,11 +370,14 @@ pub enum TurnClose {
 /// whether the holder has named a successor ([`Self::forward_to`]): to the successor, in order,
 /// or, without one, to the session itself if it is still running and nowhere if it is not, since a
 /// session without a process takes nothing and would leave the queue stranded. A queue dropped for
-/// that is announced as `handoff_messages_dropped`: these are messages held back for a handoff, never
+/// that is announced as `handoff_messages_dropped`, or as `sharing_messages_dropped` for a hold taken
+/// for a sharing change ([`AppState::hold_outbox_for_sharing`]): these are messages held back, never
 /// ones part-written into a terminal, so the notice says nothing of an input line.
 pub struct OutboxHold {
     state: Arc<AppState>,
     id: String,
+    /// Held for a change of an account's sharing, not a handoff; only the notice for a drop differs.
+    for_sharing: bool,
     successor: std::sync::Mutex<Option<String>>,
 }
 
@@ -407,21 +415,7 @@ impl Drop for OutboxHold {
                 return;
             }
             // Nothing to write to, and a queue left in the map would be replayed on a later resume.
-            let dropped = self.state.outbox.forget(target);
-            if dropped > 0 {
-                self.state.broadcast(
-                    Notice::new(
-                        notice_code::HANDOFF_MESSAGES_DROPPED,
-                        format!(
-                            "{} dropped {dropped} message(s) held back during a handoff for this \
-                             session, which has no process to receive them",
-                            crate::APP_NAME
-                        ),
-                        &[],
-                    )
-                    .about(target),
-                );
-            }
+            self.state.drop_held_queue(target, self.for_sharing);
             return;
         };
         if let Ok(runtime) = tokio::runtime::Handle::try_current() {
@@ -652,6 +646,10 @@ impl AppState {
     /// already being launched; the claim is released only when the returned guard is dropped, and
     /// registering the process as live does not release it — the holder drops it once whatever it
     /// does around the launch is done.
+    ///
+    /// Refused too while the session's account is locked for a change of its sharing (see
+    /// [`Self::lock_account_sharing`]): judged under the same lock as the claim, so a change
+    /// either sees the claim or the launch sees the change.
     pub fn begin_launch(self: &Arc<Self>, id: &str) -> Result<LaunchClaim> {
         let mut live = self.live.write().expect("live sessions lock poisoned");
         if live.sessions.contains_key(id) {
@@ -661,6 +659,13 @@ impl AppState {
                 &[("session", id)],
             ));
         }
+        if !live.sharing_locks.is_empty() {
+            if let Some(session) = self.store.get_session(id)? {
+                if let Some(entry) = locked_over(&live, &session) {
+                    return Err(crate::shared_config::sharing_in_progress(&entry.account));
+                }
+            }
+        }
         if !live.launching.insert(id.to_string()) {
             return Err(CodedError::raised(
                 error_code::SESSION_ALREADY_STARTING,
@@ -668,6 +673,8 @@ impl AppState {
                 &[("session", id)],
             ));
         }
+        drop(live);
+        crate::shared_config::publish(self);
         Ok(LaunchClaim {
             state: self.clone(),
             id: id.to_string(),
@@ -689,6 +696,8 @@ impl AppState {
                 &[("session", id)],
             ));
         }
+        drop(live);
+        crate::shared_config::publish(self);
         Ok(LaunchClaim {
             state: self.clone(),
             id: id.to_string(),
@@ -701,6 +710,105 @@ impl AppState {
             .expect("live sessions lock poisoned")
             .launching
             .remove(id);
+        crate::shared_config::publish(self);
+    }
+
+    /// Locks `account` for a change of its sharing, in one step with `admit`, which is shown
+    /// whether the account is locked already and the sessions running or holding a claim, and
+    /// refuses by answering an error: no claim can be taken or let go in between, and from then on
+    /// [`Self::begin_launch`] refuses every session of the account until the answer is dropped.
+    pub fn lock_account_sharing<T>(
+        self: &Arc<Self>,
+        account: &crate::protocol::Account,
+        admit: impl FnOnce(bool, &[Running]) -> Result<T>,
+    ) -> Result<(T, AccountSharingLock)> {
+        let mut live = self.live.write().expect("live sessions lock poisoned");
+        let running = self.running_of(&live)?;
+        let admitted = admit(live.sharing_locks.contains_key(&account.id), &running)?;
+        live.sharing_locks.insert(
+            account.id.clone(),
+            SharingLockEntry {
+                account: account.clone(),
+                restarting: HashSet::new(),
+            },
+        );
+        Ok((
+            admitted,
+            AccountSharingLock {
+                state: self.clone(),
+                account: account.id.clone(),
+                claims: HashMap::new(),
+                holds: HashMap::new(),
+            },
+        ))
+    }
+
+    /// The account locked for a change of its sharing that `session` runs under, if any, unless
+    /// the session is one that change restarts.
+    pub fn sharing_lock_over(&self, session: &Session) -> Option<crate::protocol::Account> {
+        let live = self.live.read().expect("live sessions lock poisoned");
+        locked_over(&live, session)
+            .filter(|entry| !entry.restarting.contains(&session.id))
+            .map(|entry| entry.account.clone())
+    }
+
+    /// The account `id` while it is locked for a change of its sharing.
+    pub fn sharing_locked(&self, id: &str) -> Option<crate::protocol::Account> {
+        let live = self.live.read().expect("live sessions lock poisoned");
+        live.sharing_locks
+            .get(id)
+            .map(|entry| entry.account.clone())
+    }
+
+    /// The sessions running or holding a claim, each once, as a change of sharing sees them.
+    pub fn running_sessions(&self) -> Result<Vec<Running>> {
+        let live = self.live.read().expect("live sessions lock poisoned");
+        self.running_of(&live)
+    }
+
+    fn running_of(&self, live: &LiveSessions) -> Result<Vec<Running>> {
+        let ids: HashSet<&String> = live.sessions.keys().chain(&live.launching).collect();
+        let mut running = Vec::new();
+        for id in ids {
+            let Some(session) = self.store.get_session(id)? else {
+                continue;
+            };
+            let restarting = live
+                .sharing_locks
+                .values()
+                .any(|entry| entry.restarting.contains(id));
+            let working = !restarting
+                && (live.launching.contains(id)
+                    || live
+                        .sessions
+                        .get(id)
+                        .is_none_or(|process| !self.is_idle_with(&session, process)));
+            running.push(Running {
+                session,
+                working,
+                restarting,
+            });
+        }
+        Ok(running)
+    }
+
+    /// Whether `session` is idle: its process is at the prompt, waiting for the user's next
+    /// message, with nothing on screen only the user can answer, no message of Octoboard's
+    /// queued, being written or left unsent in its input box, and nothing left running in the
+    /// background.
+    fn is_idle_with(&self, session: &Session, process: &LiveSession) -> bool {
+        session.status == SessionStatus::Idle
+            && !process.waits_for_user()
+            && !process.unsent_waiting()
+            && !self.outbox.is_pending(&session.id)
+            && self.background_tasks_of(&session.id).is_empty()
+    }
+
+    /// Whether `session`, its stored record, is working (`Some(true)`), idle (`Some(false)`), or has
+    /// no process, for telling whether its account's sharing state changed.
+    pub(crate) fn activity_of(&self, session: &Session) -> Option<bool> {
+        self.live_session(&session.id)
+            .map(|process| !self.is_idle_with(session, &process))
     }
 
     pub fn live_sessions(&self) -> Vec<Arc<LiveSession>> {
@@ -866,14 +974,18 @@ impl AppState {
     }
 
     /// The status a client is shown for a session: the stored one, or waiting for the user while
-    /// its running process is held up by something only the user can answer that no hook reports.
+    /// its running process is held up by something only the user can answer that no hook reports,
+    /// or starting while a change of its account's sharing has it ended and is to resume it.
     pub(crate) fn shown_status(&self, session: &Session) -> SessionStatus {
         let waiting = !session.status.is_dormant()
-            && self.live_session(&session.id).is_some_and(|live| {
-                live.trust.needs_user() || live.needs_user_action() || live.agent_dialog().is_some()
-            });
+            && self
+                .live_session(&session.id)
+                .is_some_and(|live| live.waits_for_user());
         if waiting {
             SessionStatus::WaitingUser
+        } else if session.status == SessionStatus::Interrupted && self.is_restarting(&session.id) {
+            // Ended by a change of its account's sharing, which resumes it once it has ended.
+            SessionStatus::Starting
         } else {
             session.status
         }
@@ -1060,6 +1172,7 @@ impl AppState {
         if is_current {
             // Its call has nobody left to return to.
             crate::session_request::withdraw_for_session(self, &session.id);
+            crate::shared_config::publish(self);
         }
         self.forget_session_bookkeeping(&session.id);
     }
@@ -1072,21 +1185,37 @@ impl AppState {
     }
 
     pub fn publish_session(&self, session: &Session) {
-        let _publication = self
-            .session_publication
-            .lock()
-            .expect("session publication lock poisoned");
-        // Partial store writes preserve columns owned by other paths. Always publish the stored
-        // row so a previously read record cannot blank a terminal title learned in the meantime.
-        match self.store.get_session(&session.id) {
-            Ok(Some(session)) => self.broadcast_locked(Event::SessionUpserted {
-                session: self.wire_session(session),
-            }),
-            Ok(None) => {}
-            Err(err) => {
-                tracing::warn!(session = %session.id, %err, "reading the session for publication failed")
+        {
+            let _publication = self
+                .session_publication
+                .lock()
+                .expect("session publication lock poisoned");
+            // Partial store writes preserve columns owned by other paths. Always publish the
+            // stored row so a previously read record cannot blank a terminal title learned in the
+            // meantime.
+            match self.store.get_session(&session.id) {
+                Ok(Some(session)) => self.broadcast_locked(Event::SessionUpserted {
+                    session: self.wire_session(session),
+                }),
+                Ok(None) => {}
+                Err(err) => {
+                    tracing::warn!(session = %session.id, %err, "reading the session for publication failed")
+                }
             }
         }
+        if let Ok(Some(session)) = self.store.get_session(&session.id) {
+            crate::shared_config::note_session(self, &session);
+        }
+    }
+
+    /// Whether a change of sharing has claimed `id` to restart it.
+    fn is_restarting(&self, id: &str) -> bool {
+        self.live
+            .read()
+            .expect("live sessions lock poisoned")
+            .sharing_locks
+            .values()
+            .any(|entry| entry.restarting.contains(id))
     }
 
     /// Writes a session record and tells every client about it. A record deleted in the meantime
@@ -1120,6 +1249,7 @@ impl AppState {
     ) -> Result<()> {
         if let Some(session) = self.store.set_session_account(id, account_id, config_dir)? {
             self.publish_session(&session);
+            crate::shared_config::publish(self);
         }
         Ok(())
     }
@@ -1178,6 +1308,7 @@ impl AppState {
     /// telling every client.
     fn forget_deleted(&self, id: &str) {
         self.forget_saved_output(id);
+        crate::shared_config::forget_session(self, id);
         self.forget_handoff_package(id);
         self.forget_request_hand(id);
         self.broadcast(Event::SessionDeleted {
@@ -1526,7 +1657,34 @@ impl AppState {
     /// than written even when the session looks ready, so order is structural rather than something
     /// each caller has to get right.
     pub fn queue_message(&self, id: &str, text: &str) -> Ticket {
-        self.outbox.push(id, text)
+        let ticket = self.outbox.push(id, text);
+        self.note_activity(id);
+        ticket
+    }
+
+    /// [`Self::queue_message`] for a session a change of its account's sharing is restarting, and
+    /// `None` for any other. The check and the push are one step under the `live` lock, which
+    /// [`AccountSharingLock::end_restart`] takes to let the session go before it ends the hold, so
+    /// a message is never pushed after the hold has dropped what it held.
+    pub(crate) fn queue_if_restarting(&self, id: &str, text: &str) -> Option<Ticket> {
+        let ticket = {
+            let live = self.live.read().expect("live sessions lock poisoned");
+            live.sharing_locks
+                .values()
+                .any(|entry| entry.restarting.contains(id))
+                .then(|| self.outbox.push(id, text))
+        }?;
+        // After the lock: it reads the live sessions again.
+        self.note_activity(id);
+        Some(ticket)
+    }
+
+    /// Tells the session's account a message queued, written or left unsent may have changed
+    /// whether the session is working.
+    fn note_activity(&self, id: &str) {
+        if let Ok(Some(session)) = self.store.get_session(id) {
+            crate::shared_config::note_session(self, &session);
+        }
     }
 
     /// Writes out whatever is queued for this session, and says what became of it.
@@ -1677,6 +1835,7 @@ impl AppState {
                 .about(id),
             );
         }
+        self.note_activity(id);
         outcome
     }
 
@@ -1694,12 +1853,58 @@ impl AppState {
     /// queued, none is written. A handoff holds the original's, so that nothing reaches a session
     /// whose work is being moved; see [`OutboxHold`].
     pub fn hold_outbox(self: &Arc<Self>, id: &str) -> OutboxHold {
-        self.outbox.hold(id);
+        self.hold_outbox_for(id, false)
+    }
+
+    /// [`Self::hold_outbox`] for a session a change of its account's sharing restarts; the only
+    /// difference is the notice for messages dropped when it is not relaunched.
+    pub fn hold_outbox_for_sharing(self: &Arc<Self>, id: &str) -> OutboxHold {
+        self.hold_outbox_for(id, true)
+    }
+
+    fn hold_outbox_for(self: &Arc<Self>, id: &str, for_sharing: bool) -> OutboxHold {
+        self.outbox.hold(id, for_sharing);
         OutboxHold {
             state: self.clone(),
             id: id.to_string(),
+            for_sharing,
             successor: std::sync::Mutex::new(None),
         }
+    }
+
+    /// Forgets what is queued for `id`, a session that will never take it, and says so as a
+    /// `sharing_messages_dropped` notice when `for_sharing` or `handoff_messages_dropped` otherwise,
+    /// when anything was queued.
+    fn drop_held_queue(&self, id: &str, for_sharing: bool) {
+        let dropped = self.outbox.forget(id);
+        if dropped == 0 {
+            return;
+        }
+        let (code, during, why) = if for_sharing {
+            (
+                notice_code::SHARING_MESSAGES_DROPPED,
+                "while its account's sharing changed",
+                "the session was not restarted",
+            )
+        } else {
+            (
+                notice_code::HANDOFF_MESSAGES_DROPPED,
+                "during a handoff",
+                "the session has no process to receive them",
+            )
+        };
+        self.broadcast(
+            Notice::new(
+                code,
+                format!(
+                    "{} dropped {dropped} message(s) held back for this session {during}, \
+                     because {why}",
+                    crate::APP_NAME
+                ),
+                &[],
+            )
+            .about(id),
+        );
     }
 
     /// Removes and returns what is queued for a session, oldest first.
@@ -1731,6 +1936,8 @@ impl AppState {
             Some(WriteHold::AgentAction)
         } else if live.agent_error() {
             Some(WriteHold::AgentError)
+        } else if self.outbox.is_held_for_sharing(id) {
+            Some(WriteHold::SharingChange)
         } else if self.outbox.is_held(id) {
             Some(WriteHold::Handoff)
         } else if live.unsent_waiting() {
@@ -2252,6 +2459,156 @@ impl AppState {
 struct LiveSessions {
     sessions: HashMap<String, Arc<LiveSession>>,
     launching: HashSet<String>,
+    /// The accounts locked for a change of their sharing, by id.
+    sharing_locks: HashMap<String, SharingLockEntry>,
+}
+
+struct SharingLockEntry {
+    /// The account as it was when locked.
+    account: crate::protocol::Account,
+    /// The sessions the change restarts, until each is resumed or let go.
+    restarting: HashSet<String>,
+}
+
+/// A session running or holding a claim, as a change of sharing sees it.
+pub struct Running {
+    pub session: Session,
+    /// Working, which refuses a change of its account's sharing: not idle (see
+    /// [`AppState::activity_of`]), or claimed by anything but such a change.
+    pub working: bool,
+    /// Claimed by a change of its account's sharing, which restarts it.
+    pub restarting: bool,
+}
+
+/// The account locked for a change of its sharing that `session` runs under, if any.
+fn locked_over<'a>(live: &'a LiveSessions, session: &Session) -> Option<&'a SharingLockEntry> {
+    live.sharing_locks
+        .values()
+        .find(|entry| crate::shared_config::runs_under(&entry.account, session))
+}
+
+/// An account locked for a change of its sharing (see [`AppState::lock_account_sharing`]), until
+/// dropped, with the claims on the idle sessions the change ends and resumes: nothing else can
+/// launch, resume, switch or delete them meanwhile, and a client is shown them `starting` rather
+/// than interrupted while their process is down (see [`AppState::shown_status`]).
+pub struct AccountSharingLock {
+    state: Arc<AppState>,
+    account: String,
+    claims: HashMap<String, LaunchClaim>,
+    /// The claimed sessions' queues, held from the claim until the session is let go: a message
+    /// sent to one meanwhile is not written into a process about to be ended, nor forgotten when
+    /// it ends, and is left for the resumed process (see [`Self::release_queue_for_relaunch`]), or
+    /// dropped with a notice for a session not resumed (see [`OutboxHold`]).
+    holds: HashMap<String, OutboxHold>,
+}
+
+impl AccountSharingLock {
+    /// Claims the sessions `choose` names, idle ones of the account, for the change to restart, in
+    /// one step with `choose`'s look at the sessions running or holding a claim, which refuses by
+    /// answering an error.
+    pub fn claim_idle(
+        &mut self,
+        choose: impl FnOnce(&[Running]) -> Result<Vec<String>>,
+    ) -> Result<()> {
+        let mut live = self
+            .state
+            .live
+            .write()
+            .expect("live sessions lock poisoned");
+        let running = self.state.running_of(&live)?;
+        let ids = choose(&running)?;
+        let mut claimed = HashSet::new();
+        for id in ids {
+            // Not claimed already: a claimed session is never idle.
+            if live.launching.insert(id.clone()) {
+                claimed.insert(id.clone());
+                self.holds
+                    .insert(id.clone(), self.state.hold_outbox_for_sharing(&id));
+                self.claims.insert(
+                    id.clone(),
+                    LaunchClaim {
+                        state: self.state.clone(),
+                        id,
+                    },
+                );
+            }
+        }
+        if let Some(entry) = live.sharing_locks.get_mut(&self.account) {
+            entry.restarting.extend(claimed);
+        }
+        Ok(())
+    }
+
+    /// The sessions the change restarts that are still claimed for it.
+    pub fn restarting(&self) -> Vec<String> {
+        let mut ids: Vec<String> = self.claims.keys().cloned().collect();
+        ids.sort();
+        ids
+    }
+
+    /// The claim on `id`, one of [`Self::restarting`].
+    pub fn claim(&self, id: &str) -> Option<&LaunchClaim> {
+        self.claims.get(id)
+    }
+
+    /// Ends the hold on `id`'s queue ahead of its relaunch, leaving what is queued for the launch's
+    /// own triggers to write once the agent can take it (its first hook, its trust screen
+    /// released), as a resume does: the session is still claimed and dormant, which the hold's end
+    /// keeps a queue for.
+    pub fn release_queue_for_relaunch(&mut self, id: &str) {
+        if let Some(hold) = self.holds.remove(id) {
+            hold.forward_to(id);
+        }
+    }
+
+    /// Lets `id` go: it is no longer restarted, and every client is told its own status again.
+    pub fn end_restart(&mut self, id: &str) {
+        if let Some(entry) = self
+            .state
+            .live
+            .write()
+            .expect("live sessions lock poisoned")
+            .sharing_locks
+            .get_mut(&self.account)
+        {
+            entry.restarting.remove(id);
+        }
+        drop(self.claims.remove(id));
+        drop(self.holds.remove(id));
+        // A message queued after the queue was handed to the launch and before the session was let
+        // go has had no drain to write it, its hooks may all have come already, or, when the launch
+        // failed, nobody to drop it.
+        if self.state.queued_count(id) > 0 {
+            if self.state.has_process(id) {
+                if let (Ok(Some(session)), Ok(_)) = (
+                    self.state.store.get_session(id),
+                    tokio::runtime::Handle::try_current(),
+                ) {
+                    self.state
+                        .spawn_flush_outbox(id, self.state.agent_status(&session));
+                }
+            } else if !self.state.is_launching(id) {
+                self.state.drop_held_queue(id, true);
+            }
+        }
+        if let Ok(Some(session)) = self.state.store.get_session(id) {
+            self.state.publish_session(&session);
+        }
+    }
+}
+
+impl Drop for AccountSharingLock {
+    fn drop(&mut self) {
+        for id in self.restarting() {
+            self.end_restart(&id);
+        }
+        self.state
+            .live
+            .write()
+            .expect("live sessions lock poisoned")
+            .sharing_locks
+            .remove(&self.account);
+    }
 }
 
 /// What a delete of a session came to.
@@ -3337,6 +3694,22 @@ mod tests {
                 assert_eq!(
                     (session.as_str(), code.as_str()),
                     ("w", "handoff_messages_dropped")
+                );
+            }
+            other => panic!("expected a notice, got {other:?}"),
+        }
+
+        // A hold taken for a sharing change says so when it drops what it held.
+        let mut events = state.subscribe();
+        let hold = state.hold_outbox_for_sharing("z");
+        state.queue_message("z", "five");
+        drop(hold);
+        assert_eq!(state.outbox.len("z"), 0);
+        match events.try_recv().expect("a notice") {
+            Event::SessionNotice { session, code, .. } => {
+                assert_eq!(
+                    (session.as_str(), code.as_str()),
+                    ("z", "sharing_messages_dropped")
                 );
             }
             other => panic!("expected a notice, got {other:?}"),

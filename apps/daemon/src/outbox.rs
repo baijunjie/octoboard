@@ -155,8 +155,9 @@ pub struct Outbox {
     /// The sessions a drainer currently owns.
     draining: Mutex<HashSet<String>>,
     /// The sessions whose queue is held: messages are still accepted but none is written, because
-    /// the session is being handed off and what is queued for it goes to its successor.
-    held: Mutex<HashSet<String>>,
+    /// the session is being handed off and what is queued for it goes to its successor, or
+    /// restarted for a change of its account's sharing (the value is `true`).
+    held: Mutex<HashMap<String, bool>>,
 }
 
 impl Outbox {
@@ -304,6 +305,16 @@ impl Outbox {
             .unwrap_or(0)
     }
 
+    /// Whether anything is queued for this session or being written into it now.
+    pub fn is_pending(&self, id: &str) -> bool {
+        self.len(id) > 0
+            || self
+                .draining
+                .lock()
+                .expect("outbox claim lock poisoned")
+                .contains(id)
+    }
+
     /// Forgets this session's queue and says how much went with it. Called when its process is gone
     /// — there is nothing to write to, and a resume starts the agent at its prompt rather than
     /// replaying a queue it never saw — and when a write left the input line holding a fragment.
@@ -317,11 +328,11 @@ impl Outbox {
     }
 
     /// Stops writing this session's queue until [`Self::release_hold`]. Pushing still works.
-    pub fn hold(&self, id: &str) {
+    pub fn hold(&self, id: &str, for_sharing: bool) {
         self.held
             .lock()
             .expect("outbox hold lock poisoned")
-            .insert(id.to_string());
+            .insert(id.to_string(), for_sharing);
     }
 
     pub fn release_hold(&self, id: &str) {
@@ -335,7 +346,17 @@ impl Outbox {
         self.held
             .lock()
             .expect("outbox hold lock poisoned")
-            .contains(id)
+            .contains_key(id)
+    }
+
+    /// Whether the hold on this session's queue is for a change of its account's sharing.
+    pub fn is_held_for_sharing(&self, id: &str) -> bool {
+        self.held
+            .lock()
+            .expect("outbox hold lock poisoned")
+            .get(id)
+            .copied()
+            .unwrap_or(false)
     }
 
     /// Removes and returns what is queued for this session, oldest first.

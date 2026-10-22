@@ -1,6 +1,6 @@
 import { Archive, ArrowLeftRight, Copy, Download, Focus, Forward, Folder, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Lock, LockOpen, Palette, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Upload, SquareArrowOutUpRight } from "lucide-react";
 
-import { switchEntries, type QuotaReadings } from "../accountChoices";
+import { ownAccountChangingUnavailable, sharingChangeUnavailable, switchEntries, type QuotaReadings } from "../accountChoices";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanel, ActionMenuSubmenu } from "../components/ActionMenu";
 import { ExternalLinkIcon } from "../components/ExternalLinkIcon";
 import { RepositoryIcon } from "../components/RepositoryIcon";
@@ -9,7 +9,7 @@ import { FadeOverflow } from "../components/FadeOverflow";
 import { AgentIcon } from "../components/AgentIcon";
 import { PathText } from "../components/PathText";
 import type { Translate } from "../i18n/catalog";
-import type { Account, Console, Project, Session, Settings } from "../protocol";
+import type { Account, AccountSharing, Console, Project, Session, Settings } from "../protocol";
 import { accountUsage } from "../quota/accountUsage";
 import { sessionChoiceTitle, sessionDisplayTitle } from "../sessionLabel";
 import { FocusShortcutKbd } from "./focusShortcut";
@@ -142,7 +142,8 @@ export function projectMenu(
 
 /** "Switch account": the session's agent's accounts, the one the session is on marked as current
  * and doing nothing, and last a way into Settings' Agent accounts section. An account whose quota
- * is used up is disabled, with why under its name. Absent when the agent has no other account to go
+ * is used up, or whose sharing change runs, is disabled, with why under its name; so is every account while the
+ * session's own account is changing. Absent when the agent has no other account to go
  * to — hidden rather than disabled, as there is nothing the user could do with it. */
 function switchAccountSubmenu(
   t: Translate,
@@ -151,18 +152,23 @@ function switchAccountSubmenu(
   accounts: Account[],
   defaultNames: Settings["default_account_names"],
   readings: QuotaReadings | undefined,
+  sharing: Map<string, AccountSharing> | undefined,
 ): ActionMenuSubmenu | undefined {
-  const entries = switchEntries(session, accounts, t, defaultNames, readings);
+  const entries = switchEntries(session, accounts, t, defaultNames, readings, sharing);
   if (entries.length < 2) return undefined;
+  const ownChanging = entries.some((entry) => entry.current && entry.changingSharing);
   return {
     label: t("sidebar.session.switchAccount"),
     icon: ArrowLeftRight,
     items: [
-      ...entries.map(({ account, name, current, isPath, exhaustedBy, quota }) => {
+      ...entries.map(({ account, name, current, isPath, exhaustedBy, quota, changingSharing }) => {
         // A usage bar as the icon, the remainder said to assistive technology, and for one
         // used up the short reason under its name. The current account is never offered, so it is
         // not marked used up; a removed account's directory has no quota.
-        const { icon, detail, reason } = accountUsage(t, session.agent, quota, current ? undefined : exhaustedBy, readings?.now ?? 0);
+        const usage = accountUsage(t, session.agent, quota, current ? undefined : exhaustedBy, readings?.now ?? 0);
+        // Nothing can be switched onto an account whose sharing change runs, nor away from one, whatever its quota.
+        const unavailable = current ? undefined : changingSharing ? sharingChangeUnavailable(t) : ownChanging ? ownAccountChangingUnavailable(t) : undefined;
+        const { icon, detail, reason } = unavailable ? { icon: usage.icon, ...unavailable } : usage;
         return {
           label: name,
           // A directory is a path, so it reads left to right and shows its end, as it does elsewhere.
@@ -186,9 +192,12 @@ function switchAccountSubmenu(
 
 /** "Hand off": offered for a session that is not archived. Disabled while the session is in the
  * middle of a turn or still starting, which the daemon refuses (`session_working`), while it
- * is locked, as Archive is, and while no other agent could take it over (`hasTarget`). */
-function handOffItem(t: Translate, handlers: SidebarHandlers, session: Session, hasTarget: boolean): ActionMenuItem {
+ * is locked, as Archive is, and while no other agent could take it over (`hasTarget`); and, with the reason
+ * shown, while the session's own account is changing its sharing (`ownChanging`), which the daemon refuses. */
+function handOffItem(t: Translate, handlers: SidebarHandlers, session: Session, hasTarget: boolean, ownChanging: boolean): ActionMenuItem {
+  const unavailable = ownChanging ? ownAccountChangingUnavailable(t) : undefined;
   return {
+    ...(unavailable ? { description: unavailable.detail, reason: unavailable.reason } : {}),
     label: t("sidebar.session.handOff"),
     icon: Forward,
     iconClassName: "rtl:-scale-x-100",
@@ -233,24 +242,26 @@ function colourSubmenu(t: Translate, handlers: SidebarHandlers, session: Session
  * `docs/product/hub-orchestration.md`), and the only place to switch its account. Focus mode is
  * offered for a console session alone; its own card in its focus mode (`placement` `focused`)
  * leaves out Focus mode and Pin / Unpin. `canHandOff` is whether another agent could take a session over.
- * `quota` is what the Switch account entries are judged against, for the accounts used up. */
+ * `quota` is what the Switch account entries are judged against, for the accounts used up, and `sharing` for the
+ * accounts whose sharing change runs. */
 export function sessionMenu(
   t: Translate,
   handlers: SidebarHandlers,
   session: Session,
   accounts: Account[],
   defaultNames: Settings["default_account_names"],
-  { placement = "list", hasBoundSessions = false, canHandOff = true, quota }: {
+  { placement = "list", hasBoundSessions = false, canHandOff = true, quota, sharing }: {
     placement?: MenuPlacement;
     hasBoundSessions?: boolean;
     canHandOff?: boolean;
     quota?: QuotaReadings;
+    sharing?: Map<string, AccountSharing>;
   } = {},
 ): ActionMenuEntry[] {
   const focused = placement === "focused";
   const archived = session.status === "archived";
   // The daemon refuses to switch the account of a session that is still starting.
-  const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts, defaultNames, quota);
+  const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts, defaultNames, quota, sharing);
   const focusable = session.role === "console" && !archived && !focused;
   return [
     ...(!archived ? [{ label: t(session.locked ? "sidebar.session.unlock" : "sidebar.session.lock"), icon: session.locked ? LockOpen : Lock, onClick: () => handlers.onSetLocked(session, !session.locked) }] : []),
@@ -261,7 +272,7 @@ export function sessionMenu(
     ...(session.role === "console" && !archived ? [colourSubmenu(t, handlers, session)] : []),
     ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <FocusShortcutKbd />, onClick: () => handlers.onFocus({ consoleSession: session }) }] : []),
     ...(switchAccount ? [switchAccount] : []),
-    ...(archived ? [] : [handOffItem(t, handlers, session, canHandOff)]),
+    ...(archived ? [] : [handOffItem(t, handlers, session, canHandOff, sharing?.get(session.account_id ?? "")?.progress !== undefined)]),
     "separator",
     offersDelete(session, hasBoundSessions)
       ? { label: t("sidebar.session.delete"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-session", session }), destructive: true, disabled: session.locked }

@@ -118,6 +118,16 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
   them, or a reading arrives while the dialog is open — a danger callout at the top of the
   dialog's body names the account, the quota it has used up and when it resets, and the dialog cannot be submitted
   until another agent or account is chosen or the account is no longer used up.
+  An account whose sharing of the default configuration is being changed, which the daemon refuses a session on
+  meanwhile (see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`), is treated
+  the same way while the change runs: it is listed but cannot be picked, its usage bar staying and a short note under
+  its name saying why, with the full reason as its description for assistive technology in place of what remains of
+  its quota; the field passes over it as it passes over a used-up account; and when the chosen account is one all
+  the same, a danger callout at the top of the dialog's body says that its sharing is being changed, to choose
+  another account or wait, and the dialog cannot be submitted until then.
+  An account whose last change of sharing is incomplete can be picked, and submitting on it asks the user first (see
+  "Starting a session on an account whose last change is incomplete" in
+  `docs/product/sharing-the-default-configuration.md`).
   Switching agents retains each agent's account choice separately. If a remembered account is removed while the dialog
   is open, that agent stays selected and its account falls back to the account the field would open on for that agent
   (see "Which account a session uses" below); with its last named account removed, the picker stays, offering the
@@ -289,8 +299,13 @@ the answer arrives, the session is still opened but not selected.
 When no agent is both added and installed, no **+** shows its quick form, and every one of them is disabled (see
 "Opening a session" above).
 
-When the account the dialog would open on is used up, the session opened with defaults takes another account of the
-same agent, as the dialog does (see **Agent** above). When every account of that agent is used up, there is nothing
+When the account the dialog would open on is used up, or its sharing of the default configuration is being changed,
+the session opened with defaults takes another account of the same agent, as the dialog does (see **Agent** above).
+When no account of the agent is left that is neither, and the one it would open on is having its sharing changed,
+nothing is sent and an error alert says the account's sharing is being changed, as the daemon's
+`account_sharing_in_progress` refusal does. When the account it opens on has an incomplete last change of sharing,
+the user is asked first, and cancelling opens nothing (see "Starting a session on an account whose last change is
+incomplete" in `docs/product/sharing-the-default-configuration.md`). When every account of that agent is used up, there is nothing
 to open with defaults:
 
 - the **+** in its quick form looks disabled but stays focusable and under the pointer; its accessible name stays its

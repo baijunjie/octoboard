@@ -382,9 +382,18 @@ impl Store {
                 conn.execute(&format!("ALTER TABLE {table} ADD COLUMN {column} TEXT"), [])?;
             }
         }
+        // A change recorded as pending, to be carried out later, did not finish: it reads as
+        // incomplete, for the user to retry.
+        if column_exists(&conn, "accounts", "share_default_config_pending")? {
+            conn.execute(
+                "ALTER TABLE accounts RENAME COLUMN share_default_config_pending \
+                 TO share_default_config_incomplete",
+                [],
+            )?;
+        }
         for column in [
             "share_default_config",
-            "share_default_config_pending",
+            "share_default_config_incomplete",
             "share_default_config_completed",
         ] {
             if !column_exists(&conn, "accounts", column)? {
@@ -719,7 +728,7 @@ impl Store {
     pub fn insert_account(&self, account: &Account) -> Result<()> {
         self.lock()
             .execute(
-                "INSERT INTO accounts (id, agent, name, config_dir, created_at, approval_reviewer, approval_mode, share_default_config, share_default_config_pending) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                "INSERT INTO accounts (id, agent, name, config_dir, created_at, approval_reviewer, approval_mode, share_default_config, share_default_config_incomplete) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 params![
                     account.id,
                     enum_to_text(&account.agent),
@@ -729,7 +738,7 @@ impl Store {
                     account.approval_reviewer.as_ref().map(enum_to_text),
                     account.approval_mode.as_ref().map(enum_to_text),
                     account.share_default_config,
-                    account.share_default_config_pending,
+                    account.share_default_config_incomplete,
                 ],
             )
             .map_err(|err| account_write_error(err, account))?;
@@ -741,12 +750,11 @@ impl Store {
     /// table's own `accounts_agent_name_unique` index is the backstop for that check, not a
     /// replacement for it.
     ///
-    /// The coordinator turns an account's sharing off before repointing it, so a new directory is
-    /// in line with a choice that is off. Should the choice still be on, it becomes pending for
-    /// the new directory, and what turning sharing on recorded of the old directory is forgotten
-    /// either way. A directory spelled differently that compares as the same one
-    /// (`account_dir_key`, folding case on macOS) is no repoint: what sharing recorded stays, so
-    /// its backups are still restored.
+    /// The coordinator turns an account's sharing off before repointing it, so a new directory
+    /// starts out not sharing: the choice is recorded off and complete, and what turning sharing
+    /// on recorded of the old directory is forgotten. A directory spelled differently that
+    /// compares as the same one (`account_dir_key`, folding case on macOS) is no repoint: what
+    /// sharing recorded stays, so its backups are still restored.
     pub fn update_account(&self, account: &Account) -> Result<()> {
         let conn = self.lock();
         let current: Option<String> = conn
@@ -762,8 +770,9 @@ impl Store {
         });
         conn.execute(
             "UPDATE accounts SET name = ?2, config_dir = ?3,
-                 share_default_config_pending = CASE WHEN ?4
-                     THEN share_default_config_pending ELSE share_default_config END,
+                 share_default_config = CASE WHEN ?4 THEN share_default_config ELSE 0 END,
+                 share_default_config_incomplete = CASE WHEN ?4
+                     THEN share_default_config_incomplete ELSE 0 END,
                  share_default_config_backup = CASE WHEN ?4
                      THEN share_default_config_backup ELSE NULL END,
                  share_default_config_dir = CASE WHEN ?4
@@ -801,12 +810,12 @@ impl Store {
         Ok(())
     }
 
-    /// Records the account's sharing choice and whether its directory is in line with it.
-    pub fn set_account_sharing(&self, id: &str, share: bool, pending: bool) -> Result<()> {
+    /// Records the account's sharing choice and whether the last change toward it is incomplete.
+    pub fn set_account_sharing(&self, id: &str, share: bool, incomplete: bool) -> Result<()> {
         self.lock().execute(
-            "UPDATE accounts SET share_default_config = ?2, share_default_config_pending = ?3
+            "UPDATE accounts SET share_default_config = ?2, share_default_config_incomplete = ?3
              WHERE id = ?1",
-            params![id, share, pending],
+            params![id, share, incomplete],
         )?;
         Ok(())
     }
@@ -859,12 +868,12 @@ impl Store {
     }
 
     /// Records the account's directory `config_dir` brought in line with the choice `share`: the
-    /// start is marked completed, or forgotten once sharing is undone. Nothing is written, and
-    /// `false` answered, when the account has been repointed or its choice changed meanwhile: the
-    /// change stays pending.
+    /// start is marked completed, or forgotten once sharing is undone, and the account is no
+    /// longer incomplete. Nothing is written, and `false` answered, when the account has been
+    /// repointed or its choice changed meanwhile.
     pub fn finish_account_sharing(&self, id: &str, config_dir: &str, share: bool) -> Result<bool> {
         let changed = self.lock().execute(
-            "UPDATE accounts SET share_default_config_pending = 0,
+            "UPDATE accounts SET share_default_config_incomplete = 0,
                  share_default_config_backup = CASE WHEN ?3 THEN share_default_config_backup END,
                  share_default_config_dir = CASE WHEN ?3 THEN share_default_config_dir END,
                  share_default_config_completed = ?3
@@ -878,7 +887,7 @@ impl Store {
         let account = self
             .lock()
             .query_row(
-                "SELECT id, agent, name, config_dir, approval_reviewer, approval_mode, share_default_config, share_default_config_pending FROM accounts WHERE id = ?1",
+                "SELECT id, agent, name, config_dir, approval_reviewer, approval_mode, share_default_config, share_default_config_incomplete FROM accounts WHERE id = ?1",
                 params![id],
                 read_account,
             )
@@ -899,7 +908,7 @@ impl Store {
     pub fn list_accounts(&self) -> Result<Vec<Account>> {
         let conn = self.lock();
         let mut stmt =
-            conn.prepare("SELECT id, agent, name, config_dir, approval_reviewer, approval_mode, share_default_config, share_default_config_pending FROM accounts ORDER BY created_at")?;
+            conn.prepare("SELECT id, agent, name, config_dir, approval_reviewer, approval_mode, share_default_config, share_default_config_incomplete FROM accounts ORDER BY created_at")?;
         let rows = stmt
             .query_map([], read_account)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -2451,7 +2460,7 @@ fn read_account(row: &Row<'_>) -> rusqlite::Result<Account> {
         approval_reviewer: enum_from_row_opt(row, 4)?,
         approval_mode: enum_from_row_opt(row, 5)?,
         share_default_config: row.get(6)?,
-        share_default_config_pending: row.get(7)?,
+        share_default_config_incomplete: row.get(7)?,
     })
 }
 
@@ -2683,7 +2692,7 @@ mod tests {
             approval_reviewer: None,
             approval_mode: None,
             share_default_config: false,
-            share_default_config_pending: false,
+            share_default_config_incomplete: false,
         }
     }
 
@@ -4040,11 +4049,11 @@ mod tests {
         assert_eq!(store.list_accounts().unwrap(), [after_repoint]);
     }
 
-    /// Repointing an account leaves its sharing choice pending for the new directory when it is
-    /// on, forgets what turning it on recorded of the old one, and an outcome carried out on the
-    /// old directory is not recorded for the new one; a rename changes none of it.
+    /// Repointing an account starts the new directory out not sharing and forgets what turning
+    /// sharing on recorded of the old one, and an outcome carried out on the old directory is not
+    /// recorded for the new one; a rename changes none of it.
     #[test]
-    fn repointing_an_account_makes_its_sharing_pending_for_the_new_directory() {
+    fn repointing_an_account_starts_its_new_directory_out_not_sharing() {
         let path = temp_db("account-sharing-repoint");
         let store = Store::open(&path).expect("store");
         store
@@ -4067,7 +4076,7 @@ mod tests {
         renamed.name = "Work".to_string();
         store.update_account(&renamed).unwrap();
         let after_rename = store.get_account("acct-1").unwrap().unwrap();
-        assert!(after_rename.share_default_config && !after_rename.share_default_config_pending);
+        assert!(after_rename.share_default_config && !after_rename.share_default_config_incomplete);
         assert_eq!(
             store.account_sharing_start("acct-1").unwrap(),
             Some(SharingStart {
@@ -4080,8 +4089,11 @@ mod tests {
         repointed.config_dir = "/home/u/.codex-work".to_string();
         store.update_account(&repointed).unwrap();
         let after_repoint = store.get_account("acct-1").unwrap().unwrap();
-        assert!(after_repoint.share_default_config && after_repoint.share_default_config_pending);
+        assert!(
+            !after_repoint.share_default_config && !after_repoint.share_default_config_incomplete
+        );
         assert_eq!(store.account_sharing_start("acct-1").unwrap(), None);
+        store.set_account_sharing("acct-1", true, true).unwrap();
         assert!(!store
             .start_account_sharing("acct-1", "/home/u/.codex-alt", &start)
             .unwrap());
@@ -4093,7 +4105,7 @@ mod tests {
                 .get_account("acct-1")
                 .unwrap()
                 .unwrap()
-                .share_default_config_pending
+                .share_default_config_incomplete
         );
 
         // Respelled only: the same directory where the platform compares it so, keeping what
@@ -4114,6 +4126,31 @@ mod tests {
             store.account_sharing_start("acct-1").unwrap().is_some(),
             same
         );
+    }
+
+    /// A change an earlier version recorded as pending, to be carried out later, reads as
+    /// incomplete.
+    #[test]
+    fn a_stored_pending_sharing_change_reads_as_incomplete() {
+        let path = temp_db("account-sharing-pending");
+        {
+            let store = Store::open(&path).expect("store");
+            store
+                .insert_account(&account("acct-1", Agent::Codex, "/home/u/.codex-alt"))
+                .expect("account");
+        }
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(
+                "ALTER TABLE accounts RENAME COLUMN share_default_config_incomplete
+                     TO share_default_config_pending;
+                 UPDATE accounts SET share_default_config = 1, share_default_config_pending = 1;",
+            )
+            .unwrap();
+        }
+        let store = Store::open(&path).expect("reopened");
+        let account = store.get_account("acct-1").unwrap().unwrap();
+        assert!(account.share_default_config && account.share_default_config_incomplete);
     }
 
     /// A freshly created project has no tags, and tags round-trip through an update.

@@ -1,5 +1,5 @@
 import { Switch } from "@heroui/react";
-import React from "react";
+import React, { useEffect, useRef } from "react";
 
 /** One setting: its name and, when it has one, a line saying what it does at the start, its control
  * at the end, with a thin divider under every row but the last. At phone widths the control moves
@@ -33,6 +33,51 @@ export function SettingRow({
   );
 }
 
+/** An on/off switch named by `label`, which the setting shows itself. */
+export function SettingSwitch({
+  label,
+  isSelected,
+  onChange,
+  describedBy,
+  isUnavailable,
+}: {
+  label: string;
+  isSelected: boolean;
+  onChange: (value: boolean) => void;
+  /** The ids of the notes that describe the switch. */
+  describedBy?: string;
+  /** The switch cannot be changed now, for a reason `describedBy` gives. It is not natively disabled, which would take
+   * it out of the Tab order and drop focus from a user who is on it: it stays focusable, reads as `aria-disabled`,
+   * looks faded, and a press or Space leaves it as it is. */
+  isUnavailable?: boolean;
+}): React.ReactElement {
+  const root = useRef<HTMLDivElement>(null);
+  // The library puts `isReadOnly` on the input as `aria-readonly` and leaves out `aria-disabled`, which says it is
+  // unavailable rather than merely fixed.
+  useEffect(() => {
+    const input = root.current?.querySelector("input");
+    if (isUnavailable) input?.setAttribute("aria-disabled", "true");
+    else input?.removeAttribute("aria-disabled");
+  }, [isUnavailable]);
+  return (
+    <Switch
+      ref={root}
+      aria-label={label}
+      aria-describedby={describedBy}
+      isReadOnly={isUnavailable}
+      isSelected={isSelected}
+      onChange={(value) => { if (!isUnavailable) onChange(value); }}
+      className={isUnavailable ? "opacity-(--disabled-opacity)" : undefined}
+    >
+      <Switch.Content>
+        <Switch.Control>
+          <Switch.Thumb />
+        </Switch.Control>
+      </Switch.Content>
+    </Switch>
+  );
+}
+
 /** A `SettingRow` whose control is an on/off switch. The switch is named by the visible label. */
 export function SwitchSettingRow({
   label,
@@ -49,13 +94,7 @@ export function SwitchSettingRow({
 }): React.ReactElement {
   return (
     <SettingRow label={label} help={help} description={description}>
-      <Switch aria-label={label} isSelected={isSelected} onChange={onChange}>
-        <Switch.Content>
-          <Switch.Control>
-            <Switch.Thumb />
-          </Switch.Control>
-        </Switch.Content>
-      </Switch>
+      <SettingSwitch label={label} isSelected={isSelected} onChange={onChange} />
     </SettingRow>
   );
 }

@@ -35,6 +35,7 @@ import { ConfirmDialog } from "./dialogs/ConfirmDialog";
 import type { DialogRequest } from "./dialogs/dialogRequest";
 import { PendingQuestionDialog, usePendingQuestion } from "./dialogs/PendingQuestionDialog";
 import { RequestedDialog } from "./dialogs/RequestedDialog";
+import { useConfirmIncompleteLaunch } from "./dialogs/useConfirmIncompleteLaunch";
 import { useQuickCreateSession } from "./dialogs/useQuickCreateSession";
 import { forcibleBranches, inspectSessionBranches, lockedWorktrees } from "./dialogs/useSessionBranches";
 import { Message, useT } from "./i18n/react";
@@ -381,9 +382,13 @@ export function App(): React.ReactElement {
     toastError,
   });
 
+  // The question before a launch on an account whose sharing change did not finish; this window's
+  // own launches (a resume, a quick create) go through it and render it at this level.
+  const { confirmLaunch, confirmation: launchConfirmation } = useConfirmIncompleteLaunch();
+
   const { settingsOpen, settingsNavigation, openSettings, openSettingsAt, closeSettings } = useSettingsDialog({
     ready: hosts !== undefined,
-    otherModalOpen: dialogRequest !== undefined || questionPending || exitConfirmOpen,
+    otherModalOpen: dialogRequest !== undefined || questionPending || exitConfirmOpen || launchConfirmation !== undefined,
     focusTerminal,
   });
 
@@ -396,9 +401,16 @@ export function App(): React.ReactElement {
 
   /** Resumes a session; resolves to whether the daemon accepted it. A console may now
    * hold any number of live console sessions, so there is nothing to pre-emptively refuse here —
-   * selecting, resuming or reopening one simply works, whatever else is running in the console. */
-  const resumeSession = async (sessionId: string): Promise<boolean> =>
-    runOnce(`resume:${sessionId}`, () => startResume(sessionId));
+   * selecting, resuming or reopening one simply works, whatever else is running in the console. An
+   * account whose last sharing change did not finish is asked about first; cancelling resolves
+   * false and sends nothing. */
+  const resumeSession = async (sessionId: string): Promise<boolean> => {
+    let accepted = false;
+    await confirmLaunch(store.getState().sessions.get(sessionId)?.account_id, async () => {
+      accepted = await runOnce(`resume:${sessionId}`, () => startResume(sessionId));
+    });
+    return accepted;
+  };
 
   const startResume = (sessionId: string): Promise<void> =>
     whileResuming(setResumingIds, sessionId, () => request({ type: "resume_session", session: sessionId, terminal_appearance: appearance }));
@@ -437,7 +449,7 @@ export function App(): React.ReactElement {
     setArchiveScope(undefined);
   };
 
-  const quickCreateSession = useQuickCreateSession(showOpenedSession, sidebarView.currentConsole?.id);
+  const quickCreateSession = useQuickCreateSession(showOpenedSession, sidebarView.currentConsole?.id, confirmLaunch);
 
   // `create_console` is answered with a bare ack, so the console this window just created is
   // recognised as the one that was not there when its dialog opened, and the sidebar switches to it.
@@ -720,6 +732,7 @@ export function App(): React.ReactElement {
   // and a dialog opened meanwhile is left alone.
   const resuming = useLatest(resumingIds);
   const openedDialog = useLatest(dialogRequest);
+  const launchQuestionOpen = useLatest(launchConfirmation !== undefined);
   const inspectingArchive = useRef(new Set<string>());
   const asksBeforeArchiving = (session: Session) =>
     resuming.current.has(session.id) || archiveNeedsConfirmation(allSessions(), session);
@@ -736,7 +749,7 @@ export function App(): React.ReactElement {
       const now = store.getState().sessions.get(live.id);
       if (!now || now.status === "archived") return;
       if (asksBeforeArchiving(now) || forcibleBranches(branches).length > 0 || lockedWorktrees(branches).length > 0) {
-        if (!openedDialog.current) openDialog({ kind: "archive-session", session: now, branches });
+        if (!openedDialog.current && !launchQuestionOpen.current) openDialog({ kind: "archive-session", session: now, branches });
         return;
       }
       setArchivingId(now.id);
@@ -1041,6 +1054,7 @@ export function App(): React.ReactElement {
           onResumeSession={resumeFromDialog}
         />
       )}
+      {launchConfirmation}
       {linkedFile && (
         <LazyTerminalFileViewer
           file={linkedFile}

@@ -5,7 +5,7 @@ import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
-import type { Account, AccountLogin, AccountQuota, Agent, AgentAvailability, Console, Project, Session, Settings } from "../protocol";
+import type { Account, AccountLogin, AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Project, Session, Settings } from "../protocol";
 import { DaemonRequestError } from "../daemon-client";
 import { errorAlerts } from "../errorAlerts";
 import { ErrorAlerts } from "../dialogs/ErrorAlerts";
@@ -16,6 +16,7 @@ import { SettingsDialog } from "./SettingsDialog";
 import { registerSettingsLauncher } from "./settingsLauncher";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentAccountsSection } from "./AgentAccountsSection";
+import { SettingsFocusContext } from "./useSectionRefocus";
 
 const request = vi.fn(() => Promise.resolve({}));
 const toastError = vi.fn();
@@ -27,6 +28,7 @@ const settings: Settings = {
 };
 const accountQuotas: AccountQuota[] = [];
 const accountLogins: AccountLogin[] = [];
+const accountSharing = new Map<string, AccountSharing>();
 const availability = new Map<Agent, AgentAvailability>();
 const consoles = new Map<string, Console>();
 const projects = new Map<string, Project>();
@@ -49,7 +51,7 @@ const bus = vi.hoisted(() => {
     },
   };
 });
-const state = () => ({ settings, agentAvailability: availability, accountQuotas, accountLogins, consoles, projects, sessions });
+const state = () => ({ settings, agentAvailability: availability, accountQuotas, accountLogins, accountSharing, consoles, projects, sessions });
 vi.mock("../store", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../store")>()),
   useDaemon: () => ({ request, toastError, store: { getState: () => state() } }),
@@ -122,6 +124,7 @@ beforeEach(() => {
   settings.claude_default_approval_mode = null;
   accountQuotas.length = 0;
   accountLogins.length = 0;
+  accountSharing.clear();
   settings.default_account_names = undefined;
   availability.clear();
 });
@@ -167,9 +170,9 @@ function mount(tab?: string, strict = false) {
     entry.remove();
     sectionEntry.current = null;
   });
-  let navigation = { pending: false, dismissForms: 0, consume: () => {} };
+  let navigation: React.ContextType<typeof AccountsNavigationContext> = { pending: false, dismissForms: 0, consume: () => {}, consumeAccount: () => {} };
   const render = () => act(() => {
-    const section = <AccountsNavigationContext.Provider value={navigation}><AgentAccountsSection /></AccountsNavigationContext.Provider>;
+    const section = <SettingsFocusContext.Provider value={() => entry}><AccountsNavigationContext.Provider value={navigation}><AgentAccountsSection /></AccountsNavigationContext.Provider></SettingsFocusContext.Provider>;
     root.render(strict ? <StrictMode>{section}</StrictMode> : section);
     bus.notify();
   });
@@ -187,7 +190,11 @@ function mount(tab?: string, strict = false) {
     navigation = { ...navigation, pending: addAgent, dismissForms: navigation.dismissForms + 1 };
     render();
   };
-  return { container, selects, change, opening, render, navigate };
+  const showSharingOf = (account: string) => {
+    navigation = { ...navigation, account, dismissForms: navigation.dismissForms + 1 };
+    render();
+  };
+  return { container, selects, change, opening, render, navigate, showSharingOf };
 }
 
 it("offers a mode for the Codex default and each Codex account, following configuration by default", () => {
@@ -301,6 +308,545 @@ const quotaOf = (agent: Account["agent"], account: string | null, patch: Partial
   windows: [{ kind: "session", label: null, used_percent: 18, resets_at: null, window_minutes: 300 }],
   unavailable: null,
   ...patch,
+});
+
+/** The text of the notes that describe `sharing`, as a screen reader reads them. */
+const captionOf = (container: HTMLElement, sharing: HTMLElement) =>
+  sharing.getAttribute("aria-describedby")!.split(" ").map((id) => container.querySelector(`[id="${id}"]`)?.textContent).join(" ");
+
+const sharingSwitches = (container: HTMLElement) => [...container.querySelectorAll<HTMLInputElement>('input[role="switch"]')].filter((input) => input.getAttribute("aria-label")?.includes("Share default configuration"));
+
+it("offers the sharing switch on each owned account and none on the default account", () => {
+  const { container } = mount("Codex");
+  const switches = sharingSwitches(container);
+  expect(switches).toHaveLength(1);
+  expect(switches[0]!.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, "")).toBe("Share default configuration for codex-work");
+  expect(switches[0]!.checked).toBe(false);
+  expect(switches[0]!.hasAttribute("aria-disabled")).toBe(false);
+  expect(captionOf(container, switches[0]!)).toBe("Turning this on links the account’s configuration and conversation history to the default account’s directory.");
+  expect(container.textContent).not.toContain("Applies at once");
+  expect(container.textContent).not.toContain("has not been applied to the account’s directory yet");
+  expect(container.querySelector('[role="progressbar"]')).toBeNull();
+});
+
+it("says what is the case now when the account shares", () => {
+  settings.accounts[1]!.share_default_config = true;
+  const { container } = mount("Codex");
+  const [sharing] = sharingSwitches(container);
+  expect(sharing!.checked).toBe(true);
+  expect(captionOf(container, sharing!)).toBe("The account’s configuration and conversation history are linked to the default account’s directory.");
+});
+
+it.each([["Claude Code", [".claude.json", "plans/"]], ["Grok Build", ["trusted_folders.toml", "hooks-paths"]]])(
+  "keeps each name in the %s sharing help tip in one box, so a line never ends on an empty start of it",
+  (tab, names) => {
+    const { container } = mount(tab);
+    const tip = container.querySelector<HTMLButtonElement>('button[aria-label="About sharing the default configuration"]')!;
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+      tip.focus();
+    });
+    const chips = [...document.querySelectorAll('[role="tooltip"] .inline-chip')].filter((chip) => chip.querySelector("code"));
+    expect(chips.map((chip) => chip.textContent)).toEqual(names);
+    // Unbroken, so a line never ends on an empty start of it; tight, so the inline-block is no taller than an inline chip
+    // and stacked chips keep the line gap.
+    for (const chip of chips) {
+      expect(chip.classList).toContain("inline-chip--unbroken");
+      expect(chip.classList).toContain("leading-[1.2]!");
+    }
+  },
+);
+
+describe("a switch that cannot be changed now", () => {
+  it.each([
+    [1, "Sharing cannot be changed while 1 of this account’s sessions is working. Wait for it to finish."],
+    [3, "Sharing cannot be changed while 3 of this account’s sessions are working. Wait for them to finish."],
+  ])("is disabled and says how many sessions run (%i)", (sessions, text) => {
+    accountSharing.set("codex-work", { account: "codex-work", in_use: { sessions, signing_in: false } });
+    const { container } = mount("Codex");
+    const [sharing] = sharingSwitches(container);
+    expect(sharing!.getAttribute("aria-disabled")).toBe("true");
+    expect(captionOf(container, sharing!)).toBe(text);
+  });
+
+  it("is disabled and says the account is being signed in", () => {
+    accountSharing.set("codex-work", { account: "codex-work", in_use: { sessions: 0, signing_in: true } });
+    const { container } = mount("Codex");
+    const [sharing] = sharingSwitches(container);
+    expect(sharing!.getAttribute("aria-disabled")).toBe("true");
+    expect(captionOf(container, sharing!)).toBe("Sharing cannot be changed while this account is being signed in.");
+  });
+
+  it("says both reasons when sessions run and the account is being signed in", () => {
+    accountSharing.set("codex-work", { account: "codex-work", in_use: { sessions: 2, signing_in: true } });
+    const { container } = mount("Codex");
+    const text = captionOf(container, sharingSwitches(container)[0]!);
+    expect(text).toContain("2 of this account’s sessions are working");
+    expect(text).toContain("being signed in");
+  });
+
+  it("is free again with the caption once nothing keeps it", () => {
+    accountSharing.set("codex-work", { account: "codex-work", in_use: { sessions: 0, signing_in: false } });
+    const { container } = mount("Codex");
+    expect(sharingSwitches(container)[0]!.hasAttribute("aria-disabled")).toBe(false);
+    expect(captionOf(container, sharingSwitches(container)[0]!)).toContain("Turning this on links");
+  });
+
+  it("does not ask for a change while disabled", () => {
+    accountSharing.set("codex-work", { account: "codex-work", in_use: { sessions: 1, signing_in: false } });
+    const { container } = mount("Codex");
+    act(() => sharingSwitches(container)[0]!.click());
+    expect(request).not.toHaveBeenCalled();
+  });
+});
+
+describe("idle sessions around a change", () => {
+  it.each([
+    [1, "Changing sharing ends this account’s 1 idle session and resumes it afterwards."],
+    [4, "Changing sharing ends this account’s 4 idle sessions and resumes them afterwards."],
+  ])("keeps the switch free and says the %i idle sessions will be restarted", (idle_sessions, text) => {
+    accountSharing.set("codex-work", { account: "codex-work", idle_sessions });
+    const { container } = mount("Codex");
+    const [sharing] = sharingSwitches(container);
+    expect(sharing!.hasAttribute("aria-disabled")).toBe(false);
+    expect(captionOf(container, sharing!)).toBe(`Turning this on links the account’s configuration and conversation history to the default account’s directory.${text}`);
+  });
+
+  it("says the idle sessions are restarted by a retry too, next to the guidance of the unfinished warning", () => {
+    settings.accounts[1]!.share_default_config = true;
+    settings.accounts[1]!.share_default_config_incomplete = true;
+    accountSharing.set("codex-work", { account: "codex-work", idle_sessions: 2 });
+    const { container } = mount("Codex");
+    expect(container.textContent).toContain("Turn the switch on again to try once more.");
+    expect(container.textContent).toContain("Changing sharing ends this account’s 2 idle sessions and resumes them afterwards.");
+  });
+
+  it("says nothing of idle sessions when there are none, and puts working sessions first when both exist", () => {
+    accountSharing.set("codex-work", { account: "codex-work", idle_sessions: 2, in_use: { sessions: 1, signing_in: false } });
+    const { container } = mount("Codex");
+    const text = captionOf(container, sharingSwitches(container)[0]!);
+    expect(text).toBe("Sharing cannot be changed while 1 of this account’s sessions is working. Wait for it to finish.");
+  });
+});
+
+describe("the phases of a running change", () => {
+  const phase = (progress: NonNullable<AccountSharing["progress"]>) => accountSharing.set("codex-work", { account: "codex-work", progress });
+  const bar = (container: HTMLElement) => container.querySelector('[role="progressbar"]')!;
+  const valueText = (container: HTMLElement) => container.querySelector(`[id="${bar(container).getAttribute("aria-describedby")}"]`)?.textContent;
+
+  it.each([
+    ["waiting", "Waiting for another account’s sharing change to finish…"],
+    ["stopping", "Ending idle sessions…"],
+    ["resuming", "Resuming sessions…"],
+  ] as const)("shows %s as an indeterminate bar that says what it waits for", (name, text) => {
+    phase({ share: true, phase: name, done: name === "resuming" ? 5 : 0, total: 5 });
+    const { container } = mount("Codex");
+    expect(bar(container).hasAttribute("aria-valuenow")).toBe(false);
+    expect(valueText(container)).toBe(text);
+    expect(container.textContent).not.toContain("Now:");
+    expect(sharingSwitches(container)[0]!.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("counts entries only while changing, and waits to start until the first one", () => {
+    phase({ share: true, phase: "changing", done: 0, total: 5 });
+    const { container, render } = mount("Codex");
+    expect(valueText(container)).toBe("Waiting to start…");
+    phase({ share: true, phase: "changing", done: 2, total: 5, item: "skills" });
+    render();
+    expect(bar(container).getAttribute("aria-valuenow")).toBe("2");
+    expect(container.textContent).toContain("2 of 5");
+    expect(container.textContent).toContain("Now: skills");
+  });
+});
+
+describe("the announcement of the phases", () => {
+  it("keeps what was said when the entries phase starts, and speaks again for the other phases", () => {
+    const set = (phase: "waiting" | "stopping" | "changing" | "resuming") => accountSharing.set("codex-work", { account: "codex-work", progress: { share: true, phase, done: 0, total: 3 } });
+    vi.useFakeTimers();
+    onTestFinished(() => { vi.useRealTimers(); });
+    set("stopping");
+    const { container, render } = mount("Codex");
+    act(() => { vi.advanceTimersByTime(300); });
+    const said = () => [...container.querySelectorAll('[role="status"]')].map((node) => node.textContent).find((text) => text?.startsWith("Turning sharing on"));
+    expect(said()).toBe("Turning sharing on. Ending idle sessions…");
+    set("changing");
+    render();
+    act(() => { vi.advanceTimersByTime(300); });
+    expect(said()).toBe("Turning sharing on. Ending idle sessions…");
+    set("resuming");
+    render();
+    expect(said()).toBe("Turning sharing on. Resuming sessions…");
+  });
+
+  it("shows the progress and not the warning when an old failure is still held during the wait", () => {
+    settings.accounts[1]!.share_default_config_incomplete = true;
+    accountSharing.set("codex-work", { account: "codex-work", failure: { share: true, items: [], detail: "x" }, progress: { share: true, phase: "waiting", done: 0, total: 3 } });
+    const { container } = mount("Codex");
+    expect(container.querySelector('[data-slot="alert-root"]')).toBeNull();
+    expect(container.querySelector('[role="progressbar"]')).not.toBeNull();
+  });
+});
+
+describe("a change that runs", () => {
+  const running = (progress: NonNullable<AccountSharing["progress"]>) => accountSharing.set("codex-work", { account: "codex-work", progress });
+
+  it("disables the switch under a determinate progress bar with the count and the entry", () => {
+    settings.accounts[1]!.share_default_config = true;
+    running({ share: true, phase: "changing", done: 3, total: 12, item: "skills" });
+    const { container } = mount("Codex");
+    const [sharing] = sharingSwitches(container);
+    expect(sharing!.getAttribute("aria-disabled")).toBe("true");
+    expect(sharing!.checked).toBe(true);
+    const bar = container.querySelector('[role="progressbar"]')!;
+    expect(bar.hasAttribute("aria-label")).toBe(false);
+    expect(container.querySelector(`[id="${bar.getAttribute("aria-labelledby")}"]`)?.textContent).toBe("Turning sharing on");
+    expect(bar.getAttribute("aria-valuenow")).toBe("3");
+    expect(bar.getAttribute("aria-valuemin")).toBe("0");
+    expect(bar.getAttribute("aria-valuemax")).toBe("12");
+    expect(bar.getAttribute("aria-valuetext")).toBe("3 of 12");
+    expect(bar.textContent).toContain("Turning sharing on");
+    expect(container.textContent).toContain("Now: skills");
+    const chip = container.querySelector('[id$="-current"] .inline-chip')!;
+    expect(chip.classList).toContain("inline-chip--unbroken");
+    expect(chip.classList).toContain("leading-[1.2]!");
+    expect(container.textContent).not.toContain("Turning this on links");
+    expect(captionOf(container, sharing!)).toBe("Turning sharing on 3 of 12 Now: skills");
+  });
+
+  it("words the direction of turning sharing off", () => {
+    running({ share: false, phase: "changing", done: 0, total: 4, item: "019e3c2a-0000-7000-8000-000000000000" });
+    const { container } = mount("Codex");
+    const bar = container.querySelector('[role="progressbar"]')!;
+    expect(container.querySelector(`[id="${bar.getAttribute("aria-labelledby")}"]`)?.textContent).toBe("Turning sharing off");
+    expect(bar.getAttribute("aria-valuenow")).toBe("0");
+    expect(container.textContent).toContain("019e3c2a-0000-7000-8000-000000000000");
+  });
+
+  it("is indeterminate while it waits for short background reads", () => {
+    running({ share: true, phase: "changing", done: 0, total: 5 });
+    const { container } = mount("Codex");
+    const bar = container.querySelector('[role="progressbar"]')!;
+    expect(bar.hasAttribute("aria-valuenow")).toBe(false);
+    expect(captionOf(container, sharingSwitches(container)[0]!)).toBe("Turning sharing on Waiting to start…");
+    expect(container.textContent).not.toContain("Now:");
+    expect(sharingSwitches(container)[0]!.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("follows the progress as the daemon reports it", () => {
+    running({ share: true, phase: "changing", done: 1, total: 4, item: "skills" });
+    const { container, render } = mount("Codex");
+    expect(container.querySelector('[role="progressbar"]')!.getAttribute("aria-valuenow")).toBe("1");
+    running({ share: true, phase: "changing", done: 2, total: 4, item: "plugins" });
+    render();
+    expect(container.querySelector('[role="progressbar"]')!.getAttribute("aria-valuenow")).toBe("2");
+    expect(container.textContent).toContain("Now: plugins");
+    accountSharing.delete("codex-work");
+    render();
+    expect(container.querySelector('[role="progressbar"]')).toBeNull();
+    expect(sharingSwitches(container)[0]!.hasAttribute("aria-disabled")).toBe(false);
+  });
+});
+
+it("asks for sharing to be turned on and off for the account", async () => {
+  const { container, render } = mount("Codex");
+  act(() => sharingSwitches(container)[0]!.click());
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_account_sharing", account: "codex-work", share: true });
+  await act(async () => {});
+  settings.accounts[1]!.share_default_config = true;
+  render();
+  request.mockClear();
+  act(() => sharingSwitches(container)[0]!.click());
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_account_sharing", account: "codex-work", share: false });
+  await act(async () => {});
+});
+
+it("reports a refused sharing change and leaves the switch as the daemon records it", async () => {
+  const { container } = mount("Codex");
+  request.mockRejectedValueOnce(new DaemonRequestError("refused", "account_in_use", { account: "codex-work", name: "codex-work", sessions: "1", signing_in: "false" }));
+  act(() => sharingSwitches(container)[0]!.click());
+  await act(async () => {});
+  expect(toastError).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ code: "account_in_use" }));
+  expect(sharingSwitches(container)[0]!.checked).toBe(false);
+});
+
+it("leaves the failure of its own request to the switch and opens no error alert for it", async () => {
+  const { container } = mount("Codex");
+  request.mockRejectedValueOnce(new DaemonRequestError("failed", "account_sharing_failed", { account: "codex-work", name: "codex-work", items: "[]", detail: "x" }));
+  act(() => sharingSwitches(container)[0]!.click());
+  await act(async () => {});
+  expect(toastError).not.toHaveBeenCalled();
+});
+
+describe("a change that did not finish", () => {
+  const failure = (patch: Partial<NonNullable<AccountSharing["failure"]>> = {}): NonNullable<AccountSharing["failure"]> => ({
+    share: true,
+    cause: "permission_denied",
+    items: [{ item: "skills/", left: "unchanged", detail: "permission denied", cause: "permission_denied" }],
+    detail: "could not link skills",
+    ...patch,
+  });
+  /** An account that records sharing on and whose last change to it did not finish. */
+  const unfinished = (share = true) => {
+    settings.accounts[1]!.share_default_config = share;
+    settings.accounts[1]!.share_default_config_incomplete = true;
+  };
+  const alert = (container: HTMLElement) => container.querySelector('[data-slot="alert-root"]');
+  /** What a screen reader is told when the warning appears: its title and reason, none of what follows them. */
+  const announced = (container: HTMLElement) => alert(container)!.querySelector('[data-slot="alert-content"] > div')!;
+  const disclosure = (container: HTMLElement) => buttonNamed(container, "Details");
+  const pressDisclosure = (container: HTMLElement) => act(() => disclosure(container)!.click());
+
+  it("shows one warning with what failed and why, the way to try again and Details inside it, and the switch where it was before", () => {
+    unfinished();
+    accountSharing.set("codex-work", { account: "codex-work", failure: failure() });
+    const { container } = mount("Codex");
+    const warning = alert(container)!;
+    expect(warning.textContent).toContain("Could not finish turning sharing on.You do not have permission to change skills/. Check that the files and folders involved can be changed and are not locked.Turn the switch on again to try once more.Details");
+    expect(warning.className).toContain("alert-fill-warning");
+    expect(warning.querySelector('[data-slot="alert-description"]')!.querySelector("div,p,ul,li,pre,button")).toBeNull();
+    expect(announced(container).textContent).toBe("Could not finish turning sharing on.You do not have permission to change skills/. Check that the files and folders involved can be changed and are not locked.");
+    expect(announced(container).contains(disclosure(container)!)).toBe(false);
+    expect(warning.contains(disclosure(container)!)).toBe(true);
+    expect(warning.querySelector('[data-slot="alert-content"] > p')?.textContent).toBe("Turn the switch on again to try once more.");
+    expect(warning.nextElementSibling).toBeNull();
+    expect(buttonNamed(container, "Try again")).toBeUndefined();
+    const [sharing] = sharingSwitches(container);
+    expect(sharing!.checked).toBe(false);
+    expect(captionOf(container, sharing!)).toBe("Could not finish turning sharing on. You do not have permission to change skills/. Check that the files and folders involved can be changed and are not locked. Turn the switch on again to try once more.");
+    expect(container.textContent).not.toContain("Turning this on links");
+  });
+
+  it("asks for the recorded choice when the switch is turned, which is the retry", async () => {
+    unfinished();
+    accountSharing.set("codex-work", { account: "codex-work", failure: failure() });
+    const { container } = mount("Codex");
+    await act(async () => sharingSwitches(container)[0]!.click());
+    expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_account_sharing", account: "codex-work", share: true });
+  });
+
+  it("retries turning sharing off the same way, in the closing wording", async () => {
+    unfinished(false);
+    accountSharing.set("codex-work", { account: "codex-work", failure: failure({ share: false }) });
+    const { container } = mount("Codex");
+    expect(alert(container)!.textContent).toContain("Could not finish turning sharing off.");
+    expect(alert(container)!.textContent).toContain("Turn the switch off again to try once more.");
+    expect(sharingSwitches(container)[0]!.checked).toBe(true);
+    await act(async () => sharingSwitches(container)[0]!.click());
+    expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_account_sharing", account: "codex-work", share: false });
+  });
+
+  it("groups the entries by cause, one line each, naming the first and how many more", () => {
+    unfinished();
+    accountSharing.set("codex-work", { account: "codex-work", failure: failure({ cause: "other", items: [
+      { item: "skills/", left: "unchanged", detail: "a", cause: "permission_denied" },
+      { item: "plugins/", left: "unchanged", detail: "b", cause: "permission_denied" },
+      { item: "agents/", left: "unchanged", detail: "c", cause: "permission_denied" },
+      { item: "settings.json", left: "linked", detail: "d", cause: "busy" },
+      { item: "hooks/", left: "unchanged", detail: "e" },
+    ] }) });
+    const { container } = mount("Codex");
+    const lines = [...alert(container)!.querySelectorAll('[data-slot="alert-description"] span.flex > span')].map((line) => line.textContent);
+    expect(lines).toEqual([
+      "You do not have permission to change skills/ and 2 more. Check that the files and folders involved can be changed and are not locked.",
+      "settings.json is in use. Close other programs using the files involved, such as an agent in a terminal, an editor or a sync tool.",
+      "Could not change hooks/. See Details.",
+    ]);
+  });
+
+  it.each([
+    ["permission_denied", "You do not have permission to change skills/. Check that the files and folders involved can be changed and are not locked."],
+    ["busy", "skills/ is in use. Close other programs using the files involved, such as an agent in a terminal, an editor or a sync tool."],
+    ["no_space", "There is not enough disk space to change skills/. Free up disk space."],
+    ["conflict", "skills/ conflicts with what is already there. Move or rename the conflicting items."],
+    ["not_found", "skills/ could not be found."],
+    ["other", "Could not change skills/. See Details."],
+  ] as const)("says what to do about a %s cause on the line that names it", (cause, line) => {
+    unfinished();
+    accountSharing.set("codex-work", { account: "codex-work", failure: failure({ cause, items: [{ item: "skills/", left: "unchanged", detail: "x", cause }] }) });
+    const { container } = mount("Codex");
+    expect([...alert(container)!.querySelectorAll('[data-slot="alert-description"] span.flex > span')].map((l) => l.textContent)).toEqual([line]);
+  });
+
+  it.each([
+    ["permission_denied", "You do not have permission to change the account’s directory. Check that the files and folders involved can be changed and are not locked."],
+    ["busy", "Something in the account’s directory is in use. Close other programs using the files involved, such as an agent in a terminal, an editor or a sync tool."],
+    ["no_space", "There is not enough disk space. Free up disk space."],
+    ["conflict", "The account’s directory conflicts with what sharing needs. Move or rename the conflicting items."],
+    ["not_found", "A directory needed for sharing could not be found."],
+    ["other", "See Details."],
+  ] as const)("says what to do about a %s cause when the change failed as a whole", (cause, text) => {
+    unfinished();
+    accountSharing.set("codex-work", { account: "codex-work", failure: failure({ items: [], cause }) });
+    const { container } = mount("Codex");
+    expect(alert(container)!.querySelector('[data-slot="alert-description"]')!.textContent).toBe(text);
+  });
+
+  it("gives no reason, and does not describe one, for a whole failure with no cause line and no raw reason", () => {
+    unfinished();
+    accountSharing.set("codex-work", { account: "codex-work", failure: failure({ items: [], cause: "other", detail: undefined }) });
+    const { container } = mount("Codex");
+    expect(alert(container)!.querySelector('[data-slot="alert-description"]')).toBeNull();
+    expect(sharingSwitches(container)[0]!.getAttribute("aria-describedby")).not.toContain("-reason");
+  });
+
+  it("keeps the raw diagnostics and what each entry was left as behind a Details disclosure inside the alert", () => {
+    unfinished();
+    accountSharing.set("codex-work", { account: "codex-work", failure: failure() });
+    const { container } = mount("Codex");
+    const button = disclosure(container)!;
+    const body = container.querySelector(`[id="${button.getAttribute("aria-controls")}"]`)!;
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    expect(body.hasAttribute("hidden")).toBe(true);
+    expect(alert(container)!.contains(body)).toBe(true);
+    expect(announced(container).contains(body)).toBe(false);
+    pressDisclosure(container);
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(body.hasAttribute("hidden")).toBe(false);
+    expect(body.textContent).toContain("skills/ was left unchanged.");
+    expect(body.querySelector("li")?.lastElementChild?.textContent).toBe("permission denied");
+    expect(body.querySelector("pre")).toBeNull();
+    expect(announced(container).textContent).not.toContain("left unchanged");
+    pressDisclosure(container);
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("gives the reason in Details when the change could not start and names its cause", () => {
+    unfinished();
+    accountSharing.set("codex-work", { account: "codex-work", failure: failure({ items: [], cause: "not_found", detail: "the directory is not readable" }) });
+    const { container } = mount("Codex");
+    expect(announced(container).textContent).toBe("Could not finish turning sharing on.A directory needed for sharing could not be found.");
+    pressDisclosure(container);
+    expect(alert(container)!.querySelector("code")?.textContent).toBe("the directory is not readable");
+  });
+
+  it("shows the same warning without reason or Details after a restart, described by its title and guidance", () => {
+    unfinished();
+    const { container } = mount("Codex");
+    const warning = alert(container)!;
+    expect(warning.className).toContain("alert-fill-warning");
+    expect(warning.textContent).toBe("The last attempt to turn sharing on did not finish.Turn the switch on again to try once more.");
+    expect(announced(container).textContent).toBe("The last attempt to turn sharing on did not finish.");
+    expect(warning.querySelector('[role="alert"]')).toBeNull();
+    expect(disclosure(container)).toBeUndefined();
+    expect(buttonNamed(container, "Try again")).toBeUndefined();
+    const [sharing] = sharingSwitches(container);
+    expect(sharing!.checked).toBe(false);
+    expect(captionOf(container, sharing!)).toBe("The last attempt to turn sharing on did not finish. Turn the switch on again to try once more.");
+  });
+
+  it("does not take a failure for an unfinished change when the daemon does not say it is incomplete", () => {
+    accountSharing.set("codex-work", { account: "codex-work", failure: failure() });
+    const { container } = mount("Codex");
+    expect(alert(container)).toBeNull();
+    expect(captionOf(container, sharingSwitches(container)[0]!)).toContain("Turning this on links");
+  });
+
+  it("shows the recorded position and asks to turn sharing off and on when the default directory has moved", async () => {
+    unfinished();
+    accountSharing.set("codex-work", { account: "codex-work", failure: failure({ cause: "default_moved", items: [] }) });
+    const { container } = mount("Codex");
+    expect(announced(container).textContent).toBe("Could not finish turning sharing on.The default account’s directory has moved since sharing was turned on.");
+    expect(alert(container)!.textContent).toContain("Turn the switch off, then on again.");
+    expect(sharingSwitches(container)[0]!.checked).toBe(true);
+    await act(async () => sharingSwitches(container)[0]!.click());
+    expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_account_sharing", account: "codex-work", share: false });
+  });
+
+  it("announces a failure that follows a change it saw run, and not one restated by an unrelated update", () => {
+    unfinished();
+    accountSharing.set("codex-work", { account: "codex-work", failure: failure() });
+    const { container, render } = mount("Codex");
+    expect(alert(container)!.querySelector('[role="alert"]')).toBeNull();
+    accountSharing.set("codex-work", { account: "codex-work", failure: failure(), in_use: { sessions: 1, signing_in: false } });
+    render();
+    expect(alert(container)!.querySelector('[role="alert"]')).toBeNull();
+    accountSharing.set("codex-work", { account: "codex-work", progress: { share: true, phase: "changing" as const, done: 1, total: 3, item: "skills" } });
+    render();
+    expect(alert(container)).toBeNull();
+    accountSharing.set("codex-work", { account: "codex-work", failure: failure({ detail: "again" }) });
+    render();
+    const live = alert(container)!.querySelector('[role="alert"]');
+    expect(live).toBe(announced(container));
+    expect(live!.textContent).toBe("Could not finish turning sharing on.You do not have permission to change skills/. Check that the files and folders involved can be changed and are not locked.");
+  });
+
+  it("shows the recorded position while the change runs again, and no warning", () => {
+    unfinished();
+    accountSharing.set("codex-work", { account: "codex-work", progress: { share: true, phase: "changing" as const, done: 0, total: 3 } });
+    const { container } = mount("Codex");
+    expect(alert(container)).toBeNull();
+    expect(sharingSwitches(container)[0]!.checked).toBe(true);
+  });
+
+  it("moves focus from Details to the switch when the warning goes", () => {
+    unfinished();
+    accountSharing.set("codex-work", { account: "codex-work", failure: failure() });
+    const { container, render } = mount("Codex");
+    act(() => disclosure(container)!.focus());
+    accountSharing.delete("codex-work");
+    settings.accounts[1] = { ...settings.accounts[1]!, share_default_config_incomplete: false };
+    render();
+    expect(alert(container)).toBeNull();
+    expect(document.activeElement).toBe(sharingSwitches(container)[0]);
+  });
+
+  it("reports a retry the daemon refuses", async () => {
+    unfinished(false);
+    const { container } = mount("Codex");
+    request.mockRejectedValueOnce(new DaemonRequestError("busy", "account_in_use", { account: "codex-work", name: "codex-work", sessions: "1", signing_in: "false" }));
+    await act(async () => sharingSwitches(container)[0]!.click());
+    expect(toastError).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ code: "account_in_use" }));
+  });
+
+  it("holds the switch back while sessions of the account run, and says why", () => {
+    unfinished();
+    accountSharing.set("codex-work", { account: "codex-work", failure: failure(), in_use: { sessions: 1, signing_in: false } });
+    const { container } = mount("Codex");
+    const [sharing] = sharingSwitches(container);
+    expect(sharing!.getAttribute("aria-disabled")).toBe("true");
+    act(() => sharing!.click());
+    expect(request).not.toHaveBeenCalled();
+    expect(captionOf(container, sharing!)).toContain("1 of this account’s sessions is working");
+  });
+});
+
+describe("an unavailable control keeps keyboard focus", () => {
+  it("leaves the switch focusable and focused when it is locked, and a press or Space changes nothing", () => {
+    accountSharing.set("codex-work", { account: "codex-work", in_use: { sessions: 1, signing_in: false } });
+    const { container } = mount("Codex");
+    const [sharing] = sharingSwitches(container);
+    expect(sharing!.disabled).toBe(false);
+    expect(sharing!.tabIndex).toBe(0);
+    sharing!.focus();
+    act(() => sharing!.click());
+    expect(request).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(sharing);
+  });
+
+  it("keeps the switch focused while the request is under way and while a change runs", async () => {
+    let finish!: (value: object) => void;
+    const { container, render } = mount("Codex");
+    request.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const [sharing] = sharingSwitches(container);
+    sharing!.focus();
+    act(() => sharing!.click());
+    expect(document.activeElement).toBe(sharing);
+    expect(sharing!.getAttribute("aria-disabled")).toBe("true");
+    accountSharing.set("codex-work", { account: "codex-work", progress: { share: true, phase: "changing" as const, done: 0, total: 2 } });
+    render();
+    expect(document.activeElement).toBe(sharingSwitches(container)[0]);
+    await act(async () => finish({}));
+    expect(document.activeElement).toBe(sharingSwitches(container)[0]);
+  });
+});
+
+it("shows the switch off again for an account that was repointed and no longer shares", () => {
+  settings.accounts[1]!.share_default_config = true;
+  const { container, render } = mount("Codex");
+  expect(sharingSwitches(container)[0]!.checked).toBe(true);
+  settings.accounts[1] = { ...settings.accounts[1]!, config_dir: "/home/dev/.elsewhere", share_default_config: false, share_default_config_incomplete: false };
+  render();
+  expect(sharingSwitches(container)[0]!.checked).toBe(false);
 });
 
 it("asks the daemon to refresh the quotas when the section opens", () => {
@@ -815,7 +1361,7 @@ it("opens the Add agent dialog once when Settings asked for it, and takes the re
     container.remove();
   });
   const render = (pending: boolean) => act(() => {
-    root.render(<AccountsNavigationContext.Provider value={{ pending, consume, dismissForms: 0 }}><AgentAccountsSection /></AccountsNavigationContext.Provider>);
+    root.render(<AccountsNavigationContext.Provider value={{ pending, consume, consumeAccount: () => {}, dismissForms: 0 }}><AgentAccountsSection /></AccountsNavigationContext.Provider>);
     bus.notify();
   });
   render(true);
@@ -830,7 +1376,7 @@ it("opens the Add agent dialog once when Settings asked for it, and takes the re
     second.remove();
   });
   act(() => {
-    secondRoot.render(<AccountsNavigationContext.Provider value={{ pending: false, consume, dismissForms: 0 }}><AgentAccountsSection /></AccountsNavigationContext.Provider>);
+    secondRoot.render(<AccountsNavigationContext.Provider value={{ pending: false, consume, consumeAccount: () => {}, dismissForms: 0 }}><AgentAccountsSection /></AccountsNavigationContext.Provider>);
     bus.notify();
   });
   expect(document.querySelector('[role="dialog"]')).toBeNull();
@@ -845,13 +1391,60 @@ it("closes its Add agent dialog when Settings asks for anything else", () => {
     container.remove();
   });
   const render = (value: { pending: boolean; dismissForms: number }) => act(() => {
-    root.render(<AccountsNavigationContext.Provider value={{ ...value, consume: () => {} }}><AgentAccountsSection /></AccountsNavigationContext.Provider>);
+    root.render(<AccountsNavigationContext.Provider value={{ ...value, consume: () => {}, consumeAccount: () => {} }}><AgentAccountsSection /></AccountsNavigationContext.Provider>);
     bus.notify();
   });
   render({ pending: true, dismissForms: 0 });
   expect(document.querySelector('[role="dialog"]')).not.toBeNull();
   render({ pending: false, dismissForms: 1 });
   expect(document.querySelector('[role="dialog"]')).toBeNull();
+});
+
+it("shows the agent tab of an account Settings was asked about and focuses its sharing switch", async () => {
+  const { container, showSharingOf } = mount("Claude Code");
+  const switchOf = () => container.querySelector('[data-sharing-account="codex-work"] input[role="switch"]');
+  expect(switchOf()).toBeNull();
+  showSharingOf("codex-work");
+  await act(async () => { await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined))); });
+  expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Codex");
+  expect(switchOf()).not.toBeNull();
+  expect(document.activeElement).toBe(switchOf());
+});
+
+it("shows the focus ring on the sharing switch even after a pointer press opened Settings", async () => {
+  const { container, showSharingOf } = mount("Claude Code");
+  act(() => setInteractionModality("pointer"));
+  showSharingOf("codex-work");
+  await act(async () => { await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined))); });
+  expect(document.activeElement).toBe(container.querySelector('[data-sharing-account="codex-work"] input[role="switch"]'));
+  expect(getInteractionModality()).toBe("keyboard");
+});
+
+it("gives up on the sharing switch of an account whose agent is not in the list, focusing the section's tab and not hunting again", async () => {
+  settings.added_agents = ["claude", "grok"];
+  const { container, showSharingOf } = mount("Claude Code");
+  const entry = document.body.lastElementChild as HTMLElement;
+  const waitFrames = async (count: number) => {
+    for (let waited = 0; waited < count; waited++) await act(async () => { await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined))); });
+  };
+  showSharingOf("codex-work");
+  await waitFrames(35);
+  expect(document.activeElement).toBe(entry);
+  // The agent comes back into the list afterwards: the switch exists now, and must not take focus.
+  settings.added_agents = ["claude", "codex", "grok"];
+  act(() => bus.notify());
+  selectTab(container, "Codex");
+  await waitFrames(3);
+  expect(container.querySelector('[data-sharing-account="codex-work"] input[role="switch"]')).not.toBeNull();
+  expect(document.activeElement).not.toBe(container.querySelector('[data-sharing-account="codex-work"] input[role="switch"]'));
+});
+
+it("focuses the section's tab when the account to show is unknown", async () => {
+  const { showSharingOf } = mount("Claude Code");
+  const entry = document.body.lastElementChild as HTMLElement;
+  showSharingOf("nobody");
+  await act(async () => { await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined))); });
+  expect(document.activeElement).toBe(entry);
 });
 
 it("flags only an added agent that is not installed", () => {
@@ -1384,6 +1977,42 @@ describe("an account's actions menu", () => {
     expect(document.querySelector('[role="alertdialog"], [role="dialog"]')?.textContent).toContain("Remove account");
     await act(async () => buttonNamed(document.querySelector('[role="alertdialog"], [role="dialog"]')!, "Remove")!.click());
     expect(request).toHaveBeenCalledExactlyOnceWith({ type: "delete_account", account: "claude-work" });
+  });
+
+  it.each(["account_still_sharing", "account_sharing_failed"] as const)("reports %s when removing the account is refused", async (code) => {
+    const alerts = document.body.appendChild(document.createElement("div"));
+    const alertsRoot = createRoot(alerts);
+    onTestFinished(() => act(() => alertsRoot.unmount()));
+    act(() => alertsRoot.render(<ErrorAlerts />));
+    const { container } = mount();
+    request.mockRejectedValueOnce(new DaemonRequestError("busy", code, { account: "claude-work", name: "claude-work" }));
+    await openAccountMenu(container);
+    await chooseItem("Remove");
+    await act(async () => buttonNamed(document.querySelector('[role="alertdialog"], [role="dialog"]')!, "Remove")!.click());
+    const shown = [...document.querySelectorAll('[role="alertdialog"]')].map((alert) => alert.textContent ?? "").join("\n");
+    expect(shown).toContain("claude-work");
+    expect(shown).toContain(code === "account_still_sharing" ? "cannot be turned off while" : "Nothing was rolled back");
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it("reports a refusal to point a sharing account at another directory", async () => {
+    const alerts = document.body.appendChild(document.createElement("div"));
+    const alertsRoot = createRoot(alerts);
+    onTestFinished(() => act(() => alertsRoot.unmount()));
+    act(() => alertsRoot.render(<ErrorAlerts />));
+    const { container } = mount();
+    await openAccountMenu(container);
+    await chooseItem("Edit");
+    const dialog = document.querySelector('[role="dialog"]')!;
+    const directory = [...dialog.querySelectorAll("input")].at(-1)!;
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(directory, "/home/dev/.claude-elsewhere");
+      directory.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    request.mockRejectedValueOnce(new DaemonRequestError("busy", "account_still_sharing", { account: "claude-work", name: "claude-work" }));
+    await act(async () => buttonNamed(dialog, "Save")!.click());
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ type: "update_account", account: "claude-work", config_dir: "/home/dev/.claude-elsewhere" }));
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("cannot be turned off while");
   });
 });
 

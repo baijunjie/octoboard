@@ -1,4 +1,4 @@
-import type { AccountQuota, Agent, Console, FileContent, GitStatus, Host, Page, Project, Session, SessionBranchItem, SessionBranchState, SessionStatus, Settings, ShellTerminal } from "../../protocol";
+import type { AccountQuota, AccountSharing, Agent, Console, FileContent, GitStatus, Host, Page, Project, Session, SessionBranchItem, SessionBranchState, SessionStatus, Settings, ShellTerminal } from "../../protocol";
 import type { SessionRequest, State, TrustPrompt } from "../../store";
 
 /** Every agent, as the list of added agents of a user who has added them all (in the default order). */
@@ -133,6 +133,11 @@ export function gitStatusOf(projectId: string, extra: Partial<GitStatus> = {}): 
   };
 }
 
+/** The sharing states the daemon reports (`snapshot.account_sharing`), by account; an account left out is free. */
+export function accountSharingOf(states: AccountSharing[]): Map<string, AccountSharing> {
+  return new Map(states.map((sharing) => [sharing.account, sharing]));
+}
+
 /** A connected window's state after its first snapshot, over which a scenario lays what it differs
  * in. Only what is given is set; the rest is the empty state. */
 export function snapshotState(parts: {
@@ -148,6 +153,7 @@ export function snapshotState(parts: {
   gitStatuses?: GitStatus[];
   settings?: Settings;
   accountQuotas?: AccountQuota[];
+  accountSharing?: AccountSharing[];
 }): Partial<State> {
   return {
     connectionState: parts.connectionState ?? "open",
@@ -164,6 +170,7 @@ export function snapshotState(parts: {
     gitStatuses: new Map((parts.gitStatuses ?? []).map((g) => [g.project, g])),
     settings: parts.settings ?? { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/Users/dev/Projects", accounts: [] },
     accountQuotas: parts.accountQuotas ?? [],
+    accountSharing: accountSharingOf(parts.accountSharing ?? []),
     homeDir: "/Users/dev",
   };
 }

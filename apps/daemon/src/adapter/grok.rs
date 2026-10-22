@@ -583,9 +583,10 @@ fn write_hooks(farm: &Path, hook_script: &Path) -> Result<()> {
 /// Keys a sharing account's session may copy from its `config.toml` onto the shared file.
 ///
 /// The session file stays a real copy, so the MCP block appended to it is never this write. The
-/// account entry has to still be a symlink when the process exits; the bytes go to that link's
-/// canonical target, and the link is not replaced. A session that did not change a key does not
-/// write it, so it does not put back a value another session has already published.
+/// bytes go to the canonical target the account's link resolved to at launch, and the link is not
+/// replaced; if by the time the process exits the entry is no longer a link resolving there,
+/// nothing is written. A session that did not change a key does not write it, so it does not put
+/// back a value another session has already published.
 ///
 /// A fullscreen launch writes `--model` into `[models] default` and `--reasoning-effort` into
 /// `[models] default_reasoning_effort` with no further action. The effort is never copied. The
@@ -596,6 +597,7 @@ fn write_hooks(farm: &Path, hook_script: &Path) -> Result<()> {
 pub struct SharedConfigWriteback {
     session_config: PathBuf,
     account_config: PathBuf,
+    shared_target: PathBuf,
     baseline: ConfigSlice,
     launch_model: Option<String>,
 }
@@ -627,8 +629,8 @@ impl ConfigChanges {
     }
 }
 
-/// One daemon publishes these, and its sessions are the only writers of this slice, so a process-wide
-/// lock around the read and the replace is enough to keep two exits from dropping each other's keys.
+/// Serializes this daemon's exits so they merge into the latest shared file rather than dropping
+/// each other's keys. External Grok processes and editors do not take this lock.
 fn writeback_lock() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -646,13 +648,14 @@ fn shared_config_writeback(
     if !meta.file_type().is_symlink() {
         return None;
     }
-    std::fs::canonicalize(&account_config).ok()?;
+    let shared_target = std::fs::canonicalize(&account_config).ok()?;
     let session_config = grok_home.join("config.toml");
     let text = std::fs::read_to_string(&session_config).ok()?;
     let table: toml::Table = text.parse().ok()?;
     Some(SharedConfigWriteback {
         session_config,
         account_config,
+        shared_target,
         baseline: ConfigSlice::from_table(&table),
         launch_model: launch_model.map(str::to_owned),
     })
@@ -673,17 +676,16 @@ impl SharedConfigWriteback {
     }
 
     fn publish_locked(&self) -> Result<()> {
-        let meta = std::fs::symlink_metadata(&self.account_config)
-            .with_context(|| format!("reading {}", self.account_config.display()))?;
-        if !meta.file_type().is_symlink() {
+        // A session's changes belong to the configuration it started from. If the account now
+        // shares a different file, publishing into that new file would carry unrelated settings.
+        if !self.still_shares() {
             return Ok(());
         }
-        let target = std::fs::canonicalize(&self.account_config)
-            .with_context(|| format!("resolving {}", self.account_config.display()))?;
-        if target == self.session_config {
+        let target = &self.shared_target;
+        if *target == self.session_config {
             anyhow::bail!("the shared configuration resolves to the session's own copy");
         }
-        if std::fs::symlink_metadata(&target).is_ok_and(|meta| meta.file_type().is_symlink()) {
+        if std::fs::symlink_metadata(target).is_ok_and(|meta| meta.file_type().is_symlink()) {
             anyhow::bail!("the shared configuration did not resolve to a file");
         }
 
@@ -697,7 +699,7 @@ impl SharedConfigWriteback {
             return Ok(());
         }
 
-        let current = std::fs::read_to_string(&target)
+        let current = std::fs::read_to_string(target)
             .with_context(|| format!("reading {}", target.display()))?;
         let merged = apply_changes(&current, &changes)?;
         if merged == current {
@@ -717,7 +719,20 @@ impl SharedConfigWriteback {
                 "writing the keys would change more of the shared configuration than those keys"
             );
         }
-        crate::trust::write_replacing(&target, &merged)
+        // Checked again just before the replace, to narrow the window for a relink meanwhile.
+        if !self.still_shares() {
+            return Ok(());
+        }
+        crate::trust::write_replacing(target, &merged)
+    }
+
+    /// The account entry is still a link that resolves to the file it resolved to at launch. A
+    /// plain file, a broken link or a link to another file does not.
+    fn still_shares(&self) -> bool {
+        std::fs::symlink_metadata(&self.account_config)
+            .is_ok_and(|meta| meta.file_type().is_symlink())
+            && std::fs::canonicalize(&self.account_config).ok().as_ref()
+                == Some(&self.shared_target)
     }
 }
 
@@ -2041,6 +2056,122 @@ command = \"/usr/bin/true\"
             std::fs::read_to_string(&shared).expect("shared"),
             SHARED_CONFIG
         );
+    }
+
+    #[test]
+    fn a_link_redirected_or_broken_before_exit_is_not_written_back() {
+        for dangling in [false, true] {
+            let mut fixture = spec_fixture();
+            let shared = link_config(&mut fixture, SHARED_CONFIG);
+            let link = PathBuf::from(&fixture.shell_env["GROK_HOME"]).join("config.toml");
+            let replacement = fixture.scratch.join("replacement.toml");
+            if !dangling {
+                std::fs::write(&replacement, "other = true\n").expect("other config");
+            }
+            let plan = plan_isolated(&fixture.spec()).expect("plan");
+            std::fs::write(session_config(&plan), "[ui]\ntheme = \"tokyonight\"\n")
+                .expect("session change");
+            std::fs::remove_file(&link).expect("unlink");
+            std::os::unix::fs::symlink(&replacement, &link).expect("redirect link");
+            plan.shared_config_writeback.expect("writeback").publish();
+            assert_eq!(std::fs::read_to_string(&shared).unwrap(), SHARED_CONFIG);
+            assert_eq!(std::fs::read_link(&link).unwrap(), replacement);
+            if dangling {
+                assert!(!replacement.exists());
+            } else {
+                assert_eq!(
+                    std::fs::read_to_string(replacement).unwrap(),
+                    "other = true\n"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn concurrent_exits_merge_different_fields_into_the_latest_shared_file() {
+        use std::sync::{Arc, Barrier};
+
+        let mut first = spec_fixture();
+        let shared = link_config(&mut first, SHARED_CONFIG);
+        let mut second = spec_fixture();
+        second.shell_env = first.shell_env.clone();
+        let theme = plan_isolated(&first.spec()).expect("theme session");
+        let model = plan_isolated(&second.spec()).expect("model session");
+        let theme_text = std::fs::read_to_string(session_config(&theme)).unwrap();
+        let model_text = std::fs::read_to_string(session_config(&model)).unwrap();
+        std::fs::write(
+            session_config(&theme),
+            theme_text.replace("theme = \"dark\"", "theme = \"tokyonight\""),
+        )
+        .unwrap();
+        std::fs::write(
+            session_config(&model),
+            model_text.replace("kept-model", "other-model"),
+        )
+        .unwrap();
+        // An editor's already-saved change is also retained by the read at publication time.
+        std::fs::write(
+            &shared,
+            format!("{SHARED_CONFIG}\n[external]\nkeep = true\n"),
+        )
+        .unwrap();
+        let ready = Arc::new(Barrier::new(3));
+        std::thread::scope(|scope| {
+            for plan in [theme, model] {
+                let ready = ready.clone();
+                scope.spawn(move || {
+                    ready.wait();
+                    plan.shared_config_writeback.expect("writeback").publish();
+                });
+            }
+            ready.wait();
+        });
+        let current: toml::Table = std::fs::read_to_string(shared).unwrap().parse().unwrap();
+        assert_eq!(current["ui"]["theme"].as_str(), Some("tokyonight"));
+        assert_eq!(current["models"]["default"].as_str(), Some("other-model"));
+        assert_eq!(current["external"]["keep"].as_bool(), Some(true));
+        assert!(current.get("mcp_servers").is_none());
+    }
+
+    #[test]
+    fn the_last_exit_that_changed_a_field_wins_but_an_unchanged_session_does_not() {
+        let mut first = spec_fixture();
+        let shared = link_config(&mut first, SHARED_CONFIG);
+        let mut second = spec_fixture();
+        second.shell_env = first.shell_env.clone();
+        let mut unchanged = spec_fixture();
+        unchanged.shell_env = first.shell_env.clone();
+        let plans = [
+            plan_isolated(&first.spec()).unwrap(),
+            plan_isolated(&second.spec()).unwrap(),
+            plan_isolated(&unchanged.spec()).unwrap(),
+        ];
+        for (plan, theme) in plans.into_iter().zip(["tokyonight", "grokday", "dark"]) {
+            let session = session_config(&plan);
+            let text = std::fs::read_to_string(&session).unwrap();
+            std::fs::write(
+                &session,
+                text.replace("theme = \"dark\"", &format!("theme = \"{theme}\"")),
+            )
+            .unwrap();
+            plan.shared_config_writeback.unwrap().publish();
+        }
+        let current: toml::Table = std::fs::read_to_string(shared).unwrap().parse().unwrap();
+        assert_eq!(current["ui"]["theme"].as_str(), Some("grokday"));
+    }
+
+    #[test]
+    fn an_invalid_session_config_leaves_the_shared_file_untouched() {
+        let mut fixture = spec_fixture();
+        let shared = link_config(&mut fixture, SHARED_CONFIG);
+        let plan = plan_isolated(&fixture.spec()).unwrap();
+        std::fs::write(session_config(&plan), "[ui]\ntheme = \"").unwrap();
+        assert!(plan
+            .shared_config_writeback
+            .unwrap()
+            .publish_locked()
+            .is_err());
+        assert_eq!(std::fs::read_to_string(shared).unwrap(), SHARED_CONFIG);
     }
 
     #[test]

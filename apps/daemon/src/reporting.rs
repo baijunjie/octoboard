@@ -121,6 +121,10 @@ pub enum WhenBlocked {
 /// and Grok Build would take it as trusting the folder — so a session whose trust watch still holds
 /// writes (`TrustState::holds_writes`) is blocked as well.
 ///
+/// A session a sharing change is restarting takes none of this: its queue is held from the claim
+/// until the resume, so a message for it is queued, whatever the process's state, and `when_blocked`
+/// does not apply.
+///
 /// **Blocks** on the PTY write and, for an idle Claude Code session, on the few seconds' wait for
 /// its agent to send it (twice, for a message a dialog discarded and that is written again);
 /// callers on the runtime are responsible for keeping it off a worker.
@@ -139,6 +143,12 @@ pub fn write_message(
         ));
     }
     let session = state.session_record(id)?;
+    // Held from the claim on until the resume, so queued rather than refused whatever state its
+    // process is in meanwhile: the account's hold keeps the queue and the resumed process gets it,
+    // or its drop reports the queue as dropped when the session is not relaunched.
+    if state.queue_if_restarting(id, text).is_some() {
+        return Ok(Delivery::Queued);
+    }
     // Nothing to write to and nothing to wait for: a resume starts the agent at its prompt rather
     // than replaying a queue, so queuing here would lose the message silently.
     if session.status.is_dormant() || state.live_session(id).is_none() {

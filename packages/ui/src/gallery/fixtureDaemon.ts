@@ -5,7 +5,7 @@ import { daemonMessage } from "../daemonMessage";
 import { errorPresentation, noticeErrorPresentation } from "../errorPresentation";
 import { errorText } from "../errorText";
 import { currentLanguage } from "../i18n/language";
-import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, type Account, type AccountLogin, type Agent, type ConsoleSessionColour, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type Project, type QuotaWindow, type RequestBody, type Session, type SessionRecordsPresence, type ShellTerminal } from "../protocol";
+import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, type Account, type AccountLogin, type AccountSharing, type Agent, type ConsoleSessionColour, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type Project, type QuotaWindow, type RequestBody, type Session, type SharingCause, type SessionRecordsPresence, type ShellTerminal } from "../protocol";
 import { accountQuotaOf } from "../quota/accountQuotaOf";
 import { exhaustedQuotaWindow } from "../quota/quotaFormat";
 import { createStateStore, type Daemon, type ToastRequest } from "../store";
@@ -45,6 +45,16 @@ const LEFT_OUT_NAMES = new Set([
   "thumbs.db",
   "desktop.ini",
 ]);
+
+/** The failure the daemon keeps of a change that failed part-way, from the `account_sharing_failed` error a scenario stages. */
+function failedSharing(error: FixtureError, share: boolean): NonNullable<AccountSharing["failure"]> {
+  return {
+    share,
+    ...(error.params?.cause && { cause: error.params.cause as SharingCause }),
+    items: JSON.parse(error.params?.items ?? "[]") as NonNullable<AccountSharing["failure"]>["items"],
+    detail: error.params?.detail ?? error.message,
+  };
+}
 
 /** Only A to Z are folded, as the daemon's `eq_ignore_ascii_case` does; `toLowerCase` would also fold
  * characters like the Kelvin sign into a letter. */
@@ -239,6 +249,15 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
       message: `${name} has used up its ${AGENT_LABEL[agent]} quota (${windowName})`,
     });
   };
+  /** Refuses what the daemon turns away while a change of the sharing of `accountId` runs: a session opened on it, one
+   * of its sessions resumed, a switch onto or away from it, a handoff from it. The default account (`null`) has no sharing. */
+  const refuseIfSharingChanges = (accountId: string | null | undefined) => {
+    if (!accountId) return;
+    const current = store.getState();
+    if (!current.accountSharing.get(accountId)?.progress) return;
+    const name = current.settings.accounts.find((candidate) => candidate.id === accountId)?.name ?? accountId;
+    return fail({ code: "account_sharing_in_progress", params: { account: accountId, name }, message: `a change of the sharing of account \`${name}\` is running` });
+  };
   /** A console session's colour as the daemon assigns one: the first of the palette that no session of
    * the console that is not archived wears (an interrupted one still holds its colour), else the first. */
   const freshColour = (consoleId: string): ConsoleSessionColour => {
@@ -310,6 +329,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           const session = current.sessions.get(body.session);
           if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
           if (session.status !== "archived" && session.status !== "interrupted") return fail({ code: "session_already_running", params: { session: body.session }, message: "this session is not interrupted or archived" });
+          refuseIfSharingChanges(session.account_id);
           // Reopening a child brings back archived owners, while siblings stay archived.
           const sessions = new Map(current.sessions);
           const reopen = (record: Session) => sessions.set(record.id, { ...record, status: "idle", ended_at: undefined });
@@ -351,6 +371,8 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           const account = body.account === null ? undefined : current.settings.accounts.find((account) => account.id === body.account && account.agent === session.agent);
           if (body.account !== null && !account) return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });
           if ((session.account_id ?? null) === body.account) return fail({ code: "session_already_on_account", params: { session: body.session }, message: "this session is on that account already" });
+          refuseIfSharingChanges(session.account_id);
+          refuseIfSharingChanges(account?.id);
           refuseIfQuotaExhausted(session.agent, account);
           const reply = scenario.sessionAccountSwitches?.[body.session];
           if (reply === "pending") return new Promise<Event>(() => {});
@@ -370,6 +392,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           if (session.status === "archived") return fail({ code: "session_archived", params: { session: session.id }, message: "An archived session cannot be handed off" });
           if (session.status === "working" || session.status === "starting") return fail({ code: "session_working", params: { session: session.id }, message: "The session is in the middle of a turn" });
           refuseLocked([session]);
+          refuseIfSharingChanges(session.account_id);
           if (body.agent === session.agent) return fail({ code: "handoff_to_same_agent", params: { session: session.id, agent: AGENT_LABEL[session.agent] }, message: "The session already runs on that agent" });
           if (isAgentUnavailable(current.agentAvailability, body.agent)) return fail({ code: "agent_not_available", params: { agent: AGENT_LABEL[body.agent] }, message: `${AGENT_LABEL[body.agent]} is not available` });
           if (!isAgentAdded(current.settings.added_agents, body.agent)) return fail(agentNotAdded(body.agent));
@@ -469,6 +492,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           const agent = body.agent ?? (project ? project.default_agent ?? projectSessionAgent(owner) : owner.default_agent);
           if (!isAgentAdded(current.settings.added_agents, agent)) return fail(agentNotAdded(agent));
           const account = launchAccount(owner, project, agent, body.account);
+          refuseIfSharingChanges(account?.id);
           refuseIfQuotaExhausted(agent, account);
           const ordinal = nextConsoleOrdinals.get(owner.id) ?? 1;
           if (!project) nextConsoleOrdinals.set(owner.id, ordinal + 1);
@@ -528,6 +552,52 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           store.setState({ settings: body.account === null
             ? { ...current.settings, claude_default_approval_mode: body.mode }
             : { ...current.settings, accounts: current.settings.accounts.map((account) => account.id === body.account ? { ...account, approval_mode: body.mode } : account) } });
+          return { type: "ack" };
+        }
+        case "set_account_sharing": {
+          // The default account is the directory the others share, so it has no choice. Turning
+          // sharing on for an owned account whose directory is that one, under another spelling, is
+          // refused the same way, and nothing is recorded. The spellings are compared lexically:
+          // the fixture has no filesystem, so it does not resolve a symlink the way the daemon does.
+          const current = store.getState();
+          if (body.account === null) {
+            return fail({ code: "default_account_not_shareable", params: {}, message: "the default account is the configuration the other accounts share" });
+          }
+          const account = current.settings.accounts.find((item) => item.id === body.account);
+          if (!account) return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });
+          const defaultDir = current.agentAvailability.get(account.agent)?.default_account_dir;
+          const shares = account.share_default_config === true;
+          if (body.share && !shares && defaultDir != null && normalizedPath(account.config_dir) === normalizedPath(defaultDir)) {
+            return fail({ code: "default_account_not_shareable", params: { account: account.id, name: account.name }, message: `account \`${account.name}\`'s directory is the default account's own` });
+          }
+          // A change runs at once or is refused: the scenario's `accountSharing` marks an account whose change runs
+          // or whose sessions or sign-in are in the way, and nothing is recorded for either.
+          const state = current.accountSharing.get(account.id);
+          if (state?.progress) return fail({ code: "account_sharing_in_progress", params: { account: account.id, name: account.name }, message: `a change of the sharing of account \`${account.name}\` is running` });
+          if (state?.in_use && (state.in_use.sessions > 0 || state.in_use.signing_in)) {
+            const { sessions, signing_in } = state.in_use;
+            return fail({ code: "account_in_use", params: { account: account.id, name: account.name, sessions: String(sessions), signing_in: String(signing_in) }, message: `account \`${account.name}\` is in use` });
+          }
+          // Asking again for the recorded value does nothing, unless the last change did not finish: then it retries.
+          if (shares === body.share && account.share_default_config_incomplete !== true) return { type: "ack" };
+          // A refusal other than a failed change leaves nothing recorded.
+          const error = scenario.accountSharingError;
+          if (error && error.code !== "account_sharing_failed") return fail(error);
+          // Otherwise the choice is recorded, and the account is complete unless the scenario fails the change; a
+          // failure is not rolled back, and the daemon keeps what it left until the next change starts.
+          store.setState((now) => {
+            const { failure: _, ...rest } = now.accountSharing.get(account.id) ?? { account: account.id };
+            const accountSharing = new Map(now.accountSharing);
+            const failure = error && failedSharing(error, body.share);
+            const next: AccountSharing = { ...rest, ...(failure && { failure }) };
+            if (next.in_use !== undefined || next.progress !== undefined || next.failure !== undefined) accountSharing.set(account.id, next);
+            else accountSharing.delete(account.id);
+            return {
+              accountSharing,
+              settings: { ...now.settings, accounts: now.settings.accounts.map((item) => item.id === account.id ? { ...item, share_default_config: body.share, share_default_config_incomplete: error !== undefined } : item) },
+            };
+          });
+          if (error) return fail(error);
           return { type: "ack" };
         }
         case "set_default_account_name": {
@@ -614,6 +684,17 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
             for (const field of fields) if (updated[field].kind === "account" && updated[field].id === body.account) updated[field] = { kind: "inherit" };
             return [id, updated];
           }));
+          // An account that shares has its sharing turned off first, at once; when that does not finish, the account stays,
+          // incomplete, with the failure kept, as `set_account_sharing` leaves it.
+          const target = current.settings.accounts.find((account) => account.id === body.account)!;
+          const error = scenario.accountSharingError;
+          if (error?.code === "account_sharing_failed" && (target.share_default_config === true || target.share_default_config_incomplete === true)) {
+            store.setState((now) => ({
+              accountSharing: new Map(now.accountSharing).set(target.id, { account: target.id, failure: failedSharing(error, false) }),
+              settings: { ...now.settings, accounts: now.settings.accounts.map((item) => item.id === target.id ? { ...item, share_default_config: false, share_default_config_incomplete: true } : item) },
+            }));
+            return fail(error);
+          }
           store.setState({ consoles, projects, settings: { ...current.settings, accounts: current.settings.accounts.filter((account) => account.id !== body.account) } });
           return { type: "ack" };
         }

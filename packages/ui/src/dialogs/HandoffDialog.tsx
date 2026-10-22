@@ -11,6 +11,7 @@ import { AgentAccountField } from "./AgentAccountField";
 import { Dialog, DialogError, useDialogAction } from "./Dialog";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
 import { useCloseWhenBlocked } from "./useCloseWhenBlocked";
+import { useConfirmIncompleteLaunch } from "./useConfirmIncompleteLaunch";
 import { useLaunchChoice } from "./useLaunchChoice";
 import { useResponsibleBranches } from "./useSessionBranches";
 
@@ -45,13 +46,14 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
   const { resolved: appearance } = useOctoboardTheme();
   const { request } = useDaemon();
   const { error, busy, run } = useDialogAction();
-  const { choice, blocked, usedUp, overrides, agentOptions, setPickedAgent, account, launch } = useLaunchChoice(parentConsole, project, session.agent);
+  const { confirmLaunch, confirmation } = useConfirmIncompleteLaunch(onClose);
+  const { choice, blocked, unavailable, overrides, agentOptions, setPickedAgent, account, launch } = useLaunchChoice(parentConsole, project, session.agent);
 
   // No other agent could take the session over (one was removed or uninstalled while this was open).
   useCloseWhenBlocked(blocked, t("dialog.handOff.noOtherAgent"), onClose);
 
   const submit = () => {
-    void run(async () => {
+    void confirmLaunch(choice.account, () => void run(async () => {
       const reply = await request({
         type: "hand_off_session",
         session: session.id,
@@ -62,7 +64,7 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
       });
       if (reply.type === "session_opened") onHandedOff(reply.session.id);
       onClose();
-    });
+    }));
   };
 
   return (
@@ -71,11 +73,11 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
       onClose={onClose}
       submitLabel={t("dialog.handOff.confirm")}
       busy={busy}
-      submitDisabled={blocked || usedUp !== undefined}
+      submitDisabled={blocked || unavailable !== undefined}
       autoFocusSubmit
       onSubmit={submit}
     >
-      {usedUp && <ErrorAlert title={usedUp.title} announce>{usedUp.description}</ErrorAlert>}
+      {unavailable && <ErrorAlert title={unavailable.title} announce>{unavailable.description}</ErrorAlert>}
       <p className="text-sm">{t("dialog.handOff.message")}</p>
       <HandoffMoves session={session} busy={busy} />
       <AgentAccountField
@@ -92,6 +94,9 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
         isDisabled={blocked}
       />
       <DialogError message={error} />
+      {/* Inside this dialog's tree, though it shows in its own layer: a focus scope that is not
+          nested in the one beneath it is bounced back to it. */}
+      {confirmation}
     </Dialog>
   );
 }

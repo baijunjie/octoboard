@@ -14,7 +14,8 @@ export function sessionLocationContent(
 ): React.ReactElement {
   if (session.project_id) {
     const project = projects.get(session.project_id);
-    return project ? <InlineChip size="inherit" dir="auto" wrap>{project.name}</InlineChip> : <>{t("session.location.project")}</>;
+    // The project's name stands alone as the whole title, so it is plain text rather than a chip.
+    return project ? <span dir="auto">{project.name}</span> : <>{t("session.location.project")}</>;
   }
   const owner = consoles.get(session.console_id);
   return owner

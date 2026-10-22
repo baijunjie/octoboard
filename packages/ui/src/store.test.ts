@@ -99,7 +99,7 @@ it("remembers the logins this window started until they end, and forgets those a
   trackAccountLogin(daemon.store, "grok", null, true);
   const snapshot = {
     type: "snapshot", hosts: [], consoles: [], projects: [], sessions: [], trusted_directories: [], settings: {}, git_statuses: [],
-    agent_availability: [], account_quotas: [], account_logins: [{ ...login, account: "b" }], home_dir: null, shell_terminals: [],
+    agent_availability: [], account_quotas: [], account_logins: [{ ...login, account: "b" }], account_sharing: [], home_dir: null, shell_terminals: [],
   } as unknown as Event;
   client.onEvents!([snapshot]);
   expect(daemon.store.getState().loginsStartedHere).toEqual([]);
@@ -122,13 +122,37 @@ it("replaces the account quotas with each update and keeps the entry of an accou
   expect(accountQuotaOf(daemon.store.getState().accountQuotas, "codex", null)).toBeUndefined();
 });
 
+it("keeps each account's sharing state from the snapshot and the account_sharing events, and drops a free account", () => {
+  const daemon = createDaemon("http://localhost:1234");
+  const running = { account: "a", progress: { share: true, phase: "changing" as const, done: 1, total: 4, item: "skills" } };
+  const snapshot = {
+    type: "snapshot", hosts: [], consoles: [], projects: [], sessions: [], trusted_directories: [], settings: {}, git_statuses: [],
+    agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [running, { account: "free" }], home_dir: null, shell_terminals: [],
+  } as unknown as Event;
+  client.onEvents!([snapshot]);
+  const held = daemon.store.getState().accountSharing.get("a");
+  expect([...daemon.store.getState().accountSharing.keys()]).toEqual(["a"]);
+  client.onEvents!([snapshot]);
+  expect(daemon.store.getState().accountSharing.get("a")).toBe(held);
+  client.onEvents!([{ type: "account_sharing", account: "a", progress: { share: true, phase: "changing" as const, done: 2, total: 4, item: "plugins" } }]);
+  expect(daemon.store.getState().accountSharing.get("a")).toEqual({ account: "a", progress: { share: true, phase: "changing" as const, done: 2, total: 4, item: "plugins" } });
+  client.onEvents!([{ type: "account_sharing", account: "b", in_use: { sessions: 2, signing_in: false } }]);
+  expect(daemon.store.getState().accountSharing.get("b")).toEqual({ account: "b", in_use: { sessions: 2, signing_in: false } });
+  const failure = { share: true, items: [{ item: "skills", left: "backed_up" as const, detail: "denied" }], detail: "summary" };
+  client.onEvents!([{ type: "account_sharing", account: "a", failure }]);
+  expect(daemon.store.getState().accountSharing.get("a")).toEqual({ account: "a", failure });
+  client.onEvents!([{ type: "account_sharing", account: "a" }]);
+  expect(daemon.store.getState().accountSharing.has("a")).toBe(false);
+  expect(daemon.store.getState().accountSharing.has("b")).toBe(true);
+});
+
 it("keeps the shell terminals a snapshot lists and the broadcasts change, and drops those of a removed project", () => {
   const daemon = createDaemon("http://localhost:1234");
   const shell = (id: string, project: string): ShellTerminal => ({ id, project_id: project, worktree: null, cwd: `/${project}`, title: "zsh", renamed: false, state: "running", busy: false, created_at: 1 });
   const project = (id: string) => ({ id, console_id: "c", name: id }) as Project;
   const snapshot = {
     type: "snapshot", hosts: [], consoles: [], projects: [project("p"), project("q")], sessions: [], trusted_directories: [], settings: {}, git_statuses: [],
-    agent_availability: [], account_quotas: [], account_logins: [], home_dir: null, shell_terminals: [shell("a", "p"), shell("b", "q")],
+    agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], home_dir: null, shell_terminals: [shell("a", "p"), shell("b", "q")],
   } as unknown as Event;
   client.onEvents!([snapshot]);
   const held = daemon.store.getState().shellTerminals.get("a");

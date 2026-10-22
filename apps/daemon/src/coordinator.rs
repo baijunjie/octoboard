@@ -2581,6 +2581,8 @@ fn resolve_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<Resolved
         request.account.clone(),
     )?;
     refuse_if_account_quota_exhausted(state, agent, account_id.as_deref(), config_dir.as_deref())?;
+    // Asked again by the launch under its claim; asked here so that nothing is recorded.
+    crate::shared_config::refuse_if_changing(state, account_id.as_deref())?;
     Ok(ResolvedOpen {
         role,
         cwd,
@@ -3634,8 +3636,8 @@ async fn start_process(
         )?;
     }
     let (model, effort) = launch_settings(state, session)?;
-    // A sharing account's directory is brought in line before its agent starts, and the
-    // agent is told where the shared directory is.
+    // A sharing account's links are repaired before its agent starts, and the agent is told
+    // where the shared directory is.
     let sharing = crate::shared_config::before_launch(state, session).await?;
     for notice in sharing.notices {
         state.broadcast(notice.about(&session.id));
@@ -4022,7 +4024,7 @@ fn archive_record(state: &Arc<AppState>, id: &str) -> Result<()> {
 /// status, and whatever later follows an archived session to the sessions bound to it — is
 /// `archive_session`'s, which is why a switch of the session's account stops the process through
 /// this and not through archiving.
-fn stop_process(live: Arc<LiveSession>) -> tokio::task::JoinHandle<()> {
+pub(crate) fn stop_process(live: Arc<LiveSession>) -> tokio::task::JoinHandle<()> {
     tokio::task::spawn_blocking(move || live.terminate())
 }
 
@@ -4046,7 +4048,7 @@ const SWITCH_SETTLE: Duration = Duration::from_secs(4);
 /// which the exit watcher does on its own schedule. Far above that schedule plus the graceful
 /// period: reaching it means the process would not die, which is not a state to carry on from
 /// (see [`error_code::SESSION_DID_NOT_STOP`]).
-const SWITCH_STOP_TIMEOUT: Duration = Duration::from_secs(30);
+pub(crate) const SWITCH_STOP_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// What a switch worked out before it ended anything.
 struct SwitchPlan {
@@ -4107,7 +4109,7 @@ fn prepare_switch(
 /// the session under way, an archived session, the account it is on already, an account that is
 /// not one of the session's agent, an account whose plan quota is used up, a Grok target that is
 /// not an initialized home, a conversation record that is not where it is expected, and a
-/// target whose pending change of sharing cannot be carried out (`account_sharing_failed`). Once the
+/// source or target whose sharing is being changed (`account_sharing_in_progress`). Once the
 /// process has been ended, a relocation that does not complete or a relaunch that is refused or
 /// does not come up leaves the session interrupted on the account it had, with the conversation
 /// still in both directories.
@@ -4182,6 +4184,9 @@ pub(crate) async fn switch_session_account_with(
         target_account.as_deref(),
         target_dir.as_deref(),
     )?;
+    // Asked under the claim, which a change of the source's sharing counts as a session starting.
+    crate::shared_config::refuse_if_changing(state, before.account_id.as_deref())?;
+    crate::shared_config::refuse_if_changing(state, target_account.as_deref())?;
 
     let plan = {
         let (agent, resume_id) = (before.agent, resumable_agent_session_id(&before));
@@ -4198,17 +4203,6 @@ pub(crate) async fn switch_session_account_with(
         .await??
     };
 
-    // The target's pending change of sharing is carried out while the session still runs, so a
-    // refusal leaves it running; the copy below asks again, holding the lock.
-    drop(
-        crate::shared_config::before_switch_copy(
-            state,
-            before.agent,
-            target_account.as_deref(),
-            id,
-        )
-        .await?,
-    );
     if let Some(live) = state.live_session(id) {
         stop_process(live).await?;
     }
@@ -4219,15 +4213,10 @@ pub(crate) async fn switch_session_account_with(
     }
 
     // Held from before the copy until the session is recorded on the target, and given up before
-    // the relaunch, which takes it itself: a pending change of the target's sharing is carried out
-    // first, so the copy lands where it stays, and no change of sharing moves what the copy writes.
-    let copying = crate::shared_config::before_switch_copy(
-        state,
-        before.agent,
-        target_account.as_deref(),
-        id,
-    )
-    .await?;
+    // the relaunch, which takes it itself: no change of sharing moves what the copy writes.
+    let copying =
+        crate::shared_config::before_switch_copy(state, before.agent, target_account.as_deref())
+            .await?;
     if let Some((from, to, record, agent_session_id)) = plan.relocation {
         let agent = before.agent;
         // The environment the relaunch will see, which with the target's `config.toml` says where
@@ -4329,8 +4318,17 @@ fn session_archived(id: &str) -> anyhow::Error {
 /// Waits for the exit watcher to have seen the session's process gone and recorded the session as
 /// dormant — the state a relaunch starts from, and the one thing that must be true before the
 /// watcher can no longer write over what the relaunch records.
-async fn wait_until_down(state: &Arc<AppState>, id: &str) -> Result<()> {
-    let deadline = Instant::now() + SWITCH_STOP_TIMEOUT;
+pub(crate) async fn wait_until_down(state: &Arc<AppState>, id: &str) -> Result<()> {
+    wait_until_down_within(state, id, SWITCH_STOP_TIMEOUT).await
+}
+
+/// [`wait_until_down`], giving up after `timeout`.
+pub(crate) async fn wait_until_down_within(
+    state: &Arc<AppState>,
+    id: &str,
+    timeout: Duration,
+) -> Result<()> {
+    let deadline = Instant::now() + timeout;
     while state.live_session(id).is_some() || !state.session_record(id)?.status.is_dormant() {
         if Instant::now() >= deadline {
             // The process may still be running, with nothing recorded and nothing copied.
@@ -4792,9 +4790,10 @@ pub(crate) fn account_can_open(
 /// The account of `agent` to use when a new session leaves its account out and
 /// `auto_select_account` is on. `Some(Some(id))` is a stored account, `Some(None)` the default
 /// account, and `None` when no account has a weekly window that still has quota and resets
-/// ahead. The soonest reset wins; a larger remainder breaks a tie, and an earlier candidate
-/// wins one that is still tied — the default account, then the stored accounts in the order
-/// they are kept. Rank from the reading held for the account's current directory. The list of
+/// ahead, skipping an account whose sharing change is running (a launch on it would be refused
+/// as `account_sharing_in_progress`). The soonest reset wins; a larger remainder breaks a tie,
+/// and an earlier candidate wins one that is still tied — the default account, then the stored
+/// accounts in the order they are kept. Rank from the reading held for the account's current directory. The list of
 /// readings carries no directory, so one still stored under another directory would be chosen.
 pub(crate) fn preferred_weekly_account(
     state: &Arc<AppState>,
@@ -4810,6 +4809,12 @@ pub(crate) fn preferred_weekly_account(
     let mut best: Option<(i64, f64, Option<String>)> = None;
     for account_id in candidates {
         if !account_can_open(state, agent, account_id.as_deref())? {
+            continue;
+        }
+        if account_id
+            .as_deref()
+            .is_some_and(|id| state.sharing_locked(id).is_some())
+        {
             continue;
         }
         let config_dir = match account_id.as_deref() {
@@ -5212,7 +5217,7 @@ fn create_account(
         approval_reviewer: None,
         approval_mode: None,
         share_default_config: false,
-        share_default_config_pending: false,
+        share_default_config_incomplete: false,
     };
     {
         // The checks and the insert are one step: another create or update cannot slip between.
@@ -5269,6 +5274,8 @@ fn update_account(
     if let Some(agent) = repointed {
         state.account_quotas.forget_account(state, id);
         let _ = state.account_logins.cancel(agent, Some(id.to_string()));
+        // What runs under the account's directory is now what runs under the new one.
+        crate::shared_config::publish(state);
     }
     broadcast_settings(state)?;
     Ok(())
@@ -5295,6 +5302,7 @@ fn delete_account(state: &Arc<AppState>, id: &str) -> Result<()> {
         .collect();
     state.store.delete_account(id)?;
     state.account_quotas.forget_account(state, id);
+    crate::shared_config::publish(state);
     let _ = state
         .account_logins
         .cancel(account.agent, Some(id.to_string()));
@@ -6485,7 +6493,7 @@ mod tests {
                 approval_reviewer: None,
                 approval_mode: None,
                 share_default_config: false,
-                share_default_config_pending: false,
+                share_default_config_incomplete: false,
             })
             .unwrap();
         let reset = now_millis() + 60_000;
@@ -6688,7 +6696,7 @@ mod tests {
                 approval_reviewer: None,
                 approval_mode: None,
                 share_default_config: false,
-                share_default_config_pending: false,
+                share_default_config_incomplete: false,
             })
             .unwrap();
         state
@@ -6701,7 +6709,7 @@ mod tests {
                 approval_reviewer: None,
                 approval_mode: None,
                 share_default_config: false,
-                share_default_config_pending: false,
+                share_default_config_incomplete: false,
             })
             .unwrap();
         state
@@ -6714,7 +6722,7 @@ mod tests {
                 approval_reviewer: None,
                 approval_mode: None,
                 share_default_config: false,
-                share_default_config_pending: false,
+                share_default_config_incomplete: false,
             })
             .unwrap();
         let mut console = console(Agent::Claude, Path::new("/tmp/unused"));
@@ -6833,7 +6841,7 @@ mod tests {
                     approval_reviewer: None,
                     approval_mode: None,
                     share_default_config: false,
-                    share_default_config_pending: false,
+                    share_default_config_incomplete: false,
                 })
                 .unwrap();
         }
@@ -9364,7 +9372,7 @@ mod tests {
                     approval_reviewer: None,
                     approval_mode: None,
                     share_default_config: false,
-                    share_default_config_pending: false,
+                    share_default_config_incomplete: false,
                 })
                 .unwrap();
         }
@@ -9516,7 +9524,7 @@ mod tests {
                 approval_reviewer: None,
                 approval_mode: None,
                 share_default_config: false,
-                share_default_config_pending: false,
+                share_default_config_incomplete: false,
             })
             .unwrap();
         let repo = dir.join("repo");
@@ -9822,7 +9830,7 @@ mod tests {
             approval_reviewer: None,
             approval_mode: None,
             share_default_config: false,
-            share_default_config_pending: false,
+            share_default_config_incomplete: false,
         };
         let (work, other) = (dir.join("work"), dir.join("other"));
         let accounts = [
@@ -10272,7 +10280,7 @@ mod tests {
                 approval_reviewer: None,
                 approval_mode: None,
                 share_default_config: false,
-                share_default_config_pending: false,
+                share_default_config_incomplete: false,
             })
             .unwrap();
         let id = "019a0000-0000-7000-8000-000000000001";

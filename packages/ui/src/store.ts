@@ -13,6 +13,7 @@ import { sameValue } from "./sameValue";
 import {
   isLive,
   type AccountLogin,
+  type AccountSharing,
   type AccountQuota,
   type Agent,
   type AgentAvailability,
@@ -166,6 +167,9 @@ export interface State {
    * page is opened by the window that asked for the login, not by every window watching it. An entry goes when the
    * page has been opened or the login ends. Client state, which the daemon knows nothing of. */
   loginsStartedHere: string[];
+  /** The sharing state of each account that has something to show — sessions in use, a change running or a failure —
+   * keyed by account id, as the last `snapshot` or `account_sharing` said. An account with no entry is free. */
+  accountSharing: Map<string, AccountSharing>;
   /** The daemon host's home directory as the last `snapshot` said, for showing paths under it as
    * `~/...` (see `abbreviateHome`). Null until the first snapshot, and when the daemon cannot
    * determine one. */
@@ -205,6 +209,7 @@ const initialState: State = {
   accountQuotas: [],
   accountLogins: [],
   loginsStartedHere: [],
+  accountSharing: new Map(),
   homeDir: null,
   shellTerminals: new Map(),
 };
@@ -235,6 +240,11 @@ function keepSameQuotas(previous: AccountQuota[], quotas: AccountQuota[]): Accou
     const held = accountQuotaOf(previous, quota.agent, quota.account);
     return held !== undefined && sameValue(held, quota) ? held : quota;
   });
+}
+
+/** Whether `sharing` says anything beyond naming the account; one that does not means the account is free. */
+function hasSharingState(sharing: AccountSharing): boolean {
+  return sharing.in_use !== undefined || sharing.progress !== undefined || sharing.idle_sessions !== undefined || sharing.failure !== undefined;
 }
 
 /** What names an account's login among the logins: its agent and account (`null` for the agent's default account). */
@@ -316,6 +326,7 @@ function reducer(state: State, action: Action): State {
             accountQuotas: keepSameQuotas(state.accountQuotas, event.account_quotas),
             accountLogins: event.account_logins,
             loginsStartedHere: state.loginsStartedHere.filter((key) => event.account_logins.some((login) => accountLoginKey(login.agent, login.account) === key)),
+            accountSharing: keepSame(state.accountSharing, event.account_sharing.filter(hasSharingState), (sharing) => sharing.account),
             homeDir: event.home_dir,
             shellTerminals: keepSame(state.shellTerminals, event.shell_terminals, (t) => t.id),
           };
@@ -497,6 +508,13 @@ function reducer(state: State, action: Action): State {
           return { ...state, agentAvailability: new Map(event.agent_availability.map((a) => [a.agent, a])) };
         case "account_quotas_updated":
           return { ...state, accountQuotas: keepSameQuotas(state.accountQuotas, event.account_quotas) };
+        case "account_sharing": {
+          const { type: _type, ...sharing } = event;
+          const accountSharing = new Map(state.accountSharing);
+          if (hasSharingState(sharing)) accountSharing.set(sharing.account, sharing);
+          else accountSharing.delete(sharing.account);
+          return { ...state, accountSharing };
+        }
         case "account_login_updated": {
           const { login } = event;
           const others = state.accountLogins.filter((held) => held.agent !== login.agent || held.account !== login.account);
@@ -570,7 +588,7 @@ export function createDaemon(origin: DaemonOrigin): Daemon {
       // not repeat the reason; any other notice as itself.
       const failure = noticeErrorPresentation(event.code, event.params, event.message);
       emitToast({
-        kind: ["launch_failed", "trust_answer_failed", "queued_messages_dropped", "handoff_messages_dropped", "message_not_sent"].includes(event.code) ? "error" : "notice",
+        kind: ["launch_failed", "trust_answer_failed", "queued_messages_dropped", "handoff_messages_dropped", "sharing_messages_dropped", "message_not_sent"].includes(event.code) ? "error" : "notice",
         message: daemonMessage(currentLanguage(), event.code, event.params, event.message, store.getState()),
         daemonTitle: failure ? new DaemonRequestError(event.message, `${event.code}.title`, event.params) : undefined,
         daemonError: failure ?? new DaemonRequestError(event.message, event.code, event.params),

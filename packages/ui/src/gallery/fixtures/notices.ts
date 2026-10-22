@@ -192,9 +192,9 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Message written but not sent by the agent",
-    description: "An error alert tied to the Claude Code session: it names the agent, says the message waits in the session's input box and that nothing more is written into the session until a prompt is sent, then gives the recovery of opening the session and pressing Enter.",
+    description: "An error alert tied to a console session, Hub, so its title is a sentence with the console's name, Main, as a chip in it, not a project name: it names the agent, says the message waits in the session's input box and that nothing more is written into the session until a prompt is sent, then gives the recovery of opening the session and pressing Enter.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
-    toasts: [{ kind: "error", code: "message_not_sent", params: { agent: "Claude Code" }, message: "", session: "s-web-1" }],
+    toasts: [{ kind: "error", code: "message_not_sent", params: { agent: "Claude Code" }, message: "", session: SAMPLE.consoleSession.id }],
   },
   {
     id: "toast-message-discarded-by-dialog",

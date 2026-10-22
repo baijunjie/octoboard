@@ -78,6 +78,9 @@ injects.
   conversation is the exception: it has that conversation from the start (see "Resuming a conversation by its
   session ID" in `docs/product/sessions.md`).
 - A resume carries no opening prompt, so the session comes up at the agent's prompt.
+- A resume or reopen the user starts from the window on an account whose last change of sharing is incomplete asks
+  the user first, and nothing is relaunched when that is cancelled (see "Starting a session on an account whose last
+  change is incomplete" in `docs/product/sharing-the-default-configuration.md`).
 - A session relaunches with the account and the config directory it last recorded for its agent — the one it was
   opened with until it is switched to another account (see `docs/product/switching-session-accounts.md`), not the console's current
   reference — and is refused if that directory no longer exists, but only when the session has a conversation to

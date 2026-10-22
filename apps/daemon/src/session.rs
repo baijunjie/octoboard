@@ -192,6 +192,13 @@ impl LiveSession {
         }
     }
 
+    /// Whether the process is held up by something only the user can answer that no hook reports:
+    /// the folder-trust confirmation, Codex's title saying it waits on the user, or a dialog on
+    /// the screen as the latest look left it.
+    pub(crate) fn waits_for_user(&self) -> bool {
+        self.trust.needs_user() || self.needs_user_action() || self.agent_dialog().is_some()
+    }
+
     pub(crate) fn needs_user_action(&self) -> bool {
         self.action_required.load(Ordering::Acquire)
     }

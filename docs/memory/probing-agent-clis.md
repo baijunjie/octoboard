@@ -367,3 +367,24 @@ Clean up in the order the daemon enforces, and leave time between the steps: arc
 record is written, while the agent process is still only being asked to exit, so deleting the console straight
 afterwards is refused for "running sessions" even though every session was archived. Wait for those processes to be
 gone, then delete — the refusal is the daemon working, not a defect.
+
+## Give a scratch daemon a Grok home in the state Grok itself leaves one
+
+Applies to a probe that runs the daemon over a hand-built Grok home — a scratch `GROK_HOME` or account directory
+(measured on Grok Build 1.0.62).
+
+**Initialise the home before taking any baseline of it.** The daemon reads every account's quota by running the
+agent's own CLI against the account's directory, the first time within about 15 seconds of its start and with no
+session involved (`docs/product/account-quotas.md`, "How a quota is read" and "When quotas are read"). For Grok that is
+`grok agent --no-leader stdio`, and its first run in a home never run before initialises it: `README.md`, `docs/`,
+`installed-plugins/`, and `[marketplace] default_skills_installs_purged = true` appended to `config.toml`, following a
+symlink into the file it points at. A probe asserting that a shared `config.toml` comes through a session untouched
+then sees a change no session made. Run Grok in the home once beforehand, or pre-seed that marker line.
+
+**Seed Grok's trust store in Grok's own format, or not at all.** In `trusted_folders.toml`, `decided_at` is an integer
+of Unix seconds (`decided_at = 1792540800`), never a timestamp string. A store Grok cannot read leaves every folder
+untrusted, so a session whose directory holds an `AGENTS.md` — every console session's does — gets the trust prompt,
+the daemon presses `y` as it does for any console session, Grok fails to save the trust ("Couldn't save folder trust:
+the trust store could not be read") and quits about 0.3 s after start, which reads exactly like a daemon defect. Left
+out, the store is created by that press. When a session in such a run ends right after it starts, read its final
+screen in the daemon's saved output, `<HOME>/.octoboard/output/<session id>`, before suspecting the daemon.

@@ -6,9 +6,10 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { AGENT_OPTIONS } from "../agents";
 import { DaemonRequestError } from "../daemon-client";
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
-import type { Session } from "../protocol";
+import type { Account, Session } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
 import type { NewSessionRequest } from "./dialogRequest";
+import { useConfirmIncompleteLaunch } from "./useConfirmIncompleteLaunch";
 import { useQuickCreateSession } from "./useQuickCreateSession";
 
 vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "light" }) }));
@@ -33,8 +34,9 @@ function mount(initial: Partial<State> = {}) {
   const onOpened = vi.fn();
   let quickCreate!: (target: NewSessionRequest, action: string) => void;
   function Host({ consoleId }: { consoleId: string }) {
-    quickCreate = useQuickCreateSession(onOpened, consoleId);
-    return null;
+    const { confirmLaunch, confirmation } = useConfirmIncompleteLaunch();
+    quickCreate = useQuickCreateSession(onOpened, consoleId, confirmLaunch);
+    return confirmation ?? null;
   }
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -123,4 +125,24 @@ it("does not select the session when the window moved to another console while i
   showConsole("c-2");
   await act(async () => reply({ type: "session_opened", session: sessionOf("s-new", parent.id, undefined, "", "idle") }));
   expect(onOpened).not.toHaveBeenCalled();
+});
+
+const ASKING = '[role="alertdialog"]';
+const half: Account = { id: "a-half", agent: "claude", name: "Half", config_dir: "/a/half", share_default_config: true, share_default_config_incomplete: true };
+const target = (): NewSessionRequest => ({ kind: "new-console-session", console: consoleOf(parent.id, "Main", { claude_account_id: half.id }) });
+const close = () => act(async () => (document.body.querySelector(`${ASKING} button[aria-label="Close"]`) as HTMLElement).click());
+
+it("sends nothing when the question about an incomplete account is cancelled, and takes a new press afterwards", async () => {
+  const base = mount();
+  const state = base.daemon.store.getState();
+  base.daemon.store.setState({
+    consoles: new Map([[parent.id, consoleOf(parent.id, "Main", { claude_account_id: half.id })]]),
+    settings: { ...state.settings, accounts: [half] },
+  });
+  await base.run(target());
+  await close();
+  expect(base.daemon.request).not.toHaveBeenCalled();
+  expect(document.body.querySelector(ASKING)).toBeNull();
+  await base.run(target());
+  expect(document.body.querySelector(ASKING)).not.toBeNull();
 });

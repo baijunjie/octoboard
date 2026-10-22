@@ -648,6 +648,22 @@ it("announces exhausted quota only when the selected conversation requires a new
   expect(onOpened).toHaveBeenCalledTimes(1);
 });
 
+it("holds Open back, with why, when the only account left is changing its sharing", () => {
+  const { daemon } = renderForResume({ claude_account_id: { kind: "account", id: "a-work" } }, record("claude", null), {
+    ...claudeAccounts,
+    accountQuotas: [{
+      agent: "claude", account: null, fetched_at: Date.now(), plan: null, unavailable: null,
+      windows: [{ kind: "session", label: null, used_percent: 100, resets_at: Date.now() + 3_600_000, window_minutes: 300 }],
+    }],
+    accountSharing: new Map([["a-work", { account: "a-work", progress: { share: true, phase: "changing" as const, done: 0, total: 2 } }]]),
+  });
+  const alert = document.body.querySelector('[data-slot="alert-content"][role="alert"]');
+  expect(alert?.querySelector('[data-slot="alert-title"]')?.textContent).toBe("Sharing is being changed");
+  expect(alert?.querySelector('[data-slot="alert-description"]')?.textContent).toContain("Choose another account or wait for the change to finish.");
+  expect(openDisabled()).toBe(true);
+  expect(daemon.request).not.toHaveBeenCalled();
+});
+
 it("keeps focus in the Session ID field while the lookup comes and goes", async () => {
   act(() => setInteractionModality("pointer"));
   renderForResume({}, record("claude", null));
@@ -1267,6 +1283,25 @@ it("keeps the Name hint visible", () => {
   const { container, root } = renderDialog([], {}, {}, undefined, null);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
   expect(document.body.textContent).toContain("Leave this empty to use the default session name.");
+});
+
+it("lists an account whose sharing change runs as unavailable in the account picker", async () => {
+  const { container, root } = renderDialog([], {
+    settings: {
+      auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p",
+      accounts: [{ id: "a-1", agent: "claude", name: "Work", config_dir: "/home/me/.claude-work" }],
+    },
+    accountSharing: new Map([["a-1", { account: "a-1", progress: { share: true, phase: "changing" as const, done: 0, total: 3 } }]]),
+  });
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  await act(async () => pickerNamed("Claude Code account").click());
+  const options = [...document.body.querySelectorAll<HTMLElement>('[role="option"]')];
+  const work = options.find((option) => option.textContent?.includes("Work"))!;
+  expect(work.textContent).toContain("Changing sharing");
+  expect(work.getAttribute("aria-describedby") && document.getElementById(work.getAttribute("aria-describedby")!)?.textContent).toBe("Unavailable while its sharing is being changed");
+  // It cannot be picked: pressing it leaves the account as it was.
+  await act(async () => work.click());
+  expect(pickerNamed("Claude Code account").textContent).not.toContain("Work");
 });
 
 it("shows the account picker with the agent's only account, its usage drawn in the option", () => {

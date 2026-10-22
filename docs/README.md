@@ -245,24 +245,27 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Agent accounts](product/agent-accounts.md) — Settings' Agent accounts section: the added agents list (how it is
   first filled, the undecided state, where it applies), the agent strip and its not-installed warning, Add agent,
   reordering and removing an agent, the empty state, the default account and renaming it, owned accounts and their
-  actions menu, approval modes, adding, editing and removing an account, and logging an account in.
+  actions menu, sharing the default configuration, approval modes, adding, editing and removing an account, and
+  logging an account in.
 - [Sharing the default configuration](product/sharing-the-default-configuration.md) — a non-default account sharing the
   agent's default directory through links: the per-account choice, what each agent shares and what is never shared,
   turning it on (backups, history moved or merged, Codex rows carried) and off (backups restored, the account's own
-  conversations taken back), when a change is carried out and how a failed one is reported, the repair before every
-  launch, Claude Code's auto memory, and removing or repointing a sharing account.
+  conversations taken back), a change carried out at once or refused, the account locked while it runs, its progress
+  and the account's sharing state, how a failed one is reported and retried, the repair before every launch, Claude
+  Code's auto memory, and removing or repointing a sharing account.
 - [Language](product/language.md) — the 17 offered languages and why they are ordered by tag, English as the fallback,
   the default picked from the system's languages on the first launch and kept from then on, the language chosen in
   Settings, how the system's languages map onto the list, what follows the current language and what does not (report
   pages, text aimed at agents), where the choice is kept, and what is translated so far.
 - [Launching agents](product/launching-agents.md) — the guarantee that Octoboard installs nothing into a project and
-  never writes the user's agent configuration (the four narrow exceptions being the conversation a switch of a
-  session's account copies, the Codex thread row that switch points at the copied head, the Grok Build trust entry
-  carried to the user's own store, and an account set to share the default configuration), and that a fast-forward and a push are the ways it changes a project repository,
-  both only at the user's word; the three things injected per launch (plus Claude Code's status line, which runs the
-  user's own and reports the context window) and the console's one generated instruction file
-  shared by every agent, ending with the console's own instructions, its refresh on each launch and which sessions an
-  edit reaches, the launch environment, and the per-agent specifics.
+  never writes the user's agent configuration (the five narrow exceptions being the conversation a switch of a session's
+  account copies, the Codex thread row that switch points at the copied head, the Grok Build trust entry carried to the
+  user's own store, an account set to share the default configuration, and selected Grok settings a session saved,
+  carried on exit into the file a linked Grok configuration leads to), and that a fast-forward and a push are the ways
+  it changes a project repository, both only at the user's word; the three things injected per launch (plus Claude
+  Code's status line, which runs the user's own and reports the context window) and the console's one generated
+  instruction file shared by every agent, ending with the console's own instructions, its refresh on each launch and
+  which sessions an edit reaches, the launch environment, and the per-agent specifics.
 - [Folder trust](product/folder-trust.md) — each agent's own folder-trust confirmation and where it records the trust,
   the one auto-trust permission Claude Code, Codex and Grok Build share (a project or a trusted folder), the trust
   dialog, how Octoboard presses each agent's confirmation, carrying Grok Build's trust entry into the user's store, and

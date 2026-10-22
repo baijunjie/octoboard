@@ -77,6 +77,8 @@ pub(crate) async fn hand_off_with(
     let original = state.session_record(&request.session)?;
     coordinator::refuse_unless_still_askers(&original, request.asked_by.as_deref())?;
     refuse_unless_it_can_be_handed_off(&original, request.agent)?;
+    // Its conversation is read from its account's directory, which a change of sharing moves.
+    crate::shared_config::refuse_if_changing(state, original.account_id.as_deref())?;
 
     let key = Uuid::new_v4().to_string();
     let open = OpenRequest {

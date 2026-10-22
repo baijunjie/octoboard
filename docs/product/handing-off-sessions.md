@@ -32,6 +32,9 @@ background" in `docs/product/sessions.md`). A handoff is refused, with nothing c
   (`unknown_account`), the receiving session's account, once resolved, is used up (`account_quota_exhausted`; see
   "Opening a session" in `docs/product/sessions.md`), or the model or reasoning effort is not one the agent offers
   (`invalid_launch_setting`);
+- a change of the sharing of the default configuration runs for the session's account or for the receiving session's
+  (`account_sharing_in_progress`; see "When a change is carried out" in
+  `docs/product/sharing-the-default-configuration.md`);
 - for a session bound to an owner, opening a session bound to that owner would be refused.
 
 The model and reasoning effort follow the rules for opening a session (see "Which model and reasoning effort a session
@@ -84,7 +87,8 @@ Then come the fields:
   field shows is sent as the receiving session's own account choice. Used-up accounts are treated
   as in the session dialog's field: listed with a usage bar but not pickable, passed over when the field opens, and,
   when the chosen account is used up all the same, a danger callout at the top of the dialog says why and **Hand off**
-  cannot be pressed.
+  cannot be pressed. An account whose sharing of the default configuration is being changed is treated the same way
+  while the change runs, as in the session dialog.
 - The collapsed **Advanced** section — the receiving session's model and reasoning effort, showing what a new session of
   the chosen agent and account would inherit, as in the session dialog (see "The Advanced section" in
   `docs/product/model-and-reasoning-effort.md`). Only values the user changed are sent with the request; the rest are
@@ -95,7 +99,9 @@ found unavailable meanwhile — the dialog closes at once, with nothing sent, an
 is available to take the session over; that alert offers nothing but its acknowledgement (see "Recovery and unexpected
 errors" in `docs/product/error-alerts.md`).
 
-Pressing **Hand off** sends `hand_off_session`. When it succeeds the dialog closes and the receiving session is
+Pressing **Hand off** sends `hand_off_session`, once the user has confirmed starting on the chosen account when its
+last change of sharing is incomplete (see "Starting a session on an account whose last change is incomplete" in
+`docs/product/sharing-the-default-configuration.md`). When it succeeds the dialog closes and the receiving session is
 selected. A refusal or failure is shown as an error alert (see `docs/product/error-alerts.md`) and the dialog stays
 open for another try. A session in the middle of a turn or still starting (`session_working`) asks the user to wait for
 its current turn or operation to finish; a receiving agent that is the session's own (`handoff_to_same_agent`), which

@@ -121,7 +121,8 @@ stays, and **Automatically select an account** stays above it.
 Each agent's panel starts with the agent's **default account**, with the directory it currently resolves to. A "?"
 ends its name line, after the plan, and says in its tooltip, or in a popover once pressed, that the default account is
 the setup a session runs under when no account is pinned. Its directory cannot be edited, and the default account cannot
-be removed. Its actions menu holds **Rename**; where **Log in** appears follows "Logging an account in" below.
+be removed. It has no sharing switch: its directory is the one other accounts share. Its actions menu holds
+**Rename**; where **Log in** appears follows "Logging an account in" below.
 
 **Rename** opens a dialog, titled for the default account of that agent, with a single name field holding the name the
 user gave it, empty when there is none, and a note that leaving it empty uses the standard name. The name is stored
@@ -159,6 +160,92 @@ with a dot, not in colour alone:
 | **Logged in**, in the success colour | The latest reading of its quota succeeded with at least one quota window. |
 | **Not logged in**, in the warning colour | Its quota is in the not-logged-in state (see "Quota states" in `docs/product/account-quotas.md`). The row then shows no quota line beneath it. |
 | None | Anything else: the quota not read yet, a reading that failed for another reason, or windows kept from before a newer reading failed. |
+
+## Sharing the default configuration
+
+Every account the user owns has a **Share default configuration** switch within its row, across the row's full
+width. The default account has none. The switch's accessible name identifies the account. A change is carried out at
+once or not at all (see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`), so
+the switch is either free to use or unavailable, and says which. Unavailable, it looks disabled but stays focusable
+and is marked unavailable for assistive technology; a press on it is ignored, and what is shown under it says why.
+
+A help tip beside the switch says, one line each, that configuration (skills, plugins, settings and more) and
+conversation history are linked to the default account's directory, what is never shared for the selected agent, and
+what happens to conversations when sharing is turned off; the rules are in "What is shared" and "Turning sharing off"
+in `docs/product/sharing-the-default-configuration.md`.
+
+The switch saves independently of the account's name or directory. It shows the daemon's recorded choice, which changes
+as soon as a change starts, so during a change it shows the change's target. While the last change is incomplete — it
+failed, or the daemon stopped during it — and no change runs, the switch instead shows the position it had before that
+change, the opposite of the recorded choice: turning it asks again for the recorded choice, which the daemon carries out
+as the retry (see "The sharing choice" in `docs/product/sharing-the-default-configuration.md`). From the switch, an
+incomplete change can therefore only be tried again in the same direction; it cannot be turned back until a retry
+succeeds. The one exception is turning sharing on that failed because the default account's directory has moved since
+sharing was turned on (the cause `default_moved`), which asking again cannot mend: the switch then shows the recorded
+choice, on, and turning it off, then on again, shares the new directory. Every window shows the same state, from the
+account's sharing state (see "The account's sharing state" in `docs/product/sharing-the-default-configuration.md`). What
+stands under the switch is its description for assistive technology:
+
+| State | The switch | Under it |
+|---|---|---|
+| Free, off | Can be turned on | A caption of what turning it on does: the account's configuration and conversation history are linked to the default account's directory. |
+| Free, on | Can be turned off | A caption of what is the case now: they are linked to the default account's directory. |
+| Free, with idle sessions of the account | Can be turned | The caption, and a line saying that changing it first ends that many idle sessions of the account and resumes them afterwards. |
+| Sessions of the account working | Unavailable | That sharing cannot be changed while that many of the account's sessions are working, and to wait for them to finish. Which sessions count as working is in "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`. |
+| The account being signed in | Unavailable | That sharing cannot be changed while the account is being signed in. With sessions running too, both lines are shown. |
+| A change running | Unavailable | A progress bar (below). |
+| The last change incomplete | Its position before that change (on, after a moved default directory) | A warning (below). |
+
+Text typed into an idle session's terminal but not yet sent is not seen, and is lost when the change ends that session
+(see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`); the switch does not warn
+of it.
+
+The on and off captions are shown only when nothing else is: a progress bar or the warning takes their place. A
+reason the account is in use is shown as well as either of these. The switch is also unavailable while this window's
+own request for a change is still unanswered, and shows the recorded choice meanwhile.
+
+**While a change runs**, a progress bar stands under the switch, labelled with the direction, turning sharing on or
+off, and following the change's phases (see "When a change is carried out" in
+`docs/product/sharing-the-default-configuration.md`). While it waits for another account's sharing change to finish,
+while it ends the idle sessions, and while it resumes them, the bar is indeterminate and says which in place of a
+count. While the entries change, it shows how many have been processed out of the total, as its value too, with the
+entry being processed named under it as a code chip; until the first entry, while a background quota or model check
+of the account finishes, it is indeterminate and says it is waiting to start. The direction is announced when the
+change starts, together with the phase when that is not the entries, and each later phase is announced as it begins,
+except entering the entries phase, which keeps what was last said.
+
+**When the change ends** the result is shown at the switch at once. A change that completed leaves the caption of the
+new state. One that did not complete — whether it failed just now or the daemon was stopped during it — is shown the
+same way in both cases, by one warning box holding everything about it, in this order:
+
+- a title saying that turning sharing on (or off) did not finish, and under it why, in plain language,
+  when that is known: one line per cause, naming the entries it hit compactly, the first by name and the rest as a
+  count ("You do not have permission to change `skills/` and 1 more."), a conversation by the name of a session
+  that records it, each line going on with what to do about its cause; or, when no entry is listed, the reason the
+  change as a whole failed with what to do about it, or only a line pointing at Details when the reason is not a
+  named one (see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`). After a
+  daemon restart nothing is known of the failure, so there is no reason. The title and these lines are the only part
+  of the warning announced to assistive technology, and only when the failure follows a change this view saw running,
+  not for one already there when the section opens;
+- then what to do: turn the switch on (or off) again to try once more, or, after a moved default directory, turn it
+  off, then on again; with idle sessions of the account, the line saying that changing sharing ends and resumes them
+  follows, since a retry does too;
+- then a collapsed **Details** disclosure, laid out as in "When a change is carried out" in
+  `docs/product/sharing-the-default-configuration.md`: each entry with what it was left as and the raw diagnostic;
+  or, with no entry listed, the one raw reason the change failed. It is present only when the failure has something
+  there, so never after a restart.
+
+The causes and what each covers are in "When a change is carried out" in
+`docs/product/sharing-the-default-configuration.md`. The warning stays while the account's last change is incomplete
+and no change runs; the failure's details are dropped once the next change records its choice, so a retry refused
+or stopped before that keeps them. When the warning goes while
+keyboard focus is inside it, focus moves to the switch. A failure is shown only there, not in an error alert, the
+window that asked for the change included. A refused request (an account in use, a change already running) is shown
+in an error alert, the switch keeping its position.
+
+While the account's last change is incomplete and no change runs, starting a session on it from the window asks the
+user first (see "Starting a session on an account whose last change is incomplete" in
+`docs/product/sharing-the-default-configuration.md`).
 
 ## Approval modes
 
@@ -233,8 +320,10 @@ Removing an account asks first and says that consoles referring to it go back to
 sessions already open are not affected. A project referring to it is put back to inheriting its console's reference at
 the same time (see "The project's account, model and reasoning effort" in `docs/product/projects.md`). Removing an
 account, or pointing it at another directory, ends a login running for it. An account that shares the default
-configuration, or has a change of it pending, has its sharing turned off first instead, which is refused while
-anything runs under its directory, a login included (see "Removing or repointing a sharing account" in
+configuration, or whose last change of it is incomplete, has its sharing turned off first instead, under the same rule
+as a change of the switch, its idle sessions ended and resumed around it: refused while sessions of the account are
+working or it is being signed in, and while a
+change of its sharing runs (see "Removing or repointing a sharing account" in
 `docs/product/sharing-the-default-configuration.md`).
 
 ## Logging an account in

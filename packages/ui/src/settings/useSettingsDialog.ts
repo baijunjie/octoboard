@@ -8,13 +8,14 @@ import type { SettingsSectionId } from "./SettingsDialog";
 
 /**
  * Whether the settings dialog is open, and how to open it (on its first section, or at a given one
- * with `openSettingsAt`, optionally with the Add agent dialog in front) and close it, including from the native
- * menu's Settings item (Cmd+,). That request is ignored while anything else holds the user's
- * attention: another modal (`otherModalOpen`), an open action menu, the settings themselves, or
- * before the UI has anything to show (`ready` is false), where it would otherwise pop the dialog
- * up later, unasked. Closing hands keyboard focus to `focusTerminal`, whatever the modal's own
- * focus restore would pick, unless a dialog is open under it (Settings was opened from one): focus
- * then stays with that dialog, which it is handed back to if the restore left it on `<body>`.
+ * with `openSettingsAt`, optionally with the Add agent dialog in front, or on an account's sharing
+ * switch) and close it, including from the native menu's Settings item (Cmd+,). That request is
+ * ignored while anything else holds the user's attention: another modal (`otherModalOpen`), an open
+ * action menu, the settings themselves, or before the UI has anything to show (`ready` is false),
+ * where it would otherwise pop the dialog up later, unasked. Closing hands keyboard focus to
+ * `focusTerminal`, whatever the modal's own focus restore would pick, unless a dialog is open under
+ * it (Settings was opened from one): focus then stays with that dialog, which it is handed back to
+ * if the restore left it on `<body>`.
  */
 export function useSettingsDialog({
   ready,
@@ -26,16 +27,23 @@ export function useSettingsDialog({
   focusTerminal: () => void;
 }): {
   settingsOpen: boolean;
-  /** What the dialog was last asked for: the section (none for its first) and whether to put its Add agent
-   * dialog in front. `nonce` changes with every request, so an open dialog can follow a later one. */
-  settingsNavigation: { nonce: number; section: SettingsSectionId | undefined; addAgent: boolean };
+  /** What the dialog was last asked for: the section (none for its first), whether to put its Add agent dialog in
+   * front, and the account (if any) whose sharing switch to focus. `nonce` changes with every request, so an open
+   * dialog can follow a later one. */
+  settingsNavigation: {
+    nonce: number;
+    section: SettingsSectionId | undefined;
+    addAgent: boolean;
+    account: string | undefined;
+  };
   openSettings: () => void;
-  openSettingsAt: (section: SettingsSectionId, options?: { addAgent?: boolean }) => void;
+  openSettingsAt: (section: SettingsSectionId, options?: { addAgent?: boolean; account?: string }) => void;
   closeSettings: () => void;
 } {
   const [open, setOpen] = useState(false);
   const [section, setSection] = useState<SettingsSectionId>();
   const [addAgent, setAddAgent] = useState(false);
+  const [account, setAccount] = useState<string>();
   const [nonce, setNonce] = useState(0);
   const { appMenu } = usePlatform();
 
@@ -63,17 +71,19 @@ export function useSettingsDialog({
 
   return {
     settingsOpen: open,
-    settingsNavigation: { nonce, section, addAgent },
+    settingsNavigation: { nonce, section, addAgent, account },
     openSettings: () => setOpen(true),
     openSettingsAt: (target, options) => {
       setSection(target);
       setAddAgent(options?.addAgent ?? false);
+      setAccount(options?.account);
       setNonce((count) => count + 1);
       setOpen(true);
     },
     closeSettings: () => {
       setSection(undefined);
       setAddAgent(false);
+      setAccount(undefined);
       setOpen(false);
     },
   };

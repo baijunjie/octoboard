@@ -39,6 +39,8 @@ it.each(["en", "zh-Hans", "ar"] as const)("keeps rich location wording equal to 
     const session = sessionOf("s", owner.id, projectId, "Task", "idle");
     const container = mount(sessionLocationContent(t, session, consoles, projects));
     expect(container.textContent).toBe(bare(sessionLocation(t, session, consoles, projects)));
+    // A project's name is the whole title, so it is no chip; a console's name runs inside a sentence, so it is one.
+    expect(container.querySelector("[data-inline-chip]") === null).toBe(projectId === project.id || projectId === "gone");
     for (const chip of container.querySelectorAll("[data-inline-chip]")) {
       expect(chip.getAttribute("dir")).toBe("auto");
       expect(chip.querySelector("code")).toBeNull();

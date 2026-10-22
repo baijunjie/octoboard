@@ -551,10 +551,10 @@ pub fn record_paths(
 /// account than the default one, nothing in the default account's records directory, by its
 /// spelling or with links resolved, such as the copy a switch left there; the default directory is
 /// the user's own setup. The exception is an account whose directory shares the default
-/// configuration with no change pending: its sessions' records live in the default directory,
-/// reached through its links, and are theirs. While a change of that sharing is pending, nothing
-/// in the default directory is removed: an orphan left there can still be removed by hand, a
-/// conversation removed by mistake cannot.
+/// configuration with its last change complete: its sessions' records live in the default
+/// directory, reached through its links, and are theirs. While the last change of that sharing is
+/// incomplete, nothing in the default directory is removed: an orphan left there can still be
+/// removed by hand, a conversation removed by mistake cannot.
 pub fn removable_record_paths(
     hints: &Hints,
     locator: &mut Locator,
@@ -571,7 +571,7 @@ pub fn removable_record_paths(
                 account.agent == agent
                     && crate::account_dirs::account_dir_key(&account.config_dir) == key
                     && account.share_default_config
-                    && !account.share_default_config_pending
+                    && !account.share_default_config_incomplete
             })
         }
     };
@@ -1225,15 +1225,15 @@ mod tests {
             approval_reviewer: None,
             approval_mode: None,
             share_default_config: true,
-            share_default_config_pending: false,
+            share_default_config_incomplete: false,
         };
         let on_sharing = removable(&mut locator, std::slice::from_ref(&sharing), Some(&account));
         assert!(on_sharing.contains(&transcript(&default)), "{on_sharing:?}");
-        sharing.share_default_config_pending = true;
-        let on_pending = removable(&mut locator, std::slice::from_ref(&sharing), Some(&account));
+        sharing.share_default_config_incomplete = true;
+        let on_incomplete = removable(&mut locator, std::slice::from_ref(&sharing), Some(&account));
         assert!(
-            on_pending.iter().all(|path| !path.starts_with(&default)),
-            "{on_pending:?}"
+            on_incomplete.iter().all(|path| !path.starts_with(&default)),
+            "{on_incomplete:?}"
         );
 
         // An account whose directory is a link to the default one reaches the default's record by
@@ -1264,7 +1264,7 @@ mod tests {
             approval_reviewer: None,
             approval_mode: None,
             share_default_config: false,
-            share_default_config_pending: false,
+            share_default_config_incomplete: false,
         };
 
         let projects = account.join("projects");

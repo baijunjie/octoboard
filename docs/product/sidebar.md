@@ -417,12 +417,17 @@ action menu offers:
   account other than the session's own that is used up (see "A used-up account" in `docs/product/account-quotas.md`),
   as judged when the menu opens, is disabled, with the short reason under its name on two lines, saying it is used up
   and when it resets; it stays reachable with the arrow keys, its accessible name is just the account's name, and the
-  full reason is its description. A removed account named by its directory shows a key icon in the bar's place, lined
-  up with the bars, and is never marked used up.
+  full reason is its description. An account other than the session's own whose sharing of the default configuration
+  is being changed, as judged when the menu opens, is disabled the same way, whatever its quota, with a short reason
+  saying so; while the session's own account is having its sharing changed, every other account is disabled with a
+  reason saying that the session's account is changing, as the session cannot be switched away from it either (see
+  "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`). A removed account named by
+  its directory shows a key icon in the bar's place, lined up with the bars, and is never marked used up.
 - **Hand off** — opens the handoff dialog, which moves the session's place to a new session of another agent (see
   "Handing off from the window" in `docs/product/handing-off-sessions.md`). Present for a project session's and a
   console session's row; an archived session has no such entry. Disabled while the session is *working* or
-  *starting*, while it is locked, and while no agent other than its own can be picked.
+  *starting*, while it is locked, while no agent other than its own can be picked, and while the session's own
+  account is having its sharing changed, with that reason.
 - **Archive** — archives the session (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`). A
   session at its prompt or interrupted, with no unarchived session under it, is archived at once, unless a branch or
   worktree bound to it needs the user's word (see "The confirmation" in `docs/product/branch-and-worktree-cleanup.md`);

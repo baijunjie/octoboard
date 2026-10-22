@@ -1,9 +1,10 @@
 import { accountsByAgent, AGENT_ACCOUNT_FIELD, defaultAccountName, isAgentPickable, projectSessionAgent, selectableAgent } from "./agents";
 import type { Translate } from "./i18n/catalog";
-import type { Account, AccountQuota, Agent, AgentAvailability, Console, Project, ProjectAccount, QuotaWindow, Session, Settings } from "./protocol";
+import type { Account, AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Project, ProjectAccount, QuotaWindow, Session, Settings } from "./protocol";
 import { accountQuotaOf } from "./quota/accountQuotaOf";
 import { exhaustedQuotaWindow } from "./quota/quotaFormat";
 import { sessionAccountName } from "./sessionLabel";
+import type { Reason } from "./components/ReasonText";
 
 /** An account of one agent as a picker settles it; `null` is the agent's default account, the
  * state of pinning nothing. */
@@ -23,6 +24,9 @@ export interface ChoiceEntry {
   /** The window that keeps the account from running a session right now (see `exhaustedQuotaWindow`);
    * the entry may still be shown, but not chosen. */
   exhaustedBy: QuotaWindow | undefined;
+  /** A change of the account's sharing of the default configuration is running; the daemon refuses a new
+   * session on the account until it ends, so the entry may be shown, but not chosen. */
+  changingSharing: boolean;
 }
 
 /** One agent's entries, the default account first. `selectable` is false only once the agent is
@@ -31,6 +35,31 @@ export interface ChoiceGroup {
   agent: Agent;
   selectable: boolean;
   entries: ChoiceEntry[];
+}
+
+/** Whether a change of sharing runs for `account` (`null`, the default account, has none). */
+export function sharingChangeRuns(sharing: Map<string, AccountSharing> | undefined, account: string | null): boolean {
+  return account !== null && sharing?.get(account)?.progress !== undefined;
+}
+
+/** The stored account `account` names when its last sharing change did not finish and none runs now, which a session
+ * may be started on only after the user confirms it. A running change is not asked about: the daemon refuses the
+ * launch. `null`, the default account, and an unknown id have none. */
+export function incompleteAccount(accounts: Account[], sharing: Map<string, AccountSharing> | undefined, account: string | null | undefined): Account | undefined {
+  if (account === null || account === undefined || sharingChangeRuns(sharing, account)) return undefined;
+  return accounts.find((item) => item.id === account && item.share_default_config_incomplete === true);
+}
+
+/** What an account shows in a list in place of its usage while its sharing change runs: why it cannot be chosen in
+ * short as the `reason` under its name, and in full as the `detail` for assistive technology. */
+export function sharingChangeUnavailable(t: Translate): { detail: string; reason: Reason } {
+  return { detail: t("accountChoice.sharingChange.detail"), reason: { state: t("accountChoice.sharingChange.reason") } };
+}
+
+/** What a session's other accounts show in the Switch account menu, and its Hand off item, while the session's own
+ * account is changing its sharing: the session cannot be moved off it until the change ends. */
+export function ownAccountChangingUnavailable(t: Translate): { detail: string; reason: Reason } {
+  return { detail: t("accountChoice.ownSharingChange.detail"), reason: { state: t("accountChoice.ownSharingChange.reason") } };
 }
 
 export function choiceKey({ agent, account }: AccountChoice): string {
@@ -47,13 +76,15 @@ export interface QuotaReadings {
 /** Every agent's group, built from the stored accounts (`added` is the user's added agents, `null` while
  * the daemon has not decided them). With none stored an agent's group holds its
  * default account alone, which needs no discovery to exist. `defaultName` is the default account's
- * name in the current language. Without `readings` no entry is used up. */
+ * name in the current language. Without `readings` no entry is used up, and without `sharing` no
+ * entry has a sharing change running. */
 export function choiceGroups(
   accounts: Account[],
   agentAvailability: Map<Agent, AgentAvailability>,
   added: Agent[] | null,
   defaultName: (agent: Agent) => string,
   readings?: QuotaReadings,
+  sharing?: Map<string, AccountSharing>,
 ): ChoiceGroup[] {
   return accountsByAgent(accounts).map(({ agent, accounts: owned }) => ({
     agent,
@@ -63,7 +94,7 @@ export function choiceGroups(
       ...owned.map((account) => ({ account: account.id, name: account.name })),
     ].map((entry) => {
       const quota = readings && accountQuotaOf(readings.quotas, agent, entry.account);
-      return { ...entry, agent, key: choiceKey({ agent, account: entry.account }), quota, exhaustedBy: readings && exhaustedQuotaWindow(quota, readings.now) };
+      return { ...entry, agent, key: choiceKey({ agent, account: entry.account }), quota, exhaustedBy: readings && exhaustedQuotaWindow(quota, readings.now), changingSharing: sharingChangeRuns(sharing, entry.account) };
     }),
   }));
 }
@@ -120,6 +151,11 @@ export function choiceExhaustion(choice: AccountChoice, groups: ChoiceGroup[]): 
   return findEntry(groups, choiceKey(choice))?.exhaustedBy;
 }
 
+/** Whether the account `choice` names has a sharing change running, which keeps a session from opening on it. */
+export function choiceChangingSharing(choice: AccountChoice, groups: ChoiceGroup[]): boolean {
+  return findEntry(groups, choiceKey(choice))?.changingSharing === true;
+}
+
 const DAY_MINUTES = 24 * 60;
 /** A credit period this long is the account's weekly quota. A monthly period (28 to 31 days) is not. */
 const WEEKLY_CREDIT_MIN_MINUTES = 6 * DAY_MINUTES;
@@ -158,7 +194,7 @@ export function preferExpiringWeekly(entries: ChoiceEntry[], now: number): Choic
   let best: ChoiceEntry | undefined;
   let bestSignal: { resetsAt: number; remaining: number } | undefined;
   for (const entry of entries) {
-    if (entry.exhaustedBy) continue;
+    if (entry.exhaustedBy || entry.changingSharing) continue;
     const signal = expiringWeekly(entry.quota, now);
     if (!signal) continue;
     if (!bestSignal || signal.resetsAt < bestSignal.resetsAt || (signal.resetsAt === bestSignal.resetsAt && signal.remaining > bestSignal.remaining)) {
@@ -186,13 +222,13 @@ export function accountOpenedOn(
   return inheritedAccount(owner, project, agent, accounts);
 }
 
-/** `choice`, or when its account is used up and its agent may be picked, the first account of the same
- * agent that is not, in the order of the agent's group (the default account first). With every account
- * of the agent used up `choice` stays, for the caller to refuse. */
+/** `choice`, or when its account is used up or its sharing change runs, and its agent may be picked, the first
+ * account of the same agent that is neither, in the order of the agent's group (the default account first). With
+ * every account of the agent unavailable `choice` stays, for the caller to refuse. */
 export function avoidExhaustedAccount(choice: AccountChoice, groups: ChoiceGroup[]): AccountChoice {
   const group = groups.find((candidate) => candidate.agent === choice.agent);
-  if (!group?.selectable || !choiceExhaustion(choice, groups)) return choice;
-  const usable = group.entries.find((entry) => !entry.exhaustedBy);
+  if (!group?.selectable || (!choiceExhaustion(choice, groups) && !choiceChangingSharing(choice, groups))) return choice;
+  const usable = group.entries.find((entry) => !entry.exhaustedBy && !entry.changingSharing);
   return usable ? { agent: choice.agent, account: usable.account } : choice;
 }
 
@@ -201,12 +237,12 @@ export function avoidExhaustedAccount(choice: AccountChoice, groups: ChoiceGroup
  * session's: the console's default — moved to one that may be picked when that one is known
  * to be missing or is not added, with the account that agent resolves to when none is chosen: the project's
  * setting for it, else the console `owner`'s, moved to another account of the agent when that one's quota is
- * used up (`avoidExhaustedAccount`). With `autoSelect`, an account of that agent whose weekly quota resets
+ * used up or its sharing change runs (`avoidExhaustedAccount`). With `autoSelect`, an account of that agent whose weekly quota resets
  * soonest (`preferExpiringWeekly`) replaces the inherited one before that move, when the group has one;
  * omitted, the inherited account is used as before. The choice made in the dialog sits above this, as the
  * daemon's own chain puts a session's choice above both. `groups` are the agents' entries with their quotas
  * judged (`choiceGroups`). `exhaustedBy` is the window that still keeps the account from running a session
- * when every account of the agent is used up. */
+ * when every account of the agent is used up, and `changingSharing` the same for a running sharing change. */
 export function settledInitialChoice(
   owner: Console,
   project: Project | undefined,
@@ -215,10 +251,10 @@ export function settledInitialChoice(
   added: Agent[] | null,
   groups: ChoiceGroup[],
   autoSelect?: { now: number },
-): { choice: AccountChoice; exhaustedBy: QuotaWindow | undefined } {
+): { choice: AccountChoice; exhaustedBy: QuotaWindow | undefined; changingSharing: boolean } {
   const agent = selectableAgent(agentAvailability, added, project ? project.default_agent ?? projectSessionAgent(owner) : owner.default_agent);
   const choice = avoidExhaustedAccount({ agent, account: accountOpenedOn(owner, project, agent, accounts, groups, autoSelect) }, groups);
-  return { choice, exhaustedBy: choiceExhaustion(choice, groups) };
+  return { choice, exhaustedBy: choiceExhaustion(choice, groups), changingSharing: choiceChangingSharing(choice, groups) };
 }
 
 /** What the control currently shows: the user's pick while it is still an entry that may be
@@ -244,6 +280,8 @@ export interface SwitchEntry {
   exhaustedBy: QuotaWindow | undefined;
   /** What the daemon last read of the account's quota, if it has; none for a removed account's directory. */
   quota: AccountQuota | undefined;
+  /** A change of the account's sharing runs; the daemon refuses a switch onto it, so it is listed, but not offered. */
+  changingSharing: boolean;
 }
 
 /** The accounts of the session's own agent, the default account first, with the one the session is
@@ -252,13 +290,15 @@ export interface SwitchEntry {
  * everywhere else a session's account is (`sessionAccountName`: the directory the session
  * recorded), so the menu still says where the session is; with no directory recorded there is
  * nothing to name it by and it is left out. The submenu is offered only when there is somewhere to
- * go, that is with more than one entry. Without `readings` no entry is used up. */
+ * go, that is with more than one entry. Without `readings` no entry is used up, and without `sharing`
+ * none has a sharing change running. */
 export function switchEntries(
   session: Session,
   accounts: Account[],
   t: Translate,
   defaultNames: Settings["default_account_names"],
   readings?: QuotaReadings,
+  sharing?: Map<string, AccountSharing>,
 ): SwitchEntry[] {
   const owned = accountsByAgent(accounts).find((group) => group.agent === session.agent)?.accounts ?? [];
   const entries = [
@@ -277,6 +317,7 @@ export function switchEntries(
       current: entry.account === (session.account_id ?? null),
       exhaustedBy: readings ? exhaustedQuotaWindow(quota, readings.now) : undefined,
       quota,
+      changingSharing: !entry.isPath && sharingChangeRuns(sharing, entry.account),
     };
   });
 }

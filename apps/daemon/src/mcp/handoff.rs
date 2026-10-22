@@ -209,7 +209,7 @@ mod tests {
                 approval_reviewer: None,
                 approval_mode: None,
                 share_default_config: false,
-                share_default_config_pending: false,
+                share_default_config_incomplete: false,
             })
             .unwrap();
         state
@@ -265,7 +265,7 @@ mod tests {
                     approval_reviewer: None,
                     approval_mode: None,
                     share_default_config: false,
-                    share_default_config_pending: false,
+                    share_default_config_incomplete: false,
                 })
                 .unwrap();
         }
@@ -345,7 +345,7 @@ mod tests {
                 approval_reviewer: None,
                 approval_mode: None,
                 share_default_config: false,
-                share_default_config_pending: false,
+                share_default_config_incomplete: false,
             })
             .unwrap();
         let before = sessions_as_stored(&state);

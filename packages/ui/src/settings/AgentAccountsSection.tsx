@@ -29,16 +29,21 @@ import { ApprovalReviewerSelect, ClaudeApprovalModeSelect } from "./AccountAppro
 import { AccountDialog } from "./AccountDialog";
 import { AutoSelectAccountSetting } from "./AutoSelectAccountSetting";
 import { AccountLoginAnnouncer, accountLoginOf, loginIsActive, useClearSucceededLogin } from "./AccountLogin";
+import { AccountSharingSwitch } from "./AccountSharingSwitch";
 import { AccountLoginDialog } from "./AccountLoginDialog";
 import { AddAgentDialog } from "./AddAgentDialog";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentMoreMenu, AgentTabMenu, RemoveAgentDialog, useAgentList } from "./AgentListMenu";
-import { useSectionRefocus } from "./useSectionRefocus";
+import { SettingsFocusContext, useSectionRefocus } from "./useSectionRefocus";
 
 /** The agent strip's height, the `p-1.5` clearance around its tabs and its 1px rule included. The strip is given
  * this height by the `h-[45px]` class below, not left to HeroUI's own sizing, so the two are one number: the
  * Settings dialog clears its fade and the scroll padding for focus moves for this much. */
 export const AGENT_STRIP_HEIGHT = 45;
+
+/** How many animation frames (about half a second) a request to focus an account's sharing switch waits for it to
+ * appear. */
+const MAX_FRAMES_TO_WAIT_FOR_SWITCH = 30;
 
 /** Every added agent's accounts, with one tab for each in the order of the list (the first agent's open) and the
  * agent's default account first, each with its plan and quota, and the means to add, edit and remove the ones the
@@ -69,6 +74,7 @@ export function AgentAccountsSection(): React.ReactElement {
   // which the section takes up once; closing that one then puts focus on the button that opens it, as no
   // control had it before.
   const accountsNavigation = useContext(AccountsNavigationContext);
+  const focusSectionTab = useContext(SettingsFocusContext);
   const openedWithAddAgent = useRef(false);
   // Opened after the first render rather than with it: both dialogs are portalled to the end of `<body>` on the
   // same stacking level, so the later one sits on top, and this one must come after Settings' own.
@@ -110,6 +116,49 @@ export function AgentAccountsSection(): React.ReactElement {
   const [chosen, setChosen] = useState<Agent>(agents[0] ?? "claude");
   // The tab in view: the chosen one unless its agent has left the list.
   const selected = agents.includes(chosen) ? chosen : agents[0];
+  // An account Settings was asked to show: its agent's tab comes forward, and then its sharing switch takes focus.
+  const [showingSharingOf, setShowingSharingOf] = useState<string>();
+  useEffect(() => {
+    const id = accountsNavigation.account;
+    if (id === undefined) return;
+    accountsNavigation.consumeAccount();
+    const account = accounts.find((held) => held.id === id);
+    if (!account) {
+      // Nothing to show, and the dialog skipped the section's tab for this request: the tab takes focus, as for any
+      // other navigation, a frame on because the tab may not have reached the dialog's ref as the section mounts.
+      requestAnimationFrame(() => focusSectionTab()?.focus());
+      return;
+    }
+    setChosen(account.agent);
+    setShowingSharingOf(id);
+  }, [accountsNavigation.account]);
+  useEffect(() => {
+    if (showingSharingOf === undefined) return;
+    // The tab's panel is mounted a render after the tab is chosen, so the switch is looked for frame by frame.
+    let frames = 0;
+    let frame = 0;
+    const focusSwitch = () => {
+      const row = Array.from(document.querySelectorAll<HTMLElement>("[data-sharing-account]")).find((held) => held.dataset.sharingAccount === showingSharingOf);
+      const control = row?.querySelector<HTMLElement>('input[role="switch"]');
+      if (!control) {
+        if (frames++ < MAX_FRAMES_TO_WAIT_FOR_SWITCH) frame = requestAnimationFrame(focusSwitch);
+        else {
+          // Its agent has left the list, so the switch will not come: stop, or a later tab switch would start the
+          // hunt again and take focus from the user.
+          setShowingSharingOf(undefined);
+          focusSectionTab()?.focus();
+        }
+        return;
+      }
+      control.scrollIntoView?.({ block: "center" });
+      // Focus lands from a press in another dialog, so the destination shows its ring.
+      setInteractionModality("keyboard");
+      control.focus();
+      setShowingSharingOf(undefined);
+    };
+    frame = requestAnimationFrame(focusSwitch);
+    return () => cancelAnimationFrame(frame);
+  }, [showingSharingOf, selected]);
   // Bumped when a removal has gone through: the menu item that was chosen goes with its account or agent and the
   // confirmation closes with it, so focus has to be sent back to the section's tab. Cancelling removes no control,
   // so it must not.
@@ -334,6 +383,7 @@ function AgentAccountsPanel({ agent, owned, onAdd, onEdit, onRemove, onRenameDef
                 </>
               }
               approval={approvalSelect(account)}
+              sharing={<AccountSharingSwitch account={account} />}
               {...loginProps(account)}
             >
               <ActionMenu
@@ -411,7 +461,7 @@ function ApprovalHeading({ agent }: { agent: Agent }): React.ReactElement {
 
 /** Subgrid shares control widths across accounts.
  * The account's quota takes the row's full width beneath its controls. */
-function AccountRow({ agent, account, label, help, description, approval, children, motionKey, login, loginName, onLogin, loginActive }: {
+function AccountRow({ agent, account, label, help, description, approval, sharing, children, motionKey, login, loginName, onLogin, loginActive }: {
   agent: Agent;
   account: string | null;
   label: React.ReactNode;
@@ -419,6 +469,8 @@ function AccountRow({ agent, account, label, help, description, approval, childr
   help?: React.ReactNode;
   description: React.ReactNode;
   approval?: React.ReactNode;
+  /** The account's Share default configuration switch, under its controls; none for the default account. */
+  sharing?: React.ReactNode;
   children?: React.ReactNode;
   motionKey: string;
   /** The account's login once it has succeeded, for the hidden status region to announce; `loginName` names the
@@ -460,6 +512,7 @@ function AccountRow({ agent, account, label, help, description, approval, childr
         )}
         <div ref={actionsRef} className="flex shrink-0 flex-wrap items-center gap-2">{children}</div>
       </div>
+      {sharing}
       {quota && !(typeof quota === "object" && isNotLoggedIn(quota.unavailable)) && <div className="col-span-full"><AccountQuotaSummary quota={quota} /></div>}
       <AccountLoginAnnouncer login={login} name={loginName} />
     </div>

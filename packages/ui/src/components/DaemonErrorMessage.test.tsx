@@ -168,6 +168,28 @@ it("names each branch or worktree still there as code with its reason, a comma i
   expect(Array.from(container.querySelectorAll("[data-inline-chip]"), (chip) => chip.textContent)).toEqual(["fix/a,b", "long", "~/wt, two", "a", "uncommitted changes"]);
 });
 
+it("keeps a sharing repair's own reason behind Details when it names no entry, and lists the entries there once it does", () => {
+  const daemon = { store: createStateStore({ sessions: new Map([["s1", { id: "s1", title: "Hub" } as import("../protocol").Session]]) }) } as Daemon;
+  const reason = "account `Work`'s links to the default configuration could not be checked: permission denied";
+  const empty = new DaemonRequestError(reason, "account_sharing_repair_failed", { account: "a1", name: "Work", items: "[]", cause: "permission_denied" });
+  const unnamed = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={empty} /></DaemonProvider>);
+  expect(unnamed.querySelector("[hidden] [data-inline-chip]")?.textContent).toBe(reason);
+  expect(unnamed.textContent).toContain("could not be brought up to date");
+  expect(unnamed.textContent).toContain("You do not have permission to change the account’s directory.");
+  act(() => unnamed.querySelector("button")!.click());
+  expect(unnamed.querySelector("[data-inline-chip] code")?.textContent).toBe(reason);
+  expect(unnamed.querySelector("pre")).toBeNull();
+  const items = JSON.stringify([{ item: "skills/", left: "unchanged", detail: "permission denied", cause: "busy" }]);
+  const listed = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={new DaemonRequestError(reason, "account_sharing_repair_failed", { account: "a1", name: "Work", items })} /></DaemonProvider>);
+  expect(listed.querySelector("[hidden] li")?.lastElementChild?.textContent).toBe("permission denied");
+  expect(listed.textContent).toContain("skills/");
+  expect(listed.textContent).toContain("is in use");
+  expect(listed.textContent).not.toContain(reason);
+  act(() => listed.querySelector("button")!.click());
+  expect(listed.querySelector("li")?.lastElementChild?.textContent).toBe("permission denied");
+  expect(listed.textContent).toContain("skills/ was left unchanged.");
+});
+
 it("shows the reason what goes with a removed project's folder is unknown as a code block under the sentence", () => {
   const error = new DaemonRequestError("plain fallback", "project_branches_not_determined", { name: "Docs", detail: "fatal: not a git repository" });
   const container = mount(<DaemonProvider value={{ store: createStateStore({}) } as Daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
@@ -409,4 +431,104 @@ it("retains a named key inside a structured trust reason as a technical chip", (
   expect(container.textContent).toContain("Answer it in the terminal.");
   const plain = daemonMessage("en", "trust_answer_failed", params, "fallback", createStateStore({}).getState());
   expect(plain).toContain("so \u2068Enter\u2069 was not sent");
+});
+
+it.each(["account_sharing_failed", "account_sharing_repair_failed"])("says %s short by cause and folds the raw diagnostics behind Details", (code) => {
+  const detail = "permission denied\n    /tmp/مراجعة/file\n";
+  const session = { id: "s1", title: "مراجعة / Review, 名称" } as import("../protocol").Session;
+  const store = createStateStore({ sessions: new Map([[session.id, session]]) });
+  const params = { name: "Work", account: "a1", detail: "do not repeat the daemon summary", items: JSON.stringify([
+    { item: "skills/", left: "unchanged", detail, cause: "permission_denied" },
+    { item: "plugins/", left: "unchanged", detail: "second", cause: "permission_denied" },
+    { item: "conversation-id", left: "partly_moved", detail: "busy", sessions: ["s1", "gone"], cause: "busy" },
+  ]) };
+  const error = new DaemonRequestError("do not repeat the raw fallback", code, params);
+  const container = mount(<DaemonProvider value={{ store } as Daemon}>
+    <ErrorAlert><DaemonErrorMessage error={error} part="summary" /></ErrorAlert>
+    <section><DaemonErrorMessage error={error} part="details" /></section>
+  </DaemonProvider>);
+  const summary = container.querySelector('[data-slot="alert-description"]')!;
+  const details = container.querySelector("section")!;
+  for (const language of ["en", "zh-Hans"] as const) {
+    act(() => setLanguage(language));
+    expect(summary.textContent).toContain("Work");
+    expect(summary.querySelector("div,p,ul,li,pre")).toBeNull();
+    expect(details.textContent).not.toContain("Work");
+    const causes = [...details.querySelectorAll("span.flex > span")];
+    expect(causes).toHaveLength(2);
+    expect(causes[0]!.textContent).toBe(language === "en" ? "You do not have permission to change skills/ and 1 more. Check that the files and folders involved can be changed and are not locked." : "没有权限修改 skills/ 和另外 1 项。请检查相关文件和文件夹的权限，并确认它们未被锁定。");
+    expect(causes[1]!.textContent).toContain(session.title);
+    expect(details.querySelector("pre")?.closest("[hidden]")).not.toBeNull();
+  }
+  const button = details.querySelector("button")!;
+  const folded = details.querySelector(`[id="${button.getAttribute("aria-controls")}"]`)!;
+  expect(button.getAttribute("aria-expanded")).toBe("false");
+  expect(folded.hasAttribute("hidden")).toBe(true);
+  act(() => button.click());
+  expect(button.getAttribute("aria-expanded")).toBe("true");
+  expect(folded.hasAttribute("hidden")).toBe(false);
+  expect(details.querySelectorAll("li")).toHaveLength(3);
+  // A one-line message is small inline code after its entry's sentence; one of several lines keeps them in a block.
+  expect([...details.querySelectorAll("pre")].map((node) => node.textContent)).toEqual([detail]);
+  expect([...details.querySelectorAll("li")].map((item) => item.lastElementChild!.textContent)).toEqual([expect.stringContaining("permission denied"), "second", "busy"]);
+  expect(details.querySelectorAll("li")[2]!.textContent).toContain(session.title);
+  expect(container.textContent).not.toContain("do not repeat");
+  act(() => store.setState({ sessions: new Map([[session.id, { ...session, title: "Renamed" }]]) }));
+  expect(details.textContent).toContain("Renamed");
+});
+
+it("names the cause of a change that could not start when no entry is listed", () => {
+  const error = new DaemonRequestError("raw", "account_sharing_failed", { name: "Work", account: "a1", items: "[]", detail: "default dir moved", cause: "conflict" });
+  const container = mount(<DaemonProvider value={{ store: createStateStore({}) } as Daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
+  expect(container.textContent).toContain("The account’s directory conflicts with what sharing needs.");
+  expect(container.querySelector("[hidden] [data-inline-chip]")?.textContent).toBe("default dir moved");
+  act(() => container.querySelector("button")!.click());
+  expect(container.querySelector("[hidden] [data-inline-chip]")).toBeNull();
+  expect(container.querySelector("code")?.textContent).toBe("default dir moved");
+});
+
+it("joins a whole failure's reason and its guidance in the catalog, and points a cause with no line of its own at Details", () => {
+  const mountWith = (cause: string, detail: string | undefined) => mount(<DaemonProvider value={{ store: createStateStore({}) } as Daemon}>
+    <DaemonErrorMessage error={new DaemonRequestError("raw", "account_sharing_failed", { name: "Work", account: "a1", items: "[]", detail, cause } as never)} />
+  </DaemonProvider>);
+  const busy = mountWith("busy", "x");
+  const other = mountWith("other", "x");
+  act(() => setLanguage("zh-Hans"));
+  expect(busy.querySelector("p")!.textContent).toBe("此账户目录中有内容正在被使用。请关闭正在使用相关文件的其他程序，例如终端中的智能体、编辑器或同步工具。");
+  expect(other.querySelector("p")!.textContent).toBe("请查看详情。");
+  act(() => setLanguage("en"));
+  expect(other.querySelector("p")!.textContent).toBe("See Details.");
+  expect(mountWith("other", undefined).querySelector("p")).toBeNull();
+});
+
+it.each([
+  { code: "account_sharing_failed", items: "[]", original: "original failure", detail: "raw start failure\n    denied" },
+  { code: "account_sharing_repair_failed", items: "[]", original: "raw repair failure\n    denied", detail: "not the original repair reason" },
+  { code: "account_sharing_repair_failed", items: "invalid JSON", original: "raw malformed repair\n    denied", detail: "not the original repair reason" },
+])("keeps $code with $items diagnostics raw and separate", ({ code, items, original, detail }) => {
+  const diagnostic = code === "account_sharing_failed" ? detail : original;
+  const error = new DaemonRequestError(original, code, { name: "Work", account: "a1", items, detail });
+  const container = mount(<><section data-summary><DaemonErrorMessage error={error} part="summary" /></section><section data-details><DaemonErrorMessage error={error} part="details" /></section></>);
+  expect(container.querySelector("[data-summary]")?.textContent).toContain("Work");
+  expect(container.querySelector("[data-summary]")?.textContent).not.toContain(diagnostic);
+  expect(container.querySelector("[data-summary] pre")).toBeNull();
+  expect(container.querySelectorAll("pre")).toHaveLength(1);
+  expect(container.querySelector("[data-details] pre")?.textContent).toBe(diagnostic);
+  expect(container.querySelector("pre")?.getAttribute("dir")).toBe("ltr");
+});
+
+it("shows a session left interrupted after a sharing change as a sentence with the reason as a code block", () => {
+  const error = new DaemonRequestError("raw", "sharing_resume_failed", { account: "a1", name: "Work", detail: "no such file" });
+  const container = mount(<DaemonProvider value={{ store: createStateStore({}) } as Daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
+  expect(container.textContent).toContain("could not be resumed after its sharing changed");
+  expect(container.querySelector("[data-inline-chip]")?.textContent).toBe("Work");
+  expect(container.querySelector("pre")?.textContent).toBe("no such file");
+});
+
+it("shows the still-running variant of the resume notice without 'left interrupted', keeping the reason as a code block", () => {
+  const error = new DaemonRequestError("raw", "sharing_resume_failed", { account: "a1", name: "Work", detail: "timed out", still_running: "true" });
+  const container = mount(<DaemonProvider value={{ store: createStateStore({}) } as Daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
+  expect(container.textContent).toContain("may still be running; it was not restarted");
+  expect(container.textContent).not.toContain("interrupted");
+  expect(container.querySelector("pre")?.textContent).toBe("timed out");
 });

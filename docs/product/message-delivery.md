@@ -162,6 +162,7 @@ question — carries `null`: its `status` says so. When several holds apply, the
 | `agent_dialog` | It is showing a screen only the user can answer (above). |
 | `agent_action` | Codex's terminal title says it is waiting on the user. |
 | `agent_error` | The moment after a Grok Build error (above). |
+| `sharing_change` | It is being restarted for a change of its account's sharing of the default configuration, and is resumed on its conversation afterwards; what is queued for it is written into the resumed process (see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`). |
 | `handoff` | It is being handed off to another agent. |
 | `unsent_message` | A message written into it was left unsent (see "A message written but not sent" below). |
 

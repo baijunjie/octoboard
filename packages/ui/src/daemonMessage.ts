@@ -6,7 +6,7 @@ import { abbreviateHome } from "./pathDisplay";
 import { sessionDisplayTitle } from "./sessionLabel";
 import { countdown } from "./quota/quotaFormat";
 import type { Language } from "./i18n/languages";
-import { DEFAULT_ACCOUNT_NAME, type MessageParams, type SessionBranchState } from "./protocol";
+import { DEFAULT_ACCOUNT_NAME, type MessageParams, type SessionBranchState, type SharingEntryCause } from "./protocol";
 import type { State } from "./store";
 
 /** The params that are record ids, and what each is shown as: the record's current name. */
@@ -74,6 +74,7 @@ export const CODE_PARAMS: Record<string, readonly string[]> = {
   invalid_launch_setting: ["field", "value"],
   claude_workspace_untrusted: ["allow", "deny"],
   agent_not_available: ["pathVar"],
+  unshared_state_database: ["path"],
 };
 
 /** Record lookup is code-specific: shared-folder errors already carry a project name, while
@@ -83,7 +84,7 @@ export const RECORD_ID_PARAMS: Record<string, readonly string[]> = {
   unknown_shell_terminal: ["shell_terminal"], unknown_page: ["page"], unknown_account: ["account"],
   not_a_git_repository: ["project"], conversation_in_session: ["session"],
   conversation_held_in_project: ["session", "project"], conversation_held_in_console: ["session", "console"],
-  session_did_not_stop: ["session"], switch_did_not_come_up: ["session"],
+  session_did_not_stop: ["session"], sharing_session_did_not_stop: ["session"], switch_did_not_come_up: ["session"],
 };
 
 /** Names retain the surrounding prose's typeface rather than the monospace used for paths. */
@@ -106,10 +107,21 @@ export const NAME_PARAMS: Record<string, readonly string[]> = {
   launch_failed: ["title"],
   "launch_failed.title": ["title"],
   session_did_not_stop: ["session"],
+  sharing_session_did_not_stop: ["session", "name"],
   project_branches_not_determined: ["name"],
   switch_did_not_come_up: ["session"],
   account_quota_exhausted: ["account"],
   "account_quota_exhausted.resets": ["account"],
+  account_sharing_failed: ["name"],
+  account_still_sharing: ["name"],
+  account_in_use: ["name"],
+  "account_in_use.signingIn": ["name"],
+  "account_in_use.both": ["name"],
+  account_sharing_in_progress: ["name"],
+  sharing_resume_failed: ["name"],
+  "sharing_resume_failed.running": ["name"],
+  account_sharing_repair_failed: ["name"],
+  unshared_state_database: ["name"],
 };
 
 /** A structured list never infers boundaries from user-provided names or punctuation. */
@@ -172,6 +184,125 @@ function leftBranchText(language: Language, item: LeftBranchItem, homeDir: strin
   return item.detail ? format(language, "branchCleanup.failed", { name, detail: isolate(item.detail) }) : name;
 }
 
+/** What a sharing change left one entry as. The wire values are the daemon's. */
+const SHARING_LEFT = ["unchanged", "backed_up", "partly_moved", "linked", "absent"] as const;
+type SharingLeft = (typeof SHARING_LEFT)[number];
+
+/** One entry `account_sharing_failed` or `account_sharing_repair_failed` could not bring in line.
+ * `sessions` is set for a conversation turning sharing off could not take back, and names the
+ * Octoboard sessions that record it. The list travels as one JSON param. */
+export type SharingFailureItem = { item: string; left: SharingLeft; detail: string; sessions: string[]; cause: SharingEntryCause };
+
+/** The causes in the order a summary lists them; `other` also stands for a cause this client does not know. */
+const SHARING_CAUSES: readonly SharingEntryCause[] = ["permission_denied", "busy", "not_found", "no_space", "conflict", "other"];
+
+const SHARING_ITEM_CODES = new Set(["account_sharing_failed", "account_sharing_repair_failed"]);
+
+/** The entries a sharing failure names, or nothing when the param is absent, empty or not the
+ * shape above. An operation that could not start at all sends an empty list: `account_sharing_failed`
+ * says why in `detail`, and `account_sharing_repair_failed` says why in the notice's own message. */
+export function sharingFailureItems(code: string, params: MessageParams): SharingFailureItem[] | undefined {
+  if (!SHARING_ITEM_CODES.has(code) || !params.items) return undefined;
+  try {
+    return parseSharingItems(JSON.parse(params.items));
+  } catch {
+    return undefined;
+  }
+}
+
+/** The entries of a sharing failure from their wire form (the `items` param once parsed, or `failure.items` of the
+ * `account_sharing` event), or nothing when the list is empty or any entry is not the shape above. */
+export function parseSharingItems(items: unknown): SharingFailureItem[] | undefined {
+  if (!Array.isArray(items) || items.length === 0) return undefined;
+  const parsed: SharingFailureItem[] = [];
+  for (const item of items) {
+    if (!item || typeof item !== "object") return undefined;
+    const entry = item as Partial<SharingFailureItem>;
+    const sessions = entry.sessions ?? [];
+    if (typeof entry.item !== "string" || entry.item.length === 0) return undefined;
+    if (typeof entry.left !== "string" || !(SHARING_LEFT as readonly string[]).includes(entry.left)) return undefined;
+    if (typeof entry.detail !== "string") return undefined;
+    if (!Array.isArray(sessions) || sessions.some((id) => typeof id !== "string" || id.length === 0)) return undefined;
+    const cause = SHARING_CAUSES.includes(entry.cause as SharingEntryCause) ? entry.cause as SharingEntryCause : "other";
+    parsed.push({ item: entry.item, left: entry.left as SharingLeft, detail: entry.detail, sessions, cause });
+  }
+  return parsed;
+}
+
+/** The entries grouped by cause, in the order the causes first appear. */
+export function sharingCauseGroups(items: SharingFailureItem[]): { cause: SharingEntryCause; items: SharingFailureItem[] }[] {
+  const groups: { cause: SharingEntryCause; items: SharingFailureItem[] }[] = [];
+  for (const item of items) {
+    const group = groups.find((candidate) => candidate.cause === item.cause);
+    if (group) group.items.push(item);
+    else groups.push({ cause: item.cause, items: [item] });
+  }
+  return groups;
+}
+
+/** The catalog key of the line that says why a change could not start or failed as a whole, when no entry is named;
+ * nothing for `other` or an unknown cause, which says nothing a reader could act on. */
+export function sharingReasonKey(cause: string | undefined) {
+  switch (cause) {
+    case "permission_denied": return "daemon.sharing.reason.permission_denied";
+    case "busy": return "daemon.sharing.reason.busy";
+    case "not_found": return "daemon.sharing.reason.not_found";
+    case "no_space": return "daemon.sharing.reason.no_space";
+    case "conflict": return "daemon.sharing.reason.conflict";
+    case "default_moved": return "daemon.sharing.reason.default_moved";
+    default: return undefined;
+  }
+}
+
+/** Whether a change that failed as a whole has a reason to put in front of the user: the cause's own line, or the raw
+ * reason behind Details that the guidance points at. */
+export function hasSharingReason(cause: string | undefined, detail: string | undefined): boolean {
+  return sharingReasonKey(cause) !== undefined || !!detail;
+}
+
+/** The catalog key of the line that says what to do about a cause before turning the switch again, or nothing when
+ * turning it again is all there is to do (`not_found`) or the warning says what to do itself (`default_moved`). */
+export function sharingFixKey(cause: string | undefined) {
+  switch (cause) {
+    case "permission_denied": return "daemon.sharing.fix.permission_denied";
+    case "busy": return "daemon.sharing.fix.busy";
+    case "no_space": return "daemon.sharing.fix.no_space";
+    case "conflict": return "daemon.sharing.fix.conflict";
+    case "other": return "daemon.sharing.fix.other";
+    default: return undefined;
+  }
+}
+
+/** The catalog key for what an entry was left as. A conversation uses its own wording for the two states whose
+ * meaning changes once the entry is a conversation rather than a directory entry. */
+export function sharingStateKey(item: SharingFailureItem):
+  | "daemon.sharing.state.unchanged" | "daemon.sharing.state.unchangedConversation"
+  | "daemon.sharing.state.backedUp" | "daemon.sharing.state.partlyMoved"
+  | "daemon.sharing.state.partlyMovedConversation" | "daemon.sharing.state.linked"
+  | "daemon.sharing.state.absent" {
+  if (item.sessions.length > 0 && item.left === "unchanged") return "daemon.sharing.state.unchangedConversation";
+  if (item.sessions.length > 0 && item.left === "partly_moved") return "daemon.sharing.state.partlyMovedConversation";
+  switch (item.left) {
+    case "unchanged": return "daemon.sharing.state.unchanged";
+    case "backed_up": return "daemon.sharing.state.backedUp";
+    case "partly_moved": return "daemon.sharing.state.partlyMoved";
+    case "linked": return "daemon.sharing.state.linked";
+    case "absent": return "daemon.sharing.state.absent";
+  }
+}
+
+/** The catalog key of the one line that says why a group of entries was left. */
+export function sharingCauseKey(cause: SharingEntryCause) {
+  return `daemon.sharing.cause.${cause}` as const;
+}
+
+/** An entry as the summary names it: a conversation by the name of the first session that records it (`title` finds
+ * a session's name), anything else by its own name. */
+export function sharingItemLabel(item: SharingFailureItem, title: (session: string) => string | undefined): { text: string; session: boolean } {
+  const named = item.sessions.map(title).find((name) => name !== undefined);
+  return named !== undefined ? { text: named, session: true } : { text: item.item, session: false };
+}
+
 /** The items of a `session_branches_not_removed` alert, which travel as one JSON param so a name
  * holding a comma, or any other character, is never split. */
 export function leftBranchItems(code: string, params: MessageParams): LeftBranchItem[] | undefined {
@@ -187,11 +318,11 @@ export function leftBranchItems(code: string, params: MessageParams): LeftBranch
   }
 }
 
-/** Producer-confirmed CLI and shell diagnostics are displayed separately from the explanation. */
+/** Producer-confirmed CLI, shell and sharing diagnostics are displayed separately from the explanation. */
 export const DETAIL_BLOCK_CODES = new Set([
-  "project_branches_not_determined", "git_failed", "git_clone_failed", "git_remote_unreachable",
+  "project_branches_not_determined", "account_sharing_failed", "git_failed", "git_clone_failed", "git_remote_unreachable",
   "git_push_failed", "git_switch_failed", "git_restore_failed", "git_unavailable",
-  "models_command_failed", "models_shell_environment_failed", "quota_command_failed", "quota_shell_environment_failed", "codex_unarchive_failed", "login_failed", "shell_environment_timeout",
+  "models_command_failed", "models_shell_environment_failed", "quota_command_failed", "quota_shell_environment_failed", "codex_unarchive_failed", "login_failed", "sharing_resume_failed", "shell_environment_timeout",
 ]);
 
 /** These trust reasons carry an OS write/read diagnostic, not another daemon error code. */
@@ -211,7 +342,7 @@ export const RECOVERY_CODES = new Set([
 /** The rich sentence omits a raw diagnostic that is rendered separately. Plain messages keep the
  * complete catalog sentence for native notifications and other text-only consumers. */
 export function richMessageCode(code: string, params: MessageParams): string {
-  return RECOVERY_CODES.has(code) || (DETAIL_BLOCK_CODES.has(code) && code !== "project_branches_not_determined" && params.detail) ? `${code}.summary` : messageCode(code, params);
+  return RECOVERY_CODES.has(code) || (DETAIL_BLOCK_CODES.has(code) && code !== "project_branches_not_determined" && code !== "account_sharing_failed" && params.detail) ? `${messageCode(code, params)}.summary` : messageCode(code, params);
 }
 
 /** Every referenced agent and product uses the same name treatment, including messages whose only
@@ -253,10 +384,13 @@ export const UI_PARAMS: Record<string, MessageParams> = {
 /** The code a message is worded under: the daemon's, except where one code has a message of its own
  * for a variant its params name (`unsupported_file_type` of an `unmerged` file, worded as
  * `daemon.unsupported_file_type.unmerged`, like `daemon.trust_reason.<code>`; `account_quota_exhausted`
- * with a `resets_at` time, worded as `daemon.account_quota_exhausted.resets`). */
+ * with a `resets_at` time, worded as `daemon.account_quota_exhausted.resets`; `account_in_use` while the
+ * account is being signed in, worded as `daemon.account_in_use.signingIn`, or `.both` with sessions too). */
 export function messageCode(code: string, params: MessageParams): string {
   if (code === "field_too_long" && (params.field === "name" || params.field === "description")) return `${code}.${params.field}`;
   if (code === "account_quota_exhausted" && /^\d+$/.test(params.resets_at ?? "")) return "account_quota_exhausted.resets";
+  if (code === "sharing_resume_failed" && params.still_running === "true") return "sharing_resume_failed.running";
+  if (code === "account_in_use" && params.signing_in === "true") return /^[1-9]\d*$/.test(params.sessions ?? "") ? "account_in_use.both" : "account_in_use.signingIn";
   return code === "unsupported_file_type" && params.file_type === "unmerged" ? "unsupported_file_type.unmerged" : code;
 }
 
@@ -331,6 +465,7 @@ export function daemonParams<V = never>(
   }
   // A count arrives as text; as a number it selects the singular or plural wording.
   if (/^\d+$/.test(all.count ?? "")) shown.count = Number(all.count);
+  if (code === "account_in_use" && /^\d+$/.test(all.sessions ?? "")) shown.count = Number(all.sessions);
   if (code === "field_too_long" && /^\d+$/.test(all.limit ?? "")) shown.limit = Number(all.limit);
   // The daemon names the window in English; the standard names are worded in the UI's language, any other
   // (a window's own label) as a quota of that name.
@@ -382,6 +517,32 @@ export function daemonMessage(
   const left = leftBranchItems(code, params);
   if (left && leftBranchGroups(left).length === 1) return String(shown.items);
   const text = format(language, key, shown);
+  // Each entry the change could not finish follows on a line of its own, in this language. The
+  // daemon's English summary of the same list is not repeated under it.
+  const sharing = sharingFailureItems(code, params);
+  if (sharing) return `${text}\n${sharingItemsText(language, sharing, records)}`;
+  const reason = SHARING_ITEM_CODES.has(code) ? sharingReasonKey(params.cause) : undefined;
+  if (reason) return `${text}\n${format(language, reason, {})}${code === "account_sharing_failed" && params.detail ? `\n${params.detail}` : ""}`;
+  // A repair that names no entry keeps its reason only in the daemon's English message.
+  if (code === "account_sharing_repair_failed" && fallback) return `${text}\n${fallback}`;
   // As plain text the diagnostic follows on a line of its own.
-  return code === "project_branches_not_determined" && params.detail ? `${text}\n${params.detail}` : text;
+  return (code === "project_branches_not_determined" || code === "account_sharing_failed") && params.detail ? `${text}\n${params.detail}` : text;
+}
+
+/** Why the entries were left, one short line per cause ("You do not have permission to change skills/ and 1 more."),
+ * then what each was left as. */
+function sharingItemsText(language: Language, items: SharingFailureItem[], records: RecordNames): string {
+  const title = (id: string) => records.sessions.get(id)?.title;
+  const causes = sharingCauseGroups(items).map((group) => {
+    const names = group.items.map((item) => isolate(sharingItemLabel(item, title).text));
+    const phrase = names.length === 1 ? names[0] : format(language, "daemon.sharing.items", { first: names[0], count: names.length - 1 });
+    return format(language, sharingCauseKey(group.cause), { items: phrase, count: names.length } as never);
+  });
+  const states = items.map((item) => {
+    const state = format(language, sharingStateKey(item), {});
+    if (item.sessions.length === 0) return format(language, "daemon.sharing.item.summary", { item: isolate(item.item), state });
+    const sessions = joinPhrases(language, item.sessions.map((id) => paramText(records, "session", id, "unknown_session", language)));
+    return format(language, "daemon.sharing.conversation.summary", { item: isolate(item.item), sessions, state });
+  });
+  return [...causes, ...states].join("\n");
 }

@@ -890,7 +890,7 @@ mod tests {
             approval_reviewer: None,
             approval_mode: None,
             share_default_config: false,
-            share_default_config_pending: false,
+            share_default_config_incomplete: false,
         }
     }
 

@@ -1,5 +1,5 @@
 import { Input, Label, TextField } from "@heroui/react";
-import React, { useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "../components/Button";
 import { InlineChip } from "../components/InlineChip";
@@ -17,7 +17,13 @@ export interface ConfirmDialogProps {
   pendingLabel?: string;
   /** What the button that declines is called. */
   cancelLabel?: string;
+  /** Leaves out the Cancel button, for a question whose buttons are all ways of answering it: the
+   * dialog's close button and Escape still call `onCancel`, so the way out stays. */
+  hideCancel?: boolean;
   destructive?: boolean;
+  /** A button before Confirm, after Cancel when there is one, for the way out that is neither: it
+   * settles the question itself in `onPress`, so the caller closes the dialog there. */
+  otherAction?: { label: string; onPress: () => void };
   /** For a question the user did not ask for, which can come up while they are typing elsewhere:
    * focus starts on the dialog rather than on Confirm, for every subject it asks about, so an Enter
    * meant for something else (or held down past the previous answer) answers nothing. */
@@ -53,11 +59,13 @@ export function ConfirmDialog({
   confirmLabel,
   pendingLabel,
   cancelLabel,
+  hideCancel,
   extraControl,
   warning,
   waiting = false,
   confirmDisabled = false,
   destructive,
+  otherAction,
   unprompted,
   resetKey,
   size,
@@ -81,16 +89,33 @@ export function ConfirmDialog({
     if (unprompted) dialogAround(confirmRef)?.focus();
   }, [resetKey]);
 
-  // Confirm held while the dialog is open (a refusal that arrives under it) hands its focus to Cancel.
+  // Confirm held while the dialog is open (a refusal that arrives under it) hands its focus to Cancel,
+  // or to the dialog when there is none.
   const cancelRef = useRef<HTMLButtonElement>(null);
-  useFocusLeavingWhenDisabled(confirmRef, !confirmed, cancelRef);
+  const dialogRef = { get current() { return dialogAround(confirmRef) ?? null; } };
+  const fallbackRef = hideCancel ? dialogRef : cancelRef;
+  useFocusLeavingWhenDisabled(confirmRef, !confirmed, fallbackRef);
   const opensOnConfirm = !destructive && !unprompted && word === undefined;
+  // The `autoFocus` below is react-aria's, which for a press without a pointer (assistive technology,
+  // a script) waits for transitions to end and is dropped if focus has moved by then. Opened over
+  // another dialog (the question a first dialog's Confirm raised), the dialog's own refocus of a lost
+  // focus moves it first, so Confirm takes focus here, after the effects of everything inside.
+  useEffect(() => {
+    if (opensOnConfirm) (confirmed ? confirmRef : fallbackRef).current?.focus();
+  }, []);
 
   const footer = (
     <>
-      <Button ref={cancelRef} type="button" variant="secondary" onPress={onCancel} isDisabled={busy} autoFocus={opensOnConfirm && !confirmed}>
-        {cancelLabel ?? t("common.cancel")}
-      </Button>
+      {!hideCancel && (
+        <Button ref={cancelRef} type="button" variant="secondary" onPress={onCancel} isDisabled={busy} autoFocus={opensOnConfirm && !confirmed}>
+          {cancelLabel ?? t("common.cancel")}
+        </Button>
+      )}
+      {otherAction && (
+        <Button type="button" variant="secondary" onPress={otherAction.onPress} isDisabled={busy}>
+          {otherAction.label}
+        </Button>
+      )}
       {/* Pending rather than disabled while it runs: a natively disabled button drops the focus the
           press gave it, and the dialog's Escape and Tab containment go with it. Focus starts on it,
           so Enter confirms at once, unless the action is destructive or the question unprompted:

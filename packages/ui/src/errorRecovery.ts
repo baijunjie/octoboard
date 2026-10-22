@@ -7,7 +7,8 @@ export type ErrorRecovery =
   | "configuration" | "image" | "clipboard" | "file" | "git" | "gitHistory" | "branch"
   | "refresh" | "scope" | "limit" | "openExternal" | "issueLink"
   | "contentSyntax" | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
-  | "sessionBranches" | "projectBranches" | "lostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "quotaUsedUpAgent" | "grokSandbox"
+  | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "quotaUsedUpAgent" | "grokSandbox"
+  | "accountNotShareable" | "accountSharing" | "accountBusy" | "accountChanging" | "sharingStop"
   | "none";
 
 /** A local failure whose user remedy is known without inspecting its translated message. */
@@ -34,6 +35,7 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   stopSessions: ["session_has_running_sessions", "console_has_running_sessions", "project_has_running_sessions", "session_not_deletable"],
   wait: ["session_lock_busy", "session_already_running", "session_already_starting", "session_working"],
   lostMessages: ["handoff_messages_dropped"],
+  sharingLostMessages: ["sharing_messages_dropped"],
   unsentMessage: ["message_not_sent"],
   trust: ["trust_answer_failed", "session_trust_pending", "session_waiting_for_user", "trust_directory_too_broad", "trust_path_not_absolute", "trust_home_unknown"],
   tool: ["binary_not_found", "agent_not_available", "agent_not_installed", "git_unavailable"],
@@ -44,6 +46,11 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   shell: ["shell_environment_timeout"],
   account: ["unknown_account", "grok_home_not_initialized"],
   grokSandbox: ["grok_sandbox_unsupported"],
+  accountNotShareable: ["default_account_not_shareable"],
+  accountSharing: ["account_sharing_failed"],
+  accountBusy: ["account_still_sharing", "account_in_use"],
+  accountChanging: ["account_sharing_in_progress"],
+  sharingStop: ["sharing_session_did_not_stop"],
   unresumable: ["conversation_unresumable"],
   unarchive: ["codex_unarchive_failed"],
   conversation: ["conversation_not_found", "conversation_to_resume_not_found", "resume_id_invalid", "conversation_outside_project", "conversation_in_session"],

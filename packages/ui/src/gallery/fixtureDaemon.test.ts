@@ -10,7 +10,7 @@ import { createFixtureDaemon } from "./fixtureDaemon";
 import { terminalFixtureUrl } from "./fakeTerminal";
 import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./fixtures/restore";
 import { quotaOf, quotaWindow } from "./fixtures/quotas";
-import { branchItemOf, consoleOf, gitStatusOf, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./fixtures/builders";
+import { accountSharingOf, branchItemOf, consoleOf, gitStatusOf, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./fixtures/builders";
 
 describe("the fixture daemon's session archiving", () => {
   it("archives running and interrupted descendants and supports reopening", async () => {
@@ -804,6 +804,177 @@ describe("the fixture daemon's account approval modes", () => {
       await expect(daemon.request({ type: "set_account_approval_mode", account, mode: "bypass" })).rejects.toMatchObject(error);
       expect(daemon.store.getState().settings).toEqual(before);
     }
+  });
+});
+
+describe("the fixture daemon's account sharing", () => {
+  const accounts = [
+    { id: "claude", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" },
+    { id: "same", agent: "claude" as const, name: "Mirror", config_dir: "/Users/dev/.claude/" },
+    { id: "codex", agent: "codex" as const, name: "Personal", config_dir: "/Users/dev/.codex-personal" },
+  ];
+  const scenario = {
+    id: "account-sharing",
+    group: "Settings" as const,
+    category: "normal" as const,
+    title: "",
+    state: {
+      ...snapshotState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts } }),
+      agentAvailability: new Map([
+        ["claude" as const, { agent: "claude" as const, availability: "available" as const, default_account_dir: "/Users/dev/.claude" }],
+        ["codex" as const, { agent: "codex" as const, availability: "available" as const, default_account_dir: "/Users/dev/.codex" }],
+      ]),
+    },
+  };
+  const sharing = (daemon: ReturnType<typeof createFixtureDaemon>, id: string) => daemon.store.getState().settings.accounts.find((account) => account.id === id);
+
+  it("carries a change out at once when nothing is in the way", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await daemon.request({ type: "set_account_sharing", account: "claude", share: true });
+    expect(sharing(daemon, "claude")).toMatchObject({ share_default_config: true, share_default_config_incomplete: false });
+    expect(sharing(daemon, "codex")).toEqual(accounts[2]);
+    await daemon.request({ type: "set_account_sharing", account: "claude", share: true });
+    expect(sharing(daemon, "claude")).toMatchObject({ share_default_config: true, share_default_config_incomplete: false });
+    await daemon.request({ type: "set_account_sharing", account: "claude", share: false });
+    expect(sharing(daemon, "claude")).toMatchObject({ share_default_config: false, share_default_config_incomplete: false });
+    // Absent is off, so asking for off again records nothing.
+    await daemon.request({ type: "set_account_sharing", account: "codex", share: false });
+    expect(sharing(daemon, "codex")).toEqual(accounts[2]);
+    expect(daemon.store.getState().accountSharing.size).toBe(0);
+  });
+
+  it("retries a change that did not finish when asked again for the recorded choice, and clears the failure it kept", async () => {
+    const daemon = createFixtureDaemon({
+      ...scenario,
+      state: {
+        ...scenario.state,
+        accountSharing: accountSharingOf([{ account: "claude", failure: { share: true, items: [{ item: "skills/", left: "unchanged", cause: "permission_denied", detail: "permission denied" }], detail: "`skills/` left unchanged" } }]),
+      },
+    });
+    daemon.store.setState({
+      settings: {
+        ...daemon.store.getState().settings,
+        accounts: accounts.map((account) => account.id === "claude" ? { ...account, share_default_config: true, share_default_config_incomplete: true } : account),
+      },
+    });
+    await daemon.request({ type: "set_account_sharing", account: "claude", share: true });
+    expect(sharing(daemon, "claude")).toMatchObject({ share_default_config: true, share_default_config_incomplete: false });
+    expect(daemon.store.getState().accountSharing.size).toBe(0);
+  });
+
+  it("turns a request away while the account is in use or its change runs, recording nothing", async () => {
+    const daemon = createFixtureDaemon({
+      ...scenario,
+      state: {
+        ...scenario.state,
+        accountSharing: accountSharingOf([
+          { account: "claude", in_use: { sessions: 2, signing_in: true } },
+          { account: "codex", progress: { share: true, phase: "changing", done: 1, total: 4 } },
+        ]),
+      },
+    });
+    const before = daemon.store.getState();
+    await expect(daemon.request({ type: "set_account_sharing", account: "claude", share: true })).rejects.toMatchObject({
+      code: "account_in_use",
+      params: { account: "claude", name: "Work", sessions: "2", signing_in: "true" },
+    });
+    await expect(daemon.request({ type: "set_account_sharing", account: "codex", share: true })).rejects.toMatchObject({
+      code: "account_sharing_in_progress",
+      params: { account: "codex", name: "Personal" },
+    });
+    expect(daemon.store.getState().settings).toEqual(before.settings);
+    expect(daemon.store.getState().accountSharing).toEqual(before.accountSharing);
+  });
+
+  it("refuses the default account and a directory that is the default's, recording nothing", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    const before = daemon.store.getState().settings;
+    await expect(daemon.request({ type: "set_account_sharing", account: null, share: true })).rejects.toMatchObject({ code: "default_account_not_shareable", params: {} });
+    await expect(daemon.request({ type: "set_account_sharing", account: "same", share: true })).rejects.toMatchObject({ code: "default_account_not_shareable", params: { account: "same", name: "Mirror" } });
+    await expect(daemon.request({ type: "set_account_sharing", account: "missing", share: true })).rejects.toMatchObject({ code: "unknown_account", params: { account: "missing" } });
+    expect(daemon.store.getState().settings).toEqual(before);
+    daemon.store.setState({
+      settings: {
+        ...before,
+        accounts: accounts.map((account) => account.id === "same" ? { ...account, share_default_config: true } : account),
+      },
+    });
+    await daemon.request({ type: "set_account_sharing", account: "same", share: false });
+    expect(sharing(daemon, "same")).toMatchObject({ share_default_config: false, share_default_config_incomplete: false });
+  });
+
+  it("refuses opening, resuming, switching and handing off from an account whose change runs", async () => {
+    const hub = sessionOf("hub", "c", undefined, "Hub", "idle", { account_id: "claude", config_dir: "/Users/dev/.claude-work" });
+    const stopped = sessionOf("stopped", "c", undefined, "Stopped", "interrupted", { account_id: "claude", config_dir: "/Users/dev/.claude-work" });
+    const other = sessionOf("other", "c", undefined, "Other", "idle");
+    const daemon = createFixtureDaemon({
+      ...scenario,
+      state: {
+        ...snapshotState({ consoles: [consoleOf("c", "Main")], sessions: [hub, stopped, other], settings: { ...scenario.state.settings!, added_agents: ["claude", "codex"] } }),
+        agentAvailability: scenario.state.agentAvailability,
+        accountSharing: accountSharingOf([{ account: "claude", progress: { share: true, phase: "changing", done: 1, total: 9, item: "skills/" } }]),
+      },
+    });
+    const refused = { code: "account_sharing_in_progress", params: { account: "claude", name: "Work" } };
+    await expect(daemon.request({ type: "open_session", console_id: "c", agent: "claude", account: "claude" })).rejects.toMatchObject(refused);
+    await expect(daemon.request({ type: "resume_session", session: "stopped" })).rejects.toMatchObject(refused);
+    await expect(daemon.request({ type: "switch_session_account", session: "hub", account: null })).rejects.toMatchObject(refused);
+    await expect(daemon.request({ type: "switch_session_account", session: "other", account: "claude" })).rejects.toMatchObject(refused);
+    await expect(daemon.request({ type: "hand_off_session", session: "hub", agent: "codex" })).rejects.toMatchObject(refused);
+    await expect(daemon.request({ type: "open_session", console_id: "c", agent: "claude", account: null })).resolves.toMatchObject({ type: "session_opened" });
+  });
+
+  it("records the choice, keeps the failure and rejects when the change fails part-way", async () => {
+    const items = [
+      { item: "skills/", left: "unchanged", cause: "permission_denied", detail: "permission denied" },
+      { item: "abc", left: "unchanged", cause: "permission_denied", detail: "permission denied", sessions: ["s1"] },
+    ];
+    const error = {
+      code: "account_sharing_failed",
+      params: { account: "claude", name: "Work", cause: "permission_denied", items: JSON.stringify(items), detail: "`skills/` left unchanged (permission denied)" },
+      message: "ending the sharing of the default configuration with account `Work` did not complete: `skills/` left unchanged (permission denied)",
+    };
+    const daemon = createFixtureDaemon({ ...scenario, accountSharingError: error });
+    daemon.store.setState({
+      settings: {
+        ...daemon.store.getState().settings,
+        accounts: accounts.map((account) => account.id === "claude" ? { ...account, share_default_config: true } : account),
+      },
+    });
+    await expect(daemon.request({ type: "set_account_sharing", account: "claude", share: false })).rejects.toMatchObject({ code: error.code, params: error.params });
+    expect(sharing(daemon, "claude")).toMatchObject({ share_default_config: false, share_default_config_incomplete: true });
+    expect(daemon.store.getState().accountSharing.get("claude")).toEqual({ account: "claude", failure: { share: false, cause: "permission_denied", items, detail: error.params.detail } });
+    expect(sharing(daemon, "codex")).toEqual(accounts[2]);
+    const before = daemon.store.getState().settings;
+    await expect(daemon.request({ type: "set_account_sharing", account: null, share: true })).rejects.toMatchObject({ code: "default_account_not_shareable" });
+    await daemon.request({ type: "set_account_sharing", account: "codex", share: false });
+    expect(daemon.store.getState().settings).toEqual(before);
+  });
+
+  it("keeps an account whose removal could not turn its sharing off, incomplete with the failure", async () => {
+    const error = {
+      code: "account_sharing_failed",
+      params: { account: "claude", name: "Work", cause: "default_moved", items: "[]", detail: "the default directory moved" },
+      message: "did not complete",
+    };
+    const daemon = createFixtureDaemon({ ...scenario, accountSharingError: error });
+    daemon.store.setState({
+      settings: { ...daemon.store.getState().settings, accounts: accounts.map((account) => account.id === "claude" ? { ...account, share_default_config: true } : account) },
+    });
+    await expect(daemon.request({ type: "delete_account", account: "claude" })).rejects.toMatchObject({ code: "account_sharing_failed" });
+    expect(sharing(daemon, "claude")).toMatchObject({ share_default_config: false, share_default_config_incomplete: true });
+    expect(daemon.store.getState().accountSharing.get("claude")?.failure).toEqual({ share: false, cause: "default_moved", items: [], detail: "the default directory moved" });
+    await daemon.request({ type: "delete_account", account: "codex" });
+    expect(sharing(daemon, "codex")).toBeUndefined();
+  });
+
+  it("records nothing when the scenario's error is a refusal", async () => {
+    const error = { code: "account_in_use", params: { account: "claude", name: "Work", sessions: "1", signing_in: "false" }, message: "in use" };
+    const daemon = createFixtureDaemon({ ...scenario, accountSharingError: error });
+    const before = daemon.store.getState();
+    await expect(daemon.request({ type: "set_account_sharing", account: "claude", share: true })).rejects.toMatchObject({ code: "account_in_use" });
+    expect(daemon.store.getState().settings).toEqual(before.settings);
+    expect(daemon.store.getState().accountSharing.size).toBe(0);
   });
 });
 

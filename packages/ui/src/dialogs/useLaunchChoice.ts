@@ -1,8 +1,9 @@
 import { useState } from "react";
 
-import { accountOpenedOn, avoidExhaustedAccount, choiceExhaustion, choiceGroups, choiceKey, currentChoice, findEntry, type AccountChoice, type ChoiceGroup } from "../accountChoices";
+import { accountOpenedOn, avoidExhaustedAccount, choiceChangingSharing, choiceExhaustion, choiceGroups, choiceKey, currentChoice, findEntry, type AccountChoice, type ChoiceGroup } from "../accountChoices";
 import { AGENT_LABEL, agentsInListingOrder, defaultAccountName, inheritedSessionLaunch, launchWithOverrides, pickableAgents, projectSessionAgent, selectableAgent } from "../agents";
 import { agentIconPickerOptions } from "../components/AgentIcon";
+import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { Agent, Console, Project } from "../protocol";
 import { quotaUsedUpCopy } from "../quota/quotaCopy";
@@ -12,7 +13,7 @@ import { accountOption } from "./accountOptions";
 
 type Overrides = { model?: string | null; effort?: string | null };
 
-/** Every agent's group of accounts as the pickers offer them, with the used-up quota of each account marked. */
+/** Every agent's group of accounts as the pickers offer them, with the used-up quota and the running sharing change of each account marked. */
 export function useChoiceGroups(): ChoiceGroup[] {
   const t = useT();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
@@ -20,8 +21,9 @@ export function useChoiceGroups(): ChoiceGroup[] {
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const quotas = useDaemonStore((s) => s.accountQuotas);
+  const sharing = useDaemonStore((s) => s.accountSharing);
   const now = useNow();
-  return choiceGroups(accounts, agentAvailability, addedAgents, (agent) => defaultAccountName(t, defaultNames, agent), { quotas, now });
+  return choiceGroups(accounts, agentAvailability, addedAgents, (agent) => defaultAccountName(t, defaultNames, agent), { quotas, now }, sharing);
 }
 
 /**
@@ -33,10 +35,10 @@ export function useChoiceGroups(): ChoiceGroup[] {
  * in place of the pickers' (ignored while that pair may not be picked). `overrides` holds only what the
  * user changed, for the request.
  *
- * An account whose quota is used up cannot be chosen: it is listed disabled with why, the choice
- * opens on another account of the agent when the one it would inherit is used up, and `usedUp`, when
- * even the account the choice ends on is used up (every account of the agent is, or it is the agent's
- * only one), says why it cannot be used, for the dialog to refuse its submit with.
+ * An account whose quota is used up or whose sharing change runs cannot be chosen: it is listed disabled with
+ * why, the choice opens on another account of the agent when the one it would inherit is unavailable, and
+ * `unavailable`, when even the account the choice ends on is (every account of the agent is, or it is the
+ * agent's only one), says why it cannot be used, for the dialog to refuse its submit with.
  *
  * With automatic account selection on, the account a new session (a handoff's included) opens on is
  * the one whose weekly quota resets soonest rather than the one the project or console resolves to.
@@ -81,6 +83,7 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
   const blocked = selectable.length === 0;
   const exhaustedBy = choiceExhaustion(choice, groups);
   const chosenEntry = findEntry(groups, choiceKey(choice));
+  const changingSharing = choiceChangingSharing(choice, groups);
 
   const changeLaunchSetting = (field: "model" | "effort") => (value: string | null) =>
     setLaunchSettings((current) => ({ ...current, [choice.agent]: { ...current[choice.agent], [field]: value } }));
@@ -89,10 +92,12 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
     choice,
     /** No agent that may be picked. */
     blocked,
-    /** Why the chosen account cannot run a session, when its quota is used up. */
-    usedUp: exhaustedBy && chosenEntry
+    /** Why the chosen account cannot run a session, when its quota is used up or its sharing change runs. */
+    unavailable: exhaustedBy && chosenEntry
       ? quotaUsedUpCopy(t, chosenEntry.name, exhaustedBy, now)
-      : undefined,
+      : changingSharing && chosenEntry
+        ? { title: t("accountChoice.sharingChange.title"), description: t("accountChoice.sharingChange.description", { name: isolate(chosenEntry.name) }) }
+        : undefined,
     overrides,
     agentOptions: agentIconPickerOptions(t, agentAvailability, addedAgents, choice.agent).filter((option) => option.value !== exclude),
     setPickedAgent,

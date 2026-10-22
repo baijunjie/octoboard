@@ -202,11 +202,49 @@ export interface Account {
   approval_mode?: ClaudeApprovalMode | null;
   /** Whether the account shares the agent's default configuration (`set_account_sharing`). */
   share_default_config?: boolean;
-  /** The account's directory has not been brought in line with `share_default_config` yet: the
-   * change waits for nothing to run under the account's directory (its sessions, an agent CLI
-   * reading its quota or models or signing it in), or carrying it out failed; it is tried again
-   * before its next session starts or resumes, or a session is switched to it. */
-  share_default_config_pending?: boolean;
+  /** The last change toward `share_default_config` did not finish (the daemon always sends it): the account's
+   * directory may not match the recorded choice. Cleared only by asking again for the recorded value (a
+   * retry) or for the opposite one. The `account_sharing` failure, when the daemon still holds one, says
+   * what was left. */
+  share_default_config_incomplete?: boolean;
+}
+
+/** What a failed sharing change left one entry as. */
+export type SharingLeft = "unchanged" | "backed_up" | "partly_moved" | "linked" | "absent";
+
+/** Why an entry could not be brought in line, as the daemon names it; an absent or unknown one reads as `other`. */
+export type SharingEntryCause = "permission_denied" | "busy" | "not_found" | "no_space" | "conflict" | "other";
+
+/** Why a change failed as a whole: an entry cause, or `default_moved`, the agent's default directory having moved
+ * since sharing was turned on, which only turning sharing off and on again can mend. */
+export type SharingCause = SharingEntryCause | "default_moved";
+
+/** Where a running sharing change is: waiting for another account of the same agent to finish its own, ending the
+ * account's idle sessions, changing the entries, or resuming the sessions. */
+export type SharingPhase = "waiting" | "stopping" | "changing" | "resuming";
+
+/** An account's sharing state at the daemon, broadcast whole by `account_sharing` and listed for every
+ * owned account in `snapshot`. Each field is absent when it has nothing to say; no field at all means
+ * the account is free. Runtime state of the daemon, never stored. */
+export interface AccountSharing {
+  account: string;
+  /** What keeps a change of sharing from starting: how many of the account's sessions run or are being
+   * started, resumed or switched under its directory, and whether it is being signed in. */
+  in_use?: { sessions: number; signing_in: boolean };
+  /** How many idle sessions of the account a change would end before it and resume after it; absent when none. */
+  idle_sessions?: number;
+  /** A change that runs: its direction, the phase it is in, the entries done out of `total` (`done` is 0 before the
+   * change and `total` while resuming), and the entry being processed during `changing` (a catalog entry or,
+   * turning sharing off, a conversation id), absent while it waits for short reads. */
+  progress?: { share: boolean; phase: SharingPhase; done: number; total: number; item?: string };
+  /** The last change that failed since the daemon started, until the next change starts. */
+  failure?: {
+    share: boolean;
+    /** The cause shared by all entries, or why the change could not start when there are none. */
+    cause?: SharingCause;
+    items: { item: string; left: SharingLeft; detail: string; sessions?: string[]; cause?: SharingEntryCause }[];
+    detail: string;
+  };
 }
 
 export interface Project {
@@ -1430,6 +1468,8 @@ export type Event =
     account_quotas: AccountQuota[];
     /** The logins that have started and not ended; empty when none is running. */
     account_logins: AccountLogin[];
+    /** The sharing state of every owned account. */
+    account_sharing: AccountSharing[];
     /** The daemon host's home directory — not the browser's, the two may be on different
        * machines — so a path under it can be shown as `~/...`. Null when the daemon cannot
        * determine one. */
@@ -1445,6 +1485,9 @@ export type Event =
   | { type: "account_quotas_updated"; account_quotas: AccountQuota[] }
   /** An account's login started, moved on or ended: its whole state. An ended login is only announced here. */
   | { type: "account_login_updated"; login: AccountLogin }
+  /** An account's whole sharing state, sent whenever any of it changes; an event with no field but
+   * `account` means the account is free. */
+  | ({ type: "account_sharing" } & AccountSharing)
   /** The whole list of trusted directories, sent when it changes. */
   | { type: "trusted_directories_updated"; trusted_directories: string[] }
   | { type: "console_upserted"; console: Console }

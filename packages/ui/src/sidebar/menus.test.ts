@@ -65,6 +65,44 @@ describe("the Switch account entry", () => {
     expect(menu([spent("w")], 7_200_000)[1].reason).toBeUndefined();
   });
 
+  it("disables an account whose sharing change runs, with why, whatever its quota, and never the current one", () => {
+    const sharing = new Map([["w", { account: "w", progress: { share: true, phase: "changing" as const, done: 1, total: 3, item: "skills" } }]]);
+    const entry = sessionMenu(t, {} as SidebarHandlers, project(), [account("w", "claude")], undefined, { sharing })
+      .find((candidate) => typeof candidate === "object" && "items" in candidate) as ActionMenuSubmenu;
+    const [current, other] = entry.items as { reason?: { state: string }; description?: string }[];
+    expect(current.reason).toBeUndefined();
+    expect(other.reason).toEqual({ state: "Changing sharing" });
+    expect(other.description).toBe("Unavailable while its sharing is being changed");
+    const free = sessionMenu(t, {} as SidebarHandlers, project(), [account("w", "claude")], undefined, { sharing: new Map() })
+      .find((candidate) => typeof candidate === "object" && "items" in candidate) as ActionMenuSubmenu;
+    expect((free.items[1] as { reason?: unknown }).reason).toBeUndefined();
+    const onto = sessionMenu(t, {} as SidebarHandlers, project({ account_id: "w", config_dir: "/home/w" }), [account("w", "claude")], undefined, { sharing })
+      .find((candidate) => typeof candidate === "object" && "items" in candidate) as ActionMenuSubmenu;
+    expect((onto.items[1] as { selected: boolean; reason?: unknown }).selected).toBe(true);
+    expect((onto.items[1] as { reason?: unknown }).reason).toBeUndefined();
+  });
+
+  it("disables every other account while the session's own account is changing its sharing", () => {
+    const sharing = new Map([["w", { account: "w", progress: { share: true, phase: "changing" as const, done: 1, total: 3, item: "skills" } }]]);
+    const entry = sessionMenu(t, {} as SidebarHandlers, project({ account_id: "w", config_dir: "/home/w" }), [account("w", "claude")], undefined, { sharing })
+      .find((candidate) => typeof candidate === "object" && "items" in candidate) as ActionMenuSubmenu;
+    const [dflt, current] = entry.items as { reason?: { state: string }; selected: boolean }[];
+    expect(current.selected).toBe(true);
+    expect(current.reason).toBeUndefined();
+    expect(dflt.reason).toEqual({ state: "Account changing sharing" });
+    expect((dflt as { description?: string }).description).toBe("Unavailable while this session’s account is having its sharing changed");
+  });
+
+  it("disables Hand off with the same reason while the session's own account is changing its sharing", () => {
+    const sharing = new Map([["w", { account: "w", progress: { share: true, phase: "changing" as const, done: 1, total: 3, item: "skills" } }]]);
+    const handOff = (opts: { sharing?: typeof sharing }) => sessionMenu(t, {} as SidebarHandlers, project({ account_id: "w", config_dir: "/home/w" }), [account("w", "claude")], undefined, opts)
+      .find((entry) => typeof entry === "object" && "label" in entry && entry.label === "Hand off") as { disabled?: boolean; reason?: { state: string }; description?: string };
+    expect(handOff({ sharing }).reason).toEqual({ state: "Account changing sharing" });
+    expect(handOff({ sharing }).description).toBe("Unavailable while this session’s account is having its sharing changed");
+    expect(handOff({}).reason).toBeUndefined();
+    expect(handOff({ sharing: new Map() }).reason).toBeUndefined();
+  });
+
   it("states what remains of an account's quota as its description, and has no reason for it", () => {
     const quota = {
       agent: "claude" as const, account: "w", fetched_at: 0, plan: null, unavailable: null,

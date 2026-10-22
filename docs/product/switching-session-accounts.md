@@ -21,6 +21,10 @@ the top of the confirmation names the account, the quota it has used up and when
 until the account is no longer used up. The submenu already disables such an account (see "Session rows" in
 `docs/product/sidebar.md`).
 
+When the target account's last change of sharing is incomplete, Confirm, and each Retry, first asks the user whether
+to start on it, and nothing is switched when that is cancelled (see "Starting a session on an account whose last
+change is incomplete" in `docs/product/sharing-the-default-configuration.md`).
+
 Confirming fixes the set of sessions to process and locks the checkbox. Sessions opened afterwards do not join that
 set, including on a retry. Sessions are switched one at a time; one that has been removed, archived or moved to the
 target account before its turn is skipped. A progress bar shows the number processed out of the fixed total, counting
@@ -170,12 +174,12 @@ reading the daemon holds at that moment (`account_quota_exhausted`, carrying wha
 shell environment could not be captured — which is read whenever either side of the switch is the default account,
 since that is what resolves its directory, and for any Codex switch, since that environment says where the target
 keeps its database (see "The launch environment" in `docs/product/launching-agents.md`) — when the conversation
-record is not where it should be, and when the target account has a change of sharing the default configuration
-pending that cannot be carried out (`account_sharing_failed`; see "When a change is carried out" in
-`docs/product/sharing-the-default-configuration.md`); the session's process is then left running. The one further refusal comes after
-the process has been asked to end: a process that has not gone within 30 seconds stops the switch, with nothing
-copied and nothing recorded, and that process may still be running. Once the process has been ended, a change of the
-target's sharing asked for meanwhile that cannot be carried out, a copy that
+record is not where it should be, and while a change of the sharing of the default configuration runs for the
+session's account or for the target (`account_sharing_in_progress`; see "When a change is carried out" in
+`docs/product/sharing-the-default-configuration.md`); the session's process is then left running. The one further
+refusal comes after the process has been asked to end: a process that has not gone within 30 seconds stops the switch,
+with nothing copied and nothing recorded, and that process may still be running. Once the process has been ended, a
+change of the target's sharing that started meanwhile, a copy that
 does not complete (a Codex account's database that cannot be updated included), a relaunch the launch rules refuse
 and a relaunch whose process ends at once are each reported as a failed switch, not as a success: the session is left
 *interrupted* on its old account, resumable as before, and already reads so everywhere by the time the failure is

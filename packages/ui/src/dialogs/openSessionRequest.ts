@@ -1,6 +1,6 @@
 import { choiceGroups, settledInitialChoice, type AccountChoice } from "../accountChoices";
 import type { Translate } from "../i18n/catalog";
-import type { AccountQuota, Agent, AgentAvailability, Console, Project, RequestBody, Settings } from "../protocol";
+import type { AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Project, RequestBody, Settings } from "../protocol";
 import type { NewSessionBinding, NewSessionRequest } from "./dialogRequest";
 
 export type OpenSessionRequest = Extract<RequestBody, { type: "open_session" }>;
@@ -37,6 +37,7 @@ export interface QuickCreateState {
   settings: Pick<Settings, "accounts" | "added_agents" | "auto_select_account">;
   agentAvailability: Map<Agent, AgentAvailability>;
   accountQuotas: AccountQuota[];
+  accountSharing?: Map<string, AccountSharing>;
 }
 
 /** The agent and account the session dialog opens on (`settledInitialChoice`) for a session in `parentConsole`
@@ -44,7 +45,7 @@ export interface QuickCreateState {
  * `auto_select_account` is on, that account is the one whose weekly quota resets soonest. */
 function settledQuickChoice(parentConsole: Console, project: Project | undefined, state: QuickCreateState, now: number) {
   const { accounts, added_agents, auto_select_account } = state.settings;
-  const groups = choiceGroups(accounts, state.agentAvailability, added_agents, () => "", { quotas: state.accountQuotas, now });
+  const groups = choiceGroups(accounts, state.agentAvailability, added_agents, () => "", { quotas: state.accountQuotas, now }, state.accountSharing);
   return settledInitialChoice(
     parentConsole,
     project,
@@ -67,7 +68,8 @@ export function quickCreateUsedUp(target: NewSessionRequest, state: QuickCreateS
  * opens on (`settledQuickChoice`), the model and effort left to follow the parent, and no owner unless
  * `binding` fixes one (a console session's focus mode). With that account's quota used up it
  * opens on another account of the agent; with every account of the agent used up there
- * is nothing to send, and `usedUp` says so instead (`quickCreateUsedUp`). */
+ * is nothing to send, and `usedUp` says so instead (`quickCreateUsedUp`). The same for an account whose sharing
+ * change runs, named by `changingSharing`. */
 export function defaultOpenSessionRequest(
   t: Translate,
   parentConsole: Console,
@@ -76,9 +78,12 @@ export function defaultOpenSessionRequest(
   state: QuickCreateState,
   now: number,
   appearance: "light" | "dark",
-): { request: OpenSessionRequest } | { usedUp: true } {
-  const { choice, exhaustedBy } = settledQuickChoice(parentConsole, project, state, now);
+): { request: OpenSessionRequest } | { usedUp: true } | { changingSharing: { account: string; name: string } } {
+  const { choice, exhaustedBy, changingSharing } = settledQuickChoice(parentConsole, project, state, now);
   if (exhaustedBy) return { usedUp: true };
+  if (changingSharing && choice.account !== null) {
+    return { changingSharing: { account: choice.account, name: state.settings.accounts.find((item) => item.id === choice.account)?.name ?? choice.account } };
+  }
   return {
     request: openSessionRequest(t, {
       console: parentConsole,

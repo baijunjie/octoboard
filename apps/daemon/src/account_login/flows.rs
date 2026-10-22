@@ -89,6 +89,30 @@ impl Progress {
     }
 }
 
+/// A sign-in counted under its account's directory, which refuses a change of the account's
+/// sharing; every client is told when it starts and when it ends.
+struct SigningIn {
+    state: Arc<AppState>,
+    run: Option<crate::shared_config::Run>,
+}
+
+impl SigningIn {
+    fn new(state: Arc<AppState>, run: crate::shared_config::Run) -> Self {
+        crate::shared_config::publish(&state);
+        Self {
+            state,
+            run: Some(run),
+        }
+    }
+}
+
+impl Drop for SigningIn {
+    fn drop(&mut self) {
+        drop(self.run.take());
+        crate::shared_config::publish(&self.state);
+    }
+}
+
 /// One agent's login, ready to run.
 pub(super) struct Flow {
     agent: Agent,
@@ -137,13 +161,13 @@ impl Flow {
         // The account's directory must not change sharing under the CLI while it signs in. A login
         // waiting for a change being carried out there is still cancelled at once.
         let dir = self.config_dir.clone();
-        let waiting = tokio::task::spawn_blocking(move || {
-            crate::shared_config::reading_account(dir.as_deref())
-        });
-        let _reading = tokio::select! {
-            reading = waiting => reading.ok().flatten(),
+        let waiting =
+            tokio::task::spawn_blocking(move || crate::shared_config::running_long(dir.as_deref()));
+        let running = tokio::select! {
+            running = waiting => running.ok().flatten(),
             () = cancel.notified() => return Outcome::Cancelled,
         };
+        let _signing_in = running.map(|run| SigningIn::new(progress.state.clone(), run));
         match self.agent {
             Agent::Claude => self.claude(progress, cancel).await,
             Agent::Codex => self.codex(progress, cancel).await,

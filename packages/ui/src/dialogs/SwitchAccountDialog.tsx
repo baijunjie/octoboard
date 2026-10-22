@@ -19,6 +19,7 @@ import { sessionDisplayTitle } from "../sessionLabel";
 import { useDaemon, useDaemonStore } from "../store";
 import { useNow } from "../useNow";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { useConfirmIncompleteLaunch } from "./useConfirmIncompleteLaunch";
 
 interface SwitchFailure {
   session: Session;
@@ -97,6 +98,7 @@ export function SwitchAccountDialog({
     if (failed.length === 0) onClose();
   };
 
+  const { confirmLaunch, confirmation } = useConfirmIncompleteLaunch(onClose);
   const usedUp = exhaustedBy && quotaUsedUpCopy(t, accountName, exhaustedBy, now);
   return (
     <ConfirmDialog
@@ -109,10 +111,10 @@ export function SwitchAccountDialog({
       pendingLabel={t("dialog.switchAccount.pending")}
       confirmDisabled={exhaustedBy !== undefined}
       onCancel={onClose}
-      onConfirm={() => {
+      onConfirm={() => confirmLaunch(account, () => {
         pending.current ??= switchSessions().finally(() => { pending.current = undefined; });
         return pending.current;
-      }}
+      })}
       extraControl={
         <>
           <Checkbox variant="secondary" isSelected={all} onChange={setAll} isReadOnly={snapshot !== undefined}>
@@ -123,6 +125,9 @@ export function SwitchAccountDialog({
             <Description>{t("dialog.switchAccount.scope", { count: snapshot?.length ?? candidates.length })}</Description>
           </Checkbox>
           <StatusAnnouncer text={announcement} />
+          {/* Inside this dialog's tree, though it shows in its own layer: a focus scope that is not
+              nested in the one beneath it is bounced back to it. */}
+          {confirmation}
           {progress && progress.total > 0 && (
             <div className="flex min-w-0 flex-col gap-2 text-sm">
               <ProgressBar value={progress.completed} maxValue={progress.total} aria-label={t("dialog.switchAccount.progressLabel")} aria-valuetext={progressText}>

@@ -418,12 +418,12 @@ pub struct Account {
     /// `set_account_sharing`; kept local like the launch overrides above.
     #[serde(default)]
     pub share_default_config: bool,
-    /// The directory has not been brought in line with `share_default_config` yet: the change
-    /// waits for nothing to run under the account's directory (its sessions, an agent CLI
-    /// reading its quota or models or signing it in), or carrying it out failed; it is tried
-    /// again before the account's next launch, resume or switch to it.
+    /// The last change toward `share_default_config` did not finish: it failed part-way, or the
+    /// daemon stopped while it ran (set when a change starts, cleared when one succeeds). Only
+    /// asking again for the recorded value or the opposite change clears it; nothing retries it
+    /// by itself.
     #[serde(default)]
-    pub share_default_config_pending: bool,
+    pub share_default_config_incomplete: bool,
 }
 
 /// Whether an agent's binary resolves on the user's login shell `PATH`, the only test an agent is
@@ -1995,9 +1995,9 @@ pub enum RequestBody {
         mode: Option<ClaudeApprovalMode>,
     },
     /// Sets whether an account shares the agent's default configuration. A null account names
-    /// the default account, which is refused. The change is carried out at once when nothing runs
-    /// under the account's directory (its sessions or agent CLI reads), else before its next
-    /// session starts or resumes, or a session is switched to it.
+    /// the default account, which is refused. The change is carried out at once and answered when
+    /// it ends, or refused: while sessions of the account run or start, or it is being signed in
+    /// (`account_in_use`), and while a change of it already runs (`account_sharing_in_progress`).
     SetAccountSharing {
         account: Option<String>,
         share: bool,
@@ -2317,6 +2317,9 @@ pub enum Event {
         /// The logins that have started and not ended, whose later updates a reconnecting client
         /// would otherwise have missed; empty when none is running. Runtime state, not stored.
         account_logins: Vec<AccountLogin>,
+        /// The sharing state of every account the user owns, as `account_sharing` sends it.
+        /// Runtime state, not stored.
+        account_sharing: Vec<AccountSharing>,
         /// The daemon host's home directory, so a client can show a path under it as `~/...`; it
         /// is the daemon's home, not the browser's, since the two may be on different machines.
         /// Null when the daemon cannot determine one.
@@ -2343,6 +2346,10 @@ pub enum Event {
     AccountLoginUpdated {
         login: AccountLogin,
     },
+    /// What stands in the way of a change of an account's sharing, the change running and the last
+    /// one that failed: the account's whole sharing state, sent whenever any of it changes. Every
+    /// owned account's is also in a `snapshot`.
+    AccountSharing(AccountSharing),
     /// The directories whose projects Octoboard presses every agent's trust confirmation for
     /// changed: the whole list, like every other upsert.
     TrustedDirectoriesUpdated {
@@ -2882,6 +2889,87 @@ pub struct AccountLogin {
     pub failure: Option<LoginFailure>,
 }
 
+/// An owned account's sharing state as the daemon holds it now. Runtime state: never stored.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct AccountSharing {
+    pub account: String,
+    /// What refuses a change now; absent when nothing does.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub in_use: Option<AccountInUse>,
+    /// How many of the account's sessions are idle — at their prompt, waiting for the user's next
+    /// message, with nothing left running in the background. They do not refuse a change: it ends
+    /// their processes first and resumes them once it has ended. Absent when none is.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub idle_sessions: usize,
+    /// The change running now; absent when none is.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress: Option<SharingProgress>,
+    /// The last change that failed since the daemon started, until the next one records its
+    /// choice.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure: Option<SharingFailure>,
+}
+
+/// What runs under an account's directory that a change of its sharing must not move files under.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct AccountInUse {
+    /// The account's sessions working under its directory: in the middle of a turn, with
+    /// background work running, waiting for the user's answer (a permission prompt, a question),
+    /// holding a message of Octoboard's queued, being written or left unsent in its input box, or
+    /// claimed — being started, resumed, switched or handed off, or having their owner changed.
+    pub sessions: usize,
+    /// Whether the account is being signed in.
+    pub signing_in: bool,
+}
+
+/// How far a change of an account's sharing has got.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SharingProgress {
+    /// The direction: turning sharing on, or off.
+    pub share: bool,
+    pub phase: SharingPhase,
+    /// The entries processed so far, out of `total`: none before `changing`, all of them once
+    /// `resuming`.
+    pub done: usize,
+    pub total: usize,
+    /// The entry being processed: an item of the account's directory, or, turning sharing off,
+    /// the agent's id of a conversation being taken back. Present only while `changing`, from
+    /// the first entry on: absent while the change waits for short CLI reads.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub item: Option<String>,
+}
+
+/// What a change of an account's sharing is doing, in order: waiting, while another account of
+/// the same agent changes, then ending the account's idle sessions, changing the entries, and
+/// resuming those sessions. `waiting` and `stopping` are left out when there is nothing to wait
+/// for or stop, and `resuming` when nothing was stopped.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SharingPhase {
+    Waiting,
+    Stopping,
+    Changing,
+    Resuming,
+}
+
+fn is_zero(count: &usize) -> bool {
+    *count == 0
+}
+
+/// A change of an account's sharing that did not complete, in the form `account_sharing_failed`
+/// gives it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct SharingFailure {
+    /// The direction of the change.
+    pub share: bool,
+    /// Why, as a whole: the cause the entries share (`other` when they differ), or why the
+    /// change could not start when there are none.
+    pub cause: crate::shared_config::FailureCause,
+    /// Each entry not brought in line, as the error's `items`.
+    pub items: Vec<crate::shared_config::FailedItem>,
+    pub detail: String,
+}
+
 /// Why a login failed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct LoginFailure {
@@ -3264,22 +3352,41 @@ pub mod error_code {
     /// accounts share, or turning sharing on for an account whose directory resolves to the
     /// default account's. `params` names the `account` and its `name` when one was named.
     pub const DEFAULT_ACCOUNT_NOT_SHAREABLE: &str = "default_account_not_shareable";
-    /// Carrying out an account's change of sharing did not complete — by `set_account_sharing`,
-    /// before a launch, resume or switch of one of its sessions, or before `delete_account`, each
-    /// of which it then refuses; the change stays pending. `params` names the `account`, its
-    /// `name`, the `detail`, and `items`: a JSON array of `{item, left, detail, sessions?}`, each
-    /// item of the account's directory that was not brought in line, what it was left as
-    /// (`unchanged`, `backed_up`, `partly_moved`, `linked`, `absent`) and why. An entry about a
-    /// conversation turning sharing off could not take back names the agent's id of it as `item`
-    /// and the sessions recording it as `sessions`.
+    /// An account's change of sharing did not complete — asked for by `set_account_sharing`, or
+    /// turning sharing off before `delete_account` or `update_account` pointing it at another
+    /// directory, which it then refuses. Nothing is rolled back: the account is left marked
+    /// `share_default_config_incomplete`. `params` names the `account`, its `name`, the `detail`,
+    /// `items`: a JSON array of `{item, left, cause, detail, sessions?}`, each item of the
+    /// account's directory that was not brought in line, what it was left as (`unchanged`,
+    /// `backed_up`, `partly_moved`, `linked`, `absent`) and why, as a
+    /// `crate::shared_config::FailureCause` and in the system's own words; and `cause`, the
+    /// cause the items share (`other` when they differ), or why the change could not start when
+    /// there are none. A `cause` of `default_moved` means the agent's default directory is no
+    /// longer the one the links lead into or sharing was started into: turning sharing off, then on
+    /// again, shares the new one. An entry about a conversation turning sharing off could not take back names
+    /// the agent's id of it as `item` and the sessions recording it as `sessions`.
     pub const ACCOUNT_SHARING_FAILED: &str = "account_sharing_failed";
     /// A `delete_account`, or an `update_account` pointing it at another directory, for an account
-    /// that shares the default configuration, or has a change of sharing pending, while something
-    /// runs under its directory (one of its sessions, or an agent CLI reading its quota or models
-    /// or signing it in): sharing has to be turned off first, and cannot be now. Nothing was
-    /// changed.
-    /// `params` names the `account` and its `name`.
+    /// that shares the default configuration, or whose last change of sharing is incomplete,
+    /// while sessions of it run or start or it is being signed in: sharing has to be turned off
+    /// first, and cannot be now. Nothing was changed. `params` names the `account` and its `name`.
     pub const ACCOUNT_STILL_SHARING: &str = "account_still_sharing";
+    /// A `set_account_sharing` while sessions of the account work under its directory (as
+    /// `AccountInUse::sessions` counts them), or it is being signed in: the change would move
+    /// files they hold. Also when one of its idle sessions turned working before the change ended
+    /// it. Nothing was stopped or changed. `params` names the `account`, its `name`, `sessions`,
+    /// how many of its sessions work, and `signing_in`, `true` or `false`.
+    pub const ACCOUNT_IN_USE: &str = "account_in_use";
+    /// A change of the account's sharing is running: creating, launching or resuming a session of
+    /// it, switching a session to or from it, a second `set_account_sharing` for it, and removing
+    /// or repointing it are refused until the change ends. `params` names the `account` and its
+    /// `name`.
+    pub const ACCOUNT_SHARING_IN_PROGRESS: &str = "account_sharing_in_progress";
+    /// A `set_account_sharing`, or a `delete_account` or `update_account` repointing an account,
+    /// ended one of the account's idle sessions for the change and did not see its process gone
+    /// after a generous wait: the change did not start, nothing was recorded, and the sessions it
+    /// ended are resumed. `params` names the `account`, its `name` and the `session`.
+    pub const SHARING_SESSION_DID_NOT_STOP: &str = "sharing_session_did_not_stop";
     /// A switch was asked to move a session to the account it is on already.
     pub const SESSION_ALREADY_ON_ACCOUNT: &str = "session_already_on_account";
     /// A switch was asked for an archived session. Reopening one is a resume's job, and a switch
@@ -3497,6 +3604,7 @@ pub mod notice_code {
     pub const CLAUDE_WORKSPACE_UNTRUSTED: &str = "claude_workspace_untrusted";
     pub const QUEUED_MESSAGES_DROPPED: &str = "queued_messages_dropped";
     pub const HANDOFF_MESSAGES_DROPPED: &str = "handoff_messages_dropped";
+    pub const SHARING_MESSAGES_DROPPED: &str = "sharing_messages_dropped";
     pub const TRUST_ANSWER_FAILED: &str = "trust_answer_failed";
     pub const TRUST_NOT_CARRIED_OVER: &str = "trust_not_carried_over";
     /// A message written into the session was not sent by its agent and is waiting in the input
@@ -3513,8 +3621,14 @@ pub mod notice_code {
     pub const MESSAGE_DIVERTED_BY_VIEW: &str = "message_diverted_by_view";
     /// Before the session launched, some of its sharing account's links to the default
     /// configuration could not be repaired; the session launched all the same. `params` names
-    /// the `account`, its `name` and `items`, as `account_sharing_failed`'s.
+    /// the `account`, its `name`, `cause` and `items`, as `account_sharing_failed`'s.
     pub const ACCOUNT_SHARING_REPAIR_FAILED: &str = "account_sharing_repair_failed";
+    /// The session was idle, so a change of its account's sharing ended its process, and it was not
+    /// resumed afterwards: resuming it failed and it is left interrupted, to be resumed by hand, or
+    /// (`still_running` `true`) its process was never seen to end and it was not relaunched.
+    /// `params` names the `account`, its `name`, the `detail` and `still_running`, `true` or
+    /// `false`.
+    pub const SHARING_RESUME_FAILED: &str = "sharing_resume_failed";
     /// The session's sharing account holds a Codex state database the shared configuration does
     /// not cover (a newer Codex's), so its threads are kept apart from the other accounts'.
     /// `params` names the `account`, its `name` and the database's `path`.
@@ -3935,6 +4049,7 @@ mod tests {
             agent_availability: vec![],
             account_quotas: vec![],
             account_logins: vec![],
+            account_sharing: vec![],
             home_dir: None,
             shell_terminals: vec![terminal],
         });
@@ -4039,6 +4154,7 @@ mod tests {
             agent_availability: vec![],
             account_quotas: quotas,
             account_logins: vec![],
+            account_sharing: vec![],
             home_dir: None,
             shell_terminals: vec![],
         })
@@ -4089,6 +4205,58 @@ mod tests {
                     "agent": "grok", "account": null, "status": "waiting",
                     "authorization_url": "https://accounts.x.ai/oauth2/device",
                     "device_code": "ABCD-1234", "opened_by_agent": true, "failure": null,
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn an_accounts_sharing_state_leaves_out_what_it_does_not_have() {
+        let free = serde_json::to_value(super::Event::AccountSharing(super::AccountSharing {
+            account: "a1".to_string(),
+            in_use: None,
+            idle_sessions: 0,
+            progress: None,
+            failure: None,
+        }))
+        .unwrap();
+        assert_eq!(
+            free,
+            serde_json::json!({"type": "account_sharing", "account": "a1"})
+        );
+        let changing = serde_json::to_value(super::Event::AccountSharing(super::AccountSharing {
+            account: "a1".to_string(),
+            in_use: Some(super::AccountInUse {
+                sessions: 2,
+                signing_in: false,
+            }),
+            idle_sessions: 1,
+            progress: Some(super::SharingProgress {
+                share: true,
+                phase: super::SharingPhase::Changing,
+                done: 3,
+                total: 31,
+                item: Some("skills".to_string()),
+            }),
+            failure: Some(super::SharingFailure {
+                share: false,
+                cause: crate::shared_config::FailureCause::PermissionDenied,
+                items: Vec::new(),
+                detail: "denied".to_string(),
+            }),
+        }))
+        .unwrap();
+        assert_eq!(
+            changing,
+            serde_json::json!({
+                "type": "account_sharing", "account": "a1",
+                "in_use": {"sessions": 2, "signing_in": false},
+                "idle_sessions": 1,
+                "progress": {
+                    "share": true, "phase": "changing", "done": 3, "total": 31, "item": "skills",
+                },
+                "failure": {
+                    "share": false, "cause": "permission_denied", "items": [], "detail": "denied",
                 },
             })
         );
@@ -4583,6 +4751,7 @@ mod tests {
             .collect(),
             account_quotas: vec![],
             account_logins: vec![],
+            account_sharing: vec![],
             home_dir: Some("/Users/dev".to_string()),
             shell_terminals: vec![],
         })

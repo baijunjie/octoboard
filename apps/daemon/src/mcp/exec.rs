@@ -749,15 +749,17 @@ fn show_page(
 
 // -- information exchange ----------------------------------------------------
 
-/// Every running session but the caller, in every console and project, console sessions
-/// included: information may go to any of them, and an owner to hand a session to or bind to is one
-/// of them.
-fn list_sessions(state: &Arc<AppState>, caller: &Session) -> Result<Value> {
+/// Every running session but the caller (one a sharing change is restarting included), in every
+/// console and project, console sessions included: information may go to any of them, and an
+/// owner to hand a session to or bind to is one of them.
+///
+/// `pub(crate)` for the tests of `shared_config`, which describe a session being restarted.
+pub(crate) fn list_sessions(state: &Arc<AppState>, caller: &Session) -> Result<Value> {
     let sessions = state
         .store
         .list_sessions()?
         .iter()
-        .filter(|session| session.id != caller.id && !session.status.is_dormant())
+        .filter(|session| session.id != caller.id && !state.shown_status(session).is_dormant())
         .map(|session| {
             let mut description = describe_session(state, session, caller)?;
             description["your_owner"] = json!(caller.bound_to.as_deref() == Some(&session.id));
@@ -1019,7 +1021,13 @@ pub(super) fn resolve_owned_session(
 /// `caller` is the session asking. Everything here is the same whoever asks except `yours`, which
 /// is relative to `caller`: a console may hold several console sessions, and each reads a
 /// session's owner alike but is told only of its own that they are its to act on.
-fn describe_session(state: &Arc<AppState>, session: &Session, caller: &Session) -> Result<Value> {
+///
+/// `pub(crate)` for the tests of `shared_config`, which describe a session being restarted.
+pub(crate) fn describe_session(
+    state: &Arc<AppState>,
+    session: &Session,
+    caller: &Session,
+) -> Result<Value> {
     let owner_kind = match &session.bound_to {
         Some(owner) => state
             .store
@@ -1096,6 +1104,11 @@ fn write_hold_explanation(hold: WriteHold) -> &'static str {
         WriteHold::Handoff => {
             "It is being handed off to another agent. Messages for it are queued and go to the \
              session that takes its place."
+        }
+        WriteHold::SharingChange => {
+            "It is being restarted for a change of its account's sharing of the agent's default \
+             configuration, and is resumed on its conversation afterwards. Messages for it are \
+             queued and written into the resumed process."
         }
         WriteHold::UnsentMessage => {
             "A message written into it was not sent by its agent and is waiting in its input box; \
@@ -2791,7 +2804,7 @@ pub(super) mod tests {
                 approval_reviewer: None,
                 approval_mode: None,
                 share_default_config: false,
-                share_default_config_pending: false,
+                share_default_config_incomplete: false,
             })
             .unwrap();
         git_remote::record_remote_url(
@@ -3427,7 +3440,7 @@ pub(super) mod tests {
                 approval_reviewer: None,
                 approval_mode: None,
                 share_default_config: false,
-                share_default_config_pending: false,
+                share_default_config_incomplete: false,
             })
             .unwrap();
         let caller = Session {
@@ -3589,7 +3602,7 @@ pub(super) mod tests {
                 approval_reviewer: None,
                 approval_mode: None,
                 share_default_config: false,
-                share_default_config_pending: false,
+                share_default_config_incomplete: false,
             })
             .unwrap();
     }
@@ -3810,7 +3823,7 @@ pub(super) mod tests {
                 approval_reviewer: None,
                 approval_mode: None,
                 share_default_config: false,
-                share_default_config_pending: false,
+                share_default_config_incomplete: false,
             })
             .unwrap();
         hold(
@@ -3902,6 +3915,41 @@ pub(super) mod tests {
         assert_eq!(
             own_console_account(&state, &caller, json!({})),
             Some(Some("later".to_string()))
+        );
+    }
+
+    /// An account whose sharing change is running would refuse the launch, so the pick passes
+    /// over it for the next one.
+    #[test]
+    fn auto_select_account_skips_an_account_whose_sharing_change_is_running() {
+        let (state, _dir, caller) = codex_caller_state("auto-select-sharing-locked");
+        state.store.set_auto_select_account(true).unwrap();
+        let soon = now_millis() + 60_000;
+        insert_codex(&state, "sooner", "/tmp/codex-sooner");
+        hold(
+            &state,
+            Agent::Codex,
+            Some("sooner"),
+            Some("/tmp/codex-sooner"),
+            vec![weekly(10.0, soon)],
+        );
+        hold(
+            &state,
+            Agent::Codex,
+            Some("codex-work"),
+            Some("/tmp/codex-work"),
+            vec![weekly(80.0, soon + 3_600_000)],
+        );
+        let account = state.store.get_account("sooner").unwrap().unwrap();
+        let (_, lock) = state.lock_account_sharing(&account, |_, _| Ok(())).unwrap();
+        assert_eq!(
+            own_console_account(&state, &caller, json!({})),
+            Some(Some("codex-work".to_string()))
+        );
+        drop(lock);
+        assert_eq!(
+            own_console_account(&state, &caller, json!({})),
+            Some(Some("sooner".to_string()))
         );
     }
 

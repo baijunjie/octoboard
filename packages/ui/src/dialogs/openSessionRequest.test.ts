@@ -95,3 +95,11 @@ it("opens on another account of the agent when the inherited one is used up, and
   expect(quick(t, onClaude, undefined, { kind: "unbound" }, accounts, available(), null, [usedUp("w")], 1)).toMatchObject({ request: { agent: "claude", account: null } });
   expect(quick(t, onClaude, undefined, { kind: "unbound" }, accounts, available(), null, [usedUp("w"), usedUp(null)], 1)).toEqual({ usedUp: true });
 });
+
+it("opens on another account of the agent when the inherited one is changing its sharing, and names it when none is left", () => {
+  const onClaude = consoleOf("c-1", "Main", { default_agent: "claude", claude_account_id: "w" });
+  const changing = new Map([["w", { account: "w", progress: { share: true, phase: "changing" as const, done: 0, total: 2 } }]]);
+  const state = (accountQuotas: AccountQuota[]) => ({ settings: { accounts, added_agents: null }, agentAvailability: available(), accountQuotas, accountSharing: changing });
+  expect(defaultOpenSessionRequest(t, onClaude, undefined, { kind: "unbound" }, state([]), 1, "light")).toMatchObject({ request: { agent: "claude", account: null } });
+  expect(defaultOpenSessionRequest(t, onClaude, undefined, { kind: "unbound" }, state([usedUp(null)]), 1, "light")).toEqual({ changingSharing: { account: "w", name: "Work" } });
+});

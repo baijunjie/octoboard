@@ -98,6 +98,8 @@ while they are typing elsewhere. The latter starts on the dialog again for each 
 confirmation opened by picking a choice in a select returns focus to that select's trigger however it closes (Cancel,
 Escape or the confirm button), and the select shows the old choice until the confirmation succeeds. One that
 turns destructive only once an option is ticked opens unticked, as an ordinary one, with focus on its confirm button.
+A confirmation raised by another dialog's confirm button opens over that dialog and follows the same rule; Escape
+or Cancel closes only it, leaving the dialog beneath open.
 One that asks for a word to be typed opens with focus in that field. A dialog's form ignores the repeats of a held Enter
 or Space, except Space in a text field and Enter in a multi-line one, so the press that opened it cannot go on to submit
 it.
@@ -161,6 +163,16 @@ it carries `aria-disabled`, keeps focus and its hover tooltip but takes no hover
 gives the reason as its tooltip and as an `aria-describedby` description while its name stays the action, and a press
 explains instead of acting. HeroUI's disabled style turns off pointer events on `aria-disabled`, so such a button puts
 them back (`pointer-events-auto`), or its tooltip never opens on hover.
+
+A switch unavailable for a reason shown under it (the account's sharing switch while its sessions run) follows the
+same rule: it keeps focus and is marked `aria-disabled`, a press or Space does nothing, and the reason is its
+`aria-describedby` description. When the control that held focus goes away with the state it belonged to, focus moves
+to the control the state was about, unless the user has already moved it.
+
+A warning that explains why a switch's last change did not finish is part of the switch's description, with the
+sentence saying how to try again and any Details disclosure placed after the Alert, not inside it; the switch itself is
+the way to try again, so there is no retry button. Only a failure that arrives while the warning's view is shown is
+announced (`role="alert"`); the same warning found already there when the view opens, or after a restart, is not.
 
 A disabled select option or menu item that carries a reason stays in the arrow-key walk (`disabledBehavior:
 "selection"` on the menu and on any single-selection section inside it), so a keyboard user reaches it and hears why;
@@ -580,6 +592,16 @@ Constrain the painted strip as well as the list and individual tab allocation; t
 The strip is bounded by its available width and scrolls when its content does not fit. A surrounding pinned header
 and its end actions may span the section while the transparent tab list keeps its content width. Keep the scrolling
 and focus-ring clearance specified under "Visible focus".
+
+### Progress of a long operation
+
+An operation that reports how far it has got (an account's sharing change) shows HeroUI's `ProgressBar`, which is a
+`progressbar` role. Its accessible name says what is in progress, not the count; the count is its value text ("3 of
+9"), and what is being processed now is visible text beside it. While the operation cannot report a count yet the bar
+is indeterminate, with no value, and `aria-describedby` points at the text saying what it waits for. The bar is not
+announced on every step: a `StatusAnnouncer` speaks the operation when it starts and again only when it moves into a
+new phase (ending sessions, waiting for another change, resuming; see "Announcing a change"), and the result is
+announced by its own alert.
 
 ### The menu bar icon and its native menu
 

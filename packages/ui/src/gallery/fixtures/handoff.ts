@@ -197,8 +197,17 @@ export const handoffScenarios: Scenario[] = [
     group: "Trust prompts and toasts",
     category: "exceptional",
     title: "Messages dropped during a handoff",
-    description: "The notice arrives as an error alert: what was dropped, followed by the recovery of checking the session they were meant for or the one that took over.",
+    description: "The notice arrives as an error alert titled with the session's project name, Website, as plain text rather than a chip: what was dropped, followed by the recovery of checking the session they were meant for or the one that took over.",
     state,
     toasts: [{ kind: "error", code: "handoff_messages_dropped", params: {}, message: "", session: lead.id }],
+  },
+  {
+    id: "toast-sharing-messages-dropped",
+    group: "Trust prompts and toasts",
+    category: "exceptional",
+    title: "Messages dropped during a sharing change",
+    description: "The notice arrives as an error alert titled with the session's project name, Website, as plain text rather than a chip: what was dropped, saying the session was not restarted, followed by its own recovery line: the messages were never written to a terminal and the session may not be running, so resume it if still needed and send them again.",
+    state,
+    toasts: [{ kind: "error", code: "sharing_messages_dropped", params: {}, message: "", session: lead.id }],
   },
 ];

@@ -29,30 +29,33 @@ This is the guarantee the whole design rests on:
   A check's fetch of remote refs is separate:
   it does not move the working tree and it does not push (see "What one check does" in
   `docs/product/project-git-status.md`).
-- **The user's own agent configuration is never written to, with four narrow exceptions.** Octoboard does not edit
+- **The user's own agent configuration is never written to, with five narrow exceptions.** Octoboard does not edit
   `~/.claude.json`, `~/.codex/`, `~/.grok/`, an account's config directory, or anything else the agent reads as the
-  user's global setup, and it never makes a trust decision of its own in any of them. The first exception is switching
-  a session to another account: it copies that one session's conversation — its record and what the agent keeps of
-  the conversation beside it — into the target account's directory, adding it there or replacing an earlier copy, by
-  way of a transient `.octoboard-switch` directory at the root of the target directory, so a failure never leaves a
+  user's global setup, and it never makes a trust decision of its own in any of them. The first exception is switching a
+  session to another account: it copies that one session's conversation — its record and what the agent keeps of the
+  conversation beside it — into the target account's directory, adding it there or replacing an earlier copy, by way of
+  a transient `.octoboard-switch` directory at the root of the target directory, so a failure never leaves a
   half-written item among the agent's own (what is copied for each agent, and how a failed copy is undone, are in
   "Carrying the conversation" in `docs/product/switching-session-accounts.md`). It touches no settings file of the
-  agent's, nothing of other sessions in either directory, and it leaves the originals where they were.
-  The second belongs to the same switch, for a Codex session: Codex remembers each thread in a database in its
-  home (or wherever the home's `sqlite_home` setting or `CODEX_SQLITE_HOME` puts it) and resumes the rollout that
-  database names, so a target account that held the thread earlier would resume an older branch of it however whole
-  the copied conversation is. The switch therefore updates the `rollout_path` that database keeps of that thread to
-  the carried head where it leads to another file, and changes nothing else in it; if it cannot, the switch fails before the session is relaunched
+  agent's, nothing of other sessions in either directory, and it leaves the originals where they were. The second
+  belongs to the same switch, for a Codex session: Codex remembers each thread in a database in its home (or wherever
+  the home's `sqlite_home` setting or `CODEX_SQLITE_HOME` puts it) and resumes the rollout that database names, so a
+  target account that held the thread earlier would resume an older branch of it however whole the copied conversation
+  is. The switch therefore updates the `rollout_path` that database keeps of that thread to the carried head where it
+  leads to another file, and changes nothing else in it; if it cannot, the switch fails before the session is relaunched
   (see "Carrying the conversation" in `docs/product/switching-session-accounts.md`). The third is Grok Build's trust
   store: once Grok's own trust confirmation has been accepted, the one entry Grok wrote into its session's copy of the
   store is carried, unchanged, into the user's own (see "Carrying Grok Build's trust record" in
   `docs/product/folder-trust.md`). The fourth is an account set to share the agent's default configuration: its
-  directory's shareable entries are replaced by links into the default account's directory, its configuration set
-  aside as backups and its conversation history moved into the default directory, the links repaired before each of
-  its sessions launches, and all of it undone when sharing is turned off, together with the paths the default
-  directory's Codex thread database and plugin registries record through the account (see
-  `docs/product/sharing-the-default-configuration.md`). Creating a Codex account's directory that does not exist yet, empty, before its
-  first launch is not an exception: Codex refuses to start without it, and nothing of the user's is in it.
+  directory's shareable entries are replaced by links into the default account's directory, its configuration set aside
+  as backups and its conversation history moved into the default directory, the links repaired before each of its
+  sessions launches, and all of it undone when sharing is turned off, together with the paths the default directory's
+  Codex thread database and plugin registries record through the account (see
+  `docs/product/sharing-the-default-configuration.md`). The fifth is settings saved in a Grok Build session whose source
+  `config.toml` is a link: after the process exits, selected changes are carried into the file that link leads to,
+  leaving the link in place (see "Per-agent specifics a user will notice" below). Creating a Codex account's directory
+  that does not exist yet, empty, before its first launch is not an exception: Codex refuses to start without it, and
+  nothing of the user's is in it.
 
 Where an agent stops to ask whether to trust a folder, Octoboard decides nothing on its behalf: it presses the
 agent's own confirmation, with the keystrokes a person would type — for a project session only after the user has
@@ -217,9 +220,11 @@ the three do differs, and is worth knowing before a value is set:
 
 - **Claude Code** silently lowers an effort the chosen model does not support down to `high`, rather than refusing it.
 - **Codex** refuses an effort the chosen model does not advertise, with an error of its own naming that model.
-- **Grok Build** takes both as flags. Because its session runs against a per-session copy of the Grok configuration
-  file, neither value, and no change the session makes to them while it runs, reaches the user's own Grok
-  configuration (see "Per-agent specifics a user will notice" below).
+- **Grok Build** takes both as flags and saves them in its per-session configuration copy. Neither value as passed
+  at launch reaches the user's own Grok configuration. With a linked source configuration, a model the user selects in
+  the session reaches the file the link leads to when the session exits, if it differs from both the model passed at
+  launch and the copy taken at launch; reasoning effort is never carried back (see "Per-agent specifics a user will
+  notice" below for the rules).
 
 ## The launch environment
 
@@ -279,8 +284,9 @@ Besides the terminal type, the variables set over the snapshot are:
   notice" below). A Grok Build config directory is not passed as `GROK_HOME` itself;
 - for every Grok Build session, `GROK_THEME`, which picks Grok's own colour theme to match the session terminal (see
   "Per-agent specifics a user will notice" below);
-- for a Claude Code session whose account's directory shares the default configuration, `CLAUDE_CODE_REMOTE_MEMORY_DIR` (see
-  "Claude Code's auto memory" in `docs/product/sharing-the-default-configuration.md`).
+- for a Claude Code session whose account's directory shares the default configuration, `CLAUDE_CODE_REMOTE_MEMORY_DIR`
+  (when exactly, an account whose last change of sharing is incomplete included, is in "Claude Code's auto memory" in
+  `docs/product/sharing-the-default-configuration.md`).
 - for a project session, a `core.hooksPath` entry through `GIT_CONFIG_COUNT`, together with `OCTOBOARD_SESSION_ID` and
   `OCTOBOARD_DAEMON_PORT`, which point every git in the agent's process tree at Octoboard's hook dispatchers; those
   still run the user's own git hooks, and report the branches that git creates (see "The session's git hooks" and
@@ -402,12 +408,24 @@ dangling source link has nothing to resolve to, and the session's link points at
 Some of its entries are **copies** taken at launch rather than links. Two are files whose copying has consequences
 worth knowing:
 
-- the Grok configuration file: an edit the user makes to it while a session is running is not picked up by that
-  session, and a setting the session persists (changing its reasoning effort, for instance) lands in Octoboard's copy
-  and is lost when the session ends. Both are re-read from the source home on the next launch. When the account's
-  `config.toml` is a link into the default directory, turning a plugin on, changing the model, or `/theme` rewrites
-  only the copy: that link and the default directory's file are unchanged, so those saves do not reach the shared
-  file.
+- the Grok configuration file: an edit to the source file while a session is running is not picked up by that
+  session. With a plain source `config.toml`, settings the session saves are lost when the session ends. With a
+  source `config.toml` that is a link to an existing file — an account sharing the default configuration, or any home
+  whose `config.toml` the user has linked elsewhere, such as into a dotfiles repository — selected settings are
+  carried into the file the link leads to after the process exits and before the per-session home is removed,
+  leaving the link in place: `ui.theme`, `plugins.enabled`, `plugins.disabled`, and `models.default`. Only values
+  that differ from the copy taken at launch are carried; each plugin list is carried whole, an empty one included,
+  but removing a key does not remove it from the linked file. A model equal to the model passed at launch is
+  excluded, including when the user explicitly selects it again. Reasoning effort, Octoboard's MCP entry and every
+  other setting stay in the copy. The next launch reads the source file afresh.
+
+  The link must still lead to the same file it led to at launch: a link removed, broken or redirected to another file
+  receives nothing. Sessions exiting under the same daemon merge only what they changed into the current file: changes
+  to different settings survive, and for the same setting — a plugin list counting as one — the last exit wins. A
+  session that changed nothing does not restore an earlier value. A simultaneous save from an external Grok process or
+  editor can still race with this. A failure to write is logged, and the per-session home is still removed, so the
+  settings it would have carried are lost; so are they if the Octoboard daemon itself stops while the session is
+  running.
 - the trust store, `trusted_folders.toml`: copied as it is, with nothing added, so a folder the user has not trusted
   Grok with shows Grok's own trust confirmation. The one entry Grok writes into the copy when that confirmation is
   accepted is the exception to its being lost: it is carried into the source home's store (see "Carrying Grok
@@ -445,7 +463,7 @@ time limit on a call to Octoboard's tools** above Octoboard's own limit on a for
 "Waiting for the answer" of `docs/product/session-requests.md`), so that a call which waits for the user, such as a
 session request, is ended by Octoboard's limit and not by Grok's — Grok cancels a call it gives up on, and a
 cancellation withdraws such a request. The limit is set on Octoboard's own entry alone; no other MCP server of the
-user's is touched, and the user's own configuration is untouched because only the copy is written.
+user's is touched, and the injected MCP entry is never carried into the user's own configuration.
 
 **Grok Build's theme follows the session terminal's appearance.** Grok's own default theme is a dark one, which would
 paint dark bands across a terminal in the light appearance, so every Grok Build launch sets `GROK_THEME`:
@@ -464,10 +482,11 @@ account), a session opened by an approved session request, or an archived owner 
 is resumed.
 
 The appearance is taken at each launch and not kept with the session: a running Grok session keeps the theme it was
-launched with when the window's appearance changes later, and its next launch picks the theme afresh. `GROK_THEME`
-takes precedence over the theme set in the Grok configuration file, so a theme the user chose for their own `grok` is
-not used in a session Octoboard launches; the configuration file itself is not changed. Claude Code and Codex are told
-nothing of the appearance.
+launched with when the window's appearance changes later, and its next launch picks the theme afresh. `GROK_THEME` takes
+precedence over the theme set in the Grok configuration file at startup, and does not save a theme into that file. An
+explicit `/theme` saves the chosen theme in the session copy; when the source `config.toml` is linked, it is carried
+into the linked file on exit under the rules above, even when it is the theme the appearance picked. The next launch
+applies the terminal's appearance again. Claude Code and Codex are told nothing of the appearance.
 
 A Grok Build config directory must **already be a Grok home, one Grok has been run against**. Only entries
 that already exist in the source home are linked; for an empty directory, Grok creates its login and session records

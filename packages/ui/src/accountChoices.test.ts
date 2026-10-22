@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { avoidExhaustedAccount, choiceExhaustion, choiceGroups, choiceKey, consoleAccount, currentChoice, expiringWeekly, inheritedAccount, preferExpiringWeekly, projectAccount, settledInitialChoice, switchEntries, type QuotaReadings } from "./accountChoices";
+import { avoidExhaustedAccount, choiceChangingSharing, choiceExhaustion, choiceGroups, choiceKey, consoleAccount, currentChoice, expiringWeekly, incompleteAccount, inheritedAccount, preferExpiringWeekly, projectAccount, settledInitialChoice, switchEntries, type QuotaReadings } from "./accountChoices";
 import { consoleOf, projectOf, sessionOf } from "./gallery/fixtures/builders";
 import { format } from "./i18n/catalog";
 import type { Translate } from "./i18n/catalog";
-import type { Account, AccountQuota, Agent, AgentAvailability, Console, Project, QuotaWindow } from "./protocol";
+import type { Account, AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Project, QuotaWindow } from "./protocol";
 
 const availability = (entries: Partial<Record<Agent, AgentAvailability["availability"]>>): Map<Agent, AgentAvailability> =>
   new Map(
@@ -39,6 +39,49 @@ describe("choiceGroups", () => {
     ["unavailable", "unavailable", false],
   ] as const)("leaves a group selectable unless its agent is known to be missing (%s)", (_, state, selectable) => {
     expect(choiceGroups(accounts, availability({ claude: state }), null, () => "Default")[0].selectable).toBe(selectable);
+  });
+});
+
+describe("choiceGroups and a running sharing change", () => {
+  const sharing = new Map<string, AccountSharing>([
+    ["w", { account: "w", progress: { share: true, phase: "changing" as const, done: 1, total: 3, item: "skills" } }],
+    ["c", { account: "c", in_use: { sessions: 2, signing_in: false } }],
+  ]);
+
+  it("marks only the entry whose change runs, never the default account or one that is merely in use", () => {
+    const groups = choiceGroups(accounts, availability({}), null, () => "Default", undefined, sharing);
+    expect(groups.flatMap((group) => group.entries.map((entry) => [entry.name, entry.changingSharing]))).toEqual([
+      ["Default", false], ["Work", true], ["Default", false], ["Codex work", false], ["Default", false],
+    ]);
+  });
+
+  it("marks nothing without the sharing state", () => {
+    expect(choiceGroups(accounts, availability({}), null, () => "Default").every((group) => group.entries.every((entry) => !entry.changingSharing))).toBe(true);
+  });
+});
+
+describe("an account whose sharing change runs", () => {
+  const sharing = new Map<string, AccountSharing>([["w", { account: "w", progress: { share: true, phase: "changing" as const, done: 0, total: 2 } }]]);
+  const groups = choiceGroups(accounts, availability({}), null, () => "Default", undefined, sharing);
+  const owner = consoleOf("c-1", "Main", { claude_account_id: "w" });
+
+  it("is avoided like a used-up one: the choice moves to the first other account of the agent", () => {
+    expect(avoidExhaustedAccount({ agent: "claude", account: "w" }, groups)).toEqual({ agent: "claude", account: null });
+    expect(avoidExhaustedAccount({ agent: "claude", account: null }, groups)).toEqual({ agent: "claude", account: null });
+  });
+
+  it("stays the choice, flagged, when it is the agent's only account", () => {
+    const only = choiceGroups([accounts[0]!], availability({}), null, () => "Default", undefined, new Map([["w", sharing.get("w")!], ["", { account: "", progress: sharing.get("w")!.progress }]]));
+    expect(choiceChangingSharing({ agent: "claude", account: "w" }, only)).toBe(true);
+    expect(choiceChangingSharing({ agent: "claude", account: null }, only)).toBe(false);
+  });
+
+  it("opens the session choice on another account, and is never preferred by the weekly quota", () => {
+    const settled = settledInitialChoice(owner, undefined, accounts, availability({}), null, groups);
+    expect(settled.choice).toEqual({ agent: "claude", account: null });
+    expect(settled.changingSharing).toBe(false);
+    const entries = groups[0]!.entries;
+    expect(preferExpiringWeekly(entries, 0)).toBeUndefined();
   });
 });
 
@@ -116,7 +159,7 @@ describe("an account whose quota is used up", () => {
   });
 
   it("moves the opening choice to the first other account of the agent, the default account first", () => {
-    expect(open([usedUp("claude", "w")])).toEqual({ choice: { agent: "claude", account: null }, exhaustedBy: undefined });
+    expect(open([usedUp("claude", "w")])).toEqual({ choice: { agent: "claude", account: null }, exhaustedBy: undefined, changingSharing: false });
     expect(open([usedUp("claude", "w"), usedUp("claude", null)]).choice).toEqual({ agent: "claude", account: "w2" });
   });
 
@@ -332,6 +375,14 @@ it("gives each agent's entries keys no other agent's can share", () => {
 
 const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as never, args[0] as never)) as Translate;
 
+describe("switchEntries and a running sharing change", () => {
+  it("marks the account whose change runs, and no other, a removed account's directory never", () => {
+    const sharing = new Map<string, AccountSharing>([["w", { account: "w", progress: { share: false, phase: "changing" as const, done: 0, total: 2 } }], ["gone", { account: "gone", progress: { share: false, phase: "changing" as const, done: 0, total: 2 } }]]);
+    const entries = switchEntries(sessionOf("s", "c-1", "p-1", "Title", "idle", { account_id: "gone", config_dir: "/home/old" }), accounts, t, undefined, undefined, sharing);
+    expect(entries.map((entry) => [entry.name, entry.changingSharing])).toEqual([["Default", false], ["Work", true], ["/home/old", false]]);
+  });
+});
+
 describe("switchEntries", () => {
   const session = (extra = {}) => sessionOf("s", "c-1", "p-1", "Title", "idle", extra);
   const summary = (entries: ReturnType<typeof switchEntries>) =>
@@ -351,5 +402,24 @@ describe("switchEntries", () => {
     const exhausted = (now: number) => switchEntries(session(), accounts, t, undefined, { quotas: [usedUp("claude", "w")], now }).map((entry) => entry.exhaustedBy?.kind);
     expect(exhausted(NOW)).toEqual([undefined, "session"]);
     expect(exhausted(NOW + 120_000)).toEqual([undefined, undefined]);
+  });
+});
+
+describe("incompleteAccount", () => {
+  const half = { ...account("h", "claude", "Half"), share_default_config_incomplete: true };
+  const running: AccountSharing = { account: "h", progress: { share: true, phase: "changing", done: 1, total: 4 } };
+
+  it("names an account whose last sharing change did not finish and none runs", () => {
+    expect(incompleteAccount([half], undefined, "h")).toBe(half);
+  });
+
+  it.each([
+    ["a complete account", [account("h", "claude", "Half")], undefined, "h"],
+    ["the default account", [half], undefined, null],
+    ["no account", [half], undefined, undefined],
+    ["an account that is no longer stored", [half], undefined, "gone"],
+    ["an account whose sharing change runs, which the daemon refuses anyway", [half], new Map([["h", running]]), "h"],
+  ] as const)("names nothing for %s", (_, stored, sharing, id) => {
+    expect(incompleteAccount([...stored], sharing, id)).toBeUndefined();
   });
 });

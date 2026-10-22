@@ -46,7 +46,24 @@ pub(super) enum DirsError {
     /// The account's directory is the default account's own, under another spelling: linking
     /// would make every item a link to itself.
     SameAsDefault,
+    /// The agent's default directory is not the one the links lead into or sharing was started
+    /// into: it has moved.
+    DefaultMoved(String),
     Io(io::Error),
+}
+
+impl DirsError {
+    /// Why the operation could not start, and the whole of it in words.
+    pub fn cause_and_detail(&self) -> (Cause, String) {
+        match self {
+            Self::SameAsDefault => (
+                Cause::Conflict,
+                "it is the default account's own directory".to_string(),
+            ),
+            Self::DefaultMoved(detail) => (Cause::DefaultMoved, detail.clone()),
+            Self::Io(err) => (Cause::of(err), err.to_string()),
+        }
+    }
 }
 
 impl From<io::Error> for DirsError {
@@ -109,7 +126,7 @@ impl Dirs {
 /// What an item was left as by an operation that could not finish it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub(super) enum Left {
+pub enum Left {
     /// As it was before the operation.
     Unchanged,
     /// Renamed to its backup, with nothing linked in its place.
@@ -123,12 +140,87 @@ pub(super) enum Left {
     Absent,
 }
 
+/// Why something could not be brought in line, for a client to explain it in plain words; the
+/// failure's `detail` keeps the system's own text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Cause {
+    /// Not allowed to change a file or directory, or on a read-only volume.
+    PermissionDenied,
+    /// A file is in use: held by another process, or a database locked by one.
+    Busy,
+    /// A file or directory is gone.
+    NotFound,
+    /// The volume or a quota is full, or a file too large for it.
+    NoSpace,
+    /// Something is in the way or not what it has to be: an entry already there, a link leading
+    /// elsewhere, a directory where a file is expected or the other way round.
+    Conflict,
+    /// The agent's default directory is no longer the one the links lead into, or the one sharing
+    /// was started into: turning sharing off, then on again, shares the new one.
+    DefaultMoved,
+    Other,
+}
+
+impl Cause {
+    pub fn of(err: &io::Error) -> Self {
+        use io::ErrorKind::*;
+        match err.kind() {
+            PermissionDenied | ReadOnlyFilesystem => Self::PermissionDenied,
+            ResourceBusy | ExecutableFileBusy | WouldBlock => Self::Busy,
+            NotFound => Self::NotFound,
+            StorageFull | QuotaExceeded | FileTooLarge => Self::NoSpace,
+            AlreadyExists | DirectoryNotEmpty | NotADirectory | IsADirectory => Self::Conflict,
+            _ => Self::Other,
+        }
+    }
+
+    /// For an error of SQLite's, which reports a file system failure by a code of its own.
+    pub fn of_database(err: &rusqlite::Error) -> Self {
+        use rusqlite::ErrorCode::*;
+        match err.sqlite_error_code() {
+            Some(DatabaseBusy | DatabaseLocked) => Self::Busy,
+            Some(PermissionDenied | ReadOnly) => Self::PermissionDenied,
+            Some(DiskFull) => Self::NoSpace,
+            _ => Self::Other,
+        }
+    }
+
+    /// The one cause of `failures`, or `other` when they differ.
+    pub fn of_all(failures: &[Failure]) -> Self {
+        Self::shared(failures.iter().map(|failure| failure.cause))
+    }
+
+    /// The one of `causes`, or `other` when they differ or there are none.
+    pub fn shared(causes: impl IntoIterator<Item = Self>) -> Self {
+        let mut causes = causes.into_iter();
+        match causes.next() {
+            Some(first) if causes.all(|cause| cause == first) => first,
+            _ => Self::Other,
+        }
+    }
+
+    /// The name the wire uses.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::PermissionDenied => "permission_denied",
+            Self::Busy => "busy",
+            Self::NotFound => "not_found",
+            Self::NoSpace => "no_space",
+            Self::Conflict => "conflict",
+            Self::DefaultMoved => "default_moved",
+            Self::Other => "other",
+        }
+    }
+}
+
 /// An item an operation could not bring in line.
-#[derive(Debug, Clone, Serialize)]
-pub(super) struct Failure {
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Failure {
     /// An entry of the account's directory, or for a conversation the agent's own id of it.
     pub item: String,
     pub left: Left,
+    pub cause: Cause,
     pub detail: String,
     /// The Octoboard sessions a conversation belongs to, for a failure about one.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -136,13 +228,18 @@ pub(super) struct Failure {
 }
 
 impl Failure {
-    fn new(item: &SharedItem, left: Left, err: impl std::fmt::Display) -> Self {
+    fn new(item: &SharedItem, left: Left, cause: Cause, detail: impl std::fmt::Display) -> Self {
         Self {
             item: item.name.to_string(),
             left,
-            detail: err.to_string(),
+            cause,
+            detail: detail.to_string(),
             sessions: Vec::new(),
         }
+    }
+
+    fn io(item: &SharedItem, left: Left, err: io::Error) -> Self {
+        Self::new(item, left, Cause::of(&err), err)
     }
 }
 
@@ -228,7 +325,7 @@ fn finish_linked(
     let entry = dirs.account.join(item.name);
     if is_line_history(item.name) {
         return merge_lines(&entry, shared, stamp)
-            .map_err(|err| Failure::new(item, Left::Linked, err));
+            .map_err(|err| Failure::io(item, Left::Linked, err));
     }
     if !(retry_database && is_state_database(item.name)) {
         return Ok(());
@@ -239,7 +336,15 @@ fn finish_linked(
     } else {
         codex_state::repoint_rows(shared, &codex_repoints(dirs))
     };
-    carried.map_err(|err| Failure::new(item, Left::Linked, format!("rows not carried over: {err}")))
+    carried.map_err(|err| {
+        let cause = Cause::of_database(&err);
+        Failure::new(
+            item,
+            Left::Linked,
+            cause,
+            format!("rows not carried over: {err}"),
+        )
+    })
 }
 
 /// Brings `item` under the default directory: the item as the account holds it is backed up
@@ -255,7 +360,8 @@ fn bring_in(
 ) -> Result<(), Failure> {
     let entry = dirs.account.join(item.name);
     let default_entry = dirs.default.join(item.name);
-    let unchanged = |err: io::Error| Failure::new(item, Left::Unchanged, err);
+    let unchanged = |err: io::Error| Failure::io(item, Left::Unchanged, err);
+    let in_the_way = |detail: String| Failure::new(item, Left::Unchanged, Cause::Conflict, detail);
     let present = lstat(&entry).map_err(unchanged)?;
     let target = resolve(&default_entry).map_err(unchanged)?;
     if let Some(target) = &target {
@@ -268,10 +374,10 @@ fn bring_in(
             && present.is_some()
             && resolve(&entry).map_err(unchanged)?.as_ref() == Some(target)
         {
-            return Err(unchanged(io::Error::other(format!(
+            return Err(in_the_way(format!(
                 "`{}` leads into the account's own directory",
                 default_entry.display()
-            ))));
+            )));
         }
     }
     let history = item.class == ItemClass::ConversationHistory;
@@ -279,10 +385,10 @@ fn bring_in(
     if history && is_link(&present) && !sharing_link {
         // Conversation history the account keeps elsewhere through a link of its own: what it
         // leads to is not the account's to move, and setting the link aside would hide it.
-        return Err(unchanged(io::Error::other(format!(
+        return Err(in_the_way(format!(
             "`{}` is a link of the account's own",
             entry.display()
-        ))));
+        )));
     }
     let holds_own = present.is_some() && !is_link(&present);
     if target.is_none() && item.kind == ItemKind::File && !(history && holds_own) {
@@ -297,7 +403,7 @@ fn bring_in(
         std::fs::rename(&entry, backup_path(&entry, stamp)).map_err(unchanged)?;
         left = Left::BackedUp;
     }
-    let failed = |left: Left, err: io::Error| Failure::new(item, left, err);
+    let failed = |left: Left, err: io::Error| Failure::io(item, left, err);
     if holds_own {
         let is_dir = present.as_ref().is_some_and(|metadata| metadata.is_dir());
         match (item.class, item.kind, &target) {
@@ -307,12 +413,11 @@ fn bring_in(
             }
             (ItemClass::ConversationHistory, ItemKind::Directory, Some(into)) if is_dir => {
                 if !into.is_dir() {
-                    return Err(failed(
+                    return Err(Failure::new(
+                        item,
                         left,
-                        io::Error::other(format!(
-                            "`{}` is not a directory",
-                            default_entry.display()
-                        )),
+                        Cause::Conflict,
+                        format!("`{}` is not a directory", default_entry.display()),
                     ));
                 }
                 merge_move(&entry, into, &backup_path(&entry, stamp))
@@ -335,7 +440,13 @@ fn bring_in(
                     // rollouts are in the default directory now.
                     return codex_state::repoint_rows(&shared, &codex_repoints(dirs)).map_err(
                         |err| {
-                            Failure::new(item, Left::Linked, format!("rows not repointed: {err}"))
+                            let cause = Cause::of_database(&err);
+                            Failure::new(
+                                item,
+                                Left::Linked,
+                                cause,
+                                format!("rows not repointed: {err}"),
+                            )
                         },
                     );
                 }
@@ -356,7 +467,13 @@ fn bring_in(
                 return codex_state::bring_rows(shared, &aside, &codex_repoints(dirs))
                     .map(|_| ())
                     .map_err(|err| {
-                        Failure::new(item, Left::Linked, format!("rows not carried over: {err}"))
+                        let cause = Cause::of_database(&err);
+                        Failure::new(
+                            item,
+                            Left::Linked,
+                            cause,
+                            format!("rows not carried over: {err}"),
+                        )
                     });
             }
             _ => {
@@ -379,13 +496,32 @@ fn bring_in(
     finish_linked(item, dirs, &target, stamp, retry_database)
 }
 
+/// Tells how far a change has got: the entries done so far, and the one being processed now.
+pub(super) type Report<'a> = &'a mut dyn FnMut(usize, &str);
+
+/// How many entries a change of `agent`'s sharing processes: every item of the catalog and, when
+/// turning sharing off, each of the `conversations` taken back.
+pub(super) fn entries(agent: Agent, conversations: usize) -> usize {
+    shared_items(agent).len() + conversations
+}
+
 /// Shares every item of `agent`'s catalog the default directory can take, backing up what the
 /// account had under `stamp`. A retry before turning sharing on has `completed` once also redoes
 /// the database work an earlier attempt may have left undone.
-pub(super) fn turn_on(agent: Agent, dirs: &Dirs, stamp: &str, completed: bool) -> Vec<Failure> {
+pub(super) fn turn_on(
+    agent: Agent,
+    dirs: &Dirs,
+    stamp: &str,
+    completed: bool,
+    report: Report,
+) -> Vec<Failure> {
     shared_items(agent)
         .iter()
-        .filter_map(|item| bring_in(item, dirs, stamp, !completed).err())
+        .enumerate()
+        .filter_map(|(done, item)| {
+            report(done, item.name);
+            bring_in(item, dirs, stamp, !completed).err()
+        })
         .collect()
 }
 
@@ -402,16 +538,20 @@ pub(super) fn turn_on(agent: Agent, dirs: &Dirs, stamp: &str, completed: bool) -
 /// rollouts through an empty directory for every account still sharing, and the plugin
 /// registries. An item whose records could not be repointed stays linked, so nothing it holds
 /// is left unreachable.
+///
+/// The repointing is told as part of the first entry, under the item whose records it rewrites.
 pub(super) fn turn_off(
     agent: Agent,
     dirs: &Dirs,
     stamp: &str,
     conversations: &[Conversation],
+    report: Report,
 ) -> Vec<Failure> {
     let items = shared_items(agent);
     let mut failures = Vec::new();
     let mut kept: Vec<&str> = Vec::new();
     for (name, file) in registries::registries(agent) {
+        report(0, name);
         let to = resolve_or_spelled(&dirs.default.join(name));
         let from = [dirs.account.join(name), dirs.account_real.join(name)];
         if let Err(err) = registries::repoint(&dirs.default.join(name).join(file), &from, &to) {
@@ -419,6 +559,7 @@ pub(super) fn turn_off(
                 failures.push(Failure::new(
                     item,
                     Left::Linked,
+                    Cause::of(&err),
                     format!("`{file}` not repointed: {err}"),
                 ));
             }
@@ -426,29 +567,36 @@ pub(super) fn turn_off(
         }
     }
     for item in items.iter().filter(|item| is_state_database(item.name)) {
-        let repointed = resolve(&dirs.default.join(item.name)).and_then(|database| {
-            database.map_or(Ok(()), |database| {
-                codex_state::repoint_rows(&database, &codex_repoints(dirs))
-                    .map_err(io::Error::other)
-            })
-        });
-        if let Err(err) = repointed {
+        report(0, item.name);
+        let repointed = match resolve(&dirs.default.join(item.name)) {
+            Ok(None) => Ok(()),
+            Ok(Some(database)) => codex_state::repoint_rows(&database, &codex_repoints(dirs))
+                .map_err(|err| (Cause::of_database(&err), err.to_string())),
+            Err(err) => Err((Cause::of(&err), err.to_string())),
+        };
+        if let Err((cause, err)) = repointed {
             failures.push(Failure::new(
                 item,
                 Left::Linked,
+                cause,
                 format!("rows not repointed: {err}"),
             ));
             kept.extend([item.name, "sessions", "archived_sessions"]);
         }
     }
-    for item in items.iter().filter(|item| !kept.contains(&item.name)) {
+    for (done, item) in items.iter().enumerate() {
+        report(done, item.name);
+        if kept.contains(&item.name) {
+            continue;
+        }
         if let Err(failure) = take_out(item, dirs, stamp) {
             failures.push(failure);
         }
     }
     // Each directory is listed once for all the conversations taken back.
     let mut locator = crate::agent_records::Locator::default();
-    for conversation in conversations {
+    for (done, conversation) in conversations.iter().enumerate() {
+        report(items.len() + done, &conversation.agent_session_id);
         if let Err(failure) = take_back(&mut locator, agent, dirs, conversation, stamp) {
             failures.push(failure);
         }
@@ -460,14 +608,14 @@ fn take_out(item: &SharedItem, dirs: &Dirs, stamp: &str) -> Result<(), Failure> 
     let entry = dirs.account.join(item.name);
     let backup = turn_on_backup(dirs, item, stamp);
     let has_backup = std::fs::symlink_metadata(&backup).is_ok();
-    let present = lstat(&entry).map_err(|err| Failure::new(item, Left::Linked, err))?;
+    let present = lstat(&entry).map_err(|err| Failure::io(item, Left::Linked, err))?;
     match &present {
         Some(_)
             if is_link(&present)
                 && ((has_backup && item.class == ItemClass::Configuration)
                     || is_sharing_link(&entry, item, dirs)) =>
         {
-            std::fs::remove_file(&entry).map_err(|err| Failure::new(item, Left::Linked, err))?;
+            std::fs::remove_file(&entry).map_err(|err| Failure::io(item, Left::Linked, err))?;
         }
         // The account's own entry, or a link of the user's.
         Some(_) => return Ok(()),
@@ -475,7 +623,7 @@ fn take_out(item: &SharedItem, dirs: &Dirs, stamp: &str) -> Result<(), Failure> 
         None if has_backup && item.class == ItemClass::Configuration => {}
         None => return Ok(()),
     }
-    let absent = |err: io::Error| Failure::new(item, Left::Absent, err);
+    let absent = |err: io::Error| Failure::io(item, Left::Absent, err);
     match (item.class, item.kind) {
         (ItemClass::Configuration, _) if has_backup => {
             std::fs::rename(backup, &entry).map_err(absent)?;
@@ -509,7 +657,7 @@ pub(super) fn repair(agent: Agent, dirs: &Dirs, stamp: &str) -> Repaired {
         let present = match lstat(&entry) {
             Ok(present) => present,
             Err(err) => {
-                failures.push(Failure::new(item, Left::Unchanged, err));
+                failures.push(Failure::io(item, Left::Unchanged, err));
                 continue;
             }
         };

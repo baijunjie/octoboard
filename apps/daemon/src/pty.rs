@@ -178,6 +178,12 @@ pub struct PtyCore {
     /// leaving that process unable to start any child at all until it was restarted.
     child: Mutex<Box<dyn Child + Send + Sync>>,
     reaped: AtomicBool,
+    /// `reaped` gates signals; this gates observing the exit. It is set once the exit hook and
+    /// scratch removal have run, or unwound. Pollers read it without waiting.
+    exit_complete: AtomicBool,
+    /// Held by the reaping observer from before `reaped` is published until `exit_complete` is
+    /// set, so a stop that finds the child reaped waits for the cleanup on it.
+    exit_cleanup: Mutex<()>,
     /// The child's place in the cleanup that kills the daemon's processes when it goes down, held
     /// from [`Self::enter_crash_cleanup`] until the child has exited, and given up before it is
     /// reaped.
@@ -191,7 +197,8 @@ pub struct PtyCore {
     /// A scratch directory of the process's own, removed once the process is gone.
     scratch_dir: Mutex<Option<std::path::PathBuf>>,
     /// Runs after the process is reaped and before [`Self::clean_scratch_dir`] removes the
-    /// directory, so it can still read what the process wrote there.
+    /// directory, so it can still read what the process wrote there. It runs under
+    /// `exit_cleanup`, so every stop waits for it, and it must not stop this process itself.
     before_scratch_removal: Mutex<Option<Box<dyn FnOnce() + Send>>>,
     /// Whether what the process leaves running in its session is killed once it exits; see
     /// [`NewPty::kill_session_leftovers`].
@@ -212,8 +219,18 @@ pub struct NewPty {
     /// that moved to a process group of their own. Left off, whatever the process started and
     /// detached (`nohup`, `disown`) keeps running after it.
     pub kill_session_leftovers: bool,
-    /// Runs after the process is reaped and before its scratch directory is removed.
+    /// Runs after the process is reaped and before its scratch directory is removed. A stop of
+    /// the process waits for it, so it must not stop the process itself.
     pub before_scratch_removal: Option<Box<dyn FnOnce() + Send>>,
+}
+
+/// Marks the exit complete when dropped, so a hook that unwinds still lets observers see the exit.
+struct ExitComplete<'a>(&'a AtomicBool);
+
+impl Drop for ExitComplete<'_> {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::Release);
+    }
 }
 
 impl PtyCore {
@@ -235,6 +252,8 @@ impl PtyCore {
             reader: Mutex::new(None),
             child: Mutex::new(spawned.child),
             reaped: AtomicBool::new(false),
+            exit_complete: AtomicBool::new(false),
+            exit_cleanup: Mutex::new(()),
             crash_cleanup: Mutex::new(None),
             fan: Mutex::new(Fan {
                 ring: RingBuffer::new(RING_CAPACITY),
@@ -575,11 +594,12 @@ impl PtyCore {
         master.take();
     }
 
-    /// Polls the child without blocking. Returns `true` once it has exited; from that point on the
-    /// pid must not be signalled again.
+    /// Polls the child, returning `true` only after its exit hook and scratch removal finish.
+    /// The observer that reaps it runs that cleanup; concurrent pollers return `false` while it
+    /// is in progress, without waiting on the hook.
     pub fn poll_exit(&self) -> bool {
         if self.reaped.load(Ordering::Acquire) {
-            return true;
+            return self.exit_complete.load(Ordering::Acquire);
         }
         let child = self.child.lock().expect("child mutex poisoned");
         self.poll_exit_locked(child)
@@ -590,7 +610,7 @@ impl PtyCore {
     /// from being reaped between its check and its `kill`.
     fn poll_exit_locked(&self, mut child: MutexGuard<'_, Box<dyn Child + Send + Sync>>) -> bool {
         if self.reaped.load(Ordering::Acquire) {
-            return true;
+            return self.exit_complete.load(Ordering::Acquire);
         }
         // The crash cleanup signals by number, so the child leaves it while it is exited but not
         // yet reaped, its pid still reserved. When `waitid` cannot tell, `try_wait` decides, and
@@ -625,12 +645,32 @@ impl PtyCore {
             }
         };
         if exited {
+            let _cleanup = self.lock_exit_cleanup();
             self.reaped.store(true, Ordering::Release);
+            // Dropped before `_cleanup`, so a stop waiting on the lock finds the exit complete.
+            let _complete = ExitComplete(&self.exit_complete);
             self.leave_crash_cleanup();
             drop(child);
             self.clean_scratch_dir();
         }
         exited
+    }
+
+    /// A stop already blocks for the child; once reaped, it also waits for whichever observer
+    /// owns cleanup, without keeping the child lock needed by signal's pid-safety check.
+    fn wait_for_reaped_cleanup(&self) -> bool {
+        if !self.reaped.load(Ordering::Acquire) {
+            return false;
+        }
+        let _cleanup = self.lock_exit_cleanup();
+        true
+    }
+
+    /// The lock guards no data, so one poisoned by an unwinding hook is still good to wait on.
+    fn lock_exit_cleanup(&self) -> MutexGuard<'_, ()> {
+        self.exit_cleanup
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     fn clean_scratch_dir(&self) {
@@ -662,16 +702,16 @@ impl PtyCore {
     /// signals are gated on the child not having been reaped, which is what keeps the pid (and the
     /// process group that the `setsid()` in `portable-pty` gave it) from being a number that now
     /// belongs to something else. **Blocks** until the process is gone, or a few seconds past the
-    /// kill.
+    /// kill. Once reaped, waits for the exit hook and scratch removal too.
     pub fn stop(&self, polite: libc::c_int) {
-        if self.poll_exit() {
+        if self.poll_exit() || self.wait_for_reaped_cleanup() {
             return;
         }
         self.signal(polite, false);
 
         let deadline = Instant::now() + STOP_GRACE;
         while Instant::now() < deadline {
-            if self.poll_exit() {
+            if self.poll_exit() || self.wait_for_reaped_cleanup() {
                 return;
             }
             std::thread::sleep(Duration::from_millis(50));
@@ -684,12 +724,14 @@ impl PtyCore {
         self.signal(libc::SIGKILL, true);
         let deadline = Instant::now() + Duration::from_secs(1);
         while Instant::now() < deadline {
-            if self.poll_exit() {
+            if self.poll_exit() || self.wait_for_reaped_cleanup() {
                 return;
             }
             std::thread::sleep(Duration::from_millis(50));
         }
-        tracing::warn!(terminal = %self.label, pid = self.pid, "the process is still alive after SIGKILL");
+        if !self.wait_for_reaped_cleanup() {
+            tracing::warn!(terminal = %self.label, pid = self.pid, "the process is still alive after SIGKILL");
+        }
     }
 
     /// Enters the child in the cleanup that kills the daemon's processes when it goes down
@@ -1082,5 +1124,81 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&marker).expect("marker"), "kept");
         assert!(!dir.exists());
         std::fs::remove_file(&marker).ok();
+    }
+
+    #[test]
+    fn an_exit_is_not_observable_until_the_scratch_hook_finishes() {
+        use std::sync::atomic::Ordering;
+        use std::sync::{mpsc, Arc};
+
+        let dir = crate::test_support::ScratchDir::new("exit-cleanup-visible");
+        let scratch = dir.join("session");
+        std::fs::create_dir(&scratch).expect("session scratch");
+        let marker = dir.join("written-back");
+        let marker_for_hook = marker.clone();
+        let (entered, hook_started) = mpsc::channel();
+        let (release, released) = mpsc::channel();
+        let mut cmd = portable_pty::CommandBuilder::new("/bin/bash");
+        cmd.args(["-c", "exit 0"]);
+        let core = Arc::new(super::PtyCore::new(super::NewPty {
+            label: "exit-cleanup-visible".to_string(),
+            spawned: super::spawn(cmd, 24, 80).expect("process"),
+            scratch_dir: Some(scratch.clone()),
+            kill_session_leftovers: false,
+            before_scratch_removal: Some(Box::new(move || {
+                entered.send(()).expect("hook entered");
+                released
+                    .recv_timeout(crate::test_support::PATIENCE)
+                    .expect("hook released");
+                std::fs::write(marker_for_hook, "saved").expect("writeback");
+            })),
+        }));
+        let reaping = core.clone();
+        let observer = std::thread::spawn(move || {
+            let deadline = Instant::now() + crate::test_support::PATIENCE;
+            while !reaping.poll_exit() {
+                assert!(Instant::now() < deadline, "the process never exited");
+                std::thread::yield_now();
+            }
+        });
+        hook_started
+            .recv_timeout(crate::test_support::PATIENCE)
+            .expect("the observer reached the hook");
+        assert!(core.reaped.load(Ordering::Acquire));
+        assert!(core.exit_cleanup.try_lock().is_err());
+        assert!(scratch.exists());
+        assert!(!marker.exists());
+        // The channel holds cleanup at an exact boundary: this second observer must return
+        // without waiting, but cannot announce completion before the writeback is visible.
+        let complete_while_hook_held = core.poll_exit();
+        // A stop finding the child reaped must likewise not return until the hook is done.
+        let (stopped, stop_returned) = mpsc::channel();
+        let stopping = core.clone();
+        let stopper = std::thread::spawn(move || {
+            stopping.stop(libc::SIGTERM);
+            stopped.send(()).expect("stop returned");
+        });
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        let stop_returned_while_hook_held = stop_returned.try_recv().is_ok();
+        release.send(()).expect("release cleanup");
+        assert!(
+            !stop_returned_while_hook_held,
+            "the stop returned before the exit hook finished"
+        );
+        stop_returned
+            .recv_timeout(crate::test_support::PATIENCE)
+            .expect("the stop returned once cleanup finished");
+        assert_eq!(
+            std::fs::read_to_string(&marker).expect("writeback"),
+            "saved"
+        );
+        assert!(!scratch.exists());
+        stopper.join().expect("stopper joined");
+        observer.join().expect("exit observer joined");
+        assert!(
+            !complete_while_hook_held,
+            "cleanup was announced prematurely"
+        );
+        assert!(core.poll_exit());
     }
 }

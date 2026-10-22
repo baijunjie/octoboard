@@ -1,7 +1,7 @@
 import type { Account, AccountQuota, Agent, AgentAvailability, Console, Project, Settings } from "../../protocol";
 import type { Scenario } from "../scenario";
 import type { Ui } from "../interact";
-import { ALL_AGENTS, SAMPLE, minutesAgo, minutesFromNow, projectOf, sessionOf, snapshotState } from "./builders";
+import { ALL_AGENTS, SAMPLE, accountSharingOf, minutesAgo, minutesFromNow, projectOf, sessionOf, snapshotState } from "./builders";
 import { quotaOf, quotaWindow } from "./quotas";
 
 const GROUP = "Sidebar sessions";
@@ -78,6 +78,8 @@ const website = { ...web, default_agent: "claude" as const };
 const searchApi = projectOf("p-api", console_.id, "Search API", { default_agent: "codex" });
 const chat = projectOf("p-chat", console_.id, "Chat Bot", { default_agent: "grok" });
 /** A project whose Claude Code sessions name Work, the spent account, to run under. */
+/** A project whose Claude Code sessions name Client to run under. */
+const onClient = { ...website, claude_account_id: { kind: "account" as const, id: "a-client" } };
 const onWork = { ...website, claude_account_id: { kind: "account" as const, id: "a-work" } };
 
 /** The console whose sessions run on Codex, for the buttons that create one. */
@@ -102,13 +104,13 @@ const openSessionDialog = (ui: Ui) => ui.press(ui.t("sidebar.project.openSession
 const accountField = (ui: Ui, agent: string) => ui.t("dialog.agentSettings.account", { agent });
 
 /** A Claude Code session that can be switched, with its sibling, on the default account. */
-const switchState = (accountQuotas: AccountQuota[]) => ({
+const switchState = (accountQuotas: AccountQuota[], onAccount?: Account) => ({
   ...snapshotState({
     consoles: [console_],
     projects: [website],
     sessions: [
       sessionOf("s-switch-hub", console_.id, undefined, "Release coordinator", "idle"),
-      sessionOf("s-switch-work", console_.id, website.id, "Review the release checklist", "idle"),
+      sessionOf("s-switch-work", console_.id, website.id, "Review the release checklist", "idle", onAccount && { account_id: onAccount.id, config_dir: onAccount.config_dir }),
       sessionOf("s-switch-bound", console_.id, website.id, "Verify the migration", "waiting_user", { bound_to: "s-switch-hub" }),
     ],
     settings,
@@ -121,6 +123,24 @@ const openSwitchTo = (account: string) => [
   (ui: Ui) => ui.press(ui.t("sidebar.session.switchAccount")),
   (ui: Ui) => ui.press(account),
 ];
+
+/** Client is turning sharing of the default configuration on, 2 entries of 9 done: while that runs the daemon refuses a
+ * session on it, whatever its quota. */
+const clientChangingSharing = accountSharingOf([{ account: "a-client", progress: { share: true, phase: "changing", done: 2, total: 9, item: "skills/" } }]);
+
+/** Client's last sharing change did not finish and none runs now, so starting a session on it asks first. */
+const clientIncomplete: Settings = {
+  ...settings,
+  accounts: accounts.map((account) => (account.id === "a-client" ? { ...account, share_default_config_incomplete: true } : account)),
+};
+
+/** Team's, Codex's second account, instead: the account whose sharing switch Settings is asked to show, on a tab other
+ * than the first. */
+const teamIncomplete: Settings = {
+  ...settings,
+  accounts: accounts.map((account) => (account.id === "a-team" ? { ...account, share_default_config_incomplete: true } : account)),
+};
+const onTeam = { ...searchApi, codex_account_id: { kind: "account" as const, id: "a-team" } };
 
 /** When the daemon, which holds a newer reading than the window, refuses: the five-hour window resets in 95 minutes. */
 const refusedWithReset = {
@@ -143,6 +163,15 @@ export const quotaGatingScenarios: Scenario[] = [
     title: "New session, account picker with quota bars",
     description: "Website would run on Work, whose quota is used up, so the Claude Code account field opens on Default, the first account with quota left, and the open picker lists every account with a compact usage bar before its name: the five-hour window's bar with the weekly window's thin one right under it. Default has plenty left and is selected; Work is unselectable, its name and bar faded and its reason at full contrast under the name on two lines, \"Used up\" and when it resets; Personal is nearly empty; Client has no reading yet and shows an empty track.",
     state: launchState([onWork], claudeQuotas),
+    steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Claude Code"))],
+  },
+  {
+    id: "dialog-new-session-sharing-picker",
+    group: GROUP,
+    category: "normal",
+    title: "New session, account picker with a sharing change running",
+    description: "Website would run on Client, whose sharing change is running, so the Claude Code account field opens on Default instead, with no alert. The open picker lists Default (selected), Work, Personal and Client, each with an empty usage track, none having a reading yet. Client is unselectable, its name and track faded and the short reason \"Changing sharing\" at full contrast under the name; the other accounts can be chosen.",
+    state: { ...launchState([onClient], []), accountSharing: clientChangingSharing },
     steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Claude Code"))],
   },
   {
@@ -201,6 +230,52 @@ export const quotaGatingScenarios: Scenario[] = [
     steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Grok Build"))],
   },
   {
+    id: "dialog-new-session-incomplete-launch",
+    group: GROUP,
+    category: "exceptional",
+    title: "New session, the account's last sharing change did not finish",
+    description: "Website runs on Client, whose last sharing change did not finish, so Open asks first: a confirmation titled \"Start on Client?\" opens over the session dialog, which stays behind it. It says the configuration and conversations may be incomplete and offers two buttons, View in Settings and, last, the primary Start anyway, which is not destructive and holds the focus; there is no Cancel, and the dialog's close button is the way to dismiss it.",
+    state: { ...launchState([onClient], []), settings: clientIncomplete },
+    steps: [openSessionDialog, (ui) => ui.confirm()],
+  },
+  {
+    id: "dialog-switch-account-incomplete-launch",
+    group: GROUP,
+    category: "exceptional",
+    title: "Switch account, the target's last sharing change did not finish",
+    description: "Switching the session to Client, whose last sharing change did not finish: after Confirm in the switch dialog, the \"Start on Client?\" confirmation opens over it, which stays behind with its Confirm button pending until the question is answered. The question's buttons are View in Settings and the focused, primary Start anyway, with no Cancel; the dialog's close button dismisses it. Nothing has been switched yet.",
+    state: { ...switchState([]), settings: clientIncomplete },
+    steps: [...openSwitchTo("Client"), (ui) => ui.confirm()],
+  },
+  {
+    id: "dialog-resume-incomplete-launch",
+    group: GROUP,
+    category: "exceptional",
+    title: "Resume by selecting, the account's last sharing change did not finish",
+    description: "Selecting Website's interrupted session, which ran on Client, whose last sharing change did not finish, would resume it, so the window asks first: a \"Start on Client?\" confirmation opens over the window, saying the configuration and conversations may be incomplete. Its buttons are View in Settings and the primary Start anyway, with no Cancel (the dialog's close button dismisses it); Start anyway holds the focus and keeps it while the session's terminal attaches. Nothing has been resumed yet.",
+    state: {
+      ...snapshotState({
+        consoles: [console_],
+        projects: [website],
+        sessions: [
+          sessionOf("s-resume-incomplete", console_.id, website.id, "Port the importer to the new parser", "interrupted", { account_id: "a-client", config_dir: "/Users/dev/.claude-client" }),
+        ],
+        settings: clientIncomplete,
+      }),
+      agentAvailability: available,
+    },
+    steps: [(ui) => ui.press(ui.session("Port the importer to the new parser"))],
+  },
+  {
+    id: "settings-accounts-from-incomplete-launch",
+    group: "Settings",
+    category: "exceptional",
+    title: "Settings opened from the question about an account's unfinished sharing change",
+    description: "Search API runs on Team, a Codex account whose last sharing change did not finish. Open asked first, and View in Settings was pressed: the launch is cancelled, the question and the session dialog beneath it are gone, and Settings is open on Agent accounts with the Codex tab selected. Team's Share default configuration switch, shown on, its position before the change, is scrolled into view with the focus ring on it, and the warning that the last attempt to turn sharing off did not finish sits right below.",
+    state: { ...launchState([onTeam], []), settings: teamIncomplete },
+    steps: [openSessionDialog, (ui) => ui.confirm(), (ui) => ui.press(ui.t("dialog.incompleteLaunch.viewSettings"))],
+  },
+  {
     id: "dialog-new-session-quota-refused",
     group: GROUP,
     category: "exceptional",
@@ -217,6 +292,30 @@ export const quotaGatingScenarios: Scenario[] = [
     title: "Switch account menu, an account used up",
     description: "The row's Switch account submenu lists Default (current), Work, Personal and Client; each account shows its compact usage bar in place of the key icon, as in the account picker. Work, whose five-hour quota is used up, is greyed out and cannot be chosen, with its reason on two lines under its name, \"Used up\" and when it resets (arrow keys still reach it, and its accessible name carries the reason); Personal, nearly spent, and Client, not read yet (an empty track), can be chosen.",
     state: switchState(claudeQuotas),
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Review the release checklist" })),
+      (ui) => ui.press(ui.t("sidebar.session.switchAccount")),
+    ],
+  },
+  {
+    id: "sidebar-session-switch-account-sharing-menu",
+    group: GROUP,
+    category: "normal",
+    title: "Switch account menu, an account whose sharing change runs",
+    description: "The row's Switch account submenu lists Default (current), Work, Personal and Client. Client, whose sharing change is running, is greyed out and cannot be chosen, with the short reason \"Changing sharing\" under its name (arrow keys still reach it; its accessible name stays \"Client\" and the reason is its description); the others can be chosen.",
+    state: { ...switchState([]), accountSharing: clientChangingSharing },
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Review the release checklist" })),
+      (ui) => ui.press(ui.t("sidebar.session.switchAccount")),
+    ],
+  },
+  {
+    id: "sidebar-session-switch-account-sharing-own-menu",
+    group: GROUP,
+    category: "exceptional",
+    title: "Switch account menu, the session's own account is changing its sharing",
+    description: "The row's session is on Client, whose sharing change is running, so the daemon would refuse to move it away or hand it off. Every other entry in the Switch account submenu, Default, Work and Personal, is greyed out with the short reason \"Account changing sharing\" under its name and cannot be chosen; Client stays marked as current. In the menu behind it, Hand off is disabled too, with the same reason under its name.",
+    state: { ...switchState([], accounts[2]), accountSharing: clientChangingSharing },
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Review the release checklist" })),
       (ui) => ui.press(ui.t("sidebar.session.switchAccount")),

@@ -86,8 +86,9 @@ export function SettingsDialog({
    * names no section renders no panel and never focuses a tab, which would lose the dialog's keyboard rules. */
   initialSection?: SettingsSectionId;
   /** What the dialog is asked to show, first on opening and again by a request made while it is open (each has
-   * its own `nonce`): a section, and the Add agent dialog in front for `addAgent`. */
-  navigation?: { nonce: number; section: SettingsSectionId | undefined; addAgent: boolean };
+   * its own `nonce`): a section, the Add agent dialog in front for `addAgent`, and an account's sharing switch to
+   * focus for `account`. */
+  navigation?: { nonce: number; section: SettingsSectionId | undefined; addAgent: boolean; account?: string };
   onClose: () => void;
 }): React.ReactElement {
   const t = useT();
@@ -95,21 +96,25 @@ export function SettingsDialog({
   const isNarrow = useIsNarrow();
   const [sectionId, setSectionId] = useState<string>(navigation?.section ?? initialSection);
   const addAgentOnOpen = navigation?.addAgent ?? false;
+  // Both ask the Agent accounts section to take focus, in place of the section's tab.
+  const sectionTakesFocus = addAgentOnOpen || navigation?.account !== undefined;
   // Taken up once by the Agent accounts section, which may be mounted again later by switching back to it.
   const [addAgentPending, setAddAgentPending] = useState(addAgentOnOpen);
+  const [accountPending, setAccountPending] = useState(navigation?.account);
   const [dismissAccountForms, setDismissAccountForms] = useState(0);
-  const accountsNavigation = useMemo(() => ({ pending: addAgentPending, consume: () => setAddAgentPending(false), dismissForms: dismissAccountForms }), [addAgentPending, dismissAccountForms]);
+  const accountsNavigation = useMemo(() => ({ pending: addAgentPending, consume: () => setAddAgentPending(false), account: accountPending, consumeAccount: () => setAccountPending(undefined), dismissForms: dismissAccountForms }), [addAgentPending, accountPending, dismissAccountForms]);
   const lastNonce = useRef(navigation?.nonce);
-  // Counts the requests whose section's tab takes focus (all but those for the Add agent dialog).
+  // Counts the requests whose section's tab takes focus (all but those for the Add agent dialog or an account).
   const [tabFocusRequests, setTabFocusRequests] = useState(0);
   useEffect(() => {
     if (!navigation || navigation.nonce === lastNonce.current) return;
     lastNonce.current = navigation.nonce;
     if (navigation.section) setSectionId(navigation.section);
     setAddAgentPending(navigation.addAgent);
+    setAccountPending(navigation.account);
     // Dismiss account forms before showing the requested section or Add agent dialog.
     setDismissAccountForms((count) => count + 1);
-    if (!navigation.addAgent) setTabFocusRequests((count) => count + 1);
+    if (!navigation.addAgent && navigation.account === undefined) setTabFocusRequests((count) => count + 1);
   }, [navigation?.nonce]);
   const selectedRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -141,7 +146,7 @@ export function SettingsDialog({
     selectedRef.current = tab;
     if (tab && !focusedOnOpen.current) {
       focusedOnOpen.current = true;
-      if (!addAgentOnOpen) tab.focus();
+      if (!sectionTakesFocus) tab.focus();
     }
     // The row of tabs below the breakpoint scrolls, so a section picked from a link may start off
     // screen. Only the tab row itself moves (`block: "nearest"` leaves the dialog where it is).

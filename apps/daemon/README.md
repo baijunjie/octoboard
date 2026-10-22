@@ -55,10 +55,10 @@ once.
 | `src/relocate.rs` | Copying a session's conversation record, with what the agent keeps beside it, between account configuration directories for an account switch, and `locate`, which finds an agent's record of a conversation in a configuration directory (also what `locate_conversation_to_resume` searches with) |
 | `src/account_dirs.rs` | An account's configuration directory as text, no file system access: `normalize_account_dir` (how what the user typed is stored) and `account_dir_key` (how two stored directories are compared) |
 | `src/shared_items.rs` | The catalog, per agent, of the entries of an account's configuration directory that may be shared with the default account's configuration directory (`shared_items`, of `SharedItem`s): each is a file or a directory, and configuration or conversation history; credentials and per-machine state are absent |
-| `src/shared_config/` | An account sharing its agent's default configuration: its choice and its carrying out, linking the catalog's items into the default directory and undoing that, and the hooks the coordinator calls around launches, account switches and deletions (below) |
+| `src/shared_config/` | An account sharing its agent's default configuration: its choice, changing it at once under the account's lock with progress, linking the catalog's items into the default directory and undoing that, and the hooks the coordinator calls around launches, account switches and deletions (below) |
 | `src/outbox.rs` | The per-session ordered queue every message Octoboard writes into an agent passes through, including what each drain does when a dialog of the agent's is up (`agent_dialogs.rs`'s `WrittenMessage`: kept as a draft, discarded, or diverted) |
 | `src/agent_dialogs.rs` | Dialogs and views an agent raises that only a person can answer and no hook announces (Claude Code's resume dialogs, Enter notices and background-agent views; Codex's sign-in, resume working-directory chooser, model migration and rate-limit nudge; Grok Build's usage-limit modal): `recognise` finds one on a live session's rendered screen, `watch` is the per-session task that holds the session's writes and reads as waiting for the user while one is up and lets go when the screen shows none, and `WrittenMessage` classifies what a message written into it becomes |
-| `src/store.rs` | The coordinator's SQLite storage: consoles, projects, sessions, pages, agent accounts (with their sharing choice and whether a change of it is pending), each agent's default account name, the added agents list, branch origins, trusted folders, user settings and the host table |
+| `src/store.rs` | The coordinator's SQLite storage: consoles, projects, sessions, pages, agent accounts (with their sharing choice and whether the last change of it is incomplete), each agent's default account name, the added agents list, branch origins, trusted folders, user settings and the host table |
 | `src/state.rs` | Shared daemon state: session status and turn bookkeeping, the shell terminal registry, record-watch bookkeeping, each project's live git status and check claim, pending `request_session` requests, agent availability, the model cache, each session's default effort (`set_default_effort`, filled into the wire record by `wire_session`), the context window each Claude Code session's status line last reported, the account quotas, the account logins and the hook queues; `write_hold` (`WriteHold`) answers why a running session's writes are held, and `shown_status` is the status a client is shown, waiting for the user while the process is held up by something no hook reports |
 | `src/launch_settings.rs`, `src/agent_models.rs` | Normalising and checking a model and reasoning effort (`LaunchCheck`), and listing the models an agent offers for an account (`ModelCache`); fixtures in `testdata/` |
 | `src/account_quotas/` | Each account's plan quota from its agent's own CLI: `mod.rs` keeps the readings (`AccountQuotas`) and runs the background poller and the on-request refresh, `probe.rs` holds the three conversations and their reply parsers; an account's missing directory and its not being signed in are told apart from a failure there; `AccountQuotas::exhausted` (`exhausted_in`, `Exhausted`) judges from the held reading alone whether an account's quota is used up, and `held_and_exhausted` gives the reading with that judgement under one lock |
@@ -99,35 +99,56 @@ once.
 
 ### `src/shared_config/`
 
-Each account keeps whether it shares the default account's configuration directory and whether its directory has been
-brought in line with that choice yet. A change is recorded when asked for and carried out only while nothing runs under
-the account's directory (none of its sessions, no agent CLI reading its quota or models or signing it in), at once or
-before its next launch, resume or switch to it; before every launch of a sharing account's session the links an agent
-replaced are repaired. The wire contract is "Sharing the default configuration" in [`PROTOCOL.md`](PROTOCOL.md); the
-items that may be shared are the catalog in `src/shared_items.rs`.
+Each account keeps whether it shares the default account's configuration directory and whether the last change toward
+that choice is incomplete. A change runs at once or is refused: refused while sessions of the account work or it is being
+signed in, it ends the account's idle sessions first and resumes them afterwards, waits only for short agent CLI reads
+(quota, models), locks the account from the check through the resumes, and tells its progress phase by phase and entry
+by entry as `account_sharing`. Nothing carries a change out later; a failed one stays incomplete for the user to retry.
+Before every launch of a sharing account's session the links an agent replaced are repaired, unless the account is
+incomplete. The wire contract is "Sharing the default configuration" in [`PROTOCOL.md`](PROTOCOL.md); the items that
+may be shared are the catalog in `src/shared_items.rs`.
 
-External interfaces (all in `mod.rs`):
+External interfaces (re-exported from `mod.rs`, defined where each says):
 
-- `set` — records a sharing choice and carries it out if nothing runs under the account.
-- `before_launch` — before a session launches or resumes: carries out its account's pending change (a failure refuses the
-  launch) and repairs links; a repair that cannot fix something becomes a notice rather than a refusal.
-- `before_switch_copy` — before an account switch copies a conversation into the target account: carries out the
-  target's pending change.
-- `before_delete`, `before_repoint` — before an account is deleted or pointed at another directory: turn its sharing
-  off first, refusing while something runs under its directory.
-- `Locks` — the per-agent lock over carrying out sharing, held also by an account switch's copy.
-- `cli_reads::reading_account` — taken by agent CLI runs outside a session (quota probes, model-list reads, logins) so a
-  sharing change waits for them and they wait for a change in progress.
+- `set` (`change.rs`) — refuses or carries out a sharing change at once, answering when it has ended.
+- `before_delete`, `before_repoint` (`change.rs`) — before an account is deleted or pointed at another directory: turn
+  its sharing off first, at once under the account's lock and with its idle sessions restarted, refusing while its
+  sessions work or it is being signed in.
+- `before_launch` (`launch.rs`) — before a session launches or resumes: refuses while its account's change runs, and
+  repairs links; a repair that cannot fix something becomes a notice rather than a refusal.
+- `refuse_if_changing`, `before_switch_copy` (`mod.rs`) — refuse opening a session, a handoff or an account switch
+  while a change of the account involved runs; the latter also takes the agent's lock for the switch's copy.
+- `publish`, `note_session`, `states` (`status.rs`) — send each owned account's sharing state when it changed, and list them for a
+  `snapshot`; `AppState` calls `publish` when a session's claim is taken or let go, its process ends or its account
+  changes, and `note_session` when its record is published or a message for it is queued or written, which publishes
+  only when that moved the session between working and idle.
+- `Sharing` (`mod.rs`) — what `AppState` holds: the per-agent locks (`locks.rs`) over changing and repairing sharing,
+  and each account's progress and last failure (`status.rs`).
+- `reading_account`, `running_long` (`cli_reads.rs`) — taken by agent CLI runs outside a session: short reads (quota
+  probes, model-list reads), which a change waits for, and long runs (logins), which refuse one; both wait for a
+  change in progress.
+
+The lock itself lives on `AppState` (`lock_account_sharing`), under the same lock as the sessions' launch claims, which
+is what makes the in-use check and the lock one step: `begin_launch` refuses a session of a locked account. It also
+tells working sessions from idle ones (`Running`, `activity_of`), claims the idle ones for the change to restart once it
+no longer waits (`AccountSharingLock::claim_idle`, which also holds their outboxes until each is relaunched), and has
+`shown_status` show such a session `starting` (to clients and to the agents' session tools alike) while its process is
+down. A session's record being published sends the sharing state only when it moved the session between working and idle
+(`note_session`).
 
 | File | Role |
 |---|---|
-| `mod.rs` | The choice and its pending state, carrying a change out, the hooks above, the repair notices |
-| `link.rs` | Turning sharing on and off item by item over the catalog, and the launch-time repair of links an agent replaced |
+| `mod.rs` | The module's contract, the refusals while a change runs, what runs under an account, the error builders |
+| `change.rs` | Locking an account and running a change with its progress, ending and resuming its idle sessions around it, and turning sharing off before a removal or repoint |
+| `launch.rs` | What a launch takes from its account's sharing: the shared directory and the repair of replaced links |
+| `locks.rs` | The per-agent lock over the default directory |
+| `status.rs` | The accounts' sharing state as `account_sharing` sends it: what runs under each directory, progress, last failure |
+| `link.rs` | Turning sharing on and off item by item over the catalog, telling each entry reached, and the launch-time repair of links an agent replaced |
 | `moves.rs` | File-move primitives (across volumes too), backup naming, merging a directory into another |
 | `take_back.rs` | On turning sharing off, moving the account's own sessions' conversations (archived ones included) back out of the default directory |
 | `codex_state.rs` | Carrying, rewriting and forgetting the rows of Codex's thread state database so shared rollouts stay listed and resumable |
 | `registries.rs` | Rewriting the paths plugin registries record when an account stops sharing its plugin directory |
-| `cli_reads.rs` | The guard between agent CLI runs under an account's directory and sharing changes |
+| `cli_reads.rs` | The registry of agent CLI runs under account directories, short and long, and the hold a change takes over them |
 | `tests.rs` | Tests over real directories |
 
 ### `src/mcp/`

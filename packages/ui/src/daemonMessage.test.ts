@@ -164,6 +164,95 @@ it("words a refused Grok sandbox with its profile and where it was set, leaving 
   }
 });
 
+it("words the account sharing errors and notices in every language, with the account's name and the failure's detail", () => {
+  const params = { account: "a1", name: "Work", detail: "the default configuration moved", items: "[]" };
+  const detailed = daemonMessage("en", "account_sharing_failed", params, "x", records);
+  expect(detailed).toContain(isolate("Work"));
+  expect(detailed).toMatch(/\nthe default configuration moved/);
+  expect(daemonMessage("en", "account_still_sharing", { account: "a1", name: "Work" }, "x", records)).toContain(isolate("Work"));
+  expect(daemonMessage("en", "unshared_state_database", { account: "a1", name: "Work", path: "/c/state_6.sqlite" }, "x", records)).toContain(isolate("/c/state_6.sqlite"));
+  for (const language of Object.keys(CATALOGS) as Language[]) {
+    for (const code of ["default_account_not_shareable", "account_sharing_failed", "account_still_sharing", "account_sharing_repair_failed", "unshared_state_database"]) {
+      expect(daemonMessage(language, code, { ...params, path: "/c/state_6.sqlite" }, "fallback", records)).not.toBe("fallback");
+    }
+  }
+});
+
+it("words account_in_use by the count of running sessions and by whether the account is being signed in, in every language", () => {
+  const named = { account: "a1", name: "Work" };
+  const only = (sessions: string) => daemonMessage("en", "account_in_use", { ...named, sessions, signing_in: "false" }, "x", records);
+  expect(only("1")).toBe(`Sharing for account ${isolate("Work")} cannot be changed while 1 of its sessions is working.`);
+  expect(only("3")).toBe(`Sharing for account ${isolate("Work")} cannot be changed while 3 of its sessions are working.`);
+  expect(daemonMessage("en", "account_in_use", { ...named, sessions: "0", signing_in: "true" }, "x", records)).toBe(`Sharing for account ${isolate("Work")} cannot be changed while it is being signed in.`);
+  expect(daemonMessage("en", "account_in_use", { ...named, sessions: "2", signing_in: "true" }, "x", records)).toBe(`Sharing for account ${isolate("Work")} cannot be changed while 2 of its sessions are working and it is being signed in.`);
+  for (const language of Object.keys(CATALOGS) as Language[]) {
+    for (const [sessions, signing_in] of [["2", "false"], ["0", "true"], ["2", "true"]]) {
+      const text = daemonMessage(language, "account_in_use", { ...named, sessions, signing_in }, "fallback", records);
+      expect(text).not.toBe("fallback");
+      expect(text).toContain(isolate("Work"));
+      expect(text).not.toMatch(/\{\w+\}/);
+    }
+  }
+});
+
+it("words account_sharing_in_progress with the account's name in every language", () => {
+  for (const language of Object.keys(CATALOGS) as Language[]) {
+    const text = daemonMessage(language, "account_sharing_in_progress", { account: "a1", name: "Work" }, "fallback", records);
+    expect(text).not.toBe("fallback");
+    expect(text).toContain(isolate("Work"));
+  }
+});
+
+it("says a failed sharing change rolled nothing back, and no longer calls it pending", () => {
+  const text = daemonMessage("en", "account_sharing_failed", { account: "a1", name: "Work", detail: "x", items: "[]" }, "x", records);
+  expect(text).toContain("Nothing was rolled back");
+  expect(text).not.toContain("pending");
+});
+
+it("says why a sharing change left its entries, one short line per cause, in the UI's language", () => {
+  const items = JSON.stringify([
+    { item: "skills/", left: "unchanged", detail: "permission denied", cause: "permission_denied" },
+    { item: "plugins/", left: "unchanged", detail: "permission denied", cause: "permission_denied" },
+    { item: "abc", left: "unchanged", detail: "busy", sessions: ["s1"], cause: "busy" },
+    { item: "hooks/", left: "linked", detail: "odd" },
+    { item: "db", left: "absent", detail: "x", cause: "something_new" },
+  ]);
+  const params = { account: "a1", name: "Work", detail: "english summary", items };
+  const english = daemonMessage("en", "account_sharing_failed", params, "x", records);
+  expect(english).toContain(`You do not have permission to change ${isolate("skills/")} and 1 more.`);
+  expect(english).toContain(`${isolate("Hub")} is in use.`);
+  expect(english).toContain(`Could not change ${isolate("hooks/")} and 1 more.`);
+  expect(english).toContain(`The conversation ${isolate("abc")}, recorded by ${isolate("Hub")}, was left in the default directory.`);
+  expect(english).toContain(`${isolate("skills/")} was left unchanged.`);
+  expect(english).not.toContain("permission denied");
+  expect(english).not.toContain("english summary");
+  const chinese = daemonMessage("zh-Hans", "account_sharing_repair_failed", params, "x", records);
+  expect(chinese).toContain(`没有权限修改 ${isolate("skills/")} 和另外 1 项。`);
+  expect(chinese).toContain(`${isolate("Hub")} 正在被使用。`);
+  expect(chinese).toContain(`未能修改 ${isolate("hooks/")} 和另外 1 项。`);
+});
+
+it.each(["permission_denied", "busy", "not_found", "no_space", "conflict", "other"])("words the cause %s for one and for several entries in every language", (cause) => {
+  for (const language of Object.keys(CATALOGS) as Language[]) {
+    for (const count of [1, 3]) {
+      const items = JSON.stringify(Array.from({ length: count }, (_, at) => ({ item: `e${at}`, left: "unchanged", detail: "d", cause })));
+      const text = daemonMessage(language, "account_sharing_failed", { account: "a1", name: "Work", detail: "x", items }, "fallback", records);
+      expect(text).toContain(isolate("e0"));
+      expect(text).not.toMatch(/\{\w+\}/);
+    }
+  }
+});
+
+it("keeps a sharing repair's English reason when it names no entry, and leaves that reason out once the entries are listed", () => {
+  const reason = "account `Work`'s links to the default configuration could not be checked: permission denied";
+  const named = { account: "a1", name: "Work" };
+  const text = daemonMessage("en", "account_sharing_repair_failed", { ...named, items: "[]" }, reason, records);
+  expect(text).toContain("could not be brought up to date");
+  expect(text).toMatch(new RegExp(`\\n${reason.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
+  const items = JSON.stringify([{ item: "skills/", left: "unchanged", detail: "permission denied" }]);
+  expect(daemonMessage("en", "account_sharing_repair_failed", { ...named, items }, reason, records)).not.toContain(reason);
+});
+
 it("resolves only producer-declared record IDs, preserving names that happen to equal another ID", () => {
   const state = { ...records, projects: new Map([["literal-name", { name: "Wrong project" } as Project]]), accounts: [{ id: "literal-name", name: "Wrong account" } as import("./protocol").Account] };
   expect(daemonMessage("en", "project_directory_shared", { project: "literal-name" }, "fallback", state)).toContain(isolate("literal-name"));
@@ -193,4 +282,33 @@ it("keeps a nested detail-only shell failure usable without inventing missing co
     expect(plain).not.toMatch(/\{(?:shell|command|timeout)\}/);
 
   }
+});
+
+it("words the notice that a session could not be resumed after a sharing change, in every language", () => {
+  for (const language of Object.keys(CATALOGS) as Language[]) {
+    const text = daemonMessage(language, "sharing_resume_failed", { account: "a1", name: "Work", detail: "no such file" }, "fallback", records);
+    expect(text).not.toBe("fallback");
+    expect(text).toContain(isolate("Work"));
+    expect(text).toContain("no such file");
+    expect(text).not.toMatch(/\{\w+\}/);
+  }
+});
+
+it("says a sharing change did not start because a session did not stop, in every language", () => {
+  const withSession = { ...records, sessions: new Map([["s1", { id: "s1", title: "Hub" } as Session]]) };
+  expect(daemonMessage("en", "sharing_session_did_not_stop", { account: "a1", name: "Work", session: "s1" }, "x", withSession))
+    .toBe(`${isolate("Hub")} did not stop in time, so sharing for account ${isolate("Work")} was not changed.`);
+  for (const language of Object.keys(CATALOGS) as Language[]) {
+    const text = daemonMessage(language, "sharing_session_did_not_stop", { account: "a1", name: "Work", session: "s1" }, "fallback", withSession);
+    expect(text).not.toBe("fallback");
+    expect(text).not.toMatch(/\{\w+\}/);
+  }
+});
+
+it("words a session that did not stop as possibly still running, and a resume that failed as left interrupted", () => {
+  const params = { account: "a1", name: "Work", detail: "timed out" };
+  expect(daemonMessage("en", "sharing_resume_failed", { ...params, still_running: "true" }, "x", records)).toContain("may still be running; it was not restarted");
+  expect(daemonMessage("en", "sharing_resume_failed", { ...params, still_running: "false" }, "x", records)).toContain("left interrupted");
+  expect(daemonMessage("en", "sharing_resume_failed", params, "x", records)).toContain("left interrupted");
+  expect(daemonMessage("zh-Hans", "sharing_resume_failed", { ...params, still_running: "true" }, "x", records)).toContain("可能仍在运行，未重新启动");
 });

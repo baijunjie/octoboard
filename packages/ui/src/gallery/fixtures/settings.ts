@@ -1,7 +1,7 @@
 import { AGENT_LABEL } from "../../agents";
-import type { AccountLogin, Agent, AgentAvailability } from "../../protocol";
+import type { AccountLogin, AccountSharing, Agent, AgentAvailability } from "../../protocol";
 import type { Scenario, Step } from "../scenario";
-import { ALL_AGENTS, SAMPLE, minutesAgo, snapshotState } from "./builders";
+import { ALL_AGENTS, SAMPLE, accountSharingOf, minutesAgo, snapshotState } from "./builders";
 import { noneAddedState } from "./empty";
 import { manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow } from "./quotas";
 
@@ -241,6 +241,154 @@ const bypassSteps: Scenario["steps"] = [
   (ui) => ui.press(ui.t("settings.accounts.approval.label", { name: "Client", agent: AGENT_LABEL.claude })),
   (ui) => ui.press(ui.t("settings.accounts.approval.claudeBypass")),
 ];
+
+/** The two owned Claude Code accounts the sharing scenarios share the page with the default account: Work is the first
+ * row, Client the second. A third row does not fit under the explanation lines. */
+function sharingAccounts(work: { share: boolean; incomplete?: boolean }, client: { share: boolean; incomplete?: boolean }): Scenario["state"] {
+  const base = browserState!;
+  return {
+    ...base,
+    settings: {
+      ...base.settings!,
+      added_agents: ["claude"],
+      accounts: [
+        { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work", share_default_config: work.share, share_default_config_incomplete: work.incomplete ?? false },
+        { id: "a-client", agent: "claude", name: "Client", config_dir: "/Users/dev/.claude-client", share_default_config: client.share, share_default_config_incomplete: client.incomplete ?? false },
+      ],
+    },
+  };
+}
+
+/** Work does not share and Client does, with no working session or sign-in in the way. */
+const sharingState = sharingAccounts({ share: false }, { share: true });
+
+/** Like `sharingState`, but Work has 2 idle sessions, which a change would end first and resume after. */
+const sharingIdleState: Scenario["state"] = {
+  ...sharingState,
+  accountSharing: accountSharingOf([{ account: "a-work", idle_sessions: 2 }]),
+};
+
+/** Work has two sessions working and Client is being signed in, so neither switch can be used. */
+const sharingInUseState: Scenario["state"] = {
+  ...sharingAccounts({ share: false }, { share: true }),
+  accountSharing: accountSharingOf([
+    { account: "a-work", in_use: { sessions: 2, signing_in: false } },
+    { account: "a-client", in_use: { sessions: 0, signing_in: true } },
+  ]),
+};
+
+/** Work is changing entries, turning sharing on, 3 of 9 done; Client is turning it off but waits for another account of
+ * the agent to finish its own change. A change under way has its choice recorded and is incomplete until it ends. */
+const sharingProgressState: Scenario["state"] = {
+  ...sharingAccounts({ share: true, incomplete: true }, { share: false, incomplete: true }),
+  accountSharing: accountSharingOf([
+    { account: "a-work", progress: { share: true, phase: "changing", done: 3, total: 9, item: "plugins/" } },
+    { account: "a-client", progress: { share: false, phase: "waiting", done: 0, total: 9 } },
+  ]),
+};
+
+/** The phases around the entries: Work is ending its idle sessions before turning sharing on, and Client has changed all
+ * 9 entries of turning it off and is resuming its sessions. */
+const sharingRestartState: Scenario["state"] = {
+  ...sharingAccounts({ share: true, incomplete: true }, { share: false, incomplete: true }),
+  accountSharing: accountSharingOf([
+    { account: "a-work", progress: { share: true, phase: "stopping", done: 0, total: 9 } },
+    { account: "a-client", progress: { share: false, phase: "resuming", done: 9, total: 9 } },
+  ]),
+};
+
+/** A change the daemon was restarted in the middle of: Work's choice is recorded as on and incomplete (the switch shows
+ * its position before the change), with no failure kept, since that lives in the daemon's memory only. */
+const sharingIncompleteState: Scenario["state"] = sharingAccounts({ share: true, incomplete: true }, { share: false });
+
+/** One owned account that does not share, and only that agent added, so its sharing explanation
+ * opens on a short page. Codex keeps the name the other Codex scenarios use. */
+function sharingHelpState(agent: Agent): Scenario["state"] {
+  const base = browserState!;
+  return {
+    ...base,
+    settings: {
+      ...base.settings!,
+      added_agents: [agent],
+      accounts: [{ id: `a-${agent}-share`, agent, name: agent === "codex" ? "Personal" : "Work", config_dir: `/Users/dev/.${agent}-work`, share_default_config: false }],
+    },
+    agentAvailability: new Map(base.agentAvailability).set(agent, { agent, availability: "available", default_account_dir: `/Users/dev/.${agent}` }),
+  };
+}
+
+const openAccounts: Scenario["steps"] = [
+  (ui) => ui.press(ui.t("rail.settings")),
+  (ui) => ui.press(ui.t("settings.section.accounts")),
+];
+
+const openSharingHelp: Scenario["steps"] = [
+  (ui) => ui.press(ui.t("rail.settings")),
+  (ui) => ui.press(ui.t("settings.section.accounts")),
+  (ui) => ui.press(ui.t("settings.accounts.sharing.helpLabel")),
+];
+
+/** What turning sharing off for Work left unfinished: a directory entry, and a conversation two
+ * sessions of this scenario record, so the alert can show their titles. */
+const SHARING_FAILURE_ITEMS: NonNullable<AccountSharing["failure"]>["items"] = [
+  { item: "skills/", left: "unchanged", cause: "permission_denied", detail: "permission denied" },
+  { item: "abc", left: "unchanged", cause: "permission_denied", detail: "permission denied", sessions: ["s-web-1", "s-web-2"] },
+  { item: "plugins/", left: "unchanged", cause: "busy", detail: "resource busy" },
+];
+
+const SHARING_FAILURE_DETAIL = "`skills/` left unchanged (permission denied); the conversation `abc` of session s-web-1, s-web-2 left in the default directory (permission denied); `plugins/` left unchanged (resource busy)";
+
+/** Turning sharing off for Work failed: the choice is recorded as off and incomplete, and the daemon still holds the
+ * failure. Client is above it so the section overflows: scrolled to the end, Work's switch and the failure under it
+ * are in view. */
+const sharingFailedState: Scenario["state"] = {
+  ...browserState,
+  settings: {
+    ...browserState.settings!,
+    added_agents: ["claude"],
+    accounts: [
+      { id: "a-client", agent: "claude", name: "Client", config_dir: "/Users/dev/.claude-client", share_default_config: false },
+      { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work", share_default_config: false, share_default_config_incomplete: true },
+    ],
+  },
+  accountSharing: accountSharingOf([{ account: "a-work", failure: { share: false, items: SHARING_FAILURE_ITEMS, detail: SHARING_FAILURE_DETAIL } }]),
+};
+
+/** Turning sharing on for Work failed because the default account's directory has moved since sharing was turned on:
+ * no entry is named, and the raw reason is all Details holds. The failure was not rolled back, so the recorded
+ * choice, on, is where the switch sits. */
+const sharingDefaultMovedState: Scenario["state"] = {
+  ...sharingAccounts({ share: true, incomplete: true }, { share: false }),
+  accountSharing: accountSharingOf([{
+    account: "a-work",
+    failure: { share: true, cause: "default_moved", items: [], detail: "the default account's directory /Users/dev/.claude was not found; it was /Users/dev/.claude-old when sharing was turned on" },
+  }]),
+};
+
+/** Turning sharing on for Work failed as a whole for lack of disk space: the daemon names a cause but no entry, so the
+ * warning holds the reason sentence rather than a line per cause. */
+const sharingNoSpaceState: Scenario["state"] = {
+  ...sharingAccounts({ share: true, incomplete: true }, { share: false }),
+  accountSharing: accountSharingOf([{
+    account: "a-work",
+    failure: { share: true, cause: "no_space", items: [], detail: "no space left on device (os error 28)" },
+  }]),
+};
+
+/** Client shares and its removal turns sharing off first, which does not finish. */
+const SHARING_REMOVAL_ERROR = {
+  code: "account_sharing_failed",
+  params: {
+    account: "a-client",
+    name: "Client",
+    cause: "permission_denied",
+    items: JSON.stringify([
+      { item: "skills/", left: "unchanged", cause: "permission_denied", detail: "permission denied" },
+      { item: "settings.json", left: "backed_up", cause: "permission_denied", detail: "permission denied" },
+    ]),
+    detail: "`skills/` left unchanged (permission denied); `settings.json` backed up, with nothing linked in its place (permission denied)",
+  },
+  message: "ending the sharing of the default configuration with account `Client` did not complete: `skills/` left unchanged (permission denied); `settings.json` backed up, with nothing linked in its place (permission denied)",
+};
 
 export const settingsScenarios: Scenario[] = [
   {
@@ -812,11 +960,74 @@ export const settingsScenarios: Scenario[] = [
     steps: bypassSteps,
   },
   {
+    id: "settings-accounts-sharing",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, sharing the default configuration",
+    description: "On the Claude Code tab the default account has no Share default configuration switch. Work's switch is off, with a line saying what turning it on does and, under it, that changing it first ends the account's 2 idle sessions and resumes them afterwards. Client's switch is on, with a line saying the account's configuration and conversation history are linked to the default account's directory, and nothing else. Both switches can be used.",
+    state: sharingIdleState,
+    steps: openAccounts,
+  },
+  {
+    id: "settings-accounts-sharing-in-use",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, sharing cannot be changed while the account is in use",
+    description: "Work's switch is faded but still focusable, and the line under it, which replaces the usual caption, says sharing cannot be changed while 2 of the account's sessions are working and to wait for them to finish. Client's switch is faded the same way, with a line saying sharing cannot be changed while the account is being signed in.",
+    state: sharingInUseState,
+    steps: openAccounts,
+  },
+  {
+    id: "settings-accounts-sharing-progress",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, sharing change running",
+    description: "Both switches are faded but still focusable while their change runs, and the usual caption is hidden. Work is turning sharing on and changing entries: a determinate progress bar reads 3 of 9, with the entry being processed, plugins/, as a chip under it. Client is turning sharing off but waits for another account's sharing change to finish: an indeterminate bar with \"Waiting for another account's sharing change to finish…\" in place of the count, and no entry.",
+    state: sharingProgressState,
+    steps: openAccounts,
+  },
+  {
+    id: "settings-accounts-sharing-progress-restart",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, sharing change ending and resuming sessions",
+    description: "Both switches are faded but still focusable, with the usual caption hidden. Work is turning sharing on and is ending the account's idle sessions: an indeterminate bar with \"Ending idle sessions…\" in place of the count and no entry. Client has finished changing its entries and is resuming its sessions: an indeterminate bar with \"Resuming sessions…\".",
+    state: sharingRestartState,
+    steps: openAccounts,
+  },
+  {
+    id: "settings-accounts-sharing-help-claude",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, Claude Code sharing explanation",
+    description: "The help button beside Share default configuration is pressed, so the explanation stays open. It says what is shared, configuration and conversation history, then what is never shared: login credentials, .claude.json (noting it holds user-scope MCP servers) and plans/, the two paths as chips. The popover keeps the same narrow width whatever the window, so a chip that does not fit at the end of a line moves to the next one whole, and no empty chip fragment is left behind at the end of the line above. The last sentence is what turning sharing off does.",
+    state: sharingHelpState("claude"),
+    steps: openSharingHelp,
+  },
+  {
+    id: "settings-accounts-sharing-help-grok",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, Grok Build sharing explanation",
+    description: "The same explanation for a Grok Build account. What is never shared is login credentials, trusted_folders.toml and hooks-paths, the two files as chips. The popover keeps a narrow width, so a chip that does not fit at the end of a line moves to the next one whole, and no empty chip fragment is left at the end of the line above. What is shared, and what turning sharing off does, reads the same as for Claude Code.",
+    state: sharingHelpState("grok"),
+    steps: openSharingHelp,
+  },
+  {
+    id: "settings-accounts-sharing-help-codex",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, Codex sharing explanation",
+    description: "The same explanation for a Codex account. What is never shared is one sentence, that login credentials are never shared, and no file is named. Personal's switch is off, with the line saying what turning it on does under it.",
+    state: sharingHelpState("codex"),
+    steps: openSharingHelp,
+  },
+  {
     id: "settings-account-approval-error",
     group: GROUP,
     category: "exceptional",
     title: "Account approval mode could not be saved",
-    description: "The error alert requires acknowledgement of the failed save. Codex's default account keeps Follow account configuration; retrying leaves the saved selection intact.",
+    description: "The error alert separates the failed-save summary from the selectable Permission denied diagnostic beneath it. Codex's default account keeps Follow account configuration behind the alert; acknowledging the error leaves that saved selection intact.",
     state: approvalState,
     accountApprovalError: { code: "store_io_failed", params: { detail: "Permission denied (os error 13)" }, message: "The account settings could not be saved: Permission denied (os error 13)" },
     steps: [
@@ -832,13 +1043,72 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Approve everything could not be saved",
-    description: "Confirming Approve everything for Client was refused, so the error alert is open, with the confirmation dialog still open beneath it; Client still follows its account configuration.",
+    description: "Confirming Approve everything for Client was refused. The error alert shows the failed-save summary above a selectable Permission denied diagnostic, with the confirmation dialog still open beneath it; Client still follows its account configuration.",
     state: quotaState,
     accountApprovalError: { code: "store_io_failed", params: { detail: "Permission denied (os error 13)" }, message: "The account settings could not be saved: Permission denied (os error 13)" },
     steps: [
       ...bypassSteps,
       (ui) => ui.confirm(),
     ],
+  },
+  {
+    id: "settings-accounts-sharing-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Sharing change could not be finished",
+    description: "Turning sharing off for Work did not finish, so its switch sits at its position before the change, on, and the usual caption is hidden. Under it one warning alert (not red) holds everything about the failure; nothing of it sits outside the yellow box. First the title, \"Could not finish turning sharing off\", and the reasons grouped by cause: no permission to change skills/ and 1 more, followed by \"Check that the files and folders involved can be changed and are not locked.\", and plugins/ in use, followed by \"Close other programs using the files involved, such as an agent in a terminal, an editor or a sync tool.\" Each cause is one compact line with its fix sentence run on after it. Below the reasons, still inside the box, come the advice to turn the switch off again to try once more and a collapsed Details disclosure; there is no Try again button and no separate error alert. Client, which has nothing to show, is listed before Work so that the section overflows and, scrolled to its end, Work's failure is what fills the view.",
+    state: sharingFailedState,
+    steps: [...openAccounts, (ui) => ui.scrollPanel(ui.t("settings.section.accounts"), SCROLLED_TO_END)],
+  },
+  {
+    id: "settings-accounts-sharing-failed-details",
+    group: GROUP,
+    category: "exceptional",
+    title: "Sharing change could not be finished, details open",
+    description: "The same failure as above with Details open, inside the warning below the advice: each unfinished entry is one tight row, its chip and what it was left as in words (skills/ and plugins/ left unchanged; the conversation abc, with the titles of the sessions that recorded it, Fix the summary layout and Update the dependencies, joined as a list, left in the default directory) followed by the system's original reason (permission denied, resource busy) as small inline code on the same row, not a separate diagnostic block.",
+    state: sharingFailedState,
+    steps: [...openAccounts, (ui) => ui.scrollPanel(ui.t("settings.section.accounts"), SCROLLED_TO_END), (ui) => ui.press(ui.t("branchCleanup.details")), (ui) => ui.scrollPanel(ui.t("settings.section.accounts"), SCROLLED_TO_END)],
+  },
+  {
+    id: "settings-accounts-sharing-default-moved",
+    group: GROUP,
+    category: "exceptional",
+    title: "Sharing change failed, the default directory has moved",
+    description: "Work's switch sits at its recorded position, on, with its caption hidden. Under it one warning alert holds the title \"Could not finish turning sharing on\" and the single reason that the default account's directory has moved since sharing was turned on; no entry is named. Below the reason, inside the box, are the advice to turn the switch off, then on again, and a collapsed Details disclosure, which holds the raw reason as small inline code when opened.",
+    state: sharingDefaultMovedState,
+    steps: openAccounts,
+  },
+  {
+    id: "settings-accounts-sharing-no-space",
+    group: GROUP,
+    category: "exceptional",
+    title: "Sharing change failed, not enough disk space",
+    description: "Turning sharing on for Work did not finish, so its switch sits at its position before the change, off, with its caption hidden. The warning alert holds the title \"Could not finish turning sharing on\" and, on one line, the reason \"There is not enough disk space.\" with its fix \"Free up disk space.\" run on after it; no entry is named. Below that, inside the same box, are the advice to turn the switch on again to try once more and a collapsed Details disclosure.",
+    state: sharingNoSpaceState,
+    steps: openAccounts,
+  },
+  {
+    id: "settings-accounts-sharing-incomplete",
+    group: GROUP,
+    category: "exceptional",
+    title: "Sharing change left unfinished by a restart",
+    description: "Work's choice is recorded as on, but the daemon was restarted in the middle of the change, so its switch sits at its position before the change, off, and the usual caption is hidden. Under it a warning alert holds the title, \"The last attempt to turn sharing on did not finish\", with the advice to turn the switch on again on a line below it, inside the box. There is no Try again button and no Details disclosure, since no entries are known after a restart. Client's switch is off and looks as usual, with its caption.",
+    state: sharingIncompleteState,
+    steps: openAccounts,
+  },
+  {
+    id: "settings-accounts-sharing-refused",
+    group: GROUP,
+    category: "exceptional",
+    title: "Sharing change refused, the account is in use",
+    description: "Work's switch looked free, but pressing it was refused because a session on the account has started working since: an error alert says sharing for Work cannot be changed while 1 of its sessions is working, and advises waiting for the working sessions to finish, then trying again. Work's switch is still off.",
+    state: sharingState,
+    accountSharingError: {
+      code: "account_in_use",
+      params: { account: "a-work", name: "Work", sessions: "1", signing_in: "false" },
+      message: "account `Work` is in use: 1 of its sessions is working",
+    },
+    steps: [...openAccounts, (ui) => ui.press(ui.t("settings.accounts.sharing.switchLabel", { name: "Work" }))],
   },
   {
     id: "settings-accounts-quota-unavailable",
@@ -922,6 +1192,21 @@ export const settingsScenarios: Scenario[] = [
       (ui) => ui.press(ui.t("settings.section.accounts")),
       (ui) => ui.press(ui.t("settings.accounts.actionsLabel", { name: "Work", agent: "Claude Code" })),
       (ui) => ui.press(ui.t("common.remove")),
+    ],
+  },
+  {
+    id: "settings-account-delete-sharing-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Remove account refused, its sharing could not be turned off",
+    description: "Confirming the removal of Client, which shares the default configuration, was refused because turning its sharing off did not finish. The confirmation dialog stays open and the refusal is reported: it says what could not be finished for Client and gives the reason by cause: no permission to change skills/ and 1 more, followed by \"Check that the files and folders involved can be changed and are not locked.\" on the same line, with the raw entries behind a collapsed Details disclosure; opened, each entry is one tight row, its sentence followed by the system's reason as small inline code. Behind the dialog Client is still listed.",
+    state: sharingState,
+    accountSharingError: SHARING_REMOVAL_ERROR,
+    steps: [
+      ...openAccounts,
+      (ui) => ui.press(ui.t("settings.accounts.actionsLabel", { name: "Client", agent: "Claude Code" })),
+      (ui) => ui.press(ui.t("common.remove")),
+      (ui) => ui.confirm(),
     ],
   },
   ...(["existing", "default", "reserved"] as const).map((kind): Scenario => ({

@@ -24,8 +24,9 @@ Everything the window shows follows the chosen appearance, including:
   they were given; the Powerline branch, line-number and lock symbols are adjusted like any other character. So
   output from an agent whose own colour scheme assumes the other appearance (pale greys and blues meant for a dark
   background, for instance) stays readable rather than all but vanishing.
-- **A Grok Build session's own theme**, which is picked from the appearance in force when the session is launched and
-  does not change while it runs (see "Per-agent specifics a user will notice" in `docs/product/launching-agents.md`).
+- **A Grok Build session's own theme**, which is picked from the appearance in force when the session is launched
+  and does not follow later appearance changes while it runs (see "Per-agent specifics a user will notice" in
+  `docs/product/launching-agents.md`).
 - **A console session's colour**, shown in its own sidebar row and as the binding badge on every project
   session bound to it (see "The binding badge" in `docs/product/sidebar.md`).
   Each colour in the fixed palette of console session colours has its own light and dark value, so in either

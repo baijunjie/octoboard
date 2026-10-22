@@ -209,6 +209,13 @@ export interface Scenario {
   sessionHandoffs?: Record<string, FixtureError | "pending">;
   /** A refusal to save an account's approval mode, Codex's or Claude Code's; successful requests update settings. */
   accountApprovalError?: FixtureError;
+  /** How a `set_account_sharing` that is not turned away at once ends. An `account_sharing_failed` error is a change that
+   * fails part-way: the choice is recorded, the account stays incomplete and the failure (its items and detail from the
+   * error's params) is kept in the account's sharing state until the next change starts. Any other error is a refusal
+   * with nothing recorded. The default account, turning sharing on for a directory that is the default account's, and
+   * an account that `state.accountSharing` marks as in use or changing are turned away whether or not this is set.
+   * Left out, a change is carried out at once. */
+  accountSharingError?: FixtureError;
   /** How a login started from Settings ends, a moment after it reaches `waiting` with its page (Grok Build's with its
    * device code); `failed` carries `login_failed`. Left out, a started login stays waiting until it is cancelled. A
    * state shown from the start is set in `state.accountLogins` instead. */

@@ -9,7 +9,7 @@ use std::path::{Component, Path, PathBuf};
 use anyhow::Result;
 
 use super::codex_state;
-use super::link::{Dirs, Failure, Left};
+use super::link::{Cause, Dirs, Failure, Left};
 use super::moves::{backup_path, is_link, lstat, merge_copy, merge_move, resolve};
 use crate::account_dirs::account_dir_key;
 use crate::protocol::{Account, Agent};
@@ -82,9 +82,10 @@ pub(super) fn take_back(
     stamp: &str,
 ) -> Result<(), Failure> {
     let id = conversation.agent_session_id.as_str();
-    let failure = |left: Left, detail: String| Failure {
+    let failure = |left: Left, cause: Cause, detail: String| Failure {
         item: id.to_string(),
         left,
+        cause,
         detail,
         sessions: conversation.sessions.clone(),
     };
@@ -104,6 +105,7 @@ pub(super) fn take_back(
             Ok(_) => {
                 return Err(failure(
                     Left::Unchanged,
+                    Cause::Conflict,
                     format!(
                         "left in the default directory: `{}` is not a directory of the \
                          account's own",
@@ -111,7 +113,7 @@ pub(super) fn take_back(
                     ),
                 ))
             }
-            Err(err) => return Err(failure(Left::Unchanged, err.to_string())),
+            Err(err) => return Err(failure(Left::Unchanged, Cause::of(&err), err.to_string())),
         }
         if asides.iter().all(|(seen, _)| *seen != root) {
             let aside = backup_path(&root, stamp);
@@ -138,6 +140,7 @@ pub(super) fn take_back(
             };
             return Err(failure(
                 left,
+                Cause::of(&err),
                 format!("`{}` not taken back: {err}", relative.display()),
             ));
         }
@@ -165,9 +168,9 @@ pub(super) fn take_back(
         {
             if let Ok(Some(database)) = resolve(&dirs.default.join(item.name)) {
                 if let Err(err) = codex_state::forget_threads(&database, &[id]) {
-                    problems.push(format!(
-                        "the default's `{}` still names it: {err}",
-                        item.name
+                    problems.push((
+                        Cause::of_database(&err),
+                        format!("the default's `{}` still names it: {err}", item.name),
                     ));
                 }
             }
@@ -180,16 +183,21 @@ pub(super) fn take_back(
         )]);
         if let Err(err) = crate::relocate::repoint_thread_row(agent, &dirs.account, &head, id, &env)
         {
-            problems.push(format!(
-                "the account's own database was not pointed at it: {err}"
+            let cause = err
+                .downcast_ref::<rusqlite::Error>()
+                .map_or(Cause::Other, Cause::of_database);
+            problems.push((
+                cause,
+                format!("the account's own database was not pointed at it: {err}"),
             ));
         }
     }
     if problems.is_empty() {
-        Ok(())
-    } else {
-        Err(failure(Left::PartlyMoved, problems.join("; ")))
+        return Ok(());
     }
+    let cause = Cause::shared(problems.iter().map(|(cause, _)| *cause));
+    let detail: Vec<String> = problems.iter().map(|(_, detail)| detail.clone()).collect();
+    Err(failure(Left::PartlyMoved, cause, detail.join("; ")))
 }
 
 /// Copies the default's thread-name entries of Codex thread `id` into the account's own index, so
