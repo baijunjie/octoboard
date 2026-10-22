@@ -558,6 +558,29 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
     let payload: serde_json::Value =
         serde_json::from_slice(body).unwrap_or(serde_json::Value::Null);
 
+    // Marked before anything of this event can release a queue: the first hook ends the trust
+    // hold below, and its drain must not write into an error's prompt. A subagent's failure is
+    // its own business, never the session's.
+    let agent = hook_agent(state, session_id);
+    if let (Some(agent), Some(event)) = (agent, hooks::event_name(&payload)) {
+        if !hooks::is_subagent(Some(agent), &payload)
+            && hooks::stopped_on_agent_error(agent, &event, &payload)
+        {
+            if let Some(live) = state.live_session(session_id) {
+                live.mark_agent_error();
+                // Nothing else drains the queue once the hold has run out.
+                let state = state.clone();
+                let id = session_id.to_string();
+                tokio::spawn(async move {
+                    tokio::time::sleep(crate::session::AGENT_ERROR_SETTLE).await;
+                    if let Ok(session) = state.session_record(&id) {
+                        state.spawn_flush_outbox(&id, state.agent_status(&session));
+                    }
+                });
+            }
+        }
+    }
+
     // Claude Code and Grok run no hook before their trust confirmation has been answered, so the
     // first one means that screen is gone — and anything on the terminal that looks like it is not
     // it. Codex runs none around its own, but its first hook still comes only once the session is
@@ -570,7 +593,6 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
     // A subagent's events are the agent's internal business and carry the subagent's own ids; the
     // only thing read from them is the background work they leave running, which never changes
     // the session's status.
-    let agent = hook_agent(state, session_id);
     if hooks::is_subagent(agent, &payload) {
         let change = hooks::event_name(&payload)
             .zip(agent)
@@ -875,6 +897,8 @@ mod tests {
     use std::net::TcpStream;
 
     use super::*;
+    use crate::outbox::Drain;
+    use crate::state::WriteHold;
     use crate::test_support::{app_state, PATIENCE};
 
     /// A sink that records what it is sent, or — `stalled` — never takes anything.
@@ -1284,6 +1308,111 @@ mod tests {
         );
         assert_eq!(published.last(), Some(&(SessionStatus::Working, 0)));
         assert!(state.background_tasks_of("s").is_empty());
+    }
+
+    /// A Grok session that stopped on an error holds what is queued for it, and a prompt sent ends
+    /// the hold; the other agents' failures hold nothing.
+    #[tokio::test]
+    async fn only_a_grok_error_holds_writes_and_a_prompt_ends_the_hold() {
+        for (agent, error, held) in [
+            (Agent::Grok, r#"{"hookEventName": "StopFailure"}"#, true),
+            (
+                Agent::Grok,
+                r#"{"hook_event_name": "Notification", "notification_type": "agent_error"}"#,
+                true,
+            ),
+            (
+                Agent::Grok,
+                r#"{"hook_event_name": "Notification", "notification_type": "idle_prompt"}"#,
+                false,
+            ),
+            (
+                Agent::Claude,
+                r#"{"hook_event_name": "StopFailure"}"#,
+                false,
+            ),
+            (Agent::Codex, r#"{"hook_event_name": "StopFailure"}"#, false),
+        ] {
+            let (state, dir) = app_state("server-agent-error");
+            state
+                .store
+                .insert_console(&crate::test_support::console(&dir))
+                .unwrap();
+            state
+                .store
+                .insert_session(&crate::test_support::console_session(
+                    "s",
+                    SessionStatus::Idle,
+                ))
+                .unwrap();
+            let live = crate::test_support::fake_live_session("s", agent, 80, 24, "sleep 30");
+            state.register_live(live.clone());
+
+            apply_hook(&state, "s", error.as_bytes());
+            let hold = state.write_hold("s");
+            assert_eq!(
+                hold,
+                held.then_some(WriteHold::AgentError),
+                "{agent:?} {error}"
+            );
+            // The error alone raises no hand; the session stays idle.
+            assert_eq!(
+                state.agent_status(&state.session_record("s").unwrap()),
+                SessionStatus::Idle
+            );
+            if !held {
+                continue;
+            }
+
+            state.queue_message("s", "go on");
+            assert_eq!(state.flush_outbox("s", SessionStatus::Idle), Drain::Pending);
+            assert_eq!(state.queued_count("s"), 1);
+
+            apply_hook(&state, "s", br#"{"hook_event_name": "UserPromptSubmit"}"#);
+            assert_eq!(state.write_hold("s"), None);
+            let deadline = std::time::Instant::now() + PATIENCE;
+            while state.queued_count("s") != 0 {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "the prompt must release the queue"
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        }
+    }
+
+    /// An error that leaves no dialog on screen holds the queue only briefly: once the hold has run
+    /// out, the queue goes in with no prompt sent.
+    #[tokio::test]
+    async fn an_agent_error_hold_runs_out_and_releases_the_queue() {
+        let (state, dir) = app_state("server-agent-error-settle");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&dir))
+            .unwrap();
+        state
+            .store
+            .insert_session(&crate::test_support::console_session(
+                "s",
+                SessionStatus::Idle,
+            ))
+            .unwrap();
+        let live = crate::test_support::fake_live_session("s", Agent::Grok, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+
+        apply_hook(&state, "s", br#"{"hookEventName": "StopFailure"}"#);
+        state.queue_message("s", "go on");
+        assert_eq!(state.flush_outbox("s", SessionStatus::Idle), Drain::Pending);
+
+        let deadline = std::time::Instant::now() + crate::session::AGENT_ERROR_SETTLE + PATIENCE;
+        while state.queued_count("s") != 0 {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the queue must go in once the hold has run out"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert_eq!(state.write_hold("s"), None);
     }
 
     /// A Claude Code session at `status` with a live stand-in, and the path its transcript is at,

@@ -34,7 +34,10 @@ Once Octoboard recognises a confirmation that needs the user, the session reads 
 its hand everywhere that status is shown or counted (see "The raised hand" in `docs/product/sessions.md`). Closing
 the dialog with **Not now**, moving the terminal's cursor or a failed attempt to press the confirmation leaves the
 hand up. It comes down when Octoboard successfully presses the confirmation, the agent sends its first hook report,
-or, for Codex answered in the terminal, Octoboard sees that the confirmation has been replaced by the next screen.
+or, for Codex answered in the terminal, Octoboard sees that the confirmation has been replaced by the next screen —
+or, for Grok Build, which may run no hook at all (see "Messages held until a session can take them" in
+`docs/product/message-delivery.md`), sees that the session's screen no longer shows the confirmation, however it was
+answered.
 The session then shows the agent's last reported status, or its launch status if no report has arrived. An
 interrupted or archived session keeps that status instead of a trust hand.
 
@@ -150,7 +153,10 @@ session's confirmation is pressed at most once per run, so a failed attempt is n
 notice on the session that Octoboard could not press that agent's confirmation, with the reason, and that they should
 answer it in the terminal. The confirmation counts as pressed once it is seen to go away — for Grok Build, once Grok has
 sent its first hook report, within about 12 seconds of the key, and the entry it wrote has reached the user's own trust
-store (see "Carrying Grok Build's trust record" below).
+store (see "Carrying Grok Build's trust record" below). When no hook report comes to carry the entry — a policy that
+runs none of Octoboard's hooks — the press counts once the session's screen is seen no longer to show the
+confirmation, and the permission a go-ahead from the trust dialog asked for is recorded then; nothing has been carried to the user's trust store at
+that point, and a hook report that comes later still carries the entry.
 
 **Recognition is limited to the start of a session.** A confirmation is looked for only in the session's own terminal
 output, and only for as long as it can still come up, so the same words appearing later in a session are never taken
@@ -163,12 +169,9 @@ for it:
 - for Codex, which sends no hook report until its first prompt, until the first terminal title it sets or its first
   hook report, whichever comes first. Codex sets its terminal title only once its session has started — past the
   confirmation, and on an account's first launch past its sign-in screen, which comes before the confirmation — so
-  there is no limit on output or time before that either;
-- for Codex when the `config.toml` in the Codex home that launch uses sets `tui.terminal_title` to an empty list (no
-  title at all) or to anything other than a list, or that file exists but cannot be read or parsed, until its first hook
-  report, its first terminal title if it sets one, or until it has printed 64 KiB or run for 5 minutes, whichever comes
-  first. A confirmation Codex shows after that is not recognised: it raises no hand and is left for the person to answer
-  in the terminal. A missing file, or one without that key, leaves the terminal title on.
+  there is no limit on output or time before that either. Every launch sets the items its title shows (see
+  "Per-agent specifics a user will notice" in `docs/product/launching-agents.md`), so no configuration switches the
+  title off.
 
 What Octoboard writes into a session while its confirmation may be up is held; see "Messages held until a session can
 take them" in `docs/product/message-delivery.md`.

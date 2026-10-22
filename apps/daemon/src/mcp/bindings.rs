@@ -35,7 +35,8 @@ fn told(delivery: &Result<Delivery>, who: &str) -> String {
         Ok(Delivery::Queued) => format!("{who} will be told as soon as it can take a message."),
         Ok(Delivery::Unsent) => format!(
             "{who} was not told: the message was written into its input, but its agent did not \
-             send it. The user has been told to check it."
+             send it to the conversation (it is in the input box, or went to a view of its \
+             background agents). The user has been told to check the session."
         ),
         Err(err) => format!("{who} could not be told ({err:#})."),
     }
@@ -171,7 +172,8 @@ pub(super) async fn bind_to_session(
     let first = match delivered {
         Ok((_, Delivery::Unsent)) => {
             "Your summary was written into its input as your first report, but its agent did not \
-             send it, so it has not read it; the user has been told. Do not send it again."
+             send it to the conversation, so it has not read it; the user has been told. Do not \
+             send it again."
                 .to_string()
         }
         Ok(_) => "Your summary was sent to it as your first report.".to_string(),

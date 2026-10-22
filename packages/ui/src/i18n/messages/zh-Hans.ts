@@ -391,6 +391,10 @@ export const zhHans: Translation<"other"> = {
     "{appName} 无法送达移交期间为某个会话暂存的消息，这些消息已被丢弃。",
   "daemon.message_not_sent":
     "{appName} 写入此会话的一条消息未被 {agent} 发送，仍停留在会话的输入框中。在发送任何提示之前，{appName} 不会再向此会话写入内容。",
+  "daemon.message_discarded_by_dialog":
+    "{appName} 向此会话写入消息时，{agent} 弹出了对话框并丢弃了这条消息。对话框被回应后，{appName} 会重新写入。",
+  "daemon.message_diverted_by_view":
+    "{appName} 向此会话写入消息时，{agent} 正显示其后台智能体的视图，消息因此进入了该视图，而没有进入对话。请检查此会话。",
   "daemon.launch_failed": "无法启动 {title}：{reason}",
   "daemon.launch_failed.title": "无法启动 {title}",
   "daemon.trust_answer_failed": "{appName} 无法按下 {agent} 的信任确认（{reason}）。请在终端中回应。",

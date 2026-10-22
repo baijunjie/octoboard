@@ -352,6 +352,22 @@ conditions that are visible:
   confirmation appears, and Octoboard presses it under the user's permission (see `docs/product/folder-trust.md`);
 - Codex's check for a newer version at startup is turned off for that launch (`check_for_update_on_startup=false`),
   so that its update prompt does not come up ahead of the trust confirmation; the user's own setting is left as it is;
+- the items of Codex's terminal title are set for that launch to its activity, the thread's name and the project's name
+  (`tui.terminal_title=["activity","thread-name","project-name"]`), overriding the user's and a trusted project's own
+  `tui.terminal_title` inside Octoboard's terminal. Codex's first title is what tells Octoboard its session has
+  started, and its activity title is what raises the hand for an action Codex waits on (see "Messages held until a
+  session can take them" in `docs/product/message-delivery.md` and "The raised hand" in `docs/product/sessions.md`),
+  so a configuration that draws no title would otherwise hold the session's messages for good;
+- a resume starts in the session's own working directory without asking (`tui.resume_cwd="current"`), instead of
+  Codex offering to switch to the directory the conversation last ran in;
+- Codex's prompt to try a newer model is suppressed for every model that the models cache (`models_cache.json`) in
+  the Codex home that launch uses lists an upgrade for (`notice.model_migrations`), and nothing is passed when that cache is
+  missing, unreadable or lists none; its nudge to switch to another model as a rate limit nears is hidden
+  (`notice.hide_rate_limit_model_nudge=true`). Each of these screens, like the working-directory choice above, would
+  take a message written into the session as its answer; one that comes up all the same holds the session's messages
+  until the user has answered it (see "Messages held until a session can take them" in
+  `docs/product/message-delivery.md`). Like the title items and the working directory, these hold for that launch
+  alone; nothing is written into the user's configuration;
 - the review Codex would otherwise raise for Octoboard's own hooks is bypassed, which costs two warning lines in the
   session's own output on **every** launch, a resume included. The bypass covers hook review only; it does not weaken
   the sandbox or the approval policy. These two lines are a standing cost, not a defect waiting to be fixed: Codex
@@ -368,7 +384,8 @@ conditions that are visible:
 An explicit Codex approval reviewer chosen for the account in Settings takes precedence on every launch, a resume
 included. When the account follows its configuration, whether Codex resolves approval requests by itself is read
 from `config.toml` in the Codex home that launch uses: the session's Codex config directory, else a `CODEX_HOME` the
-user's shell exports, else `~/.codex`. The account choices and their lifetime rules are in "Approval modes" in
+user's shell exports, else `~/.codex`. A trusted project's own `.codex/config.toml`, which Codex itself layers over
+that file, is not consulted for this. The account choices and their lifetime rules are in "Approval modes" in
 `docs/product/agent-accounts.md`.
 
 **Grok Build.** A Grok session runs against a per-session Grok home that Octoboard builds afresh on every launch from a

@@ -13,8 +13,9 @@ or a project session — named by its own binding rather than looked up, since a
 hold several console sessions. It arrives as a user message naming the reporting session's id, its title and project,
 the status, the open items, and then the summary. The reporting session is told that it was delivered, that it was
 accepted and will reach its owner as soon as the owner can take a message, or that it was written into the owner's input
-but the owner's agent did not send it, so the owner has not read it, the user has been told, and it must not be sent
-again (see "A message written but not sent" in `docs/product/message-delivery.md`). The note calls the owner a console
+but the owner's agent did not send it to the conversation, so the owner has not read it, the user has been told, and it
+must not be sent again (see "A message written but not sent" and "A message a dialog discarded or a view took" in
+`docs/product/message-delivery.md`). The note calls the owner a console
 session or a project session according to which it is.
 
 Reporting fails, and leaves the session exactly as it was, when:
@@ -70,7 +71,8 @@ and the session is archived anyway rather than being left alive until the owner 
 to it.
 
 **A report left unsent archives nothing.** A report that would have archived the session, written into the owner's
-input but not sent by the owner's agent (see "A message written but not sent" in `docs/product/message-delivery.md`),
+input but not sent to its conversation by the owner's agent — left in the input box or taken by a view of its background
+agents (see "A message written but not sent" in `docs/product/message-delivery.md`) —
 leaves the reporting session running and awaiting instructions, and its answer adds that the session was not archived
 because its owner has not read the report. The report still counts as the session's own for that turn, so no report is
 synthesised when the turn ends. Nothing archives the session later by itself, and it was told not to send the report

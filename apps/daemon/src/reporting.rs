@@ -78,8 +78,10 @@ pub enum Delivery {
     /// Accepted and queued. It goes in as soon as the session can take one, so the sender must not
     /// send it again.
     Queued,
-    /// Written, but the session's agent did not send it: the text is waiting in its input box for
-    /// the user, who has been told. The session has not read it, and it must not be sent again.
+    /// Written, but the session's agent did not take it as a message to its conversation: the text
+    /// is waiting in its input box for the user, or went to a view of its background agents
+    /// instead. The user has been told. The session has not read it, and it must not be sent
+    /// again.
     Unsent,
 }
 
@@ -120,7 +122,8 @@ pub enum WhenBlocked {
 /// writes (`TrustState::holds_writes`) is blocked as well.
 ///
 /// **Blocks** on the PTY write and, for an idle Claude Code session, on the few seconds' wait for
-/// its agent to send it; callers on the runtime are responsible for keeping it off a worker.
+/// its agent to send it (twice, for a message a dialog discarded and that is written again);
+/// callers on the runtime are responsible for keeping it off a worker.
 pub fn write_message(
     state: &Arc<AppState>,
     id: &str,
@@ -178,6 +181,16 @@ pub fn write_message(
         // later one was written after this one went in.
         Drain::Unsent(unsent) if unsent < ticket => Ok(Delivery::Queued),
         Drain::Unsent(_) => Ok(Delivery::Written),
+        // The discarded message is back at the front of the queue, so this message is queued
+        // whether it is that one or waits behind it; one queued before it was written first.
+        Drain::Discarded(discarded) if discarded <= ticket => Ok(Delivery::Queued),
+        Drain::Discarded(_) => Ok(Delivery::Written),
+        // Taken by a view of background agents, so the conversation has not read it, which is what
+        // `Unsent` says of a message; a later one waits for the view to be left, an earlier one
+        // was written before it.
+        Drain::Diverted(diverted) if diverted == ticket => Ok(Delivery::Unsent),
+        Drain::Diverted(diverted) if diverted < ticket => Ok(Delivery::Queued),
+        Drain::Diverted(_) => Ok(Delivery::Written),
         Drain::Lost => Err(CodedError::raised(
             error_code::QUEUED_MESSAGES_LOST,
             lost_message(),
@@ -332,8 +345,9 @@ fn deliver_and_archive(
             "Report accepted; the {owner_kind} will see it as soon as it can take a message."
         ),
         (Delivery::Unsent, _) => format!(
-            "Your report was written into the {owner_kind}'s input, but its agent did not send it, \
-             so the {owner_kind} has not read it; the user has been told. Do not send it again.{}",
+            "Your report was written into the {owner_kind}'s input, but its agent did not send it \
+             to the conversation, so the {owner_kind} has not read it; the user has been told. Do \
+             not send it again.{}",
             if held_back {
                 " This session was not archived, because its owner has not read the report."
             } else {

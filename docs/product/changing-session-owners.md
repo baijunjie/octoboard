@@ -66,7 +66,8 @@ reported on to its owner as usual (see "When a session does not report" in
 The call returns `session`, `owner` (the new owner's id), `owner_kind` (`console` or `project`) and a `note` saying the
 session now reports to the new owner and is no longer the caller's, and whether each of the two was told, will be told
 as soon as it can take a message, could not be told, with the reason, or was not told because the message was written
-into its input but its agent did not send it, the user having been told to check it (see "A message written but not
+into its input but its agent did not send it to the conversation — it is in the input box, or went to a view of the
+agent's background agents — the user having been told to check the session (see "A message written but not
 sent" in `docs/product/message-delivery.md`). When the new owner could not be told, the note says to tell it of the
 handover with `share_info`. Once the binding has changed the handover stands, whatever became of the messages.
 
@@ -95,7 +96,7 @@ synthesised report (see "When a session does not report" in
 
 The call returns `owner`, `owner_kind` and a `note` telling the caller that it is now bound to that owner (as its lead
 session, where it is one) and whether its summary was sent as its first report — or was written into the owner's input
-as its first report but not sent by the owner's agent, so the owner has not read it, the user has been told, and it is
+as its first report but not sent to its conversation by the owner's agent, so the owner has not read it, the user has been told, and it is
 not to be sent again (see "A message written but not sent" in `docs/product/message-delivery.md`); that from now on the
 owner is the one it takes work from, or the user typing in its terminal, and it reports to it with `report` once per
 round of work, which replaces what its role description says about being unbound and not calling `report`; that `done`

@@ -3503,6 +3503,14 @@ pub mod notice_code {
     /// box; nothing more is written into the session until a prompt is sent. `params` names the
     /// `agent`.
     pub const MESSAGE_NOT_SENT: &str = "message_not_sent";
+    /// A message written into the session was thrown away by a dialog its agent raised as the
+    /// message went in; it is back at the front of the queue and is written again once the dialog
+    /// has been answered. `params` names the `agent`.
+    pub const MESSAGE_DISCARDED_BY_DIALOG: &str = "message_discarded_by_dialog";
+    /// A message written into the session went to a view of its agent's background agents (a
+    /// subagent, or a new background session) rather than the conversation, and is not written
+    /// again. `params` names the `agent`.
+    pub const MESSAGE_DIVERTED_BY_VIEW: &str = "message_diverted_by_view";
     /// Before the session launched, some of its sharing account's links to the default
     /// configuration could not be repaired; the session launched all the same. `params` names
     /// the `account`, its `name` and `items`, as `account_sharing_failed`'s.

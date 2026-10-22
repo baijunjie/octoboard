@@ -38,7 +38,7 @@ use crate::protocol::{
 use crate::reporting::{self, Delivery, ReportStatus, WhenBlocked};
 use crate::session_request;
 use crate::sharing::{self, OwnerCopy};
-use crate::state::AppState;
+use crate::state::{AppState, WriteHold};
 
 use super::account_switch;
 use super::args::{
@@ -452,8 +452,9 @@ fn delivery_note(delivery: Delivery) -> &'static str {
         }
         Delivery::Unsent => {
             "Not sent: the message was written into this session's input, but its agent did not \
-             send it, so the session has not read it. The user has been told to check it; do not \
-             send it again."
+             send it to the conversation (it is in the input box, or went to a view of its \
+             background agents), so the session has not read it. The user has been told to check \
+             the session; do not send it again."
         }
     }
 }
@@ -467,7 +468,7 @@ async fn get_session(
     let output = recent_output(state, &target.id).await;
     let mut description = describe_session(state, &target, caller)?;
     description["recent_output"] = json!(output);
-    if target.status == SessionStatus::WaitingUser {
+    if state.shown_status(&target) == SessionStatus::WaitingUser {
         description["note"] = json!(
             "This session is waiting for the user, not for you. Leave it be until they have \
              answered."
@@ -711,9 +712,10 @@ async fn reopen_session(
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
     let target = resolve_owned_session(state, caller, required_str(arguments, "session")?)?;
-    // The instruction travels with the relaunch rather than being written after it: whichever hook
-    // would release it can fire the moment the agent starts, so the queueing belongs inside the
-    // launch, where a refusal also undoes it.
+    // The instruction travels with the relaunch rather than being written after it. A Claude Code
+    // resume takes it as the launch's prompt; for the other agents it is queued inside the
+    // launch, because whichever hook would release it can fire the moment the agent starts, and a
+    // refusal there also undoes it.
     coordinator::resume_session(
         state,
         &target.id,
@@ -791,8 +793,8 @@ async fn share_info(
             " Its owner's copy is queued, and will arrive as soon as the owner can take it.",
         ),
         OwnerCopy::Sent(Delivery::Unsent) => note.push_str(
-            " Its owner's copy was written into the owner's input but not sent; the user has been \
-             told.",
+            " Its owner's copy was written into the owner's input but not sent to its \
+             conversation; the user has been told.",
         ),
         OwnerCopy::Failed(reason) => note.push_str(&format!(
             " Its owner could not be sent a copy ({reason}); the information itself was not \
@@ -1025,11 +1027,14 @@ fn describe_session(state: &Arc<AppState>, session: &Session, caller: &Session) 
             .map(|owner| owner.role.kind()),
         None => None,
     };
+    // Looked at before the status is read, so that the status, which reads the screen as that look
+    // left it, and the hold cannot disagree about a dialog that came up in between.
+    let write_hold = state.write_hold(&session.id);
     Ok(json!({
         "session": session.id,
         "title": session.title,
         "agent": session.agent,
-        "status": session.status,
+        "status": state.shown_status(session),
         // What an idle session has left running in the background: it takes a message like any
         // idle session, but its work is not over. Empty for every other status.
         "background_tasks": state.shown_background_tasks(session),
@@ -1046,7 +1051,58 @@ fn describe_session(state: &Arc<AppState>, session: &Session, caller: &Session) 
         "yours": session.bound_to.as_deref() == Some(caller.id.as_str()),
         "started_at": session.started_at,
         "ended_at": session.ended_at,
+        // Messages sent to this session that are waiting to be written into it.
+        "queued_messages": state.queued_count(&session.id),
+        // What keeps them waiting while `status` alone would say the session can take one, so an
+        // idle session with messages queued is not left unexplained. Null when nothing holds it.
+        "writes_held": write_hold.map(|hold| {
+            let mut held = json!({
+                "reason": hold.code(),
+                "explanation": write_hold_explanation(hold),
+            });
+            if let Some(dialog) = hold.dialog() {
+                held["dialog"] = json!(dialog);
+            }
+            held
+        }),
     }))
+}
+
+/// What an owner is told about a hold on a session's writes, and what, if anything, it can do.
+fn write_hold_explanation(hold: WriteHold) -> &'static str {
+    match hold {
+        WriteHold::Starting => {
+            "Its agent has not yet signalled that it is past its startup screens, so nothing is \
+             written into it in case one is still up. Messages for it are queued and go in once \
+             that signal arrives; if this lasts, the user has to look at the session."
+        }
+        WriteHold::TrustConfirmation => {
+            "Its agent is asking whether to trust its folder. Messages for it are queued until \
+             that is answered."
+        }
+        WriteHold::AgentDialog(_) => {
+            "Its agent is showing a dialog that only the user can answer, and a message written \
+             into it would answer the dialog instead. Messages for it are queued until the dialog \
+             is gone."
+        }
+        WriteHold::AgentAction => {
+            "Its agent is waiting on the user. Messages for it are queued until the user has \
+             answered."
+        }
+        WriteHold::AgentError => {
+            "Its agent has just stopped on an error. Messages for it are queued for a moment, \
+             until it is clear whether the agent is showing a prompt only the user can answer."
+        }
+        WriteHold::Handoff => {
+            "It is being handed off to another agent. Messages for it are queued and go to the \
+             session that takes its place."
+        }
+        WriteHold::UnsentMessage => {
+            "A message written into it was not sent by its agent and is waiting in its input box; \
+             the user has been told. Nothing more is written into it until a prompt is sent \
+             there, and messages for it are queued until then. Do not send it again."
+        }
+    }
 }
 
 /// Makes raw PTY output readable: escape sequences and the cursor-control bytes an agent's
@@ -1921,6 +1977,87 @@ pub(super) mod tests {
         assert!(!tail.contains('\x1b'), "{tail:?}");
         assert!(tail.len() <= 8 * 1024, "{}", tail.len());
         assert!(read("archived-of-b").await["recent_output"].is_null());
+    }
+
+    /// A running session that holds what is queued for it says so and why, in the listing and in
+    /// `get_session` alike, however idle its status reads; one with no process holds nothing.
+    #[tokio::test]
+    async fn a_session_holding_its_queue_says_why() {
+        let (state, _dir) = shared_console_state("tool-surface-write-hold");
+        let held = |listed: &Value| {
+            let session = listed["sessions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|session| session["session"] == "of-a")
+                .unwrap()
+                .clone();
+            (
+                session["writes_held"].clone(),
+                session["queued_messages"].clone(),
+            )
+        };
+        let fetched = || async {
+            let fetched = call(
+                &state,
+                "a",
+                "get_session",
+                &arguments(json!({ "session": "of-a" })),
+            )
+            .await
+            .unwrap();
+            (
+                fetched["writes_held"].clone(),
+                fetched["queued_messages"].clone(),
+            )
+        };
+        let listed = || async {
+            call(&state, "a", "list_sessions", &Map::new())
+                .await
+                .unwrap()
+        };
+
+        assert_eq!(fetched().await, (Value::Null, json!(0)));
+
+        // Freshly launched, before its agent's first hook.
+        let live = crate::test_support::watched_live_session(
+            "of-a",
+            Agent::Claude,
+            80,
+            24,
+            "sleep 30",
+            None,
+        );
+        state.register_live((*live).clone());
+        state.queue_message("of-a", "go on");
+        let (hold, queued) = fetched().await;
+        assert_eq!(hold["reason"], "starting");
+        assert!(hold["explanation"].as_str().unwrap().contains("startup"));
+        assert_eq!(queued, 1);
+        assert_eq!(held(&listed().await), (hold, json!(1)));
+
+        live.trust.end_watch();
+        assert_eq!(fetched().await.0, Value::Null);
+
+        live.mark_unsent(live.prompts_sent());
+        assert_eq!(fetched().await.0["reason"], "unsent_message");
+        assert_eq!(held(&listed().await).0["reason"], "unsent_message");
+
+        // A dialog on its screen outranks the unsent message, and the session reads as waiting
+        // for the user here as it does to a client, though its stored status is idle.
+        live.on_output(b"Resume this conversation?\r\nEnter to confirm \xc2\xb7 Esc to resume\r\n");
+        let fetched = call(
+            &state,
+            "a",
+            "get_session",
+            &arguments(json!({ "session": "of-a" })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(fetched["status"], "waiting_user");
+        assert_eq!(fetched["writes_held"]["reason"], "agent_dialog");
+        assert_eq!(fetched["writes_held"]["dialog"], "claude_resume_at_launch");
+        assert!(fetched["note"].is_string());
     }
 
     /// The archive of a project is listed whole, owners marked, rather than filtered to the caller.

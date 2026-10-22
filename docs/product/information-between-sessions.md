@@ -5,8 +5,8 @@ every console and project, and tell any of them things. Neither needs to own the
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `list_sessions` | — | The running sessions other than the caller, in every console and project, console sessions included, each with its status, title, agent, `role` (a console or a project session), `console`, `project` (null for a console session), `background_tasks`, `owner`, `owner_kind` and `yours` as in the orchestration tools' reads (see "The console session's tools" in `docs/product/hub-orchestration.md`), and `your_owner` marking the one that owns the caller. The caller's own owner is also given at the top level (null when the caller is unbound or a console session). |
-| `share_info` | `session`, `text` | Writes `text` into a running session, of any project or console, console sessions included, as information from the caller. Answers with `delivered` and a `note` saying, as the owner's `send_message` does (see "The console session's tools" in `docs/product/hub-orchestration.md`), whether it was delivered, queued, or written into the receiver's input but not sent by its agent, and whether the receiver's owner was sent a copy — a copy written into the owner's input but not sent is reported as such, the user having been told. Refused, with the reason in prose, for the caller itself, a session that does not exist, and a session with no process running. |
+| `list_sessions` | — | The running sessions other than the caller, in every console and project, console sessions included, each with its status, title, agent, `role` (a console or a project session), `console`, `project` (null for a console session), `background_tasks`, `queued_messages`, `writes_held`, `owner`, `owner_kind` and `yours` as in the orchestration tools' reads (see "The console session's tools" in `docs/product/hub-orchestration.md`), and `your_owner` marking the one that owns the caller. The caller's own owner is also given at the top level (null when the caller is unbound or a console session). |
+| `share_info` | `session`, `text` | Writes `text` into a running session, of any project or console, console sessions included, as information from the caller. Answers with `delivered` and a `note` saying, as the owner's `send_message` does (see "The console session's tools" in `docs/product/hub-orchestration.md`), whether it was delivered, queued, or written into the receiver's input but not sent to its conversation by its agent, and whether the receiver's owner was sent a copy — a copy written into the owner's input but not sent to its conversation is reported as such, the user having been told. Refused, with the reason in prose, for the caller itself, a session that does not exist, and a session with no process running. |
 
 **Information is not instruction.** Every session knows who it belongs to: the console session or project session it
 is bound to, or the user for an unbound project session or a console session. It takes work only from that owner (or
@@ -37,7 +37,8 @@ message right now is queued.
 
 Delivery is the same as for any other message: sanitized as in "Messages held until a session can take them" in
 `docs/product/message-delivery.md`, held when the receiver's own agent is waiting for the user — at a permission prompt
-or a question of its own — or may be at its trust confirmation, and refused when it has no process running. A receiver
+or a question of its own — may be at its trust confirmation, or shows a screen only the user can answer, and refused
+when it has no process running. A receiver
 reading as *waiting for the user* only because a session request of its own is waiting takes the message straight
 away, since what has to be answered there is a dialog (see "Waiting for the answer" in
 `docs/product/session-requests.md`). The two tools are on by default and have no setting. A session launched before

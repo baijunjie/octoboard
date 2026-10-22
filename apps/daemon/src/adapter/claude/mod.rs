@@ -83,6 +83,13 @@ const HOOK_EVENTS: &[&str] = &[
 /// to a URL from inside the agent's own process. Older ones only run commands.
 const HTTP_HOOKS_SINCE: AgentVersion = (2, 1, 63);
 
+/// The registered events Claude Code skips an HTTP handler for (it runs only commands on
+/// `SessionStart` and `Setup`; measured on 2.1.307), so they keep the command handler whatever the
+/// rest use. `SessionStart` is the only hook a launch or resume with no prompt sends, and the
+/// daemon holds every write into the session until a first hook arrives (see `crate::trust`), so
+/// without it such a session would hold its messages until the user typed a prompt.
+const COMMAND_ONLY_EVENTS: &[&str] = &["SessionStart"];
+
 /// The status line is injected only for a Claude Code known to be at least this version, well
 /// inside the releases that run a `statusLine` command; one whose input carries no context window
 /// still passes the user's own status line through and reports nothing.
@@ -102,16 +109,16 @@ fn parse_version(text: &str) -> Option<AgentVersion> {
 }
 
 impl ClaudeAdapter {
-    /// The `--settings` JSON. A Claude Code that takes HTTP hooks posts each event to the daemon
-    /// itself, so a hook costs no process at all; with an older or unknown version, or when a
-    /// settings file's `allowedHttpHookUrls` leaves the daemon's URL out (Claude Code then skips
-    /// every HTTP hook silently), each event runs a command instead. `async` keeps a slow command
-    /// off the turn's critical path (a 30 s hook took a turn from 6.8 s to 36.7 s without it) and
-    /// `timeout` bounds it regardless; an HTTP hook has no `async`, and is kept off the critical
-    /// path by the route answering before the event is applied (see `server::hook_callback`).
-    /// Claude Code runs a command through a shell, so the daemon is exec'd by the command itself
-    /// rather than through the per-session hook script, which would be one more process to start
-    /// per event.
+    /// The `--settings` JSON. A Claude Code that takes HTTP hooks posts each event to the
+    /// daemon itself, so a hook costs no process at all, except for [`COMMAND_ONLY_EVENTS`];
+    /// with an older or unknown version, or when a settings file's `allowedHttpHookUrls` leaves
+    /// the daemon's URL out (Claude Code then skips every HTTP hook silently), each event runs
+    /// a command instead. `async` keeps a slow command off the turn's critical path (a 30 s
+    /// hook took a turn from 6.8 s to 36.7 s without it) and `timeout` bounds it regardless; an
+    /// HTTP hook has no `async`, and is kept off the critical path by the route answering
+    /// before the event is applied (see `server::hook_callback`). Claude Code runs a command
+    /// through a shell, so the daemon is exec'd by the command itself rather than through the
+    /// per-session hook script, which would be one more process to start per event.
     ///
     /// A daemon that cannot be reached, or does not answer within the timeout, shows a
     /// non-blocking error notice in Claude Code for an HTTP hook, where the command form swallows
@@ -121,22 +128,24 @@ impl ClaudeAdapter {
         let url = hook_url(spec.session_id, spec.daemon_port);
         let http = spec.agent_version.is_some_and(|v| v >= HTTP_HOOKS_SINCE)
             && http_hooks_allowed(&url, &settings_files(spec, pinned));
-        let handler = if http {
-            json!({
-                "type": "http",
-                "url": url,
-                "timeout": HOOK_TIMEOUT_SECS,
-            })
-        } else {
-            json!({
-                "type": "command",
-                "command": hook_command(spec.self_exe, spec.session_id, spec.daemon_port),
-                "async": true,
-                "timeout": HOOK_TIMEOUT_SECS,
-            })
-        };
+        let command = json!({
+            "type": "command",
+            "command": hook_command(spec.self_exe, spec.session_id, spec.daemon_port),
+            "async": true,
+            "timeout": HOOK_TIMEOUT_SECS,
+        });
+        let http_handler = json!({
+            "type": "http",
+            "url": url,
+            "timeout": HOOK_TIMEOUT_SECS,
+        });
         let mut hooks = serde_json::Map::new();
         for event in HOOK_EVENTS {
+            let handler = if http && !COMMAND_ONLY_EVENTS.contains(event) {
+                &http_handler
+            } else {
+                &command
+            };
             let mut group = json!({ "hooks": [handler] });
             // Only `idle_prompt` is read (see `crate::hooks`); the matcher keeps the other
             // notifications from being delivered for nothing.
@@ -655,7 +664,8 @@ mod tests {
     }
 
     /// A Claude Code that takes HTTP hooks gets the daemon's hook route, with no process behind any
-    /// event; one older than that, or of a version nobody could tell, keeps the command.
+    /// event but the ones it runs only commands for; one older than that, or of a version nobody
+    /// could tell, keeps the command for every event.
     #[test]
     fn http_hooks_are_injected_from_the_version_that_takes_them() {
         let mut fixture = spec_fixture();
@@ -672,7 +682,7 @@ mod tests {
             for event in HOOK_EVENTS {
                 let handler = &hooks[*event][0]["hooks"][0];
                 assert_eq!(handler["timeout"], HOOK_TIMEOUT_SECS);
-                if http {
+                if http && *event != "SessionStart" {
                     assert_eq!(handler["type"], "http", "{version:?}");
                     assert_eq!(
                         handler["url"], "http://127.0.0.1:4321/hook/session-1",
@@ -681,7 +691,16 @@ mod tests {
                     assert!(handler.get("async").is_none(), "{version:?}");
                     assert!(handler.get("command").is_none(), "{version:?}");
                 } else {
-                    assert_eq!(handler["type"], "command", "{version:?}");
+                    // `SessionStart` among them, which Claude Code runs no HTTP handler for: it is
+                    // the one hook a launch or resume with no prompt sends.
+                    assert_eq!(handler["type"], "command", "{event} {version:?}");
+                    assert_eq!(handler["async"], true, "{event} {version:?}");
+                    assert_eq!(
+                        handler["command"],
+                        "exec '/opt/octoboard/octoboardd' hook --session 'session-1' --port 4321 \
+                         2>/dev/null",
+                        "{event} {version:?}"
+                    );
                 }
                 assert_eq!(
                     hooks[*event][0].get("matcher").and_then(|m| m.as_str()),

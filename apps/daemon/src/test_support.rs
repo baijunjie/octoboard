@@ -393,30 +393,6 @@ pub(crate) fn watched_live_session(
     script: &str,
     carried_trust: Option<crate::trust::CarriedTrust>,
 ) -> StandIn {
-    live_session_watching(id, agent, cols, rows, script, carried_trust, false)
-}
-
-/// [`watched_live_session`] for an agent whose configuration switches off the signal that ends its
-/// watch (`LaunchPlan::start_signal_missing`), so that the watch is bounded.
-pub(crate) fn unsignalled_live_session(
-    id: &str,
-    agent: Agent,
-    cols: u16,
-    rows: u16,
-    script: &str,
-) -> StandIn {
-    live_session_watching(id, agent, cols, rows, script, None, true)
-}
-
-fn live_session_watching(
-    id: &str,
-    agent: Agent,
-    cols: u16,
-    rows: u16,
-    script: &str,
-    carried_trust: Option<crate::trust::CarriedTrust>,
-    start_signal_missing: bool,
-) -> StandIn {
     // Bash rather than `/bin/sh`: callers' scripts may use bash builtins and syntax that dash, the
     // `/bin/sh` of Debian and Ubuntu, lacks.
     let mut cmd = portable_pty::CommandBuilder::new("/bin/bash");
@@ -430,7 +406,6 @@ fn live_session_watching(
         resolves_approvals_itself: false,
         carried_trust,
         before_scratch_removal: None,
-        start_signal_missing,
     })))
 }
 

@@ -15,6 +15,7 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use tokio::sync::broadcast;
 
+use crate::agent_dialogs::Sighting;
 use crate::hooks::BackgroundTasksChange;
 use crate::outbox::{Drain, Outbox, PromptSignal, Ticket};
 use crate::protocol::{
@@ -274,6 +275,50 @@ pub struct AppState {
     shutdown: tokio::sync::Notify,
 }
 
+/// Why nothing is written into a running session for now; see [`AppState::write_hold`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WriteHold {
+    /// The agent has not yet sent the signal that it is past its startup screens: its first hook,
+    /// or for Codex its first terminal title.
+    Starting,
+    /// The agent's folder-trust confirmation is up and has not been answered.
+    TrustConfirmation,
+    /// The agent is showing a dialog only the user can answer, which a message's paste and Enter
+    /// would answer destructively; see [`crate::agent_dialogs`].
+    AgentDialog(crate::agent_dialogs::Dialog),
+    /// Codex's terminal title says it is waiting on the user.
+    AgentAction,
+    /// The agent stopped on an error and may be showing a prompt only the user can answer; held for
+    /// [`crate::session::AGENT_ERROR_SETTLE`] or until a prompt is sent there, whichever is first.
+    AgentError,
+    /// The session is being handed off to another agent.
+    Handoff,
+    /// A message written into it was not sent and is still in its input box.
+    UnsentMessage,
+}
+
+impl WriteHold {
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::Starting => "starting",
+            Self::TrustConfirmation => "trust_confirmation",
+            Self::AgentDialog(_) => "agent_dialog",
+            Self::AgentAction => "agent_action",
+            Self::AgentError => "agent_error",
+            Self::Handoff => "handoff",
+            Self::UnsentMessage => "unsent_message",
+        }
+    }
+
+    /// Which dialog, for [`Self::AgentDialog`].
+    pub fn dialog(self) -> Option<&'static str> {
+        match self {
+            Self::AgentDialog(dialog) => Some(dialog.code),
+            _ => None,
+        }
+    }
+}
+
 /// What the daemon remembers about a session's current turn.
 #[derive(Default)]
 struct TurnState {
@@ -444,6 +489,18 @@ impl PromptSignal for HookPrompts<'_> {
 
     fn unsent_waiting(&self) -> bool {
         self.live.unsent_waiting()
+    }
+
+    fn sighting(&self) -> Sighting {
+        self.live.look_for_dialog()
+    }
+
+    fn watch_screen(&self, on: bool) {
+        self.live.watch_screen(on);
+    }
+
+    fn trust_holds_writes(&self) -> bool {
+        self.live.trust.holds_writes()
     }
 }
 
@@ -808,16 +865,24 @@ impl AppState {
         }
     }
 
+    /// The status a client is shown for a session: the stored one, or waiting for the user while
+    /// its running process is held up by something only the user can answer that no hook reports.
+    pub(crate) fn shown_status(&self, session: &Session) -> SessionStatus {
+        let waiting = !session.status.is_dormant()
+            && self.live_session(&session.id).is_some_and(|live| {
+                live.trust.needs_user() || live.needs_user_action() || live.agent_dialog().is_some()
+            });
+        if waiting {
+            SessionStatus::WaitingUser
+        } else {
+            session.status
+        }
+    }
+
     /// The session as a client receives it, with its resolved title and live user interactions.
     /// These leave the stored agent status intact so answering restores it even before a hook.
     pub(crate) fn wire_session(&self, mut session: Session) -> Session {
-        if !session.status.is_dormant()
-            && self
-                .live_session(&session.id)
-                .is_some_and(|live| live.trust.needs_user() || live.needs_user_action())
-        {
-            session.status = SessionStatus::WaitingUser;
-        }
+        session.status = self.shown_status(&session);
         session.background_tasks = self.shown_background_tasks(&session);
         session.default_effort = self
             .default_efforts
@@ -1467,8 +1532,22 @@ impl AppState {
     /// Writes out whatever is queued for this session, and says what became of it.
     ///
     /// **Blocks** on the PTY write and on the wait for an idle Claude Code session to send what was
-    /// written, so callers on an async path go through [`Self::spawn_flush_outbox`].
+    /// written — twice over for a message a dialog discarded, which is written again in the same
+    /// call — so callers on an async path go through [`Self::spawn_flush_outbox`].
     pub fn flush_outbox(&self, id: &str, status: SessionStatus) -> Drain {
+        self.flush_outbox_once(id, status, true)
+    }
+
+    /// [`Self::flush_outbox`]; `again` says whether a message a dialog discarded may be written
+    /// again here, which is allowed once per call so that a dialog every write brings back cannot
+    /// keep the caller waiting.
+    fn flush_outbox_once(&self, id: &str, status: SessionStatus, again: bool) -> Drain {
+        // Each check below leaves the queue pending, and nothing retries a pending queue by itself:
+        // whatever lifts a hold — a hook, a screen watch seeing the screen go, a timer, the person
+        // answering in the terminal — has to call for a drain on every path it can lift by, and a
+        // hold must never wait on an event that may not come. The same goes for a message put back
+        // on the queue while no drain is running.
+        //
         // A write while a modal dialog is up has its trailing Enter confirm whatever option is
         // highlighted. Check both the caller's hook state and the live interaction below.
         if !matches!(status, SessionStatus::Working | SessionStatus::Idle) {
@@ -1487,8 +1566,21 @@ impl AppState {
         };
         // Nor while the agent may be showing its trust screen, which the paste's trailing Enter
         // would accept (Codex, Grok Build) or decline (Claude Code); see `crate::trust`. The press
-        // that answers it, its first hook or the end of the watch releases the queue.
+        // that answers it, its first hook, the end of the watch or, for an agent whose hook may
+        // never come, its fallback releases the queue.
         if live.trust.holds_writes() || live.needs_user_action() {
+            return Drain::Pending;
+        }
+        // Nor while it shows a dialog of its own, looked for now rather than taken from the watch,
+        // which polls: a dialog that came up since its last look would be answered by the paste.
+        // The drain looks again before each message.
+        if live.look_for_dialog().current.is_some() {
+            return Drain::Pending;
+        }
+        // Nor just after an error the agent stopped on, which can leave a prompt that no hook
+        // announces and the screen may not show yet; for `AGENT_ERROR_SETTLE`, or until a prompt
+        // is sent.
+        if live.agent_error() {
             return Drain::Pending;
         }
         let outcome = self.outbox.drain(
@@ -1518,6 +1610,55 @@ impl AppState {
                 )
                 .about(id),
             );
+        }
+        if matches!(outcome, Drain::Diverted(_)) && still_running {
+            self.broadcast(
+                Notice::new(
+                    notice_code::MESSAGE_DIVERTED_BY_VIEW,
+                    format!(
+                        "{} was showing a view of its background agents while {} wrote a message \
+                         into this session, so the message went there rather than to the \
+                         conversation. Check the session.",
+                        live.agent.label(),
+                        crate::APP_NAME
+                    ),
+                    &[("agent", live.agent.label())],
+                )
+                .about(id),
+            );
+        }
+        if matches!(outcome, Drain::Discarded(_)) && still_running {
+            self.broadcast(
+                Notice::new(
+                    notice_code::MESSAGE_DISCARDED_BY_DIALOG,
+                    format!(
+                        "{} showed a dialog while {} wrote a message into this session and \
+                         discarded the message. {} will write it again once the dialog has been \
+                         answered.",
+                        live.agent.label(),
+                        crate::APP_NAME,
+                        crate::APP_NAME
+                    ),
+                    &[("agent", live.agent.label())],
+                )
+                .about(id),
+            );
+            // The dialog has usually been answered by the message's own Enter, and taken down,
+            // within the write, and answering it runs no hook: with no drain under way any more
+            // and no dialog left for the watch to see go, nothing else would write the message
+            // again. One still up is left to the watch, which drains when it goes. What the second
+            // drain came to is what the sender is told, except a pending one, which does not say
+            // what was written: the first outcome still holds for whatever went in before the
+            // discarded message. A second discard by a dialog gone before anything looks waits for
+            // the next drain.
+            if again && live.look_for_dialog().current.is_none() {
+                if let Ok(record) = self.session_record(id) {
+                    return match self.flush_outbox_once(id, self.agent_status(&record), false) {
+                        Drain::Pending => outcome,
+                        other => other,
+                    };
+                }
+            }
         }
         if outcome == Drain::Lost {
             // Nobody is waiting on a return value for most of these drains, and a message Octoboard
@@ -1564,6 +1705,39 @@ impl AppState {
     /// Removes and returns what is queued for a session, oldest first.
     pub fn take_queued(&self, id: &str) -> Vec<String> {
         self.outbox.take(id)
+    }
+
+    /// How many messages are queued for a session and not yet written into it.
+    pub fn queued_count(&self, id: &str) -> usize {
+        self.outbox.len(id)
+    }
+
+    /// What keeps [`Self::flush_outbox`] from writing into a running session apart from the status
+    /// a hook reported, which a caller reads off the record: a session can read as idle and still
+    /// hold everything queued for it. `None` for one with no process running, or nothing holding
+    /// it.
+    pub fn write_hold(&self, id: &str) -> Option<WriteHold> {
+        let live = self.live_session(id)?;
+        if live.trust.holds_writes() {
+            return Some(if live.trust.waiting() {
+                WriteHold::TrustConfirmation
+            } else {
+                WriteHold::Starting
+            });
+        }
+        if let Some(dialog) = live.look_for_dialog().current {
+            Some(WriteHold::AgentDialog(dialog))
+        } else if live.needs_user_action() {
+            Some(WriteHold::AgentAction)
+        } else if live.agent_error() {
+            Some(WriteHold::AgentError)
+        } else if self.outbox.is_held(id) {
+            Some(WriteHold::Handoff)
+        } else if live.unsent_waiting() {
+            Some(WriteHold::UnsentMessage)
+        } else {
+            None
+        }
     }
 
     /// Throws away anything queued for a session that will never take it — a relaunch that failed,
@@ -2588,6 +2762,195 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
         assert!(!live.needs_user_action());
+    }
+
+    const LAUNCH_DIALOG: &str = "  Resume this conversation?\r\n  \u{276f} 1. Resume\r\n    2. Start a new conversation\r\n  Enter to confirm \u{b7} Esc to resume\r\n";
+    const CLEAR_SCREEN: &str = "\x1b[2J\x1b[H";
+
+    /// A dialog on the screen holds the writes, shows the session as waiting for the user, and the
+    /// queue goes in once the screen shows none.
+    #[test]
+    fn an_agent_dialog_on_the_screen_holds_writes_until_it_is_gone() {
+        let (state, dir) = app_state("state-agent-dialog");
+        insert_record(&state, &dir, "s", SessionStatus::Idle);
+        let live = fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+        assert_eq!(state.write_hold("s"), None);
+
+        live.on_output(LAUNCH_DIALOG.as_bytes());
+        let hold = state.write_hold("s").expect("held");
+        assert_eq!(hold.code(), "agent_dialog");
+        assert_eq!(hold.dialog(), Some("claude_resume_at_launch"));
+        assert_eq!(
+            state
+                .wire_session(state.session_record("s").unwrap())
+                .status,
+            SessionStatus::WaitingUser
+        );
+
+        state.queue_message("s", "go on");
+        assert_eq!(state.flush_outbox("s", SessionStatus::Idle), Drain::Pending);
+        assert_eq!(state.outbox.len("s"), 1);
+
+        live.on_output(CLEAR_SCREEN.as_bytes());
+        assert_eq!(state.write_hold("s"), None);
+        assert_eq!(state.flush_outbox("s", SessionStatus::Idle), Drain::Clear);
+        assert_eq!(state.outbox.len("s"), 0);
+    }
+
+    /// The watch publishes the session when a dialog comes and goes, and writes out what waited.
+    #[tokio::test]
+    async fn the_dialog_watch_raises_the_hand_and_releases_the_queue() {
+        let (state, dir) = app_state("state-agent-dialog-watch");
+        insert_record(&state, &dir, "s", SessionStatus::Idle);
+        let live = fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+        crate::agent_dialogs::watch(&state, &live);
+        let mut events = state.subscribe();
+
+        live.on_output(LAUNCH_DIALOG.as_bytes());
+        let deadline = Instant::now() + PATIENCE;
+        loop {
+            match events.try_recv() {
+                Ok(Event::SessionUpserted { session }) => {
+                    assert_eq!(session.status, SessionStatus::WaitingUser);
+                    break;
+                }
+                _ => {
+                    assert!(Instant::now() < deadline, "the hand was not raised");
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            }
+        }
+
+        state.queue_message("s", "go on");
+        live.on_output(CLEAR_SCREEN.as_bytes());
+        let deadline = Instant::now() + PATIENCE;
+        while state.outbox.len("s") != 0 {
+            assert!(Instant::now() < deadline, "the queue was not released");
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+
+    /// A launch dialog that comes up as a message is written discards it: the message is queued
+    /// again, no unsent mark holds the queue, and the user is told what happened.
+    #[test]
+    fn a_message_a_launch_dialog_discarded_is_queued_again_and_announced() {
+        let (state, dir) = app_state("state-agent-dialog-discard");
+        insert_record(&state, &dir, "s", SessionStatus::Idle);
+        let live = fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+        *state.send_wait.lock().unwrap() = Some(Duration::from_secs(2));
+        let mut events = state.subscribe();
+        state.queue_message("s", "go on");
+        state.queue_message("s", "and then");
+
+        let screen = live.clone();
+        let dialog = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(200));
+            screen.on_output(LAUNCH_DIALOG.as_bytes());
+        });
+        let outcome = state.flush_outbox("s", SessionStatus::Idle);
+        dialog.join().unwrap();
+
+        assert_eq!(outcome, Drain::Discarded(0));
+        assert_eq!(state.outbox.len("s"), 2);
+        assert!(!live.unsent_waiting());
+        assert!(matches!(
+            state.write_hold("s"),
+            Some(WriteHold::AgentDialog(_))
+        ));
+        let mut announced = None;
+        while let Ok(event) = events.try_recv() {
+            if let Event::SessionNotice {
+                session,
+                code,
+                params,
+                ..
+            } = event
+            {
+                announced = Some((session, code, params));
+            }
+        }
+        let (session, code, params) = announced.expect("a notice");
+        assert_eq!(
+            (session.as_str(), code.as_str()),
+            ("s", "message_discarded_by_dialog")
+        );
+        assert_eq!(params.get("agent").map(String::as_str), Some("Claude Code"));
+    }
+
+    /// The dialog a write closes within milliseconds is gone before anything looks at the screen
+    /// after the write, and the message is still known to have been discarded: the screen is looked
+    /// at on every chunk of output while the write is waited on. With the dialog gone, the message
+    /// is written again at once.
+    #[test]
+    fn a_dialog_drawn_and_closed_inside_the_write_still_discards_the_message() {
+        let (state, dir) = app_state("state-agent-dialog-closed");
+        insert_record(&state, &dir, "s", SessionStatus::Idle);
+        let live = fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+        *state.send_wait.lock().unwrap() = Some(Duration::from_secs(1));
+        state.queue_message("s", "go on");
+
+        let screen = live.clone();
+        let dialog = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(200));
+            screen.on_output(LAUNCH_DIALOG.as_bytes());
+            screen.on_output(CLEAR_SCREEN.as_bytes());
+        });
+        let outcome = state.flush_outbox("s", SessionStatus::Idle);
+        dialog.join().unwrap();
+
+        // Written again, and what the second write came to is the answer: the stand-in sends no
+        // prompt, so this time it is left unsent.
+        assert_eq!(outcome, Drain::Unsent(0));
+        assert_eq!(state.outbox.len("s"), 0);
+        assert!(live.unsent_waiting());
+        assert_eq!(state.write_hold("s"), Some(WriteHold::UnsentMessage));
+        assert_eq!(live.look_for_dialog().current, None);
+    }
+
+    /// A view of background agents takes the message it is written while it comes up: the message
+    /// is not queued again and holds nothing, the sender is told it did not reach the conversation,
+    /// and the user is told where it went.
+    #[test]
+    fn a_message_a_view_of_background_agents_took_is_announced_and_not_queued_again() {
+        let (state, dir) = app_state("state-agent-view-diverted");
+        insert_record(&state, &dir, "s", SessionStatus::Idle);
+        let live = fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+        *state.send_wait.lock().unwrap() = Some(Duration::from_secs(1));
+        let mut events = state.subscribe();
+        state.queue_message("s", "go on");
+        state.queue_message("s", "and then");
+
+        let screen = live.clone();
+        let view = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(200));
+            screen.on_output("  \u{25ef} main\r\n".as_bytes());
+        });
+        let outcome = state.flush_outbox("s", SessionStatus::Idle);
+        view.join().unwrap();
+
+        assert_eq!(outcome, Drain::Diverted(0));
+        assert_eq!(state.outbox.len("s"), 1);
+        assert!(!live.unsent_waiting());
+        assert!(matches!(
+            state.write_hold("s"),
+            Some(WriteHold::AgentDialog(_))
+        ));
+        let mut announced = None;
+        while let Ok(event) = events.try_recv() {
+            if let Event::SessionNotice { session, code, .. } = event {
+                announced = Some((session, code));
+            }
+        }
+        let (session, code) = announced.expect("a notice");
+        assert_eq!(
+            (session.as_str(), code.as_str()),
+            ("s", "message_diverted_by_view")
+        );
     }
 
     #[test]

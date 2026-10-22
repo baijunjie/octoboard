@@ -7,9 +7,11 @@
 //! - **Order-preserving.** A message that cannot be written yet does not let a later one past it.
 //!   Reports from several project sessions arriving at one console session, and a console
 //!   session's follow-up landing after the report it answers, both rest on this.
-//! - **Nothing is dropped once accepted**, with two exceptions: a half-written message (below),
-//!   whose drain reports the loss; and a session whose process ends, which takes its queue with it.
-//!   Short of those, whoever queued a message was told not to send it again and is right.
+//! - **Nothing is dropped once accepted**, with three exceptions: a half-written message (below),
+//!   whose drain reports the loss; a message a view of the agent's took instead of the
+//!   conversation (below), which is reported too; and a session whose process ends, which takes
+//!   its queue with it. Short of those, whoever queued a message was told not to send it again and
+//!   is right.
 //! - **A held queue is kept and not written.** A handoff holds the original's queue: messages are
 //!   still accepted, a drain in progress stops at its next message, and the queue survives the
 //!   session's process ending, so that its holder can forward it to the session that takes over
@@ -50,6 +52,20 @@
 //! that holds the queue is the running process's, kept beside its count of prompts sent
 //! ([`PromptSignal`]), so it goes with that process and never holds the next one's queue.
 //!
+//! **A message a dialog threw away is put back.** A modal dialog that appears at launch (Claude
+//! Code's "Resume this conversation?") discards a paste and lets the Enter pick a row, so the
+//! message is nowhere. Such a dialog is held for before any write (`PromptSignal::sighting`), and
+//! when one is seen to have come up between a write and the end of the wait for its report, the
+//! message goes back to the front of the queue with its ticket and no unsent mark is set. The
+//! screen is looked at on every chunk of output while a checked write is in flight
+//! (`PromptSignal::watch_screen`), because the write itself can close such a dialog within
+//! milliseconds, leaving nothing on screen to see once the wait is over.
+//!
+//! **A message a view took is not put back.** Claude Code's views of its background agents take
+//! what is written into them: it reaches a subagent or starts another session. Writing it again
+//! would deliver it twice, so it is neither queued again nor marked unsent; the drain reports it
+//! and stops, and the queue waits behind the view like any other dialog.
+//!
 //! Recovery from the ordinary case — nothing written, because the session could not take it — has
 //! no timer of its own: the message waits at the front of the queue for the next drain, which
 //! something outside triggers (a status a hook reported, or another message being queued). The
@@ -60,6 +76,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
+use crate::agent_dialogs::Sighting;
 use crate::ptyio::PartialWrite;
 use crate::session::LiveSession;
 use crate::term;
@@ -76,6 +93,13 @@ pub enum Drain {
     /// The message with this ticket was written, but the agent did not report sending it. Its text
     /// is in the session's input box, and the rest of the queue waits for the next prompt sent.
     Unsent(Ticket),
+    /// The message with this ticket was written while a dialog came up that threw it away. It is
+    /// back at the front of the queue, which waits for the dialog to be answered.
+    Discarded(Ticket),
+    /// The message with this ticket was written while a view of the agent's background agents came
+    /// up, which took it in place of the conversation. It is not queued again; the rest of the
+    /// queue waits for the view to be left.
+    Diverted(Ticket),
 }
 
 /// What [`Outbox::push`] hands back for a message, for telling it apart in a drain's outcome.
@@ -95,6 +119,32 @@ pub trait PromptSignal {
     /// Whether a message marked unsent is still waiting, which it is until the count moves past
     /// the one it was marked at.
     fn unsent_waiting(&self) -> bool;
+    /// Looks at the agent's screen now: whether it shows a dialog only the user can answer, which
+    /// a message written into it would answer destructively, and how many times dialogs of each
+    /// kind have come up so far, including any that have gone again.
+    fn sighting(&self) -> Sighting;
+    /// Starts (`true`) or ends (`false`) having the screen looked at on every chunk of output, so
+    /// that a dialog drawn and closed between two calls of [`Self::sighting`] is still counted.
+    fn watch_screen(&self, on: bool);
+    /// Whether the agent's folder-trust screen has been sighted and not answered, which a message
+    /// written into it would answer.
+    fn trust_holds_writes(&self) -> bool;
+}
+
+/// A screen watch that ends when it is dropped, so no return from a drain leaves it on.
+struct ScreenWatch<'a, P: PromptSignal>(&'a P);
+
+impl<'a, P: PromptSignal> ScreenWatch<'a, P> {
+    fn start(prompts: &'a P) -> Self {
+        prompts.watch_screen(true);
+        Self(prompts)
+    }
+}
+
+impl<P: PromptSignal> Drop for ScreenWatch<'_, P> {
+    fn drop(&mut self) {
+        self.0.watch_screen(false);
+    }
 }
 
 #[derive(Default)]
@@ -180,19 +230,39 @@ impl Outbox {
             if self.is_held(id) {
                 return Drain::Pending;
             }
-            if prompts.unsent_waiting() {
+            if prompts.unsent_waiting() || prompts.trust_holds_writes() {
+                return Drain::Pending;
+            }
+            // Asked afresh for every message: once one is sent the agent reads as working, and what
+            // follows is queued by the agent until that turn ends.
+            let checked = prompts.expects_send();
+            // From before the look at the screen until the write has been waited on, so that a
+            // dialog coming up in between, and gone again, is counted all the same. The look is
+            // also the mark the count is compared with.
+            let _watch = checked.then(|| ScreenWatch::start(prompts));
+            let seen = prompts.sighting();
+            if seen.current.is_some() {
                 return Drain::Pending;
             }
             let Some((ticket, text)) = self.pop(id) else {
                 return Drain::Clear;
             };
-            // Asked afresh for every message: once one is sent the agent reads as working, and what
-            // follows is queued by the agent until that turn ends.
-            let checked = prompts.expects_send();
             let before = prompts.sent();
             match write(&text) {
                 Ok(()) if !checked || prompts.wait_past(before) => {}
                 Ok(()) => {
+                    let now = prompts.sighting();
+                    if now.discarded_seen > seen.discarded_seen {
+                        // Its paste went to a dialog that discarded it, so unlike an unsent
+                        // message nothing of it is in the input box.
+                        tracing::warn!(session = %id, "a dialog discarded a written message");
+                        self.push_front(id, ticket, text);
+                        return Drain::Discarded(ticket);
+                    }
+                    if now.diverted_seen > seen.diverted_seen {
+                        tracing::warn!(session = %id, "a view of background agents took a message");
+                        return Drain::Diverted(ticket);
+                    }
                     tracing::warn!(session = %id, "a written message was not sent by the agent");
                     prompts.mark_unsent(before);
                     return Drain::Unsent(ticket);
@@ -315,6 +385,7 @@ impl Outbox {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent_dialogs::{Dialog, WrittenMessage};
     use std::cell::Cell;
 
     /// An agent mid-turn, or one that reports no prompts at all: nothing written is waited on.
@@ -336,6 +407,15 @@ mod tests {
         fn unsent_waiting(&self) -> bool {
             false
         }
+        fn sighting(&self) -> Sighting {
+            Sighting::default()
+        }
+        fn watch_screen(&self, _on: bool) {
+            unreachable!("nothing is checked mid-turn")
+        }
+        fn trust_holds_writes(&self) -> bool {
+            false
+        }
     }
 
     /// An agent at its prompt that sends a written message, or none while `sends` is off, and is
@@ -347,6 +427,16 @@ mod tests {
         waits: Cell<u32>,
         unsent: Cell<Option<u64>>,
         busy: Cell<bool>,
+        dialog: Cell<Option<Dialog>>,
+        /// What the screen has shown so far.
+        sighting: Cell<Sighting>,
+        /// A dialog that comes up while the next message is waited on, and whether it is gone
+        /// again by the time the wait ends.
+        dialog_on_wait: Cell<Option<(Dialog, bool)>>,
+        /// Screen watches in force, and the most that ever were.
+        watching: Cell<i32>,
+        watched_during_wait: Cell<bool>,
+        trust_holds: Cell<bool>,
     }
 
     impl AtPrompt {
@@ -357,7 +447,19 @@ mod tests {
                 waits: Cell::new(0),
                 unsent: Cell::new(None),
                 busy: Cell::new(false),
+                dialog: Cell::new(None),
+                sighting: Cell::new(Sighting::default()),
+                dialog_on_wait: Cell::new(None),
+                watching: Cell::new(0),
+                watched_during_wait: Cell::new(false),
+                trust_holds: Cell::new(false),
             }
+        }
+
+        /// The screen now shows `dialog`, or none.
+        fn show(&self, dialog: Option<Dialog>) {
+            self.dialog.set(dialog);
+            self.sighting.set(self.sighting.get().after(dialog));
         }
 
         fn prompt_sent(&self) {
@@ -375,6 +477,13 @@ mod tests {
         }
         fn wait_past(&self, before: u64) -> bool {
             self.waits.set(self.waits.get() + 1);
+            self.watched_during_wait.set(self.watching.get() > 0);
+            if let Some((dialog, gone_again)) = self.dialog_on_wait.take() {
+                self.show(Some(dialog));
+                if gone_again {
+                    self.show(None);
+                }
+            }
             if self.sends.get() {
                 self.prompt_sent();
             }
@@ -387,6 +496,23 @@ mod tests {
             self.unsent
                 .get()
                 .is_some_and(|before| self.sent.get() <= before)
+        }
+        fn sighting(&self) -> Sighting {
+            self.sighting.get()
+        }
+        fn watch_screen(&self, on: bool) {
+            self.watching
+                .set(self.watching.get() + if on { 1 } else { -1 });
+        }
+        fn trust_holds_writes(&self) -> bool {
+            self.trust_holds.get()
+        }
+    }
+
+    fn dialog(written: WrittenMessage) -> Dialog {
+        Dialog {
+            code: "test_dialog",
+            written,
         }
     }
 
@@ -570,5 +696,120 @@ mod tests {
         agent.sends.set(true);
         assert_eq!(outbox.drain_with("s", &mut write, &agent), Drain::Clear);
         assert_eq!(written, vec!["first", "second", "third"]);
+    }
+
+    /// Nothing is written while a dialog is up, and the queue goes on once it is gone.
+    #[test]
+    fn nothing_is_written_while_a_dialog_is_up() {
+        let outbox = Outbox::default();
+        outbox.push("s", "first");
+        let agent = AtPrompt::new(true);
+        agent.show(Some(dialog(WrittenMessage::Draft)));
+        let mut written = Vec::new();
+        let mut write = |text: &str| {
+            written.push(text.to_string());
+            Ok(())
+        };
+        assert_eq!(outbox.drain_with("s", &mut write, &agent), Drain::Pending);
+        assert_eq!(outbox.len("s"), 1);
+
+        agent.show(None);
+        assert_eq!(outbox.drain_with("s", &mut write, &agent), Drain::Clear);
+        assert_eq!(written, vec!["first"]);
+    }
+
+    /// A trust screen sighted while a drain runs stops it at the next message.
+    #[test]
+    fn nothing_is_written_while_the_trust_screen_holds_writes() {
+        let outbox = Outbox::default();
+        outbox.push("s", "first");
+        let agent = AtPrompt::new(true);
+        agent.trust_holds.set(true);
+        let mut written = Vec::new();
+        let mut write = |text: &str| {
+            written.push(text.to_string());
+            Ok(())
+        };
+        assert_eq!(outbox.drain_with("s", &mut write, &agent), Drain::Pending);
+        assert_eq!(outbox.len("s"), 1);
+        assert!(written.is_empty());
+    }
+
+    /// A dialog that came up around a write threw the message away: it goes back at the front
+    /// under its ticket, the agent is not marked as holding an unsent message, and the message
+    /// behind it is not let past. The dialog is gone again by the end of the wait, as one a write
+    /// closes is, and the screen was being watched throughout.
+    #[test]
+    fn a_message_a_dialog_threw_away_goes_back_at_the_front() {
+        let outbox = Outbox::default();
+        let first = outbox.push("s", "first");
+        outbox.push("s", "second");
+        let agent = AtPrompt::new(false);
+        agent
+            .dialog_on_wait
+            .set(Some((dialog(WrittenMessage::Discarded), true)));
+        let mut written = Vec::new();
+        let mut write = |text: &str| {
+            written.push(text.to_string());
+            Ok(())
+        };
+        assert_eq!(
+            outbox.drain_with("s", &mut write, &agent),
+            Drain::Discarded(first)
+        );
+        assert!(agent.watched_during_wait.get());
+        assert_eq!(agent.watching.get(), 0);
+        assert_eq!(outbox.len("s"), 2);
+        assert!(!agent.unsent_waiting());
+
+        agent.sends.set(true);
+        assert_eq!(outbox.drain_with("s", &mut write, &agent), Drain::Clear);
+        assert_eq!(written, vec!["first", "first", "second"]);
+    }
+
+    /// A view that took the message has delivered it, to the wrong place: it is not put back, no
+    /// unsent mark holds the queue, and the message behind it waits for the view to be left.
+    #[test]
+    fn a_message_a_view_took_is_not_put_back() {
+        let outbox = Outbox::default();
+        let first = outbox.push("s", "first");
+        outbox.push("s", "second");
+        let agent = AtPrompt::new(false);
+        agent
+            .dialog_on_wait
+            .set(Some((dialog(WrittenMessage::Diverted), false)));
+        let mut written = Vec::new();
+        let mut write = |text: &str| {
+            written.push(text.to_string());
+            Ok(())
+        };
+        assert_eq!(
+            outbox.drain_with("s", &mut write, &agent),
+            Drain::Diverted(first)
+        );
+        assert_eq!(outbox.len("s"), 1);
+        assert!(!agent.unsent_waiting());
+
+        assert_eq!(outbox.drain_with("s", &mut write, &agent), Drain::Pending);
+        agent.show(None);
+        agent.sends.set(true);
+        assert_eq!(outbox.drain_with("s", &mut write, &agent), Drain::Clear);
+        assert_eq!(written, vec!["first", "second"]);
+    }
+
+    /// A draft a dialog kept (the idle resume dialog) is in the input box, so it counts as unsent.
+    #[test]
+    fn a_message_left_as_a_draft_by_a_dialog_is_unsent() {
+        let outbox = Outbox::default();
+        let first = outbox.push("s", "first");
+        let agent = AtPrompt::new(false);
+        agent
+            .dialog_on_wait
+            .set(Some((dialog(WrittenMessage::Draft), false)));
+        assert_eq!(
+            outbox.drain_with("s", &mut |_| Ok(()), &agent),
+            Drain::Unsent(first)
+        );
+        assert_eq!(outbox.len("s"), 0);
     }
 }

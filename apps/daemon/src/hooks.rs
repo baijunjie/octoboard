@@ -248,6 +248,21 @@ fn grok_status(event: &str, payload: &Value) -> Option<SessionStatus> {
     }
 }
 
+/// Whether this event says the agent stopped on an error, and may now be showing a prompt only the
+/// user can answer. Grok's alone: after a usage-limit error it fires `Notification` (type
+/// `agent_error`) and `StopFailure` with a modal on screen that the next paste and Enter would
+/// answer, while Claude Code's and Codex's errors leave their prompts as they were.
+pub fn stopped_on_agent_error(agent: Agent, event: &str, payload: &Value) -> bool {
+    agent == Agent::Grok
+        && match event {
+            "StopFailure" => true,
+            "Notification" => {
+                grok_field(payload, "notificationType", "notification_type") == Some("agent_error")
+            }
+            _ => false,
+        }
+}
+
 /// Grok writes every payload field in both camelCase and snake_case; read whichever is present.
 fn grok_field<'a>(payload: &'a Value, camel: &str, snake: &str) -> Option<&'a str> {
     payload

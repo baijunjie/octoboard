@@ -56,6 +56,12 @@ accepted whatever is written in them, invented ones included, while the same fil
 loudly — so "it was registered and the session started without complaint" is not evidence the event exists, and the
 loud validation next door is exactly what makes it feel like evidence.
 
+Nor is a real event's name evidence that the handler fires: a CLI can skip a handler type for particular events with
+nothing on screen — Claude Code runs no `http` handler for `SessionStart` or `Setup`, saying so only in its debug log —
+and a design that waited on such an event held a session's writes until the user typed. So before anything rests on an
+event arriving, see it arrive on the real CLI, on each path that has to produce it (a fresh launch, a resume with no
+prompt), through the handler type the launch actually registers.
+
 ## To know exactly what Claude Code does to an input, run the code that produced the symptom
 
 Applies when the question is the precise behaviour of a check or transform Claude Code runs locally — which characters
@@ -141,6 +147,14 @@ trust, and its project hooks also need a git root; server-side feature flags gat
 them turns a whole matrix negative in a way indistinguishable from the thing being measured. When the control fails
 too, vary the preconditions one at a time before naming which one is the gate: Grok's folder-trust gate on instruction
 files was once recorded here as a need for a git repository.
+
+The kind of login is one such precondition, and the fake-key stub recommended above fixes it at the wrong value for
+anything gated on the account: Claude Code shows some screens (its "Resume this conversation?" at launch) only to a
+subscription account of a known rate-limit tier, and others only under a server-side flag, so an API-key probe reports
+"no dialog" whatever the code does. Read the gate out of the executable first, then satisfy it in the scratch config
+directory without a real login — a fake subscription `.credentials.json` carrying the tier the gate checks, and the
+flags it reads planted under `cachedGrowthBookFeatures` in that directory's `.claude.json` — with inference on a local
+stub. Like the fake key, this carries no real login and needs no authorisation.
 
 A negative that is a *silence* — "no event fires on this path" — needs one thing more than the control: knowing what
 would have ended it. That becomes a finding only once you can say why waiting longer could never have produced the

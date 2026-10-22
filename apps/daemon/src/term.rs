@@ -213,7 +213,6 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         before_scratch_removal: plan
             .shared_config_writeback
             .map(|writeback| Box::new(move || writeback.publish()) as Box<dyn FnOnce() + Send>),
-        start_signal_missing: plan.start_signal_missing,
     }));
     session::spawn_reader_thread(live.clone(), pty::READ_BUF);
 
@@ -256,12 +255,26 @@ pub fn send_message(session: &LiveSession, text: &str) -> Result<(), crate::ptyi
     session.write_input(&frame_message(text))
 }
 
-/// Shapes a message into the bracketed-paste buffer `send_message` writes: strip controls and
-/// invisible characters, guard a leading slash, then frame. Pulled out as a pure function so the
-/// ordering — both strips before the slash guard, not after — is something a test can pin
-/// directly, rather than re-deriving it from a copy of this logic; `send_message` itself needs a
-/// `LiveSession` and a PTY, which is why it is not tested directly.
+/// Shapes a message into the bracketed-paste buffer `send_message` writes: see [`shaped`], then
+/// frame. Pulled out as a pure function so the ordering — both strips before the slash guard, not
+/// after — is something a test can pin directly, rather than re-deriving it from a copy of this
+/// logic; `send_message` itself needs a `LiveSession` and a PTY, which is why it is not tested
+/// directly.
 pub(crate) fn frame_message(text: &str) -> Vec<u8> {
+    let text = shaped(text);
+
+    let mut buf =
+        Vec::with_capacity(PASTE_START.len() + text.len() + PASTE_END.len() + SUBMIT.len());
+    buf.extend_from_slice(PASTE_START);
+    buf.extend_from_slice(text.as_bytes());
+    buf.extend_from_slice(PASTE_END);
+    buf.extend_from_slice(SUBMIT);
+    buf
+}
+
+/// A message as the agent should read it: control and invisible characters stripped, then a
+/// leading slash guarded.
+fn shaped(text: &str) -> String {
     // `text` can be model-authored (a report panel submission, a project session's report summary)
     // and is never reviewed before it is written here. Without this, a value containing the
     // paste-end marker (`ESC[201~`) would close the bracketed paste early, and everything the
@@ -282,19 +295,27 @@ pub(crate) fn frame_message(text: &str) -> Vec<u8> {
 
     // A message starting with `/` is executed as a slash command even inside a bracketed paste, so
     // it never reaches the model; a single leading space makes it arrive as ordinary text.
-    let text = if text.starts_with('/') {
+    if text.starts_with('/') {
         format!(" {text}")
     } else {
         text
-    };
+    }
+}
 
-    let mut buf =
-        Vec::with_capacity(PASTE_START.len() + text.len() + PASTE_END.len() + SUBMIT.len());
-    buf.extend_from_slice(PASTE_START);
-    buf.extend_from_slice(text.as_bytes());
-    buf.extend_from_slice(PASTE_END);
-    buf.extend_from_slice(SUBMIT);
-    buf
+/// A message as the command line of an agent launch takes it, shaped exactly as one written into a
+/// running session is, or `None` when nothing is left of it. A prompt that began with `/` would
+/// run a slash command, as a pasted one would, and one that began with `-` would be read as a flag;
+/// a leading space keeps either as text.
+pub(crate) fn launch_prompt(text: &str) -> Option<String> {
+    if is_blank_once_stripped(text) {
+        return None;
+    }
+    let text = shaped(text);
+    Some(if text.starts_with('-') {
+        format!(" {text}")
+    } else {
+        text
+    })
 }
 
 /// Whether nothing but whitespace is left of a message once its control and invisible characters

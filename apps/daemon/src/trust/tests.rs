@@ -3,10 +3,9 @@ use std::path::{Path, PathBuf};
 use super::*;
 use crate::protocol::{Console, Origin, ProjectAccount, ProjectSource, SessionStatus};
 use crate::session::spawn_reader_thread;
+use crate::state::WriteHold;
 use crate::store::LOCAL_HOST_ID;
-use crate::test_support::{
-    unsignalled_live_session, watched_live_session, ScratchDir, StandIn, PATIENCE,
-};
+use crate::test_support::{watched_live_session, ScratchDir, StandIn, PATIENCE};
 
 // What Claude Code 2.1.289 actually printed, captured from a real PTY in a directory it had
 // never seen; only the directory's name and the account's plan were replaced. The screen as
@@ -254,50 +253,23 @@ fn a_transcript_quoting_both_options_beside_a_cursor_glyph_is_not_the_screen() {
     assert!(!CLAUDE.is_shown_in(reversed.as_bytes()));
 }
 
-/// A Codex whose title is switched off has no start signal, so a screen that has not appeared
-/// within the limits is not coming; a title it writes after all is past the screen as well.
-#[test]
-fn the_watch_for_codex_without_a_title_ends_after_too_much_output_or_too_long() {
-    let state = TrustState::new(Agent::Codex, None, true);
-    let mut sightings = state.take_sightings().expect("receiver");
-    state.feed(&vec![b'.'; WATCH_BYTES + 1], 0, 0);
-    state.feed(CODEX_SCREEN, 0, 0);
-    assert!(sightings.try_recv().is_err(), "too late by output");
-    assert!(!state.waiting());
-    assert_eq!(
-        state.window.lock().unwrap().window.capacity(),
-        0,
-        "the window is released"
-    );
-
-    let state = TrustState::with_limits(Agent::Codex, None, true, WATCH_BYTES, Duration::ZERO);
-    let mut sightings = state.take_sightings().expect("receiver");
-    std::thread::sleep(Duration::from_millis(5));
-    state.feed(CODEX_SCREEN, 0, 0);
-    assert!(sightings.try_recv().is_err(), "too late by time");
-
-    let state = TrustState::new(Agent::Codex, None, true);
-    assert!(state.holds_writes());
-    state.note_title();
-    assert!(!state.holds_writes(), "ended by a title");
-}
-
 /// Claude Code, Grok and Codex can print a good deal before the screen (Claude Code's onboarding
-/// and Codex's login on an account's first launch, a browser login among it); neither the output
-/// nor the time limit ends their watch while they have a start signal to wait for.
+/// and Codex's login on an account's first launch, a browser login among it); no amount of output
+/// ends their watch while they have a start signal to wait for.
 #[test]
-fn the_watch_for_an_agent_with_a_start_signal_outlasts_the_limits() {
+fn the_watch_for_an_agent_outlasts_any_amount_of_output() {
     for (agent, screen) in [
         (Agent::Claude, SCREEN),
         (Agent::Grok, GROK_SCREEN),
         (Agent::Codex, CODEX_SCREEN),
     ] {
-        let state = TrustState::with_limits(agent, None, false, WATCH_BYTES, Duration::ZERO);
+        let state = TrustState::new(agent, None);
         let mut sightings = state.take_sightings().expect("receiver");
-        std::thread::sleep(Duration::from_millis(5));
+        // Three 64 KiB chunks of output with no screen in them.
         for _ in 0..3 {
-            state.feed(&vec![b'.'; WATCH_BYTES], 0, 0);
+            state.feed(&vec![b'.'; 64 * 1024], 0, 0);
         }
+        assert!(state.holds_writes(), "{agent:?} still held");
         state.feed(screen, 0, 0);
         assert!(sightings.try_recv().is_ok(), "{agent:?} sighted late");
         assert!(state.waiting());
@@ -340,7 +312,7 @@ fn a_title_in_the_chunk_of_the_screen_does_not_end_the_wait_for_it() {
 #[test]
 fn a_title_ends_no_watch_but_codexs() {
     for (agent, screen) in [(Agent::Claude, SCREEN), (Agent::Grok, GROK_SCREEN)] {
-        let state = TrustState::new(agent, None, false);
+        let state = TrustState::new(agent, None);
         state.note_title();
         assert!(state.holds_writes(), "{agent:?}");
         state.feed(screen, 0, 0);
@@ -350,10 +322,10 @@ fn a_title_ends_no_watch_but_codexs() {
 
 #[test]
 fn a_hook_releases_the_window() {
-    let state = TrustState::new(Agent::Claude, None, false);
+    let state = TrustState::new(Agent::Claude, None);
     state.feed(b"some output", 0, 0);
     state.note_hook();
-    assert_eq!(state.window.lock().unwrap().window.capacity(), 0);
+    assert_eq!(state.window.lock().unwrap().capacity(), 0);
 }
 
 #[test]
@@ -382,7 +354,7 @@ fn the_screen_is_sighted_once_however_it_is_cut_into_reads() {
         (Agent::Grok, GROK_SCREEN, GROK_ANIMATION),
     ] {
         for size in [1, 3, 7, 200, screen.len()] {
-            let state = TrustState::new(agent, None, false);
+            let state = TrustState::new(agent, None);
             let mut sightings = state.take_sightings().expect("receiver");
             for chunk in screen.chunks(size) {
                 state.feed(chunk, 0, 0);
@@ -402,7 +374,7 @@ fn the_screen_is_sighted_once_however_it_is_cut_into_reads() {
 
 #[test]
 fn nothing_is_sighted_before_the_screen_is_complete() {
-    let state = TrustState::new(Agent::Claude, None, false);
+    let state = TrustState::new(Agent::Claude, None);
     let mut sightings = state.take_sightings().expect("receiver");
     // Everything up to, and including, the first option.
     let cut = SCREEN
@@ -418,7 +390,7 @@ fn nothing_is_sighted_before_the_screen_is_complete() {
 #[test]
 fn each_agent_is_watched_for_its_own_screen_and_a_hook_ends_the_watch() {
     for agent in [Agent::Codex, Agent::Grok] {
-        let state = TrustState::new(agent, None, false);
+        let state = TrustState::new(agent, None);
         let mut sightings = state.take_sightings().expect("receiver");
         state.feed(SCREEN, 0, 0);
         assert!(
@@ -428,7 +400,7 @@ fn each_agent_is_watched_for_its_own_screen_and_a_hook_ends_the_watch() {
         assert!(!state.claim_answer(), "{agent:?} is not answered for it");
     }
 
-    let state = TrustState::new(Agent::Claude, None, false);
+    let state = TrustState::new(Agent::Claude, None);
     let mut sightings = state.take_sightings().expect("receiver");
     state.feed(DISMISSED, 0, 0);
     state.note_hook();
@@ -440,7 +412,7 @@ fn each_agent_is_watched_for_its_own_screen_and_a_hook_ends_the_watch() {
 
 #[test]
 fn a_session_is_answered_at_most_once_and_only_after_the_screen_was_sighted() {
-    let state = TrustState::new(Agent::Claude, None, false);
+    let state = TrustState::new(Agent::Claude, None);
     assert!(!state.claim_answer(), "nothing sighted yet");
     state.feed(SCREEN, 0, 0);
     assert!(state.waiting());
@@ -567,19 +539,9 @@ fn scratch(name: &str) -> ScratchDir {
 /// prints what the script says to and records every byte it is sent, so a test sees exactly
 /// what reached the terminal.
 fn stand_in(id: &str, agent: Agent, script: &str) -> StandIn {
-    stand_in_with(id, agent, script, false)
-}
-
-/// [`stand_in`], for a session whose agent's configuration switches off the signal that ends its
-/// watch when `start_signal_missing`, so that the watch is bounded.
-fn stand_in_with(id: &str, agent: Agent, script: &str, start_signal_missing: bool) -> StandIn {
     // Raw first, so the fixtures reach the terminal as captured and the keys are read as sent.
     let script = format!("stty raw -echo; {script}");
-    let live = if start_signal_missing {
-        unsignalled_live_session(id, agent, 120, 32, &script)
-    } else {
-        watched_live_session(id, agent, 120, 32, &script, None)
-    };
+    let live = watched_live_session(id, agent, 120, 32, &script, None);
     spawn_reader_thread(live.clone(), 8 * 1024);
     live
 }
@@ -820,24 +782,12 @@ fn state_with_project(name: &str) -> (Arc<AppState>, ScratchDir) {
 /// Starts a stand-in session of the given kind under a stored record and registers it, as a
 /// launch would; the caller decides whether it is supervised.
 fn start(state: &Arc<AppState>, dir: &Path, record: Session, script: &str) -> (StandIn, PathBuf) {
-    start_with(state, dir, record, script, false)
-}
-
-/// [`start`] with [`stand_in_with`]'s `start_signal_missing`.
-fn start_with(
-    state: &Arc<AppState>,
-    dir: &Path,
-    record: Session,
-    script: &str,
-    start_signal_missing: bool,
-) -> (StandIn, PathBuf) {
     let received = dir.join(format!("received-{}", record.id));
     state.store.insert_session(&record).expect("session");
-    let live = stand_in_with(
+    let live = stand_in(
         &record.id,
         record.agent,
         &script.replace("%RECEIVED%", &received.to_string_lossy()),
-        start_signal_missing,
     );
     state.register_live(live.clone());
     (live, received)
@@ -1781,34 +1731,6 @@ async fn trusting_a_project_presses_its_other_waiting_screens_and_no_others() {
     assert!(sent(&other_received).is_empty(), "not another project's");
 }
 
-/// A Codex session with its title switched off shows no trust screen and no start signal, so what
-/// was queued for it is let through when its bounded watch ends.
-#[tokio::test]
-async fn a_message_for_codex_without_a_title_is_let_through_when_its_watch_ends() {
-    let (state, dir) = state_with_project("watch-ends");
-    let message = crate::term::frame_message("hello");
-    let record = session("codex-1", Agent::Codex, Role::Project, Some("project-1"));
-    let script = format!(
-        "printf 'ready'; {}; sleep 30",
-        take(message.len(), "'%RECEIVED%'")
-    );
-    let (live, received) = start_with(&state, &dir, record, &script, true);
-    live.trust.shorten_watch(Duration::from_millis(300));
-    supervise(&state, &live);
-
-    let delivery = crate::reporting::write_message(
-        &state,
-        "codex-1",
-        "hello",
-        crate::reporting::WhenBlocked::Queue,
-    )
-    .expect("accepted");
-    assert!(matches!(delivery, crate::reporting::Delivery::Queued));
-    let delivered =
-        tokio::task::spawn_blocking(move || wait_for(PATIENCE, || sent(&received) == message));
-    assert!(delivered.await.unwrap());
-}
-
 /// A Codex session that shows no trust screen writes its terminal title as it starts, which ends
 /// its watch, and what was queued for it is let through then.
 #[tokio::test]
@@ -2132,4 +2054,179 @@ async fn trust_waiting_preserves_the_agent_status_and_ends_only_when_the_screen_
         on_hook(&state, &live);
         assert_eq!(state.wire_session(record).status, SessionStatus::Working);
     }
+}
+
+/// A Grok session whose hook never comes (a managed policy that runs none of Octoboard's) has its
+/// held messages let through once the bound has passed, with no screen sighted and no dialog up.
+#[tokio::test]
+async fn grok_messages_are_let_through_when_no_hook_comes_within_the_bound() {
+    let (state, dir) = state_with_project("hook-fallback");
+    let message = crate::term::frame_message("hello");
+    let record = session("grok-1", Agent::Grok, Role::Project, Some("project-1"));
+    let script = format!(
+        "printf 'ready'; {}; sleep 30",
+        take(message.len(), "'%RECEIVED%'")
+    );
+    let (live, received) = start(&state, &dir, record, &script);
+    release_when_no_hook_comes(&state, &live, Duration::from_millis(600));
+
+    let delivery = crate::reporting::write_message(
+        &state,
+        "grok-1",
+        "hello",
+        crate::reporting::WhenBlocked::Queue,
+    )
+    .expect("accepted");
+    assert!(matches!(delivery, crate::reporting::Delivery::Queued));
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert!(live.trust.holds_writes(), "held before the bound");
+    assert!(sent(&received).is_empty());
+
+    let delivered =
+        tokio::task::spawn_blocking(move || wait_for(PATIENCE, || sent(&received) == message));
+    assert!(delivered.await.unwrap(), "released after the bound");
+    assert!(!live.trust.holds_writes());
+}
+
+/// A sighted screen stays held past the bound, and a Grok that then shows a screen after a release
+/// is held again.
+#[tokio::test]
+async fn the_hook_fallback_never_lets_a_sighted_trust_screen_through() {
+    let (state, dir) = state_with_project("hook-fallback-screen");
+    let record = session("grok-1", Agent::Grok, Role::Project, Some("project-1"));
+    let (live, _) = start(&state, &dir, record, "sleep 30");
+    live.on_output(GROK_SCREEN);
+    assert!(live.trust.waiting());
+    release_when_no_hook_comes(&state, &live, Duration::from_millis(50));
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    assert!(live.trust.holds_writes());
+    assert!(!live.trust.released_without_hook.load(Ordering::Acquire));
+
+    let watch = TrustState::new(Agent::Grok, None);
+    assert!(watch.release_without_hook());
+    assert!(!watch.holds_writes());
+    watch.feed(GROK_SCREEN, 0, 0);
+    assert!(
+        watch.holds_writes(),
+        "a screen after the release holds again"
+    );
+}
+
+/// With no hook ever (a managed policy that allows only managed hooks), a sighted screen that is
+/// seen to be gone from the rendered screen ends the hold, whoever answered it; the animation Grok
+/// keeps drawing at the screen is not mistaken for the screen going.
+#[tokio::test]
+async fn a_grok_screen_seen_to_go_with_no_hook_releases_what_it_held() {
+    let (state, dir) = state_with_project("grok-screen-gone");
+    let record = session("grok-1", Agent::Grok, Role::Project, Some("project-1"));
+    let (live, _) = start(&state, &dir, record, "sleep 30");
+    live.on_output(GROK_SCREEN);
+    live.trust.needs_user.store(true, Ordering::Release);
+    assert!(live.trust.waiting() && live.trust.holds_writes() && live.trust.needs_user());
+    release_when_the_sighted_screen_goes(&state, &live);
+
+    live.on_output(GROK_ANIMATION);
+    tokio::time::sleep(Duration::from_millis(700)).await;
+    assert!(live.trust.holds_writes(), "the screen is still up");
+
+    live.on_output(b"\x1b[2J\x1b[HGrok is ready\r\n");
+    let seen = Arc::clone(&live);
+    let released =
+        tokio::task::spawn_blocking(move || wait_for(PATIENCE, || !seen.trust.holds_writes()));
+    assert!(released.await.unwrap(), "released once the screen is gone");
+    assert!(live.trust.dismissed.load(Ordering::Acquire));
+    assert!(!live.trust.needs_user());
+    assert!(!live.trust.waiting());
+}
+
+/// A screen sighted after the fallback has let the messages through is held for, and released,
+/// the same way.
+#[tokio::test]
+async fn a_grok_screen_sighted_after_the_fallback_is_released_when_it_goes() {
+    let (state, dir) = state_with_project("grok-screen-late");
+    let record = session("grok-1", Agent::Grok, Role::Project, Some("project-1"));
+    let (live, _) = start(&state, &dir, record, "sleep 30");
+    assert!(live.trust.release_without_hook());
+    release_when_the_sighted_screen_goes(&state, &live);
+    live.on_output(GROK_SCREEN);
+    assert!(live.trust.holds_writes());
+
+    live.on_output(b"\x1b[2J\x1b[HGrok is ready\r\n");
+    let seen = Arc::clone(&live);
+    let released =
+        tokio::task::spawn_blocking(move || wait_for(PATIENCE, || !seen.trust.holds_writes()));
+    assert!(released.await.unwrap(), "released once the screen is gone");
+}
+
+/// Claude Code's hold ends with its hook alone: a screen seen to go does not end it.
+#[test]
+fn a_dismissed_screen_ends_no_hold_of_an_agent_without_the_fallback() {
+    let watch = TrustState::new(Agent::Claude, None);
+    watch.dismissed.store(true, Ordering::Release);
+    assert!(watch.holds_writes());
+}
+
+/// The fallback lets the messages through whatever is on the screen; a dialog then holds them as
+/// any other, and its going lets them through.
+#[tokio::test]
+async fn the_hook_fallback_leaves_a_dialog_to_hold_the_writes_itself() {
+    let (state, dir) = state_with_project("hook-fallback-dialog");
+    let record = session("grok-1", Agent::Grok, Role::Project, Some("project-1"));
+    let (live, _) = start(&state, &dir, record, "sleep 30");
+    live.on_output(
+        b"You hit your weekly limit.\r\n1 (o) Upgrade tier\r\n2 (o) Buy more credits\r\n\
+          3 (o) Try Again\r\nEnter :submit\r\n",
+    );
+    assert!(live.look_for_dialog().current.is_some());
+    assert_eq!(state.write_hold("grok-1"), Some(WriteHold::Starting));
+    release_when_no_hook_comes(&state, &live, Duration::from_millis(50));
+    let seen = Arc::clone(&live);
+    let released =
+        tokio::task::spawn_blocking(move || wait_for(PATIENCE, || !seen.trust.holds_writes()));
+    assert!(released.await.unwrap(), "released at the bound");
+    assert!(matches!(
+        state.write_hold("grok-1"),
+        Some(WriteHold::AgentDialog(_))
+    ));
+
+    live.on_output(b"\x1b[2J\x1b[H");
+    assert_eq!(state.write_hold("grok-1"), None);
+}
+
+/// A hook before the bound releases as it always has, and the fallback then does nothing; Claude
+/// Code has no fallback at all.
+#[tokio::test]
+async fn a_hook_before_the_bound_releases_and_claude_code_has_no_fallback() {
+    assert!(CLAUDE.hook_fallback.is_none());
+    assert!(CODEX.hook_fallback.is_none());
+    assert_eq!(GROK.hook_fallback, Some(HOOK_FALLBACK));
+
+    let (state, dir) = state_with_project("hook-fallback-hook");
+    let record = session("grok-1", Agent::Grok, Role::Project, Some("project-1"));
+    let (live, _) = start(&state, &dir, record, "sleep 30");
+    release_when_no_hook_comes(&state, &live, Duration::from_millis(300));
+    assert!(live.trust.holds_writes());
+    on_hook(&state, &live);
+    assert!(!live.trust.holds_writes());
+    tokio::time::sleep(Duration::from_millis(700)).await;
+    assert!(!live.trust.released_without_hook.load(Ordering::Acquire));
+}
+
+/// A Grok press the rendered screen alone confirmed has had nothing carried, so the first hook to
+/// come after it still carries Grok's entry; a later hook carries nothing more.
+#[test]
+fn a_hook_after_a_press_the_screen_confirmed_still_carries_the_entry() {
+    let watch = TrustState::new(
+        Agent::Grok,
+        Some(CarriedTrust {
+            session_store: PathBuf::from("/nonexistent/session/trusted_folders.toml"),
+            user_store: PathBuf::from("/nonexistent/user/trusted_folders.toml"),
+            folder: "/nonexistent/project".to_string(),
+        }),
+    );
+    watch.sighted.store(true, Ordering::Release);
+    watch.dismissed.store(true, Ordering::Release);
+    watch.pressed.store(true, Ordering::Release);
+    assert!(watch.note_hook().carry);
+    assert!(!watch.note_hook().carry);
 }

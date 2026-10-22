@@ -315,10 +315,6 @@ pub struct LaunchPlan {
     /// accepted, by Octoboard's press or in the terminal. Only Grok, whose trust store lives in the
     /// per-session home.
     pub carried_trust: Option<crate::trust::CarriedTrust>,
-    /// The agent's configuration switches off what tells the trust watch that the agent is past its
-    /// startup (Codex's terminal title), or cannot be read to say it does not; the watch is then
-    /// bounded instead (`crate::trust::TrustState::new`).
-    pub start_signal_missing: bool,
     /// Grok's: keys to copy from the session's `config.toml` onto the shared file once the process
     /// has exited. Only when that source file is a symlink.
     pub shared_config_writeback: Option<grok::SharedConfigWriteback>,

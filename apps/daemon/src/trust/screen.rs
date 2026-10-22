@@ -30,6 +30,12 @@ pub(super) struct Screen {
     /// What the agent does first once it is past its startup, which ends the watch for the screen:
     /// everything before it, however long, may still be the screen's to come.
     pub(super) start_signal: StartSignal,
+    /// For a [`StartSignal::Hook`] agent whose hook cannot be relied on to come at all: how long
+    /// after the launch its messages stay held for a hook before they are let through anyway,
+    /// provided no screen has been sighted ([`super::release_when_no_hook_comes`]); a screen that
+    /// has been is held until it is seen to go ([`super::release_when_the_sighted_screen_goes`]).
+    /// `None` holds them for as long as the session runs.
+    pub(super) hook_fallback: Option<Duration>,
 }
 
 /// How an agent shows that its startup, the trust screen included, is behind it.
@@ -43,8 +49,8 @@ pub(super) enum StartSignal {
     /// It runs no hook until its first prompt (Codex) but writes the terminal title as its
     /// session starts, after the screen and after the login screen that can come before it, and
     /// never before either. Its messages are released by Octoboard's press of its screen, or by
-    /// the watch ending with none sighted. A title the agent is configured never to write is no
-    /// signal ([`TrustState::new`]), and the watch is bounded instead.
+    /// the watch ending with none sighted. The launch fixes the title's items
+    /// ([`crate::adapter::codex`]), so no configuration switches the title off.
     TerminalTitle,
 }
 
@@ -73,6 +79,7 @@ pub(super) const CLAUDE: Screen = Screen {
     // a Down, is caught there.
     input_ends_wait: false,
     start_signal: StartSignal::Hook,
+    hook_fallback: None,
 };
 
 /// Codex 0.161.0: the question, then "› 1. Trust and continue" and "2. Quit". Codex redraws only
@@ -91,6 +98,7 @@ pub(super) const CODEX: Screen = Screen {
     // otherwise leave the screen looking unanswered until then.
     input_ends_wait: true,
     start_signal: StartSignal::TerminalTitle,
+    hook_fallback: None,
 };
 
 /// Grok Build 1.0.50: the question, then "Yes, proceed y" and "No, quit n", with no cursor.
@@ -106,6 +114,10 @@ pub(super) const GROK: Screen = Screen {
     next_screen: None,
     input_ends_wait: true,
     start_signal: StartSignal::Hook,
+    // Its `SessionStart` normally comes within a second, but a managed policy that allows only
+    // managed hooks (`allow_managed_hooks_only`) runs none of Octoboard's, and the session would
+    // hold its messages for good.
+    hook_fallback: Some(HOOK_FALLBACK),
 };
 
 pub(super) fn screen_of(agent: Agent) -> &'static Screen {
@@ -120,20 +132,6 @@ pub(super) fn screen_of(agent: Agent) -> &'static Screen {
 /// most (Codex's, with the frame it is drawn over, about 4.3 KiB); the rest is room for it to
 /// arrive in pieces and for what comes before it.
 pub(super) const WINDOW: usize = 16 * 1024;
-
-/// How long the watch for the screen lasts for an agent whose start signal is switched off in its
-/// configuration (Codex with `tui.terminal_title = []`) or whose configuration cannot be read: the
-/// screen is among the first things the agent prints, so a session that has printed this much or
-/// has been running this long, or has written its first terminal title, and has not shown it, will
-/// not. With a start signal there is no such bound, since the agent can print a good deal first —
-/// Claude Code's onboarding or Codex's login on an account's first launch, each with a browser
-/// login, comes before the screen — and the signal ends the watch instead.
-///
-/// The 64 KiB covers Codex's whole first launch through login and trust screen (measured 34 KiB,
-/// the screens before the trust screen being static) and still bounds how much output a transcript
-/// quoting the screen can be taken for it in; the time is long enough for a login in a browser.
-pub(super) const WATCH_BYTES: usize = 64 * 1024;
-pub(super) const WATCH_SECONDS: u64 = 5 * 60;
 
 /// Which option holds the cursor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -282,9 +280,10 @@ impl Screen {
 pub(super) struct HookNoted {
     /// Messages were held for the session, and the hook lets them through.
     pub(super) released: bool,
-    /// The hook ends a sighted screen Octoboard has not pressed successfully — the person answered
-    /// it in the terminal, or Octoboard's press is still in flight or has failed — so the trust
-    /// the agent recorded is the hook's to carry over, where the agent's record has to be carried.
+    /// The hook ends a sighted screen whose trust record nothing has carried yet — the person
+    /// answered it in the terminal, Octoboard's press is still in flight or has failed, or the
+    /// press counted only because the rendered screen was seen to go — so the trust the agent
+    /// recorded is the hook's to carry over, where the agent's record has to be carried.
     pub(super) carry: bool,
 }
 
@@ -297,32 +296,21 @@ pub(super) struct CarryHandover {
     pub(super) outcome: Option<std::result::Result<(), CarryFailure>>,
 }
 
-#[derive(Default)]
-pub(super) struct Watched {
-    pub(super) window: Vec<u8>,
-    pub(super) total: usize,
-}
-
 /// One session's watch for its trust screen, owned by its [`LiveSession`].
 pub struct TrustState {
     /// The screen this session's agent shows, and how it is pressed.
     pub(super) screen: &'static Screen,
     /// Grok's: where its trust entry is carried from and to after a press.
     pub(super) carried: Option<CarriedTrust>,
-    /// The output not yet identified as anything, at most [`WINDOW`] bytes of it, and, for a
-    /// bounded watch, what it has seen in all. Released when the watch ends.
-    pub(super) window: Mutex<Watched>,
-    /// When the watch began, and how much output and how long it lasts, when it is bounded
-    /// ([`Self::limited`]).
-    pub(super) started: Instant,
-    pub(super) watch_bytes: usize,
-    pub(super) watch_age: Mutex<Duration>,
-    /// The watch has ended without a sighting: the agent's terminal title came, or a bounded watch
-    /// saw too much output or ran too long. Never set for an agent that runs a hook at start.
+    /// The output not yet identified as anything, at most [`WINDOW`] bytes of it. Released when the
+    /// watch ends.
+    pub(super) window: Mutex<Vec<u8>>,
+    /// The watch has ended without a sighting: the agent's terminal title came. Never set for an
+    /// agent that runs a hook at start.
     pub(super) expired: AtomicBool,
-    /// The watch has a bound: the agent's start signal is a terminal title, and its configuration
-    /// switches that off or cannot be read.
-    pub(super) limited: bool,
+    /// The agent's hook fallback ([`Screen::hook_fallback`]) has let its messages through with no
+    /// hook seen. Outranked by a sighting of the screen after it.
+    pub(super) released_without_hook: AtomicBool,
     /// The screen has been sighted, once, and `sightings` told.
     pub(super) sighted: AtomicBool,
     /// The screen needs a person rather than an automatic press.
@@ -337,8 +325,10 @@ pub struct TrustState {
     pub(super) answered: AtomicBool,
     /// Octoboard's press of the screen succeeded.
     pub(super) pressed: AtomicBool,
-    /// The person answered the screen in the terminal and it has been seen to go
-    /// ([`super::release_when_the_screen_goes`]); for an agent that runs no hook after it.
+    /// The screen has been seen to go with no hook to say so: the person answered it in the
+    /// terminal ([`super::release_when_the_screen_goes`], Codex), or the agent's hook cannot be
+    /// relied on and the rendered screen no longer shows it
+    /// ([`super::release_when_the_sighted_screen_goes`], Grok Build).
     pub(super) dismissed: AtomicBool,
     /// Where a hook leaves the outcome of carrying the agent's trust record for a press waiting on
     /// it.
@@ -349,38 +339,14 @@ pub struct TrustState {
 }
 
 impl TrustState {
-    /// `start_signal_missing`: the agent's configuration switches off the signal that would end
-    /// the watch, which only matters for a terminal title ([`StartSignal::TerminalTitle`]); the
-    /// watch is then bounded. Also the case when the configuration cannot be read, the safe side
-    /// being messages that are never held for good.
-    pub fn new(agent: Agent, carried: Option<CarriedTrust>, start_signal_missing: bool) -> Self {
-        Self::with_limits(
-            agent,
-            carried,
-            start_signal_missing,
-            WATCH_BYTES,
-            Duration::from_secs(WATCH_SECONDS),
-        )
-    }
-
-    pub(super) fn with_limits(
-        agent: Agent,
-        carried: Option<CarriedTrust>,
-        start_signal_missing: bool,
-        bytes: usize,
-        age: Duration,
-    ) -> Self {
+    pub fn new(agent: Agent, carried: Option<CarriedTrust>) -> Self {
         let (sightings, receiver) = unbounded_channel();
-        let screen = screen_of(agent);
         Self {
-            screen,
+            screen: screen_of(agent),
             carried,
-            window: Mutex::new(Watched::default()),
-            started: Instant::now(),
-            watch_bytes: bytes,
-            watch_age: Mutex::new(age),
+            window: Mutex::new(Vec::new()),
             expired: AtomicBool::new(false),
-            limited: screen.start_signal == StartSignal::TerminalTitle && start_signal_missing,
+            released_without_hook: AtomicBool::new(false),
             sighted: AtomicBool::new(false),
             needs_user: AtomicBool::new(false),
             writes_at_sighting: AtomicU64::new(0),
@@ -408,21 +374,13 @@ impl TrustState {
             return;
         }
         let mut watched = self.window.lock().expect("trust window mutex poisoned");
-        if self.limited {
-            watched.total += chunk.len();
-            if watched.total > self.watch_bytes || self.started.elapsed() > self.watch_age() {
-                self.expired.store(true, Ordering::Release);
-                *watched = Watched::default();
-                return;
-            }
+        watched.extend_from_slice(chunk);
+        if watched.len() > WINDOW {
+            let excess = watched.len() - WINDOW;
+            watched.drain(..excess);
         }
-        watched.window.extend_from_slice(chunk);
-        if watched.window.len() > WINDOW {
-            let excess = watched.window.len() - WINDOW;
-            watched.window.drain(..excess);
-        }
-        if self.screen.is_shown_in(&watched.window) {
-            *watched = Watched::default();
+        if self.screen.is_shown_in(&watched) {
+            *watched = Vec::new();
             self.writes_at_sighting
                 .store(input_writes, Ordering::Release);
             self.output_at_sighting
@@ -448,14 +406,7 @@ impl TrustState {
             return;
         }
         self.expired.store(true, Ordering::Release);
-        *watched = Watched::default();
-    }
-
-    fn watch_age(&self) -> Duration {
-        *self
-            .watch_age
-            .lock()
-            .expect("trust watch age mutex poisoned")
+        *watched = Vec::new();
     }
 
     /// A hook of this session reached the daemon: the screen has been answered, so it is no longer
@@ -463,31 +414,41 @@ impl TrustState {
     pub(super) fn note_hook(&self) -> HookNoted {
         let released = self.holds_writes();
         let first = !self.hook_seen.swap(true, Ordering::AcqRel);
-        *self.window.lock().expect("trust window mutex poisoned") = Watched::default();
+        *self.window.lock().expect("trust window mutex poisoned") = Vec::new();
         HookNoted {
             released,
+            // A press the rendered screen alone confirmed has had nothing carried, so a hook that
+            // comes after it still carries the entry.
             carry: first
                 && self.carried.is_some()
                 && self.sighted.load(Ordering::Acquire)
-                && !self.pressed.load(Ordering::Acquire),
+                && (!self.pressed.load(Ordering::Acquire)
+                    || self.dismissed.load(Ordering::Acquire)),
         }
     }
 
-    /// Whether a message written into the session now could land on its trust screen, and so has
-    /// to be held. A paste's trailing carriage return accepts Codex's screen and Grok's, and exits
+    /// Whether a message written into the session now could land on its trust screen, and so has to
+    /// be held. A paste's trailing carriage return accepts Codex's screen and Grok's, and exits
     /// Claude Code's. For an agent that runs a hook at start (`Screen::hook_at_start`) messages are
     /// held until that hook, so a session whose hooks never arrive holds them for as long as it
-    /// runs. For one that runs none (Codex) they are held while the watch is still looking for the
-    /// screen — it ends with the agent's terminal title or, for a watch that is bounded, on its own
-    /// after [`WATCH_SECONDS`], with no output arriving to notice it — and, once the screen is up,
-    /// until Octoboard's press of it has succeeded, the person's own answer in the terminal has
-    /// been seen to take it away, or a hook arrives.
+    /// runs, unless the agent has a [`Screen::hook_fallback`] and it has let them through. For one
+    /// that runs none (Codex) they are held while the watch is still looking for the screen — it
+    /// ends with the agent's terminal title — and, once the screen is up, until Octoboard's press
+    /// of it has succeeded, the person's own answer in the terminal has been seen to take it away,
+    /// or a hook arrives.
     pub fn holds_writes(&self) -> bool {
         if self.hook_seen.load(Ordering::Acquire) {
             return false;
         }
         if self.screen.hook_at_start() {
-            return true;
+            // For an agent whose hook may never come, a sighted screen seen to go is as good as
+            // the hook. Claude Code has no such fallback, and its hold ends only with its hook.
+            if self.screen.hook_fallback.is_some() && self.dismissed.load(Ordering::Acquire) {
+                return false;
+            }
+            // Let through without a hook only while no screen has come up since.
+            return !self.released_without_hook.load(Ordering::Acquire)
+                || self.sighted.load(Ordering::Acquire);
         }
         if self.pressed.load(Ordering::Acquire) || self.dismissed.load(Ordering::Acquire) {
             return false;
@@ -499,7 +460,18 @@ impl TrustState {
             return true;
         }
         !self.expired.load(Ordering::Acquire)
-            && (!self.limited || self.started.elapsed() <= self.watch_age())
+    }
+
+    /// Lets through what is held for an agent whose hook has not come ([`Screen::hook_fallback`]),
+    /// and says whether it did: not once a hook has arrived or the screen has been sighted, which
+    /// this checks under the window's lock a sighting is made under.
+    pub(super) fn release_without_hook(&self) -> bool {
+        let _watched = self.window.lock().expect("trust window mutex poisoned");
+        if self.hook_seen.load(Ordering::Acquire) || self.sighted.load(Ordering::Acquire) {
+            return false;
+        }
+        self.released_without_hook.store(true, Ordering::Release);
+        true
     }
 
     /// Ends the watch as if the session had run its first hook, for a test's stand-in that stands
@@ -507,15 +479,6 @@ impl TrustState {
     #[cfg(test)]
     pub(crate) fn end_watch(&self) {
         self.note_hook();
-    }
-
-    /// Shortens the watch, for a test that cannot wait out [`WATCH_SECONDS`].
-    #[cfg(test)]
-    pub(crate) fn shorten_watch(&self, age: Duration) {
-        *self
-            .watch_age
-            .lock()
-            .expect("trust watch age mutex poisoned") = age;
     }
 
     /// For a press that has sent its key: says that it waits for the hook's carry. Taken back by
@@ -579,10 +542,11 @@ impl TrustState {
     }
 
     /// Whether the screen is up and nobody has started answering it.
-    pub(super) fn waiting(&self) -> bool {
+    pub(crate) fn waiting(&self) -> bool {
         self.sighted.load(Ordering::Acquire)
             && !self.hook_seen.load(Ordering::Acquire)
             && !self.answered.load(Ordering::Acquire)
+            && !self.dismissed.load(Ordering::Acquire)
     }
 
     /// [`Self::waiting`], and for a screen that input ends, nothing written into the session's

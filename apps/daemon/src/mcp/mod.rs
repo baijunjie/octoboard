@@ -141,7 +141,10 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                       `yours: false` is not this caller's to drive — it is unbound, or reports \
                       to a different session — leave it alone. An idle session with a \
                       non-empty `background_tasks` takes messages like any idle session but still \
-                      has work running in the background.",
+                      has work running in the background. \
+                      A non-null `writes_held` says why messages for a running session are \
+                      queued rather than written into it, whatever its `status` reads; \
+                      `queued_messages` counts them.",
         schema: || object_schema(json!({}), &[]),
     },
     ToolDef {
@@ -400,7 +403,10 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                       leave it alone. `owner` says whose it is, `owner_kind` whether that is a \
                       console or a project session, and `role` whether the session itself is a \
                       console session. An idle session with a non-empty `background_tasks` takes \
-                      messages like any idle session but still has work running in the background.",
+                      messages like any idle session but still has work running in the background. \
+                      A non-null `writes_held` says why messages for a running session are \
+                      queued rather than written into it, whatever its `status` reads; \
+                      `queued_messages` counts them.",
         schema: || {
             object_schema(
                 json!({
@@ -786,7 +792,10 @@ const LIST_SESSIONS: ToolDef = ToolDef {
                   session you report to, which is also given at the top level. Use it to find \
                   who to share information with, or an owner to hand a session to or bind to. An \
                   idle session with a non-empty `background_tasks` takes messages like any idle \
-                  session but still has work running in the background.",
+                  session but still has work running in the background. \
+                  A non-null `writes_held` says why messages for a running session are \
+                  queued rather than written into it, whatever its `status` reads; \
+                  `queued_messages` counts them.",
     schema: || object_schema(json!({}), &[]),
 };
 
@@ -1015,7 +1024,10 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
                       different session: leave it alone. `owner` says whose it is and \
                       `owner_kind` whether that is a console or a project session. An idle \
                       session with a non-empty `background_tasks` takes messages like any idle \
-                      session but still has work running in the background.",
+                      session but still has work running in the background. \
+                      A non-null `writes_held` says why messages for a running session are \
+                      queued rather than written into it, whatever its `status` reads; \
+                      `queued_messages` counts them.",
         schema: || {
             object_schema(
                 json!({

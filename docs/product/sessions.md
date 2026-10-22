@@ -610,8 +610,9 @@ Transitions:
   *awaiting instructions* otherwise, unless the agent's own first report has already moved it on (see "Opening a
   session"). A launch that fails removes the session.
 - While the process runs, reports from the agent move the session between *working*, *waiting for the user* and
-  *awaiting instructions* — except while a folder-trust confirmation, Codex action prompt or session request holds
-  it at *waiting for the user* (see "What the statuses are derived from" below). A Claude Code session that would be
+  *awaiting instructions* — except while a folder-trust confirmation, Codex action prompt, a screen of the agent's
+  that only the user can answer or a session request holds it at *waiting for the user* (see "What the statuses are
+  derived from" below). A Claude Code session that would be
   *awaiting instructions* reads as *working in background* while it has work left running there (see "Working in
   background" below).
 - The process ending for any reason other than archiving — the agent exiting on its own, a crash, the application
@@ -632,8 +633,8 @@ Transitions:
 
 Status comes from hook events Octoboard injects into each agent per launch, with the exceptions below. Only the
 session's own events count: those of a subagent it runs never change its status, on any agent, and on Claude Code
-neither do those of its internal helper agents. Five things besides those events bear on a running session's status,
-and only these five.
+neither do those of its internal helper agents. Six things besides those events bear on a running session's status,
+and only these six.
 
 - While a **Claude Code** session is *working* or *waiting for the user*, Octoboard also reads that session's own
   transcript file — the machine-readable record the agent keeps of the conversation, still not its rendered output —
@@ -648,6 +649,11 @@ and only these five.
 - A recognised folder-trust confirmation that needs the user holds its session at *waiting for the user*, even
   before the agent's first hook report. Its raised hand follows the confirmation rather than the dialog; see
   "What happens when a confirmation comes up" in `docs/product/folder-trust.md`.
+- A screen of the agent's own that only the user can answer and that no hook reports — such as Claude Code's "Resume
+  this conversation?" or a view of its background agents, Codex's sign-in screen, or Grok Build's usage-limit screen —
+  holds its session at *waiting for the user* for as long as the session's rendered screen shows it, whatever the
+  agent's hook reports say meanwhile; once it is gone the session shows the agent's last reported status again. Which
+  screens are recognised is in "Messages held until a session can take them" in `docs/product/message-delivery.md`.
 - A session request — a `request_session` call — waiting for the user's answer holds
   its session at *waiting for the user* for the whole wait, whatever the agent's own events say meanwhile; when the
   request ends the session goes back to where its agent was last seen to be (see "Waiting for the answer" in
@@ -763,7 +769,8 @@ own row:
   `docs/product/sidebar.md`).
 
 **Where the hand is the agent's own, the user answers in the session's terminal**, and the status leaves *waiting for
-the user* on the agent's next event or when its Codex action title clears — or, where the answer was a decline and no
+the user* on the agent's next event, when its Codex action title clears or when the screen that held it is no longer
+shown — or, where the answer was a decline and no
 event follows, on the decline showing up in the agent's own record of the conversation, which only Claude Code
 sessions are read for (see "Declining a Claude Code prompt or question" below). Nobody can answer for them: a session
 driving others — a console session, or a
@@ -795,9 +802,11 @@ title back after the answer, the session returns to its last hook-reported statu
 if that status permits delivery, without waiting for another hook event.
 
 The title does not override a hook-reported wait after it clears: ordinary approvals whose last hook status is
-still *waiting for the user* keep the hand up until the tool finishes, as described above. This detection also
-requires Codex's activity title: disabling terminal titles, or customising `tui.terminal_title` to omit activity
-or its blinking indicator, removes the signal. Octoboard does not change the user's Codex configuration to enable it.
+still *waiting for the user* keep the hand up until the tool finishes, as described above. This detection relies on
+Codex's activity title, which every launch keeps on: each launch sets the items of Codex's terminal title for that
+launch, overriding the user's and the project's own `tui.terminal_title` inside Octoboard's terminal, so the signal
+does not depend on how the user has configured their titles (see "Per-agent specifics a user will notice" in
+`docs/product/launching-agents.md`). The user's Codex configuration files are not changed.
 
 ### Declining a Claude Code prompt or question
 

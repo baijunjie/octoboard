@@ -33,13 +33,11 @@
 //! first (Claude Code's onboarding or Codex's login on an account's first launch, each with a login
 //! in a browser) and shows the signal only once past the screen: the first hook for Claude Code and
 //! Grok, and for Codex, which runs none until its first prompt, the first terminal title it writes,
-//! which it does as its session starts and never before. Nothing a transcript quotes can precede
-//! it. The exception is a Codex whose configuration switches the title off
-//! (`tui.terminal_title = []`) or cannot be read: its watch is bounded, ending after
-//! [`WATCH_BYTES`] of output or [`WATCH_SECONDS`] seconds, or at its first title, if it sets one. A
-//! transcript that quotes a screen is not taken for it unless it reproduces the first-draw pattern
-//! inside the output window before the watch has ended; and whatever is sighted, keys are sent only
-//! if the checks below pass.
+//! which it does as its session starts and never before (the launch fixes the title's items, so no
+//! configuration switches it off). Nothing a transcript quotes can precede it. A transcript that
+//! quotes a screen is not taken for it unless it reproduces the first-draw pattern inside the
+//! output window before the watch has ended; and whatever is sighted, keys are sent only if the
+//! checks below pass.
 //!
 //! **Octoboard's own messages are held** for as long as a screen may be up
 //! ([`TrustState::holds_writes`]), since a message's trailing Enter would otherwise answer it —
@@ -47,14 +45,19 @@
 //!
 //! - Claude Code and Grok run a hook as they start, once they are past the screen, so their
 //!   messages are held until that first hook and released by it ([`on_hook`]); another startup
-//!   modal can follow Claude Code's screen, and only the hook says the session is ready. A session
-//!   whose hooks never arrive holds its messages for as long as it runs.
+//!   modal can follow Claude Code's screen, and only the hook says the session is ready. A Claude
+//!   Code session whose hooks never arrive holds its messages for as long as it runs; a Grok one
+//!   does so only until [`HOOK_FALLBACK`] after its launch, since a managed policy can keep every
+//!   hook of Octoboard's from running. Then they are let through ([`release_when_no_hook_comes`]),
+//!   unless its screen has been sighted, which keeps them held until the rendered screen no longer
+//!   shows it ([`release_when_the_sighted_screen_goes`]). A dialog of the agent's holds them as
+//!   it does at any other time ([`crate::agent_dialogs`]).
 //! - Codex runs none until its first prompt, so its messages are held while the watch is still
-//!   looking (until its first terminal title, or the bound of a watch that has one) and, once its
-//!   screen is sighted, until Octoboard's press of it succeeds, a hook arrives, or the person's own
-//!   answer in the terminal is seen to take the screen away. The press releases them itself; the
-//!   end of the watch with nothing sighted and the person's answer are watched for by
-//!   [`supervise`] (`release_when_the_screen_goes`).
+//!   looking (until its first terminal title) and, once its screen is sighted, until Octoboard's
+//!   press of it succeeds, a hook arrives, or the person's own answer in the terminal is seen to
+//!   take the screen away. The press releases them itself; the end of the watch with nothing
+//!   sighted and the person's answer are watched for by [`supervise`]
+//!   (`release_when_the_screen_goes`).
 //!
 //! So none of Octoboard's own writes can be what ends a wait, and the input counted since a
 //! sighting is the person's alone.
@@ -83,7 +86,8 @@
 //!   first drawing staying in the recent output nor a quiet terminal can be waited for. It is
 //!   pressed with `y` while nothing has shown the screen gone — no hook has run, the process is
 //!   still there (a decline exits it), and nothing has been written into its input since the
-//!   screen was sighted — and the press counts once Grok has recorded the trust.
+//!   screen was sighted — and the press counts once Grok has recorded the trust, or, when no hook
+//!   comes to carry the record, once the rendered screen is seen to have gone.
 //!
 //! Whatever cannot be confirmed ends the attempt with the keys not sent, and the screen waits for
 //! the person to answer it. Each session is answered at most once, so a failed attempt is not
@@ -127,6 +131,11 @@ const WATCHED_ANSWER_BYTES: u64 = 128 * 1024;
 
 /// How often a session's held messages are looked at while its watch runs.
 const RELEASE_POLL: Duration = Duration::from_millis(250);
+
+/// How long after its launch a Grok Build session may go without a hook before the messages held
+/// for it are let through anyway ([`Screen::hook_fallback`]). Its `SessionStart` normally comes
+/// within a second of the launch, so a hook that has not come by now is not coming.
+const HOOK_FALLBACK: Duration = Duration::from_secs(30);
 
 /// Whether Octoboard may answer this session's screen without asking: a console session always
 /// may, because its working directory is the console's own, which holds nothing but the
@@ -240,6 +249,10 @@ pub fn supervise(state: &Arc<AppState>, live: &Arc<LiveSession>) {
     if !live.trust.screen.hook_at_start() {
         release_when_the_screen_goes(state, live);
     }
+    if let Some(bound) = live.trust.screen.hook_fallback {
+        release_when_no_hook_comes(state, live, bound);
+        release_when_the_sighted_screen_goes(state, live);
+    }
     let state = state.clone();
     // Weak, so that the session being dropped closes its sightings and ends this task.
     let live = Arc::downgrade(live);
@@ -313,6 +326,66 @@ fn release_when_the_screen_goes(state: &Arc<AppState>, live: &Arc<LiveSession>) 
     });
 }
 
+/// Lets through the messages held for a session whose agent should have run a hook by now and has
+/// not (Grok Build; [`Screen::hook_fallback`]): once `bound` has passed since the launch, with no
+/// hook seen and no trust screen sighted. A sighted screen stays held until it is answered
+/// ([`release_when_the_sighted_screen_goes`]). Nothing here looks for a dialog of the agent's: the
+/// drain refuses a session that shows one, and the dialog watch writes out what waited when it
+/// goes ([`crate::agent_dialogs`]).
+fn release_when_no_hook_comes(state: &Arc<AppState>, live: &Arc<LiveSession>, bound: Duration) {
+    let state = state.clone();
+    let live = Arc::downgrade(live);
+    tokio::spawn(async move {
+        tokio::time::sleep(bound).await;
+        let Some(live) = live.upgrade() else { return };
+        if live.trust.release_without_hook() {
+            release_held(&state, &live.id);
+        }
+    });
+}
+
+/// Releases the messages held for a session whose agent's hook cannot be relied on (Grok Build;
+/// [`Screen::hook_fallback`]) once its sighted trust screen has been answered, which nothing it
+/// reports would say: under a managed policy that allows only managed hooks none of Octoboard's
+/// runs, so neither Octoboard's press (which waits for the hook that carries the trust record)
+/// nor the person's answer in the terminal is ever followed by one. A screen sighted after the
+/// fallback has let the messages through is held for the same way.
+///
+/// The answer is read off the rendered screen, which shows what is up now, rather than off what
+/// was printed since the sighting: Grok animates its logo for as long as it waits at the screen,
+/// so output after the sighting says nothing about it, and Octoboard's own press is not counted as
+/// input to gate on. The screen is gone when none of its text is on the rendered screen
+/// ([`Screen::gone_in`]) twice, a moment apart; a hook ends the watch as it ends the hold.
+fn release_when_the_sighted_screen_goes(state: &Arc<AppState>, live: &Arc<LiveSession>) {
+    let state = state.clone();
+    let live = Arc::downgrade(live);
+    tokio::spawn(async move {
+        let gone = |live: &LiveSession| live.trust.screen.gone_in(live.screen_text().as_bytes());
+        loop {
+            tokio::time::sleep(RELEASE_POLL).await;
+            let Some(live) = live.upgrade() else { break };
+            let trust = &live.trust;
+            if trust.hook_seen.load(Ordering::Acquire) {
+                break;
+            }
+            if !trust.sighted.load(Ordering::Acquire) || !gone(&live) {
+                continue;
+            }
+            tokio::time::sleep(QUIET).await;
+            if trust.hook_seen.load(Ordering::Acquire) {
+                break;
+            }
+            if gone(&live) {
+                trust.dismissed.store(true, Ordering::Release);
+                trust.needs_user.store(false, Ordering::Release);
+                publish_status(&state, &live);
+                release_held(&state, &live.id);
+                break;
+            }
+        }
+    });
+}
+
 /// Writes out whatever was queued for the session while its trust screen held it.
 fn release_held(state: &Arc<AppState>, session_id: &str) {
     if let Ok(session) = state.session_record(session_id) {
@@ -320,13 +393,14 @@ fn release_held(state: &Arc<AppState>, session_id: &str) {
     }
 }
 
-/// A hook of this session reached the daemon, so it is past its trust screen. Lets through what
-/// was held for it, and, where the agent's trust record has to be carried (Grok Build), carries the
-/// entry the agent wrote when the hook ends a screen Octoboard has not pressed successfully: the
-/// person answered it in the terminal, or Octoboard's press is still waiting on this very hook or
-/// has failed. A press waiting on it is handed the outcome; otherwise a failure is a notice, and
-/// an entry that never appears — the person declined — leaves everything as it is, silently.
-/// Nothing of Octoboard's own permission is recorded here; only a successful press does that.
+/// A hook of this session reached the daemon, so it is past its trust screen. Lets through what was
+/// held for it, and, where the agent's trust record has to be carried (Grok Build), carries the
+/// entry the agent wrote when the hook ends a screen whose record nothing has carried yet: the
+/// person answered it in the terminal, Octoboard's press is still waiting on this very hook or has
+/// failed, or the press counted once the rendered screen was seen to go with no hook. A press
+/// waiting on it is handed the outcome; otherwise a failure is a notice, and an entry that never
+/// appears — the person declined — leaves everything as it is, silently. Nothing of Octoboard's own
+/// permission is recorded here; only a successful press does that.
 pub fn on_hook(state: &Arc<AppState>, live: &Arc<LiveSession>) {
     let noted = live.trust.note_hook();
     if live.trust.needs_user.swap(false, Ordering::AcqRel) {

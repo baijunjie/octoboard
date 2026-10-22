@@ -429,6 +429,10 @@ export const en = {
     "{appName} could not deliver messages held back for a session during a handoff, so they were dropped.",
   "daemon.message_not_sent":
     "{agent} did not send a message {appName} wrote into this session, so it is waiting in the session's input box. {appName} writes nothing more into the session until a prompt is sent.",
+  "daemon.message_discarded_by_dialog":
+    "{agent} showed a dialog while {appName} wrote a message into this session and discarded the message. {appName} will write it again once the dialog has been answered.",
+  "daemon.message_diverted_by_view":
+    "{agent} was showing a view of its background agents while {appName} wrote a message into this session, so the message went there rather than to the conversation. Check the session.",
   "daemon.launch_failed": "Could not start {title}: {reason}",
   // The same notice's title when its failure is laid out beneath it, which says the reason itself.
   "daemon.launch_failed.title": "Could not start {title}",

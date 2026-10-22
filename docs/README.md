@@ -122,8 +122,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   console with `list_sessions` and writing information into any of them with `share_info`: why it reaches a session as
   information rather than an instruction, and the copy its owner is sent.
 - [Message delivery](product/message-delivery.md) — how a message written into a session is delivered: what is
-  sanitized, when it is queued until the session can take it, the hold while a trust confirmation may be up, and a
-  write that only partly lands.
+  sanitized, when it is queued until the session can take it, the hold while a trust confirmation may be up, the holds
+  behind screens an agent raises that only the user can answer and after a Grok Build error, a Claude Code relaunch
+  instruction passed as the launch prompt, what the owners' tools report as held, a message a dialog discarded or a view
+  of background agents took, and a write that only partly lands.
 - [Session requests](product/session-requests.md) — how any session asks with `request_session` for a session that has
   no owner, in any project or as a console session: who is offered the tool, its arguments and the refusals before the
   user is asked, the setting that approves requests automatically without a dialog, the 8-minute wait and the raised
@@ -302,15 +304,17 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Agent CLI reference](agent-cli-reference.md) — what the three agent CLIs themselves do, against the versions the
   facts were established on: each one's hook events, the payload fields and the keys a turn can be correlated on, what a
   failing hook costs, how a project's own configuration layers around an injected one, how Octoboard is injected into
-  each agent and the conditions that come with it, each agent's own folder-trust confirmation (when it appears, how it
-  reads and is accepted, and where the agent records the trust), each one's own time limit on a tool call — what it does
-  to the server and to its own model when the limit passes, and whether its model takes turns while a call is
-  outstanding — what the model is handed and how it reaches an MCP tool, the rules for writing into a running session,
-  where each keeps a session's conversation record (Codex's history segments included) and what moving it to another
-  config directory or another account takes, the measured risks of two accounts sharing a session directory without the rest
-  of their configuration, and how each agent treats a configuration directory whose entries are links into
-  another — which entries it keeps and what they hold, whether a linked file survives the agent saving it, what loads
-  through a link, and what loses its automatic approval there.
+  each agent and the conditions that come with it, the handler types each agent runs per event, the dialogs, notices,
+  pre-session screens and views an agent raises that a written message would answer (and the launch overrides that keep
+  some away), each agent's own folder-trust confirmation (when it appears, how it reads and is accepted, and where the
+  agent records the trust), each one's own time limit on a tool call — what it does to the server and to its own model
+  when the limit passes, and whether its model takes turns while a call is outstanding — what the model is handed and
+  how it reaches an MCP tool, the rules for writing into a running session, where each keeps a session's conversation
+  record (Codex's history segments included) and what moving it to another config directory or another account takes,
+  the measured risks of two accounts sharing a session directory without the rest of their configuration, and how each
+  agent treats a configuration directory whose entries are links into another — which entries it keeps and what they
+  hold, whether a linked file survives the agent saving it, what loads through a link, and what loses its automatic
+  approval there.
 - [UI accessibility standard](ui-accessibility.md) — HeroUI default styles taking precedence, WCAG 2.2 AA for custom
   styles in both appearances, and the application-level accessibility rules: keyboard access (Tab, the exception for a
   react-aria collection that manages its own focus, F6 as the way out of the terminal), visible focus and why it never
@@ -349,18 +353,20 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Probing agent CLIs](memory/probing-agent-clis.md) — how to establish what the three agent CLIs actually do, and how
   to probe a live Octoboard session that launches them: which session markers to strip and why enumerating them beats
   matching a prefix, why neither `--help`, the binary's own strings, nor a config file's silent acceptance of a
-  capability's name can be trusted, why the exact behaviour of a check Claude Code runs on an input is settled by
-  finding the code behind the symptom's wording in its executable and running it as an oracle, how to settle a question
-  without spending a model turn and where that stops being yours to decide — substituting only the inference endpoint
-  with a local stub where the question is what the agent does, and driving a probe that goes through the daemon from a
-  client of its own on the control WebSocket rather than building the application — how to prove a per-launch injection
-  and an MCP tool out of band rather than through the model, why a probe expecting "no" needs a positive control and why
-  a measured silence also has to be bounded by what would have ended it, why a permission probe has to be set up against
-  the user's own settings with the mode in effect confirmed from the session itself, and the residue a probe leaves — in
-  the user's configuration and in their live `~/.octoboard` data — and how a probe that needs no logged-in agent avoids
-  the latter with a throwaway `HOME`/`TMPDIR`, using Codex's sign-in screen as session output, and how to put a fake
-  agent CLI on `PATH` for an isolated daemon so the real one does not launch instead, and which entries a throwaway
-  config directory built as a symlink farm has to own so the probe does not write through them into the user's own.
+  capability's name can be trusted, why an event's arrival has to be seen on every path with the handler type actually
+  registered, why the exact behaviour of a check Claude Code runs on an input is settled by finding the code behind the
+  symptom's wording in its executable and running it as an oracle, how to settle a question without spending a model
+  turn and where that stops being yours to decide — substituting only the inference endpoint with a local stub where the
+  question is what the agent does, and driving a probe that goes through the daemon from a client of its own on the
+  control WebSocket rather than building the application — how to prove a per-launch injection and an MCP tool out of
+  band rather than through the model, why a probe expecting "no" needs a positive control (the kind of login being one
+  of its preconditions) and why a measured silence also has to be bounded by what would have ended it, why a permission
+  probe has to be set up against the user's own settings with the mode in effect confirmed from the session itself, and
+  the residue a probe leaves — in the user's configuration and in their live `~/.octoboard` data — and how a probe that
+  needs no logged-in agent avoids the latter with a throwaway `HOME`/`TMPDIR`, using Codex's sign-in screen as session
+  output, and how to put a fake agent CLI on `PATH` for an isolated daemon so the real one does not launch instead, and
+  which entries a throwaway config directory built as a symlink farm has to own so the probe does not write through them
+  into the user's own.
 - [Building and launching the app for verification](memory/building-and-launching-the-app-for-verification.md) — how to
   build, launch and isolate the app for a verification: when to launch the real window, building the daemon and
   confirming the running sidecar's binary, `pnpm build:app` (a `tauri build` that cannot sign), `open` rather than

@@ -16,6 +16,18 @@
 //! "Update now / Skip" prompt would otherwise sit in front of the trust screen Octoboard watches
 //! for. Only the launch is affected; the user's own setting is left as it is.
 //!
+//! Every launch also overrides four things, for this launch only. Three would otherwise put a
+//! screen in front of the session that no hook or terminal title announces, and that a message's
+//! paste and Enter would answer destructively: a resume asks which of two working directories to
+//! use (`tui.resume_cwd` starts it in the current one); the model-migration prompt is shown for a
+//! model that has an upgrade (`model_migrations` suppresses it for every model the models cache
+//! lists one for); and the rate-limit "switch model" nudge appears after a turn, once a limit is
+//! near (hidden). The fourth restores the start signal rather than removing a screen: the terminal
+//! title is pinned to a fixed set of items (`TERMINAL_TITLE`), since the trust watch ends at the
+//! first title and a configuration that draws none (a project's own `[tui] terminal_title = []`, or
+//! items that are empty at the start) would hold messages for good; overrides outrank project
+//! configuration.
+//!
 //! Two kinds of trust are involved, and they are handled differently:
 //!
 //! - **Project trust** is not passed. In a git repository Codex has not been told to trust, it
@@ -258,6 +270,19 @@ impl AgentAdapter for CodexAdapter {
         args.push("check_for_update_on_startup=false".to_string());
 
         args.push("-c".to_string());
+        args.push(format!("tui.terminal_title={TERMINAL_TITLE}"));
+        if spec.resume_agent_session_id.is_some() {
+            args.push("-c".to_string());
+            args.push("tui.resume_cwd=\"current\"".to_string());
+        }
+        args.push("-c".to_string());
+        args.push("notice.hide_rate_limit_model_nudge=true".to_string());
+        if let Some(upgrades) = model_migrations(&codex_home(spec, pinned)) {
+            args.push("-c".to_string());
+            args.push(format!("notice.model_migrations={upgrades}"));
+        }
+
+        args.push("-c".to_string());
         args.push(format!(
             "developer_instructions={}",
             toml_string(&mcp::role::role_description(
@@ -306,7 +331,6 @@ impl AgentAdapter for CodexAdapter {
             args,
             env,
             resolves_approvals_itself: resolves_approvals_itself(spec, &config),
-            start_signal_missing: !terminal_title_enabled(&config),
             ..LaunchPlan::default()
         })
     }
@@ -376,22 +400,35 @@ fn resolves_approvals_itself(spec: &LaunchSpec<'_>, config: &ConfigFile) -> bool
         .is_some_and(|value| mentions(value, AUTO_REVIEW))
 }
 
-/// Whether Codex writes a terminal title, which the trust watch ends at (`crate::trust`): it does
-/// by default, with a `config.toml` that has no `tui.terminal_title` or one that is a non-empty
-/// list. An absent file is the default, as on an account's first launch. A file that cannot be read
-/// or parsed, or a `tui.terminal_title` that is not a list, says nothing sure, and the title is
-/// then taken as off: the watch ends on a bound, so that messages are never held for good.
-fn terminal_title_enabled(config: &ConfigFile) -> bool {
-    let parsed = match config {
-        ConfigFile::Absent => return true,
-        ConfigFile::Unreadable => return false,
-        ConfigFile::Parsed(parsed) => parsed,
-    };
-    match parsed.get("tui").and_then(|tui| tui.get("terminal_title")) {
-        None => true,
-        Some(toml::Value::Array(items)) => !items.is_empty(),
-        Some(_) => false,
-    }
+/// The terminal title items every launch is given, in the order Codex's default title draws them.
+/// `thread-title` is left out: until a thread is named it falls back to the thread id.
+const TERMINAL_TITLE: &str = "[\"activity\",\"thread-name\",\"project-name\"]";
+
+/// The `notice.model_migrations` table for the models cache in `codex_home`: every model that has
+/// an upgrade target, mapped to it, so that whichever model ends up in effect, Codex's "try the new
+/// model" prompt is not shown. `None` when the cache is missing, unreadable or lists no upgrade.
+/// Read from the file, since asking Codex would start a process on every launch.
+fn model_migrations(codex_home: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(codex_home.join("models_cache.json")).ok()?;
+    upgrade_table(&text)
+}
+
+fn upgrade_table(cache: &str) -> Option<String> {
+    let cache: serde_json::Value = serde_json::from_str(cache).ok()?;
+    // A key repeated in the table would make the whole override a TOML error.
+    let mut seen = std::collections::HashSet::new();
+    let entries: Vec<String> = cache
+        .get("models")?
+        .as_array()?
+        .iter()
+        .filter_map(|model| {
+            let from = model.get("slug")?.as_str()?;
+            let to = model.get("upgrade")?.get("model")?.as_str()?;
+            seen.insert(from)
+                .then(|| format!("{}={}", toml_string(from), toml_string(to)))
+        })
+        .collect();
+    (!entries.is_empty()).then(|| format!("{{{}}}", entries.join(",")))
 }
 
 /// What the user's `config.toml` in the Codex home in effect came to, for each reader to take its
@@ -719,40 +756,101 @@ mod tests {
         );
     }
 
-    /// Codex's terminal title is what ends the trust watch, so a configuration that switches it
-    /// off, or that cannot be read, makes the plan say the signal is missing.
+    /// The title items are pinned for every launch, so a project's own `terminal_title = []` cannot
+    /// leave the trust watch without its start signal; a resume starts in the current directory,
+    /// and the nudge to switch model is hidden.
     #[test]
-    fn a_switched_off_terminal_title_is_noticed() {
+    fn every_launch_pins_the_terminal_title_and_hides_the_model_nudge() {
+        let fixture = spec_fixture();
+        let fresh = overrides(&CodexAdapter.plan(&fixture.spec()).expect("plan").args);
+        let mut spec = fixture.spec();
+        spec.resume_agent_session_id = Some("thread-id");
+        let resumed = overrides(&CodexAdapter.plan(&spec).expect("plan").args);
+        for overrides in [&fresh, &resumed] {
+            assert!(overrides.contains(
+                &"tui.terminal_title=[\"activity\",\"thread-name\",\"project-name\"]".to_string()
+            ));
+            assert!(overrides.contains(&"notice.hide_rate_limit_model_nudge=true".to_string()));
+        }
+        assert!(!fresh.iter().any(|o| o.starts_with("tui.resume_cwd")));
+        assert!(resumed.contains(&"tui.resume_cwd=\"current\"".to_string()));
+    }
+
+    const MODELS_CACHE: &str = r#"{"models":[
+        {"slug":"gpt-6-sol","upgrade":null},
+        {"slug":"gpt-5.6-sol","upgrade":{
+            "model":"gpt-6-sol","migration_markdown":"Meet GPT-6 Sol\n"}},
+        {"slug":"gpt-5.5","upgrade":{"model":"gpt-6-sol","migration_markdown":"x"}},
+        {"slug":"gpt-5.5","upgrade":{"model":"repeated"}},
+        {"slug":"no-upgrade-key"},
+        {"slug":"odd","upgrade":{"markdown":"no target"}},
+        {"upgrade":{"model":"no-slug"}}]}"#;
+
+    #[test]
+    fn the_migration_table_maps_every_model_that_has_an_upgrade() {
+        let table = upgrade_table(MODELS_CACHE).expect("table");
+        assert_eq!(
+            table,
+            "{\"gpt-5.6-sol\"=\"gpt-6-sol\",\"gpt-5.5\"=\"gpt-6-sol\"}"
+        );
+        let parsed: toml::Table = format!("v={table}").parse().expect("valid TOML");
+        assert_eq!(parsed["v"]["gpt-5.5"].as_str(), Some("gpt-6-sol"));
+    }
+
+    #[test]
+    fn a_models_cache_that_says_nothing_gives_no_migration_table() {
+        for cache in [
+            "",
+            "not json",
+            "[]",
+            "{}",
+            r#"{"models":{}}"#,
+            r#"{"models":[{"slug":"a","upgrade":null}]}"#,
+        ] {
+            assert_eq!(upgrade_table(cache), None, "{cache:?}");
+        }
+    }
+
+    /// The models cache is read from the Codex home in effect, the pinned directory when there is
+    /// one, and nothing is passed when there is none.
+    #[test]
+    fn the_migration_override_comes_from_the_codex_home_in_effect() {
         let mut fixture = spec_fixture();
-        let home = fixture.scratch.join("codex-home");
-        std::fs::create_dir_all(&home).expect("codex home");
+        let shell_home = fixture.scratch.join("shell-codex-home");
+        let pinned = fixture.scratch.join("pinned-codex-home");
+        for dir in [&shell_home, &pinned] {
+            std::fs::create_dir_all(dir).expect("codex home");
+        }
         fixture.shell_env.insert(
             "CODEX_HOME".to_string(),
-            home.to_string_lossy().into_owned(),
+            shell_home.to_string_lossy().into_owned(),
         );
-        let missing = |fixture: &crate::adapter::tests::SpecFixture| {
-            CodexAdapter
-                .plan(&fixture.spec())
-                .expect("plan")
-                .start_signal_missing
+        let migrations = |fixture: &crate::adapter::tests::SpecFixture| {
+            overrides(&CodexAdapter.plan(&fixture.spec()).expect("plan").args)
+                .into_iter()
+                .find(|o| o.starts_with("notice.model_migrations="))
         };
+        assert_eq!(migrations(&fixture), None, "no cache");
 
-        assert!(!missing(&fixture), "no configuration is the default");
-        for (config, expected) in [
-            ("model = \"gpt\"\n", false),
-            ("[tui]\ntheme = \"dark\"\n", false),
-            ("[tui]\nterminal_title = [\"project\"]\n", false),
-            ("[tui]\nterminal_title = []\n", true),
-            ("[tui]\nterminal_title = \"project\"\n", true),
-            ("[tui\nterminal_title =", true),
-        ] {
-            std::fs::write(home.join("config.toml"), config).expect("config");
-            assert_eq!(missing(&fixture), expected, "{config:?}");
-        }
+        std::fs::write(shell_home.join("models_cache.json"), MODELS_CACHE).expect("cache");
+        assert_eq!(
+            migrations(&fixture).as_deref(),
+            Some(
+                "notice.model_migrations={\"gpt-5.6-sol\"=\"gpt-6-sol\",\"gpt-5.5\"=\"gpt-6-sol\"}"
+            )
+        );
 
-        std::fs::remove_file(home.join("config.toml")).expect("remove");
-        std::fs::create_dir(home.join("config.toml")).expect("a directory in its place");
-        assert!(missing(&fixture), "unreadable");
+        fixture.config_dir = Some(pinned.clone());
+        assert_eq!(migrations(&fixture), None, "the pinned home has its own");
+        std::fs::write(
+            pinned.join("models_cache.json"),
+            r#"{"models":[{"slug":"a","upgrade":{"model":"b"}}]}"#,
+        )
+        .expect("cache");
+        assert_eq!(
+            migrations(&fixture).as_deref(),
+            Some("notice.model_migrations={\"a\"=\"b\"}")
+        );
     }
 
     /// The approval setting is read from the Codex home in effect, which is the pinned directory

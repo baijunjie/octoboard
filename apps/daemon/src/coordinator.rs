@@ -18,6 +18,7 @@ use crate::account_dirs::{account_dir_key, normalize_account_dir};
 use crate::account_login;
 use crate::account_quotas;
 use crate::adapter;
+use crate::agent_dialogs;
 use crate::agent_records;
 use crate::availability;
 use crate::branch_origin;
@@ -3144,9 +3145,10 @@ fn resumable_agent_session_id(session: &Session) -> Option<String> {
     }
 }
 
-/// Relaunches a dormant session. `instruction` is written into it once it is running — queued here
-/// rather than by the caller, because whichever hook releases it can fire the moment the agent
-/// starts, so it has to be in the queue before the launch and out again if the launch never happens.
+/// Relaunches a dormant session. `instruction` is given to it here rather than by the caller: as
+/// the launch prompt for a Claude Code session that resumes a conversation, otherwise queued to be
+/// written once it is running — whichever hook releases it can fire the moment the agent starts, so
+/// it has to be in the queue before the launch and out again if the launch never happens.
 ///
 /// A session bound to an archived owner (a console session, or a project session that started it)
 /// brings its archived owners back first, level by level from the topmost down — a session bound
@@ -3441,7 +3443,8 @@ pub(crate) async fn relaunch_session_with(
     let previous_ended_at = session.ended_at;
     let cwd = session_cwd(state, &session)?;
     let resume_id = resumable_agent_session_id(&session);
-    // A relaunch carries no task, so the agent comes up at its prompt rather than working. On
+    // A relaunch carries no task of its own, so the agent comes up at its prompt rather than
+    // working (a Claude Code instruction given as the launch prompt is reported by its hook). On
     // Codex that is also the only correct value available: its `SessionStart` hook does not fire
     // until the first prompt submission, so an optimistic `working` would never be corrected.
     session.status = SessionStatus::Idle;
@@ -3454,9 +3457,19 @@ pub(crate) async fn relaunch_session_with(
         return Err(session_archived(id));
     }
 
+    // Claude Code asks "Resume this conversation?" at a launch that resumes with no prompt on the
+    // command line, and a message pasted into that dialog is discarded while its Enter picks a
+    // row. With the instruction as the launch prompt the dialog is not shown, so it goes there;
+    // every other launch has it queued instead.
+    let (prompt, queued) = match instruction {
+        Some(instruction) if session.agent == Agent::Claude && resume_id.is_some() => {
+            (term::launch_prompt(instruction), None)
+        }
+        queued => (None, queued),
+    };
     // Queued with every refusal above already past, so a call that never launched leaves nothing
     // behind for a later launch to deliver.
-    if let Some(instruction) = instruction {
+    if let Some(instruction) = queued {
         state.queue_message(&session.id, instruction);
     }
 
@@ -3465,7 +3478,7 @@ pub(crate) async fn relaunch_session_with(
         claim,
         &session,
         &cwd,
-        None,
+        prompt.as_deref(),
         resume_id.as_deref(),
         terminal_appearance,
         // The snapshot the caller resolved something from is the one the launch must use.
@@ -3667,6 +3680,7 @@ async fn start_process(
     state.forget_saved_output(&session.id);
     state.watch_exit(launch.session.clone());
     trust::supervise(state, &launch.session);
+    agent_dialogs::watch(state, &launch.session);
     if let Some(agent_session_id) = launch.agent_session_id {
         state.set_agent_session_id(&session.id, &agent_session_id)?;
     }
@@ -10576,6 +10590,55 @@ mod tests {
         );
         assert_eq!(after.config_dir, None);
         assert_eq!(status_of(&state, "hub"), Some(Archived));
+    }
+
+    /// A Claude Code resume takes the instruction as its launch prompt, shaped as a written message
+    /// is, and queues nothing: written into the session it would meet the "Resume this
+    /// conversation?" dialog. Another agent has it queued, as before.
+    #[tokio::test]
+    async fn a_claude_resume_takes_its_instruction_as_the_launch_prompt() {
+        use crate::test_support::{stand_in_launch, Launched, StandIn};
+        use std::sync::Mutex;
+        let (state, _dir) = console_with_project_and_accounts("coordinator-resume-prompt");
+        for (id, agent, instruction, prompt, queued) in [
+            (
+                "claude",
+                Agent::Claude,
+                "\u{1}/clear it",
+                Some(" /clear it"),
+                0,
+            ),
+            ("dashed", Agent::Claude, "- item", Some(" - item"), 0),
+            ("blank", Agent::Claude, "\u{1} ", None, 0),
+            ("codex", Agent::Codex, "/clear it", None, 1),
+        ] {
+            state
+                .store
+                .insert_session(&Session {
+                    agent_session_id: Some(format!("conversation-{id}")),
+                    has_conversation: true,
+                    ..project_session(id, agent, SessionStatus::Interrupted)
+                })
+                .unwrap();
+            let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
+            let started = Arc::new(Mutex::new(Vec::<StandIn>::new()));
+            let claim = state.begin_launch(id).unwrap();
+            relaunch_session_with(
+                &state,
+                &claim,
+                id,
+                Some(instruction),
+                true,
+                None,
+                None,
+                stand_in_launch(&started, &launches, || {}),
+            )
+            .await
+            .unwrap();
+            let launches = launches.lock().unwrap();
+            assert_eq!(launches[0].2.as_deref(), prompt, "{id}");
+            assert_eq!(state.queued_count(id), queued, "{id}");
+        }
     }
 
     #[tokio::test]

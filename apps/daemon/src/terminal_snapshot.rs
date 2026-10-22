@@ -144,6 +144,33 @@ impl TerminalSnapshot {
         output.into_bytes()
     }
 
+    /// The rows the screen shows right now as plain text, one line per row, without the scrollback.
+    /// Recognising what an agent is showing goes by this and never by the byte stream: Claude Code
+    /// places words with cursor moves and Codex redraws only the cells that changed, so the bytes
+    /// hold no whole phrase.
+    pub fn visible_text(&self) -> String {
+        let grid = self.terminal.grid();
+        let mut text = String::new();
+        for row in 0..grid.screen_lines() as i32 {
+            let cells = &grid[Line(row)];
+            for col in 0..grid.columns() {
+                let cell = &cells[Column(col)];
+                if cell
+                    .flags
+                    .intersects(Flags::WIDE_CHAR_SPACER | Flags::LEADING_WIDE_CHAR_SPACER)
+                {
+                    continue;
+                }
+                text.push(cell.c);
+                if let Some(chars) = cell.zerowidth() {
+                    text.extend(chars);
+                }
+            }
+            text.push('\n');
+        }
+        text
+    }
+
     fn render(&self) -> Vec<u8> {
         let grid = self.terminal.grid();
         // Normal buffers include their history. Alternate screens have no scrollback, exactly

@@ -8,6 +8,7 @@ mod account_dirs;
 mod account_login;
 mod account_quotas;
 mod adapter;
+mod agent_dialogs;
 mod agent_models;
 mod agent_records;
 mod archive_cleanup;

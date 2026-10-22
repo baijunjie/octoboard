@@ -170,6 +170,16 @@ each a **non-blocking error** that shows a notice in the transcript and lets the
 `command` handler with an `args` list is run in *exec form*: the command is resolved as an executable and spawned
 directly with `args` as its argument vector, with no shell.
 
+**`SessionStart` and `Setup` run no HTTP handler** (2.1.307): an `http` handler registered for either is skipped, with
+only a debug-log line ("HTTP hooks are not supported for SessionStart") and nothing on screen, and those two are the
+only events the check names. So a session that runs every hook over HTTP sends nothing at all on a launch or a
+`--resume` with no prompt until the user types. A `command` handler with `async: true` for `SessionStart` runs to
+completion and shows nothing in the TUI; measured, it fired with `source` `startup` 0.3–0.9 s after a fresh launch and
+with `resume` 0.3–1.9 s after a `--resume <id>` with no prompt. Like every hook it is skipped, not deferred, while the
+workspace-trust screen is up: in an untrusted folder it fired about 0.5 s after the screen was accepted and not at all
+when it was declined. Octoboard therefore registers `SessionStart` as an async command even where every other event
+is HTTP.
+
 **`allowedHttpHookUrls` can switch every HTTP hook off.** When that setting is defined in any settings file (user,
 project, local or managed; the arrays merge), Claude Code runs an HTTP hook only if its URL matches one of the patterns
 (`*` is a wildcard) and skips the rest without running them; an empty array skips every HTTP hook. So a user or managed
@@ -256,6 +266,55 @@ model lacks is silently lowered, so no level is ever refused.
 - **In `auto`, an `ask` rule raises a normal prompt** with `PreToolUse`, then `PermissionRequest` (`permission_mode` is
   `auto`), then `Notification` `permission_prompt`. A tool call the classifier blocks shows no prompt: `PreToolUse` and
   then `Stop`, with no `PermissionRequest` and no `PostToolUse`.
+
+**Dialogs at a resume and in an idle session** (2.1.307, read from the executable and reproduced with fake
+subscription credentials against a local stub). None runs a hook, and `idle_prompt` is not sent while one is up.
+
+- **"Resume this conversation?" at launch.** After `--resume` or `--continue` with **no prompt on the command line**,
+  Claude Code can ask before the first prompt, at the same moment `SessionStart` with `resume` fires: "This
+  conversation has been inactive for 3d 0h 1m and is 42k tokens long. Resuming it will use about 42% of your 5-hour
+  usage limit.", rows "1. Resume" and "2. Start a new conversation", footer "Enter to confirm · Esc to resume". It is
+  shown only to a subscription account whose rate-limit tier is known, with the prompt cache cold (or the model
+  changed), when the conversation's cost reaches a server-set share of the 5-hour limit (5% in the cached flags seen),
+  and not once `resumeReturnDismissed` is set in the config directory's `.claude.json` (what "Don't ask me again"
+  writes; no setting or variable reaches it). A bracketed paste is discarded and a CR picks the focused row; the
+  focus starts on Resume, or under a server flag on "Start a new conversation", which then runs `/clear` (a
+  `SessionEnd` with `reason` `clear`, then `SessionStart` with `clear` and a new session id). A typed digit picks its
+  row; Esc keeps the conversation. **A launch with a prompt never shows it**: `--resume <id> "<prompt>"` ran the turn
+  straight away, as did `-p`.
+- **The same title in an idle session.** Under a server flag (off on the accounts seen) it also comes up on its own once
+  the prompt cache has expired — at the cache TTL after the last request, an hour for a subscriber — with unnumbered
+  rows and the footer "Enter to confirm · Esc to dismiss". Here a paste goes into the input box as a draft (the dialog
+  adds "Your unsent message will still be there after you answer.") and the CR is swallowed, so nothing is lost and no
+  turn starts.
+- **"Resume from summary".** Under another server flag the no-prompt resume can show "This session is 3d old and 150k
+  tokens." with "1. Resume from summary (recommended)", "2. Resume full session as-is", "3. Don't ask me again" and
+  "Enter to confirm · Esc to cancel" (from 70 minutes and 100k tokens, adjustable with
+  `CLAUDE_CODE_RESUME_THRESHOLD_MINUTES` and `CLAUDE_CODE_RESUME_TOKEN_THRESHOLD`). A blind Enter runs `/compact`.
+
+Octoboard passes an instruction for a relaunched conversation as the launch prompt, which keeps both launch dialogs
+away, and holds its writes into any session whose screen shows one of them (`docs/product/message-delivery.md`).
+
+**A notice that waits for Enter** (2.1.308): in `auto` mode with `ANTHROPIC_BASE_URL` pointing elsewhere, the first
+classifier call of a session raised "We're changing auto mode to no longer charge for classifier requests …" mid-turn,
+ending "Enter to continue · Esc to cancel" (the rewind dialog's footer too), with no hook. A message written then was
+lost: its Enter dismissed the notice and the text went nowhere. Octoboard holds its writes while that footer is on
+screen.
+
+**Views of background agents** (2.1.307, reproduced against a local stub). A turn that starts an `Agent` with
+`run_in_background` adds a task list under the prompt box — a filled `⏺ main` row and a row per agent — and the hint
+"↓ to manage". With the footer focused ("↑/↓ to select", and "Enter to view · x to stop" on an agent's row) a paste is
+dropped and a CR opens the agent's view. **In that view** the conversation area shows the subagent's transcript, the
+`❯` prompt box stays (its placeholder reads "Message @<agent type>…"), and the main row turns hollow, `◯ main`. Text
+sent there goes to the subagent, with no `UserPromptSubmit`; sent to a finished agent it resumes it. The view stays up
+after the agent finishes. No single key leaves it safely: Esc in the input stops a running agent, Ctrl+C kills it, and
+← at an empty input opens the agents view; ↓ to the main row and Enter returns to the conversation with the footer
+still focused. **The agents view** (`claude agents`, ← at an empty prompt, hinted as "← for agents" for the first ten
+seconds) moves the conversation into a background session forked under a new session id, starts a transient
+`claude daemon`, and shows "New sessions: …", "0 awaiting input · 1 working · 0 completed" and "describe a task for a
+new session": a paste and CR there start another session with that text. `CLAUDE_CODE_DISABLE_AGENT_VIEW=1` (setting
+`disableAgentView`) removes the agents view and its hint and leaves the subagent view. Octoboard holds its writes while
+either view, or the focused task list, is on screen.
 
 ## Codex
 
@@ -374,8 +433,10 @@ the hook's own stderr text is not shown — and a *synchronous* hook that hangs 
 **Project configuration layering**: project hooks in `<cwd>/.codex/hooks.json` merge with injected ones;
 `<cwd>/AGENTS.md` is concatenated *after* `~/.codex/AGENTS.md` inside a single instructions block, separated by a
 `--- project-doc ---` line, so the user's global file survives; skills are discovered in both `<cwd>/.agents/skills/`
-and `<cwd>/.codex/skills/`. `<cwd>/.codex/config.toml` is **not read at all**, which is why Codex has no project-level
-permission or approval configuration for an injected one to collide with.
+and `<cwd>/.codex/skills/`. `<cwd>/.codex/config.toml` is layered over `CODEX_HOME/config.toml` once the project is
+trusted and ignored before that (see "The effort a turn runs at when nothing sets one" below), and a `-c` override
+outranks both: on 0.162.1 a trusted project's `[tui] terminal_title = []` stopped every terminal title, and
+`-c tui.terminal_title=[…]` brought them back.
 
 **An update prompt can come first**: when a newer version is out, Codex can open with an "Update now / Skip / Skip
 until next version" prompt (seen as an "Update available!" banner in the probe on 0.161.0). Octoboard passes
@@ -384,6 +445,27 @@ for updates at startup and shows that prompt, so nothing sits in front of the fo
 that launch only. Measured on 0.160.0, with an update made available by raising `latest_version` in Codex's cached
 `version.json`: a plain launch opened with the update prompt, and a launch with the override went straight to the
 folder-trust confirmation and showed no update prompt after it either.
+
+**Screens before the session starts, and the overrides that keep them away** (0.162.1, measured with a scratch
+`CODEX_HOME` against a local stub). Each is drawn before Codex sets its first terminal title and runs no hook, and a
+paste and CR answer it:
+
+- On a resume from a directory other than the one the rollout last recorded, a working-directory chooser ("Working
+  directory · resume", "1. Use session directory (…)", "2. Use current directory", "3. Always use session directory",
+  "4. Always use current directory", "enter continue · esc use session · ⌃c quit"); a CR picks the session directory.
+  `-c tui.resume_cwd="current"` skips it.
+- When the effective model has an `upgrade` entry in the catalogue (`models_cache.json`), "Meet <model> …" with "1. Try
+  new model" and "2. Use existing model"; a CR accepted the new model and wrote `model`, `model_reasoning_effort` and
+  `[notice.model_migrations]` into the user's `config.toml`. `-c 'notice.model_migrations={"<from>"="<to>"}'` for the
+  model marks it seen and skips it.
+- With no login, the sign-in screen ("Welcome to Codex", "1. Sign in with ChatGPT", "2. Sign in with Device Code",
+  "3. Provide your own API key", "Press enter to continue"); a CR starts the ChatGPT sign-in. Nothing skips it.
+
+Mid-session, close to a rate limit, Codex draws "Approaching rate limits" / "Switch to <model> for lower credit
+usage?" with "1. Switch to …", "2. Keep current model" and "3. Keep current model (never show again)" after a turn, with
+no title change and no hook; a paste and CR switched the model and the message was never sent.
+`-c notice.hide_rate_limit_model_nudge=true` keeps it away. Octoboard passes these three overrides, the migration table
+built from the session's catalogue cache, and holds its writes while the sign-in screen or any of these is on screen.
 
 **Two visible side effects of passing any `-c` override**: it forces embedded mode, so the TUI carries a permanent
 `⚠ 1 warning` badge explaining that command-line overrides require it, and the session is invisible to `codex agents`.
@@ -546,6 +628,24 @@ sessions that ran a level other than the `config.toml` `[models] default_reasoni
 `reasoning_effort` and the `default: true` level of its `reasoning_efforts` name the model's default; Grok's own
 configuration reference says `default_reasoning_effort` applies to "the default model", and whether it also applies to
 a model chosen with `--model` was not measured.
+
+**Hooks that never come, and screens after an error** (1.0.67, scratch `GROK_HOME`, fake key, local stub). On a launch
+and on `--resume <id>` with no prompt, `SessionStart` (with `source` `load` on a resume) arrives 0.5–1.0 s after the
+start, and right after the folder-trust confirmation is accepted. With `allow_managed_hooks_only = true` in Grok's
+requirements no hook of Octoboard's runs at all, so nothing marks the session started; a write before `SessionStart`
+was buffered and submitted. After a usage-limit error (the stub answering HTTP 402) Grok fires `Notification` with
+type `agent_error` and `StopFailure`, then draws "You hit your weekly limit." with "1 (○) Upgrade tier", "2 (○) Buy
+more credits", "3 (○) Try Again" and "↑/↓ navigate · y copy Enter :submit / Shift+x :dismiss": a paste and CR closed it
+with no `UserPromptSubmit` and opened the browser on a purchase page. The modal is on screen before those hooks reach
+a hook command. "3" (or the arrows and Enter) retries, firing `UserPromptSubmit` with the original prompt; Shift+x
+dismisses it with no hook and leaves the input free. An HTTP 429 shows "Rate limited | Retrying (attempt 1)…" and
+"Queued · Enter to send now", and a paste there was queued, not lost; Grok retries once, honouring `retry-after`, and
+when that retry is refused too it fires `agent_error` and `StopFailure` (`error` `rate_limit`) with an inline "Retry
+failed" line, no modal, and submits a queued prompt by itself. An HTTP 400 fires the same two hooks (`error`
+`invalid_request`, as for the 402) with an inline line and no modal; a single HTTP 500 is retried with no hook.
+Octoboard lets a Grok session's writes through 30 s after its launch when no hook has come and no trust screen has been
+sighted (one that has is held until the rendered screen no longer shows it), holds them for two seconds after a
+`StopFailure` or an `agent_error`, and holds them while the usage-limit modal is on screen.
 
 ## Across the three agents
 
@@ -1664,8 +1764,8 @@ Octoboard recognizes it in the terminal output and presses it; what pressing it 
 - **Claude Code** shows its workspace-trust screen the first time it runs in a directory, with the cursor on "No,
   exit" and "Yes, I trust this folder" below it; a Down and then an Enter accept. It records the trust in its global
   config file (above), and runs its first hook only after the screen is answered.
-- **Codex** shows its folder-trust confirmation only when the working directory is inside a git repository; outside
-  one it never asks and reads `AGENTS.md` all the same (measured on 0.161.0, and again on 0.162.1, where an interactive
+- **Codex** shows its folder-trust confirmation only when the working directory is inside a git repository; outside one
+  it never asks and reads `AGENTS.md` all the same (measured on 0.161.0, and again on 0.162.1, where an interactive
   launch in a fresh non-git directory drew no confirmation and its first request carried that directory's `AGENTS.md`,
   while one in a fresh `git init` directory drew the confirmation below). The screen reads "Trust this folder? Codex can
   read, edit, and run files here, …", then "› 1. Trust and continue", "2. Quit" and "enter continue · esc quit". The
@@ -1676,14 +1776,15 @@ Octoboard recognizes it in the terminal output and presses it; what pressing it 
   No hook fires before or right after the confirmation, and none at startup at all until the first prompt is submitted.
   Codex sets no terminal title before the confirmation or the sign-in screen that precedes it on an account's first
   launch; its first title (OSC 0/2) comes once its session starts (0.160.0–0.163.0), so that title marks it past both.
-  With `[tui] terminal_title = []` it never sets one. The ">_ OpenAI Codex (v…)" banner is drawn before the sign-in
-  screen and the confirmation alike, so it marks neither. Codex redraws only the cells that changed, so text read off
-  the screen can lose characters wherever the frame before held the same one; the confirmation's own phrases came
-  through intact in its first drawing, a path above it did not. The review Codex raises for new hooks without
-  `--dangerously-bypass-hook-trust` reads "Hooks need review … 2. Trust all and continue" and is a different modal. On
-  0.161.0 a key the confirmation ignores (a letter, Right, Tab, `?`) draws nothing but a bare synchronized-update frame
-  (`ESC[?2026h ESC[39m ESC[49m ESC[0m ESC[?2026l`); accepting it clears the screen and redraws it whole, starting with
-  the ">_ OpenAI Codex (v…)" banner, which is how an answer given in the terminal is told apart.
+  With `[tui] terminal_title = []` it never sets one, which is why Octoboard passes `-c tui.terminal_title=[…]`. The ">_
+  OpenAI Codex (v…)" banner is drawn before the sign-in screen and the confirmation alike, so it marks neither. Codex
+  redraws only the cells that changed, so text read off the screen can lose characters wherever the frame before held
+  the same one; the confirmation's own phrases came through intact in its first drawing, a path above it did not. The
+  review Codex raises for new hooks without `--dangerously-bypass-hook-trust` reads "Hooks need review … 2. Trust all
+  and continue" and is a different modal. On 0.161.0 a key the confirmation ignores (a letter, Right, Tab, `?`) draws
+  nothing but a bare synchronized-update frame (`ESC[?2026h ESC[39m ESC[49m ESC[0m ESC[?2026l`); accepting it clears the
+  screen and redraws it whole, starting with the ">_ OpenAI Codex (v…)" banner, which is how an answer given in the
+  terminal is told apart.
 - **Grok Build** shows its confirmation only when the folder holds content its trust gates, such as an `AGENTS.md`,
   whether or not it is a git repository, so a console directory holding an instruction file is asked about too. The
   screen reads "Do you trust the contents of this directory?", "Grok Build may run or modify contents in this
@@ -1705,7 +1806,11 @@ arrives as one message with no delay between paste and Enter. Every agent queues
 it when the turn ends. (Codex additionally has `codex queue --thread <session id>`.) Five rules, each failing silently
 or destructively if ignored:
 
-- A message starting with `/` runs as a slash command even inside a bracketed paste; prefix a single space.
+- A message starting with `/` runs as a slash command even inside a bracketed paste; prefix a single space. The same
+  holds for a prompt given on the command line (Claude Code 2.1.308, a fresh launch against a stub endpoint under a
+  scratch `HOME`): `claude "/help me please"` runs the command and makes no model request, while `claude " /help me
+  please"` reaches the model as text, so the launch prompt is guarded by the same leading space. Not run with
+  `--resume`.
 - A macOS PTY master accepts only about 1022 bytes before `EAGAIN` when the child is not draining, so the write is a
   non-blocking partial-write-and-retry loop in slices, never a blocking `write_all` on the daemon's event loop.
 - Nothing may be written while a modal dialog is up. The paste is discarded but the trailing `CR` confirms whatever is
@@ -1716,11 +1821,15 @@ or destructively if ignored:
   deliberate exception is the daemon's press of an agent's own folder-trust confirmation: Down and Enter for Claude
   Code, Enter for Codex, `y` for Grok, and nothing else.
 - The gate comes from hook-reported state, never from the terminal, because none of the agents signal modal state
-  through terminal modes. If the hook state is missing or stale, do not write. The folder-trust confirmations are the
-  exception: no hook runs before one is answered, so it can only be read from the output, and nothing is written into
-  a session from its launch until its first hook has arrived; for Codex, which runs none until its first prompt, also
-  until the confirmation has been pressed, the person's answer in the terminal is seen to replace it, or the watch for
-  it has ended with none sighted.
+  through terminal modes. If the hook state is missing or stale, do not write. Two kinds of screen are the exception,
+  since no hook announces them, and are read off the terminal instead. The folder-trust confirmations are read from the
+  output: no hook runs before one is answered, and nothing is written into a session from its launch until its first
+  hook has arrived; for Codex, which runs none until its first prompt, also until the confirmation has been pressed, the
+  person's answer in the terminal is seen to replace it, or the watch for it has ended with none sighted; for Grok
+  Build, which may run no hook at all, at most until 30 s have passed with no confirmation sighted, or, for one sighted,
+  until the rendered screen no longer shows it. The dialogs an agent raises that only a person can answer (Claude Code's
+  launch and resume dialogs and its views of background agents, Codex's and Grok Build's own screens) are read from the
+  rendered screen, which is looked at before each write: nothing is written while one is up.
 - Claude Code does not send a prompt that holds an invisible character. When Enter submits one, it removes those
   characters, leaves the cleaned text in the input box with "Removed N invisible characters · review and press Enter to
   send", and starts no turn (its code returns before the submission that fires `UserPromptSubmit`, read from the

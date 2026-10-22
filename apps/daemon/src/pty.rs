@@ -395,6 +395,15 @@ impl PtyCore {
         self.fan.lock().expect("fan mutex poisoned").total
     }
 
+    /// The text of the rows the parsed screen shows now; see [`TerminalSnapshot::visible_text`].
+    pub fn screen_text(&self) -> String {
+        self.fan
+            .lock()
+            .expect("fan mutex poisoned")
+            .terminal
+            .visible_text()
+    }
+
     /// What this process printed after `mark`, as taken from [`Self::output_total`] — less of it if
     /// the ring buffer has already let some go.
     pub fn output_since(&self, mark: u64) -> Vec<u8> {

@@ -154,7 +154,9 @@ pub(super) fn still_waiting_after_claim(live: &LiveSession) -> bool {
 /// and the terminal is never quiet; what is checked instead is that no hook has run (the claim),
 /// that the process is still there (a decline exits it), and that nothing has been written into
 /// its input since the screen was sighted (one step with the key). The press counts once Grok has
-/// run its hook and the entry it recorded has reached the user's own store.
+/// run its hook and the entry it recorded has reached the user's own store, or, with no hook to
+/// carry it (a policy that runs none), once the rendered screen is seen to have gone; a hook that
+/// comes after that still carries the entry.
 pub(super) fn press_yes(live: &LiveSession) -> Result<()> {
     let agent = live.agent;
     let trust = &live.trust;
@@ -195,6 +197,9 @@ pub(super) fn press_yes(live: &LiveSession) -> Result<()> {
         Some(Err(failure)) => Err(not_carried_over(agent, carried, &failure)),
         // A carry that outlasted even that reports itself; nothing more to say here.
         None if trust.hook_seen.load(Ordering::Acquire) => Err(not_waiting()),
+        // The watch for the rendered screen has seen it go with no hook to carry anything: the key
+        // worked, so it counts as pressed, and the messages held are let through.
+        None if trust.dismissed.load(Ordering::Acquire) => Ok(()),
         // No hook: the confirmation did not go. A hook that comes later reports its own outcome.
         None => Err(not_dismissed(agent)),
     }

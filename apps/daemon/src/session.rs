@@ -2,9 +2,11 @@
 //! the agent, its title, its folder-trust watch and the count of writes into its input.
 
 use std::io;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
+use std::time::{Duration, Instant};
 
+use crate::agent_dialogs::{self, Dialog, Sighting};
 use crate::protocol::Agent;
 use crate::pty::{NewPty, PtyCore, PtyOwner, Spawned};
 use crate::ptyio;
@@ -17,6 +19,12 @@ pub use crate::pty::spawn_reader_thread;
 /// teardown and not at all on a kill, and repeatedly killing Claude Code mid-startup trips its own
 /// renderer-fallback counter, which is machine-level state it keeps about itself.
 const AGENT_STOP_SIGNAL: libc::c_int = libc::SIGTERM;
+
+/// How long an agent's error holds its session's writes ([`LiveSession::agent_error`]). Every flush
+/// looks at the screen afresh, so this covers what a look can miss: the PTY reader getting the
+/// modal's bytes into the parsed screen (`on_output` can block behind a slow client), and a version
+/// that draws the modal slightly after its hooks.
+pub const AGENT_ERROR_SETTLE: Duration = Duration::from_secs(2);
 
 #[derive(Default)]
 struct TitleObserver {
@@ -72,6 +80,17 @@ pub struct LiveSession {
     /// message is taken to be waiting in the input box. Kept with the count it is compared with,
     /// so that it ends with this process.
     unsent_at: Mutex<Option<u64>>,
+    /// When the agent stopped on an error. It holds the session's writes for [`AGENT_ERROR_SETTLE`]
+    /// after that, or until the next prompt is sent; gone with the process.
+    agent_error_at: Mutex<Option<Instant>>,
+    /// What the screen last showed of the dialogs only a person can answer; see
+    /// [`crate::agent_dialogs`]. Read and updated under this lock together, so a look that read
+    /// an older screen never overwrites a newer one.
+    dialogs: Mutex<Sighting>,
+    /// How many checked writes are in flight, each of which has the screen looked at on every chunk
+    /// of output so a dialog drawn and closed inside the write is still seen; see
+    /// [`Self::watch_screen`].
+    screen_watchers: AtomicU32,
 }
 
 impl std::ops::Deref for LiveSession {
@@ -107,8 +126,6 @@ pub struct NewSession {
     pub carried_trust: Option<CarriedTrust>,
     /// Runs after the process is reaped and before its scratch directory is removed.
     pub before_scratch_removal: Option<Box<dyn FnOnce() + Send>>,
-    /// See `adapter::LaunchPlan::start_signal_missing`.
-    pub start_signal_missing: bool,
 }
 
 impl LiveSession {
@@ -126,14 +143,13 @@ impl LiveSession {
             title: Mutex::new(TitleObserver::default()),
             action_required: AtomicBool::new(false),
             resolves_approvals_itself: session.resolves_approvals_itself,
-            trust: TrustState::new(
-                session.agent,
-                session.carried_trust,
-                session.start_signal_missing,
-            ),
+            trust: TrustState::new(session.agent, session.carried_trust),
             input_writes: AtomicU64::new(0),
             prompts_sent: AtomicU64::new(0),
             unsent_at: Mutex::new(None),
+            agent_error_at: Mutex::new(None),
+            dialogs: Mutex::new(Sighting::default()),
+            screen_watchers: AtomicU32::new(0),
         }
     }
 
@@ -144,6 +160,36 @@ impl LiveSession {
         observer.state = Arc::downgrade(state);
         observer.runtime = tokio::runtime::Handle::try_current().ok();
         observer.publish(self);
+    }
+
+    /// The dialog the screen showed at the latest look, whoever made it: the watch, a write about
+    /// to be made, a description of the session, or the output of a write in flight.
+    pub fn agent_dialog(&self) -> Option<Dialog> {
+        self.dialogs.lock().expect("dialogs lock poisoned").current
+    }
+
+    /// Looks at the screen now for a dialog and notes what it shows. Takes the sighting lock and
+    /// then the output's, never the other way round, so the reader thread can call it between
+    /// chunks.
+    pub fn look_for_dialog(&self) -> Sighting {
+        let mut shown = self.dialogs.lock().expect("dialogs lock poisoned");
+        *shown = shown.after(agent_dialogs::recognise(
+            self.agent,
+            &self.pty.screen_text(),
+        ));
+        *shown
+    }
+
+    /// Starts (`true`) or ends (`false`) having the screen looked at on every chunk of output, for
+    /// the length of a write whose outcome depends on what a dialog did to it. A dialog a write
+    /// closes within milliseconds is gone before any look made after the write, and the watch's
+    /// own polling is too slow to catch it.
+    pub fn watch_screen(&self, on: bool) {
+        if on {
+            self.screen_watchers.fetch_add(1, Ordering::AcqRel);
+        } else {
+            self.screen_watchers.fetch_sub(1, Ordering::AcqRel);
+        }
     }
 
     pub(crate) fn needs_user_action(&self) -> bool {
@@ -178,6 +224,10 @@ impl LiveSession {
             // for this very thread to drain its output.
             self.trust
                 .feed(data, self.input_writes.load(Ordering::Acquire), total);
+            // Run outside the output's lock, as a look takes that after the sighting's.
+            if self.screen_watchers.load(Ordering::Acquire) > 0 {
+                self.look_for_dialog();
+            }
         });
         if titled {
             self.trust.note_title();
@@ -234,9 +284,35 @@ impl LiveSession {
         self.input_writes.load(Ordering::Acquire)
     }
 
-    /// Counts a prompt the agent's hooks reported it sending.
+    /// Counts a prompt the agent's hooks reported it sending, which also ends the hold an agent
+    /// error put on the session's writes.
     pub fn note_prompt_sent(&self) {
         self.prompts_sent.fetch_add(1, Ordering::AcqRel);
+        *self
+            .agent_error_at
+            .lock()
+            .expect("agent error lock poisoned") = None;
+    }
+
+    /// Records that the agent stopped on an error.
+    pub fn mark_agent_error(&self) {
+        *self
+            .agent_error_at
+            .lock()
+            .expect("agent error lock poisoned") = Some(Instant::now());
+    }
+
+    /// Whether the agent stopped on an error less than [`AGENT_ERROR_SETTLE`] ago and no prompt
+    /// has been sent since. Past that, whatever the error left on screen is the dialog watch's to
+    /// recognise ([`crate::agent_dialogs`]): Grok Build draws its usage-limit modal before the
+    /// error's hooks arrive, and after an error that draws none (a refused request, retries run
+    /// out, a modal dismissed) its input is free, so holding on until a prompt would only keep
+    /// messages from a session that can take them.
+    pub fn agent_error(&self) -> bool {
+        self.agent_error_at
+            .lock()
+            .expect("agent error lock poisoned")
+            .is_some_and(|at| at.elapsed() < AGENT_ERROR_SETTLE)
     }
 
     /// How many prompts the agent's hooks have reported it sending so far.
