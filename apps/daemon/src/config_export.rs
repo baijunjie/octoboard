@@ -65,6 +65,18 @@ pub struct DocumentSettings {
     /// as it is.
     #[serde(default)]
     pub sidebar_order_by_status: Option<bool>,
+    /// Absent in a document exported before the setting existed: importing it leaves the setting
+    /// as it is.
+    #[serde(default)]
+    pub auto_start_quota_windows: Option<bool>,
+    /// Absent in a document exported before the setting was carried: importing it leaves the
+    /// setting as it is.
+    #[serde(default)]
+    pub auto_approve_session_requests: Option<bool>,
+    /// Absent in a document exported before the setting was carried: importing it leaves the
+    /// setting as it is.
+    #[serde(default)]
+    pub auto_approve_resume_requests: Option<bool>,
 }
 
 /// A reference to an account: its name, which is unique within its agent. The agent is the one
@@ -174,6 +186,9 @@ pub fn build(store: &Store, console: Option<&str>) -> Result<ConfigurationDocume
             auto_delete_unresumable_archives: Some(store.auto_delete_unresumable_archives()?),
             auto_select_account: Some(store.auto_select_account()?),
             sidebar_order_by_status: Some(store.sidebar_order_by_status()?),
+            auto_start_quota_windows: Some(store.auto_start_quota_windows()?),
+            auto_approve_session_requests: Some(store.auto_approve_session_requests()?),
+            auto_approve_resume_requests: Some(store.auto_approve_resume_requests()?),
         }),
     };
 
@@ -450,6 +465,9 @@ mod tests {
                 auto_delete_unresumable_archives: Some(false),
                 auto_select_account: Some(false),
                 sidebar_order_by_status: Some(true),
+                auto_start_quota_windows: Some(false),
+                auto_approve_session_requests: Some(false),
+                auto_approve_resume_requests: Some(false),
             })
         );
         assert_eq!(

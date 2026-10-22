@@ -5,7 +5,7 @@ payloads can and cannot be correlated on, what a failing hook costs, how a proje
 injected one, the mechanism and conditions for injecting Octoboard into each, what it takes to move a session's
 conversation into another config directory, how each signs in a config directory without a terminal and what it answers
 before that, what happens when two accounts share a session directory or the rest of a configuration directory, and how
-to ask each one how much of its plan quota is left.
+to ask each one how much of its plan quota is left and how to start a usage window that has not begun counting.
 
 Established against **Claude Code 2.1.274**, **Codex 0.160.0** and **Grok Build 1.0.46**; what the Claude Code section
 says about a declined prompt was measured on **2.1.286** as well, and held identically on both. What "Moving a
@@ -19,6 +19,8 @@ model itself is handed, and what it calls" says was re-confirmed on **Grok Build
 the timeout paragraph's `tool_timeout_sec = 660`; "The id a turn records is not one of the ids `grok models` prints" was
 first measured on that build. What "Plan quota" says was measured on **Claude Code 2.1.302**, **Codex 0.162.1** and
 **Grok Build 1.0.60**. What the Claude Code section's "Permission mode" says was measured on **Claude Code 2.1.303**.
+What "Starting a quota window" says was checked on 2026-10-22 against **Claude Code 2.1.308**, **Codex 0.162.1** and
+**Grok Build 1.0.67**.
 What "Sharing a session directory between accounts" says, and the "Codex, history segments" and "Under a different
 account" notes under "Moving a conversation to another config directory", were measured on 2026-10-19 on **Claude Code
 2.1.302**, **Codex 0.162.1** and **Grok Build 1.0.62**. What "Codex resume from aged rollouts" says was measured on
@@ -1659,6 +1661,118 @@ What remains unavoidable: each probe starts one agent process and writes the fil
 and, for Claude Code, its `sessions/` registration; a Claude Code probe syncs the user's plugins; and a Grok Build probe
 starts with the account's whole configuration. Whether a user's hook fires was not observed for any agent: no session or
 turn starts in a probe, and the hook events documented above are session events.
+
+## Starting a quota window
+
+A window only starts counting at the account's first request after it resets; until then the CLI reports it with no
+reset time. A **kick** is one one-word request on that account that starts it. Each agent is run the way its quota probe
+is (login-shell environment, the configuration-directory variable set to the account's directory, the home directory as
+working directory, the CLI's whole session killed when it ends, after sixty seconds or when the daemon shuts down), with
+stdin closed and the reply not read: that it exited with status 0 is all that is wanted, and more than 64 KiB on stdout
+fails the kick (a runaway CLI is cut off, its output not kept). Each takes the cheapest model its catalogue offers and
+its lowest reasoning effort, and is made as small as the CLI allows: a one-line system prompt in place of its own, no
+tools, one turn, a capped reply, and as little of the user's setup as can be left out without changing which sign-in is
+used. No agent is run with an option that changes the credentials it reads (Claude Code's `--bare` skips the Keychain).
+
+```
+claude -p hi --model haiku --effort low --no-session-persistence --system-prompt "Reply with one word." --tools "" \
+  --disable-slash-commands --strict-mcp-config --mcp-config '{"mcpServers":{}}' \
+  --settings '{"disableAllHooks":true,"outputStyle":"default"}'
+    # with CLAUDE_CODE_MAX_OUTPUT_TOKENS=128 CLAUDE_CODE_DISABLE_CLAUDE_MDS=1 in the environment
+codex exec --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules -m gpt-6-luna \
+  -c model_reasoning_effort="low" -c instructions="Reply with one word." \
+  -c include_permissions_instructions=false -c include_apps_instructions=false -c include_environment_context=false \
+  -c include_collaboration_mode_instructions=false -c web_search="disabled" \
+  -c features.plugins=false -c features.remote_plugin=false -c features.apps=false -c features.hooks=false \
+  -c features.shell_tool=false -c features.unified_exec=false -c features.sleep_tool=false \
+  -c features.view_image=false -c features.image_generation=false -c features.goals=false \
+  -c features.multi_agent=false -c features.browser_use=false -c features.browser_use_external=false \
+  -c features.in_app_browser=false -c features.computer_use=false -c features.tool_suggest=false \
+  -c features.skill_search=false hi
+grok -p hi -m grok-4.7 --effort low --system-prompt-override "Reply with one word." --no-subagents \
+  --disable-web-search --no-plan --max-turns 1 --disallowed-tools run_terminal_cmd,read_file,search_replace,list_dir,grep,\
+kill_task,todo_write,get_task_output,wait_tasks,task,scheduler_create,scheduler_delete,scheduler_list,monitor,\
+search_tool,use_tool,workflow,enter_plan_mode,exit_plan_mode,ask_user_question,send_feedback,image_gen,image_edit,\
+image_to_video,reference_to_video,write,web_search,web_fetch,Agent
+    # with GROK_CONFIG='{"models":{"max_completion_tokens":128}}', GROK_CLAUDE_SKILLS_ENABLED=0,
+    # GROK_CLAUDE_MCPS_ENABLED=0, GROK_CLAUDE_AGENTS_ENABLED=0, GROK_CLAUDE_RULES_ENABLED=0,
+    # GROK_CLAUDE_HOOKS_ENABLED=0, GROK_TURN_SUMMARY=0 and GROK_SESSION_RECAP=0 in the environment
+```
+
+How each was chosen, from the installed CLIs' `--help`, their on-disk documentation and requests captured by a local
+stand-in endpoint on a scratch configuration directory with a fake key (so nothing reached the vendor); sizes are the
+request body in characters (2026-10-22):
+
+- **Claude Code** takes `haiku`, the alias for the newest Haiku (see "Discovering models"), so no version is written
+  down; `--effort low` is always accepted. `--no-session-persistence` keeps the conversation off disk,
+  `--strict-mcp-config` with an empty `--mcp-config` keeps the user's MCP servers from starting as the probe does, and
+  `--tools ""` sends no tool definitions. `--system-prompt` replaces the default prompt (9.3 KB even with no tools) with
+  20 characters. `--settings` merges over the user's settings: `disableAllHooks` stopped both a user's own
+  `SessionStart` and `UserPromptSubmit` hooks and a plugin's (loaded with `--plugin-dir`), none of the four firing where
+  all four did without it, and `outputStyle: "default"` drops the user's output style from the request (-1.4 KB in the
+  measured one). `--disable-slash-commands` leaves skills out. `CLAUDE_CODE_MAX_OUTPUT_TOKENS` sets the request's
+  `max_tokens` (128000 otherwise) and `CLAUDE_CODE_DISABLE_CLAUDE_MDS` drops the user's `CLAUDE.md` from it. With all of
+  it the request body went from 28 KB to 1.9 KB. The prompt comes straight after `-p`, since `--tools` and
+  `--mcp-config` take lists and would swallow a prompt placed after them. What a kick still loads: the user's settings
+  other than hooks and output style (an `apiKeyHelper`, `env`, proxy and `forceLoginMethod` must stay, as they decide
+  the sign-in), and the plugin sync a probe does too. There is no flag to cap thinking: `alwaysThinkingEnabled` in
+  `--settings` left the request's `thinking` unchanged.
+- **Codex** has no alias, so the model is a catalogue slug: of `codex debug models`, `gpt-6-luna` is the newest entry
+  described as "Fast and affordable", and its levels include `low`. The effort is only a configuration override. `exec`
+  is its non-interactive mode, `--ephemeral` writes no session files and `--skip-git-repo-check` lets it run from the
+  home directory. `-c instructions=` replaces the model's base prompt (18 KB) with the one line; the three `include_*`
+  overrides and `include_collaboration_mode_instructions` leave the permissions, apps, environment and collaboration
+  messages out, and the four feature overrides also set for the probe's app server stop the plugin sync, apps and
+  hooks. On Codex 0.162.1 the request went from 53 KB to 26 KB with the feature overrides below. What still goes in is
+  an 18 KB tool section (`exec`, `wait`, `request_user_input` and the `collaboration` tools: no `-c` override removed
+  them), 2.7 KB of skills instructions, the multi-agent messages (3 KB) and the user's `$CODEX_HOME/AGENTS.md`
+  (`project_doc_max_bytes=0` did not drop it).
+  **Feature overrides, tried on Codex 0.163.0** (the build at hand; against a stand-in endpoint with a fake API
+  key, every feature `codex features list` shows as on and not removed set to `false` on top of the ones above, one at a
+  time): none changed the request body (25,700 characters each time). That covers `code_mode_host`, `tool_suggest`,
+  `skill_search`, `computer_use`, `browser_use` (with `browser_use_external` and `in_app_browser`), `shell_snapshot`
+  (which only affects how a shell starts) and every other default-on feature. What a fake key cannot show is what a
+  ChatGPT sign-in adds (connector and plugin suggestions, the browser and computer tools), so the kick sets
+  `tool_suggest`, `skill_search`, `computer_use`, `browser_use`, `browser_use_external` and `in_app_browser` off all the
+  same. In the same measurement `shell_tool`, `goals` and `view_image` each took 0.7 to 3 KB out of the body, which is
+  33,005 characters without any feature override, while `multi_agent=false` and `unified_exec=false` left it as it was
+  (the `collaboration` and `exec` tools stayed). The kick sets those two off, with `sleep_tool` and `image_generation`,
+  as a precaution all the same.
+  **`--ignore-user-config`**: `-c mcp_servers={}` and `-c notify=[]` do not empty the user's `[mcp_servers.*]` and
+  `notify` (a `-c` override merges into those tables, and both still started in a scratch home), so only leaving
+  `config.toml` out keeps them and the user's plugins from starting. The sign-in is read from `CODEX_HOME` all the same:
+  on an account out of credits the request got as far as the server's "workspace is out of credits" refusal. What it
+  costs is the rest of that file: an account whose `config.toml` selects another credential store
+  (`cli_auth_credentials_store`) or provider is not served, and its kick fails and is logged. An unknown model slug is
+  not refused at launch, only at the first turn, so a catalogue that drops this slug makes the kick fail with that
+  error.
+- **Grok Build** lists four models and describes `grok-4.7-build-fast` as "Fast variant. 2x the price", so the kick
+  takes the plain `grok-4.7`; whether `grok-4.5` or `grok-4.6` costs less was not found out. `-p` is its single-turn
+  mode and `--effort` is an alias of `--reasoning-effort` (`low` is in every model's levels). `--system-prompt-override`
+  replaces the system prompt (5.2 KB). `--tools ""` takes no tool out; the tools are removed by name with
+  `--disallowed-tools` (the ids above, which cover every built-in tool, subagents, web search and plan mode of the
+  1.0.67 build), taking the request's tool section from 39 KB to none, and with the rest the whole request from 55 KB to
+  6 KB. `--no-subagents`, `--disable-web-search`, `--no-plan` and `--max-turns 1` keep the turn to the one reply. The
+  `GROK_CLAUDE_*_ENABLED` variables stop it scanning Claude Code's skills, MCP servers, agents, rules and hooks (the
+  skills list shrank from 7.6 KB to 2.4 KB; what remains comes from another skill source), and `GROK_CONFIG`, an overlay
+  that accepts `models` among its few allowed tables, caps the reply with `max_completion_tokens` (the request's
+  `max_tokens`). The request also sends two session-title requests of about 1 KB each to another model, which no option
+  found stopped. What a kick still loads: Grok's own `config.toml` and a session record left in the account's directory
+  (no flag keeps it off disk or leaves its MCP servers out; a configured MCP server was not started before the turn in
+  the measured run, as for the probe). `grok -p` runs the agent in its own process: with `[cli] use_leader = true` set
+  in a scratch `GROK_HOME` it created no `leader.sock` and no leader process, so it does not join the shared leader at
+  `~/.grok/leader.sock`, and a non-default account's kick cannot spend the default account's window through it. Run from
+  the home directory, which holds project sources of Claude Code's (`.claude/`) and was never trusted in the scratch
+  directory, it was not stopped by the folder-trust gate; it started and sent its request.
+
+What was checked is the requests above, captured and sized as stated, and that each CLI parses these flags. On the
+default accounts at hand each kick was refused for want of quota, so that a kick starts a window was not observed on any
+of them: Claude Code's weekly window was used up (`You've hit your weekly limit`, exit status 1, the session window
+still without a reset time afterwards), Codex's only window (a weekly one) was used up (`Your workspace is out of
+credits`, exit status 1, no 5-hour window listed, its reset time set) and Grok Build's sign-in had expired. So that the
+three models are served on every plan, that `low` is accepted by each of them on the server's side (Codex's request was
+accepted far enough to be refused for credits), that a capped reply still ends with status 0, and that an unstarted
+Codex or Grok Build window reports no reset time were not measured.
 
 ## Injecting Octoboard into each agent
 

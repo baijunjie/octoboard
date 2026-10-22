@@ -1373,6 +1373,9 @@ export const zhHans: Translation<"other"> = {
   "configuration.import.settings.archiveCleanup.turnsOn": "开启 {setting}（目前为关闭）。之后 {appName} 会自动删除对话已丢失的已归档会话。",
   "configuration.import.settings.autoSelectAccount.turnsOn": "开启 {setting}（目前为关闭）。之后新建会话会使用周额度最快重置的账户。",
   "configuration.import.settings.sidebarOrder.turnsOn": "开启 {setting}（目前为关闭）。之后侧边栏中的会话和项目会随状态变化移动位置。",
+  "configuration.import.settings.autoStartQuotaWindows.turnsOn": "开启 {setting}（目前为关闭）。之后尚未开始计时的用量窗口会通过一次很小的请求启动，该请求会消耗账户的少量额度。",
+  "configuration.import.settings.autoApproveSession.turnsOn": "开启 {setting}（目前为关闭）。之后会话请求启动向你汇报的新会话时，将直接获批，不再先询问你。",
+  "configuration.import.settings.autoApproveResume.turnsOn": "开启 {setting}（目前为关闭）。之后会话请求重新打开、恢复会话或在新会话中恢复对话时，将直接获批，不再先询问你。",
   "configuration.import.settings.turnsOff": "关闭 {setting}（目前为开启）。",
   "configuration.import.settings.alreadyOn": "文件中 {setting} 为开启，当前也已开启，因此应用后不会有任何变化。",
   "configuration.import.settings.alreadyOff": "文件中 {setting} 为关闭，当前也已关闭，因此应用后不会有任何变化。",
@@ -1490,6 +1493,11 @@ export const zhHans: Translation<"other"> = {
     "开启后，新建会话会使用周额度最快重置的账户，以免即将重置的额度被浪费。",
   "settings.autoSelect.description.on":
     "新建会话使用周额度最快重置的账户，以免即将重置的额度被浪费。",
+  "settings.startQuotaWindows.label": "自动启动用量窗口",
+  "settings.startQuotaWindows.description.off":
+    "开启后，当某个用量窗口已重置但尚未开始计时，会在该账户上用智能体最便宜的模型发送一次很小的请求来启动它，这样就会显示倒计时，下一次重置也不会被推迟。该请求会消耗账户的少量额度。",
+  "settings.startQuotaWindows.description.on":
+    "当某个用量窗口已重置但尚未开始计时，会在该账户上用智能体最便宜的模型发送一次很小的请求来启动它，这样就会显示倒计时，下一次重置也不会被推迟。该请求会消耗账户的少量额度。",
   "settings.background.label": "关闭窗口后在后台继续运行",
   "settings.background.description.off":
     "开启后，关闭窗口时会话及其智能体会继续运行，通知也会照常送达。点按菜单栏图标即可重新打开窗口。",

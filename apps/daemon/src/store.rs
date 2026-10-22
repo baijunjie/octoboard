@@ -274,6 +274,7 @@ impl Store {
                 auto_approve_resume_requests INTEGER NOT NULL DEFAULT 0,
                 auto_select_account INTEGER NOT NULL DEFAULT 0,
                 sidebar_order_by_status INTEGER NOT NULL DEFAULT 1,
+                auto_start_quota_windows INTEGER NOT NULL DEFAULT 0,
                 -- NULL until the user sets one; see `Store::default_clone_dir`.
                 default_clone_dir      TEXT,
                 -- NULL until the list is first decided; see `Store::added_agents`.
@@ -392,6 +393,13 @@ impl Store {
             conn.execute(
                 "ALTER TABLE settings \
                  ADD COLUMN sidebar_order_by_status INTEGER NOT NULL DEFAULT 1",
+                [],
+            )?;
+        }
+        if !column_exists(&conn, "settings", "auto_start_quota_windows")? {
+            conn.execute(
+                "ALTER TABLE settings \
+                 ADD COLUMN auto_start_quota_windows INTEGER NOT NULL DEFAULT 0",
                 [],
             )?;
         }
@@ -1157,6 +1165,7 @@ impl Store {
             auto_approve_resume_requests: self.auto_approve_resume_requests()?,
             auto_select_account: self.auto_select_account()?,
             sidebar_order_by_status: self.sidebar_order_by_status()?,
+            auto_start_quota_windows: self.auto_start_quota_windows()?,
             default_clone_dir: self.default_clone_dir()?,
             accounts: self.list_accounts()?,
             added_agents: self.added_agents()?,
@@ -1359,6 +1368,24 @@ impl Store {
         let changed = self.lock().execute(
             "UPDATE settings SET sidebar_order_by_status = ?2 \
              WHERE id = ?1 AND sidebar_order_by_status != ?2",
+            params![SETTINGS_ID, value],
+        )?;
+        Ok(changed > 0)
+    }
+
+    pub fn auto_start_quota_windows(&self) -> Result<bool> {
+        Ok(self.lock().query_row(
+            "SELECT auto_start_quota_windows FROM settings WHERE id = ?1",
+            params![SETTINGS_ID],
+            |row| row.get(0),
+        )?)
+    }
+
+    /// Whether the setting actually changed.
+    pub fn set_auto_start_quota_windows(&self, value: bool) -> Result<bool> {
+        let changed = self.lock().execute(
+            "UPDATE settings SET auto_start_quota_windows = ?2 \
+             WHERE id = ?1 AND auto_start_quota_windows != ?2",
             params![SETTINGS_ID, value],
         )?;
         Ok(changed > 0)
@@ -4560,6 +4587,32 @@ mod tests {
         drop(store);
         let store = Store::open(&path).expect("store");
         assert!(store.sidebar_order_by_status().unwrap());
+    }
+
+    /// Starting quota windows is off in a fresh database and in one from before the setting
+    /// existed, round-trips, and a repeat write reports no change.
+    #[test]
+    fn the_auto_start_quota_windows_setting_defaults_off_and_round_trips() {
+        let path = temp_db("auto-start-quota-windows-setting");
+        let store = Store::open(&path).expect("store");
+        assert!(!store.get_settings().unwrap().auto_start_quota_windows);
+
+        assert!(store.set_auto_start_quota_windows(true).unwrap());
+        assert!(!store.set_auto_start_quota_windows(true).unwrap());
+        assert!(store.auto_start_quota_windows().unwrap());
+        assert!(store.set_auto_start_quota_windows(false).unwrap());
+
+        store.set_auto_start_quota_windows(true).unwrap();
+        store
+            .lock()
+            .execute(
+                "ALTER TABLE settings DROP COLUMN auto_start_quota_windows",
+                [],
+            )
+            .unwrap();
+        drop(store);
+        let store = Store::open(&path).expect("store");
+        assert!(!store.auto_start_quota_windows().unwrap());
     }
 
     /// The default clone directory is the built-in one until set, a blank value goes back to it,

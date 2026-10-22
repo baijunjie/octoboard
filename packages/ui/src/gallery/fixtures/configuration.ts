@@ -95,6 +95,12 @@ export const REVIEW: Omit<Inspection, "type"> = {
     current_auto_select_account: false,
     sidebar_order_by_status: false,
     current_sidebar_order_by_status: true,
+    auto_start_quota_windows: true,
+    current_auto_start_quota_windows: false,
+    auto_approve_session_requests: true,
+    current_auto_approve_session_requests: false,
+    auto_approve_resume_requests: true,
+    current_auto_approve_resume_requests: false,
   },
   consoles: [
     {
@@ -169,9 +175,9 @@ const SINGLE: Omit<Inspection, "type"> = {
   ],
 };
 
-/** The same document of a full export made before archive cleanup, automatic account selection and
- * the sidebar's status ordering existed, so it holds only the automatic pull, which is off where
- * this machine has it on. */
+/** The same document of a full export made before archive cleanup, automatic account selection, the
+ * sidebar's status ordering, starting usage windows and the automatic approval of agents' requests
+ * were carried, so it holds only the automatic pull, which is off where this machine has it on. */
 const WITH_SETTING_OFF: Omit<Inspection, "type"> = {
   ...SINGLE,
   settings: { auto_pull_repositories: false, current_auto_pull_repositories: true, current_auto_delete_unresumable_archives: true },
@@ -186,12 +192,11 @@ const LONG_CLONE_DETAIL = [
   "    retry failed after reading the proxy configuration",
 ].join("\n");
 
-/** What importing `REVIEW` with its defaults came to: a project whose directory was gone by the time it was
- * imported, a clone that failed with a long reason, a project nothing
- * placed, a console that could not be created with its project not tried, and the account
- * references that fell back. */
+/** What importing `REVIEW` with its defaults came to: a project whose directory was gone by the time
+ * it was imported, a clone that failed with a long reason, a project nothing placed, a console that
+ * could not be created with its project not tried, and the account references that fell back. */
 export const MIXED_RESULT: Omit<Imported, "type"> = {
-  settings_applied: { auto_pull_repositories: true, auto_delete_unresumable_archives: false, auto_select_account: true, sidebar_order_by_status: false },
+  settings_applied: { auto_pull_repositories: true, auto_delete_unresumable_archives: false, auto_select_account: true, sidebar_order_by_status: false, auto_start_quota_windows: true, auto_approve_session_requests: true, auto_approve_resume_requests: true },
   consoles: [
     {
       name: "Work laptop",
@@ -481,7 +486,7 @@ export const configurationScenarios: Scenario[] = [
     category: "normal",
     title: "Import, review",
     description:
-      "Projects found at recorded or default paths, clone candidates, missing paths, account fallbacks and an empty console appear together; settings start unchecked, and their note has four lines: automatic pull turns on, archive cleanup turns off, automatic account selection turns on, and ordering the sidebar by status turns off.",
+      "Projects found at recorded or default paths, clone candidates, missing paths, account fallbacks and an empty console appear together; settings start unchecked, and their note has seven lines: automatic pull turns on, archive cleanup turns off, automatic account selection turns on, ordering the sidebar by status turns off, starting usage windows automatically turns on, and the two automatic approvals of agents' requests (sessions, resumes) turn on.",
     state,
     configuration: reviewing(),
     steps: [
@@ -508,7 +513,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, an older document whose setting is off where it is on here",
-    description: "The checkbox is ticked, and its note is a single line: applying turns automatic pull off. The file predates archive cleanup, automatic account selection and status ordering of the sidebar, so none of them has a line.",
+    description: "The checkbox is ticked, and its note is a single line: applying turns automatic pull off. The file predates archive cleanup, automatic account selection, status ordering of the sidebar, starting usage windows and the automatic approvals of agents' requests, so none of them has a line.",
     state: autoPulling,
     configuration: { file: FILE, inspection: WITH_SETTING_OFF },
     steps: [
@@ -586,7 +591,7 @@ export const configurationScenarios: Scenario[] = [
     title: "Import result with failures and fallbacks",
     state: state,
     configuration: reviewing(),
-    description: "Placement outcomes, failed projects and consoles, fallback accounts and applied settings share the result; the settings show four lines, automatic pull on, archive cleanup off, automatic account selection on and ordering the sidebar by status off. The error alert the failures raise is dismissed to leave the result in view. Short height exposes scrolling; Phone folds rows.",
+    description: "Placement outcomes, failed projects and consoles, fallback accounts and applied settings share the result; the settings show seven lines, automatic pull on, archive cleanup off, automatic account selection on, ordering the sidebar by status off, starting usage windows automatically on and both automatic approvals of agents' requests on. The error alert the failures raise is dismissed to leave the result in view. Short height exposes scrolling; Phone folds rows.",
     steps: [
       ...importFromSettings,
       chooseFile,

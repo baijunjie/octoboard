@@ -1,10 +1,10 @@
-//! The agent CLIs the daemon runs under an account's directory outside a session, which a change
-//! of the account's sharing must not move files under: a Codex starting there opens its state
-//! database and history. They are of two kinds. A short read — the account's plan quota, its
-//! models — ends within seconds, so a change holds new ones back and waits for those running to
-//! end. A long run — signing the account in — lasts as long as the user takes, so a change is
-//! refused while one runs. A run of either kind that starts while a change holds the directory
-//! waits for the change.
+//! The agent CLIs the daemon runs under an account's directory outside a session, which a change of
+//! the account's sharing must not move files under: a Codex starting there opens its state database
+//! and history. They are of two kinds. A short read — the account's plan quota, its models — ends
+//! within seconds and a kick (one model request) within a minute, so a change holds new ones back
+//! and waits for those running to end. A long run — signing the account in — lasts as long as the
+//! user takes, so a change is refused while one runs. A run of either kind that starts while a
+//! change holds the directory waits for the change.
 //!
 //! Kept for the whole process rather than per daemon state: the runs start from blocking code
 //! that has no state at hand, and an account directory is the same directory whichever state

@@ -155,30 +155,29 @@ list of added agents and the names the user gave the default accounts (see "Adde
 
 ### The application settings a full export carries
 
-Four, each under its own key:
+Seven, each under its own key. The first is in every document that has application settings. Each of the other six
+is missing from a document exported before it was carried, and applying that document's settings then leaves the
+importing machine's value as it is; the import review notes each of the six only when the document carries it as a
+boolean.
 
 - **Automatically pull repositories** (see "Automatically pulling repositories" in
   `docs/product/project-git-status.md`), under `auto_pull_repositories`. An import also reads it from a document that
   carries it under the key `auto_sync_repositories`; an export writes only `auto_pull_repositories`.
 - **Automatically delete archived sessions whose conversation is gone** (see "Deleting archived sessions whose
-  conversation is gone" in `docs/product/deleting-sessions.md`), under `auto_delete_unresumable_archives`. A document
-  exported before the setting existed does not carry it, and applying that document's settings leaves the importing
-  machine's value as it is.
-- **Automatically select an account** (see that section in `docs/product/settings.md`), under `auto_select_account`. A
-  document exported before the setting existed does not carry it, and applying that document's settings leaves the
-  stored value unchanged. The import review notes the setting only when the document carries it as a boolean. The line
-  that says turning it on is its own, not the one used for automatic pull: a new session then uses the account whose
-  weekly quota resets soonest.
-- **Order the sidebar by status** (see that section in `docs/product/settings.md`), under `sidebar_order_by_status`. A
-  document exported before the setting existed does not carry it, and applying that document's settings leaves the
-  stored value unchanged. The import review notes the setting only when the document carries it as a boolean; its line
-  that says turning it on is its own: sessions and projects in the sidebar then move as their status changes.
-
-**Automatically approve session requests** and **Automatically approve resume requests** (see "Approving requests
-automatically" in `docs/product/session-requests.md`) are never carried, unlike the other application-wide switches,
-and an import never applies either — not even from a document that holds the key `auto_approve_session_requests` or
-`auto_approve_resume_requests`, which the inspection does not report either — so a shared document cannot turn on the
-approval of either kind of request without asking.
+  conversation is gone" in `docs/product/deleting-sessions.md`), under `auto_delete_unresumable_archives`.
+- **Automatically select an account** (see that section in `docs/product/settings.md`), under `auto_select_account`.
+  The review's line for turning it on says that a new session then uses the account whose weekly quota resets soonest.
+- **Order the sidebar by status** (see that section in `docs/product/settings.md`), under `sidebar_order_by_status`.
+  The review's line for turning it on says that sessions and projects in the sidebar then move as their status changes.
+- **Start usage windows automatically** (see that section in `docs/product/settings.md`), under
+  `auto_start_quota_windows`. The review's line for turning it on says that a usage window that has not started
+  counting is then started with one small request, which uses a little of the account's quota.
+- **Automatically approve session requests** (see "Approving requests automatically" in
+  `docs/product/session-requests.md`), under `auto_approve_session_requests`. The review's line for turning it on says
+  that a session's request to start a session that reports to the user is then approved without asking first.
+- **Automatically approve resume requests** (see the same section), under `auto_approve_resume_requests`. The
+  review's line for turning it on says that a session's request to reopen or resume a session, or to resume a
+  conversation in a new session, is then approved without asking first.
 
 A single console's document carries no application settings at all. The settings that belong to one machine or to its
 accounts stay out of every document (see "What is not configuration and never travels" above).
@@ -276,17 +275,21 @@ fills the window in as it goes.
 ### Application settings are left alone unless they are asked for
 
 A document's application settings are applied **only when the import is explicitly asked to apply them**, and are not
-applied by default. Automatically pull repositories makes the daemon fast-forward the user's own repositories by
-itself, automatically deleting archived sessions makes it delete sessions by itself, and automatic account selection
-makes a later new session that names no account take the one whose weekly quota resets soonest, so applying them
-changes how the daemon's host behaves rather than only adding to what it holds. The inspection says both what the
-document sets and what is set now, so what applying would change can be shown before anything is done. The settings
-are applied last, through the same path as a change made in Settings — so an import that turns automatic pulling on
-runs the same immediate fast-forward pass turning it on by hand does (see "Turning the switch on" in
-`docs/product/project-git-status.md`), one that turns the automatic deletion on deletes nothing until the next
-scheduled check, as the switch does, and one that turns automatic account selection on or off changes no session
-already open — and the result of the import reports what was applied. Asking to apply the settings of a document that
-carries none is refused rather than quietly ignored, so a request never does less than it was told to.
+applied by default. Automatically pull repositories makes the daemon fast-forward the user's own repositories by itself,
+automatically deleting archived sessions makes it delete sessions by itself, automatic account selection makes a
+later new session that names no account take the one whose weekly quota resets soonest, starting usage windows
+automatically spends a little of the accounts' quota by itself, and the two automatic approvals let agents' requests
+through without asking the user, so applying them changes how the daemon's host behaves rather than only adding to what
+it holds. The inspection says both what the document sets and what is set now, so what applying would change can be
+shown before anything is done. The settings are applied last, through the same path as a change made in Settings — so an
+import that turns automatic pulling on runs the same immediate fast-forward pass turning it on by hand does (see
+"Turning the switch on" in `docs/product/project-git-status.md`), one that turns the automatic deletion on deletes
+nothing until the next scheduled check, as the switch does, one that turns automatic account selection on or off changes
+no session already open, one that turns the starting of usage windows on looks over the quota readings already held at
+once (see "When an account is kicked" in `docs/product/account-quotas.md`), and one that turns an automatic approval on
+or off changes no request already waiting — and the result of the import reports what was applied. Asking to apply the
+settings of a document that carries none is refused rather than quietly ignored, so a request never does less than it
+was told to.
 
 ### What is refused, and what is reported instead
 

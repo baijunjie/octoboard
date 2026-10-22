@@ -3236,6 +3236,32 @@ pub(super) mod tests {
         }
     }
 
+    /// Starting quota windows spends the user's quota, so an agent can neither read the setting
+    /// nor change it through the settings tools, whatever it passes.
+    #[tokio::test]
+    async fn the_quota_window_setting_is_out_of_the_agents_reach() {
+        let (state, _dir) = settings_state("app-settings-quota-windows");
+        let listed = call(&state, "a", "get_settings", &arguments(json!({})))
+            .await
+            .unwrap();
+        assert!(listed.get("auto_start_quota_windows").is_none());
+
+        let updated = call(
+            &state,
+            "a",
+            "update_settings",
+            &arguments(json!({
+                "auto_start_quota_windows": true,
+                "default_clone_dir": "/tmp/clones",
+            })),
+        )
+        .await
+        .unwrap();
+        assert!(updated.get("auto_start_quota_windows").is_none());
+        assert_eq!(updated["default_clone_dir"], "/tmp/clones");
+        assert!(!state.store.auto_start_quota_windows().unwrap());
+    }
+
     /// The settings listing names every agent's default account, never an account's directory, and
     /// the only writes are to the five settings a console session may change.
     #[tokio::test]

@@ -96,10 +96,11 @@ user is asked, is **approved at once**, without asking:
 Each tool's description tells the agent that the call waits for the user's answer unless the user has chosen to have
 such requests approved automatically, in which case the result says so and the call does not wait.
 
-Only the user changes either setting, in Settings. An agent can neither read nor change either through the settings
-tools (see "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`), so
-a session cannot approve its own requests, and a configuration document neither carries nor applies either (see "The
-application settings a full export carries" in `docs/product/configuration-export-and-import.md`).
+An agent can neither read nor change either setting through the settings tools (see "Application settings:
+`get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`), so a session cannot approve its own
+requests. Besides Settings, the only other way either changes is an import of a full configuration document that the
+user asks to apply its application settings, whose review says beforehand when the document would turn one on (see
+"The application settings a full export carries" in `docs/product/configuration-export-and-import.md`).
 
 ## Waiting for the answer
 

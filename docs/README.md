@@ -511,8 +511,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   arguments with `--`; what a test proving a read leaves the repository alone has to set up first (a stale-stat
   fixture and a positive control); and why a test fixture is built only from Git 2.36's commands.
 - [Adding a user setting](memory/adding-a-user-setting.md) — the checklist for adding a user setting: exposing it in
-  the agents' settings tools unless only the user may change it, and carrying a portable application setting through a
-  full configuration export and import.
+  the agents' settings tools unless only the user may change it, and carrying every application setting that is not
+  valid only on this machine through a full configuration export and import.
 - [Writing text into a session](memory/writing-text-into-a-session.md) — why any new notice, brief or opening prompt the
   daemon writes into a session's input needs a fixed opening constant listed in `session_history.rs`'s
   `OCTOBOARD_OPENINGS`, or the archived history shows it as the user's own words.

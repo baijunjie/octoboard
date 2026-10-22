@@ -73,6 +73,15 @@ it("reports the setting this machine has now as the scenario's own state has it"
     if (typeof inspection.settings!.sidebar_order_by_status === "boolean") {
       expect(inspection.settings!.current_sidebar_order_by_status, id).toBe(machine!.sidebar_order_by_status ?? true);
     }
+    if (typeof inspection.settings!.auto_start_quota_windows === "boolean") {
+      expect(inspection.settings!.current_auto_start_quota_windows, id).toBe(machine!.auto_start_quota_windows ?? false);
+    }
+    if (typeof inspection.settings!.auto_approve_session_requests === "boolean") {
+      expect(inspection.settings!.current_auto_approve_session_requests, id).toBe(machine!.auto_approve_session_requests ?? false);
+    }
+    if (typeof inspection.settings!.auto_approve_resume_requests === "boolean") {
+      expect(inspection.settings!.current_auto_approve_resume_requests, id).toBe(machine!.auto_approve_resume_requests ?? false);
+    }
   }
 });
 
@@ -153,6 +162,15 @@ it("reports application settings only for a document that carries them", () => {
       }
       if (typeof inspection.settings.sidebar_order_by_status === "boolean") {
         expect(result.settings_applied.sidebar_order_by_status, id).toBe(inspection.settings.sidebar_order_by_status);
+      }
+      if (typeof inspection.settings.auto_start_quota_windows === "boolean") {
+        expect(result.settings_applied.auto_start_quota_windows, id).toBe(inspection.settings.auto_start_quota_windows);
+      }
+      if (typeof inspection.settings.auto_approve_session_requests === "boolean") {
+        expect(result.settings_applied.auto_approve_session_requests, id).toBe(inspection.settings.auto_approve_session_requests);
+      }
+      if (typeof inspection.settings.auto_approve_resume_requests === "boolean") {
+        expect(result.settings_applied.auto_approve_resume_requests, id).toBe(inspection.settings.auto_approve_resume_requests);
       }
     }
   }

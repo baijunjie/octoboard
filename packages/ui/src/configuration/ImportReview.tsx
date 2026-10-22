@@ -65,6 +65,9 @@ type SettingMessage =
   | "configuration.import.settings.archiveCleanup.turnsOn"
   | "configuration.import.settings.autoSelectAccount.turnsOn"
   | "configuration.import.settings.sidebarOrder.turnsOn"
+  | "configuration.import.settings.autoStartQuotaWindows.turnsOn"
+  | "configuration.import.settings.autoApproveSession.turnsOn"
+  | "configuration.import.settings.autoApproveResume.turnsOn"
   | "configuration.import.settings.turnsOff"
   | "configuration.import.settings.alreadyOn"
   | "configuration.import.settings.alreadyOff";
@@ -297,6 +300,15 @@ export function ImportReview({
       )}
       {typeof settings.sidebar_order_by_status === "boolean" && typeof settings.current_sidebar_order_by_status === "boolean" && (
         <SettingNote label={t("settings.sidebarOrder.label")} wanted={settings.sidebar_order_by_status} current={settings.current_sidebar_order_by_status} turnsOn="configuration.import.settings.sidebarOrder.turnsOn" />
+      )}
+      {typeof settings.auto_start_quota_windows === "boolean" && typeof settings.current_auto_start_quota_windows === "boolean" && (
+        <SettingNote label={t("settings.startQuotaWindows.label")} wanted={settings.auto_start_quota_windows} current={settings.current_auto_start_quota_windows} turnsOn="configuration.import.settings.autoStartQuotaWindows.turnsOn" />
+      )}
+      {typeof settings.auto_approve_session_requests === "boolean" && typeof settings.current_auto_approve_session_requests === "boolean" && (
+        <SettingNote label={t("settings.autoApproveSession.label")} wanted={settings.auto_approve_session_requests} current={settings.current_auto_approve_session_requests} turnsOn="configuration.import.settings.autoApproveSession.turnsOn" />
+      )}
+      {typeof settings.auto_approve_resume_requests === "boolean" && typeof settings.current_auto_approve_resume_requests === "boolean" && (
+        <SettingNote label={t("settings.autoApproveResume.label")} wanted={settings.auto_approve_resume_requests} current={settings.current_auto_approve_resume_requests} turnsOn="configuration.import.settings.autoApproveResume.turnsOn" />
       )}
     </>
   );

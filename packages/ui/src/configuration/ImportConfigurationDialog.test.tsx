@@ -158,6 +158,29 @@ it("notes what applying each application setting would change", async () => {
   expect(text()).toContain("Turns on Automatically pull repositories");
   expect(text()).toContain("Turns off Automatically delete archived sessions whose conversation is gone");
   expect(text()).toContain("Turns on Automatically select an account");
+  expect(text()).toContain("Turns on Start usage windows automatically");
+  expect(text()).toContain("uses a little of the account's quota");
+});
+
+it("states what turning on the automatic approvals lets agents do", async () => {
+  await reviewing();
+  expect(text()).toContain("Turns on Automatically approve session requests");
+  expect(text()).toContain("request to start a session that reports to you is then approved without asking you first");
+  expect(text()).toContain("Turns on Automatically approve resume requests");
+  expect(text()).toContain("request to reopen or resume a session");
+});
+
+it("leaves out the automatic approvals when the file does not carry them", async () => {
+  const without = {
+    ...REVIEW,
+    settings: {
+      ...REVIEW.settings!,
+      auto_approve_session_requests: null,
+      auto_approve_resume_requests: null,
+    },
+  };
+  await reviewing({ reply: (body) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected", ...without }) : reply(body)) });
+  expect(text()).not.toContain("Automatically approve");
 });
 
 it("leaves out the setting a file from before it existed does not carry", async () => {

@@ -99,7 +99,7 @@ the request id as if it were a record id.
 | `confirm_trust` | `session`, `remember`, `trust_parent_dir?` | The user's go-ahead to a `trust_prompt`, whichever agent is asking: Octoboard may press that session's own folder-trust confirmation, which it does by typing at the session's terminal after checking that the confirmation is still up — for Claude Code a Down and an Enter, once the cursor is seen to move to "Yes, I trust this folder"; for Codex an Enter, with the cursor seen on "1. Trust and continue" and nothing written into the session since the confirmation was sighted; for Grok Build a `y`, while no hook has run, the process is still there and nothing has been written into the session since the confirmation was sighted. Pressing it is what makes the agent record the trust in its own configuration, so its later launches do not ask; for Grok Build the entry Grok wrote into the session's own copy of its trust store is then carried over, unchanged, into the user's own store, and the press counts only once that is done, or, when no hook comes to carry it (a Grok policy that runs none), once the confirmation is seen to have gone from the screen; a hook that comes later still carries the entry. `remember` also records the project's permission (`Project.trust_consent`) once the confirmation has been pressed, so a later confirmation of any agent in that project is pressed without a prompt, and broadcasts the updated `project_upserted`. `trust_parent_dir` (absent means false) records the project's parent directory as trusted instead, once the confirmation has been pressed, and then `remember` adds nothing. Every project whose path lies under that directory is covered by it, for every agent — those already there, those added later by any means, repositories the console session clones or adds into it included — and each agent then applies that project's own configuration once it has recorded its trust. The confirmations already waiting under it are pressed at once. The daemon derives the directory from the session's project (it is the prompt's `trust_dir`); a client never names one. A parent that is the filesystem root, the user's home directory (however it is spelled or linked) or a directory containing it is refused, before anything is pressed, with `error` code `trust_directory_too_broad`; so is a project whose path is not absolute (`trust_path_not_absolute`), and so is any case where the home directory cannot be determined to check against (`trust_home_unknown`). Refused, with nothing recorded and nothing sent, unless `session` is a running project session that is still waiting at its own agent's confirmation and has not been answered (one that is no longer waiting is answered with `error` code `trust_not_waiting`, which a client shows nothing for); a failure to press once it was accepted (the confirmation is not as expected, or something else typed into the session meanwhile) is an `error` with code `trust_answer_failed`, and a Grok Build press whose entry could not be carried over is one with code `trust_not_carried_over`; either records no permission and is also broadcast as a `session_notice` so that it is seen even if the requesting dialog has closed. Octoboard never writes a trust decision into an agent's configuration itself; the one file it writes is the user's Grok Build trust store, with the entry Grok wrote |
 | `remove_trusted_directory` | `path` | Stops trusting a directory (compared after lexical normalisation, so a trailing slash does not matter) and broadcasts `trusted_directories_updated`. Projects' own permissions, sessions already running and the trust each agent has already recorded are untouched. Removing one that is not trusted does nothing. Directories are added only by `confirm_trust` |
 | `answer_session_request` | `request_id`, `approve` | The user's answer to a `session_request`. `approve` true does what the request's `action` says. For `start` it starts the session the request describes — a project session in its project, or a console session in its console — as `open_session` would, with no `bound_to`: it has no owner and reports to the user, and the requesting session carries on unchanged, neither bound to it nor owning it. For `reopen` and `resume` it brings back the session `target` as `resume_session` does, without an instruction, and its owner and everything bound to it stay as they are; archived owners are reopened first, topmost down, and a name the request carried for an archived session is then given as `rename_session` does (a name that cannot be given is told to the requester and does not undo the reopen). A target that is already running or starting when the answer arrives is left alone and counts as done, as does one that `resume_session` refuses with `session_already_running`, or with `session_already_starting` for the target's own launch or after which the target is no longer dormant; a `session_already_starting` that is a claim for an account switch, a handoff, a handover of branches or a binding change on the target, or for an archived owner, while the target is still dormant, is not done: the answer fails with that refusal's own error and the requester is told the approval could not be carried out. A name the request carried that was not given because the target was not archived by then is told as `renamed: false` in the result. For `resume_record` it opens a session as `open_session` does on the record the request names, with no `bound_to`, so that it reports to the user. False refuses it and changes nothing (a client sends false when the dialog is dismissed). Approval is answered with `session_opened` carrying the new session, or for `reopen` and `resume` the target as it then stands, refusal with `ack`. The first answer wins. An answer for a request that has already been answered, or that the daemon does not know, gets `session_request_answered`. An approval for one that was withdrawn or timed out, or whose session's process ended before it could be carried out, gets `session_request_not_waiting`; a refusal for one gets the same code. An approval that fails while launching returns that launch's own error |
-| `update_settings` | `auto_pull_repositories?`, `auto_delete_unresumable_archives?`, `auto_approve_session_requests?`, `auto_approve_resume_requests?`, `auto_select_account?`, `sidebar_order_by_status?`, `default_clone_dir?` | Each settable field absent means "leave it alone". Turning `auto_delete_unresumable_archives` on starts no scan; the next scheduled one (at most a day away) deletes again. Turning `auto_approve_session_requests` or `auto_approve_resume_requests` on or off changes no request already waiting: the first is read when a `request_session` call is made, the second when a `request_resume_session` call is made. Turning `auto_select_account` on or off changes no session already open: it is read when `new_session`, `request_session` or `handoff_session` leaves the account out, and then the session runs on the account of its agent whose weekly quota resets soonest and still has some left, or, when none does, on the account it would have taken while the setting is off. `default_clone_dir` follows the path rules of `add_project`'s `path` (absolute or `~/`, stored lexically normalised, a relative one refused), and a blank value goes back to the built-in default; a refused value leaves the whole request unapplied. Broadcasts `settings_updated` only when something actually changed, as `remove_trusted_directory` does. A change that turns `auto_pull_repositories` on also starts the immediate fast-forward pass described in "Fast-forwarding when the setting is turned on" below, whose statuses follow as `project_git_status` broadcasts; an update that leaves the value as it was starts nothing. Turning it off starts nothing and undoes nothing |
+| `update_settings` | `auto_pull_repositories?`, `auto_delete_unresumable_archives?`, `auto_approve_session_requests?`, `auto_approve_resume_requests?`, `auto_select_account?`, `sidebar_order_by_status?`, `auto_start_quota_windows?`, `default_clone_dir?` | Each settable field absent means "leave it alone". Turning `auto_delete_unresumable_archives` on starts no scan; the next scheduled one (at most a day away) deletes again. Turning `auto_approve_session_requests` or `auto_approve_resume_requests` on or off changes no request already waiting: the first is read when a `request_session` call is made, the second when a `request_resume_session` call is made. Turning `auto_select_account` on or off changes no session already open: it is read when `new_session`, `request_session` or `handoff_session` leaves the account out, and then the session runs on the account of its agent whose weekly quota resets soonest and still has some left, or, when none does, on the account it would have taken while the setting is off. `default_clone_dir` follows the path rules of `add_project`'s `path` (absolute or `~/`, stored lexically normalised, a relative one refused), and a blank value goes back to the built-in default; a refused value leaves the whole request unapplied. Broadcasts `settings_updated` only when something actually changed, as `remove_trusted_directory` does. A change that turns `auto_pull_repositories` on also starts the immediate fast-forward pass described in "Fast-forwarding when the setting is turned on" below, whose statuses follow as `project_git_status` broadcasts; an update that leaves the value as it was starts nothing. Turning it off starts nothing and undoes nothing. Turning `auto_start_quota_windows` on looks over the readings already held at once, as described in "Account quotas" below |
 | `refresh_git_status` | `console` | Checks every project of `console` against its remote, a few at a time; answered with `ack` at once, and the statuses follow as `project_git_status` broadcasts, one per project as its own check finishes. A project whose check is already running — this call raced ahead of an earlier one, or another client is watching the same console — is not started again, and nor is one whose last check completed less than a minute ago: several clients can each be polling this console on their own 5-minute interval and phase, and without this floor their sweeps would interleave into several checks per project every 5 minutes instead of one. Either way nothing is broadcast for the project that was skipped — it keeps whatever status it already had. An unknown console is `unknown_console`. See "Daemon behaviour, per project" below for what one project's check does |
 | `open_project_path` | `project`, `path`, `worktree?` | Opens an existing project-relative wire path with its default application on the daemon's host; a directory opens in the file manager. `worktree` selects the same scoped live root as browsing; absent means the project's own directory. The path and its symlink target must remain inside that scope. Answers `ack` when the host accepts the request (Linux starts `xdg-open` detached, so later launcher failures cannot be observed). Invalid, missing and outside-scope paths use the browse errors; launch failures are `path_open_failed` |
 | `reveal_project_path` | `project`, `path`, `worktree?` | Selects an existing file or directory in its containing folder on the daemon's host. Scope and path validation match `open_project_path`; a symlink is selected by its own name. macOS uses `open -R`; Linux requires `gdbus` and a file manager implementing `org.freedesktop.FileManager1.ShowItems`. Answers `ack` after the launcher succeeds; launch failures are `directory_unavailable` |
@@ -412,7 +412,7 @@ BackgroundTask { id, type?, description? }
 SessionContext { tokens, window?, used_percent? }
 Page    { id, console_session_id, html, anchor_message_id?, created_at }
 Settings  { auto_pull_repositories, auto_delete_unresumable_archives, auto_approve_session_requests, auto_approve_resume_requests,
-            auto_select_account, sidebar_order_by_status, default_clone_dir, accounts: Account[],
+            auto_select_account, sidebar_order_by_status, auto_start_quota_windows, default_clone_dir, accounts: Account[],
             codex_default_approval_reviewer, claude_default_approval_mode,
             default_account_names: { "<agent>": string } }
 AccountLogin { agent, account: string|null, status: "starting"|"waiting"|"succeeded"|"failed"|"cancelled"|"timed_out",
@@ -781,12 +781,13 @@ message are as for an approval, except that the opening prompt of the new sessio
 approved the request automatically under this setting rather than the user. A request already waiting when the setting
 is turned on stays in its dialog. While an earlier approval of the same session is being carried out, a further call is
 refused as before, and an automatic request takes the place of a request the session has waiting. Only a client changes
-it: the settings tools of the MCP server neither read nor write it, so an agent cannot turn it on, and a configuration
-document neither carries nor applies it.
+it: the settings tools of the MCP server neither read nor write it, so an agent cannot turn it on. A full configuration
+export carries it and an import that applies the settings sets it, like the other portable settings.
 `auto_approve_resume_requests` (default `false`, also for a database from before it existed) is the same for a
 `request_resume_session` call, independently of `auto_approve_session_requests`: either can be on while the other is
 off. An automatic approval under it is worded in the outcome as the user's choice to have resume requests approved
-without asking, and it is as out of an agent's reach, and as absent from a configuration document, as the other one.
+without asking, and it is as out of an agent's reach as the other one, and a full configuration export carries it as
+that one does.
 `auto_select_account` (default `false`, also for a database from before it existed) makes a session started by
 `new_session`, `request_session` or `handoff_session` whose account was left out run on the account of that session's
 agent whose weekly quota resets soonest. An account is a candidate only when it can still open a session: a 5-hour,
@@ -807,6 +808,10 @@ orders sessions and projects by status. The daemon only stores and serves it; th
 sidebar ranks no session or project by status: sessions go pinned first, then most recently started, and projects keep
 active first, then pinned, then name. Agents may read and change the setting. A full configuration export carries it; a
 document exported before it existed omits it, and importing that document leaves the stored value unchanged.
+`auto_start_quota_windows` (default `false`, also for a database from before it existed) is whether the daemon starts a
+usage window that has reset but not begun counting; see "Account quotas" below. Agents cannot read or change it, as it
+spends the user's quota. A full configuration export carries it; a document exported before it existed omits it, and
+importing that document leaves the stored value unchanged.
 `GitStatus` is one project's live git state, derived from its working directory on request and never stored; see
 "Daemon behaviour, per project" below for how it is built. `repository` is `false` when the project's directory is
 not a git repository, and every other field is then at its empty value. `branch` is the branch name, the short
@@ -966,6 +971,18 @@ request for a client that wants fresher data when it opens a view: it reads what
 signed in or has no quota to report once its last attempt is 30 seconds old, so asking on every open costs next to
 nothing. Every change to the list is broadcast whole as `account_quotas_updated`.
 
+While `auto_start_quota_windows` is on, a successful reading that shows a window with no `resets_at` (one that has
+reset but not begun counting), other than a model's own weekly window, is followed by a kick: one one-word request on
+that account, with the agent's cheapest model at its lowest effort (see "Starting a quota window" in
+`docs/agent-cli-reference.md`), and then a reading of the account again. The kick and that reading run in the
+background, so the refresh that found the window returns without waiting for them. A kick holds the account's claim, so
+a refresh that finds the account claimed leaves it alone, and takes one of the four CLI slots; a login that ends drops
+the claim all the same, so the account can then be read while a kick still runs. A window is kicked once per episode,
+which ends only when a reading shows that window with a `resets_at` again: a window still without one after a kick, or
+whose kick failed (logged, not retried), is not kicked again. The episodes are runtime state like the readings, dropped
+with them, and a daemon restart starts them afresh. Turning the setting on kicks the accounts whose held readings call
+for it at once.
+
 ### Account login
 
 `start_account_login` runs the agent's login flow in the background and `account_login_updated` carries its state,
@@ -1009,7 +1026,10 @@ Document { format: "octoboard-configuration", version: 1,
                                                       // may carry it as `auto_sync_repositories`, read alike
                         auto_delete_unresumable_archives?,   // absent or null in an older document: left as it is
                         auto_select_account?,                // absent or null in an older document: left as it is
-                        sidebar_order_by_status? },          // absent or null in an older document: left as it is
+                        sidebar_order_by_status?,            // absent or null in an older document: left as it is
+                        auto_start_quota_windows?,           // absent or null in an older document: left as it is
+                        auto_approve_session_requests?,      // absent or null in an older document: left as it is
+                        auto_approve_resume_requests? },     // absent or null in an older document: left as it is
            consoles: DocumentConsole[] }
 DocumentConsole { name, icon?, default_agent,
                   project_session_agent?,                           // absent in an older document: follows default_agent
@@ -1034,11 +1054,11 @@ ProjectAccountRef { kind: "inherit" } | { kind: "default" } | { kind: "account",
 
 - **Scope.** With `console`, the document holds that console alone and no `settings`; without it, it holds every console
   and `settings`, which are the portable application settings (`auto_pull_repositories`,
-  `auto_delete_unresumable_archives`, `auto_select_account` and `sidebar_order_by_status`). The shape is the same either
-  way: a full export is a list of consoles that happens to hold all of them. Consoles are ordered by creation time and a
-  console's `projects` by name, with the stored id breaking a tie, so the order is the same on every export; the id
-  itself is not in the document. `projects` is all of a console's projects, whether or not a project is a git
-  repository.
+  `auto_delete_unresumable_archives`, `auto_select_account`, `sidebar_order_by_status`, `auto_start_quota_windows`,
+  `auto_approve_session_requests` and `auto_approve_resume_requests`). The shape is the same either way: a full export
+  is a list of consoles that happens to hold all of them. Consoles are ordered by creation time and a console's
+  `projects` by name, with the stored id breaking a tie, so the order is the same on every export; the id itself is not
+  in the document. `projects` is all of a console's projects, whether or not a project is a git repository.
 - **Nothing is an id.** No console, project or account carries an `id`. A console's `workdir` is not in the document
   either: the daemon derives it from the console's id when it creates the console, so it would carry that id and the
   daemon's own layout, and an import creates its console, and so its directory, itself. A console's `*_account` is
@@ -1086,7 +1106,13 @@ configuration_inspected { settings?: { auto_pull_repositories, current_auto_pull
                                       auto_select_account?,                // absent or null: the document predates it
                                       current_auto_select_account,
                                       sidebar_order_by_status?,            // absent or null: the document predates it
-                                      current_sidebar_order_by_status },
+                                      current_sidebar_order_by_status,
+                                      auto_start_quota_windows?,           // absent or null: the document predates it
+                                      current_auto_start_quota_windows,
+                                      auto_approve_session_requests?,      // absent or null: the document predates it
+                                      current_auto_approve_session_requests,
+                                      auto_approve_resume_requests?,       // absent or null: the document predates it
+                                      current_auto_approve_resume_requests },
                           consoles: InspectedConsole[] }
 InspectedConsole  { name, account_fallbacks: AccountFallback[], projects: InspectedProject[] }
 InspectedProject  { name, path, remote_url?,            // as the document records them
@@ -1101,7 +1127,8 @@ ProjectResolution { console, project,                   // indexes into the docu
                           | { kind: "directory", path } }
 
 configuration_imported { settings_applied?: { auto_pull_repositories, auto_delete_unresumable_archives?, auto_select_account?,
-                                           sidebar_order_by_status? },
+                                           sidebar_order_by_status?, auto_start_quota_windows?,
+                                           auto_approve_session_requests?, auto_approve_resume_requests? },
                          settings_error?: Failure,   // the settings asked for could not be applied
                          consoles: ImportedConsole[] }
 ImportedConsole   { name, status: "created" | "failed",
@@ -1164,11 +1191,14 @@ Failure           { code, params, message }             // as an `error` reply c
   `auto_delete_unresumable_archives` makes it delete archived sessions on its own, which changes how this machine
   behaves. A document without `auto_delete_unresumable_archives` leaves that setting as it is. `auto_select_account` is
   carried and applied the same way; a document that omits it, as one exported before the setting existed does, leaves
-  the stored value unchanged. `sidebar_order_by_status` is carried and applied the same way. They are applied last,
-  through the same path as `update_settings` (so they are normalised and `settings_updated` is broadcast when the value
-  changes), and `settings_applied` in the result reports what was applied. Asking for them of a document that has none
-  is refused (`import_settings_missing`) rather than ignored, so a request never silently does less than it was told to.
-  Settings that could not be applied are `settings_error`, and the import is reported all the same.
+  the stored value unchanged. `sidebar_order_by_status`, `auto_start_quota_windows`, `auto_approve_session_requests` and
+  `auto_approve_resume_requests` are carried and applied the same way; the two approvals make the daemon approve agents'
+  session and resume requests without asking the user, which is why the review states it when the document turns one on.
+  They are applied last, through the same path as `update_settings` (so they are normalised and `settings_updated` is
+  broadcast when the value changes), and `settings_applied` in the result reports what was applied. Asking for them of a
+  document that has none is refused (`import_settings_missing`) rather than ignored, so a request never silently does
+  less than it was told to. Settings that could not be applied are `settings_error`, and the import is reported all the
+  same.
 - **In the result.** A project with no resolution is `left_out`. One whose directory cannot be obtained (the path is
   gone, a clone fails or its target exists, the choice has nothing to use) is `failed` with its `error`, and the rest
   carry on; its console is still created. A console that cannot be created (the disk is full, the data directory cannot

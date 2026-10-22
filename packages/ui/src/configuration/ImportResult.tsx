@@ -185,6 +185,12 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
         settingLine(t("settings.autoSelect.label"), result.settings_applied.auto_select_account)}
       {typeof result.settings_applied?.sidebar_order_by_status === "boolean" &&
         settingLine(t("settings.sidebarOrder.label"), result.settings_applied.sidebar_order_by_status)}
+      {typeof result.settings_applied?.auto_start_quota_windows === "boolean" &&
+        settingLine(t("settings.startQuotaWindows.label"), result.settings_applied.auto_start_quota_windows)}
+      {typeof result.settings_applied?.auto_approve_session_requests === "boolean" &&
+        settingLine(t("settings.autoApproveSession.label"), result.settings_applied.auto_approve_session_requests)}
+      {typeof result.settings_applied?.auto_approve_resume_requests === "boolean" &&
+        settingLine(t("settings.autoApproveResume.label"), result.settings_applied.auto_approve_resume_requests)}
       {result.settings_error && (
         <CodeToneContext value="danger">
           <div className="flex min-w-0 flex-col gap-3">

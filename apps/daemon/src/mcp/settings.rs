@@ -130,6 +130,8 @@ pub(super) fn update_settings(
             auto_approve_resume_requests: None,
             auto_select_account: optional_bool(arguments, "auto_select_account")?,
             sidebar_order_by_status: optional_bool(arguments, "sidebar_order_by_status")?,
+            // Not settable by an agent: it spends the user's quota.
+            auto_start_quota_windows: None,
             default_clone_dir: raw_text(arguments, "default_clone_dir")?,
         },
     )?;

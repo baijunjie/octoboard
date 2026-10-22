@@ -147,6 +147,15 @@ pub struct InspectedSettings {
     /// Absent when the document predates the setting, which applying it then leaves as it is.
     pub sidebar_order_by_status: Option<bool>,
     pub current_sidebar_order_by_status: bool,
+    /// Absent when the document predates the setting, which applying it then leaves as it is.
+    pub auto_start_quota_windows: Option<bool>,
+    pub current_auto_start_quota_windows: bool,
+    /// Absent when the document predates the setting, which applying it then leaves as it is.
+    pub auto_approve_session_requests: Option<bool>,
+    pub current_auto_approve_session_requests: bool,
+    /// Absent when the document predates the setting, which applying it then leaves as it is.
+    pub auto_approve_resume_requests: Option<bool>,
+    pub current_auto_approve_resume_requests: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -490,6 +499,12 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
             current_auto_select_account: state.store.auto_select_account()?,
             sidebar_order_by_status: settings.sidebar_order_by_status,
             current_sidebar_order_by_status: state.store.sidebar_order_by_status()?,
+            auto_start_quota_windows: settings.auto_start_quota_windows,
+            current_auto_start_quota_windows: state.store.auto_start_quota_windows()?,
+            auto_approve_session_requests: settings.auto_approve_session_requests,
+            current_auto_approve_session_requests: state.store.auto_approve_session_requests()?,
+            auto_approve_resume_requests: settings.auto_approve_resume_requests,
+            current_auto_approve_resume_requests: state.store.auto_approve_resume_requests()?,
         }),
         None => None,
     };
@@ -676,10 +691,11 @@ pub async fn apply(
         let changes = SettingsChanges {
             auto_pull_repositories: Some(settings.auto_pull_repositories),
             auto_delete_unresumable_archives: settings.auto_delete_unresumable_archives,
-            auto_approve_session_requests: None,
-            auto_approve_resume_requests: None,
+            auto_approve_session_requests: settings.auto_approve_session_requests,
+            auto_approve_resume_requests: settings.auto_approve_resume_requests,
             auto_select_account: settings.auto_select_account,
             sidebar_order_by_status: settings.sidebar_order_by_status,
+            auto_start_quota_windows: settings.auto_start_quota_windows,
             default_clone_dir: None,
         };
         match coordinator::update_settings(state, changes) {
@@ -1709,6 +1725,9 @@ mod tests {
                 auto_delete_unresumable_archives: Some(false),
                 auto_select_account: None,
                 sidebar_order_by_status: None,
+                auto_start_quota_windows: None,
+                auto_approve_session_requests: None,
+                auto_approve_resume_requests: None,
             })
         );
         assert!(state.store.auto_pull_repositories().unwrap());
@@ -1727,6 +1746,7 @@ mod tests {
             .unwrap();
         source.store.set_auto_select_account(true).unwrap();
         source.store.set_sidebar_order_by_status(false).unwrap();
+        source.store.set_auto_start_quota_windows(true).unwrap();
         let hub = crate::test_support::console(&source_dir);
         source.store.insert_console(&hub).unwrap();
         let full = serde_json::to_value(crate::config_export::build(&source.store, None).unwrap())
@@ -1750,13 +1770,14 @@ mod tests {
         assert!(full["settings"]["auto_select_account"].as_bool().unwrap());
         assert!(!target.store.sidebar_order_by_status().unwrap());
         assert_eq!(full["settings"]["sidebar_order_by_status"], false);
+        assert!(target.store.auto_start_quota_windows().unwrap());
+        assert_eq!(full["settings"]["auto_start_quota_windows"], true);
     }
 
-    /// The automatic approval of session requests and of resume requests is never exported, and an
-    /// import that applies a document's settings, one that smuggles the keys in included, leaves
-    /// both as the machine has them.
+    /// The automatic approval of session requests and of resume requests travels in a full export
+    /// and is applied on import, like the other portable settings.
     #[tokio::test]
-    async fn the_automatic_approvals_are_neither_exported_nor_imported() {
+    async fn the_automatic_approvals_round_trip_in_a_full_export() {
         let (source, source_dir) = app_state("import-auto-approve-source");
         source
             .store
@@ -1769,24 +1790,23 @@ mod tests {
             .unwrap();
         let full = serde_json::to_value(crate::config_export::build(&source.store, None).unwrap())
             .unwrap();
-        assert!(!full.to_string().contains("auto_approve_session_requests"));
-        assert!(!full.to_string().contains("auto_approve_resume_requests"));
+        assert_eq!(full["settings"]["auto_approve_session_requests"], true);
+        assert_eq!(full["settings"]["auto_approve_resume_requests"], true);
 
         let (target, _target_dir) = app_state("import-auto-approve-target");
-        apply(&target, &full, Vec::new(), true).await.unwrap();
-        assert!(!target.store.auto_approve_session_requests().unwrap());
-        assert!(!target.store.auto_approve_resume_requests().unwrap());
+        let inspection = inspect(&target, &full).await.unwrap();
+        let settings = inspection.settings.unwrap();
+        assert_eq!(settings.auto_approve_session_requests, Some(true));
+        assert!(!settings.current_auto_approve_session_requests);
+        assert_eq!(settings.auto_approve_resume_requests, Some(true));
+        assert!(!settings.current_auto_approve_resume_requests);
 
-        let mut smuggled = with_settings(document(vec![console("Hub", Vec::new())]), true, true);
-        smuggled["settings"]["auto_approve_session_requests"] = json!(true);
-        smuggled["settings"]["auto_approve_resume_requests"] = json!(true);
-        let inspection = inspect(&target, &smuggled).await.unwrap();
-        let inspected = serde_json::to_string(&inspection).unwrap();
-        assert!(!inspected.contains("auto_approve_session_requests"));
-        assert!(!inspected.contains("auto_approve_resume_requests"));
-        apply(&target, &smuggled, Vec::new(), true).await.unwrap();
+        apply(&target, &full, Vec::new(), false).await.unwrap();
         assert!(!target.store.auto_approve_session_requests().unwrap());
         assert!(!target.store.auto_approve_resume_requests().unwrap());
+        apply(&target, &full, Vec::new(), true).await.unwrap();
+        assert!(target.store.auto_approve_session_requests().unwrap());
+        assert!(target.store.auto_approve_resume_requests().unwrap());
     }
 
     /// A document from before the cleanup setting existed leaves it as the importing machine has
@@ -1800,6 +1820,9 @@ mod tests {
             .unwrap();
         state.store.set_auto_select_account(true).unwrap();
         state.store.set_sidebar_order_by_status(false).unwrap();
+        state.store.set_auto_start_quota_windows(true).unwrap();
+        state.store.set_auto_approve_session_requests(true).unwrap();
+        state.store.set_auto_approve_resume_requests(true).unwrap();
         let mut older = document(vec![console("Hub", Vec::new())]);
         older["settings"] = json!({ "auto_pull_repositories": true });
 
@@ -1811,6 +1834,12 @@ mod tests {
         assert!(settings.current_auto_select_account);
         assert_eq!(settings.sidebar_order_by_status, None);
         assert!(!settings.current_sidebar_order_by_status);
+        assert_eq!(settings.auto_start_quota_windows, None);
+        assert!(settings.current_auto_start_quota_windows);
+        assert_eq!(settings.auto_approve_session_requests, None);
+        assert!(settings.current_auto_approve_session_requests);
+        assert_eq!(settings.auto_approve_resume_requests, None);
+        assert!(settings.current_auto_approve_resume_requests);
 
         let imported = apply(&state, &older, Vec::new(), true).await.unwrap();
         assert_eq!(
@@ -1820,12 +1849,18 @@ mod tests {
                 auto_delete_unresumable_archives: None,
                 auto_select_account: None,
                 sidebar_order_by_status: None,
+                auto_start_quota_windows: None,
+                auto_approve_session_requests: None,
+                auto_approve_resume_requests: None,
             })
         );
         assert!(state.store.auto_pull_repositories().unwrap());
         assert!(!state.store.auto_delete_unresumable_archives().unwrap());
         assert!(state.store.auto_select_account().unwrap());
         assert!(!state.store.sidebar_order_by_status().unwrap());
+        assert!(state.store.auto_start_quota_windows().unwrap());
+        assert!(state.store.auto_approve_session_requests().unwrap());
+        assert!(state.store.auto_approve_resume_requests().unwrap());
     }
 
     #[tokio::test]
@@ -1842,6 +1877,9 @@ mod tests {
                 auto_delete_unresumable_archives: None,
                 auto_select_account: None,
                 sidebar_order_by_status: None,
+                auto_start_quota_windows: None,
+                auto_approve_session_requests: None,
+                auto_approve_resume_requests: None,
             })
         );
         assert!(state.store.auto_pull_repositories().unwrap());

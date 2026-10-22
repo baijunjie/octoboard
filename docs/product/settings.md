@@ -193,8 +193,8 @@ never does and where the value is kept are in "Automatically pulling repositorie
 
 The agents the user has added and every account of each, grouped by agent, with the means to add, reorder and remove
 agents, to add, edit, rename and remove accounts, to sign an account in, and each account's approval mode and plan
-quota, and **Automatically select an account**. Where that switch sits, and what the rest of the section shows and
-offers, are in `docs/product/agent-accounts.md`.
+quota, and the two switches **Automatically select an account** and **Start usage windows automatically**. Where those
+switches sit, and what the rest of the section shows and offers, are in `docs/product/agent-accounts.md`.
 
 ### Automatically select an account
 
@@ -208,6 +208,19 @@ settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-
 a full export carries" in `docs/product/configuration-export-and-import.md`). Which account is chosen, and who applies
 the choice, are in "Which account a session uses" in `docs/product/sessions.md`. Turning it on or off changes no
 session already open.
+
+### Start usage windows automatically
+
+A switch, **off to begin with** — installations from before the switch existed included: whether Octoboard starts a
+usage window that has reset but not begun counting by sending one small request on its account. While the switch is
+off the row's description says what turning it on will do, and while it is on it says what is happening now: such a
+window is started with one small request on that account with the agent's cheapest model, so its countdown shows and
+its next reset is not pushed later, and the request uses a little of the account's quota. The daemon stores it as
+`auto_start_quota_windows` and keeps it, so every window shows the same. A console session can neither read nor change
+it, since it spends the user's quota (see "Who reads and changes what" in `docs/product/agent-settings-tools.md`); a
+full configuration export carries it (see "The application settings a full export carries" in
+`docs/product/configuration-export-and-import.md`). When a request is sent, what it is and what it leaves behind are in
+"Starting a window that has not begun counting" in `docs/product/account-quotas.md`.
 
 ## Trusted folders
 
@@ -282,10 +295,11 @@ first read comes back the section shows neither line and nothing else either.
 
 What a session may do without asking the user first. A paragraph under the heading says as much, above two rows:
 **Automatically approve session requests**, then **Automatically approve resume requests**. The section is the same in
-every client. Each switch is kept by the daemon, so every window shows the same, and its row is the only way to change
-it; turning one on or off leaves the other as it is. What an automatic approval does, what turning a switch on changes,
-and why neither agents nor a configuration document can change either switch are in "Approving requests
-automatically" in `docs/product/session-requests.md`.
+every client. Each switch is kept by the daemon, so every window shows the same, and besides its row only an import
+asked to apply a full configuration document's application settings changes it (see "The application settings a full
+export carries" in `docs/product/configuration-export-and-import.md`); turning one on or off leaves the other as it
+is. What an automatic approval does, what turning a switch on changes, and why agents cannot change either switch are
+in "Approving requests automatically" in `docs/product/session-requests.md`.
 
 ### Automatically approve session requests
 

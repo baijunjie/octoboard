@@ -447,10 +447,13 @@ describe("the fixture daemon's settings and trusted folders", () => {
     await daemon.request({ type: "update_settings", auto_delete_unresumable_archives: false });
     expect(daemon.store.getState().settings.auto_delete_unresumable_archives).toBe(false);
     expect(daemon.store.getState().settings.auto_approve_session_requests).toBeUndefined();
+    expect(exportedDocument(daemon.store.getState()).settings).not.toHaveProperty("auto_approve_session_requests");
+    expect(exportedDocument(daemon.store.getState()).settings).not.toHaveProperty("auto_approve_resume_requests");
     await daemon.request({ type: "update_settings", auto_approve_session_requests: true });
     expect(daemon.store.getState().settings.auto_approve_session_requests).toBe(true);
     await daemon.request({ type: "update_settings", auto_pull_repositories: true });
     expect(daemon.store.getState().settings.auto_approve_session_requests).toBe(true);
+    expect(exportedDocument(daemon.store.getState()).settings?.auto_approve_session_requests).toBe(true);
     await daemon.request({ type: "update_settings", auto_approve_session_requests: false });
     expect(daemon.store.getState().settings.auto_approve_session_requests).toBe(false);
     expect(daemon.store.getState().settings.auto_approve_resume_requests).toBeUndefined();
@@ -462,6 +465,7 @@ describe("the fixture daemon's settings and trusted folders", () => {
     await daemon.request({ type: "update_settings", auto_approve_resume_requests: false });
     expect(daemon.store.getState().settings.auto_approve_resume_requests).toBe(false);
     expect(daemon.store.getState().settings.auto_approve_session_requests).toBe(true);
+    expect(exportedDocument(daemon.store.getState()).settings?.auto_approve_resume_requests).toBe(false);
     await daemon.request({ type: "update_settings", auto_approve_session_requests: false });
     expect(exportedDocument(daemon.store.getState()).settings).not.toHaveProperty("auto_select_account");
     await daemon.request({ type: "update_settings", auto_select_account: true });
@@ -475,6 +479,12 @@ describe("the fixture daemon's settings and trusted folders", () => {
     await daemon.request({ type: "update_settings", auto_pull_repositories: true });
     expect(daemon.store.getState().settings.sidebar_order_by_status).toBe(false);
     expect(exportedDocument(daemon.store.getState()).settings?.sidebar_order_by_status).toBe(false);
+    expect(exportedDocument(daemon.store.getState()).settings).not.toHaveProperty("auto_start_quota_windows");
+    await daemon.request({ type: "update_settings", auto_start_quota_windows: true });
+    expect(daemon.store.getState().settings.auto_start_quota_windows).toBe(true);
+    await daemon.request({ type: "update_settings", auto_pull_repositories: true });
+    expect(daemon.store.getState().settings.auto_start_quota_windows).toBe(true);
+    expect(exportedDocument(daemon.store.getState()).settings?.auto_start_quota_windows).toBe(true);
     await daemon.request({ type: "remove_trusted_directory", path: "~/work/../code" });
     expect(daemon.store.getState().trustedDirectories).toEqual([]);
   });

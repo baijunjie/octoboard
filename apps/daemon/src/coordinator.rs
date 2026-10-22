@@ -996,6 +996,7 @@ async fn handle_inner(
             auto_approve_resume_requests,
             auto_select_account,
             sidebar_order_by_status,
+            auto_start_quota_windows,
             default_clone_dir,
         } => {
             update_settings(
@@ -1007,6 +1008,7 @@ async fn handle_inner(
                     auto_approve_resume_requests,
                     auto_select_account,
                     sidebar_order_by_status,
+                    auto_start_quota_windows,
                     default_clone_dir,
                 },
             )?;
@@ -5631,6 +5633,7 @@ pub struct SettingsChanges {
     pub auto_approve_resume_requests: Option<bool>,
     pub auto_select_account: Option<bool>,
     pub sidebar_order_by_status: Option<bool>,
+    pub auto_start_quota_windows: Option<bool>,
     /// Blank text goes back to the built-in default.
     pub default_clone_dir: Option<String>,
 }
@@ -5645,6 +5648,7 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         auto_approve_resume_requests,
         auto_select_account,
         sidebar_order_by_status,
+        auto_start_quota_windows,
         default_clone_dir,
     } = changes;
     // Checked before anything is written, so a refused directory leaves the other field unapplied
@@ -5656,6 +5660,7 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     };
     let mut changed = false;
     let mut pull_turned_on = false;
+    let mut quota_windows_turned_on = false;
     if let Some(value) = auto_pull_repositories {
         let updated = state.store.set_auto_pull_repositories(value)?;
         pull_turned_on = updated && value;
@@ -5676,6 +5681,11 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     if let Some(value) = sidebar_order_by_status {
         changed |= state.store.set_sidebar_order_by_status(value)?;
     }
+    if let Some(value) = auto_start_quota_windows {
+        let updated = state.store.set_auto_start_quota_windows(value)?;
+        quota_windows_turned_on = updated && value;
+        changed |= updated;
+    }
     if let Some(value) = default_clone_dir {
         changed |= state.store.set_default_clone_dir(value.as_deref())?;
     }
@@ -5690,6 +5700,11 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     // `git_status::pull_behind_projects`).
     if pull_turned_on {
         git_status::pull_behind_projects(state);
+    }
+    // Likewise the readings already held are looked over now, so an account whose window has not
+    // started is not left waiting for its next reading.
+    if quota_windows_turned_on {
+        account_quotas::kick_held(state);
     }
     Ok(())
 }
@@ -5812,6 +5827,61 @@ mod tests {
         )
         .unwrap();
         assert!(events.try_recv().is_err(), "a repeat changes nothing");
+    }
+
+    /// Turning the setting that starts quota windows on looks over the readings already held;
+    /// saying it is on again changes nothing, so it looks at nothing.
+    #[tokio::test]
+    async fn turning_the_quota_window_setting_on_kicks_held_readings_and_repeating_it_does_not() {
+        use crate::protocol::{AccountQuota, QuotaWindow, QuotaWindowKind};
+        let (state, _dir) = crate::test_support::app_state("coordinator-quota-windows");
+        let unstarted = |agent| AccountQuota {
+            agent,
+            account: None,
+            fetched_at: 1,
+            plan: None,
+            windows: vec![QuotaWindow {
+                kind: QuotaWindowKind::Session,
+                label: None,
+                used_percent: 0.0,
+                resets_at: None,
+                window_minutes: None,
+            }],
+            unavailable: None,
+        };
+        let turn_on = |sidebar_order_by_status: Option<bool>| {
+            update_settings(
+                &state,
+                SettingsChanges {
+                    auto_start_quota_windows: Some(true),
+                    sidebar_order_by_status,
+                    ..SettingsChanges::default()
+                },
+            )
+            .unwrap()
+        };
+        state.account_quotas.hold_for_test(&unstarted(Agent::Codex));
+        turn_on(None);
+        let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
+        while !state.account_quotas.is_kicked_for_test(Agent::Codex, None) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the held reading was not kicked"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+
+        // Already on, though the same request does change another setting, so the quota setting
+        // itself is what has to be told apart from a request that changed something: a reading
+        // held since is left alone.
+        state.account_quotas.hold_for_test(&unstarted(Agent::Grok));
+        let ordered = state.store.sidebar_order_by_status().unwrap();
+        turn_on(Some(!ordered));
+        assert_eq!(state.store.sidebar_order_by_status().unwrap(), !ordered);
+        // The test's runtime has the one thread, so yielding runs whatever `turn_on` spawned up to
+        // its first wait, which is where a kick of the reading would already be claimed.
+        tokio::task::yield_now().await;
+        assert!(!state.account_quotas.is_kicked_for_test(Agent::Grok, None));
     }
 
     #[tokio::test]

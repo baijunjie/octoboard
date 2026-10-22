@@ -1508,6 +1508,12 @@ export const en = {
     "Turns on {setting}, which is currently off. A new session then uses the account whose weekly quota resets soonest.",
   "configuration.import.settings.sidebarOrder.turnsOn":
     "Turns on {setting}, which is currently off. Sessions and projects in the sidebar then move as their status changes.",
+  "configuration.import.settings.autoStartQuotaWindows.turnsOn":
+    "Turns on {setting}, which is currently off. A usage window that has not started counting is then started with one small request, which uses a little of the account's quota.",
+  "configuration.import.settings.autoApproveSession.turnsOn":
+    "Turns on {setting}, which is currently off. A session's request to start a session that reports to you is then approved without asking you first.",
+  "configuration.import.settings.autoApproveResume.turnsOn":
+    "Turns on {setting}, which is currently off. A session's request to reopen or resume a session, or to resume a conversation in a new session, is then approved without asking you first.",
   "configuration.import.settings.turnsOff": "Turns off {setting}, which is currently on.",
   "configuration.import.settings.alreadyOn":
     "{setting} is on in the file and already on, so applying changes nothing.",
@@ -1636,6 +1642,11 @@ export const en = {
     "Once this is on, a new session uses the account whose weekly quota resets soonest, so quota that is about to reset is used before it is lost.",
   "settings.autoSelect.description.on":
     "A new session uses the account whose weekly quota resets soonest, so quota that is about to reset is used before it is lost.",
+  "settings.startQuotaWindows.label": "Start usage windows automatically",
+  "settings.startQuotaWindows.description.off":
+    "Once this is on, when a usage window has reset but has not started counting, one small request is sent on that account with the agent's cheapest model to start it, so its countdown shows and its next reset is not pushed later. The request uses a little of the account's quota.",
+  "settings.startQuotaWindows.description.on":
+    "When a usage window has reset but has not started counting, one small request is sent on that account with the agent's cheapest model to start it, so its countdown shows and its next reset is not pushed later. The request uses a little of the account's quota.",
   "settings.background.label": "Keep running in the background when the window is closed",
   "settings.background.description.off":
     "Once this is on, closing the window keeps sessions and their agents running and notifications arriving. The menu bar icon brings the window back.",

@@ -532,7 +532,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Claude Code tab",
-    description: "The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each as wide as its icon and name and the strip starting at the left edge, and Claude Code is open. The default account's name line ends with a small muted \"?\" after Default and its plan chip, with only its config directory beneath. Each account's plan sits beside its name, with its quota beneath: the five-hour window's headline with what remains and the countdown at the end of its line, a thick bar of that remainder in the agent's colour, and the weekly window's thin bar directly under it with its own headline, so the two read as one two-layer bar; the default account lists that pair first and Fable last, in a row of its own with no countdown. Work is spent: 0% remaining, also where use went past 100%. A small muted \"Updated N ago\" ends the directory line, under the name, of each account that has a reading, at the far right (Work's says 7 minutes, the default account's 1). Client has no quota yet and says it is being read. Add agent stays above the tab strip; Add account begins the selected tab on the same row as the vertically centered Permission approval column heading, with a help button for its explanation: the default account is set to Automatic, Work to Approve everything and Client follows its account configuration. The heading and selectors align with the start of the right-hand quota column, and account actions stay at the far right. Remove Work or Client: the account fades out while sliding to the right while the remaining accounts slide into place.",
+    description: "The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each as wide as its icon and name and the strip starting at the left edge, and Claude Code is open. The default account's name line ends with a small muted \"?\" after Default and its plan chip, with only its config directory beneath. Each account's plan sits beside its name, with its quota beneath: the five-hour window's headline with what remains and the countdown at the end of its line, a thick bar of that remainder in the agent's colour, and the weekly window's thin bar directly under it with its own headline, so the two read as one two-layer bar; the default account lists that pair first and Fable last, in a row of its own with no countdown. Work is spent: 0% remaining, also where use went past 100%. A small muted \"Updated N ago\" ends the directory line, under the name, of each account that has a reading, at the far right (Work's says 7 minutes, the default account's 1). Client has no quota yet and says it is being read. Above Add agent, the account-selection switch is followed directly by the \"Start usage windows automatically\" switch, both off, each description starting with \"Once this is on\". Add agent stays above the tab strip; Add account begins the selected tab on the same row as the vertically centered Permission approval column heading, with a help button for its explanation: the default account is set to Automatic, Work to Approve everything and Client follows its account configuration. The heading and selectors align with the start of the right-hand quota column, and account actions stay at the far right. Remove Work or Client: the account fades out while sliding to the right while the remaining accounts slide into place.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -540,12 +540,12 @@ export const settingsScenarios: Scenario[] = [
     ],
   },
   {
-    id: "settings-accounts-auto-select-on",
+    id: "settings-accounts-switches-on",
     group: GROUP,
     category: "normal",
-    title: "Settings: accounts, an account selected automatically",
-    description: "Above Add agent, and above the open Claude Code tab, the account-selection switch is on. Its description states the behaviour and does not start with \"Once this is on\".",
-    state: { ...quotaState, settings: { ...quotaState.settings!, auto_select_account: true } },
+    title: "Settings: accounts, both account switches on",
+    description: "Above Add agent, and above the open Claude Code tab, the account-selection switch and the \"Start usage windows automatically\" switch below it are both on. Each description states the behaviour and does not start with \"Once this is on\". Switch either off and on again to read both of its descriptions; neither moves the other.",
+    state: { ...quotaState, settings: { ...quotaState.settings!, auto_select_account: true, auto_start_quota_windows: true } },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
@@ -689,7 +689,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, no agent added",
-    description: "Every agent has been removed: no tab strip or Add account button, a hint to add an installed agent, and Add agent is offered. The account-selection switch stays above Add agent, off, and its description starts with \"Once this is on\". The accounts set up earlier are kept, only unlisted.",
+    description: "Every agent has been removed: no tab strip or Add account button, a hint to add an installed agent, and Add agent is offered. The account-selection and \"Start usage windows automatically\" switches stay above Add agent, both off, their descriptions starting with \"Once this is on\". The accounts set up earlier are kept, only unlisted.",
     state: noAgentsState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),

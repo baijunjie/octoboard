@@ -23,16 +23,30 @@
 //! [`MIN_REREAD_INTERVAL`] has passed since its last attempt. A missing configuration directory
 //! is not read early: only a login or the ordinary interval brings it back.
 //!
+//! A window that has reset only begins counting at the account's next request, and until then the
+//! agent reports it with no reset time. While the user's setting asks for it, a successful reading
+//! that shows such a window is followed by a kick (`kick.rs`): one minimal request on the account,
+//! and then a reading of it again. The kick and that reading run in the background, detached from
+//! the refresh that found the window, so the other accounts' readings are not held up behind a
+//! model round trip. A window is kicked once per episode, which ends only when a reading shows it
+//! with a reset time again, so a window that a kick does not start (a credit pool with no period,
+//! say) is not kicked over and over, and neither is one whose kick failed. A model's own weekly
+//! window is never kicked: the request goes to one cheap model and cannot start another's. A kick
+//! holds the account's claim and a slot like a reading does.
+//!
 //! The module also decides whether a reading means the account is used up
 //! ([`AccountQuotas::exhausted`]).
 
+mod kick;
 mod probe;
 
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use anyhow::Context;
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
@@ -41,6 +55,7 @@ use crate::protocol::{
     QuotaUnavailable, QuotaWindow, QuotaWindowKind,
 };
 use crate::state::AppState;
+use kick::{kick, KICK_TIMEOUT};
 pub(crate) use probe::CODEX_APP_SERVER_ARGS;
 use probe::{config_dir_missing, probe, PROBE_TIMEOUT};
 
@@ -67,9 +82,9 @@ const POLL_TICK: Duration = Duration::from_secs(15);
 /// wait doubles with each, so at most `POLL_INTERVAL * 2^3`.
 const MAX_BACKOFF_DOUBLINGS: u32 = 3;
 
-/// How many CLIs run at once across the whole daemon, a poll and any refresh requests together.
-/// Each is a whole agent process.
-const MAX_CONCURRENT_PROBES: usize = 4;
+/// How many CLIs run at once across the whole daemon, a poll, any refresh requests and the kicks
+/// together. Each is a whole agent process.
+const MAX_CONCURRENT_CLI_RUNS: usize = 4;
 
 /// What a reading belongs to. The configuration directory is part of it so that an account
 /// pointed at another directory never inherits the reading of its old one.
@@ -92,6 +107,13 @@ impl Key {
     }
 }
 
+/// What names a window within an account: its kind and, for a model's own weekly window, the model.
+type WindowId = (QuotaWindowKind, Option<String>);
+
+fn window_id(window: &QuotaWindow) -> WindowId {
+    (window.kind, window.label.clone())
+}
+
 struct Entry {
     quota: AccountQuota,
     attempted: Instant,
@@ -108,10 +130,13 @@ struct Entry {
 #[derive(Default)]
 struct Inner {
     entries: HashMap<Key, Entry>,
-    /// The claim (by its token) of each key whose probe is running, so two requests arriving
-    /// together run one.
+    /// The claim (by its token) of each key whose probe or kick is running, so two requests
+    /// arriving together run one.
     in_flight: HashMap<Key, u64>,
     next_token: u64,
+    /// The windows of each account that have been kicked in an episode that has not ended: one
+    /// that a reading shows with a reset time again is taken out.
+    kicked: HashMap<Key, Vec<WindowId>>,
 }
 
 impl Inner {
@@ -131,10 +156,11 @@ impl Inner {
     }
 }
 
-/// The right to probe one account, held for as long as its probe runs and released on drop, so a
-/// probe that panics or is abandoned never leaves its account excluded from every later one.
-/// [`AccountQuotas::finish`] consumes it. A claim whose account was forgotten or repointed in the
-/// meantime no longer counts, and whatever it finishes with is discarded.
+/// The right to read or kick one account, held for as long as the CLI runs (a kick and the reading
+/// after it under the one claim) and released on drop, so a run that panics or is abandoned never
+/// leaves its account excluded from every later one. [`AccountQuotas::finish`] consumes it. A claim
+/// whose account was forgotten, repointed or made due in the meantime no longer counts, and
+/// whatever it finishes with is discarded.
 struct Claim {
     key: Key,
     token: u64,
@@ -161,15 +187,19 @@ impl Drop for Claim {
 /// makes it, so the order clients see is the order they happened in.
 pub struct AccountQuotas {
     inner: Arc<Mutex<Inner>>,
-    /// Bounds the probes running at once, whichever refresh started them.
+    /// Bounds the CLI runs, probes and kicks, at once, whichever refresh started them.
     slots: Arc<Semaphore>,
+    /// Set once the daemon is shutting down: a kick running then is stopped, and no kick is
+    /// claimed or started after it.
+    stopping: Arc<AtomicBool>,
 }
 
 impl Default for AccountQuotas {
     fn default() -> Self {
         Self {
             inner: Arc::default(),
-            slots: Arc::new(Semaphore::new(MAX_CONCURRENT_PROBES)),
+            slots: Arc::new(Semaphore::new(MAX_CONCURRENT_CLI_RUNS)),
+            stopping: Arc::default(),
         }
     }
 }
@@ -318,6 +348,9 @@ impl AccountQuotas {
                 return false;
             }
             inner.in_flight.remove(&claim.key);
+            if quota.unavailable.is_none() {
+                end_episodes(inner, &claim.key, &quota.windows);
+            }
             let previous = inner.entries.get(&claim.key);
             let keeps_windows = quota
                 .unavailable
@@ -348,6 +381,49 @@ impl AccountQuotas {
             );
             true
         });
+    }
+
+    /// The claim for a kick of the account `key`, when its held reading calls for one: the setting
+    /// is on, nothing is running for the account, the reading is a successful one and shows a
+    /// window with no reset time, other than a model's own weekly one, that has not been kicked in
+    /// its episode. Every such window then counts as kicked, as the one request is meant to start
+    /// them all. None once the daemon is shutting down, with no window counted as kicked.
+    fn claim_kick(&self, state: &AppState, key: &Key) -> Option<Claim> {
+        if self.stopping.load(Ordering::Relaxed) {
+            return None;
+        }
+        match state.store.auto_start_quota_windows() {
+            Ok(true) => {}
+            Ok(false) => return None,
+            Err(err) => {
+                tracing::warn!(%err, "reading the setting that starts quota windows failed");
+                return None;
+            }
+        }
+        let mut guard = self.lock();
+        let inner = &mut *guard;
+        if inner.in_flight.contains_key(key) {
+            return None;
+        }
+        let quota = &inner.entries.get(key)?.quota;
+        if quota.unavailable.is_some() {
+            return None;
+        }
+        let kicked = inner.kicked.get(key).map_or(&[][..], Vec::as_slice);
+        let fresh: Vec<WindowId> = quota
+            .windows
+            .iter()
+            .filter(|window| {
+                window.resets_at.is_none() && window.kind != QuotaWindowKind::WeeklyModel
+            })
+            .map(window_id)
+            .filter(|id| !kicked.contains(id))
+            .collect();
+        if fresh.is_empty() {
+            return None;
+        }
+        inner.kicked.entry(key.clone()).or_default().extend(fresh);
+        Some(self.claim_locked(inner, key.clone(), now_millis()))
     }
 
     /// A probe's whole claim-and-finish for `key`, with `quota` as its outcome.
@@ -385,6 +461,15 @@ impl AccountQuotas {
                 due: false,
             },
         );
+    }
+
+    /// Whether a window of the account has been kicked in an episode that has not ended.
+    #[cfg(test)]
+    pub fn is_kicked_for_test(&self, agent: Agent, account: Option<&str>) -> bool {
+        self.lock()
+            .kicked
+            .keys()
+            .any(|key| key.agent == agent && key.account.as_deref() == account)
     }
 
     /// Whether the held reading of the account is marked due.
@@ -427,9 +512,10 @@ impl AccountQuotas {
         Ok(self.claim_due_locked(&mut inner, selected, now, now_millis(), trigger))
     }
 
-    /// Makes the account's reading due and drops any probe running for it, so that the next
-    /// refresh reads it at once and a probe begun before a login ended cannot put its not-signed-in
-    /// reading back over the new one. `account` is an account id, `None` for the default account.
+    /// Makes the account's reading due and drops any claim on it, so that the next refresh reads it
+    /// at once and a probe begun before a login ended cannot put its not-signed-in reading back
+    /// over the new one. A kick running at the time is not stopped, so the account can be read
+    /// while it still is. `account` is an account id, `None` for the default account.
     pub fn make_due(&self, agent: Agent, account: Option<&str>) {
         let mut inner = self.lock();
         let is_it = |key: &Key| key.agent == agent && key.account.as_deref() == account;
@@ -439,8 +525,23 @@ impl AccountQuotas {
         }
     }
 
-    /// Drops what is held for the account `id`, and any probe running for it, so that a probe
-    /// begun under the old directory cannot put its reading back.
+    /// Stops the kicks running and keeps each from going on to the reading after it. A kick would
+    /// otherwise outlive a shutdown by up to [`KICK_TIMEOUT`], its CLI with it.
+    pub fn stop_kicks(&self) {
+        self.stopping.store(true, Ordering::Relaxed);
+    }
+
+    /// Whether the kick `claim` covers should go on to the reading after it: the daemon is not
+    /// shutting down and the claim still counts, as a login that ended or a deleted account
+    /// makes it not.
+    fn kick_is_wanted(&self, claim: &Claim) -> bool {
+        !self.stopping.load(Ordering::Relaxed)
+            && self.lock().in_flight.get(&claim.key) == Some(&claim.token)
+    }
+
+    /// Drops what is held for the account `id`, and any probe or kick running for it along with
+    /// its episodes, so that a probe begun under the old directory cannot put its reading back
+    /// and a kick is not followed by a reading.
     pub fn forget_account(&self, state: &AppState, id: &str) {
         self.change(state, |inner| {
             let before = inner.entries.len();
@@ -449,6 +550,9 @@ impl AccountQuotas {
                 .retain(|key, _| key.account.as_deref() != Some(id));
             inner
                 .in_flight
+                .retain(|key, _| key.account.as_deref() != Some(id));
+            inner
+                .kicked
                 .retain(|key, _| key.account.as_deref() != Some(id));
             inner.entries.len() != before
         });
@@ -601,12 +705,28 @@ fn may_have_signed_in_since(quota: &AccountQuota) -> bool {
             .is_some_and(|u| u.code == code::NOT_SIGNED_IN || u.code == code::NO_WINDOWS)
 }
 
-/// Drops every reading, and every probe in flight, whose key is not in `wanted`; true when a
-/// reading went.
+/// Ends the episode of each window of `key` that a reading shows with a reset time.
+fn end_episodes(inner: &mut Inner, key: &Key, windows: &[QuotaWindow]) {
+    let Some(kicked) = inner.kicked.get_mut(key) else {
+        return;
+    };
+    kicked.retain(|id| {
+        !windows
+            .iter()
+            .any(|window| window.resets_at.is_some() && window_id(window) == *id)
+    });
+    if kicked.is_empty() {
+        inner.kicked.remove(key);
+    }
+}
+
+/// Drops every reading, every probe in flight and every episode whose key is not in `wanted`; true
+/// when a reading went.
 fn retain_locked(inner: &mut Inner, wanted: &[Key]) -> bool {
     let before = inner.entries.len();
     inner.entries.retain(|key, _| wanted.contains(key));
     inner.in_flight.retain(|key, _| wanted.contains(key));
+    inner.kicked.retain(|key, _| wanted.contains(key));
     inner.entries.len() != before
 }
 
@@ -677,7 +797,7 @@ pub fn spawn(state: &Arc<AppState>) {
     });
 }
 
-/// Where a probe gets the shell environment it runs in.
+/// Where a probe or a kick gets the shell environment it runs in.
 type ShellSource = Arc<dyn Fn() -> anyhow::Result<HashMap<String, String>> + Send + Sync>;
 
 /// Reads the accounts of `scope` that are due and broadcasts after each. See [`refresh_with`].
@@ -695,7 +815,8 @@ pub async fn refresh_requested(state: &Arc<AppState>, scope: &Scope) {
 
 /// Reads the accounts of `scope` that are due for `trigger`, as many at a time as the daemon-wide
 /// limit allows, and broadcasts after each. Also drops the readings of accounts no longer
-/// targeted. Returns when every reading it started is done.
+/// targeted. Returns when every reading it started is done; a kick one of them calls for, and
+/// the reading after it, goes on in the background (see [`kick_and_read`]).
 async fn refresh_with(state: &Arc<AppState>, scope: &Scope, trigger: Trigger, shell: ShellSource) {
     let claims = match state
         .account_quotas
@@ -710,28 +831,115 @@ async fn refresh_with(state: &Arc<AppState>, scope: &Scope, trigger: Trigger, sh
     let mut readings = JoinSet::new();
     for claim in claims {
         let (state, shell) = (state.clone(), shell.clone());
-        let slots = state.account_quotas.slots.clone();
         readings.spawn(async move {
-            let _slot = slots.acquire_owned().await;
-            let key = claim.key.clone();
-            let outcome = tokio::task::spawn_blocking(move || read(&key, &*shell)).await;
-            let quota = outcome.unwrap_or_else(|err| {
-                unavailable_quota(
-                    &claim.key,
-                    QuotaUnavailable::new(
-                        code::COMMAND_FAILED,
-                        format!("reading the quota failed: {err}"),
-                        &[
-                            ("agent", claim.key.agent.label()),
-                            ("detail", &err.to_string()),
-                        ],
-                    ),
-                )
-            });
-            state.account_quotas.finish(&state, claim, quota);
+            if let Some(kick) = read_account(&state, &shell, claim).await {
+                tokio::spawn(async move { kick_and_read(&state, &shell, kick).await });
+            }
         });
     }
     while readings.join_next().await.is_some() {}
+}
+
+/// Kicks the accounts whose held readings call for it, as many at a time as the daemon-wide limit
+/// allows, and reads each again once its kick has ended. Starts the work in the background and
+/// returns at once. Run when the setting that starts quota windows is turned on, so that the
+/// readings already held count without waiting for the next one.
+pub fn kick_held(state: &Arc<AppState>) {
+    let state = state.clone();
+    tokio::spawn(async move { kick_held_with(&state, held_shell()).await });
+}
+
+/// The shell environment the kicks of [`kick_held`] run in. A test has none: a kick under test
+/// must not start the agent installed on the machine running it.
+#[cfg(not(test))]
+fn held_shell() -> ShellSource {
+    Arc::new(crate::env_shell::cached_snapshot)
+}
+
+#[cfg(test)]
+fn held_shell() -> ShellSource {
+    Arc::new(|| anyhow::bail!("no shell environment under test"))
+}
+
+/// [`kick_held`] in the shell environment `shell` gives, returning when every kick and the reading
+/// after it is done.
+async fn kick_held_with(state: &Arc<AppState>, shell: ShellSource) {
+    let keys: Vec<Key> = state
+        .account_quotas
+        .lock()
+        .entries
+        .keys()
+        .cloned()
+        .collect();
+    let mut kicks = JoinSet::new();
+    for key in keys {
+        let Some(claim) = state.account_quotas.claim_kick(state, &key) else {
+            continue;
+        };
+        let (state, shell) = (state.clone(), shell.clone());
+        kicks.spawn(async move { kick_and_read(&state, &shell, claim).await });
+    }
+    while kicks.join_next().await.is_some() {}
+}
+
+/// Reads the account `claim` is on and records the reading. Returns the claim for a kick when the
+/// reading calls for one (see [`AccountQuotas::claim_kick`]). Holds a slot while the CLI runs.
+async fn read_account(state: &Arc<AppState>, shell: &ShellSource, claim: Claim) -> Option<Claim> {
+    let _slot = state.account_quotas.slots.acquire().await;
+    let key = claim.key.clone();
+    let shell = shell.clone();
+    let outcome = tokio::task::spawn_blocking(move || read(&key, &*shell)).await;
+    let quota = outcome.unwrap_or_else(|err| {
+        unavailable_quota(
+            &claim.key,
+            QuotaUnavailable::new(
+                code::COMMAND_FAILED,
+                format!("reading the quota failed: {err}"),
+                &[
+                    ("agent", claim.key.agent.label()),
+                    ("detail", &err.to_string()),
+                ],
+            ),
+        )
+    });
+    let key = claim.key.clone();
+    state.account_quotas.finish(state, claim, quota);
+    state.account_quotas.claim_kick(state, &key)
+}
+
+/// Carries a claim from a kick through the reading after it, and on to a further kick if that
+/// reading still calls for one, until a reading calls for none. A step takes a slot of its own, so
+/// the claim is held between them but a slot never waits on another.
+async fn kick_and_read(state: &Arc<AppState>, shell: &ShellSource, claim: Claim) {
+    let mut claim = claim;
+    loop {
+        {
+            let _slot = state.account_quotas.slots.acquire().await;
+            let key = claim.key.clone();
+            let shell = shell.clone();
+            let stopping = state.account_quotas.stopping.clone();
+            let outcome =
+                tokio::task::spawn_blocking(move || start_windows(&key, &*shell, &stopping)).await;
+            if let Err(err) = outcome
+                .map_err(anyhow::Error::from)
+                .and_then(|result| result)
+            {
+                tracing::warn!(
+                    agent = claim.key.agent.label(),
+                    account = ?claim.key.account,
+                    %err,
+                    "starting the account's quota windows failed"
+                );
+            }
+        }
+        if !state.account_quotas.kick_is_wanted(&claim) {
+            return;
+        }
+        match read_account(state, shell, claim).await {
+            Some(next) => claim = next,
+            None => return,
+        }
+    }
 }
 
 /// Reads one account's quota in the shell environment `shell` gives. Blocking: it runs a
@@ -740,14 +948,7 @@ fn read(
     key: &Key,
     shell: &(dyn Fn() -> anyhow::Result<HashMap<String, String>> + Send + Sync),
 ) -> AccountQuota {
-    // Looked for before anything is run: Claude Code and Grok Build would create the directory,
-    // empty, and then call the account not signed in, and a poll would keep bringing back one a
-    // user deleted. Only `NotFound` says it is gone: a directory that cannot be looked at, or a
-    // regular file in its place, is left to the CLI to report. The default account pins nothing,
-    // so Codex's own refusal of a missing home is what tells that case (see `probe`).
-    if let Some(dir) = key.config_dir.as_deref().filter(|dir| {
-        matches!(std::fs::metadata(dir), Err(err) if err.kind() == std::io::ErrorKind::NotFound)
-    }) {
+    if let Some(dir) = missing_config_dir(key) {
         return unavailable_quota(key, config_dir_missing(key.agent, dir));
     }
     let result = match shell() {
@@ -777,6 +978,42 @@ fn read(
         },
         Err(unavailable) => unavailable_quota(key, unavailable),
     }
+}
+
+/// The account's configuration directory when it is gone. Looked for before anything is run:
+/// Claude Code and Grok Build would create the directory, empty, and then call the account not
+/// signed in, and a poll or a kick would keep bringing back one a user deleted. Only `NotFound`
+/// says it is gone: a directory that cannot be looked at, or a regular file in its place, is left
+/// to the CLI to report. The default account pins nothing, so Codex's own refusal of a missing
+/// home is what tells that case (see `probe`).
+fn missing_config_dir(key: &Key) -> Option<&str> {
+    key.config_dir.as_deref().filter(|dir| {
+        matches!(std::fs::metadata(dir), Err(err) if err.kind() == std::io::ErrorKind::NotFound)
+    })
+}
+
+/// Kicks one account in the shell environment `shell` gives, unless its directory is gone: the
+/// reading after the kick records that. Blocking: it runs a subprocess. Setting `cancel` stops it,
+/// and a kick begun with it set is refused before anything is run.
+fn start_windows(
+    key: &Key,
+    shell: &(dyn Fn() -> anyhow::Result<HashMap<String, String>> + Send + Sync),
+    cancel: &AtomicBool,
+) -> anyhow::Result<()> {
+    if cancel.load(Ordering::Relaxed) {
+        anyhow::bail!("the kick was cancelled before it started");
+    }
+    if let Some(dir) = missing_config_dir(key) {
+        anyhow::bail!("the account's configuration directory {dir} does not exist");
+    }
+    let shell_env = shell().context("the shell environment could not be captured")?;
+    kick(
+        key.agent,
+        &shell_env,
+        key.config_dir.as_deref().map(Path::new),
+        KICK_TIMEOUT,
+        cancel,
+    )
 }
 
 fn unavailable_quota(key: &Key, unavailable: QuotaUnavailable) -> AccountQuota {
@@ -1388,6 +1625,348 @@ mod tests {
             .list()
             .iter()
             .all(|quota| quota.unavailable.is_none()));
+    }
+
+    /// A default Codex account over a fake CLI: its quota requests are answered from `reply`
+    /// and each run counted in `runs`; `exec` is a kick, logged with its arguments in `kicks`,
+    /// failing while `kick-fails` exists, not ending while `kick-sleeps` exists, and otherwise
+    /// leaving `after.reply` as the reply.
+    struct KickFixture {
+        state: Arc<AppState>,
+        bin: std::path::PathBuf,
+        shell: ShellSource,
+        _dir: crate::test_support::ScratchDir,
+    }
+
+    /// Codex's reply with its 5-hour window started or not.
+    fn codex_reply(started: bool) -> String {
+        let reply = include_str!("../../testdata/codex_rate_limits_reply.json");
+        if started {
+            reply.to_string()
+        } else {
+            reply.replace(r#""resetsAt":1792261723"#, r#""resetsAt":null"#)
+        }
+    }
+
+    impl KickFixture {
+        fn new(label: &str, setting: bool) -> Self {
+            let (state, dir) = crate::test_support::app_state(label);
+            let bin = dir.join("bin");
+            std::fs::create_dir(&bin).unwrap();
+            let d = bin.display();
+            let env = crate::test_support::fake_agent(
+                &bin,
+                "codex",
+                &format!(
+                    "case \"$1\" in\n\
+                     exec) echo \"$*\" >> '{d}/kicks'; [ -e '{d}/kick-fails' ] && exit 1\n\
+                     while [ -e '{d}/kick-sleeps' ]; do sleep 0.02; done\n\
+                     cp '{d}/after.reply' '{d}/reply';;\n\
+                     *) echo run >> '{d}/runs'\n\
+                     while read line; do case \"$line\" in *rateLimits*) cat '{d}/reply';; \
+                     esac; done;;\n\
+                     esac"
+                ),
+            );
+            state.set_agent_availability(vec![crate::protocol::AgentAvailability {
+                agent: Agent::Codex,
+                availability: Availability::Available,
+                default_account_dir: None,
+            }]);
+            state.store.set_auto_start_quota_windows(setting).unwrap();
+            let fixture = Self {
+                state,
+                bin,
+                shell: Arc::new(move || Ok(env.clone())),
+                _dir: dir,
+            };
+            fixture.serve(&codex_reply(false));
+            fixture.after_kick(&codex_reply(true));
+            fixture
+        }
+
+        fn serve(&self, reply: &str) {
+            std::fs::write(self.bin.join("reply"), reply).unwrap();
+        }
+
+        fn after_kick(&self, reply: &str) {
+            std::fs::write(self.bin.join("after.reply"), reply).unwrap();
+        }
+
+        fn count(&self, file: &str) -> usize {
+            std::fs::read_to_string(self.bin.join(file)).map_or(0, |text| text.lines().count())
+        }
+
+        /// A due reading of the account, with the kick it leads to and the reading after that,
+        /// awaited.
+        async fn refresh(&self) {
+            self.state.account_quotas.make_due(Agent::Codex, None);
+            refresh_with(
+                &self.state,
+                &Scope::default(),
+                Trigger::Poll,
+                self.shell.clone(),
+            )
+            .await;
+            self.settled().await;
+        }
+
+        /// Waits for the work a refresh left in the background: the account is claimed for as long
+        /// as a kick or the reading after it is running.
+        async fn settled(&self) {
+            let deadline = Instant::now() + crate::test_support::PATIENCE;
+            while !self.state.account_quotas.lock().in_flight.is_empty() {
+                assert!(Instant::now() < deadline, "the kick did not end");
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        }
+
+        fn session_reset(&self) -> Option<i64> {
+            let held = self.state.account_quotas.list();
+            held[0].windows[0].resets_at
+        }
+    }
+
+    #[tokio::test]
+    async fn a_window_with_no_reset_time_is_left_alone_while_the_setting_is_off() {
+        let fixture = KickFixture::new("quota-kick-off", false);
+        fixture.refresh().await;
+        assert_eq!((fixture.count("runs"), fixture.count("kicks")), (1, 0));
+        assert_eq!(fixture.session_reset(), None);
+    }
+
+    /// A reading is done once `refresh_with` returns: the kick it calls for goes on without it, so
+    /// the readings of other accounts are not held up behind a model round trip.
+    #[tokio::test]
+    async fn a_refresh_returns_without_waiting_for_the_kick_it_starts() {
+        let fixture = KickFixture::new("quota-kick-detached", true);
+        std::fs::write(fixture.bin.join("kick-sleeps"), "").unwrap();
+        fixture.state.account_quotas.make_due(Agent::Codex, None);
+        refresh_with(
+            &fixture.state,
+            &Scope::default(),
+            Trigger::Poll,
+            fixture.shell.clone(),
+        )
+        .await;
+        assert_eq!(fixture.session_reset(), None);
+        assert!(!fixture.state.account_quotas.lock().in_flight.is_empty());
+        std::fs::remove_file(fixture.bin.join("kick-sleeps")).unwrap();
+        fixture.settled().await;
+        assert_eq!(fixture.session_reset(), Some(1_792_261_723_000));
+    }
+
+    #[tokio::test]
+    async fn a_window_with_no_reset_time_is_kicked_once_and_the_account_read_again() {
+        let fixture = KickFixture::new("quota-kick-once", true);
+        fixture.refresh().await;
+        assert_eq!((fixture.count("runs"), fixture.count("kicks")), (2, 1));
+        assert_eq!(fixture.session_reset(), Some(1_792_261_723_000));
+        let kick = std::fs::read_to_string(fixture.bin.join("kicks")).unwrap();
+        assert!(kick.starts_with("exec --ephemeral "), "{kick}");
+    }
+
+    #[tokio::test]
+    async fn a_window_still_with_no_reset_time_after_a_kick_is_not_kicked_again() {
+        let fixture = KickFixture::new("quota-kick-still-null", true);
+        fixture.after_kick(&codex_reply(false));
+        fixture.refresh().await;
+        assert_eq!((fixture.count("runs"), fixture.count("kicks")), (2, 1));
+        fixture.refresh().await;
+        fixture.refresh().await;
+        assert_eq!((fixture.count("runs"), fixture.count("kicks")), (4, 1));
+        assert_eq!(fixture.session_reset(), None);
+    }
+
+    #[tokio::test]
+    async fn a_failed_kick_is_not_retried_within_its_episode() {
+        let fixture = KickFixture::new("quota-kick-fails", true);
+        std::fs::write(fixture.bin.join("kick-fails"), "").unwrap();
+        fixture.refresh().await;
+        assert_eq!((fixture.count("runs"), fixture.count("kicks")), (2, 1));
+        fixture.refresh().await;
+        assert_eq!((fixture.count("runs"), fixture.count("kicks")), (3, 1));
+    }
+
+    #[tokio::test]
+    async fn a_window_is_kicked_again_once_a_reading_has_shown_its_reset_time() {
+        let fixture = KickFixture::new("quota-kick-again", true);
+        fixture.after_kick(&codex_reply(false));
+        fixture.refresh().await;
+        assert_eq!(fixture.count("kicks"), 1);
+
+        // A reading with the reset time ends the episode, so the same window going unstarted again
+        // is a new one.
+        fixture.serve(&codex_reply(true));
+        fixture.refresh().await;
+        assert_eq!(fixture.count("kicks"), 1);
+        fixture.serve(&codex_reply(false));
+        fixture.refresh().await;
+        assert_eq!((fixture.count("runs"), fixture.count("kicks")), (5, 2));
+    }
+
+    #[tokio::test]
+    async fn turning_the_setting_on_kicks_the_readings_already_held() {
+        let fixture = KickFixture::new("quota-kick-held", false);
+        fixture.refresh().await;
+        assert_eq!((fixture.count("runs"), fixture.count("kicks")), (1, 0));
+
+        kick_held_with(&fixture.state, fixture.shell.clone()).await;
+        assert_eq!(fixture.count("kicks"), 0);
+
+        fixture
+            .state
+            .store
+            .set_auto_start_quota_windows(true)
+            .unwrap();
+        kick_held_with(&fixture.state, fixture.shell.clone()).await;
+        assert_eq!((fixture.count("runs"), fixture.count("kicks")), (2, 1));
+        assert_eq!(fixture.session_reset(), Some(1_792_261_723_000));
+    }
+
+    /// Holds the default Codex account's unstarted window, claims its kick and runs
+    /// [`kick_and_read`] on it in the background, with `kick-sleeps` keeping the kick going, until
+    /// the fake CLI has been started for the kick.
+    async fn kick_in_progress(fixture: &KickFixture) -> tokio::task::JoinHandle<()> {
+        let key = key(Agent::Codex, None);
+        let unstarted = AccountQuota {
+            windows: vec![window(QuotaWindowKind::Session, 0.0, None)],
+            ..quota_of(&key, false)
+        };
+        let quotas = &fixture.state.account_quotas;
+        quotas.recorded(&fixture.state, key.clone(), unstarted);
+        std::fs::write(fixture.bin.join("kick-sleeps"), "").unwrap();
+        let claim = quotas.claim_kick(&fixture.state, &key).expect("a kick");
+        let (state, shell) = (fixture.state.clone(), fixture.shell.clone());
+        let running = tokio::spawn(async move { kick_and_read(&state, &shell, claim).await });
+        let deadline = Instant::now() + crate::test_support::PATIENCE;
+        while fixture.count("kicks") == 0 {
+            assert!(Instant::now() < deadline, "the kick did not start");
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        running
+    }
+
+    /// A kick whose account was made due (a login ended) while it ran has no claim any more, so
+    /// the reading after it, which would be discarded, is not taken.
+    #[tokio::test]
+    async fn a_kick_whose_claim_was_dropped_is_not_followed_by_a_reading() {
+        let fixture = KickFixture::new("quota-kick-dropped", true);
+        let running = kick_in_progress(&fixture).await;
+        fixture.state.account_quotas.make_due(Agent::Codex, None);
+        std::fs::remove_file(fixture.bin.join("kick-sleeps")).unwrap();
+        running.await.unwrap();
+        assert_eq!(fixture.count("runs"), 0);
+    }
+
+    /// The daemon shutting down stops the CLI of a kick at once and takes no reading after it.
+    #[tokio::test]
+    async fn a_shutdown_stops_a_running_kick_and_the_reading_after_it() {
+        let fixture = KickFixture::new("quota-kick-shutdown", true);
+        let running = kick_in_progress(&fixture).await;
+        fixture.state.account_quotas.stop_kicks();
+        // The fake CLI is still told to sleep: only the cancel can end the kick.
+        tokio::time::timeout(crate::test_support::PATIENCE, running)
+            .await
+            .expect("the kick was not stopped")
+            .unwrap();
+        assert_eq!(fixture.count("runs"), 0);
+    }
+
+    /// A kick claimed or started once the daemon is shutting down is refused, so its CLI is never
+    /// spawned, and no window counts as kicked.
+    #[tokio::test]
+    async fn no_kick_is_started_once_the_daemon_is_shutting_down() {
+        let fixture = KickFixture::new("quota-kick-refused", true);
+        let key = key(Agent::Codex, None);
+        let unstarted = AccountQuota {
+            windows: vec![window(QuotaWindowKind::Session, 0.0, None)],
+            ..quota_of(&key, false)
+        };
+        let quotas = &fixture.state.account_quotas;
+        quotas.recorded(&fixture.state, key.clone(), unstarted);
+        quotas.stop_kicks();
+        assert!(quotas.claim_kick(&fixture.state, &key).is_none());
+        let shell_asked = AtomicBool::new(false);
+        let shell = || {
+            shell_asked.store(true, Ordering::Relaxed);
+            (*fixture.shell)()
+        };
+        let err = start_windows(&key, &shell, &AtomicBool::new(true)).unwrap_err();
+        assert!(err.to_string().contains("before it started"), "{err}");
+        assert!(!shell_asked.load(Ordering::Relaxed));
+        assert_eq!(fixture.count("kicks"), 0);
+        // Nothing was counted as kicked, so the window is claimed once the flag is clear again.
+        quotas.stopping.store(false, Ordering::Relaxed);
+        assert!(quotas.claim_kick(&fixture.state, &key).is_some());
+    }
+
+    /// A kick would make the CLI recreate an account's directory the user deleted, so it is not
+    /// run; the reading after it is what records the directory as missing.
+    #[test]
+    fn an_account_whose_directory_is_gone_is_not_kicked() {
+        let fixture = KickFixture::new("quota-kick-dir-missing", true);
+        let gone = fixture.bin.join("deleted-account");
+        let key = Key::of(Agent::Codex, Some("a"), gone.to_str());
+        let err = start_windows(&key, &*fixture.shell, &AtomicBool::new(false)).unwrap_err();
+        assert!(err.to_string().contains("does not exist"), "{err}");
+        assert_eq!(fixture.count("kicks"), 0);
+        assert!(matches!(
+            read(&key, &*fixture.shell).unavailable,
+            Some(unavailable) if unavailable.code == code::CONFIG_DIR_MISSING
+        ));
+    }
+
+    /// An account that is being read, whose reading failed or holds no windows, or that is gone
+    /// is not kicked, and its episodes go with it.
+    #[test]
+    fn only_a_successful_reading_of_an_idle_account_with_an_unstarted_window_is_kicked() {
+        let (state, _dir) = crate::test_support::app_state("quota-kick-claims");
+        state.store.set_auto_start_quota_windows(true).unwrap();
+        let quotas = AccountQuotas::default();
+        let key = key(Agent::Codex, Some("a"));
+        let unstarted = AccountQuota {
+            windows: vec![window(QuotaWindowKind::Session, 0.0, None)],
+            ..quota_of(&key, false)
+        };
+
+        assert!(quotas.claim_kick(&state, &key).is_none());
+        quotas.recorded(&state, key.clone(), quota_of(&key, true));
+        assert!(quotas.claim_kick(&state, &key).is_none());
+        quotas.recorded(&state, key.clone(), quota_of(&key, false));
+        assert!(quotas.claim_kick(&state, &key).is_none());
+
+        quotas.recorded(&state, key.clone(), unstarted.clone());
+        let running = quotas.claim_due(vec![key.clone()], Instant::now() + POLL_INTERVAL);
+        assert!(quotas.claim_kick(&state, &key).is_none());
+        drop(running);
+        let claim = quotas.claim_kick(&state, &key).expect("a kick");
+        assert!(quotas.claim_kick(&state, &key).is_none());
+        drop(claim);
+        assert!(quotas.claim_kick(&state, &key).is_none());
+
+        quotas.forget_account(&state, "a");
+        quotas.recorded(&state, key.clone(), unstarted);
+        assert!(quotas.claim_kick(&state, &key).is_some());
+    }
+
+    /// A kick goes to one cheap model, so it cannot start the window of another model.
+    #[test]
+    fn a_models_own_weekly_window_with_no_reset_time_is_not_kicked() {
+        let (state, _dir) = crate::test_support::app_state("quota-kick-weekly-model");
+        state.store.set_auto_start_quota_windows(true).unwrap();
+        let quotas = AccountQuotas::default();
+        let key = key(Agent::Claude, None);
+        let mut model = window(QuotaWindowKind::WeeklyModel, 0.0, None);
+        model.label = Some("Fable".to_string());
+        let mut reading = quota_of(&key, false);
+        reading.windows = vec![model, window(QuotaWindowKind::Weekly, 40.0, Some(NOW))];
+        quotas.recorded(&state, key.clone(), reading.clone());
+        assert!(quotas.claim_kick(&state, &key).is_none());
+
+        reading.windows[1] = window(QuotaWindowKind::Session, 0.0, None);
+        quotas.recorded(&state, key.clone(), reading);
+        assert!(quotas.claim_kick(&state, &key).is_some());
     }
 
     const NOW: i64 = 1_000_000;

@@ -12,16 +12,17 @@ unsure whether it does, ask rather than leave it out.
 Do not take a neighbouring setting that the tools leave out as precedent: accounts, trusted folders and the like are
 left out because they are the user's own, not because settings are opt-in to the tools.
 
-## A new portable application setting travels in a full configuration export
+## A new application setting travels in a full configuration export
 
-An application setting that describes how Octoboard should behave, rather than something about this machine or its
-accounts, is carried by a full ("everything") export and applied on import; a single console's export carries no
-application settings, and machine-local settings (such as the default clone directory) and account settings never
-travel (`docs/product/configuration-export-and-import.md`, section "The application settings a full export carries").
-The exception is a setting that lets agents act without asking the user (such as approving session requests
-automatically): a shared document must not be able to switch it on, so it is neither exported nor applied on import,
-just as the agents' settings tools leave it out; if you are unsure whether a new setting is of that kind, ask. So a new
-portable application setting is added, in the same change, to:
+Every application setting is carried by a full ("everything") export and applied by an import that is asked to apply
+settings, except one that is only valid on this machine — a path such as the default clone directory, a system
+permission, this machine's accounts — since it would mean nothing elsewhere; a single console's export carries no
+application settings (`docs/product/configuration-export-and-import.md`, section "The application settings a full
+export carries"). If you are unsure whether a new setting is valid only on this machine, ask. Whether the agents'
+settings tools may read or change a setting is a separate decision and no reason to leave it out of the export: the
+settings hidden from agents because they let them act without asking or spend quota (approving requests automatically,
+starting usage windows automatically) travel all the same. So a new application setting that is not machine-local is
+added, in the same change, to:
 
 - `DocumentSettings` in `apps/daemon/src/config_export.rs`, as an `Option` with `#[serde(default)]`, so a document
   exported before the setting existed still imports and applying it leaves the setting as it is; filled in `build` for
@@ -30,6 +31,3 @@ portable application setting is added, in the same change, to:
   `coordinator::update_settings` call that applies the document's settings;
 - the window: a line in the apply-settings note of `packages/ui/src/configuration/ImportReview.tsx` and in the result
   of `packages/ui/src/configuration/ImportResult.tsx`, each shown only when the document carries the setting.
-
-Do not take the default clone directory being absent from the document as precedent for a new setting: it stays out
-because it names a path on one machine.

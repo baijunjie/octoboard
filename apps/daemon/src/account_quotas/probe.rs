@@ -43,18 +43,17 @@ pub(super) const PROBE_TIMEOUT: Duration = Duration::from_secs(15);
 /// to hundreds of kilobytes.
 const OUTPUT_LIMIT: usize = 8 * 1024 * 1024;
 
-/// How much of a probe's stderr is kept for the failure that reports it.
-const STDERR_LIMIT: usize = 4096;
+/// How much of a probe's or a kick's stderr is kept for the failure that reports it.
+pub(super) const STDERR_LIMIT: usize = 4096;
 
 const SESSION_MINUTES: u32 = 5 * 60;
 const WEEK_MINUTES: u32 = 7 * 24 * 60;
 
-/// How Codex's app server is started, here and for signing an account in. The features off are
-/// the ones that reach out on start: the plugin catalogue sync (which runs `git ls-remote` over
-/// SSH), apps, and the user's hooks. Set as configuration rather than `--disable`, which refuses a
-/// feature name the installed Codex does not know, where an unknown configuration key is ignored.
-pub(crate) const CODEX_APP_SERVER_ARGS: &[&str] = &[
-    "app-server",
+/// The Codex configuration overrides that keep it from reaching out on start: the plugin catalogue
+/// sync (which runs `git ls-remote` over SSH), apps, and the user's hooks. Set as configuration
+/// rather than `--disable`, which refuses a feature name the installed Codex does not know, where
+/// an unknown configuration key is ignored.
+pub(super) const CODEX_QUIET_FEATURES: &[&str] = &[
     "-c",
     "features.plugins=false",
     "-c",
@@ -64,6 +63,19 @@ pub(crate) const CODEX_APP_SERVER_ARGS: &[&str] = &[
     "-c",
     "features.hooks=false",
 ];
+
+/// How Codex's app server is started, here and for signing an account in.
+pub(crate) const CODEX_APP_SERVER_ARGS: &[&str] = &APP_SERVER_ARGS;
+
+const APP_SERVER_ARGS: [&str; 1 + CODEX_QUIET_FEATURES.len()] = {
+    let mut args = ["app-server"; 1 + CODEX_QUIET_FEATURES.len()];
+    let mut i = 0;
+    while i < CODEX_QUIET_FEATURES.len() {
+        args[i + 1] = CODEX_QUIET_FEATURES[i];
+        i += 1;
+    }
+    args
+};
 
 /// What a readable reply holds.
 #[derive(Debug, PartialEq)]

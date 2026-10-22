@@ -34,6 +34,7 @@ import { AccountLoginDialog } from "./AccountLoginDialog";
 import { AddAgentDialog } from "./AddAgentDialog";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentMoreMenu, AgentTabMenu, RemoveAgentDialog, useAgentList } from "./AgentListMenu";
+import { StartQuotaWindowsSetting } from "./StartQuotaWindowsSetting";
 import { SettingsFocusContext, useSectionRefocus } from "./useSectionRefocus";
 
 /** The agent strip's height, the `p-1.5` clearance around its tabs and its 1px rule included. The strip is given
@@ -48,13 +49,13 @@ const MAX_FRAMES_TO_WAIT_FOR_SWITCH = 30;
 /** Every added agent's accounts, with one tab for each in the order of the list (the first agent's open) and the
  * agent's default account first, each with its plan and quota, and the means to add, edit and remove the ones the
  * user owns, to rename the default account, and to add, remove and reorder the agents (see
- * `docs/product/agent-accounts.md`); a new account starts on the agent of the tab in view. The switch
- * that picks an account by the weekly quota resetting soonest sits above that list, once: it applies
- * to every agent, including when none is added. While the daemon has not decided the list every agent
- * is shown, and the agents cannot be removed or reordered yet. The default account is not a
- * record: it is the state of pinning nothing, so it is shown from the agent's availability and can be renamed but
- * not edited or removed. Opening the section asks the daemon to refresh the quotas that are due, those of every
- * agent and not only of the tab in view. */
+ * `docs/product/agent-accounts.md`); a new account starts on the agent of the tab in view. The two switches, one
+ * that picks an account by the weekly quota resetting soonest and one that starts a usage window that has not begun
+ * counting, sit above that list, once: both apply to every agent, including when none is added. While the daemon has
+ * not decided the list every agent is shown, and the agents cannot be removed or reordered yet. The default account
+ * is not a record: it is the state of pinning nothing, so it is shown from the agent's availability and can be
+ * renamed but not edited or removed. Opening the section asks the daemon to refresh the quotas that are due, those
+ * of every agent and not only of the tab in view. */
 export function AgentAccountsSection(): React.ReactElement {
   const t = useT();
   const { request, store } = useDaemon();
@@ -179,6 +180,7 @@ export function AgentAccountsSection(): React.ReactElement {
         <Message id="settings.accounts.description" params={PATH_VAR_PARAMS} />
       </p>
       <AutoSelectAccountSetting />
+      <StartQuotaWindowsSetting />
       <div className="flex flex-wrap gap-2 pt-3">
         <Button ref={addAgentButton} size="sm" variant="outline" preventFocusOnPress onPress={() => setAddingAgent(true)}>
           <Bot aria-hidden="true" className="size-4" />

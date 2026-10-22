@@ -877,6 +877,9 @@ pub struct Settings {
     /// Whether the client's sidebar orders sessions and projects by status. On unless the user
     /// turned it off; the daemon only stores it, the ordering is the client's.
     pub sidebar_order_by_status: bool,
+    /// Whether the daemon starts an account's usage window that has reset but not begun counting,
+    /// by sending one minimal request on that account. Off unless the user turned it on.
+    pub auto_start_quota_windows: bool,
     /// The directory a `git` association clones into when none is named: the one the user set, or
     /// `~/Projects` (expanded) while none is. Always an absolute, lexically normalised path.
     pub default_clone_dir: String,
@@ -907,6 +910,7 @@ impl Default for Settings {
             auto_approve_resume_requests: false,
             auto_select_account: false,
             sidebar_order_by_status: true,
+            auto_start_quota_windows: false,
             default_clone_dir: String::new(),
             accounts: Vec::new(),
             added_agents: None,
@@ -1947,6 +1951,8 @@ pub enum RequestBody {
         auto_select_account: Option<bool>,
         #[serde(default)]
         sidebar_order_by_status: Option<bool>,
+        #[serde(default)]
+        auto_start_quota_windows: Option<bool>,
         /// A blank value goes back to the built-in default.
         default_clone_dir: Option<String>,
     },
@@ -4744,7 +4750,7 @@ mod tests {
     }
 
     /// One field is enough: the others stay absent, and a body that names nothing leaves
-    /// `auto_select_account` and `sidebar_order_by_status` absent too.
+    /// `auto_select_account`, `sidebar_order_by_status` and `auto_start_quota_windows` absent too.
     #[test]
     fn an_update_settings_may_name_only_one_field() {
         let parsed = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
@@ -4755,6 +4761,7 @@ mod tests {
                 auto_approve_resume_requests,
                 auto_select_account,
                 sidebar_order_by_status,
+                auto_start_quota_windows,
                 default_clone_dir,
             } => (
                 auto_pull_repositories,
@@ -4763,25 +4770,30 @@ mod tests {
                 auto_approve_resume_requests,
                 auto_select_account,
                 sidebar_order_by_status,
+                auto_start_quota_windows,
                 default_clone_dir,
             ),
             _ => panic!("parses as update_settings"),
         };
         assert_eq!(
             parsed(r#"{"type":"update_settings","auto_select_account":true}"#),
-            (None, None, None, None, Some(true), None, None)
+            (None, None, None, None, Some(true), None, None, None)
         );
         assert_eq!(
             parsed(r#"{"type":"update_settings","auto_approve_resume_requests":true}"#),
-            (None, None, None, Some(true), None, None, None)
+            (None, None, None, Some(true), None, None, None, None)
         );
         assert_eq!(
             parsed(r#"{"type":"update_settings","sidebar_order_by_status":false}"#),
-            (None, None, None, None, None, Some(false), None)
+            (None, None, None, None, None, Some(false), None, None)
+        );
+        assert_eq!(
+            parsed(r#"{"type":"update_settings","auto_start_quota_windows":true}"#),
+            (None, None, None, None, None, None, Some(true), None)
         );
         assert_eq!(
             parsed(r#"{"type":"update_settings"}"#),
-            (None, None, None, None, None, None, None)
+            (None, None, None, None, None, None, None, None)
         );
     }
 
