@@ -1,6 +1,6 @@
 import { useEffect, type RefObject } from "react";
 
-import { prefersReducedMotion } from "../reducedMotion";
+import { onReducedMotion, prefersReducedMotion } from "../reducedMotion";
 import { dialogAround } from "./dialogElement";
 
 /**
@@ -17,7 +17,8 @@ import { dialogAround } from "./dialogElement";
  * forces a layout, and the observer's own reports while the animation runs (the frames of the
  * height it sets) are ignored. Not animated: the first size, a change of the window's size (a
  * window being dragged would restart the animation on every frame), and anything under reduced
- * motion.
+ * motion. A running animation is cancelled when reduced motion is requested, which leaves the
+ * dialog at its new height.
  */
 export function useHeightMotion(marker: RefObject<HTMLElement | null>): void {
   useEffect(() => {
@@ -43,7 +44,9 @@ export function useHeightMotion(marker: RefObject<HTMLElement | null>): void {
       });
     });
     observer.observe(dialog);
+    const stopReduced = onReducedMotion(() => animation?.cancel());
     return () => {
+      stopReduced();
       observer.disconnect();
       animation?.cancel();
     };

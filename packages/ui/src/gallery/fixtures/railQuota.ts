@@ -2,6 +2,7 @@ import type { Account, Agent, AgentAvailability, AccountQuota, Settings } from "
 import { describing } from "../interact";
 import type { Scenario } from "../scenario";
 import { ALL_AGENTS, SAMPLE, minutesAgo, snapshotState } from "./builders";
+import { accountAdded, accountRemoved, agentAvailability } from "./liveChanges";
 import { manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow } from "./quotas";
 
 const GROUP = "Window layout";
@@ -67,6 +68,16 @@ const reorderedState = railQuotaState(
   [...readState.accountQuotas!, quotaOf("grok", null, "SuperGrok", [quotaWindow("credit_period", 23, 4 * 24 * 60 + 11 * 60)])],
   { installed: ALL_AGENTS, added: ["codex", "claude"], defaultNames: { claude: "Studio laptop" } },
 );
+
+/** Every agent installed, added and read, one tab each. */
+const liveState = railQuotaState(
+  [...claudeAccounts, ...codexAccounts],
+  [...readState.accountQuotas!, quotaOf("grok", null, "SuperGrok", [quotaWindow("credit_period", 23, 4 * 24 * 60 + 11 * 60)])],
+  { installed: ALL_AGENTS, defaultNames: { claude: "Studio laptop" } },
+);
+
+/** An account another window adds to Claude Code's, between its default account and Work. */
+const sideProject: Account = { id: "a-side", agent: "claude", name: "Side project", config_dir: "/Users/dev/.claude-side" };
 
 /** Claude Code's accounts that give no whole reading: the default account never read (its attempt timed out), Work
  * with windows from twelve minutes ago and a failed newer attempt, and Client with no entry yet. */
@@ -241,6 +252,24 @@ export const railQuotaScenarios: Scenario[] = [
       (ui) => ui.key("Enter"),
       // The arrow key a keyboard user takes to the next tab; it selects it and moves the focus ring along.
       (ui) => ui.key("ArrowRight"),
+    ],
+  },
+  {
+    id: "rail-quota-live",
+    group: GROUP,
+    category: "normal",
+    title: "Rail quota panel, accounts and agents changing while it is open",
+    description: "The panel is pinned open on Claude Code's tab and stays open while the \"Live changes\" buttons make what another window or the machine would: Side project is added between the default account and Work, or removed again, and Codex is found uninstalled, or installed again, taking its tab away from the middle of the strip or giving it back. Added and removed rows and tabs fade while the ones after them slide into place; with reduced motion they appear and disappear at once. Nothing moves when the panel first opens, when its list scrolls or when the window is resized.",
+    state: liveState,
+    steps: [
+      (ui) => ui.focusControl(ui.t("rail.quota")),
+      (ui) => ui.key("Enter"),
+    ],
+    liveChanges: [
+      accountAdded("add-account", "Add account Side project", sideProject, quotaOf("claude", "a-side", "pro", [quotaWindow("session", 34, 120), quotaWindow("weekly", 21, 4 * 24 * 60)]), "a-work"),
+      accountRemoved("remove-account", "Remove account Side project", sideProject),
+      agentAvailability("uninstall-codex", "Codex uninstalled", "codex", "unavailable"),
+      agentAvailability("install-codex", "Codex installed", "codex", "available"),
     ],
   },
   {

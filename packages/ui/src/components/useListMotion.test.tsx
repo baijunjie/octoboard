@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { BrowserListMotion, useBrowserListMotion } from "../browser/useBrowserListMotion";
-import { useListMotion } from "./useListMotion";
+import { releaseListMotion, useListMotion } from "./useListMotion";
 import { MotionListBox } from "./MotionListBox";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -26,7 +26,7 @@ beforeEach(() => {
   reduced = false;
   progress = 0.5;
   vi.clearAllMocks();
-  vi.stubGlobal("matchMedia", () => ({ matches: reduced, addEventListener: (_: string, fn: () => void) => { preferenceChanged = fn; }, removeEventListener: vi.fn() }));
+  vi.stubGlobal("matchMedia", () => ({ get matches() { return reduced; }, addEventListener: (_: string, fn: () => void) => { preferenceChanged = fn; }, removeEventListener: vi.fn() }));
   vi.stubGlobal("ResizeObserver", class {
     constructor(fn: () => void) { resize = fn; }
     observe() {}
@@ -262,6 +262,21 @@ it("animates a live first addition to an initially empty collection after mounti
   expect(animate.mock.calls[0][0]).toEqual([{ opacity: 0, transform: "translateX(-25%)" }, { opacity: 1, transform: "none" }]);
 });
 
+it("takes rows a collection commits after its list, while the mount settles, as part of the mount", async () => {
+  // In a browser the observer reports those rows only after the mount has settled.
+  const Observer = MutationObserver;
+  vi.stubGlobal("MutationObserver", class extends Observer {
+    constructor(report: MutationCallback) { super((records, observer) => setTimeout(() => report(records, observer), 0)); }
+  });
+  const list = mount([]);
+  // A react-aria collection renders its rows in a commit of its own, within the same task.
+  const row = document.createElement("button");
+  row.dataset.listMotion = "late";
+  list.list.appendChild(row);
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  expect(animate).not.toHaveBeenCalled();
+});
+
 it("preserves resolved full-span subgrid tracks in a departing visual", () => {
   const list = mount(["a"]);
   list.list.style.gridTemplateColumns = "32px 168px";
@@ -413,4 +428,124 @@ it("folds virtual rows in and out with their parent, nested rows included, and e
   expect(host.querySelector("[data-list-motion-ghost]")).toBeNull();
   render(["a", "f"], []);
   expect(presences()).toEqual([0]);
+});
+
+function Strip({ keys, rtl }: { keys: string[]; rtl?: boolean }) {
+  const ref = useListMotion<HTMLDivElement>({ contentWidth: true });
+  return <div ref={ref} style={{ direction: rtl ? "rtl" : "ltr" }}>{keys.map((key) => <button key={key} data-list-motion={key}>{key}</button>)}</div>;
+}
+
+function mountStrip(initial: string[], rtl = false) {
+  // The strip is `width` wide, each tab 80 pixels.
+  const offsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth")!;
+  Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get(this: HTMLElement) { return this.dataset.listMotion === undefined ? width : 80; } });
+  onTestFinished(() => { Object.defineProperty(HTMLElement.prototype, "offsetWidth", offsetWidth); });
+  const host = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  const render = (keys: string[]) => act(() => root.render(<Strip keys={keys} rtl={rtl} />));
+  onTestFinished(() => { act(() => root.unmount()); host.remove(); });
+  render(initial);
+  return { render, strip: host.firstElementChild as HTMLElement };
+}
+
+it("takes a content-width strip's change of width with its tabs as that change, and a change of width alone as a resize", () => {
+  width = 160;
+  points = { a: [0, 0], b: [80, 0] };
+  const strip = mountStrip(["a", "b"]);
+  width = 240;
+  points.c = [160, 0];
+  strip.render(["a", "b", "c"]);
+  expect(animate.mock.calls.map(([frames]) => frames)).toEqual([[{ opacity: 0, transform: "translateX(-25%)" }, { opacity: 1, transform: "none" }]]);
+  animate.mockClear();
+  width = 160;
+  points = { b: [0, 0], c: [80, 0] };
+  strip.render(["b", "c"]);
+  expect(animate.mock.calls.map(([frames]) => frames)).toEqual([
+    [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateX(25%)" }],
+    [{ translate: "80px 0px" }, { translate: "0px 0px" }],
+    [{ translate: "80px 0px" }, { translate: "0px 0px" }],
+  ]);
+  const ghost = strip.strip.querySelector<HTMLElement>("[data-list-motion-ghost]")!;
+  expect(ghost.closest("[inert][aria-hidden=true]")).not.toBeNull();
+  animate.mockClear();
+  width = 200;
+  points = { b: [0, 0], c: [100, 0] };
+  act(() => resize());
+  expect(animate).not.toHaveBeenCalled();
+});
+
+it("measures a right-to-left strip from its right edge, so tabs that stay put while it grows at its end do not slide", () => {
+  // The strip ends at 300 and grows leftward; its first tab sits at its right end. The strip's own offset is keyed
+  // by no tab.
+  width = 160;
+  points = { "": [140, 0], a: [220, 0], b: [140, 0] };
+  const strip = mountStrip(["a", "b"], true);
+  width = 240;
+  points = { "": [60, 0], a: [220, 0], b: [140, 0], c: [60, 0] };
+  strip.render(["a", "b", "c"]);
+  expect(animate.mock.calls.map(([frames]) => frames)).toEqual([[{ opacity: 0, transform: "translateX(-25%)" }, { opacity: 1, transform: "none" }]]);
+  animate.mockClear();
+  width = 160;
+  points = { "": [140, 0], b: [220, 0], c: [140, 0] };
+  strip.render(["b", "c"]);
+  expect(animate.mock.calls.slice(1).map(([frames]) => frames)).toEqual([
+    [{ translate: "-80px 0px" }, { translate: "0px 0px" }],
+    [{ translate: "-80px 0px" }, { translate: "0px 0px" }],
+  ]);
+  // The departing tab's visual stands where the tab stood (jsdom gives it no offset parent to measure from).
+  expect(strip.strip.querySelector<HTMLElement>("[data-list-motion-exit]")!.style.left).toBe("220px");
+});
+
+it("starts a released drag's move from where its transforms show the tabs, for the change that follows only", async () => {
+  vi.stubGlobal("DOMMatrixReadOnly", class {
+    m41: number;
+    m42 = 0;
+    constructor(transform: string) { this.m41 = Number(/translateX\((-?\d+)px\)/.exec(transform)?.[1] ?? 0); }
+  });
+  points = { a: [0, 0], b: [80, 0] };
+  const strip = mountStrip(["a", "b"]);
+  const [a, b] = Array.from(strip.strip.querySelectorAll<HTMLElement>("[data-list-motion]"));
+  // `a` was dragged past `b`, which made room for it.
+  a.style.transform = "translateX(100px)";
+  b.style.transform = "translateX(-80px)";
+  releaseListMotion(a);
+  a.style.transform = "";
+  b.style.transform = "";
+  points = { b: [0, 0], a: [80, 0] };
+  strip.render(["b", "a"]);
+  expect(animate.mock.calls.map(([frames]) => frames)).toEqual([[{ translate: "20px 0px" }, { translate: "0px 0px" }]]);
+  // A reorder brings nothing in or out, so there is no travel to clip: the dropped tab's slide shows whole.
+  expect([strip.strip.style.minWidth, strip.strip.style.overflow]).toEqual(["", ""]);
+  animate.mockClear();
+  progress = 1;
+  a.style.transform = "translateX(-80px)";
+  releaseListMotion(a);
+  a.style.transform = "";
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  points = { a: [0, 0], b: [80, 0] };
+  strip.render(["a", "b"]);
+  expect(animate.mock.calls.map(([frames]) => frames)).toEqual([
+    [{ translate: "80px 0px" }, { translate: "0px 0px" }],
+    [{ translate: "-80px 0px" }, { translate: "0px 0px" }],
+  ]);
+});
+
+it("keeps a strip that loses a tab at its width, clipping, until the motion has played out, and not under reduced motion", () => {
+  width = 160;
+  points = { a: [0, 0], b: [80, 0] };
+  const strip = mountStrip(["a", "b"]);
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  onTestFinished(() => { vi.useRealTimers(); });
+  width = 80;
+  points = { b: [0, 0] };
+  strip.render(["b"]);
+  expect([strip.strip.style.minWidth, strip.strip.style.overflow]).toEqual(["160px", "clip"]);
+  act(() => { vi.advanceTimersByTime(300); });
+  expect([strip.strip.style.minWidth, strip.strip.style.overflow]).toEqual(["", ""]);
+  reduced = true;
+  width = 160;
+  strip.render(["a", "b"]);
+  width = 80;
+  strip.render(["b"]);
+  expect([strip.strip.style.minWidth, strip.strip.style.overflow]).toEqual(["", ""]);
 });

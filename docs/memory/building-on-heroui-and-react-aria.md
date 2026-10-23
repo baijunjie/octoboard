@@ -127,12 +127,6 @@ unit test mounts the panel on its own and never switches tabs, and neither does 
 Permissions section's "restart for this to take effect" line was first built from React state remembering the
 grant it had watched arrive, and died on the first click to another section.
 
-The panel also mounts, unmounts and is replaced in a commit that does not render the component holding it: react-aria
-renders the panel from the collection it built when the selection changes. So a hook whose owner renders the `Tabs`
-and hands a ref to an element inside a panel never sees that element arrive or go from its own effects — they run only
-on the owner's next render, which already carries that render's change. A hook that watches such an element attaches
-and detaches in a ref callback, as `useListMotion` (`packages/ui/src/components/useListMotion.ts`) does.
-
 `shouldForceMount` keeps the unselected panels mounted, but it is not the way to keep a panel's state. Pass it only
 where the hidden panels must go on taking up layout, as the rail's quota panel
 (`packages/ui/src/quota/RailQuotaEntry.tsx`) is the one place that does: it stacks every agent's panel in one grid cell so that, anchored by its bottom edge, it keeps the tallest tab's height
@@ -141,6 +135,28 @@ and its tab strip does not move out from under the pointer. A force-mounted unse
 (`data-[inert=true]:invisible`). HeroUI's `.tabs__panel` gives every panel padding and a top margin and takes an
 exiting one out of the flow (`data-[exiting=true]`, `position: absolute`), so where the panels share one box, clear
 those on the panels and put the spacing on the container.
+
+## A react-aria collection renders its parts from a copy it built, not from your component's render
+
+A react-aria-components collection (`Tabs` among them) first renders the content you give it in a hidden copy, to
+build the collection, and then renders the visible parts from what that copy recorded. Two things
+follow in `packages/ui`, and neither shows in a jsdom test that only asserts the DOM.
+
+- A tab panel mounts, unmounts and is replaced in a commit that does not render the component holding it:
+  react-aria renders the panel from the collection when the selection changes. So a hook whose owner renders
+  the `Tabs` and hands a ref to an element inside a panel never sees that element arrive or go from its own effects —
+  they run only on the owner's next render, which already carries that render's change. A hook that watches such an
+  element attaches and detaches in a ref callback, as `useListMotion` (`packages/ui/src/components/useListMotion.ts`)
+  does.
+- Everything inside `<Tabs>` is rendered twice — a component of yours placed there, such as `AgentTabList`
+  (`packages/ui/src/components/AgentTabList.tsx`), runs its hooks once in the hidden copy and once in the visible one
+  — and each tab's props, its handlers and ref callback among them, come from the hidden copy. A tab's handler that
+  reads a ref or state of that component which only the visible copy fills (a ref on the `Tabs.List`, say) finds it
+  empty and silently does nothing. From an item's handler, reach what you need through the DOM — the item element the
+  handler has, walking up from it — rather than through such a ref, as `releaseListMotion(row)` in `useListMotion.ts`
+  finds a list's motion from one of its tabs. What an item's own ref callback records and its own handlers read comes
+  from the same copy and agrees. A component that renders the `<Tabs>` itself sits outside the copy and is rendered
+  once, so its closures are safe.
 
 ## A `Tabs` panel stays a tab stop until it renders with something tabbable inside
 

@@ -166,7 +166,7 @@ export function ResizeSeparator({
       {appearance === "grip" ? (
         <div ref={gripRef} className={`rounded-full transition-opacity motion-reduce:transition-none ${axis.grip} ${dragging ? "bg-(--grip-active) opacity-100" : "bg-(--grip-hover) opacity-0 group-hover:opacity-100 group-data-focus-visible:opacity-100"}`} />
       ) : (
-        <div className={`transition-colors group-hover:bg-accent group-data-focus-visible:bg-accent ${axis.line} ${dragging ? "bg-accent" : ""}`} />
+        <div className={`transition-colors motion-reduce:transition-none group-hover:bg-accent group-data-focus-visible:bg-accent ${axis.line} ${dragging ? "bg-accent" : ""}`} />
       )}
       {tooltip && appearance === "grip" && <AnchoredTooltip tooltip={tooltip} anchor={gripRef} hovered={hovered && !dragging} placement={orientation === "vertical" ? "end" : undefined} />}
     </div>

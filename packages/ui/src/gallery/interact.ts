@@ -3,10 +3,10 @@ import { gitBadgeAriaLabel } from "../gitStatusLabel";
 import { format, type MessageArgs, type MessageKey } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
 import { panelId, type PanelKind } from "../panels/stackState";
-import { DORMANT_STATUSES, LIVE_STATUSES, type AccountQuota, type Agent, type AgentAvailability, type GitStatus } from "../protocol";
+import { DORMANT_STATUSES, LIVE_STATUSES, type AccountQuota, type Agent, type AgentAvailability, type Event as DaemonEvent, type GitStatus } from "../protocol";
 import { activityLabel, statusLabel } from "../sessionLabel";
 import { ACTIVITIES } from "../sidebar/order";
-import type { Daemon } from "../store";
+import type { Daemon, State } from "../store";
 import type { TerminalElement } from "../terminal/TerminalController";
 import { IS_MAC } from "../useWindowShortcut";
 import { STATUS_LABELS, type StatusKey } from "../viewer/statusMarks";
@@ -327,6 +327,11 @@ export interface Ui {
    * lands under an open dialog reaches (the account being switched to turns out to be used up after the menu that
    * offered it was read). */
   setAccountQuotas: (accountQuotas: AccountQuota[]) => Promise<void>;
+  /** Applies daemon events to the store, in order, as the connection does for those the daemon broadcasts, so a
+   * collection changes under an open view the way another window or the machine changes it (an account added, a
+   * terminal closed there). An event may be written as a function of the store's state by then, for a whole-list
+   * event that must keep the rest of the list. It returns once the changes have had time to animate. */
+  daemonEvents: (...events: (DaemonEvent | ((state: State) => DaemonEvent))[]) => Promise<void>;
 }
 
 /** The icon the git badge draws for `status`, by the name lucide gives its class (`GitBadge.tsx`
@@ -537,6 +542,13 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     async setAccountQuotas(accountQuotas) {
       if (!daemon) throw new Error("This scenario has no daemon behind it to change the quota readings of");
       daemon.store.setState({ accountQuotas });
+      await wait(300);
+    },
+    async daemonEvents(...events) {
+      if (!daemon) throw new Error("This scenario has no daemon behind it to send events from");
+      // Not imported above: the store loads after the gallery frame has registered its own listeners (`frame.tsx`).
+      const { applyDaemonEvent } = await import("../store");
+      for (const event of events) applyDaemonEvent(daemon.store, typeof event === "function" ? event(daemon.store.getState()) : event);
       await wait(300);
     },
     async key(key) {

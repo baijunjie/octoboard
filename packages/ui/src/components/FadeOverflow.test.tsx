@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterAll, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { FadeOverflow } from "./FadeOverflow";
+import { stubListMotion } from "./listMotionTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -332,6 +333,22 @@ it("leaves a start-clipped label alone where the system asks for no motion", () 
   settle();
   expect(written).toEqual([]);
   expect(label.scrollLeft).toBe(400);
+  finish();
+});
+
+it("stops a running marquee at the label's rest when the preference turns to reduce, and does not run it again", () => {
+  const motion = stubListMotion();
+  const { label, written, enter, finish } = mount({ clip: "end", children: "a long label" }, true);
+  enter();
+  act(() => void vi.advanceTimersByTime(1200));
+  expect(label.scrollLeft).toBeGreaterThan(0);
+
+  motion.reduce();
+  expect(label.scrollLeft).toBe(0);
+  written.length = 0;
+  act(() => void vi.advanceTimersByTime(5000));
+  expect(written).toEqual([]);
+  expect(label.scrollLeft).toBe(0);
   finish();
 });
 

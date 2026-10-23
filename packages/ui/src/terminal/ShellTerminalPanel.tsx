@@ -6,6 +6,7 @@ import { useFocusVisible } from "react-aria";
 import { Button } from "../components/Button";
 import type { ViewedFile } from "../browser/TerminalFileViewer";
 import { ActionMenu, type ActionMenuEntry } from "../components/ActionMenu";
+import { afterCollectionFocus } from "../components/afterCollectionFocus";
 import { AnchoredTooltip } from "../components/AnchoredTooltip";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
@@ -19,6 +20,7 @@ import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useTabScrollLabels } from "../components/tabScrollLabels";
 import { TitledControl } from "../components/TitledControl";
 import { useLatest } from "../components/useLatest";
+import { useListMotion } from "../components/useListMotion";
 import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { RenameDialog } from "../dialogs/RenameDialog";
 import { errorPresentation } from "../errorPresentation";
@@ -41,6 +43,7 @@ import { ShellTerminalView, type ShellTerminalViewHandle } from "./ShellTerminal
  * shown is kept per project and per client (`setActiveShellTerminal`).
  *
  * Closing a tab whose shell is running something asks first; an idle or exited one closes at once.
+ * Tabs that arrive or go while the strip is shown move with the shared list motion.
  * A tab's name is the terminal's title, which follows the shell's until the user renames it.
  */
 export function ShellTerminalPanel({
@@ -79,6 +82,7 @@ export function ShellTerminalPanel({
   const bodyRef = useRef<HTMLDivElement>(null);
   const newRef = useRef<HTMLButtonElement>(null);
   const views = useRef(new Map<string, ShellTerminalViewHandle>());
+  const stripRef = useListMotion<HTMLDivElement>({ contentWidth: true });
   const tabs = useRef(new Map<string, HTMLElement>());
   // The tab elements again, as state: a tab's context menu attaches to its element once, as it
   // mounts, and react-aria renders the tabs in a commit of their own, after this component's.
@@ -122,6 +126,19 @@ export function ShellTerminalPanel({
     requestAnimationFrame(() => {
       const view = latest.current.activeId === undefined ? undefined : views.current.get(latest.current.activeId);
       if (view) view.focus();
+      else rootRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+    });
+
+  /** Focus for the strip once the tab that held it (or its context menu) has gone: the shown tab, or
+   * the panel's first control when no tab is left. After the strip's own re-aiming of focus, and only
+   * while focus has fallen to the page, so a place the user or a dialog has put it stays. */
+  const focusShownTab = () =>
+    afterCollectionFocus(() => {
+      const active = document.activeElement;
+      if (active && active !== document.body) return;
+      const id = latest.current.activeId;
+      const tab = id === undefined ? undefined : tabs.current.get(id);
+      if (tab) tab.focus();
       else rootRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
     });
 
@@ -249,19 +266,24 @@ export function ShellTerminalPanel({
                 // tab's close mark: while the strip scrolls, its ends are padded to hold them.
                 className="min-w-0 rounded-none bg-transparent has-[>:is([data-left-scroll=true],[data-right-scroll=true],[data-left-right-scroll=true])]:px-6"
                 render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
-                {/* The scroller clips outside this padding; leave room for the focus ring and its offset. */}
-                <Tabs.List aria-label={t("shellTerminal.tabs")} className="w-max min-w-0 p-1.5">
+                {/* The scroller clips outside this padding; leave room for the focus ring and its offset.
+                    Positioned, so a departing tab's visual stays in the strip's scroll. */}
+                <Tabs.List ref={stripRef} aria-label={t("shellTerminal.tabs")} className="relative w-max min-w-0 p-1.5">
                   {terminals.map((terminal) => (
                     <Tabs.Tab
                       key={terminal.id}
                       id={terminal.id}
                       ref={registerTab}
+                      data-list-motion={terminal.id}
                       // The selected tab is drawn with the fill HeroUI's sliding indicator has, as a
                       // fill of its own: the indicator's shared-element transition is left stuck
                       // part-way when its tab renders again within the frame it was selected in,
-                      // which a tab created and selected in one go does.
-                      className={`group/tab h-6 scroll-mx-1.5 gap-0.5 ps-1.5 pe-0.5 whitespace-nowrap hover:text-foreground hover:opacity-100 data-[selected=true]:bg-(--segment) data-[selected=true]:shadow-(--surface-shadow)${closingIds.has(terminal.id) ? " opacity-50" : ""}${terminal.state === "exited" ? " text-app-muted" : ""}`}
+                      // which a tab created and selected in one go does. Content-wide, not filling the
+                      // strip, which keeps its width while a closed tab's neighbours slide up.
+                      className={`group/tab h-6 w-auto flex-none scroll-mx-1.5 gap-0.5 ps-1.5 pe-0.5 whitespace-nowrap hover:text-foreground hover:opacity-100 data-[selected=true]:bg-(--segment) data-[selected=true]:shadow-(--surface-shadow)${closingIds.has(terminal.id) ? " opacity-50" : ""}${terminal.state === "exited" ? " text-app-muted" : ""}`}
                     >
+                      {/* First among what goes away with the tab, so focus inside it is still found. */}
+                      <HandOffOnUnmount from={`[data-key="${CSS.escape(terminal.id)}"]`} to={focusShownTab} />
                       <FadeOverflow as="span" dir="auto" className="max-w-40 min-w-0" titleWhenClipped={tabLabel(terminal)}>{tabLabel(terminal)}</FadeOverflow>
                       <TabCloseMark title={t("shellTerminal.close")} onClose={() => requestClose(terminal)} />
                     </Tabs.Tab>
@@ -309,7 +331,7 @@ export function ShellTerminalPanel({
       </div>
       {terminals.map((terminal) => {
         const tab = tabNodes.get(terminal.id);
-        return tab && <TabContextMenu key={terminal.id} label={t("shellTerminal.actions", { title: isolate(terminal.title) })} items={actionsOf(terminal)} tab={tab} />;
+        return tab && <TabContextMenu key={terminal.id} label={t("shellTerminal.actions", { title: isolate(terminal.title) })} items={actionsOf(terminal)} tab={tab} onGone={focusShownTab} />;
       })}
       {confirmClose !== undefined && terminals.some((terminal) => terminal.id === confirmClose) && (
         <ConfirmDialog
@@ -353,10 +375,24 @@ async function closeShellTerminal(daemon: Pick<Daemon, "request" | "toastError">
 
 /** A tab's context menu (a right-click, or Shift+F10 and the menu key on the focused tab), with the
  * actions the header's menu has for the shown tab. It attaches to `tab` as it mounts, so it is
- * mounted once the tab is. */
-function TabContextMenu({ label, items, tab }: { label: string; items: ActionMenuEntry[]; tab: HTMLElement }): React.ReactElement {
+ * mounted once the tab is. `onGone` is called when it unmounts with focus in its open menu, as the
+ * tab goes while the menu is up. */
+function TabContextMenu({ label, items, tab, onGone }: { label: string; items: ActionMenuEntry[]; tab: HTMLElement; onGone: () => void }): React.ReactElement {
   const [target] = useState<React.RefObject<HTMLElement | null>>(() => ({ current: tab }));
-  return <ActionMenu label={label} items={items} contextTargetRef={target} contextOnly />;
+  // Kept past the wrapper's unmount, whose ref is cleared before the hand-off looks for the menu.
+  const scope = useRef<HTMLDivElement | null>(null);
+  // Only this menu: another one open (the header's) keeps its focus when a tab goes. The menu is
+  // labelled by its hidden trigger, in the wrapper.
+  const ownMenu = () => {
+    const trigger = scope.current?.querySelector("button")?.id;
+    return trigger ? document.querySelector(`[role=menu][aria-labelledby="${CSS.escape(trigger)}"]`) : null;
+  };
+  return (
+    <div ref={(element) => { if (element) scope.current = element; }} className="contents">
+      <HandOffOnUnmount from={ownMenu} to={onGone} />
+      <ActionMenu label={label} items={items} contextTargetRef={target} contextOnly />
+    </div>
+  );
 }
 
 /** Scrolls `scroller` just far enough to bring `tab` into view, honouring the scroll padding and

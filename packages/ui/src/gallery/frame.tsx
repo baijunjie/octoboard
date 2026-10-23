@@ -17,6 +17,7 @@ import { installFakeTerminal } from "./fakeTerminal";
 import { holdPrimaryModifier } from "./heldModifier";
 import { createUi, settleMotion, stuckExit } from "./interact";
 import { prepareStorage } from "./prepare";
+import { LIVE_CHANGE_EVENT } from "./scenario";
 
 const params = new URLSearchParams(window.location.search);
 const scenario = SCENARIOS.find((s) => s.id === params.get("scenario"));
@@ -185,10 +186,47 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   </React.StrictMode>,
 );
 
+/** Paints a failure over the page if something that was closing never left it. */
+async function reportStuckExit(): Promise<void> {
+  const stuck = await stuckExit(document);
+  if (stuck) galleryFailure(`Something that was closing never left the page: ${stuck} is still marked data-exiting`);
+}
+
+/** Applies the scenario's live changes one at a time, in the order asked for: each is a step that waits for the
+ * collection it changes to move, and two at once would act on a view still in motion. A failure is shown over the
+ * page like a step's. */
+class LiveChanges {
+  /** Held until `release`: a change asked for while the steps run waits for them. */
+  private queue: Promise<void>;
+  /** Lets the changes run: called once the steps have, or have failed. */
+  release!: () => void;
+  constructor(private readonly ui: ReturnType<typeof createUi>) {
+    this.queue = new Promise<void>((resolve) => (this.release = resolve));
+  }
+
+  apply(id: string): Promise<void> {
+    this.queue = this.queue.then(async () => {
+      try {
+        const change = scenario?.liveChanges?.find((candidate) => candidate.id === id);
+        if (!change) throw new Error(`The scenario has no live change “${id}”`);
+        for (const step of change.steps) await step(this.ui);
+        await settleMotion(document, 1000);
+        await reportStuckExit();
+      } catch (error) {
+        galleryFailure(`Live change failed: ${(error as Error).message}`, error);
+      }
+    });
+    return this.queue;
+  }
+}
+
 // The scenario's interactions, once the app has mounted. A failed one is shown over the page as
 // well as logged, since the scenario then shows less than it says; so is an exit that does not end.
+const ui = createUi(document, language, daemon);
+// Listening before the steps, so the buttons work on a page whose steps failed; a change waits for them.
+const live = new LiveChanges(ui);
+document.addEventListener(LIVE_CHANGE_EVENT, (event) => void live.apply(String((event as CustomEvent<unknown>).detail)));
 try {
-  const ui = createUi(document, language, daemon);
   await ui.wait(300);
   for (const step of scenario?.steps ?? []) await step(ui);
   if (scenario?.quitRequested) {
@@ -197,12 +235,16 @@ try {
       await ui.wait(300);
     } else galleryFailure("The scenario asks for a quit request but the app registered no quit handler");
   }
+  // The live changes the URL asks for, as a viewer would have pressed them; the shell's buttons send the rest.
+  live.release();
+  for (const id of (params.get("live") ?? "").split(",").filter(Boolean)) await live.apply(id);
   // After the steps, which find the "+" buttons by their plain names, not the held form's.
   heldModifier?.press();
-  const stuck = await stuckExit(document);
-  if (stuck) galleryFailure(`Something that was closing never left the page: ${stuck} is still marked data-exiting`);
+  await reportStuckExit();
 } catch (error) {
   galleryFailure(`Scenario step failed: ${(error as Error).message}`, error);
+} finally {
+  live.release();
 }
 // The first wait: two frames after the last step, not at its end, since what the last step set going (a render, a
 // transition's first frames, a failure line) has usually been drawn by then, which is what a capture or a read of

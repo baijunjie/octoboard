@@ -2,7 +2,8 @@
 // the red `[data-gallery-failure]` overlay (`src/gallery/banner.ts`) the page raises when a step threw, a
 // fixture could not be answered as the real daemon would answer, or an exit transition never ended. It is
 // the one check that sees a step that no longer runs or a state that no longer renders: neither the type
-// checker nor the unit tests load a scenario. See "The UI state gallery" in `packages/ui/README.md`.
+// checker nor the unit tests load a scenario. A scenario's live changes (its "Live changes" buttons) are
+// applied too, after its steps and before the page is ready. See "The UI state gallery" in `packages/ui/README.md`.
 //
 //   pnpm gallery:sweep [options] [scenario-id-or-pattern ...]
 //
@@ -285,7 +286,7 @@ async function readGallery(browser, origin) {
         const { SCENARIOS } = await import("/src/gallery/fixtures/index.ts");
         const { LANGUAGES } = await import("/src/i18n/languages.ts");
         return {
-          scenarios: SCENARIOS.map((s) => ({ id: s.id, group: s.group, width: s.width, height: s.height })),
+          scenarios: SCENARIOS.map((s) => ({ id: s.id, group: s.group, width: s.width, height: s.height, live: (s.liveChanges ?? []).map((change) => change.id) })),
           languages: [...LANGUAGES],
         };
       }),
@@ -361,6 +362,9 @@ async function sweepOne(context, origin, scenario, language, theme) {
   try {
     await page.setViewportSize({ width: scenario.width ?? 1440, height: scenario.height ?? 900 });
     const query = new URLSearchParams({ scenario: scenario.id, theme, lang: language });
+    // The scenario's live changes, applied after its steps and before the page is ready (the frame runs `live=`
+    // first), as a viewer pressing each of its buttons would.
+    if (scenario.live.length > 0) query.set("live", scenario.live.join(","));
     await page.goto(`${origin}/gallery-frame.html?${query}`, { waitUntil: "commit" });
     try {
       // The page sets this on <html> once the app has mounted and the scenario's steps have run, failed or

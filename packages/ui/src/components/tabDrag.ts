@@ -1,5 +1,5 @@
 import type { Agent } from "../protocol";
-import { prefersReducedMotion } from "../reducedMotion";
+import { onReducedMotion, prefersReducedMotion } from "../reducedMotion";
 
 /** How far the pointer has to move before a press on a tab is a drag rather than a press. */
 const DRAG_THRESHOLD = 5;
@@ -13,7 +13,9 @@ export function movedAgent(agents: Agent[], agent: Agent, to: number): Agent[] {
 
 /** Follows a pointer drag that began on `agent`'s tab: the tab follows the pointer, the tabs it passes make room for it,
  * and releasing it over a new place calls `onDrop` with the whole new order and the agent that was moved. The tabs are only moved by
- * transform while it lasts, so the order itself is left to the caller; Escape and a cancelled pointer end the drag
+ * transform while it lasts, so the order itself is left to the caller. `onDrop` is called while those transforms still
+ * stand, so the caller can start the tabs' move to the new order from where they are shown; they are cleared as it
+ * returns. Escape and a cancelled pointer end the drag
  * with nothing dropped. A mouse or pen only: a touch on a tab scrolls the strip. The click that follows a drag is
  * swallowed, so the end of a drag does not also press whatever is under the pointer. */
 export function beginTabDrag({ agent, agents, elements, event, onDrop }: {
@@ -32,7 +34,6 @@ export function beginTabDrag({ agent, agents, elements, event, onDrop }: {
   const rtl = getComputedStyle(source).direction === "rtl";
   const gap = agents.length > 1 ? Math.max(0, rtl ? rects[0]!.left - rects[1]!.right : rects[1]!.left - rects[0]!.right) : 0;
   const slot = rects[from]!.width + gap;
-  const animated = !prefersReducedMotion();
   const startX = event.clientX;
   let dragging = false;
   let target = from;
@@ -49,7 +50,7 @@ export function beginTabDrag({ agent, agents, elements, event, onDrop }: {
     if (!dragging) {
       if (Math.abs(dx) < DRAG_THRESHOLD) return;
       dragging = true;
-      for (const tab of tabs) if (tab !== source && animated) tab!.style.transition = "transform 150ms";
+      for (const tab of tabs) if (tab !== source && !prefersReducedMotion()) tab!.style.transition = "transform 150ms";
       source.style.zIndex = "1";
     }
     source.style.transform = `translateX(${dx}px)`;
@@ -61,7 +62,12 @@ export function beginTabDrag({ agent, agents, elements, event, onDrop }: {
       tabs[i]!.style.transform = shift ? `translateX(${rtl ? -shift : shift}px)` : "";
     });
   };
+  // The tabs then follow the drag in the same frame, instead of easing toward their places.
+  const stopReduced = onReducedMotion(() => {
+    for (const tab of tabs) tab!.style.transition = "";
+  });
   const finish = () => {
+    stopReduced();
     document.removeEventListener("pointermove", move, true);
     document.removeEventListener("pointerup", up, true);
     document.removeEventListener("pointercancel", cancel, true);
@@ -74,10 +80,12 @@ export function beginTabDrag({ agent, agents, elements, event, onDrop }: {
     setTimeout(() => source.removeEventListener("click", stop, true), 0);
   };
   const up = () => {
-    finish();
-    if (!dragging) return;
-    swallowClick();
-    if (target !== from) onDrop(movedAgent(agents, agent, target), agent);
+    try {
+      if (dragging && target !== from) onDrop(movedAgent(agents, agent, target), agent);
+    } finally {
+      finish();
+    }
+    if (dragging) swallowClick();
   };
   const cancel = () => {
     finish();

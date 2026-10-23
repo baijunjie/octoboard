@@ -17,6 +17,7 @@ import { AgentIcon } from "../components/AgentIcon";
 import { StatusBadge } from "../components/StatusBadge";
 import { useTabScrollLabels } from "../components/tabScrollLabels";
 import { useFocusHandoff } from "../components/useFocusHandoff";
+import { useListMotion } from "../components/useListMotion";
 import { useT } from "../i18n/react";
 import type { Agent } from "../protocol";
 import { useDaemonStore } from "../store";
@@ -76,6 +77,8 @@ export function ConsoleLaunchFields({
   if (picked && !listed.includes(picked)) setPicked(undefined);
   const agent = [picked, defaultAgent].find((candidate) => candidate && listed.includes(candidate)) ?? listed[0] ?? defaultAgent;
   const rootRef = useRef<HTMLDivElement>(null);
+  // Tabs come and go while the section is open, as values for a missing agent are cleared or availability changes.
+  const tabsRef = useListMotion<HTMLDivElement>({ contentWidth: true });
   const focusHandoff = useFocusHandoff(() => rootRef.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus());
   const launch = useLaunchModels(agent, storedAccount(values[AGENT_ACCOUNT_FIELD[agent]], agent, accounts), expanded);
 
@@ -84,11 +87,12 @@ export function ConsoleLaunchFields({
       <div ref={rootRef} {...focusHandoff} className="rounded-xl border border-separator p-4">
         <Tabs selectedKey={agent} onSelectionChange={(key) => setPicked(key as Agent)} className="gap-4">
           <Tabs.ListContainer className="w-max max-w-full self-start" render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
-            <Tabs.List aria-label={t("dialog.console.launchAgent")} className="w-max min-w-0 p-1.5">
+            {/* Positioned, so a departing tab's visual stays in the strip's scroll. */}
+            <Tabs.List ref={tabsRef} aria-label={t("dialog.console.launchAgent")} className="relative w-max min-w-0 p-1.5">
               {listed.map((option) => {
                 const badge = agentChoiceBadge(t, agentAvailability, addedAgents, option);
                 return (
-                  <Tabs.Tab key={option} id={option} className="w-auto flex-none scroll-mx-1.5 gap-2 whitespace-nowrap hover:text-foreground hover:opacity-100">
+                  <Tabs.Tab key={option} id={option} data-list-motion={option} className="w-auto flex-none scroll-mx-1.5 gap-2 whitespace-nowrap hover:text-foreground hover:opacity-100">
                     <AgentIcon agent={option} />
                     {AGENT_LABEL[option]}
                     {badge && <StatusBadge>{badge}</StatusBadge>}

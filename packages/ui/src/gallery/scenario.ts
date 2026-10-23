@@ -62,6 +62,24 @@ export interface ToastFixture {
  * the archive view, which session is selected) rather than in the store. */
 export type Step = (ui: Ui) => Promise<void>;
 
+/** A change the daemon makes while the window already shows the scenario's view (an account added by another
+ * window, a terminal closed there), for the motion and focus that only a live change shows: the view never
+ * changes by itself, the viewer presses `label` among the "Live changes" buttons above the window. Its `steps`
+ * are `daemonEvents` steps, which apply the same events the daemon would send. Changes that undo each
+ * other let the viewer watch both directions; the undo restores the data, not necessarily what the app selected
+ * meanwhile (a reopened terminal is not selected). A change that is already in effect does nothing. */
+export interface LiveChange {
+  /** Names the change in the frame URL's `live` parameter, which applies it after the steps (the sweep does). */
+  id: string;
+  /** The button's text, in the gallery's own English. */
+  label: string;
+  steps: Step[];
+}
+
+/** The document event the gallery shell dispatches into a scenario's frame to apply a live change; its detail is
+ * the change's `id`. */
+export const LIVE_CHANGE_EVENT = "gallery:live-change";
+
 /** The window the gallery page opens a scenario at when the scenario names none and no width has been
  * chosen above the window. */
 export const DEFAULT_WIDTH = 1440;
@@ -269,6 +287,8 @@ export interface Scenario {
    * for interactive copy and paste previews. Without either, the browser's clipboard stands. */
   clipboard?: "unavailable" | { text: string };
   steps?: Step[];
+  /** Changes the viewer can make to what the window shows once it is up, as buttons above it. */
+  liveChanges?: LiveChange[];
   /** Renders the file viewer over the subjects `subjects` builds, in place of the app; built only
    * when the scenario opens. `loadDelay` shows each one's loading state for that many milliseconds
    * first. */

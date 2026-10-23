@@ -1,5 +1,6 @@
 import React, { useCallback, useLayoutEffect, useRef, useState } from "react";
 
+import { onReducedMotion, prefersReducedMotion } from "../reducedMotion";
 import { AnchoredTooltip } from "./AnchoredTooltip";
 
 interface Clipped {
@@ -223,7 +224,7 @@ function useMarquee(
       });
     };
     const start = () => {
-      if (!over || running || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      if (!over || running || prefersReducedMotion()) return;
       if (overflowExtent(element) <= OVERFLOW_EPSILON) return;
       running = true;
       holds.current = true;
@@ -251,7 +252,10 @@ function useMarquee(
 
     scope.addEventListener("pointerenter", enter);
     scope.addEventListener("pointerleave", leave);
+    // A run in progress stops where the label rests, and does not start again while reduced.
+    const stopReduced = onReducedMotion(giveBack);
     return () => {
+      stopReduced();
       over = false;
       running = false;
       holds.current = false;

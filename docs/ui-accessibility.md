@@ -1400,13 +1400,15 @@ should not (see "The UI state gallery" in `packages/ui/README.md`).
 ## Motion
 
 An animation or transition that is not essential stops under `prefers-reduced-motion: reduce` (Tailwind's
-`motion-safe:` / `motion-reduce:` variants).
+`motion-safe:` / `motion-reduce:` variants). Motion driven from script reads `prefersReducedMotion()` before it starts
+and subscribes with `onReducedMotion()` (`packages/ui/src/reducedMotion.ts`) to cut a running effect short, leaving it
+at its end state, when the preference turns on.
 
 ### Dynamic collections
 
 When items are added, removed, reordered or folded within a visible collection, surviving items that change
 position slide into place using the shared list-motion implementation. This applies to navigation lists, settings
-records, selected tags, wrapping chips and virtualized file and change collections. Use stable item identities,
+records, tab strips, selected tags, wrapping chips and virtualized file and change collections. Use stable item identities,
 not array indices or translated labels. Horizontal and wrapping collections move on both axes, including under RTL.
 
 Use a 300 ms ease with `cubic-bezier(0.2, 0, 0, 1)` for position changes. In nonvirtualized collections, new items
@@ -1414,7 +1416,8 @@ fade in from the left while removed items fade out to the right as inert, access
 These effects move by 25% of each item's own width over 300 ms with `cubic-bezier(0.4, 0, 0.2, 1)`, starting alongside
 the surviving items' movement. Removed items stop accepting input immediately; do not delay an action or keep a
 removed control reachable to play an exit animation. Preserve keyboard focus on surviving controls and retain the
-surface's focus handoff when the focused item is removed.
+surface's focus handoff when the focused item is removed: a tab removed while it or its context menu holds focus
+hands focus to the strip's shown tab, or into the panel when no tab is left, with the ring shown.
 
 Initial rendering, scrolling, viewport recycling and container resizing do not trigger item movement animations.
 Virtualized collections keep virtualization and animate only surviving rendered identities whose layout changes.
@@ -1430,6 +1433,12 @@ Its descendant mode supports semantic wrappers and `display: contents`; its virt
 identities without replacing the collection's layout transforms or focus management. Browser collections use
 `useBrowserListMotion` to preserve their existing scroll and focus refs. Keep animation timing and preference
 handling in the shared implementation rather than writing a separate transition at each caller.
+A content-width, start-aligned tab strip passes `contentWidth`: its own width changes with its tabs, which would
+otherwise read as a resize and animate nothing, and positions are measured from its reading-start edge. A caller that
+moves items with inline transforms during a drag calls `releaseListMotion(item)` as it lets go, before clearing the
+transforms, so the dropped item slides on from where it is drawn instead of moving twice. A divider that is hidden
+after the last item uses `[&:not(:has(~[data-list-motion]))]:border-b-0`, not `last:`, because exit copies are
+appended after the last real item.
 For a lazily mounted choice popup, use `MotionListBox` inside the popup so the observer mounts with the list and
 captures its initial positions before the first live choice update. Apply the same motion rule to choices that
 refresh while the popup remains open; a static choice list simply has no movement to animate.

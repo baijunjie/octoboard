@@ -1,5 +1,6 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
 
+import { onReducedMotion, prefersReducedMotion } from "../reducedMotion";
 import { ringForAutomaticFocus } from "../touchInput";
 import { useLatest } from "../components/useLatest";
 import { ArchiveView } from "./ArchiveView";
@@ -23,9 +24,8 @@ export function ArchiveLayer({ view, focusTerminal }: { view: View | undefined; 
       ringForAutomaticFocus();
       latestFocusTerminal.current();
     }
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
     const finish = () => setRetained(undefined);
-    if (reduced.matches) {
+    if (prefersReducedMotion()) {
       finish();
       return;
     }
@@ -36,14 +36,11 @@ export function ArchiveLayer({ view, focusTerminal }: { view: View | undefined; 
       if (event.animationName === "archive-exit" && (event.target as HTMLElement).matches("[data-region=archive]")) finish();
     };
     root?.addEventListener("animationend", ended);
-    const changed = () => {
-      if (reduced.matches) finish();
-    };
-    reduced.addEventListener("change", changed);
+    const stopReduced = onReducedMotion(finish);
     return () => {
       clearTimeout(fallback);
       root?.removeEventListener("animationend", ended);
-      reduced.removeEventListener("change", changed);
+      stopReduced();
     };
   }, [open, retained, latestFocusTerminal]);
 

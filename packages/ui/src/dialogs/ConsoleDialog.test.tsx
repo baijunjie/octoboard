@@ -9,6 +9,7 @@ import { isolate } from "../i18n/isolate";
 import type { Account, Agent, AgentAvailability, AgentModel, Console, Event, ModelsUnavailable, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { openDetails } from "../components/detailsTestSupport";
+import { presence, stubListMotion } from "../components/listMotionTestSupport";
 import { imageToAvatar } from "../avatarImage";
 import { ConsoleDialog } from "./ConsoleDialog";
 import { trackMountRefocus } from "./dialogTestSupport";
@@ -885,4 +886,26 @@ it("restores Manage accounts after virtual activation followed by a pointer back
   });
   expect(document.querySelector('[role="dialog"][aria-label="Settings"]')).toBeNull();
   expect(document.activeElement).toBe(opener);
+});
+
+it("moves the Advanced tabs that come and go, none as the section opens, and hands focus on from a tab that goes", async () => {
+  const motion = stubListMotion();
+  render(undefined, [], undefined, { claude: "available", codex: "available", grok: "available" });
+  await openAdvanced();
+  expect(motion.played()).toEqual([]);
+  const grok = Array.from(document.body.querySelectorAll<HTMLElement>('[role="tab"]')).find((tab) => tab.textContent === "Grok Build")!;
+  await clickTab("Grok Build");
+  await act(async () => grok.focus());
+  expect(selectedTab()).toBe("Grok Build");
+  const availability = (grokState: AgentAvailability["availability"]) => new Map((["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: agent === "grok" ? grokState : "available" }]));
+  await act(async () => lastStore.setState({ agentAvailability: availability("unavailable") }));
+  expect(motion.played().map(({ frames }) => presence(frames))).toEqual(["exit"]);
+  const copy = document.body.querySelector("[data-list-motion-exit]")!;
+  expect(copy.getAttribute("aria-hidden")).toBe("true");
+  expect(copy.hasAttribute("inert")).toBe(true);
+  expect(document.activeElement?.textContent).toBe("Claude Code");
+  expect(copy.contains(document.activeElement)).toBe(false);
+  motion.clear();
+  await act(async () => lastStore.setState({ agentAvailability: availability("available") }));
+  expect(motion.played().map(({ element, frames }) => [element.textContent, presence(frames)])).toEqual([["Grok Build", "enter"]]);
 });

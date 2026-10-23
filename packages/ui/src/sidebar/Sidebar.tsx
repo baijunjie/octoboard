@@ -34,6 +34,7 @@ import { drawerClass, PANE_ID, RailClip, usePanePeekPointer } from "../layout/pa
 import type { PaneWidth } from "../layout/paneWidth";
 import { COLUMN_EASE_CLASS, columnSpan, isDockEasing, usePaneDockMotion, type DockPhase } from "../layout/paneDockMotion";
 import type { PanePeek } from "../layout/usePaneToggles";
+import { onReducedMotion, prefersReducedMotion } from "../reducedMotion";
 import { effectiveTags, matchesFilter, tagVocabulary } from "../projectFiltering";
 import type { Console, Project, Session } from "../protocol";
 import { activityLabelKey, sessionAriaLabel, sessionDisplayTitle, sessionShownStatusKind } from "../sessionLabel";
@@ -273,12 +274,13 @@ export function Sidebar({
   const viewKey = focusId ? `focus:${focusId}` : `console:${shownConsole.id}`;
   const viewRef = useRef<HTMLDivElement>(null);
   const previousViewRef = useRef(viewKey);
+  const viewAnimationRef = useRef<Animation>(undefined);
   // Played in place rather than by remounting the view, so a console switch leaves what is mounted
   // in it (the header and its menu trigger among it) as it is.
   useLayoutEffect(() => {
     const previous = previousViewRef.current;
     previousViewRef.current = viewKey;
-    if (previous === viewKey || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (previous === viewKey || prefersReducedMotion()) return;
     // The card owns its entry animation; animate content changes only once it is visible.
     if (peek?.active && !dock.insetShown) return;
     // Going into or out of a focus mode slides sideways; between two views of the same level (two
@@ -291,8 +293,10 @@ export function Sidebar({
         : enters
           ? { transform: "translateX(var(--view-shift))" }
           : { transform: "translateX(calc(-1 * var(--view-shift)))" };
-    viewRef.current?.animate([{ ...from, opacity: 0 }, {}], { duration: 240, easing: "cubic-bezier(0.2, 0, 0, 1)" });
+    viewAnimationRef.current = viewRef.current?.animate([{ ...from, opacity: 0 }, {}], { duration: 240, easing: "cubic-bezier(0.2, 0, 0, 1)" });
   }, [viewKey]);
+  // Reduced motion requested while the view is arriving: it is where it ends up at once.
+  useEffect(() => onReducedMotion(() => viewAnimationRef.current?.cancel()), []);
 
   let content: React.ReactNode;
   if (focus && "project" in focus) {
@@ -593,7 +597,7 @@ function ConsoleBody({
                 // plain paint and lets every pointer event through. It takes the dimmed names below
                 // WCAG AA (about 2.9:1, muted text about 1.9:1) on purpose, by the user's decision: a
                 // de-emphasis cue, lifted as soon as the group is pointed at, focused or has a menu open.
-                className="relative after:pointer-events-none after:absolute after:inset-0 after:transition-colors after:duration-200 data-inactive:after:bg-panel-sidebar/55"
+                className="relative after:pointer-events-none after:absolute after:inset-0 after:transition-colors after:duration-200 motion-reduce:after:transition-none data-inactive:after:bg-panel-sidebar/55"
               >
                 <ProjectNode
                   handlers={handlers}

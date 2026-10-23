@@ -1,6 +1,7 @@
 import type { Preferences, Scenario } from "../scenario";
 import type { Ui } from "../interact";
 import { SAMPLE, shellTerminalOf, snapshotState } from "./builders";
+import { terminalClosed, terminalOpened } from "./liveChanges";
 
 const GROUP = "Terminal panel";
 
@@ -56,10 +57,16 @@ export const terminalPanelScenarios: Scenario[] = [
     category: "normal",
     title: "Several tabs",
     description:
-      "Three shells in the order they were started, the newest selected with the raised fill and the others muted until hovered. The pane is widened to 560px so the three tabs fit the strip whole, as at the default width they already scroll (see Many tabs). Hover or select a tab to see its close mark; press New terminal for another tab, selected at once.",
+      "Three shells in the order they were started, the newest selected with the raised fill and the others muted until hovered. The pane is widened to 560px so the three tabs fit the strip whole, as at the default width they already scroll (see Many tabs). Hover or select a tab to see its close mark; press New terminal for another tab, selected at once. The \"Live changes\" buttons make what another window would: its new terminal joins the strip at the end without being selected, and closing the shown one hands the view to a neighbour, and reopening it afterwards brings it back without selecting it, so the view stays on the neighbour. Tabs fade in or out while the ones after them slide into place; with reduced motion they appear and disappear at once.",
     state: stateOf(severalShells),
     preferences: WIDE_TERMINAL,
     steps: [openWebsite],
+    liveChanges: [
+      terminalOpened("open-htop", "Another window opens htop", shellTerminalOf("sh-4", web, "htop", 3)),
+      terminalClosed("close-htop", "Another window closes htop", "sh-4"),
+      terminalClosed("close-git-log", "Another window closes git log", "sh-3"),
+      terminalOpened("open-git-log", "Another window reopens git log", severalShells[2]),
+    ],
   },
   {
     id: "shell-panel-many-tabs",
@@ -197,6 +204,21 @@ export const terminalPanelScenarios: Scenario[] = [
     state: stateOf(severalShells),
     preferences: WIDE_TERMINAL,
     steps: [openWebsite, (ui) => ui.contextMenu("pnpm dev")],
+  },
+  {
+    id: "shell-panel-tab-menu-focused",
+    group: GROUP,
+    category: "normal",
+    title: "Context menu of the focused tab, the tab closed elsewhere",
+    description:
+      "The pnpm dev tab had the keyboard focus when its context menu opened at it, the shown tab unchanged; focus is now inside the open menu, and the menu returns it to the pnpm dev tab when it closes. \"Another window closes pnpm dev\" among the \"Live changes\" buttons removes the tab under the open menu, to show where focus goes when the tab it would return to is gone: the tab fades out, the menu goes with it and focus lands on the shown tab (git log), with its focus ring, rather than on the page. \"Another window reopens pnpm dev\" brings the tab back, not selected. With reduced motion the tab goes at once.",
+    state: stateOf(severalShells),
+    preferences: WIDE_TERMINAL,
+    steps: [openWebsite, (ui) => ui.focusControl("pnpm dev"), (ui) => ui.contextMenu("pnpm dev")],
+    liveChanges: [
+      terminalClosed("close-pnpm-dev", "Another window closes pnpm dev", "sh-2"),
+      terminalOpened("open-pnpm-dev", "Another window reopens pnpm dev", severalShells[1]),
+    ],
   },
   {
     id: "shell-rename",

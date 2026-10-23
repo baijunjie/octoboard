@@ -2,6 +2,7 @@ import type { Agent, AgentAvailability, Settings } from "../../protocol";
 import { describing, type Ui } from "../interact";
 import type { Scenario, Step } from "../scenario";
 import { ALL_AGENTS, SAMPLE, branchItemOf, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState, switchingAccount, worktreeItemOf } from "./builders";
+import { agentAvailability } from "./liveChanges";
 import { SAMPLE_CODEX_MODELS } from "./agentModels";
 import { IMAGES } from "./viewerImages";
 import { SHELL_TIMEOUT } from "./shellTimeout";
@@ -676,10 +677,14 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "normal",
     title: "New console advanced settings",
-    description: "Without named accounts every agent in the \"Agent default accounts\" section has a picker holding only its default account, as \"Default account\", with the icon-only key button named \"Manage accounts\" beside the section title. Advanced opens on the console sessions' agent among tabs for every agent, each with a Console sessions and a Project sessions group of model and reasoning effort settings, and at its foot the empty Console session instructions field with its placeholder and note. No line about each agent having its own models sits above the tabs.",
+    description: "Without named accounts every agent in the \"Agent default accounts\" section has a picker holding only its default account, as \"Default account\", with the icon-only key button named \"Manage accounts\" beside the section title. Advanced opens on the console sessions' agent among tabs for every agent, each with a Console sessions and a Project sessions group of model and reasoning effort settings, and at its foot the empty Console session instructions field with its placeholder and note. No line about each agent having its own models sits above the tabs. \"Codex uninstalled\" among the \"Live changes\" buttons is the machine finding it missing while the dialog is open: its tab fades out and the one after it slides into its place, and \"Codex installed\" brings it back. With reduced motion the tab goes and returns at once.",
     steps: [
       (ui) => ui.press(ui.t("rail.newConsole")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+    ],
+    liveChanges: [
+      agentAvailability("uninstall-codex", "Codex uninstalled", "codex", "unavailable"),
+      agentAvailability("install-codex", "Codex installed", "codex", "available"),
     ],
   },
   {
@@ -689,11 +694,15 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "normal",
     title: "Console settings with differing default agents",
-    description: "Console sessions run on Claude Code and project sessions on Codex, which is no longer installed: that picker keeps it, with a grey Not installed badge after the name. The \"Agent default accounts\" rows sit on the same two columns as the Default agent pickers above, each agent's name on the left and its account picker on the right: Claude Code (with its named accounts), Grok Build (only \"Default account\") and Codex with the badge, which stays because the console still pins its account. In Advanced the agent tabs include Codex with the badge, which stays while the console stores a project session model for it.",
+    description: "Console sessions run on Claude Code and project sessions on Codex, which is no longer installed: that picker keeps it, with a grey Not installed badge after the name. The \"Agent default accounts\" rows sit on the same two columns as the Default agent pickers above, each agent's name on the left and its account picker on the right: Claude Code (with its named accounts), Grok Build (only \"Default account\") and Codex with the badge, which stays because the console still pins its account. In Advanced the agent tabs include Codex with the badge, which stays while the console stores a project session model for it. \"Codex installed\" among the \"Live changes\" buttons is the machine finding it: its tab loses the badge and moves up to its own place before Grok Build, the tabs sliding to make room, and \"Codex uninstalled\" puts the badge back and the tab at the end again.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.edit")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+    ],
+    liveChanges: [
+      agentAvailability("install-codex", "Codex installed", "codex", "available"),
+      agentAvailability("uninstall-codex", "Codex uninstalled", "codex", "unavailable"),
     ],
   },
   {

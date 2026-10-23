@@ -428,6 +428,34 @@ it("uses the card entry alone for a new console, then animates switches while th
 });
 
 
+it("cuts a running view-switch animation short when reduced motion is requested", () => {
+  const preference = new EventTarget() as MediaQueryList;
+  Object.defineProperty(preference, "matches", { value: false, writable: true });
+  vi.stubGlobal("matchMedia", () => preference);
+  const originalAnimate = HTMLElement.prototype.animate;
+  const cancel = vi.fn();
+  const animate = vi.fn(() => ({ cancel }));
+  HTMLElement.prototype.animate = animate as unknown as typeof HTMLElement.prototype.animate;
+  onTestFinished(() => {
+    if (originalAnimate) HTMLElement.prototype.animate = originalAnimate;
+    else Reflect.deleteProperty(HTMLElement.prototype, "animate");
+    vi.unstubAllGlobals();
+  });
+  const other = consoleOf("c-2", "Other");
+  const { render } = mountSidebar({ projects: [], sessions: [] });
+  render({ shownConsole: other, projects: [], sessions: [] });
+  expect(animate).toHaveBeenCalledOnce();
+  expect(cancel).not.toHaveBeenCalled();
+  act(() => {
+    Object.defineProperty(preference, "matches", { value: true });
+    preference.dispatchEvent(new Event("change"));
+  });
+  expect(cancel).toHaveBeenCalledOnce();
+  render({ shownConsole: main, projects: [], sessions: [] });
+  expect(animate).toHaveBeenCalledOnce();
+});
+
+
 it("expands only projects with unarchived sessions and keeps interrupted projects undimmed", () => {
   onTestFinished(() => {
     act(() => vi.runOnlyPendingTimers());

@@ -28,7 +28,7 @@ const page = {
   async waitForTimeout() {},
   async evaluate(fn) {
     if (String(fn).includes("SCENARIOS")) {
-      return { scenarios: [{ id: "test", group: "Test" }], languages: ["en", "zh-Hans"] };
+      return { scenarios: [{ id: "test", group: "Test", live: [] }], languages: ["en", "zh-Hans"] };
     }
     return mode?.startsWith("scenario-failure") ? ["fixture failed"] : [];
   },

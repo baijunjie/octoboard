@@ -19,7 +19,7 @@ const VALUE_ARGUMENTS: Partial<Record<keyof Ui, number[]>> = { hoverChangeStatus
 
 /** Every scenario's steps, run against a `Ui` that presses nothing and records the names it was
  * given to look for, in `language`. Only `t`, `session` and `changeRow` are real. `key` and `type`
- * take text, and `hoverCalloutStatus` a title, so they record nothing. */
+ * take text, `hoverCalloutStatus` a title and `daemonEvents` events, so they record nothing. */
 async function matchersOf(language: Language): Promise<{ id: string; matcher: Matcher }[]> {
   const real = createUi({} as Document, language);
   const matchers: { id: string; matcher: Matcher }[] = [];
@@ -28,7 +28,7 @@ async function matchersOf(language: Language): Promise<{ id: string; matcher: Ma
       get(target, property: keyof Ui) {
         if (property === "t" || property === "session" || property === "changeRow") return target[property];
         return async (...args: unknown[]) => {
-          if (property === "key" || property === "type" || property === "hoverCalloutStatus") return;
+          if (property === "key" || property === "type" || property === "hoverCalloutStatus" || property === "daemonEvents") return;
           args.forEach((arg, index) => {
             if (VALUE_ARGUMENTS[property]?.includes(index)) return;
             if (typeof arg === "string" || typeof arg === "function") matchers.push({ id: scenario.id, matcher: arg as Matcher });
@@ -112,6 +112,17 @@ describe("gallery scenarios", () => {
   it("have unique ids, which the URL names them by", () => {
     const ids = SCENARIOS.map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("name each live change of a scenario by an id and a label of its own, which the URL and the buttons tell them by", () => {
+    for (const scenario of SCENARIOS.filter(({ liveChanges }) => liveChanges)) {
+      const changes = scenario.liveChanges!;
+      expect(changes.length, scenario.id).toBeGreaterThan(0);
+      expect(new Set(changes.map(({ id }) => id)).size, scenario.id).toBe(changes.length);
+      // The frame URL's `live` parameter lists them comma-separated.
+      expect(changes.filter(({ id }) => id.includes(",")).map(({ id }) => id), scenario.id).toEqual([]);
+      expect(new Set(changes.map(({ label }) => label)).size, scenario.id).toBe(changes.length);
+    }
   });
 
   it("write no width the gallery already opens at, which would be a scenario carrying nothing", () => {

@@ -490,8 +490,9 @@ function AccountRow({ agent, account, label, help, description, approval, sharin
   const actionsRef = useRef<HTMLDivElement>(null);
   const loginRef = useRef<HTMLButtonElement>(null);
   const returnLoginFocus = useLoginFocusReturn(loginRef, actionsRef, { active: loginActive, succeeded: login !== undefined });
+  // The last row has no divider; a departing row's visual after it is not a row.
   return (
-    <div data-list-motion={motionKey} className="col-span-full grid grid-cols-subgrid items-center gap-y-3 groove-b py-4 last:border-b-0">
+    <div data-list-motion={motionKey} className="col-span-full grid grid-cols-subgrid items-center gap-y-3 groove-b py-4 [&:not(:has(~[data-list-motion]))]:border-b-0">
       <div className="min-w-0">
         <AccountNameLine name={label} quota={quota} help={help} showLoginState showUpdated={false}>
           {notLoggedIn && <Button ref={loginRef} size="xs" variant="secondary" preventFocusOnPress isDisabled={loginActive} onPress={() => onLogin(returnLoginFocus)}>

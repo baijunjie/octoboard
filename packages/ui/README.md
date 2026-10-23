@@ -56,6 +56,12 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   `[data-gallery-failure]` overlay (`src/gallery/banner.ts`); check a capture for it.
 - A frame URL with `chrome=1` gives the page the desktop window's `windowChrome` capability (`src/gallery/frame.tsx`),
   so what only the desktop app offers can be driven in a browser.
+- A scenario with `liveChanges` lists them as buttons beside the other controls, offered once its page is ready: each makes
+  what another window or the machine would while the view is on screen (an account added, a terminal closed there, an agent
+  found missing), as the daemon's own events through the steps' `daemonEvents`. They are for the motion and focus of a
+  collection that changes under a view, which no first render shows. A pointer press on a button does not take focus from the window, so
+  a pinned panel or an open menu stays as it is (a keyboard press on one does move focus out). A change's `id` in a frame URL's `live` parameter (comma-separated) applies
+  it after the steps, which is how `pnpm gallery:sweep` runs every one.
 - Report scenarios expose the document event `gallery:report-page-created` through
   `src/gallery/reportPageFixture.ts`, applying fixture pages through the store's `applyDaemonEvent`.
   `node scripts/gallery-report-focus.mjs <gallery-origin>` drives report replacement and focus checks against a served gallery.
@@ -131,6 +137,9 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   modifier is pressed after the steps, so they find those buttons by their plain names; `ui.pressWithModifier`
   presses a control with the modifier down for that press alone, for what a press does when the page has not seen
   the modifier held.
+- Live changes are written with the builders in `fixtures/liveChanges.ts` (`accountAdded`, `accountRemoved`,
+  `agentAvailability`, `terminalOpened`, `terminalClosed`), not raw `daemonEvents` steps; add a builder there for another
+  kind of collection.
 - Steps name a control in the language the window is in, so copy is never written out: controls through `ui.t`, a
   session row through `ui.session`, a change row through `ui.changeRow`. A name that is not copy (a branch, a file, a
   title the fixture sets) is a plain string or a test of the name; a matcher is never a regular expression.

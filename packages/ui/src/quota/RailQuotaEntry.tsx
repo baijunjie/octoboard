@@ -12,6 +12,7 @@ import { FadeOverflow } from "../components/FadeOverflow";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FADE_SIZE, FadedScroller, useFadeRegion } from "../components/scrollFade";
 import { useStableHandler } from "../components/useLatest";
+import { useListMotion } from "../components/useListMotion";
 import { Message, useT } from "../i18n/react";
 import type { Account, Agent, QuotaWindow } from "../protocol";
 import type { SettingsSectionId } from "../settings/SettingsDialog";
@@ -375,13 +376,14 @@ function QuotaPanel({ shownAgent, shownAccount, focusSelectedTab, onOpenAccounts
  *
  * With a `currentAccount` (`null` for the default account) the list opens scrolled so that account's row
  * is in view, as the selected session's account is the one the user came to read. The row is not marked
- * in any other way. */
+ * in any other way. Accounts added or removed while the panel is open move with the shared list motion. */
 function AgentPanel({ agent, owned, currentAccount }: { agent: Agent; owned: Account[]; currentAccount?: string | null }): React.ReactElement {
   const t = useT();
   const defaultName = defaultAccountName(t, useDaemonStore((s) => s.settings.default_account_names), agent);
   const region = useFadeRegion({ label: t("rail.quota.accounts") });
   const scroller = useRef<HTMLDivElement>(null);
   const currentRow = useRef<HTMLDivElement>(null);
+  const listRef = useListMotion<HTMLDivElement>();
   // `scrollTop` rather than `scrollIntoView`, which would scroll the popover's ancestors too. The row's
   // `offsetTop` is measured from the list's content (its wrapper is the offset parent) and is not
   // affected by the popover's opening transform.
@@ -401,7 +403,7 @@ function AgentPanel({ agent, owned, currentAccount }: { agent: Agent; owned: Acc
     >
       <div className={region.focused ? "ring-2 ring-inset ring-focus" : ""}>
         <FadedScroller ref={scroller} region={region} className="max-h-[min(24rem,60vh)]">
-          <div className="relative flex flex-col px-4">
+          <div ref={listRef} className="relative flex flex-col px-4">
             <QuotaAccount agent={agent} account={null} name={defaultName} rowRef={currentAccount === null ? currentRow : undefined} />
             {owned.map((account) => (
               <QuotaAccount
@@ -425,8 +427,9 @@ function QuotaAccount({ agent, account, name, rowRef }: { agent: Agent; account:
   const quota = useAccountQuota(agent, account);
   const now = useNow();
   const usedUp = exhaustedQuotaWindow(quota, now) !== undefined;
+  // The last row has no divider; a departing row's visual after it is not a row.
   return (
-    <div ref={rowRef} className="flex flex-col gap-2 groove-b py-3 last:border-b-0">
+    <div ref={rowRef} data-list-motion={account ?? `default:${agent}`} className="flex flex-col gap-2 groove-b py-3 [&:not(:has(~[data-list-motion]))]:border-b-0">
       <AccountNameLine name={name} quota={quota} usedUp={usedUp} />
       <AccountQuotaSummary quota={quota} single usedUp={usedUp} />
     </div>

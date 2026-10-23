@@ -89,9 +89,13 @@ An idle running shell, or one that has exited, closes at once without asking. Wh
 
 - Until the daemon has ended it, the tab stays, dimmed, and stays shown if it was; Close terminal is unavailable for
   it meanwhile.
-- Once it has gone, the tab after it is shown in its place, or the one before it when it was the last; keyboard focus
-  that was in its terminal moves to the terminal now shown, or, with no tab left, into the panel (to New terminal).
+- Once it has gone, the tab after it is shown in its place, or the one before it when it was the last.
 - A close the daemon refuses raises an error alert.
+
+**Keyboard focus when a terminal goes**, whether closed here or from another client: focus that was in its terminal
+moves to the terminal now shown; focus on its tab, or in that tab's open context menu, moves to the shown tab in the
+strip. With no tab left, either moves into the panel (to New terminal). The control focus lands on shows its focus
+ring, except after a touch. Focus anywhere else stays where it is.
 
 ## The shell terminal
 

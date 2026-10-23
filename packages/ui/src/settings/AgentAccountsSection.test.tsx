@@ -911,7 +911,7 @@ it("shows the plan and the quota of the default account and of an owned one, eac
 it("explains the default account in a help tip beside its name rather than in a line of its own", () => {
   availability.set("claude", { availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
   const { container } = mount();
-  const row = container.querySelector("[data-list-motion]")!;
+  const row = container.querySelector("[data-list-motion]:not([role=tab])")!;
   const tip = row.querySelector("button")!;
   expect(tip.getAttribute("aria-label")).toBe("About the default account");
   expect(row.textContent).not.toContain("The setup a session runs under");

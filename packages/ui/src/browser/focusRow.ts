@@ -1,13 +1,8 @@
+import { afterCollectionFocus } from "../components/afterCollectionFocus";
+
 /** The row `key` names in `list`, found again by its key since the collection may have rebuilt it. */
 function findRow(list: HTMLElement | null, key: string): HTMLElement | null {
   return list?.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"]`) ?? null;
-}
-
-/** Runs `then` once the collection has had its two renders to re-aim focus: when what held focus
- * goes away, react-aria points its focused key at a row in one render and focuses that row from an
- * effect of the next, which would undo a focus move made any sooner. */
-function afterCollectionFocus(then: () => void): void {
-  requestAnimationFrame(() => requestAnimationFrame(then));
 }
 
 /** Puts keyboard focus on the row `key` names in `list` once a viewer opened from it has closed:

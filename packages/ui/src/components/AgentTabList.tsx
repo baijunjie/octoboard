@@ -10,6 +10,7 @@ import { AgentIcon } from "./AgentIcon";
 import { AnchoredTooltip } from "./AnchoredTooltip";
 import { beginTabDrag } from "./tabDrag";
 import { useLatest } from "./useLatest";
+import { releaseListMotion, useListMotion } from "./useListMotion";
 import { useTabScrollLabels } from "./tabScrollLabels";
 
 /** How long after keyboard focus arrives to wait for the scroll that reveals the tab to begin, and how long a
@@ -28,9 +29,10 @@ const REVEAL_QUIET_MS = 100;
  * keyboard focus (see `AgentTab`). With `onReorder` the tabs can be dragged with a mouse or pen, and it
  * is called with the whole new order and the agent moved when one is dropped elsewhere; the order itself
  * stays the caller's, and the tabs fall back to `agents` until it changes, so the caller shows the new
- * order at once. `trailing` is a control at the end of the strip. It sits flush with the container's
- * end, aligned with the section's trailing actions column when that column is present; narrow account rows
- * place their actions on a separate line at reading start.
+ * order at once. Tabs added, removed or reordered while the strip is shown move with the shared list motion.
+ * `trailing` is a control at the end of the strip. It sits flush with the container's end, aligned with the
+ * section's trailing actions column when that column is present; narrow account rows place their actions on a
+ * separate line at reading start.
  * The container is padded at its end so the tabs scroll clear of it, and HeroUI's scroll-forward
  * chevron, which would sit under it, is moved to just before it. */
 export function AgentTabList({
@@ -52,10 +54,17 @@ export function AgentTabList({
 } & Omit<React.HTMLAttributes<HTMLDivElement>, "children">): React.ReactElement {
   const tabScrollLabels = useTabScrollLabels();
   const [elements] = useState(() => new Map<Agent, HTMLElement>());
+  const listRef = useListMotion<HTMLDivElement>({ contentWidth: true });
   const latest = useLatest({ agents, onReorder });
   const dragStart = (agent: Agent, event: PointerEvent) => {
     const { agents: current, onReorder: reorder } = latest.current;
-    if (reorder && current.length > 1) beginTabDrag({ agent, agents: current, elements, event, onDrop: reorder });
+    // A dropped tab moves into its new place from where the drag left it, not from where it started.
+    const drop = (order: Agent[], moved: Agent) => {
+      const tab = elements.get(moved);
+      if (tab) releaseListMotion(tab);
+      reorder?.(order, moved);
+    };
+    if (reorder && current.length > 1) beginTabDrag({ agent, agents: current, elements, event, onDrop: drop });
   };
   return (
     <Tabs.ListContainer
@@ -69,7 +78,8 @@ export function AgentTabList({
         </div>
       )}
     >
-      <Tabs.List aria-label={label} className="w-max min-w-0 p-1.5">
+      {/* Positioned, so a departing tab's visual stays in the strip's scroll. */}
+      <Tabs.List ref={listRef} aria-label={label} className="relative w-max min-w-0 p-1.5">
         {agents.map((agent) => (
           <AgentTab key={agent} agent={agent} tabRef={tabRef?.(agent)} notInstalledTip={notInstalledTip?.(agent)} elements={elements} onDragStart={onReorder && dragStart} />
         ))}
@@ -170,6 +180,7 @@ function AgentTab({ agent, tabRef, notInstalledTip, elements, onDragStart }: {
     <Tabs.Tab
       id={agent}
       ref={attach}
+      data-list-motion={agent}
       aria-label={notInstalledTip ? t("agents.notInstalled", { agent: AGENT_LABEL[agent] }) : undefined}
       onHoverChange={setHovered}
       onFocus={() => {

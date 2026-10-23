@@ -1,13 +1,13 @@
 // The gallery's own page: the scenario list and the controls around the iframe that renders the
 // chosen scenario (`frame.tsx`). A dev tool, so plain, English and outside the app's i18n and theme.
 // What is chosen lives in the URL, so a link reproduces a view.
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom/client";
 
 import { LANGUAGES, LANGUAGE_NAMES, isLanguage, type Language } from "../i18n/languages";
 import { DEFAULT_SCENARIO, GROUPS, SCENARIOS } from "./fixtures";
 import { CATEGORIES } from "./fixtures/groups";
-import { DEFAULT_WIDTH, MIN_HEIGHT, type Scenario } from "./scenario";
+import { DEFAULT_WIDTH, LIVE_CHANGE_EVENT, MIN_HEIGHT, type Scenario } from "./scenario";
 
 const WIDTHS = [
   { label: "Wide", width: DEFAULT_WIDTH },
@@ -125,12 +125,31 @@ function Gallery(): React.ReactElement {
   const width = view.width ?? scenario.width ?? DEFAULT_WIDTH;
   const height = view.height ?? scenario.height;
   const update = (patch: Partial<View>) => setView((current) => ({ ...current, ...patch }));
+  const frame = useRef<HTMLIFrameElement>(null);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     window.history.replaceState(null, "", viewQuery(view));
   }, [view]);
 
   const frameQuery = `?${sharedParams({ ...view, scenario: scenario.id })}`;
+
+  // The live changes are offered once the frame says it is ready: the page listens for them only after its steps.
+  useEffect(() => {
+    setReady(false);
+    if (!scenario.liveChanges) return;
+    const timer = setInterval(() => {
+      try {
+        if (frame.current?.contentDocument?.documentElement.dataset.galleryReady) {
+          setReady(true);
+          clearInterval(timer);
+        }
+      } catch {
+        // A frame that is not ours to read yet; the next tick looks again.
+      }
+    }, 200);
+    return () => clearInterval(timer);
+  }, [run, frameQuery, scenario]);
 
   return (
     <>
@@ -219,6 +238,23 @@ function Gallery(): React.ReactElement {
               </button>
             ))}
           </div>
+          {scenario.liveChanges && (
+            <div className="group" role="group" aria-label="Live changes">
+              Live changes
+              {scenario.liveChanges.map((change) => (
+                <button
+                  key={change.id}
+                  disabled={!ready}
+                  // The press must not take focus from the window: a pinned panel or an open menu in it would
+                  // otherwise close as focus left, which a change made by another window never does.
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => frame.current?.contentDocument?.dispatchEvent(new CustomEvent(LIVE_CHANGE_EVENT, { detail: change.id }))}
+                >
+                  {change.label}
+                </button>
+              ))}
+            </div>
+          )}
           <a href={`gallery-frame.html${frameQuery}`} target="_blank" rel="noreferrer">
             Open alone
           </a>
@@ -226,6 +262,7 @@ function Gallery(): React.ReactElement {
         </header>
         <div className="stage">
           <iframe
+            ref={frame}
             key={`${run}${frameQuery}`}
             title={scenario.title}
             src={`gallery-frame.html${frameQuery}`}

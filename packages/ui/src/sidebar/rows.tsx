@@ -88,7 +88,7 @@ export function TreeRow({
       data-selected={selected || undefined}
       data-locked={locked || undefined}
       {...focusVisible}
-      className={`group flex cursor-pointer rounded-lg text-sm outline-none select-none transition-colors hover:bg-panel-hover data-focus-visible:ring-2 data-focus-visible:ring-focus data-selected:bg-panel-selected ${className}`}
+      className={`group flex cursor-pointer rounded-lg text-sm outline-none select-none transition-colors motion-reduce:transition-none hover:bg-panel-hover data-focus-visible:ring-2 data-focus-visible:ring-focus data-selected:bg-panel-selected ${className}`}
       onMouseDown={keepFocus}
       onClick={onActivate}
       onKeyDown={rowKeyHandler(onActivate)}

@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
+import { presence, stubListMotion } from "../components/listMotionTestSupport";
 import { enter, leave, mountForTooltip, openTooltip, pointer, withFakeTimers } from "../components/tooltipTestSupport";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import type { Account, AccountQuota, Agent, Availability, Session } from "../protocol";
@@ -771,4 +772,42 @@ it("keeps the mini bar of a session whose agent was removed", () => {
   expect(fill()).not.toBeNull();
   act(() => store.setState({ settings: { ...store.getState().settings, added_agents: ["codex"] } }));
   expect(fill()).not.toBeNull();
+});
+
+it("moves the accounts and agent tabs that come and go while the panel is open, and nothing as it opens", async () => {
+  withFakeTimers();
+  const motion = stubListMotion();
+  const { button, store } = mount();
+  click(button);
+  expect(motion.played()).toEqual([]);
+  const setAccounts = (next: Account[]) => act(() => store.setState((state) => ({ settings: { ...state.settings, accounts: next } })));
+  const withSide = [...accounts, { id: "claude-side", agent: "claude" as const, name: "Side", config_dir: "/home/dev/.claude-side" }];
+  setAccounts(withSide);
+  const row = (id: string) => document.querySelector(`[data-list-motion="${id}"]`);
+  expect(motion.played().map(({ element, frames }) => [element, presence(frames)])).toEqual([[row("claude-side"), "enter"]]);
+  motion.clear();
+  setAccounts(withSide.filter((account) => account.id !== "claude-work"));
+  expect(motion.played().map(({ frames }) => presence(frames))).toEqual(["exit"]);
+  const copy = panel()!.querySelector("[data-list-motion-exit]")!;
+  expect(copy.getAttribute("aria-hidden")).toBe("true");
+  expect(copy.hasAttribute("inert")).toBe(true);
+  expect(row("claude-work")).toBeNull();
+  motion.clear();
+  // Codex stops being installed: its tab leaves the strip.
+  act(() => store.setState((state) => ({ agentAvailability: new Map(state.agentAvailability).set("codex", { agent: "codex", availability: "unavailable" }) })));
+  // The tabs are rendered from the collection in a commit of their own, which the motion observes.
+  await act(async () => {});
+  expect(motion.played().map(({ frames }) => presence(frames))).toEqual(["exit"]);
+  expect(tabs().filter((tab) => !tab.closest("[inert]")).map((tab) => tab.textContent)).toEqual(["Claude Code"]);
+});
+
+it("drops a removed account at once, with no copy, while reduced motion is asked for", () => {
+  withFakeTimers();
+  const motion = stubListMotion();
+  const { button, store } = mount();
+  click(button);
+  motion.reduce();
+  act(() => store.setState((state) => ({ settings: { ...state.settings, accounts: accounts.filter((account) => account.id !== "claude-work") } })));
+  expect(motion.played()).toEqual([]);
+  expect(panel()!.querySelector("[data-list-motion-exit]")).toBeNull();
 });
