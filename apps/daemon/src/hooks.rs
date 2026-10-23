@@ -543,17 +543,17 @@ mod tests {
     }
 
     /// Only the id-less signal may be attributed by the clock; everything else names its own turn.
+    /// Grok's backstop carries nothing but the fact that the turn is over.
     #[test]
-    fn only_the_backstop_is_marked_as_clock_attributed() {
-        assert!(
-            turn_end(
-                Agent::Grok,
-                "Notification",
-                &json!({"notificationType": "idle_prompt"})
-            )
-            .expect("a turn end")
-            .backstop
-        );
+    fn only_the_backstop_is_clock_attributed_and_it_carries_no_message() {
+        let backstop = turn_end(
+            Agent::Grok,
+            "Notification",
+            &json!({"notificationType": "idle_prompt"}),
+        )
+        .expect("a turn end");
+        assert!(backstop.backstop);
+        assert!(backstop.last_assistant_message.is_none());
         assert!(
             !turn_end(Agent::Grok, "Stop", &json!({}))
                 .expect("a turn end")
@@ -649,18 +649,6 @@ mod tests {
         .expect("a turn end");
         assert!(!end.failed);
         assert!(turn_end(Agent::Codex, "UserPromptSubmit", &json!({})).is_none());
-    }
-
-    /// Grok's backstop carries nothing but the fact that the turn is over.
-    #[test]
-    fn the_idle_prompt_backstop_is_a_turn_end_with_no_message() {
-        let end = turn_end(
-            Agent::Grok,
-            "Notification",
-            &json!({"notificationType": "idle_prompt"}),
-        )
-        .expect("a turn end");
-        assert!(end.last_assistant_message.is_none());
     }
 
     fn task(id: &str, kind: &str, description: &str) -> BackgroundTask {

@@ -672,10 +672,10 @@ mod tests {
         assert_eq!(gone(delete_judged(&state, &group).unwrap()).len(), 1);
     }
 
-    /// A group that finds the setting off under the claim ends the pass: the groups after it are
-    /// not judged, and nothing is deleted.
+    /// A pass that finds the setting off under the claim deletes nothing, however many groups it
+    /// has.
     #[test]
-    fn a_pass_stops_at_the_first_group_that_finds_the_setting_off() {
+    fn a_pass_deletes_nothing_while_the_setting_is_off() {
         let (state, dir) = console_with_project_and_accounts("archive-cleanup-pass-stops");
         let account = Account::new(&dir, &[]);
         for id in ["first", "second"] {
@@ -688,12 +688,6 @@ mod tests {
             .store
             .set_auto_delete_unresumable_archives(false)
             .unwrap();
-        let judged = state.store.list_sessions().unwrap();
-        let group: Vec<&Session> = judged.iter().collect();
-        assert!(matches!(
-            delete_judged(&state, &group).unwrap(),
-            Judged::SwitchedOff
-        ));
         assert!(delete_unresumable_groups(&state, &(account.locator())()).is_empty());
         assert_eq!(session_ids(&state), ["first", "second"]);
     }

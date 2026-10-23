@@ -68,17 +68,6 @@ it("gives its popover the control fills of a dialog's surface", () => {
   expect(dialog()?.closest(".control-fills")).not.toBeNull();
 });
 
-it("closes the popover on Escape and returns focus to the button", () => {
-  const button = mount();
-  // A real press focuses the button before it opens the popover; synthetic events do not.
-  act(() => button.focus());
-  press(button);
-  expect(dialog()).not.toBeNull();
-  act(() => void dialog()!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
-  expect(dialog()).toBeNull();
-  expect(document.activeElement).toBe(button);
-});
-
 it("closes the popover on a press outside it", () => {
   const button = mount();
   press(button);

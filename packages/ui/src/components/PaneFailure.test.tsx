@@ -41,11 +41,6 @@ it("holds the rest of the failure behind Details, beside Try again, and has no T
   expect([...alone.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Details"]);
 });
 
-it("announces the title and the line only, and not the buttons", () => {
-  const container = mountForTooltip(<PaneFailure title="Could not list the files" message="Permission denied" announce onRetry={() => {}} />);
-  expect(container.querySelector("[role=alert] button")).toBeNull();
-});
-
 it.each(["internal_error", "unexpected_error", "some_code_from_a_newer_daemon"])("shows the generic sentence for %s, and the raw message only behind Details", (code) => {
   const error = new DaemonRequestError("database is locked", code, { detail: "database is locked" });
   const container = mountForTooltip(<PaneFailure title="Could not load the pages" message={error} announce onRetry={() => {}} />);

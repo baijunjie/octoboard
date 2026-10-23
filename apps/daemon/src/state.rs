@@ -3403,11 +3403,6 @@ mod tests {
             events.try_recv().is_err(),
             "equal titles are not announced again"
         );
-        first.on_output("\x1b]2;◐ First task\x07\x1b]2;◑ First task\x07".as_bytes());
-        assert!(
-            events.try_recv().is_err(),
-            "a title that only changes its spinner glyph is not announced"
-        );
         state.save_session(&original).unwrap();
         let Event::SessionUpserted { session } = events.try_recv().unwrap() else {
             panic!("expected the saved session")

@@ -852,10 +852,7 @@ it("wraps nothing by default, then wraps files and diffs alike once chosen, and 
 // The two controls portal into places of their own, so the Tab order stays the order on screen
 // whichever mounts first: stepping from a one-sided diff (the wrap choice only) to a two-sided one
 // brings the layout choice in after it.
-it.each([
-  ["with a clipboard", { clipboard: { writeText: async () => {} } }, ["Copy path"]],
-  ["without a clipboard", undefined, ["Copy path"]],
-])("keeps Copy path, then the layout choice, then the wrap choice, when the layout choice mounts second, %s", (_, host, leading) => {
+it("keeps Copy path, then the layout choice, then the wrap choice, when the layout choice mounts second", () => {
   const side: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "file" };
   const change = (key: string, patch: string, old: ViewerChangeSide): ViewerSubject => ({
     key,
@@ -863,10 +860,10 @@ it.each([
     content: { state: "change", change: { old, new: side, patch } },
   });
   const controls = () => [...dialog()!.querySelector("[data-viewer-description]")!.querySelectorAll("button")].map((b) => b.getAttribute("aria-label"));
-  show(change("one", "@@ -0,0 +1 @@\n+a\n", { state: "absent" }), undefined, host);
-  expect(controls()).toEqual([...leading, "Wrap lines"]);
-  show(change("two", "@@ -1 +1 @@\n-a\n+b\n", side), undefined, host);
-  expect(controls()).toEqual([...leading, "Show split diff", "Wrap lines"]);
+  show(change("one", "@@ -0,0 +1 @@\n+a\n", { state: "absent" }));
+  expect(controls()).toEqual(["Copy path", "Wrap lines"]);
+  show(change("two", "@@ -1 +1 @@\n-a\n+b\n", side));
+  expect(controls()).toEqual(["Copy path", "Show split diff", "Wrap lines"]);
 });
 
 // An image that cannot be decoded falls back to its text on whichever side it happens to, and the

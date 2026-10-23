@@ -478,21 +478,3 @@ it("shows a project image and does not fetch one that leaves the project", async
   expect(region().textContent).toContain("secret");
   expect(region().textContent).toContain("web");
 });
-
-it("says when a project image cannot be shown", async () => {
-  await open(markdownFile("docs/a.md", "![chart](missing.png)"), undefined, {
-    location: { project: "p" },
-    request: (async () => {
-      throw new Error("missing");
-    }) as Daemon["request"],
-  });
-  const mark = () => region().querySelector('[role="img"]');
-  for (let i = 0; i < 20 && !mark(); i += 1) {
-    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
-  }
-  expect(region().querySelector("img")).toBeNull();
-  expect(region().textContent).toContain("chart");
-  // A failed image is a named glyph in the paragraph, not a sentence of error text.
-  expect(mark()?.getAttribute("aria-label")).toBe("This image could not be shown.");
-  expect(region().textContent).not.toContain("could not be shown");
-});

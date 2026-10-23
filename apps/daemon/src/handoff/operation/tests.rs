@@ -522,20 +522,6 @@ async fn a_handoff_to_an_agent_that_is_not_added_is_refused() {
     assert_eq!(fixture.snapshot(), before);
 }
 
-/// While the added list is undecided nothing is refused for it, so the handoff goes ahead.
-#[tokio::test]
-async fn a_handoff_goes_ahead_while_the_added_list_is_undecided() {
-    let fixture = Fixture::new("target-undecided");
-    fixture.run(session("original", true, "idle", None, false));
-    assert_eq!(fixture.state.store.added_agents().unwrap(), None);
-
-    let receiving = fixture
-        .hand_off_to("original", Agent::Codex)
-        .await
-        .expect("handed off");
-    assert_eq!(receiving.agent, Agent::Codex);
-}
-
 /// An agent that cannot be launched leaves the original, its branches and its sessions as they were,
 /// no receiving session and no package, and nobody is told.
 #[tokio::test]

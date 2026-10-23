@@ -66,22 +66,14 @@ async function copied(button: HTMLButtonElement | null): Promise<void> {
   await act(async () => {});
 }
 
-it("copies a worktree inside the project's folder as the path relative to it", async () => {
-  const { button, writeText } = mountWorktreeNotice("/work/app/.worktrees/feature", source("/work/app", "/work/app"));
+it.each([
+  ["a worktree inside the project's folder as the path relative to it", "/work/app/.worktrees/feature", source("/work/app", "/work/app"), ".worktrees/feature"],
+  ["a worktree inside the folder the project resolves to as the path relative to it", "/real/app/.worktrees/feature", source("/link/app", "/real/app"), ".worktrees/feature"],
+  ["the absolute path of a worktree outside the project's folder", "/work/app-2/feature", source("/work/app", "/work/app"), "/work/app-2/feature"],
+])("copies %s", async (_name, worktreePath, project, expected) => {
+  const { button, writeText } = mountWorktreeNotice(worktreePath, project);
   await copied(button);
-  expect(writeText).toHaveBeenCalledExactlyOnceWith(".worktrees/feature");
-});
-
-it("takes the folder the project resolves to as one the worktree can be inside", async () => {
-  const { button, writeText } = mountWorktreeNotice("/real/app/.worktrees/feature", source("/link/app", "/real/app"));
-  await copied(button);
-  expect(writeText).toHaveBeenCalledExactlyOnceWith(".worktrees/feature");
-});
-
-it("copies the absolute path of a worktree outside the project's folder", async () => {
-  const { button, writeText } = mountWorktreeNotice("/work/app-2/feature", source("/work/app", "/work/app"));
-  await copied(button);
-  expect(writeText).toHaveBeenCalledExactlyOnceWith("/work/app-2/feature");
+  expect(writeText).toHaveBeenCalledExactlyOnceWith(expected);
 });
 
 it("returns keyboard focus to the branch selector when its worktree row disappears", () => {

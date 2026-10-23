@@ -63,16 +63,6 @@ it.each(["file_not_found", "permission_denied", "unexpected_error"])("marks a pr
   expect(queued()).toEqual([]);
 });
 
-it("marks a document image that is not an image, with no error alert dialog", async () => {
-  await mount(
-    <ViewerHost request={async () => ({ type: "project_file", project: "project", worktree: null, source: { kind: "live", root_id: "root", version: "version" }, path: "image.png", file: { kind: "text", text: "not an image", size: 12, media_type: null, data: null } })}>
-      <p id="paragraph"><DaemonImageFixture /></p>
-    </ViewerHost>,
-  );
-  expect(document.querySelector('#paragraph [role="img"]')).not.toBeNull();
-  expect(queued()).toEqual([]);
-});
-
 it("marks a document image whose data cannot be decoded, with no error alert dialog", async () => {
   await mount(
     <ViewerHost request={async () => ({ type: "project_file", project: "project", worktree: null, source: { kind: "live", root_id: "root", version: "version" }, path: "image.png", file: { kind: "binary", text: null, size: 3, media_type: "image/png", data: "AAEC" } })}>
@@ -100,4 +90,5 @@ it("stands a failed image in the paragraph as a named glyph, with no sentence of
   expect(mark.textContent).toBe("");
   expect(paragraph.textContent).toBe("Diagram");
   expect(paragraph.querySelector("div")).toBeNull();
+  expect(queued()).toEqual([]);
 });

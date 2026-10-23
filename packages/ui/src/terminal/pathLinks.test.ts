@@ -34,11 +34,6 @@ it.each([
   ["an address", "open https://example.com/a/b now"],
   ["a bare word", "the README and a.b are not paths"],
   ["a lone slash", "a / b"],
-])("does not find a path in %s", (_name, text) => {
-  expect(paths(text)).toEqual([]);
-});
-
-it.each([
   ["a route pattern", "open app/[id]/page.tsx now"],
   ["a route group", "open app/(group)/page.tsx"],
 ])("does not find a path in %s", (_name, text) => {
@@ -279,21 +274,13 @@ it("asks about paths together, once, and links only the ones found", async () =>
   expect(links.kind("/b")).toBeUndefined();
 });
 
-it("keeps the view the daemon gave a path beside its kind", async () => {
-  const view = { worktree: "w", path: "src/a.ts" };
-  const { cache: links, onChange } = cache(() => [{ kind: "file", view }]);
-  links.want(["/a"]);
-  await vi.waitFor(() => expect(onChange).toHaveBeenCalledOnce());
-  expect(links.answerFor("/a").view).toEqual(view);
-  expect(links.answerFor("/b").view).toBeUndefined();
-});
-
 it("gives a click the kind of the path beside its view", async () => {
   const view = { path: "docs/README.md" };
   const { cache: links, onChange } = cache(() => [{ kind: "directory", view }]);
   links.want(["/docs"]);
   await vi.waitFor(() => expect(onChange).toHaveBeenCalledOnce());
   expect(links.answerFor("/docs")).toEqual({ kind: "directory", view, viewerOnly: undefined });
+  expect(links.answerFor("/b").view).toBeUndefined();
 });
 
 it("asks again only once the answer is old, and says nothing when it did not change", async () => {

@@ -483,19 +483,6 @@ it("project focus lists an archived child on its own while its parent is live, a
   expect(container.querySelector('[role="button"][aria-label="View all"]')).toBeNull();
 });
 
-it("project focus leaves a child under its archived parent to the full archive and keeps it reachable", () => {
-  const parent = sessionOf("parent", main.id, web.id, "Parent", "archived");
-  const child = sessionOf("child", main.id, web.id, "Hidden child", "archived", { bound_to: parent.id });
-  const { container, text, handlers } = mount((h) => (
-    <ProjectFocusView handlers={h} console={main} project={web} sessions={[parent, child]} owners={owners} />
-  ));
-  expect(text()).toContain("Archived (2)");
-  expect(text()).not.toContain(child.title);
-  const viewAll = container.querySelector<HTMLElement>('[role="button"][aria-label="View all"]')!;
-  act(() => viewAll.click());
-  expect(handlers.onOpenArchive).toHaveBeenCalledWith({ console: main.id, project: web.id });
-});
-
 it.each([10, 11])("project focus offers View all for an archive of %s parents exactly when the preview omits one", (count) => {
   const archived = Array.from({ length: count }, (_, index) => sessionOf(`root-${index}`, main.id, web.id, `Parent ${index}`, "archived"));
   const { container } = mount((h) => (

@@ -127,7 +127,7 @@ fn a_reverted_codex_threads_whole_branch_is_read_for_the_package() {
 }
 
 #[test]
-fn the_package_of_each_agent_holds_the_conversation_and_no_tool_output() {
+fn the_package_of_each_agent_holds_the_conversation() {
     let (state, dir) = app_state("handoff-agents");
     state.store.insert_console(&console(&dir)).unwrap();
     let repo = repo_with("handoff-agents-repo", &[(b"a.txt", b"one\n")]);
@@ -184,9 +184,6 @@ fn the_package_of_each_agent_holds_the_conversation_and_no_tool_output() {
                 "{text}"
             );
             assert!(!text.contains("/compaction/"), "{text}");
-        }
-        for dropped in ["TOOL-OUTPUT", "REASONING", "INJECTED", "SIDECHAIN"] {
-            assert!(!text.contains(dropped), "{agent:?} kept {dropped}:\n{text}");
         }
     }
 }

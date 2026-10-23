@@ -4042,8 +4042,20 @@ mod tests {
         let mut other = console(Some("claude-acct"), None, None);
         other.id = "console-2".to_string();
         store.insert_console(&other).expect("insert");
+        store
+            .insert_account(&account(
+                "claude-other",
+                Agent::Claude,
+                "/home/u/.claude-other",
+            ))
+            .expect("account");
+        let mut untouched = console(Some("claude-other"), None, None);
+        untouched.id = "console-3".to_string();
+        store.insert_console(&untouched).expect("insert");
         let mut referring = project(false);
         referring.claude_account_id = named("claude-acct");
+        // Another agent's setting of the same project is not touched by a Claude account going.
+        referring.codex_account_id = ProjectAccount::Default;
         store.insert_project(&referring).expect("insert");
         // A project that pins the default account refers to no id, so it keeps saying so.
         let mut defaulting = project(false);
@@ -4051,16 +4063,31 @@ mod tests {
         defaulting.path = "/tmp/project-2".to_string();
         defaulting.claude_account_id = ProjectAccount::Default;
         store.insert_project(&defaulting).expect("insert");
+        let mut inheriting = project(false);
+        inheriting.id = "project-3".to_string();
+        inheriting.path = "/tmp/project-3".to_string();
+        store.insert_project(&inheriting).expect("insert");
 
         store.delete_account("claude-acct").expect("deleted");
         let claude_account = |id: &str| store.get_project(id).unwrap().unwrap().claude_account_id;
         assert_eq!(claude_account("project-1"), ProjectAccount::Inherit);
         assert_eq!(claude_account("project-2"), ProjectAccount::Default);
+        assert_eq!(claude_account("project-3"), ProjectAccount::Inherit);
+        assert_eq!(
+            store
+                .get_project("project-1")
+                .unwrap()
+                .unwrap()
+                .codex_account_id,
+            ProjectAccount::Default
+        );
         assert!(store.get_account("claude-acct").unwrap().is_none());
         for id in ["console-1", "console-2"] {
             let console = store.get_console(id).unwrap().unwrap();
             assert_eq!(console.claude_account_id, None);
         }
+        let untouched = store.get_console("console-3").unwrap().unwrap();
+        assert_eq!(untouched.claude_account_id.as_deref(), Some("claude-other"));
     }
 
     /// The added agents are undecided on a fresh database and on one from before the column
@@ -4124,12 +4151,17 @@ mod tests {
         assert_eq!(store.added_agents().unwrap(), Some(vec![Agent::Codex]));
     }
 
+    /// The approval columns of accounts and settings are added to a database from before they
+    /// existed, read as unset there, and round-trip.
     #[test]
-    fn approval_reviewer_columns_migrate_and_settings_round_trip() {
-        let path = temp_db("approval-reviewer-migration");
+    fn approval_columns_migrate_and_settings_round_trip() {
+        let path = temp_db("approval-columns-migration");
         let store = Store::open(&path).unwrap();
         store
-            .insert_account(&account("acct-1", Agent::Codex, "/tmp/codex"))
+            .insert_account(&account("acct-codex", Agent::Codex, "/tmp/codex"))
+            .unwrap();
+        store
+            .insert_account(&account("acct-claude", Agent::Claude, "/tmp/claude"))
             .unwrap();
         {
             let conn = store.lock();
@@ -4140,42 +4172,6 @@ mod tests {
                 [],
             )
             .unwrap();
-        }
-        drop(store);
-        let store = Store::open(&path).unwrap();
-        let mut account = store.get_account("acct-1").unwrap().unwrap();
-        assert_eq!(account.approval_reviewer, None);
-        assert_eq!(store.codex_default_approval_reviewer().unwrap(), None);
-        account.approval_reviewer = Some(ApprovalReviewer::User);
-        store
-            .set_account_approval_reviewer(&account.id, account.approval_reviewer)
-            .unwrap();
-        store
-            .set_codex_default_approval_reviewer(Some(ApprovalReviewer::AutoReview))
-            .unwrap();
-        drop(store);
-        let store = Store::open(&path).unwrap();
-        assert_eq!(store.get_account("acct-1").unwrap().unwrap(), account);
-        assert_eq!(
-            store
-                .get_settings()
-                .unwrap()
-                .codex_default_approval_reviewer,
-            Some(ApprovalReviewer::AutoReview)
-        );
-        store.set_codex_default_approval_reviewer(None).unwrap();
-        assert_eq!(store.codex_default_approval_reviewer().unwrap(), None);
-    }
-
-    #[test]
-    fn approval_mode_columns_migrate_and_settings_round_trip() {
-        let path = temp_db("approval-mode-migration");
-        let store = Store::open(&path).unwrap();
-        store
-            .insert_account(&account("acct-1", Agent::Claude, "/tmp/claude"))
-            .unwrap();
-        {
-            let conn = store.lock();
             conn.execute("ALTER TABLE accounts DROP COLUMN approval_mode", [])
                 .unwrap();
             conn.execute(
@@ -4186,23 +4182,42 @@ mod tests {
         }
         drop(store);
         let store = Store::open(&path).unwrap();
-        let mut account = store.get_account("acct-1").unwrap().unwrap();
-        assert_eq!(account.approval_mode, None);
+        let mut codex = store.get_account("acct-codex").unwrap().unwrap();
+        assert_eq!(codex.approval_reviewer, None);
+        assert_eq!(store.codex_default_approval_reviewer().unwrap(), None);
+        let mut claude = store.get_account("acct-claude").unwrap().unwrap();
+        assert_eq!(claude.approval_mode, None);
         assert_eq!(store.claude_default_approval_mode().unwrap(), None);
-        account.approval_mode = Some(ClaudeApprovalMode::Manual);
+
+        codex.approval_reviewer = Some(ApprovalReviewer::User);
         store
-            .set_account_approval_mode(&account.id, account.approval_mode)
+            .set_account_approval_reviewer(&codex.id, codex.approval_reviewer)
+            .unwrap();
+        store
+            .set_codex_default_approval_reviewer(Some(ApprovalReviewer::AutoReview))
+            .unwrap();
+        claude.approval_mode = Some(ClaudeApprovalMode::Manual);
+        store
+            .set_account_approval_mode(&claude.id, claude.approval_mode)
             .unwrap();
         store
             .set_claude_default_approval_mode(Some(ClaudeApprovalMode::Bypass))
             .unwrap();
         drop(store);
         let store = Store::open(&path).unwrap();
-        assert_eq!(store.get_account("acct-1").unwrap().unwrap(), account);
+        assert_eq!(store.get_account("acct-codex").unwrap().unwrap(), codex);
+        assert_eq!(store.get_account("acct-claude").unwrap().unwrap(), claude);
+        let settings = store.get_settings().unwrap();
         assert_eq!(
-            store.get_settings().unwrap().claude_default_approval_mode,
+            settings.codex_default_approval_reviewer,
+            Some(ApprovalReviewer::AutoReview)
+        );
+        assert_eq!(
+            settings.claude_default_approval_mode,
             Some(ClaudeApprovalMode::Bypass)
         );
+        store.set_codex_default_approval_reviewer(None).unwrap();
+        assert_eq!(store.codex_default_approval_reviewer().unwrap(), None);
         store.set_claude_default_approval_mode(None).unwrap();
         assert_eq!(store.claude_default_approval_mode().unwrap(), None);
     }
@@ -4446,175 +4461,126 @@ mod tests {
         assert!(tags_from_text("project-1", "not json").is_empty());
     }
 
-    /// A fresh database's settings start at their default, round-trip, and a repeat write reports
-    /// no change.
+    /// Each boolean setting starts at its default on a fresh database and on one from before its
+    /// column existed, round-trips, and a repeat write reports no change; the settings are
+    /// independent of one another.
     #[test]
-    fn the_settings_round_trip_and_a_repeat_write_changes_nothing() {
-        let path = temp_db("settings");
-        let store = Store::open(&path).expect("store");
-        assert!(!store.get_settings().unwrap().auto_pull_repositories);
+    fn the_boolean_settings_default_round_trip_and_a_repeat_write_changes_nothing() {
+        struct Setting {
+            column: &'static str,
+            default: bool,
+            read: fn(&Settings) -> bool,
+            get: fn(&Store) -> Result<bool>,
+            set: fn(&Store, bool) -> Result<bool>,
+            /// Whether the column was added after the table, so a database can lack it.
+            added_later: bool,
+        }
+        let settings = [
+            Setting {
+                column: "auto_pull_repositories",
+                default: false,
+                read: |settings| settings.auto_pull_repositories,
+                get: Store::auto_pull_repositories,
+                set: Store::set_auto_pull_repositories,
+                added_later: false,
+            },
+            Setting {
+                column: "auto_delete_unresumable_archives",
+                default: true,
+                read: |settings| settings.auto_delete_unresumable_archives,
+                get: Store::auto_delete_unresumable_archives,
+                set: Store::set_auto_delete_unresumable_archives,
+                added_later: true,
+            },
+            Setting {
+                column: "auto_approve_session_requests",
+                default: false,
+                read: |settings| settings.auto_approve_session_requests,
+                get: Store::auto_approve_session_requests,
+                set: Store::set_auto_approve_session_requests,
+                added_later: true,
+            },
+            Setting {
+                column: "auto_approve_resume_requests",
+                default: false,
+                read: |settings| settings.auto_approve_resume_requests,
+                get: Store::auto_approve_resume_requests,
+                set: Store::set_auto_approve_resume_requests,
+                added_later: true,
+            },
+            Setting {
+                column: "auto_select_account",
+                default: false,
+                read: |settings| settings.auto_select_account,
+                get: Store::auto_select_account,
+                set: Store::set_auto_select_account,
+                added_later: true,
+            },
+            Setting {
+                column: "sidebar_order_by_status",
+                default: true,
+                read: |settings| settings.sidebar_order_by_status,
+                get: Store::sidebar_order_by_status,
+                set: Store::set_sidebar_order_by_status,
+                added_later: true,
+            },
+            Setting {
+                column: "auto_start_quota_windows",
+                default: false,
+                read: |settings| settings.auto_start_quota_windows,
+                get: Store::auto_start_quota_windows,
+                set: Store::set_auto_start_quota_windows,
+                added_later: true,
+            },
+        ];
 
-        assert!(store.set_auto_pull_repositories(true).unwrap());
-        assert!(
-            !store.set_auto_pull_repositories(true).unwrap(),
-            "a repeat write changes nothing"
-        );
-        assert!(store.get_settings().unwrap().auto_pull_repositories);
-    }
+        for setting in &settings {
+            let column = setting.column;
+            let changed = !setting.default;
+            let path = temp_db(&format!("setting-{column}"));
+            let store = Store::open(&path).expect("store");
+            assert_eq!(
+                (setting.read)(&store.get_settings().unwrap()),
+                setting.default,
+                "{column} starts at its default"
+            );
 
-    /// The automatic archive cleanup is on in a fresh database and in one from before the setting
-    /// existed, round-trips, and a repeat write reports no change.
-    #[test]
-    fn the_archive_cleanup_setting_defaults_on_and_round_trips() {
-        let path = temp_db("archive-cleanup-setting");
-        let store = Store::open(&path).expect("store");
-        assert!(
-            store
-                .get_settings()
-                .unwrap()
-                .auto_delete_unresumable_archives
-        );
+            assert!((setting.set)(&store, changed).unwrap(), "{column}");
+            assert!(
+                !(setting.set)(&store, changed).unwrap(),
+                "{column}: a repeat write changes nothing"
+            );
+            assert_eq!((setting.get)(&store).unwrap(), changed, "{column}");
+            assert_eq!(
+                (setting.read)(&store.get_settings().unwrap()),
+                changed,
+                "{column}"
+            );
+            for other in settings.iter().filter(|other| other.column != column) {
+                assert_eq!(
+                    (other.get)(&store).unwrap(),
+                    other.default,
+                    "writing {column} left {} alone",
+                    other.column
+                );
+            }
+            assert!((setting.set)(&store, setting.default).unwrap(), "{column}");
 
-        assert!(store.set_auto_delete_unresumable_archives(false).unwrap());
-        assert!(!store.set_auto_delete_unresumable_archives(false).unwrap());
-        assert!(!store.auto_delete_unresumable_archives().unwrap());
-        assert!(store.set_auto_delete_unresumable_archives(true).unwrap());
-
-        store
-            .lock()
-            .execute(
-                "ALTER TABLE settings DROP COLUMN auto_delete_unresumable_archives",
-                [],
-            )
-            .unwrap();
-        drop(store);
-        let store = Store::open(&path).expect("store");
-        assert!(store.auto_delete_unresumable_archives().unwrap());
-    }
-
-    /// Approving session requests automatically is off in a fresh database and in one from before
-    /// the setting existed, round-trips, and a repeat write reports no change.
-    #[test]
-    fn the_auto_approve_session_requests_setting_defaults_off_and_round_trips() {
-        let path = temp_db("auto-approve-session-requests-setting");
-        let store = Store::open(&path).expect("store");
-        assert!(!store.get_settings().unwrap().auto_approve_session_requests);
-
-        assert!(store.set_auto_approve_session_requests(true).unwrap());
-        assert!(!store.set_auto_approve_session_requests(true).unwrap());
-        assert!(store.auto_approve_session_requests().unwrap());
-        assert!(store.set_auto_approve_session_requests(false).unwrap());
-
-        store
-            .lock()
-            .execute(
-                "ALTER TABLE settings DROP COLUMN auto_approve_session_requests",
-                [],
-            )
-            .unwrap();
-        drop(store);
-        let store = Store::open(&path).expect("store");
-        assert!(!store.auto_approve_session_requests().unwrap());
-    }
-
-    /// Approving resume requests automatically is off in a fresh database and in one from before
-    /// the setting existed, round-trips, a repeat write reports no change, and it is independent
-    /// of approving session requests.
-    #[test]
-    fn the_auto_approve_resume_requests_setting_defaults_off_and_round_trips() {
-        let path = temp_db("auto-approve-resume-requests-setting");
-        let store = Store::open(&path).expect("store");
-        assert!(!store.get_settings().unwrap().auto_approve_resume_requests);
-
-        assert!(store.set_auto_approve_resume_requests(true).unwrap());
-        assert!(!store.set_auto_approve_resume_requests(true).unwrap());
-        assert!(store.auto_approve_resume_requests().unwrap());
-        assert!(!store.auto_approve_session_requests().unwrap());
-        assert!(store.set_auto_approve_resume_requests(false).unwrap());
-
-        store
-            .lock()
-            .execute(
-                "ALTER TABLE settings DROP COLUMN auto_approve_resume_requests",
-                [],
-            )
-            .unwrap();
-        drop(store);
-        let store = Store::open(&path).expect("store");
-        assert!(!store.auto_approve_resume_requests().unwrap());
-    }
-
-    /// Selecting an account from weekly quota is off in a fresh database and in one from before
-    /// the setting existed, round-trips, and a repeat write reports no change.
-    #[test]
-    fn the_auto_select_account_setting_defaults_off_and_round_trips() {
-        let path = temp_db("auto-select-account-setting");
-        let store = Store::open(&path).expect("store");
-        assert!(!store.get_settings().unwrap().auto_select_account);
-
-        assert!(store.set_auto_select_account(true).unwrap());
-        assert!(!store.set_auto_select_account(true).unwrap());
-        assert!(store.auto_select_account().unwrap());
-        assert!(store.set_auto_select_account(false).unwrap());
-
-        store
-            .lock()
-            .execute("ALTER TABLE settings DROP COLUMN auto_select_account", [])
-            .unwrap();
-        drop(store);
-        let store = Store::open(&path).expect("store");
-        assert!(!store.auto_select_account().unwrap());
-    }
-
-    /// Ordering the sidebar by status is on in a fresh database and in one from before the
-    /// setting existed, round-trips, and a repeat write reports no change.
-    #[test]
-    fn the_sidebar_order_by_status_setting_defaults_on_and_round_trips() {
-        let path = temp_db("sidebar-order-by-status-setting");
-        let store = Store::open(&path).expect("store");
-        assert!(store.get_settings().unwrap().sidebar_order_by_status);
-
-        assert!(store.set_sidebar_order_by_status(false).unwrap());
-        assert!(!store.set_sidebar_order_by_status(false).unwrap());
-        assert!(!store.sidebar_order_by_status().unwrap());
-        assert!(store.set_sidebar_order_by_status(true).unwrap());
-
-        store
-            .lock()
-            .execute(
-                "ALTER TABLE settings DROP COLUMN sidebar_order_by_status",
-                [],
-            )
-            .unwrap();
-        drop(store);
-        let store = Store::open(&path).expect("store");
-        assert!(store.sidebar_order_by_status().unwrap());
-    }
-
-    /// Starting quota windows is off in a fresh database and in one from before the setting
-    /// existed, round-trips, and a repeat write reports no change.
-    #[test]
-    fn the_auto_start_quota_windows_setting_defaults_off_and_round_trips() {
-        let path = temp_db("auto-start-quota-windows-setting");
-        let store = Store::open(&path).expect("store");
-        assert!(!store.get_settings().unwrap().auto_start_quota_windows);
-
-        assert!(store.set_auto_start_quota_windows(true).unwrap());
-        assert!(!store.set_auto_start_quota_windows(true).unwrap());
-        assert!(store.auto_start_quota_windows().unwrap());
-        assert!(store.set_auto_start_quota_windows(false).unwrap());
-
-        store.set_auto_start_quota_windows(true).unwrap();
-        store
-            .lock()
-            .execute(
-                "ALTER TABLE settings DROP COLUMN auto_start_quota_windows",
-                [],
-            )
-            .unwrap();
-        drop(store);
-        let store = Store::open(&path).expect("store");
-        assert!(!store.auto_start_quota_windows().unwrap());
+            if setting.added_later {
+                (setting.set)(&store, changed).unwrap();
+                store
+                    .lock()
+                    .execute(&format!("ALTER TABLE settings DROP COLUMN {column}"), [])
+                    .unwrap();
+                drop(store);
+                let store = Store::open(&path).expect("store");
+                assert_eq!(
+                    (setting.get)(&store).unwrap(),
+                    setting.default,
+                    "{column} on a database from before it existed"
+                );
+            }
+        }
     }
 
     /// The default clone directory is the built-in one until set, a blank value goes back to it,

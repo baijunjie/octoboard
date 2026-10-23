@@ -254,16 +254,16 @@ describe("a project's menu", () => {
     ]);
   });
 
-  it.each(["list", "focused", "nested"] as const)("groups outside tools for every project in %s", (placement) => {
-    const menu = projectMenu(t, {} as SidebarHandlers, { id: "p" } as Project, [], { placement });
+  it("groups outside tools for every project", () => {
+    const menu = projectMenu(t, {} as SidebarHandlers, { id: "p" } as Project, []);
     expect(openIn(menu).items.map((entry) => typeof entry === "object" ? entry.label : entry)).toEqual(["File manager", "Terminal"]);
-    expect(labels(placement)).not.toContain("Terminal");
+    expect(labels("list")).not.toContain("Terminal");
   });
 
-  it.each(["list", "focused", "nested"] as const)("opens the branded repository through the same %s submenu", (placement) => {
+  it("opens the branded repository through the Open in submenu", () => {
     const handlers = { onOpenRepository: vi.fn() } as unknown as SidebarHandlers;
     const project = { id: "p", remote_url: "git@github.com:acme/app.git" } as Project;
-    const entry = openIn(projectMenu(t, handlers, project, [], { placement })).items[2];
+    const entry = openIn(projectMenu(t, handlers, project, [])).items[2];
     expect(entry).toMatchObject({ label: "GitHub", icon: { props: { brand: "github" } } });
     (entry as { onClick: () => void }).onClick();
     expect(handlers.onOpenRepository).toHaveBeenCalledExactlyOnceWith("https://github.com/acme/app");
@@ -271,10 +271,10 @@ describe("a project's menu", () => {
     expect(openIn(projectMenu(t, handlers, { ...project, remote_url: "/tmp/repo" }, [])).items).toHaveLength(2);
   });
 
-  it.each(["list", "focused", "nested"] as const)("offers Browse files only while this project's browser is not visible in the %s menu", (placement) => {
+  it("offers Browse files only while this project's browser is not visible", () => {
     for (const visibleBrowserProjectId of [undefined, "other", "p"]) {
       const handlers = { visibleBrowserProjectId } as SidebarHandlers;
-      const menu = projectMenu(t, handlers, { id: "p" } as Project, [], { placement });
+      const menu = projectMenu(t, handlers, { id: "p" } as Project, []);
       const menuLabels = menu.flatMap((entry) => typeof entry === "object" ? [entry.label] : []);
       expect(menuLabels.includes("Browse files")).toBe(visibleBrowserProjectId !== "p");
       expect(menuLabels).toContain("Open in");

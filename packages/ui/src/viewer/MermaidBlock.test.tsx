@@ -47,17 +47,6 @@ it("draws a diagram as an image with a text alternative, and does not follow a l
   expect(click.defaultPrevented).toBe(true);
 });
 
-it("shows the source when a diagram cannot be drawn", async () => {
-  const error = new Error("nope");
-  render.mockRejectedValue(error);
-  await mount("graph TD\nA-->B");
-  expect(document.querySelector("[role=img]")).toBeNull();
-  expect(document.body.textContent).toContain("This diagram could not be drawn, so its source is shown.");
-  expect(document.body.textContent).toContain("graph TD");
-  // A failure of what the document shows is on the screen only: no error alert dialog.
-  expect(errorAlerts.getSnapshot()).toEqual([]);
-});
-
 it("shows an over-budget diagram as source without drawing it", async () => {
   await mount("graph TD\nA-->B", true);
   expect(render).not.toHaveBeenCalled();
@@ -66,12 +55,14 @@ it("shows an over-budget diagram as source without drawing it", async () => {
 });
 
 it.each([
+  new Error("nope"),
   Object.assign(new Error("Diagram type is unknown"), { name: "UnknownDiagramError" }),
   Object.assign(new Error("Unexpected token"), { hash: { expected: ["NODE"], token: "EOF", line: 2 } }),
   new TypeError("Library initialization failed"),
 ])("shows the source and says so for a Mermaid failure, with no error alert dialog: %s", async (error) => {
   render.mockRejectedValue(error);
   await mount("graph TD\nA-->");
+  expect(document.querySelector("[role=img]")).toBeNull();
   expect(document.body.textContent).toContain("This diagram could not be drawn, so its source is shown.");
   expect(document.body.textContent).toContain("graph TD");
   expect(errorAlerts.getSnapshot()).toEqual([]);

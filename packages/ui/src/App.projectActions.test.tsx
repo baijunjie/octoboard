@@ -12,7 +12,6 @@ import { consoleOf, projectOf, sessionOf, snapshotState } from "./gallery/fixtur
 import { isolate } from "./i18n/isolate";
 import { PlatformProvider } from "./platform/react";
 import type { PlatformAdapter } from "./platform";
-import { PREFERENCE_KEYS } from "./preferenceKeys";
 import type { Project } from "./protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "./store";
 import { ThemeProvider } from "./theme";
@@ -136,44 +135,6 @@ it.each([false, true])("has no toggle for the pane itself, only a panel's, which
   expect(toggle("Hide files panel")).not.toBeNull();
 });
 
-it("floats one panel at a time over the terminal in a window too narrow to dock it, closed by its toggle, a press beside it or Escape", async () => {
-  const { project } = mountApp(true);
-  const storedBefore = localStorage.getItem(PREFERENCE_KEYS.panelStacks);
-  // A closed panel fades away out of reach (inert) before it leaves: only the ones still open count.
-  const cards = () => Array.from(document.querySelectorAll("[data-panel-card]")).filter((card) => !card.closest("[inert]")).map((card) => card.id);
-  const area = () => document.querySelector("main")!.firstElementChild!;
-  const scrim = () => Array.from(document.querySelectorAll<HTMLElement>("button[aria-label='Close panel']:not([inert])")).find((button) => !button.closest("[data-panel-card]"));
-  await press("Show sessions");
-  await openProjectMenu(project.name);
-  await press("Browse files");
-  expect(asidePane().hasAttribute("data-floating-panel")).toBe(true);
-  expect(cards()).toEqual(["panel-files"]);
-  // The covered terminal takes no keystrokes.
-  expect(area().hasAttribute("inert")).toBe(true);
-  // Opening another panel closes the first; the toggles say which one is shown.
-  await press("Show terminal panel");
-  expect(cards()).toEqual(["panel-terminal"]);
-  expect(toggle("Hide terminal panel")!.getAttribute("aria-expanded")).toBe("true");
-  expect(toggle("Show files panel")!.getAttribute("aria-expanded")).toBe("false");
-  // Its toggle closes it rather than dismissing and reopening it.
-  await press("Hide terminal panel");
-  expect(cards()).toEqual([]);
-  expect(scrim()).toBeUndefined();
-  expect(area().hasAttribute("inert")).toBe(false);
-  await press("Show files panel");
-  expect(cards()).toEqual(["panel-files"]);
-  await act(async () => scrim()!.click());
-  expect(cards()).toEqual([]);
-  expect(toggle("Show files panel")).not.toBeNull();
-  await press("Show files panel");
-  await act(async () => {
-    document.querySelector<HTMLElement>("#panel-files")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-  });
-  expect(cards()).toEqual([]);
-  // None of it closed anything in the stack kept for a wider window.
-  expect(localStorage.getItem(PREFERENCE_KEYS.panelStacks)).toBe(storedBefore);
-});
-
 it("floats the hidden pane in while the pointer rests on a toggle, and docks it when the toggle is pressed", async () => {
   vi.useFakeTimers();
   document.documentElement.style.setProperty("--peek-gap", "8px");
@@ -241,20 +202,6 @@ it("reports a clipboard failure", async () => {
   expect(daemon.toastNotice).not.toHaveBeenCalled();
 });
 
-it("copies the project name through the selection without clipboard support", async () => {
-  const copied: string[] = [];
-  const execCommand = vi.fn(() => copied.push(document.getSelection()!.toString()) > 0);
-  Object.assign(document, { execCommand });
-  onTestFinished(() => { Reflect.deleteProperty(document, "execCommand"); });
-  const { daemon, project } = mountApp();
-  await openProjectMenu(project.name);
-  expect(menuHas("Copy project name")).toBe(true);
-  await press("Copy project name");
-  expect(execCommand).toHaveBeenCalledWith("copy");
-  expect(copied).toEqual([project.name]);
-  expect(daemon.toastNotice).toHaveBeenCalledWith("Project name copied");
-});
-
 it("copies the session ID unchanged and reports success", async () => {
   const clipboard = { writeText: vi.fn(async () => {}) };
   const { daemon } = mountApp(false, clipboard, true);
@@ -274,20 +221,6 @@ it("reports a session ID clipboard failure", async () => {
   await press("Copy session ID");
   expect(daemon.toastError).toHaveBeenCalledWith(expect.objectContaining({ message: "Could not copy the session ID", recovery: "clipboard" }));
   expect(daemon.toastNotice).not.toHaveBeenCalled();
-});
-
-it("copies the session ID through the selection without clipboard support", async () => {
-  const copied: string[] = [];
-  const execCommand = vi.fn(() => copied.push(document.getSelection()!.toString()) > 0);
-  Object.assign(document, { execCommand });
-  onTestFinished(() => { Reflect.deleteProperty(document, "execCommand"); });
-  const { daemon } = mountApp(false, undefined, true);
-  await press(`Actions for session ${isolate("Fix bug")}`);
-  expect(document.querySelector('[role=menuitem][aria-label="Copy session ID"]')).not.toBeNull();
-  await press("Copy session ID");
-  expect(execCommand).toHaveBeenCalledWith("copy");
-  expect(copied).toEqual(["s-archive"]);
-  expect(daemon.toastNotice).toHaveBeenCalledWith("Session ID copied");
 });
 
 async function openRestoreConfirmation() {

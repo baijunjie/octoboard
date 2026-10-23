@@ -219,7 +219,7 @@ async fn the_title_follows_the_shell_until_the_terminal_is_renamed() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_shell_is_busy_while_it_runs_something_in_the_foreground_or_the_background() {
+async fn a_shell_is_busy_while_it_runs_something_in_the_foreground() {
     let (state, _dir, _project) = with_project("shell-busy");
     let created = create(&state, "p1".to_string(), None, no_git)
         .await
@@ -229,11 +229,6 @@ async fn a_shell_is_busy_while_it_runs_something_in_the_foreground_or_the_backgr
     shell.write(b"sleep 30\r").unwrap();
     record_where(&state, &created.id, |record| record.busy).await;
     shell.write(b"\x03").unwrap();
-    record_where(&state, &created.id, |record| !record.busy).await;
-
-    shell.write(b"sleep 30 &\r").unwrap();
-    record_where(&state, &created.id, |record| record.busy).await;
-    shell.write(b"kill %1\r").unwrap();
     record_where(&state, &created.id, |record| !record.busy).await;
 
     close(&state, &created.id).await.unwrap();

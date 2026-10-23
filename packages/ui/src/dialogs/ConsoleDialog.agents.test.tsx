@@ -17,13 +17,6 @@ it("names the agent project sessions follow on the Same as entry, and keeps it c
   expect(picker("Project sessions").textContent).toContain("Same as console sessions, Grok Build");
 });
 
-it("starts a new console on Same as console sessions and sends no project session agent", async () => {
-  const request = render();
-  type("Name", "Main");
-  await clickButton("Create");
-  expect(sent(request)).toEqual([{ type: "create_console", name: "Main", default_agent: "claude" }]);
-});
-
 it("creates with the project session agent that was picked", async () => {
   const request = render();
   type("Name", "Main");

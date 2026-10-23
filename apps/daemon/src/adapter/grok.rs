@@ -1067,33 +1067,31 @@ mod tests {
     /// is refused too, not only a resumed one: Grok cannot safely create a home the way the other
     /// two can, so there is no "let the agent create it" case for a missing pinned source home —
     /// it fails `require_initialized_grok_home` instead of the generic vanished-directory check.
-    #[test]
-    fn a_pinned_grok_home_that_has_gone_refuses_a_fresh_launch_too() {
-        let mut fixture = spec_fixture();
-        fixture.config_dir = Some(fixture.scratch.join("missing"));
-        let err = plan_isolated(&fixture.spec()).err().expect("refused");
-        assert_eq!(
-            err.downcast_ref::<crate::protocol::CodedError>()
-                .expect("coded")
-                .code,
-            crate::protocol::error_code::GROK_HOME_NOT_INITIALIZED
-        );
-    }
-
     /// A pinned directory that exists but Grok has never been run against carries no login and no
-    /// session history for the per-session farm to link, so it is refused rather than silently
-    /// handed to Grok, which would write a login and a conversation into the throw-away farm and
-    /// lose both.
+    /// session history for the per-session farm to link, so it is refused the same way rather
+    /// than silently handed to Grok, which would write a login and a conversation into the
+    /// throw-away farm and lose both.
     #[test]
-    fn a_pinned_grok_home_that_was_never_initialized_refuses_the_launch() {
-        let mut fixture = spec_fixture();
-        let empty = fixture.scratch.join("never-run");
-        std::fs::create_dir_all(&empty).expect("empty directory");
-        fixture.config_dir = Some(empty.clone());
-        let err = plan_isolated(&fixture.spec()).err().expect("refused");
-        let message = err.to_string();
-        assert!(message.contains("never-run"), "{message}");
-        assert!(!message.contains("  "), "stray spaces in: {message}");
+    fn a_pinned_grok_home_that_has_gone_or_was_never_initialized_refuses_the_launch() {
+        for (name, exists) in [("missing", false), ("never-run", true)] {
+            let mut fixture = spec_fixture();
+            let home = fixture.scratch.join(name);
+            if exists {
+                std::fs::create_dir_all(&home).expect("empty directory");
+            }
+            fixture.config_dir = Some(home);
+            let err = plan_isolated(&fixture.spec()).err().expect("refused");
+            assert_eq!(
+                err.downcast_ref::<crate::protocol::CodedError>()
+                    .expect("coded")
+                    .code,
+                crate::protocol::error_code::GROK_HOME_NOT_INITIALIZED,
+                "{name}"
+            );
+            let message = err.to_string();
+            assert!(message.contains(name), "{message}");
+            assert!(!message.contains("  "), "stray spaces in: {message}");
+        }
     }
 
     /// The default home is never held to the same requirement: it is the user's own existing

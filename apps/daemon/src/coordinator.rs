@@ -6126,11 +6126,6 @@ mod tests {
         assert!(!state.delete_if_archived("project-archived").unwrap());
         drop(claim);
 
-        state.mark_conversation_started("project-idle").unwrap();
-        let refused = delete_session(&state, "project-idle").expect_err("in use");
-        let coded = refused.downcast_ref::<CodedError>().expect("a coded error");
-        assert_eq!(coded.code, error_code::SESSION_NOT_DELETABLE);
-
         delete_archived_sessions(&state, "console-1", Some("project-1"), None).unwrap();
         assert_eq!(
             remaining(),
@@ -6792,19 +6787,6 @@ mod tests {
         assert!(!params.contains_key("resets_at"));
     }
 
-    /// While availability has not yet been determined — the state every run begins in — nothing is
-    /// refused on that account: the launch's own refusal already covers a binary that is not
-    /// there.
-    #[test]
-    fn nothing_is_refused_for_unavailability_while_it_is_not_yet_determined() {
-        let (state, _dir) = crate::test_support::app_state("coordinator-agent-not-yet-determined");
-        assert_eq!(
-            state.agent_availability_of(Agent::Claude).availability,
-            Availability::NotDetermined
-        );
-        assert!(refuse_if_agent_unavailable(&state, Agent::Claude).is_ok());
-    }
-
     /// A session is opened only on an added agent, wherever the agent comes from: the request's
     /// own choice or the console's default. An undecided list refuses nothing.
     #[tokio::test]
@@ -6918,91 +6900,170 @@ mod tests {
         assert!(normalize_icon(Some(&huge)).is_err());
     }
 
+    /// A session's account is its own pick, else the project's reference for its agent, else the
+    /// console's, else the default account: a project's reference overrides the console's, and one
+    /// left unset falls back to it, agent by agent. Another agent's account is never borrowed.
     #[test]
-    fn a_session_is_pinned_to_its_own_agents_account() {
+    fn a_sessions_account_is_its_own_pick_else_its_projects_else_its_consoles() {
         let (state, _dir) = crate::test_support::app_state("coordinator-session-account");
-        state
-            .store
-            .insert_account(&Account {
-                id: "claude-acct".to_string(),
-                agent: Agent::Claude,
-                name: "Claude work".to_string(),
-                config_dir: "/home/u/.claude-alt".to_string(),
-                approval_reviewer: None,
-                approval_mode: None,
-                share_default_config: false,
-                share_default_config_incomplete: false,
-            })
-            .unwrap();
-        state
-            .store
-            .insert_account(&Account {
-                id: "claude-other".to_string(),
-                agent: Agent::Claude,
-                name: "Claude other".to_string(),
-                config_dir: "/home/u/.claude-other".to_string(),
-                approval_reviewer: None,
-                approval_mode: None,
-                share_default_config: false,
-                share_default_config_incomplete: false,
-            })
-            .unwrap();
-        state
-            .store
-            .insert_account(&Account {
-                id: "codex-acct".to_string(),
-                agent: Agent::Codex,
-                name: "Codex work".to_string(),
-                config_dir: "/home/u/.codex-alt".to_string(),
-                approval_reviewer: None,
-                approval_mode: None,
-                share_default_config: false,
-                share_default_config_incomplete: false,
-            })
-            .unwrap();
+        for (id, agent, name, dir) in [
+            (
+                "claude-acct",
+                Agent::Claude,
+                "Claude work",
+                "/home/u/.claude-alt",
+            ),
+            (
+                "claude-other",
+                Agent::Claude,
+                "Claude other",
+                "/home/u/.claude-other",
+            ),
+            (
+                "claude-project",
+                Agent::Claude,
+                "Claude project",
+                "/home/u/.claude-project",
+            ),
+            (
+                "codex-acct",
+                Agent::Codex,
+                "Codex work",
+                "/home/u/.codex-alt",
+            ),
+            (
+                "grok-project",
+                Agent::Grok,
+                "Grok project",
+                "/home/u/.grok-project",
+            ),
+        ] {
+            state
+                .store
+                .insert_account(&Account {
+                    id: id.to_string(),
+                    agent,
+                    name: name.to_string(),
+                    config_dir: dir.to_string(),
+                    approval_reviewer: None,
+                    approval_mode: None,
+                    share_default_config: false,
+                    share_default_config_incomplete: false,
+                })
+                .unwrap();
+        }
         let mut console = console(Agent::Claude, Path::new("/tmp/unused"));
         console.claude_account_id = Some("claude-acct".to_string());
         console.codex_account_id = Some("codex-acct".to_string());
 
-        let resolved = |agent: Agent, chosen: Option<Option<&str>>| {
+        let resolved = |agent: Agent, project: Option<&Project>, chosen: Option<Option<&str>>| {
             session_account(
                 &state,
                 agent,
                 &console,
-                None,
+                project,
                 chosen.map(|choice| choice.map(str::to_string)),
             )
             .unwrap()
         };
         let account = |id: &str, dir: &str| (Some(id.to_string()), Some(dir.to_string()));
+        let project = |claude: ProjectAccount, grok: ProjectAccount| {
+            let mut project = project_of("console-1", "project-1");
+            project.claude_account_id = claude;
+            project.grok_account_id = grok;
+            Some(project)
+        };
+        let claude_acct = || account("claude-acct", "/home/u/.claude-alt");
+        let claude_other = || account("claude-other", "/home/u/.claude-other");
+        let claude_project = || account("claude-project", "/home/u/.claude-project");
+        let codex_acct = || account("codex-acct", "/home/u/.codex-alt");
 
-        // (agent, the choice made for the session, what it launches under)
+        // (agent, the session's project, the choice made for the session, what it launches under)
         let cases = [
-            // No choice: the console's account for the session's own agent.
-            (
-                Agent::Claude,
-                None,
-                account("claude-acct", "/home/u/.claude-alt"),
-            ),
-            (
-                Agent::Codex,
-                None,
-                account("codex-acct", "/home/u/.codex-alt"),
-            ),
+            // No project and no choice: the console's account for the session's own agent.
+            (Agent::Claude, None, None, claude_acct()),
+            (Agent::Codex, None, None, codex_acct()),
             // Nothing referenced for Grok, and another agent's account is never borrowed for it:
             // the default account, which pins nothing.
-            (Agent::Grok, None, (None, None)),
+            (Agent::Grok, None, None, (None, None)),
             // A choice wins over the console's reference...
             (
                 Agent::Claude,
+                None,
                 Some(Some("claude-other")),
-                account("claude-other", "/home/u/.claude-other"),
+                claude_other(),
             ),
             // ...and a choice of the default account wins over it too.
-            (Agent::Claude, Some(None), (None, None)),
+            (Agent::Claude, None, Some(None), (None, None)),
+            // The project's reference wins over the console's...
+            (
+                Agent::Claude,
+                project(pins("claude-project"), pins("grok-project")),
+                None,
+                claude_project(),
+            ),
+            // ...a project that sets nothing for the agent falls back to the console's...
+            (
+                Agent::Codex,
+                project(pins("claude-project"), pins("grok-project")),
+                None,
+                codex_acct(),
+            ),
+            // ...and to the default account when the console sets nothing either; the project's
+            // reference for another agent is never borrowed.
+            (
+                Agent::Grok,
+                project(pins("claude-project"), pins("grok-project")),
+                None,
+                account("grok-project", "/home/u/.grok-project"),
+            ),
+            (
+                Agent::Grok,
+                project(pins("claude-project"), ProjectAccount::Inherit),
+                None,
+                (None, None),
+            ),
+            // A project that says the default account ends the chain there, where the console would
+            // have named an account; the agents it says nothing for still inherit.
+            (
+                Agent::Claude,
+                project(ProjectAccount::Default, ProjectAccount::Inherit),
+                None,
+                (None, None),
+            ),
+            (
+                Agent::Codex,
+                project(ProjectAccount::Default, ProjectAccount::Inherit),
+                None,
+                codex_acct(),
+            ),
+            // The session's own pick wins over the project's reference, the default account
+            // included, and over a project that says the default account.
+            (
+                Agent::Claude,
+                project(ProjectAccount::Default, ProjectAccount::Inherit),
+                Some(Some("claude-other")),
+                claude_other(),
+            ),
+            (
+                Agent::Claude,
+                project(pins("claude-project"), ProjectAccount::Inherit),
+                Some(Some("claude-other")),
+                claude_other(),
+            ),
+            (
+                Agent::Claude,
+                project(pins("claude-project"), ProjectAccount::Inherit),
+                Some(None),
+                (None, None),
+            ),
         ];
-        for (agent, chosen, expected) in cases {
-            assert_eq!(resolved(agent, chosen), expected, "{agent:?} {chosen:?}");
+        for (index, (agent, project, chosen, expected)) in cases.into_iter().enumerate() {
+            assert_eq!(
+                resolved(agent, project.as_ref(), chosen),
+                expected,
+                "case {index}: {agent:?} {chosen:?}"
+            );
         }
 
         // A choice naming no account, or an account of another agent, is refused.
@@ -7051,109 +7112,6 @@ mod tests {
     /// A project's setting naming the account `id`.
     fn pins(id: &str) -> ProjectAccount {
         ProjectAccount::Account { id: id.to_string() }
-    }
-
-    /// A session's account is its own pick, else the project's reference for its agent, else the
-    /// console's, else the default account: a project's reference overrides the console's, and one
-    /// left unset falls back to it, agent by agent.
-    #[test]
-    fn a_projects_account_overrides_the_consoles_and_an_unset_one_falls_back_to_it() {
-        let (state, _dir) = crate::test_support::app_state("coordinator-session-account-project");
-        for (id, agent, dir) in [
-            ("claude-console", Agent::Claude, "/home/u/.claude-console"),
-            ("claude-project", Agent::Claude, "/home/u/.claude-project"),
-            ("claude-pick", Agent::Claude, "/home/u/.claude-pick"),
-            ("codex-console", Agent::Codex, "/home/u/.codex-console"),
-            ("grok-project", Agent::Grok, "/home/u/.grok-project"),
-        ] {
-            state
-                .store
-                .insert_account(&Account {
-                    id: id.to_string(),
-                    agent,
-                    name: id.to_string(),
-                    config_dir: dir.to_string(),
-                    approval_reviewer: None,
-                    approval_mode: None,
-                    share_default_config: false,
-                    share_default_config_incomplete: false,
-                })
-                .unwrap();
-        }
-        let mut console = console(Agent::Claude, Path::new("/tmp/unused"));
-        console.claude_account_id = Some("claude-console".to_string());
-        console.codex_account_id = Some("codex-console".to_string());
-        let mut project = project_of("console-1", "project-1");
-        project.claude_account_id = pins("claude-project");
-        project.grok_account_id = pins("grok-project");
-
-        let resolved = |agent: Agent, project: Option<&Project>, chosen: Option<Option<&str>>| {
-            session_account(
-                &state,
-                agent,
-                &console,
-                project,
-                chosen.map(|choice| choice.map(str::to_string)),
-            )
-            .unwrap()
-        };
-        let account = |id: &str, dir: &str| (Some(id.to_string()), Some(dir.to_string()));
-
-        // The project's reference wins over the console's...
-        assert_eq!(
-            resolved(Agent::Claude, Some(&project), None),
-            account("claude-project", "/home/u/.claude-project")
-        );
-        // ...a project that sets nothing for the agent falls back to the console's...
-        assert_eq!(
-            resolved(Agent::Codex, Some(&project), None),
-            account("codex-console", "/home/u/.codex-console")
-        );
-        // ...and to the default account when the console sets nothing either; the project's
-        // reference for another agent is never borrowed.
-        assert_eq!(
-            resolved(Agent::Grok, Some(&project), None),
-            account("grok-project", "/home/u/.grok-project")
-        );
-        project.grok_account_id = ProjectAccount::Inherit;
-        assert_eq!(resolved(Agent::Grok, Some(&project), None), (None, None));
-        // A project that says the default account ends the chain there, where the console would
-        // have named an account; the agents it says nothing for still inherit.
-        project.claude_account_id = ProjectAccount::Default;
-        assert_eq!(
-            resolved(Agent::Claude, Some(&project), None),
-            (None, None),
-            "the console pins an account and the project says the default account"
-        );
-        assert_eq!(
-            resolved(Agent::Claude, None, None),
-            account("claude-console", "/home/u/.claude-console"),
-            "a session without a project still reads the console's"
-        );
-        assert_eq!(
-            resolved(Agent::Codex, Some(&project), None),
-            account("codex-console", "/home/u/.codex-console")
-        );
-        // The session's own pick still wins over a project that says the default account.
-        assert_eq!(
-            resolved(Agent::Claude, Some(&project), Some(Some("claude-pick"))),
-            account("claude-pick", "/home/u/.claude-pick")
-        );
-        project.claude_account_id = pins("claude-project");
-        // A session without a project, as a console session is, reads the console's.
-        assert_eq!(
-            resolved(Agent::Claude, None, None),
-            account("claude-console", "/home/u/.claude-console")
-        );
-        // The session's own pick wins over both, the default account included.
-        assert_eq!(
-            resolved(Agent::Claude, Some(&project), Some(Some("claude-pick"))),
-            account("claude-pick", "/home/u/.claude-pick")
-        );
-        assert_eq!(
-            resolved(Agent::Claude, Some(&project), Some(None)),
-            (None, None)
-        );
     }
 
     /// A project's path is stored absolute and written one way, so the trusted directories can be
@@ -7349,43 +7307,6 @@ mod tests {
             let coded = err.downcast_ref::<CodedError>().expect("a coded error");
             assert_eq!(coded.code, error_code::UNKNOWN_SESSION, "{target}");
         }
-    }
-
-    /// Two console sessions of the same console coexist on record and both come back from
-    /// `list_sessions` — the storage layer that `Store::insert_console_session` and listing sit on
-    /// never treated a second one as a conflict (that refusal lived in `open_session`, not here).
-    ///
-    /// This does not cover the actual removal of the one-live-console-session rule: that refusal
-    /// used to sit in `open_session`, ahead of launching the agent process, and exercising its
-    /// absence means actually launching a second agent for the same console, which needs a real
-    /// agent binary and is impractical to do here. Nothing in this test suite currently covers that
-    /// seam; `open_session`'s own refusal path is gone and read rather than tested at the daemon
-    /// level.
-    #[test]
-    fn a_consoles_several_console_sessions_both_come_back_from_listing() {
-        let (state, _dir) = crate::test_support::app_state("coordinator-several-console-sessions");
-        state
-            .store
-            .insert_console(&console(Agent::Claude, Path::new("/tmp/unused")))
-            .unwrap();
-        let first = state
-            .store
-            .insert_console_session(bare_session("session-0", Role::Console), None)
-            .expect("first console session");
-        let second = state
-            .store
-            .insert_console_session(bare_session("session-1", Role::Console), None)
-            .expect("second console session");
-
-        let live_console_sessions: Vec<String> = state
-            .store
-            .list_sessions()
-            .unwrap()
-            .into_iter()
-            .filter(|s| s.role == Role::Console && !s.status.is_dormant())
-            .map(|s| s.id)
-            .collect();
-        assert_eq!(live_console_sessions, [first.id, second.id]);
     }
 
     // -- accounts --------------------------------------------------------------
@@ -9095,29 +9016,6 @@ mod tests {
         assert_eq!(refused(err), error_code::FIELD_REQUIRED);
     }
 
-    /// A console session reads the pair that belongs to its own agent, and no other.
-    #[test]
-    fn a_console_session_launches_with_its_own_agents_model_and_effort() {
-        let mut console = console(Agent::Claude, Path::new("/tmp/unused"));
-        console.claude_console_session_model = Some("opus".to_string());
-        console.codex_console_session_effort = Some("high".to_string());
-        console.grok_console_session_model = Some("grok-4".to_string());
-        console.grok_console_session_effort = Some("low".to_string());
-
-        assert_eq!(
-            console_session_launch_settings(&console, Agent::Claude),
-            (Some("opus".to_string()), None)
-        );
-        assert_eq!(
-            console_session_launch_settings(&console, Agent::Codex),
-            (None, Some("high".to_string()))
-        );
-        assert_eq!(
-            console_session_launch_settings(&console, Agent::Grok),
-            (Some("grok-4".to_string()), Some("low".to_string()))
-        );
-    }
-
     /// A project session reads its project's pair for its own agent and never the console's; a
     /// console session reads the console's pair and never a project's. A project that sets nothing
     /// leaves its sessions launching exactly as the agent would unasked, whatever the console sets.
@@ -9127,6 +9025,8 @@ mod tests {
         let mut owner = console(Agent::Claude, Path::new("/tmp/unused"));
         owner.claude_console_session_model = Some("console-opus".to_string());
         owner.codex_console_session_effort = Some("console-high".to_string());
+        owner.grok_console_session_model = Some("console-grok".to_string());
+        owner.grok_console_session_effort = Some("console-low".to_string());
         state.store.insert_console(&owner).unwrap();
         let mut configured = project_of("console-1", "configured");
         configured.claude_session_model = Some("project-sonnet".to_string());
@@ -9155,6 +9055,10 @@ mod tests {
         assert_eq!(
             launched(Role::Console, None, Agent::Codex),
             pair(None, Some("console-high"))
+        );
+        assert_eq!(
+            launched(Role::Console, None, Agent::Grok),
+            pair(Some("console-grok"), Some("console-low"))
         );
         assert_eq!(
             launched(Role::Project, Some("configured"), Agent::Claude),
@@ -9818,12 +9722,11 @@ mod tests {
         assert_eq!(stored.grok_session_effort.as_deref(), Some("high"));
     }
 
-    /// Removing an account a console refers to clears that console's reference, putting it back on
-    /// the agent's default account; a console that never referred to it is untouched.
+    /// Removing an account publishes the projects whose reference it cleared, and only those.
     #[tokio::test]
-    async fn removing_an_account_a_console_refers_to_clears_the_reference() {
+    async fn removing_an_account_publishes_only_the_projects_it_cleared() {
         let (state, _dir) =
-            crate::test_support::app_state("coordinator-account-delete-clears-console");
+            crate::test_support::app_state("coordinator-account-delete-publishes-projects");
         handle(
             &state,
             None,
@@ -9835,16 +9738,9 @@ mod tests {
 
         let mut referring = console(Agent::Claude, Path::new("/tmp/unused"));
         referring.id = "console-referring".to_string();
-        referring.claude_account_id = Some(account_id.clone());
         state.store.insert_console(&referring).unwrap();
-        let mut untouched = console(Agent::Claude, Path::new("/tmp/unused"));
-        untouched.id = "console-untouched".to_string();
-        state.store.insert_console(&untouched).unwrap();
         let mut referring_project = project_of("console-referring", "project-referring");
         referring_project.claude_account_id = pins(&account_id);
-        // A project that names the default account refers to no id, and one on another agent's
-        // setting is not touched by a Claude account going.
-        referring_project.codex_account_id = ProjectAccount::Default;
         state.store.insert_project(&referring_project).unwrap();
         let mut defaulting_project = project_of("console-referring", "project-defaulting");
         defaulting_project.claude_account_id = ProjectAccount::Default;
@@ -9863,47 +9759,6 @@ mod tests {
         .await
         .expect("removed");
 
-        let after = state
-            .store
-            .get_console("console-referring")
-            .unwrap()
-            .unwrap();
-        assert_eq!(after.claude_account_id, None, "back on the default account");
-        assert_eq!(
-            state
-                .store
-                .get_console("console-untouched")
-                .unwrap()
-                .unwrap()
-                .claude_account_id,
-            None,
-            "a console that never referred to it is unaffected either way"
-        );
-        assert_eq!(
-            state
-                .store
-                .get_project("project-referring")
-                .unwrap()
-                .unwrap()
-                .claude_account_id,
-            ProjectAccount::Inherit,
-            "a project's reference is cleared back to inheriting as well"
-        );
-        let project_after = |id: &str| state.store.get_project(id).unwrap().unwrap();
-        assert_eq!(
-            project_after("project-referring").codex_account_id,
-            ProjectAccount::Default,
-            "another setting of the same project that says the default account stays so"
-        );
-        assert_eq!(
-            project_after("project-defaulting").claude_account_id,
-            ProjectAccount::Default,
-            "a project that says the default account is not put back to inheriting"
-        );
-        assert_eq!(
-            project_after("project-inheriting").claude_account_id,
-            ProjectAccount::Inherit
-        );
         let mut broadcast_projects = Vec::new();
         while let Ok(event) = events.try_recv() {
             if let Event::ProjectUpserted { project } = event {
@@ -13252,12 +13107,17 @@ mod tests {
 
     /// A launch that fails leaves nothing behind: the session is deleted again, and the user is told
     /// why by a notice that names the session by its title, which no longer exists to be looked up.
+    /// The failure's own code and params travel in the notice, for a client to word the reason.
     #[tokio::test]
     async fn a_launch_that_fails_deletes_the_session_and_says_why() {
         let (state, _dir) = state_for_opening("coordinator-open-detached-fails");
         let mut events = state.subscribe();
         let opened = open_started(&state, open_request(), |_| {
-            Err(anyhow::anyhow!("the agent is not installed"))
+            Err(CodedError::raised(
+                error_code::BINARY_NOT_FOUND,
+                "`claude` was not found".to_string(),
+                &[("binary", "claude")],
+            ))
         })
         .await
         .expect("replied before the launch");
@@ -13280,7 +13140,9 @@ mod tests {
         assert!(deleted, "clients drop the row they were shown");
         let (code, params) = notice.expect("a notice");
         assert_eq!(code, notice_code::LAUNCH_FAILED);
-        assert_eq!(params["reason"], "the agent is not installed");
+        assert_eq!(params["reason"], "`claude` was not found");
+        assert_eq!(params["reason_code"], error_code::BINARY_NOT_FOUND);
+        assert_eq!(params["binary"], "claude");
         assert_eq!(params["title"], opened.title);
     }
 
@@ -13444,32 +13306,6 @@ mod tests {
         drop(followup);
         wait_until(|| state.store.get_session(&opened.id).unwrap().is_none()).await;
         assert!(launched.load(std::sync::atomic::Ordering::SeqCst));
-    }
-
-    /// The failure's own code and params travel in the notice, for a client to word the reason.
-    #[tokio::test]
-    async fn a_failed_launch_notice_carries_the_failures_code_and_params() {
-        let (state, _dir) = state_for_opening("coordinator-open-notice-params");
-        let mut events = state.subscribe();
-        let opened = open_started(&state, open_request(), |_| {
-            Err(CodedError::raised(
-                error_code::BINARY_NOT_FOUND,
-                "`claude` was not found".to_string(),
-                &[("binary", "claude")],
-            ))
-        })
-        .await
-        .expect("opened");
-        wait_until(|| state.store.get_session(&opened.id).unwrap().is_none()).await;
-        let params = loop {
-            if let Event::SessionNotice { params, .. } = events.try_recv().expect("a notice") {
-                break params;
-            }
-        };
-        assert_eq!(params["reason_code"], error_code::BINARY_NOT_FOUND);
-        assert_eq!(params["binary"], "claude");
-        assert_eq!(params["reason"], "`claude` was not found");
-        assert_eq!(params["title"], opened.title);
     }
 
     /// A session still starting is refused as an owner: its launch may fail, which deletes it

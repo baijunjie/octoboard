@@ -155,22 +155,19 @@ it("words Claude Code's weekly window for all models only beside a model's own w
   expect(daemonMessage("en", "account_quota_exhausted", { ...params, agent: "Codex", model_weekly: "true" }, "x", records)).toContain("has used up its weekly quota.");
 });
 
-it("words a credit pool by its period, and a refusal without the structured window by its English name", () => {
+it("words a credit pool by its period or as credits, and a window without the structured kind by its own name", () => {
   const params = { agent: "Grok Build", account: "Work", window: "Weekly", window_kind: "credit_period" };
   expect(daemonMessage("en", "account_quota_exhausted", { ...params, window_minutes: "10080" }, "x", records)).toContain("has used up its weekly quota.");
   expect(daemonMessage("en", "account_quota_exhausted", { ...params, window: "Monthly", window_minutes: "43200" }, "x", records)).toContain("has used up its monthly quota.");
   expect(daemonMessage("en", "account_quota_exhausted", { ...params, window: "Credits" }, "x", records)).toContain("has used up its credits.");
   expect(daemonMessage("en", "account_quota_exhausted", { agent: "Codex", account: "Work", window: "5-hour" }, "x", records)).toContain(`its ${isolate("5-hour")} quota.`);
-});
-
-it("words an exhausted credit pool as credits and a window without a structured kind as a quota of its own name", () => {
-  const params = { agent: "Codex", account: "Work" };
-  const credits = { ...params, window: "Credits", window_kind: "credit_period" };
+  const codex = { agent: "Codex", account: "Work" };
+  const credits = { ...codex, window: "Credits", window_kind: "credit_period" };
   expect(daemonMessage("en", "account_quota_exhausted", credits, "x", records)).toContain("has used up its credits.");
   expect(daemonMessage("zh-Hans", "account_quota_exhausted", credits, "x", records)).toContain("：额度已用完。");
-  expect(daemonMessage("en", "account_quota_exhausted", { ...params, window: "Opus weekly" }, "x", records)).toContain(`its ${isolate("Opus weekly")} quota.`);
+  expect(daemonMessage("en", "account_quota_exhausted", { ...codex, window: "Opus weekly" }, "x", records)).toContain(`its ${isolate("Opus weekly")} quota.`);
   for (const unknown of [{ window_kind: "weekly_model" }, { agent: "Other" }]) {
-    expect(daemonMessage("en", "account_quota_exhausted", { ...params, window: "Weekly", window_kind: "weekly", ...unknown }, "x", records)).toContain(`its ${isolate("Weekly")} quota.`);
+    expect(daemonMessage("en", "account_quota_exhausted", { ...codex, window: "Weekly", window_kind: "weekly", ...unknown }, "x", records)).toContain(`its ${isolate("Weekly")} quota.`);
   }
 });
 

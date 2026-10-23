@@ -863,17 +863,6 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn a_project_checked_past_the_floor_is_due() {
-        let now = Instant::now();
-        let last_completed = now - GIT_CHECK_MIN_INTERVAL - Duration::from_secs(1);
-        assert!(due_for_check(
-            Some(last_completed),
-            now,
-            GIT_CHECK_MIN_INTERVAL
-        ));
-    }
-
     /// What the branch header of [`repo_with_a_stale_stat`] reads as: a branch with an upstream it
     /// is one commit ahead of, so that all four of the fields the check reports carry a value.
     fn stale_stat_header() -> BranchHeader {

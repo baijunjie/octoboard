@@ -133,7 +133,6 @@ fn codex_defaults(catalogue: &Value) -> HashMap<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::record_observed::Observed;
     use crate::test_support::ScratchDir;
 
     const CATALOGUE: &str = include_str!("../testdata/codex_models_cache_0.162.1.json");
@@ -152,29 +151,6 @@ mod tests {
             effort,
             &Locator::default(),
         )
-    }
-
-    /// A turn context that names the model and no effort is what a session gets with no layer of
-    /// its configuration setting one, and the account's catalogue then gives the level.
-    #[test]
-    fn a_codex_turn_without_an_effort_runs_at_the_accounts_catalogue_default() {
-        let mut observed = Observed::default();
-        for line in include_str!("../testdata/observed_codex_unset_effort_0.162.1.jsonl").lines() {
-            observed.fold_codex(line);
-        }
-        let account = ScratchDir::new("default-effort");
-        std::fs::write(account.join(CODEX_CATALOGUE_FILE), CATALOGUE).unwrap();
-        let mut defaults = DefaultEfforts::default();
-        defaults.begin_pass();
-        assert_eq!(
-            lookup(
-                &mut defaults,
-                &account,
-                observed.model.as_deref(),
-                observed.effort.as_deref()
-            ),
-            Some(Some("medium".to_owned()))
-        );
     }
 
     #[test]

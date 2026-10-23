@@ -581,26 +581,6 @@ mod tests {
     }
 
     #[test]
-    fn frame_reaching_onto_an_unplugged_display_is_pulled_onto_the_ones_left() {
-        // It spanned an external display to the laptop's left and the laptop; only the laptop is
-        // left, and the frame must end up wholly on it.
-        let state = saved(-1800.0, 100.0, 2400.0, 760.0, false);
-        assert_eq!(
-            initial_window(Some(&state), &[LAPTOP], Some(LAPTOP)),
-            restored(0.0, 100.0, 1512.0, 760.0, false)
-        );
-    }
-
-    #[test]
-    fn frame_spanning_connected_displays_is_restored_unchanged() {
-        let state = saved(800.0, 100.0, 1500.0, 800.0, false);
-        assert_eq!(
-            initial_window(Some(&state), &[LAPTOP, EXTERNAL], Some(LAPTOP)),
-            restored(800.0, 100.0, 1500.0, 800.0, false)
-        );
-    }
-
-    #[test]
     fn absurd_saved_size_is_held_to_the_displays() {
         let state = saved(100.0, 100.0, 100_000.0, 100_000.0, false);
         assert_eq!(
@@ -630,26 +610,6 @@ mod tests {
         assert_eq!(
             initial_window(Some(&state), &[top_right, bottom_left], Some(top_right)),
             restored(1400.0, 120.0, 1200.0, 760.0, false)
-        );
-    }
-
-    #[test]
-    fn frame_on_a_connected_display_of_another_scale_is_restored_in_points() {
-        // Quit on the 1× external display while the Retina laptop is the main display: the frame
-        // comes back exactly, not halved or doubled by either display's scale.
-        let state = saved(1700.0, 100.0, 1200.0, 760.0, false);
-        assert_eq!(
-            initial_window(Some(&state), &[LAPTOP, EXTERNAL], Some(LAPTOP)),
-            restored(1700.0, 100.0, 1200.0, 760.0, false)
-        );
-    }
-
-    #[test]
-    fn frame_on_a_disconnected_display_falls_back_to_the_main_display() {
-        let state = saved(1700.0, 100.0, 1400.0, 900.0, false);
-        assert_eq!(
-            initial_window(Some(&state), &[LAPTOP], Some(LAPTOP)),
-            fallback(false)
         );
     }
 

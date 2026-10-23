@@ -171,12 +171,15 @@ it("names each message by its speaker and keeps a message's key when replies are
   expect(container.querySelectorAll("article")[2]).toBe(user);
 });
 
-it("speaks the outcome: unavailable and empty through a status, a failure through an alert", async () => {
+it("speaks an unavailable and an empty history through a status", async () => {
   vi.useFakeTimers();
   try {
-    const container = await mount({ type: "session_history", session: "s-1", messages: [], unavailable: true });
+    const unavailable = await mount({ type: "session_history", session: "s-1", messages: [], unavailable: true });
     await act(async () => void vi.advanceTimersByTime(200));
-    expect(container.querySelector("[role=status]")?.textContent).toContain("Reopen the session to see its terminal.");
+    expect(unavailable.querySelector("[role=status]")?.textContent).toContain("Reopen the session to see its terminal.");
+    const empty = await mount({ type: "session_history", session: "s-1", messages: [] });
+    await act(async () => void vi.advanceTimersByTime(200));
+    expect(empty.querySelector("[role=status]")?.textContent).toContain("No messages in this session");
   } finally {
     vi.useRealTimers();
   }

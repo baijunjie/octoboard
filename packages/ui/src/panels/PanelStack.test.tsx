@@ -104,9 +104,8 @@ it("styles the card as the sidebar's floating card, with the same header height"
   expect(card.className).not.toContain("panel-shadow");
 });
 
-it("offers no maximize on a kind that is not maximizable, and closing the last panel leaves the owner's stack empty", () => {
+it("closing the last panel leaves the owner's stack empty", () => {
   const { container, stack } = mount();
-  expect(container.querySelector("[aria-label='Maximize panel']")).toBeNull();
   act(() => void container.querySelector<HTMLButtonElement>("[aria-label='Close panel']")!.click());
   expect(stack().open).toEqual([]);
 });

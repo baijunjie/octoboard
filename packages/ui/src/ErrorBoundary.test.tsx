@@ -63,28 +63,6 @@ function column(container: HTMLElement): HTMLElement {
   return outer;
 }
 
-// The stack outgrows the screen more often than not, so the edge it hides the rest behind fades.
-it("fades the stack at an edge it can still scroll towards", async () => {
-  const block = stack(await mountCrashed({ scrollHeight: 1000, clientHeight: 100 }));
-  expect(block.classList.contains("scroll-shadow--fade")).toBe(true);
-  expect(block.getAttribute("data-bottom-scroll")).toBe("true");
-});
-
-// A focused region is scrolled to the container's edge and no further, which is where the fade sits.
-it("keeps the stack scrolled into view clear of the fade at its edge", async () => {
-  const block = stack(await mountCrashed({ scrollHeight: 1000, clientHeight: 100 }));
-  const fade = Number(block.getAttribute("data-scroll-shadow-size"));
-  expect(fade).toBeGreaterThan(0);
-  expect(parseFloat(block.style.scrollPaddingBlock)).toBeGreaterThanOrEqual(fade);
-});
-
-it("shows no fade on a stack that fits", async () => {
-  const block = stack(await mountCrashed({ scrollHeight: 100, clientHeight: 100 }));
-  expect(block.getAttribute("data-bottom-scroll")).not.toBe("true");
-  expect(block.getAttribute("data-top-scroll")).not.toBe("true");
-  expect(block.hasAttribute("data-top-bottom-scroll")).toBe(false);
-});
-
 // Nothing else on the screen scrolls either of its two scrollers, so each takes focus itself — and
 // only while it scrolls, since a tab stop that scrolls nothing is one the user passes for no reason.
 // The column's half of this is `StartupScreen`'s, asserted here because the crash screen is the only

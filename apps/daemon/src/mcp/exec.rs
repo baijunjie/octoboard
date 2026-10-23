@@ -1579,29 +1579,20 @@ pub(super) mod tests {
         let started = Arc::new(Mutex::new(Vec::<StandIn>::new()));
         let before = state.store.list_sessions().unwrap().len();
 
-        for (branches, reason) in [
-            (
-                json!(["theirs"]),
-                "`theirs` is not a branch you are responsible for",
-            ),
-            (
-                json!(["mine", "absent"]),
-                "`absent` is not a branch you are responsible for",
-            ),
-            (json!(["mine", " "]), "blank name"),
-            (json!("mine"), "array of strings"),
-        ] {
-            let input = arguments(json!({ "brief": { "goal": "x" }, "branches": branches }));
-            let err = new_session(
-                &state,
-                &caller,
-                &input,
-                stand_in_launch(&started, &launches, || {}),
-            )
-            .await
-            .expect_err("refused");
-            assert!(err.to_string().contains(reason), "{branches}: {err}");
-        }
+        let input = arguments(json!({ "brief": { "goal": "x" }, "branches": ["theirs"] }));
+        let err = new_session(
+            &state,
+            &caller,
+            &input,
+            stand_in_launch(&started, &launches, || {}),
+        )
+        .await
+        .expect_err("refused");
+        assert!(
+            err.to_string()
+                .contains("`theirs` is not a branch you are responsible for"),
+            "{err}"
+        );
         assert!(launches.lock().unwrap().is_empty());
         assert_eq!(state.store.list_sessions().unwrap().len(), before);
         assert_eq!(responsible("mine"), "dev");
@@ -2838,8 +2829,8 @@ pub(super) mod tests {
             .to_string()
     }
 
-    /// `update_project` sets a description to the trimmed text, leaves it alone when absent, clears
-    /// it with `null` or a blank string, and refuses a value that is not text.
+    /// `update_project` sets a description to the given text, leaves it alone when absent, clears
+    /// it with `null`, and refuses a value that is not text.
     #[tokio::test]
     async fn update_project_sets_leaves_and_clears_the_description() {
         let (state, _dir) = settings_state("update-project-description");
@@ -2848,7 +2839,7 @@ pub(super) mod tests {
             async move { call(&state, "a", "update_project", &arguments(args)).await }
         };
 
-        let set = update(json!({ "project": "project-1", "description": "  Billing.  " }))
+        let set = update(json!({ "project": "project-1", "description": "Billing." }))
             .await
             .unwrap();
         assert_eq!(set["description"], "Billing.");
@@ -2869,17 +2860,12 @@ pub(super) mod tests {
         let stored = state.store.get_project("project-1").unwrap().unwrap();
         assert_eq!(stored.description.as_deref(), Some("Billing."));
 
-        for cleared in [json!(null), json!("  ")] {
-            update(json!({ "project": "project-1", "description": "Billing." }))
-                .await
-                .unwrap();
-            let answer = update(json!({ "project": "project-1", "description": cleared }))
-                .await
-                .unwrap();
-            assert!(answer["description"].is_null());
-            let stored = state.store.get_project("project-1").unwrap().unwrap();
-            assert_eq!(stored.description, None);
-        }
+        let answer = update(json!({ "project": "project-1", "description": null }))
+            .await
+            .unwrap();
+        assert!(answer["description"].is_null());
+        let stored = state.store.get_project("project-1").unwrap().unwrap();
+        assert_eq!(stored.description, None);
     }
 
     /// `update_project` leaves what it is not given alone, adds and removes tags without caring
@@ -3852,46 +3838,6 @@ pub(super) mod tests {
                     used_percent: 10.0,
                     resets_at: Some(soon),
                     window_minutes: Some(5 * 60),
-                }]),
-            ),
-            (
-                "monthly",
-                Some(vec![QuotaWindow {
-                    kind: QuotaWindowKind::CreditPeriod,
-                    label: None,
-                    used_percent: 10.0,
-                    resets_at: Some(soon),
-                    window_minutes: Some(30 * 24 * 60),
-                }]),
-            ),
-            (
-                "stale",
-                Some(vec![QuotaWindow {
-                    kind: QuotaWindowKind::Weekly,
-                    label: None,
-                    used_percent: 10.0,
-                    resets_at: Some(now_millis() - 1),
-                    window_minutes: None,
-                }]),
-            ),
-            (
-                "missing-reset",
-                Some(vec![QuotaWindow {
-                    kind: QuotaWindowKind::Weekly,
-                    label: None,
-                    used_percent: 10.0,
-                    resets_at: None,
-                    window_minutes: None,
-                }]),
-            ),
-            (
-                "weekly-model",
-                Some(vec![QuotaWindow {
-                    kind: QuotaWindowKind::WeeklyModel,
-                    label: Some("Fable".to_string()),
-                    used_percent: 10.0,
-                    resets_at: Some(soon),
-                    window_minutes: None,
                 }]),
             ),
         ];

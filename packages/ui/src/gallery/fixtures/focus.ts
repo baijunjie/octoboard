@@ -415,16 +415,6 @@ export const focusScenarios: Scenario[] = [
     ],
   },
   {
-    id: "focus-agent-tooltip",
-    group: GROUP,
-    category: "normal",
-    title: "Agent mark tooltip",
-    description: "The pointer rests on the Claude Code mark of Add idempotency keys. The tooltip names the agent, then lists the account the session runs under, its model and its effort, each under its label: Work, Opus 5.5 and high, the same as the line beside the mark.",
-    state: combinedState,
-    preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}`, projectFocusIncludeConsoleSessions: true },
-    steps: [(ui) => ui.hoverSessionAgent(addIdempotencyKeys(ui), AGENT_LABEL.claude, { account: "Work", model: "Opus 5.5", effort: "high" })],
-  },
-  {
     id: "focus-console-session",
     group: GROUP,
     category: "normal",
@@ -576,7 +566,7 @@ export const focusScenarios: Scenario[] = [
     title: "Archived session actions",
     state: archivePreviewTen,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "The menu offers Reopen, Copy session ID and a destructive Delete after a divider; there is no Hand off. Copy session ID shows the ID beneath its label inside the same item, directly after Reopen. Used archived rows have no Delete shortcut, because deleting needs confirmation. Archived rows have no lock controls. Reopen selects the session and moves it from Archived to Sessions.",
+    description: "The headings count zero live sessions and ten directly bound archived parents, all shown without View all. The menu offers Reopen, Copy session ID and a destructive Delete after a divider; there is no Hand off. Copy session ID shows the ID beneath its label inside the same item, directly after Reopen. Used archived rows have no Delete shortcut, because deleting needs confirmation. Archived rows have no lock controls. Reopen selects the session and moves it from Archived to Sessions.",
     steps: [(ui) => ui.press(ui.t("sidebar.session.actions", { title: previewLead.title }))],
   },
   {
@@ -588,15 +578,6 @@ export const focusScenarios: Scenario[] = [
     sessionRecords: { "s-preview-2": "absent" },
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}` },
     description: "The heading counts thirteen archived sessions: eleven parents and two hidden children. Ten parent rows precede View all, and the archived lead's children appear only in the full archive. Delete the unused draft to bring the eleventh parent into the preview; View all remains while archived children are hidden.",
-  },
-  {
-    id: "focus-console-archive-five",
-    group: GROUP,
-    category: "normal",
-    title: "Console archive preview, exactly ten parents",
-    state: archivePreviewTen,
-    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "The headings count zero live sessions and ten directly bound archived parents, all shown without View all. Used archived rows have no Delete shortcut; their menu keeps Reopen and Delete with confirmation.",
   },
   {
     id: "focus-console-archive-overflow",

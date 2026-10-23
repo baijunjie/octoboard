@@ -481,9 +481,16 @@ mod tests {
     #[test]
     fn malformed_and_unknown_lines_are_skipped_without_error() {
         let path = ScratchFile::new("transcript-malformed", "transcript.jsonl");
+        // The two cut-off lines carry a marker, so they reach the JSON parse, and fail it.
+        let cut_rejection = format!("{{\"type\":\"user\",\"note\":\"{REJECTED_TOOL_USE_PREFIX}");
+        let cut_interrupt = format!(
+            "{{\"type\":\"user\",\"message\":{{\"content\":[{{\"type\":\"text\",\"text\":\"{INTERRUPTED_MARKER}"
+        );
         std::fs::write(
             &path,
-            format!("not json at all\n{{\"no\":\"message field\"}}\n{REJECTION}"),
+            format!(
+                "not json at all\n{{\"no\":\"message field\"}}\n{cut_rejection}\n{cut_interrupt}\n{REJECTION}"
+            ),
         )
         .expect("write transcript");
         let scan = record_watch::scan_lines(&path, 0, |line| is_rejection_line(line).then_some(()))

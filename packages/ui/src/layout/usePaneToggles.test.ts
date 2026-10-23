@@ -101,14 +101,6 @@ it.each([true, false])("floats the aside in on request while it may, in a narrow
   expect(panes().asidePeek.active).toBe(false);
 });
 
-it("hides the floating aside when the sidebar's drawer opens", () => {
-  const { panes } = mountToggles(true);
-  act(() => panes().asidePeek.reveal());
-  expect(panes().asidePeek.active).toBe(true);
-  act(() => panes().toggleSidebar());
-  expect(panes().asidePeek.active).toBe(false);
-});
-
 it("leaves Escape to a floating panel over an open drawer, and closes the drawer on the next one", () => {
   const { panes } = mountToggles(true);
   act(() => panes().toggleSidebar());

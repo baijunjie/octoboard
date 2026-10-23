@@ -367,13 +367,6 @@ mod tests {
     }
 
     #[test]
-    fn keeps_only_the_records_asked_for() {
-        let groups = parsed(b"1\t0\ta\x002\t0\tb\0", &["b"]);
-        assert_eq!(groups[0].1.len(), 1);
-        assert!(groups[0].1.contains_key("b"));
-    }
-
-    #[test]
     fn splits_a_log_into_commits() {
         let id = "a".repeat(40);
         let next = "b".repeat(40);

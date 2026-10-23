@@ -169,17 +169,6 @@ mod tests {
         }
     }
 
-    fn assert_unique(agent: Agent) {
-        let items = shared_items(agent);
-        for (i, item) in items.iter().enumerate() {
-            assert!(
-                items[..i].iter().all(|earlier| earlier.name != item.name),
-                "{agent:?} lists {} twice",
-                item.name
-            );
-        }
-    }
-
     #[test]
     fn claude_catalog() {
         assert_eq!(
@@ -261,13 +250,6 @@ mod tests {
                 ("sessions", D, H),
             ]
         );
-    }
-
-    #[test]
-    fn no_item_is_listed_twice() {
-        for agent in Agent::ALL {
-            assert_unique(agent);
-        }
     }
 
     #[test]

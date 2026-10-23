@@ -973,7 +973,6 @@ async fn ask_automatically(
     launcher: &Arc<Launcher>,
     caller: &str,
     asked: OpenRequest,
-    handover: Option<Handover>,
 ) -> Result<Value> {
     let caller = launcher.state.session_record(caller).unwrap();
     let launcher_for_launch = launcher.clone();
@@ -983,7 +982,7 @@ async fn ask_automatically(
         &caller,
         Action::Start {
             open: asked,
-            handover,
+            handover: None,
         },
         true,
         ANSWER_TIME_LIMIT,
@@ -1005,7 +1004,7 @@ async fn an_automatic_approval_starts_the_session_without_asking() {
 
     let result = tokio::time::timeout(
         PATIENCE,
-        ask_automatically(&launcher, "asker", asked(CONSOLE, Some("project-1")), None),
+        ask_automatically(&launcher, "asker", asked(CONSOLE, Some("project-1"))),
     )
     .await
     .expect("the call returns without an answer")
@@ -1047,34 +1046,9 @@ async fn an_automatic_approval_starts_the_session_without_asking() {
         );
     }
     // Nothing is left marking the session as being approved.
-    ask_automatically(&launcher, "asker", asked(CONSOLE, None), None)
+    ask_automatically(&launcher, "asker", asked(CONSOLE, None))
         .await
         .unwrap();
-}
-
-/// An automatic approval hands the branches over like any approval.
-#[tokio::test]
-async fn an_automatic_approval_hands_the_branches_over() {
-    let (state, _dir) = fixture("automatic-handover");
-    let _asker = running(&state, "asker");
-    let launcher = Launcher::new(&state);
-    let (handover, _repo) = handover_of(&state, &["one"]);
-
-    let result = ask_automatically(
-        &launcher,
-        "asker",
-        asked(CONSOLE, Some("project-1")),
-        Some(handover.clone()),
-    )
-    .await
-    .unwrap();
-
-    let note = result["note"].as_str().unwrap();
-    assert!(note.contains("Handed over to it: `one`"), "{note}");
-    assert_eq!(
-        responsible_for(&state, &handover),
-        vec![("one".to_string(), "started-0".to_string())]
-    );
 }
 
 /// An automatic request takes the place of one its session has waiting in a dialog, which is
@@ -1087,7 +1061,7 @@ async fn an_automatic_approval_replaces_a_waiting_request_and_respects_an_approv
     let launcher = Launcher::new(&state);
     let (waiting, _id) = ask_here(&state, "asker", ANSWER_TIME_LIMIT).await;
 
-    ask_automatically(&launcher, "asker", asked(CONSOLE, None), None)
+    ask_automatically(&launcher, "asker", asked(CONSOLE, None))
         .await
         .unwrap();
     let err = outcome_of(waiting).await.expect_err("withdrawn");
@@ -1122,7 +1096,7 @@ async fn an_automatic_approval_replaces_a_waiting_request_and_respects_an_approv
         }
     });
     entered_rx.await.unwrap();
-    let err = ask_automatically(&launcher, "asker", asked(CONSOLE, None), None)
+    let err = ask_automatically(&launcher, "asker", asked(CONSOLE, None))
         .await
         .unwrap_err();
     assert!(err.to_string().contains("being carried out"), "{err}");

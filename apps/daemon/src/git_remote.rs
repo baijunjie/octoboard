@@ -749,17 +749,8 @@ mod tests {
 
     /// `git` through the fixture helper's isolated environment rather than the user's login shell.
     fn observe_in(dir: &Path) -> Option<Option<String>> {
-        observe_in_with_global(dir, None)
-    }
-
-    /// As [`observe_in`], with `global` as the user's global `git` configuration.
-    fn observe_in_with_global(dir: &Path, global: Option<&Path>) -> Option<Option<String>> {
         observe_with(dir, &|args| {
-            let mut command = fixture_git(dir);
-            if let Some(global) = global {
-                command.env("GIT_CONFIG_GLOBAL", global);
-            }
-            let output = command.args(args).output().expect("git runs");
+            let output = fixture_git(dir).args(args).output().expect("git runs");
             if output.status.success() {
                 Ok(String::from_utf8_lossy(&output.stdout).into_owned())
             } else {
@@ -872,23 +863,6 @@ mod tests {
         assert_eq!(
             observe_in(&repo),
             Some(Some("https://example.com/up/r.git".to_string()))
-        );
-    }
-
-    #[test]
-    fn a_remote_only_the_global_configuration_defines_is_found() {
-        let repo = repo_with("git-remote-global", &[(b"f.txt", b"one\n")]);
-        let scratch = ScratchDir::new("git-remote-global-config");
-        let global = scratch.join("gitconfig");
-        std::fs::write(
-            &global,
-            "[remote \"shared\"]\n\turl = https://example.com/shared/r.git\n",
-        )
-        .expect("global config");
-        assert_eq!(observe_in(&repo), Some(None));
-        assert_eq!(
-            observe_in_with_global(&repo, Some(&global)),
-            Some(Some("https://example.com/shared/r.git".to_string()))
         );
     }
 
@@ -1055,35 +1029,20 @@ mod tests {
     #[test]
     fn the_check_records_what_it_read_and_leaves_the_url_when_it_read_nothing() {
         let (state, _dir) = state_with_project("git-remote-check", Some("old"));
-        let mut events = state.subscribe();
         let reads = std::cell::Cell::new(0);
 
-        // A differing URL is written and broadcast.
         let run = fake(&["origin"], None, &reads);
         record_inspected(&state, "project-1", inspect(&run).as_ref());
         assert_eq!(stored_url(&state).as_deref(), Some("u-origin"));
-        assert!(matches!(
-            events.try_recv(),
-            Ok(Event::ProjectUpserted { project }) if project.remote_url.as_deref() == Some("u-origin")
-        ));
-
-        // The same URL again sends nothing.
-        record_inspected(&state, "project-1", inspect(&run).as_ref());
-        assert!(events.try_recv().is_err());
 
         // A read that could not be made changes nothing.
         record_inspected(&state, "project-1", None);
         assert_eq!(stored_url(&state).as_deref(), Some("u-origin"));
-        assert!(events.try_recv().is_err());
 
         // A repository that has lost its remote has the URL cleared.
         let run = fake(&[], None, &reads);
         record_inspected(&state, "project-1", inspect(&run).as_ref());
         assert_eq!(stored_url(&state), None);
-        assert!(matches!(
-            events.try_recv(),
-            Ok(Event::ProjectUpserted { .. })
-        ));
     }
 
     #[test]

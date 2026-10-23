@@ -374,8 +374,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   in characters rather than bytes.
 - [Measuring build and test speed](memory/measuring-build-and-test-speed.md) — judging a speed change by CPU time and
   output size, measured back to back at a similar load and counting every process that does the work, never by
-  wall-clock time on a shared machine, against a control worktree at the base commit; why a shared Rust compilation
-  cache (sccache) across worktrees was measured and dropped; and how to profile a slow UI test file and when splitting
+  wall-clock time on a shared machine, against a control worktree at the base commit; why checks are made cheaper by
+  doing less and caching, not by parallel steps, CI test runs or a shared `CARGO_TARGET_DIR`; why a shared Rust
+  compilation cache (sccache) across worktrees was measured and dropped; and how to profile a slow UI test file and when splitting
   one is worth it (only a file that dominates the run, since splitting does not cut CPU).
 - [Probing agent CLIs](memory/probing-agent-clis.md) — how to establish what the three agent CLIs actually do, and how
   to probe a live Octoboard session that launches them: which session markers to strip and why enumerating them beats
@@ -492,8 +493,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   request together with the existing limits, and the spare unit each replaceable slot reserves because the daemon
   counts a replacing request before it gives the replaced one up.
 - [Writing automated tests](memory/writing-automated-tests.md) — how lean unit tests are kept (one case per rule,
-  table-driven), then the fixture conventions this project's tests need on macOS: why an executable written fresh per
-  test flakes only under a parallel run, why every wait on a spawned process is bounded by the shared `PATIENCE`
+  table-driven) and how to judge an existing test redundant when trimming, then the fixture conventions this
+  project's tests need on macOS: why an executable written fresh per test flakes only under a parallel run, why every wait on a spawned process is bounded by the shared `PATIENCE`
   (exec stalls of seconds on machines with endpoint-security software) and how to tell that stall apart, why a daemon
   test that gives anything a model or an effort seeds the agent's model list first, and how to verify behaviour the daemon derives from an agent's own output by replaying a committed capture rather than staging
   a live session, why a jsdom test must leave nothing running when it ends with the cleanup bound to the test that

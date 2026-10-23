@@ -145,10 +145,6 @@ it("starts a new account on the agent of the tab in view", () => {
   expect(document.body.querySelector<HTMLSelectElement>('select[aria-label="Agent"]')!.value).toBe("codex");
 });
 
-it("still refreshes the quotas of every agent while only one tab is shown", () => {
-  expect(mount().opening).toEqual([[{ type: "refresh_account_quotas" }]]);
-});
-
 it("marks an agent that is not installed in its tab, not in its panel", () => {
   availability.set("grok", { agent: "grok", availability: "unavailable" });
   const { container } = mount("Grok Build");

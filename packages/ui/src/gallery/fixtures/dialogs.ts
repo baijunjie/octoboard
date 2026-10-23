@@ -5,7 +5,6 @@ import { ALL_AGENTS, SAMPLE, branchItemOf, consoleOf, minutesAgo, projectOf, ses
 import { agentAvailability } from "./liveChanges";
 import { SAMPLE_CODEX_MODELS } from "./agentModels";
 import { IMAGES } from "./viewerImages";
-import { SHELL_TIMEOUT } from "./shellTimeout";
 
 
 const { console: console_, web, api, sessions } = SAMPLE;
@@ -807,21 +806,6 @@ export const dialogScenarios: Scenario[] = [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
       (ui) => ui.press(ui.t("common.add")),
-    ],
-  },
-  {
-    ...dialogFixture,
-    id: "dialog-new-session-shell-timeout",
-    group: "Sidebar sessions",
-    category: "exceptional",
-    title: "Session launch, shell environment timed out",
-    description: "The danger alert presents the failed shell command, cause, launch consequence and recovery as separate readable parts. Short shows the recovery at the bottom of the scrolling body.",
-    sessionOpenError: SHELL_TIMEOUT,
-    steps: [
-      (ui) => ui.press(ui.t("sidebar.project.openSession")),
-      (ui) => ui.focus(ui.t("common.name")),
-      (ui) => ui.confirm(),
-      async () => { document.querySelector<HTMLElement>('[role="dialog"] [role="alert"]')?.scrollIntoView({ block: "end" }); },
     ],
   },
   {

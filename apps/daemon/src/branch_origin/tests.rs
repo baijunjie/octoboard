@@ -492,7 +492,7 @@ fn a_handover_keeps_the_first_characters_of_a_long_title() {
 }
 
 #[test]
-fn a_renamed_branch_keeps_its_responsible_session() {
+fn a_renamed_branch_keeps_its_responsible_session_and_a_copy_gets_none() {
     let fixture = Fixture::new();
     fixture.as_session("a", &["branch", "old"]);
     fixture.deliver(1);
@@ -508,48 +508,10 @@ fn a_renamed_branch_keeps_its_responsible_session() {
     git(&fixture.repo, &["branch", "-m", "old", "new"]);
 
     let rows = fixture.reconcile_full();
-
-    let row = rows.iter().find(|row| row.branch == "new").unwrap();
-    assert_eq!(row.responsible_session, "c");
-    assert_eq!(row.responsible_title, "Session c");
-}
-
-#[test]
-fn a_branch_made_again_under_the_same_name_has_no_responsible_session() {
-    let fixture = Fixture::new();
-    fixture.as_session("a", &["branch", "topic"]);
-    fixture.deliver(1);
-    hand_over(
-        &fixture.state,
-        &fixture.common_dir,
-        &["topic".to_string()],
-        "a",
-        "c",
-        "Session c",
-    )
-    .unwrap();
-    git(&fixture.repo, &["branch", "-q", "-D", "topic"]);
-    git(
-        &fixture.repo,
-        &["commit", "-q", "--allow-empty", "-m", "next"],
-    );
-    git(&fixture.repo, &["branch", "topic"]);
-
-    fixture.reconcile_full();
-
-    assert!(fixture.rows().is_empty());
-}
-
-#[test]
-fn a_renamed_branch_keeps_its_responsible_session_and_a_copy_gets_none() {
-    let fixture = Fixture::new();
-    fixture.as_session("a", &["branch", "old"]);
-    fixture.deliver(1);
-    git(&fixture.repo, &["branch", "-m", "old", "new"]);
-
-    fixture.reconcile_full();
     assert_eq!(fixture.responsible("old"), None);
-    assert_eq!(fixture.responsible("new").as_deref(), Some("a"));
+    assert_eq!(fixture.responsible("new").as_deref(), Some("c"));
+    let row = rows.iter().find(|row| row.branch == "new").unwrap();
+    assert_eq!(row.responsible_title, "Session c");
 
     // git reports no transaction for a copy; a branch made after it shows the report would have
     // arrived by then.
@@ -1073,27 +1035,6 @@ fn a_listing_after_the_last_project_went_leaves_no_record_of_the_repository() {
     annotate(&fixture.state, &fixture.common_dir, &mut list);
 
     assert!(fixture.state.branch_origins.holds_no_repository());
-}
-
-#[test]
-fn deleting_the_last_project_clears_the_responsible_sessions() {
-    let fixture = Fixture::new();
-    fixture.as_session("a", &["branch", "topic"]);
-    fixture.deliver(1);
-    hand_over(
-        &fixture.state,
-        &fixture.common_dir,
-        &["topic".to_string()],
-        "a",
-        "c",
-        "Session c",
-    )
-    .unwrap();
-
-    fixture.state.store.delete_project("project").unwrap();
-    project_deleted(&fixture.state, &fixture.repo.to_string_lossy());
-
-    assert!(fixture.rows().is_empty());
 }
 
 #[test]

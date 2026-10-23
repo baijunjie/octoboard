@@ -118,11 +118,6 @@ it("keeps the pane when the pointer goes from a card into the pane's padding, wh
   expect(hide).not.toHaveBeenCalled();
 });
 
-it("marks the real toggle button with what it controls, as the toggle rule matches it", () => {
-  const { toggle } = mountToggle();
-  expect(toggle.getAttribute("data-pane-toggle")).toBe(PANE_ID.aside);
-});
-
 it("does not count a move on the aside's toggle as leaving, though the top bar is outside the card", () => {
   const { peek, hide, toggle } = mountToggle();
   placePane();

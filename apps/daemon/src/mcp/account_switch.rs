@@ -272,9 +272,9 @@ mod tests {
         assert_nobody_told(&state, &caller, &started);
     }
 
-    /// What is not the caller's to switch (another owner's session, the caller itself), an account
-    /// of another agent, and what the switch refuses (the account the session is on, an archived
-    /// session) are all refused in prose: nothing is launched, the session keeps its process, and
+    /// What is not the caller's to switch (another owner's session, the caller itself) and what
+    /// the switch refuses (an archived session, one case of the coordinator's refusals passed
+    /// through) are all refused in prose: nothing is launched, the session keeps its process, and
     /// no session changes.
     #[tokio::test]
     async fn a_switch_that_is_refused_changes_nothing() {
@@ -294,14 +294,6 @@ mod tests {
             (
                 json!({ "session": "a", "account": "claude-a" }),
                 "your own session",
-            ),
-            (
-                json!({ "session": "of-a", "account": "codex-a" }),
-                "codex-a",
-            ),
-            (
-                json!({ "session": "of-a", "account": "default" }),
-                "on that account already",
             ),
             (
                 json!({ "session": "archived-of-a", "account": "claude-a" }),

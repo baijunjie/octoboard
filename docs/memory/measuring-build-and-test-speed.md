@@ -21,6 +21,18 @@ load average has moved between about 15 and 170.
   about 58 s for a build that really cost 143 s. Time that server separately and add the two.
 - A change that shows no gain by those numbers is dropped, not kept on the hope that it helps on a quieter machine.
 
+## Make checks cheaper by doing less work and caching it, not by running more at once
+
+Applies to proposals for shortening builds, checks and test runs on a development machine shared with many agent
+sessions building and testing in their own worktrees, often short of memory, which is the normal state here.
+
+- Do not run the heavy steps of one verification side by side: under that load it gains almost nothing and adds memory
+  pressure.
+- Do not move tests to CI: tests stay local by the user's decision. Merges are local fast-forwards with no PR flow, so CI
+  test runs would need branch pushes and macOS runner minutes.
+- Do not point worktrees at one shared `CARGO_TARGET_DIR`: cargo locks its build directory for a whole build, so
+  concurrent agents would queue behind each other.
+
 ## Do not add a shared Rust compilation cache across worktrees
 
 Applies to speeding up a new worktree's first Rust build. sccache (0.18.0, as `RUSTC_WRAPPER`) was measured on the cold

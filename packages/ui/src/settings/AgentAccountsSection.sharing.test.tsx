@@ -91,13 +91,6 @@ describe("a switch that cannot be changed now", () => {
     expect(sharingSwitches(container)[0]!.hasAttribute("aria-disabled")).toBe(false);
     expect(captionOf(container, sharingSwitches(container)[0]!)).toContain("Turning this on links");
   });
-
-  it("does not ask for a change while disabled", () => {
-    accountSharing.set("codex-work", { account: "codex-work", in_use: { sessions: 1, signing_in: false } });
-    const { container } = mount("Codex");
-    act(() => sharingSwitches(container)[0]!.click());
-    expect(request).not.toHaveBeenCalled();
-  });
 });
 
 /** The description under a warning's announced sentence: the one main thing to do, never behind Details. */

@@ -31,7 +31,7 @@ function mount(panel: boolean, landing = false) {
   return { f6, active: () => document.activeElement?.id };
 }
 
-it("visits a shown panel as a stop of its own, landing on its first control, and skips one that is not shown", () => {
+it("visits a shown panel as a stop of its own, landing on its first control, forwards", () => {
   const shown = mount(true);
   document.getElementById("bar")!.focus();
   shown.f6();

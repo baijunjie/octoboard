@@ -6,6 +6,11 @@ The user wants tests lean and has had over-written ones trimmed. Test a module's
 one representative case per rule, in a table (`it.each`) when several rules share one shape, rather than a
 `describe` block per behaviour with a handful of near-duplicate cases each.
 
+When trimming existing tests as redundant: a test that pins a past defect is not redundant just because another test
+covers the same code path — keep it unless the user agrees to drop it; a merge into a table keeps every case and every
+side assertion the merged tests made, or the test that holds one stays as it is; and a test that cannot fail as named
+is not deleted as a duplicate but given the missing assertion or renamed to what it does check.
+
 ## Check a new test by breaking the rule it is named for
 
 Before calling a test done, make the rule its name claims fail — empty the constant the production path reads, feed it

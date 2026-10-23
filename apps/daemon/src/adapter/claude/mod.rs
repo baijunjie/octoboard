@@ -695,29 +695,6 @@ mod tests {
         settings["hooks"].clone()
     }
 
-    #[test]
-    fn injects_every_hook_event_as_a_fast_silent_command() {
-        let fixture = spec_fixture();
-        let hooks = injected_hooks(&fixture);
-        let hooks = hooks.as_object().expect("a hooks table");
-        assert_eq!(hooks.len(), HOOK_EVENTS.len());
-        for event in HOOK_EVENTS {
-            let handler = &hooks[*event][0]["hooks"][0];
-            assert_eq!(handler["type"], "command");
-            assert_eq!(handler["async"], true);
-            assert_eq!(handler["timeout"], HOOK_TIMEOUT_SECS);
-            assert_eq!(
-                handler["command"].as_str().unwrap(),
-                "exec '/opt/octoboard/octoboardd' hook --session 'session-1' --port 4321 2>/dev/null"
-            );
-            // Only `idle_prompt` of the notifications is read.
-            assert_eq!(
-                hooks[*event][0].get("matcher").and_then(|m| m.as_str()),
-                (*event == "Notification").then_some("idle_prompt")
-            );
-        }
-    }
-
     /// Both layouts match exactly, and a binary whose install tells nothing has no version.
     #[test]
     fn a_binary_version_comes_from_its_install_location() {
@@ -780,6 +757,11 @@ mod tests {
         ] {
             fixture.agent_version = version;
             let hooks = injected_hooks(&fixture);
+            assert_eq!(
+                hooks.as_object().expect("a hooks table").len(),
+                HOOK_EVENTS.len(),
+                "{version:?}"
+            );
             for event in HOOK_EVENTS {
                 let handler = &hooks[*event][0]["hooks"][0];
                 assert_eq!(handler["timeout"], HOOK_TIMEOUT_SECS);

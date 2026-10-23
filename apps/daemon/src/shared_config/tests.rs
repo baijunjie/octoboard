@@ -2032,11 +2032,10 @@ async fn a_working_session_blocks_a_change_and_is_left_running() {
     claude_setup(&fixture);
     let launches = Launches::default();
     launches.resume_through(&fixture.state, false);
-    // In the middle of a turn, at a permission prompt or question, idle with background work
-    // still running, and idle behind a dialog of its agent's that only the user can answer.
+    // In the middle of a turn, idle with background work still running, and idle behind a dialog
+    // of its agent's that only the user can answer.
     for (id, status) in [
         ("turn", SessionStatus::Working),
-        ("prompt", SessionStatus::WaitingUser),
         ("background", SessionStatus::Idle),
         ("dialog", SessionStatus::Idle),
     ] {

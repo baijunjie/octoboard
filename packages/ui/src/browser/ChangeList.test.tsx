@@ -16,9 +16,9 @@ import { ROW_HEIGHT } from "./treeRow";
 
 const items = changeItems([change("staged", "src/utils/alpha.ts"), change("staged", "src/beta.ts"), change("unstaged", "src/beta.ts"), change("unstaged", "docs/alpha.md")]);
 
-function render(view: Partial<ChangeViewState> = {}) {
+function render(view: Partial<ChangeViewState> = {}, listed: typeof items = items) {
   const container = mountRows(
-    <ChangeList items={items} selected={undefined} label="Changes" onOpen={() => {}} listRef={() => {}} changeView={changeViewFixture(view)} />,
+    <ChangeList items={listed} selected={undefined} label="Changes" onOpen={() => {}} listRef={() => {}} changeView={changeViewFixture(view)} />,
     { clipboard: { writeText: async () => {} } },
   );
   return { container };
@@ -64,19 +64,10 @@ it("narrows a flat list to the file names that match, each section counting what
   expect(container.textContent).toContain("Unstaged1");
 });
 
-it("narrows the tree the same way: only the directories that lead to a match and the matches", () => {
-  const { container } = render({ layout: "tree", filter: "alpha" });
-  expect(rows(container)).toEqual(["src/utils", `${isolate("alpha.ts")}, modified`, "docs", `${isolate("alpha.md")}, modified`]);
-  expect(container.textContent).toContain("Staged1");
-  expect(container.textContent).toContain("Unstaged1");
-});
-
 it("says so when no file name matches", () => {
-  for (const layout of ["flat", "tree"] as const) {
-    const { container } = render({ layout, filter: "zzz" });
-    expect(rows(container)).toEqual([]);
-    expect(container.textContent).toContain("No matching changes");
-  }
+  const { container } = render({ filter: "zzz" });
+  expect(rows(container)).toEqual([]);
+  expect(container.textContent).toContain("No matching changes");
 });
 
 it("announces that nothing matches, and only when something is typed", () => {
@@ -86,7 +77,7 @@ it("announces that nothing matches, and only when something is typed", () => {
     const typed = render({ filter: "zzz" });
     act(() => void vi.advanceTimersByTime(200));
     expect(statusText(typed.container)).toBe("No matching changes");
-    const empty = render({ filter: "" });
+    const empty = render({ filter: "" }, []);
     act(() => void vi.advanceTimersByTime(200));
     expect(statusText(empty.container)).toBe("");
   } finally {

@@ -40,7 +40,7 @@ const press = (element: HTMLElement, key: string) =>
   });
 const flush = () => act(async () => {});
 
-// The rows differ between the two layouts (changes alone, and under directories), so these run on both.
+// The rows differ between the two layouts (changes alone, and under directories), so this runs on both.
 it.each(["flat", "tree"] as const)("%s: gives each change row an actions button, named for its change, that the row's arrow keys reach", (layout) => {
   const { container } = render(layout, { writeText: async () => {} });
   const row = rowOf(container, "alpha.ts");
@@ -52,8 +52,8 @@ it.each(["flat", "tree"] as const)("%s: gives each change row an actions button,
   expect(document.activeElement).toBe(row);
 });
 
-it.each(["flat", "tree"] as const)("%s: still opens the change on a row's Enter", (layout) => {
-  const { container, onOpen } = render(layout, { writeText: async () => {} });
+it("still opens the change on a flat row's Enter", () => {
+  const { container, onOpen } = render("flat", { writeText: async () => {} });
   const row = rowOf(container, "alpha.ts");
   act(() => row.focus());
   press(row, "Enter");

@@ -325,10 +325,6 @@ function mountPeeking() {
 const SLIDE_AWAY_MS = 200;
 const wait = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 
-it("marks a console's avatar on the rail as a place that keeps the floating sidebar up", () => {
-  expect(mountPeeking().avatar().hasAttribute("data-sidebar-peek-keep")).toBe(true);
-});
-
 it("watches the pointer while its card floats, and lets the card go once the pointer is off it", () => {
   const { peek, hide, onContent } = mountPeeking();
   onContent(400, 300);

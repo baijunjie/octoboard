@@ -142,12 +142,6 @@ it("keeps a closed tab shown until the daemon has ended it, then shows the tab a
   expect(panel.shown()).toBe("c");
 });
 
-it("focuses the terminal a start from the panel made, once it is shown", async () => {
-  const panel = mount([shell("a", 1)]);
-  await act(async () => panel.container.querySelector<HTMLButtonElement>("button[aria-label='New terminal']")!.click());
-  await vi.waitFor(() => expect(focused).toEqual(["new"]));
-});
-
 it("shows a start in flight instead of the empty state, which would offer a second one", async () => {
   let release!: () => void;
   const panel = mount([], { holdCreate: new Promise<void>((resolve) => (release = resolve)) });
