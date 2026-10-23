@@ -103,8 +103,13 @@ function urlRun(cells: string[], from: number): number {
 
 const WORD_CHAR = /^[A-Za-z0-9]$/;
 const WORD_RUN = /^[A-Za-z0-9]+$/;
-/** A run that opens a list item rather than carrying on an address: marks alone (`-`), or a number (`1.`). */
-const LIST_MARKER = /^(?:[^A-Za-z0-9]+|[0-9]+\.)$/;
+/**
+ * A run that opens a list item rather than carrying on an address: marks alone (`-`), or a number,
+ * a single letter or a roman numeral written with i, v and x alone, in either case, before a period
+ * (`1.`, `a.`, `iv.`, `IV.`). Other words before a period (`Hans.`, `mid.`) still continue an address
+ * that ends a sentence.
+ */
+const LIST_MARKER = /^(?:[^A-Za-z0-9]+|(?:[0-9]+|[A-Za-z]|[ivx]+|[IVX]+)\.)$/;
 
 /**
  * Whether `row` carries on an address that ends on the line `above`, and the column it does from.
@@ -116,7 +121,7 @@ const LIST_MARKER = /^(?:[^A-Za-z0-9]+|[0-9]+\.)$/;
  * does a row xterm wrapped after a resize; a mark such as `-` or `&` shows the rows are one address
  * (`…auto-select-` / `account&…`). A finished address and a word of letters or digits
  * (`http://a.dev/x` / `Hans`) stay apart, and so do an address and the marker of a list item that
- * follows it (`-`, `1.`). The width of the lines around is no proof for an address, which a word
+ * follows it (`-`, `1.`, `a.`). The width of the lines around is no proof for an address, which a word
  * may follow, so only the terminal's own counts.
  */
 function continuesAddress(above: LineRow[], row: TerminalRow, layout: LineLayout): number | undefined {

@@ -96,6 +96,9 @@ it.each([
   ["the next row starts its own address", [row("http://a.dev/x"), row("  http://b.dev/y")]],
   ["it stops short of the last column and a list item follows", [row("http://a.dev/?l=zh-Hans"), row("  - Show it")]],
   ["it stops short of the last column and a numbered item follows", [row("http://a.dev/?l=zh-Hans"), row("  1. Show it")]],
+  ["it stops short of the last column and a lettered item follows", [row("http://a.dev/?l=zh-Hans"), row("  b. Show it")]],
+  ["it stops short of the last column and a roman-numbered item follows", [row("http://a.dev/?l=zh-Hans"), row("  iv. Show it")]],
+  ["it stops short of the last column and an upper-case item follows", [row("http://a.dev/?l=zh-Hans"), row("  IV. Show it")]],
   ["other text follows it on its own row", [row("http://a.dev/sel- now"), row("  account&x=1")]],
   ["a border follows it", [row("http://a.dev/sel-│"), row("  account&x=1")]],
   ["the next row is empty", [row("http://a.dev/xxxxxxxxxxx"), row("")]],
@@ -130,6 +133,11 @@ it("chains a short break across every following row that still continues the add
   const rows = [row("http://a.dev/sel-"), row("  account&theme="), row("  light&lang=zh-Hans")];
   expect(brokenAt(rows, 3).map((link) => link.url)).toEqual(["http://a.dev/sel-account&theme=light&lang=zh-Hans"]);
   expect(brokenAt(rows, 2).map((link) => link.url)).toEqual(["http://a.dev/sel-account&theme=light&lang=zh-Hans"]);
+});
+
+it("joins a short address onto a word that ends a sentence", () => {
+  expect(brokenAt([row("http://a.dev/sel-"), row("  Hans. Next")], 2).map((link) => link.url)).toEqual(["http://a.dev/sel-Hans"]);
+  expect(brokenAt([row("http://a.dev/sel-"), row("  mid. Next")], 2).map((link) => link.url)).toEqual(["http://a.dev/sel-mid"]);
 });
 
 it("stops a short chain at a separate word", () => {
