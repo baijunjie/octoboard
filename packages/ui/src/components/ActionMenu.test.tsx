@@ -59,6 +59,13 @@ it("names an open menu once: on the menu, not also on its popover dialog", async
   expect(namedRoles()).toEqual(["menu"]);
 });
 
+it("draws a separator only between two items", async () => {
+  const item = (label: string): ActionMenuEntry => ({ label, icon: Trash2, onClick: () => {} });
+  await openMenu(["separator", item("A"), "separator", "separator", item("B"), "separator"]);
+  const menu = document.querySelector("[role=menu]")!;
+  expect([...menu.children].map((el) => el.getAttribute("role") ?? el.textContent)).toEqual(["menuitem", "separator", "menuitem"]);
+});
+
 it("names a submenu once, though its items form a single-selection group", async () => {
   await openMenu([
     {

@@ -239,7 +239,9 @@ function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElem
         </Dropdown.Section>,
       );
     } else if (entry === "separator") {
-      nodes.push(<Separator key={index} />);
+      // A menu built from conditional items can leave a separator with nothing on one side; a separator
+      // is drawn only between two items, and a run of them draws one.
+      if (nodes.length > 0 && index < entries.length - 1 && entries[index + 1] !== "separator") nodes.push(<Separator key={index} />);
     } else if ("items" in entry || "panel" in entry) {
       nodes.push(
         <Dropdown.SubmenuTrigger key={index}>

@@ -201,6 +201,16 @@ export const projectFilesScenarios: Scenario[] = [
     steps: [...openFiles, (ui) => ui.press(ui.t("sidebar.project.actions", { name: web.name })), (ui) => ui.press(ui.t("common.openIn"))],
   },
   {
+    id: "files-project-focus-menu",
+    group: GROUP,
+    category: "normal",
+    title: "Project focus actions with its files already visible",
+    description: "In Website's focus mode with its files visible, the header's actions menu has no Browse files, and starts directly with Open in: no separator line above it.",
+    state,
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${web.id}` },
+    steps: [...openFiles, (ui) => ui.press(ui.t("sidebar.project.actions", { name: web.name }))],
+  },
+  {
     id: "files-row-menu",
     group: GROUP,
     category: "normal",
