@@ -37,18 +37,18 @@ describe("the Switch account entry", () => {
     expect(submenu(session, [...accounts])?.label === "Switch account").toBe(shown);
   });
 
-  it("marks the current account without making it actionable, picks another through a confirmation, and ends in Settings", () => {
-    const handlers = { onOpenDialog: vi.fn(), onOpenSettings: vi.fn() } as unknown as SidebarHandlers;
+  it("lists only accounts, marks the current one, and picks another through a confirmation", () => {
+    const handlers = { onOpenDialog: vi.fn() } as unknown as SidebarHandlers;
     const items = submenu(project(), [account("w", "claude")], handlers)!.items;
-    const [current, other, separator, manage] = items;
+    const [current, other] = items;
 
-    expect([separator, (current as { selected: boolean }).selected, (other as { selected: boolean }).selected]).toEqual(["separator", true, false]);
+    expect(items).toHaveLength(2);
+
+    expect([(current as { selected: boolean }).selected, (other as { selected: boolean }).selected]).toEqual([true, false]);
     (current as { onClick: () => void }).onClick();
     expect(handlers.onOpenDialog).not.toHaveBeenCalled();
     (other as { onClick: () => void }).onClick();
     expect(handlers.onOpenDialog).toHaveBeenCalledWith(expect.objectContaining({ kind: "switch-account", account: "w", accountName: "w" }));
-    (manage as { onClick: () => void }).onClick();
-    expect(handlers.onOpenSettings).toHaveBeenCalledWith("accounts");
   });
 
   it("disables an account whose quota is used up at the time given, with why, and never the current one", () => {

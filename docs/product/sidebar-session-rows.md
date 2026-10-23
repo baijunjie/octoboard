@@ -63,9 +63,8 @@ A session row's action menu offers:
   session's.
 - **Switch account** — a submenu of the accounts of the session's agent, the default account first, with the one the
   session is on checked and doing nothing; picking another asks for confirmation, then moves the session to it (see
-  `docs/product/switching-session-accounts.md`). Its last entry, **Manage accounts…**, opens Settings
-  at the Agent accounts section. A session whose account has since been removed still shows it, checked and named by
-  the directory the session recorded. The entry is present for a console session's row as well as a project session's,
+  `docs/product/switching-session-accounts.md`). A session whose account has since been removed still shows it,
+  checked and named by the directory the session recorded. The entry is present for a console session's row as well as a project session's,
   and only when the session's agent has more than one account to be on; with just the default account it is left out
   rather than shown disabled. A session in the archive has no such entry, and neither has one still starting. Each
   account shows its compact usage bar before its name, as in the account picker, and assistive technology reads what

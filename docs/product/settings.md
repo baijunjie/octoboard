@@ -53,8 +53,6 @@ Settings opens from:
 - in the macOS application, the application menu's **Settings…** item, shortcut `Cmd+,`. The menu item does nothing
   while the window has nothing to show yet (before the daemon's state has first arrived), while Settings is already
   open, and while another dialog or an action menu — a row's or a header's, its submenus included — is open;
-- a session row's **Switch account** submenu, whose last entry, **Manage accounts…**, opens it on the Agent accounts
-  section instead of the first (see "Session rows" in `docs/product/sidebar-session-rows.md`);
 - the **Manage accounts** button beside the title of the console dialog's Agent default accounts section, which opens
   it on the Agent accounts section above the console dialog, left open beneath it (see "Agent config directories" in
   `docs/product/consoles.md`);

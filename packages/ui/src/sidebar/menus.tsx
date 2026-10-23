@@ -149,8 +149,8 @@ export function projectMenu(
 }
 
 /** "Switch account": the session's agent's accounts, the one the session is on marked as current
- * and doing nothing, and last a way into Settings' Agent accounts section. An account whose quota
- * is used up, or whose sharing change runs, is disabled, with why under its name; so is every account while the
+ * and doing nothing. An account whose quota is used up, or whose sharing change runs, is disabled,
+ * with why under its name; so is every account while the
  * session's own account is changing, and every account but the current one while an account switch holds the
  * session. Absent when the agent has no other account to go to — hidden rather than disabled, as there is nothing the
  * user could do with it. */
@@ -170,33 +170,29 @@ function switchAccountSubmenu(
   return {
     label: t("sidebar.session.switchAccount"),
     icon: ArrowLeftRight,
-    items: [
-      ...entries.map(({ account, name, current, isPath, exhaustedBy, quota, changingSharing }) => {
-        // A usage bar as the icon, the remainder said to assistive technology, and for one
-        // used up the short reason under its name. The current account is never offered, so it is
-        // not marked used up; a removed account's directory has no quota.
-        const usage = accountUsage(t, session.agent, quota, current ? undefined : exhaustedBy, readings?.now ?? 0);
-        // Nothing can be switched onto an account whose sharing change runs, nor away from one, whatever its quota.
-        const unavailable = current ? undefined : switching ? sessionSwitchingUnavailable(t) : changingSharing ? sharingChangeUnavailable(t) : ownChanging ? ownAccountChangingUnavailable(t) : undefined;
-        const { icon, detail, reason } = unavailable ? { icon: usage.icon, ...unavailable } : usage;
-        return {
-          label: name,
-          // A directory is a path, so it reads left to right and shows its end, as it does elsewhere.
-          // `block` gives the span the label's width to clip against; inline, it never overflows.
-          ...(isPath ? { content: <PathText path={name} as="span" className="block" />, ariaLabel: name } : {}),
-          // The key sits in the bar's width, so that the labels line up.
-          icon: isPath ? <span aria-hidden="true" className="flex w-8 shrink-0 justify-center"><KeyRound className="size-4 text-app-muted" /></span> : icon,
-          reason,
-          description: detail,
-          selected: current,
-          onClick: current
-            ? () => {}
-            : () => handlers.onOpenDialog({ kind: "switch-account", session, account, accountName: name }),
-        };
-      }),
-      "separator" as const,
-      { label: t("sidebar.session.manageAccounts"), icon: Settings2, onClick: () => handlers.onOpenSettings("accounts") },
-    ],
+    items: entries.map(({ account, name, current, isPath, exhaustedBy, quota, changingSharing }) => {
+      // A usage bar as the icon, the remainder said to assistive technology, and for one
+      // used up the short reason under its name. The current account is never offered, so it is
+      // not marked used up; a removed account's directory has no quota.
+      const usage = accountUsage(t, session.agent, quota, current ? undefined : exhaustedBy, readings?.now ?? 0);
+      // Nothing can be switched onto an account whose sharing change runs, nor away from one, whatever its quota.
+      const unavailable = current ? undefined : switching ? sessionSwitchingUnavailable(t) : changingSharing ? sharingChangeUnavailable(t) : ownChanging ? ownAccountChangingUnavailable(t) : undefined;
+      const { icon, detail, reason } = unavailable ? { icon: usage.icon, ...unavailable } : usage;
+      return {
+        label: name,
+        // A directory is a path, so it reads left to right and shows its end, as it does elsewhere.
+        // `block` gives the span the label's width to clip against; inline, it never overflows.
+        ...(isPath ? { content: <PathText path={name} as="span" className="block" />, ariaLabel: name } : {}),
+        // The key sits in the bar's width, so that the labels line up.
+        icon: isPath ? <span aria-hidden="true" className="flex w-8 shrink-0 justify-center"><KeyRound className="size-4 text-app-muted" /></span> : icon,
+        reason,
+        description: detail,
+        selected: current,
+        onClick: current
+          ? () => {}
+          : () => handlers.onOpenDialog({ kind: "switch-account", session, account, accountName: name }),
+      };
+    }),
   };
 }
 
