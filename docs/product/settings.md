@@ -99,8 +99,8 @@ every path is shown in full.
 ## General
 
 Small app-wide settings: an **Appearance** row, a **Language** row, a **Markdown style** row, an **Order the sidebar
-by status** row, a **Default clone directory** row, then an **Automatically delete archived sessions whose conversation
-is gone** row, and last, in the macOS application only, a **Keep running in the background** row.
+by status** row, then an **Automatically delete archived sessions whose conversation is gone** row, and last, in the
+macOS application only, a **Keep running in the background** row.
 
 ### Appearance
 
@@ -135,23 +135,6 @@ full configuration export carries it (see "Application settings: `get_settings` 
 `docs/product/configuration-export-and-import.md`). The order under either state, and what else follows it, are in
 "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`.
 
-### Default clone directory
-
-A text field with a folder icon in it and a **Browse** button beside it (the directory browser, see "Browsing
-directories" in `docs/product/projects.md`), showing the directory a repository is cloned into when a project is added
-from a git URL and no other directory is named. It is `~/Projects` until the user sets one. The field shows the
-directory in a monospace font, with the daemon host's home directory written as `~` under the same rules as in "How
-paths are shown" above, and the full path as the field's tooltip whenever the two differ. The daemon stores the
-directory expanded, as an absolute path without a trailing slash; a leading `~/` in what is sent is expanded again. The
-value is sent when the field loses focus or Enter is pressed, and at once when a directory is picked; a value equal to
-what the field shows unedited, or to the full path it stands for, sends nothing. `Escape` while the field holds keyboard
-focus closes Settings and discards what was typed. It is the only exit that loses it: the close button, a press on the
-dimmed area around the dialog, and moving focus out of the field all save the typed path first. Once a send is answered
-the field shows the stored directory again, written as above. A value that is neither absolute nor starts with `~/` is
-refused with an error alert and the field returns to the stored one, and a blank value goes back to `~/Projects`. The
-browser opens on the nearest existing ancestor when the directory does not exist yet (see "Browsing directories" in
-`docs/product/projects.md`). Where the directory applies is in "Associating a project" in the same document.
-
 ### Automatically delete archived sessions whose conversation is gone
 
 A switch, **on to begin with** — installations from before the switch existed included: whether Octoboard deletes on
@@ -181,7 +164,28 @@ in `docs/product/application-lifecycle.md`.
 
 ## Git
 
-One row, **Automatically pull repositories**, a switch, off to begin with: whether a project's branch is pulled
+Two rows: **Default clone directory** first, then **Automatically pull repositories**.
+
+### Default clone directory
+
+A text field with a folder icon in it and a **Browse** button beside it (the directory browser, see "Browsing
+directories" in `docs/product/projects.md`), showing the directory a repository is cloned into when a project is added
+from a git URL and no other directory is named. It is `~/Projects` until the user sets one. The field shows the
+directory in a monospace font, with the daemon host's home directory written as `~` under the same rules as in "How
+paths are shown" above, and the full path as the field's tooltip whenever the two differ. The daemon stores the
+directory expanded, as an absolute path without a trailing slash; a leading `~/` in what is sent is expanded again. The
+value is sent when the field loses focus or Enter is pressed, and at once when a directory is picked; a value equal to
+what the field shows unedited, or to the full path it stands for, sends nothing. `Escape` while the field holds keyboard
+focus closes Settings and discards what was typed. It is the only exit that loses it: the close button, a press on the
+dimmed area around the dialog, and moving focus out of the field all save the typed path first. Once a send is answered
+the field shows the stored directory again, written as above. A value that is neither absolute nor starts with `~/` is
+refused with an error alert and the field returns to the stored one, and a blank value goes back to `~/Projects`. The
+browser opens on the nearest existing ancestor when the directory does not exist yet (see "Browsing directories" in
+`docs/product/projects.md`). Where the directory applies is in "Associating a project" in the same document.
+
+### Automatically pull repositories
+
+A switch, off to begin with: whether a project's branch is pulled
 (fast-forwarded) on its own when it is behind its upstream, rather than only reported as behind. The row's line of
 text says that it pulls a branch that is behind its upstream and can be fast-forwarded, never pushes, and leaves a
 branch with commits of its own alone; a "?" at the end of its name says that the remote is checked every few minutes

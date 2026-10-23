@@ -16,7 +16,6 @@ import { GeneralSection } from "./GeneralSection";
 // The rows beside it read the theme and the daemon's settings, which this test has no use for.
 vi.mock("./AppearanceSetting", () => ({ AppearanceSetting: () => null }));
 vi.mock("./LanguageSetting", () => ({ LanguageSetting: () => null }));
-vi.mock("./CloneDirSetting", () => ({ CloneDirSetting: () => null }));
 vi.mock("./ArchiveCleanupSetting", () => ({ ArchiveCleanupSetting: () => null }));
 vi.mock("./SidebarOrderSetting", () => ({ SidebarOrderSetting: () => null }));
 

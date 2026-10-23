@@ -60,7 +60,7 @@ rules in this section, and a stricter one for a repository URL it clones (see "A
 `docs/product/agent-settings-tools.md`).
 
 The **default clone directory** is where a clone lands when no parent directory is named. It is `~/Projects` (expanded
-to the home directory) until the user sets one in Settings' General section (see "General" in
+to the home directory) until the user sets one in Settings' Git section (see "Default clone directory" in
 `docs/product/settings.md`), and follows the same path rules as any other path here. The form starts its "Clone into"
 field with it, and the console session's `add_project` falls back to it when it gives no `path` for a clone; a path is
 still required for the other two sources. The form keeps the local directory and clone parent directory separately:

@@ -399,7 +399,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Browser General settings",
-    description: "The Language row follows Appearance, then Markdown style starts on Tailwind. The \"Order the sidebar by status\" switch follows it, on, with the description that says sessions and projects move as their status changes. The clone-directory explanation describes when the chosen directory is used; the path appears in the input. The archive-cleanup switch sits right below it, on, with the description that says what is deleted and when. It is the last row.",
+    description: "The Language row follows Appearance, then Markdown style starts on Tailwind. The \"Order the sidebar by status\" switch follows it, on, with the description that says sessions and projects move as their status changes. The archive-cleanup switch follows sidebar status ordering, on, with the description that says what is deleted and when. It is the last row.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -410,7 +410,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "General, archive cleanup switched off",
-    description: "The archive-cleanup switch below the clone-directory row is off, and its description now starts with \"Once this is on\" instead of stating the behaviour.",
+    description: "The archive-cleanup switch below sidebar status ordering is off, and its description now starts with \"Once this is on\" instead of stating the behaviour.",
     state: { ...browserState, settings: { ...browserState.settings!, auto_delete_unresumable_archives: false } },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -522,7 +522,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: git",
-    description: "Automatically pull repositories shows its first two sentences under the label, and a small muted \"?\" at the end of the label holds the sentence about the remote being checked. It is the only row on this page with a help tip.",
+    description: "Default clone directory is the first row, before Automatically pull repositories; its explanation describes when the chosen directory is used, and the path appears in the input. Automatically pull repositories shows its first two sentences under the label, and a small muted \"?\" at the end of the label holds the sentence about the remote being checked. It is the only row on this page with a help tip.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
