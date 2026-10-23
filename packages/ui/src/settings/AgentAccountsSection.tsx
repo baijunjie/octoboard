@@ -5,7 +5,7 @@ import React, { useContext, useEffect, useRef, useState } from "react";
 import { ringForAutomaticFocus } from "../touchInput";
 
 import { AGENT_LABEL, defaultAccountName, isAgentUnavailable } from "../agents";
-import { ActionMenu, type ActionMenuEntry } from "../components/ActionMenu";
+import { ActionMenu, takeMenuFocusToRestore, type ActionMenuEntry } from "../components/ActionMenu";
 import { AgentTabList } from "../components/AgentTabList";
 import { ExternalLinkIcon } from "../components/ExternalLinkIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
@@ -165,6 +165,14 @@ export function AgentAccountsSection(): React.ReactElement {
   // so it must not.
   const [removedCount, setRemovedCount] = useState(0);
   useSectionRefocus([accounts, removedCount, added]);
+  const removalDone = () => {
+    // The pointer-opened menu that asked for the removal left the confirmation the element that held focus when the
+    // menu opened, to hand focus back to as it closes, a moment after the section's tab has taken it. A removal ends
+    // on the section's tab whatever held focus before (another section's tab, when an accessibility press selected
+    // this section without moving focus), so that hand-back is dropped.
+    takeMenuFocusToRestore();
+    setRemovedCount((count) => count + 1);
+  };
   const pinnedFocus = useStickyHeadingFocus(AGENT_STRIP_HEIGHT);
   const availability = useDaemonStore((s) => s.agentAvailability);
   useEffect(() => {
@@ -260,7 +268,7 @@ export function AgentAccountsSection(): React.ReactElement {
           agent={removingAgent}
           onRemoved={() => {
             setRemovingAgent(undefined);
-            setRemovedCount((count) => count + 1);
+            removalDone();
           }}
           onCancel={() => setRemovingAgent(undefined)}
         />
@@ -275,7 +283,7 @@ export function AgentAccountsSection(): React.ReactElement {
           onConfirm={async () => {
             await request({ type: "delete_account", account: removing.id });
             setRemoving(undefined);
-            setRemovedCount((count) => count + 1);
+            removalDone();
           }}
           onCancel={() => setRemoving(undefined)}
         />

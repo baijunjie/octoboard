@@ -21,7 +21,8 @@ import { usePointerFocusReturn } from "./usePointerFocusReturn";
 let menuFocusToRestore: HTMLElement | null = null;
 
 /** The element a menu could not give focus back to while a dialog was open, if any; the caller
- * returns focus to it once the dialog is gone. Each element is handed out once. */
+ * returns focus to it once the dialog is gone. Each element is handed out once. The dialog's owner
+ * may take it first and drop it, when the dialog's outcome sends focus somewhere else. */
 export function takeMenuFocusToRestore(): HTMLElement | null {
   const element = menuFocusToRestore;
   menuFocusToRestore = null;

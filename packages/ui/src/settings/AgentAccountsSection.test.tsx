@@ -8,7 +8,7 @@ import { describe, expect, it, onTestFinished, vi } from "vitest";
 import type { Console, Project, Session } from "../protocol";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentAccountsSection } from "./AgentAccountsSection";
-import { account, availability, bus, consoles, projects, request, sessions, settings, toastError } from "./agentAccountsSectionTestState";
+import { account, availability, bus, consoles, projects, request, sectionEntry, sessions, settings, toastError } from "./agentAccountsSectionTestState";
 import { animate, buttonNamed, chooseItem, menuItem, mount, openTabMenu, selectTab } from "./agentAccountsSectionTestSupport";
 
 vi.mock("../store", async (importOriginal) => (await import("./agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
@@ -17,6 +17,9 @@ vi.mock("../components/FadeOverflow", async () => ({ FadeOverflow: (await import
 vi.mock("../components/MarkedPath", async () => ({ MarkedPath: (await import("./agentAccountsSectionTestState")).MarkedPathStandIn }));
 vi.mock("./useSectionRefocus", async (importOriginal) => (await import("./agentAccountsSectionTestState")).sectionRefocusStandIn(await importOriginal()));
 vi.mock("../dialogs/OptionSelect", async () => ({ OptionSelect: (await import("./agentAccountsSectionTestState")).OptionSelectStandIn }));
+
+/** Waits out React Aria's focus restore after a dialog closes and what runs in the frames after it. */
+const frames = () => act(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 0)))));
 
 it("offers a mode for the Codex default and each Codex account, following configuration by default", () => {
   const { selects } = mount("Codex");
@@ -599,6 +602,42 @@ it("names what still uses the agent when removing it, and says it keeps its sett
   expect(text).not.toMatch(/[()]/);
   // The names stand as chips, with no brackets around them.
   expect([...dialog.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent?.replace(/[\u2066-\u2069]/g, ""))).toEqual(["Codex", "Codex", "Codex", "Main", "Site", "Fix build"]);
+});
+
+it.each(["agent", "account"] as const)("puts focus on the section's entry once a removed %s's confirmation closes, not where it stood when the menu opened", async (removed) => {
+  // Another section's entry holds focus, as an accessibility press that selected this section leaves it.
+  const elsewhere = document.body.appendChild(document.createElement("button"));
+  elsewhere.textContent = "General";
+  onTestFinished(() => elsewhere.remove());
+  const { container } = mount();
+  act(() => elsewhere.focus());
+  // The confirmation keeps focus inside itself at once, as in a browser; jsdom's containment finds nothing in it to
+  // focus and takes focus back only a frame later, too late for the menu to see its hand-back refused.
+  elsewhere.addEventListener("focus", () => document.querySelector<HTMLElement>('[role="alertdialog"]')?.focus());
+  if (removed === "agent") {
+    await openTabMenu(container, "Grok Build");
+    await chooseItem("Remove agent");
+  } else {
+    const trigger = container.querySelector('[data-list-motion="claude-work"]')!.querySelector<HTMLButtonElement>('button[aria-label^="Actions"]')!;
+    await act(async () => {
+      trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse", button: 0 }));
+      trigger.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "mouse", button: 0 }));
+      trigger.click();
+    });
+    await chooseItem("Remove");
+  }
+  // The menu has tried to give focus back to where it stood, which the confirmation refused.
+  await frames();
+  const confirm = buttonNamed(document.querySelector('[role="alertdialog"]')!, "Remove")!;
+  act(() => confirm.focus());
+  await act(async () => confirm.click());
+  expect(request).toHaveBeenCalledExactlyOnceWith(removed === "agent" ? { type: "remove_agent", agent: "grok" } : { type: "delete_account", account: "claude-work" });
+  if (removed === "agent") settings.added_agents = ["claude", "codex"];
+  else settings.accounts = settings.accounts.filter((held) => held.id !== "claude-work");
+  act(() => bus.notify());
+  await frames();
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  expect(document.activeElement).toBe(sectionEntry.current);
 });
 
 describe("dragging a tab", () => {
