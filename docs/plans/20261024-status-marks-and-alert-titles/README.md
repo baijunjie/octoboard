@@ -25,8 +25,8 @@
    callers move onto it, dropping the name-repeating tooltip.
 3. The file viewer drops Alerts: a whole-file notice becomes a status mark after the file path; a notice about one spot
    in Markdown or diff content stays at that spot as the same kind of mark.
-4. The UI standard gains the rule "an Alert has a title", enforced in code, and every title-less Alert is brought into
-   line.
+4. The UI standard gains the rules "an Alert has a title" and "an Alert holds its own details", enforced in code
+   where it can be, and every Alert that breaks them is brought into line.
 
 ## Key design decisions
 
@@ -68,13 +68,19 @@
 - **An Alert must have a title** (user decision) — this is the rule that keeps the misalignment from coming back, in
   place of a CSS exception. It is enforced in code so a new caller cannot omit it. "A short error that already says
   what happened needs no generic title" in the standard is withdrawn.
+- **An Alert holds its title and its own details; only the remedy sits after it** (user decision). The earlier rule
+  "an inline Alert holds only what failed and why; the remedy sits after it" was meant to move only the remedy out,
+  but combined with "stock structure only — `Alert.Description` cannot hold a list" it pushed an Alert's own details
+  out too: the delete-session confirmation shows its warning's title in the Alert and the list of sessions deleted
+  along with it outside, followed by consequence lines that read as the Alert's continuation. Details go inside
+  `Alert.Content`, after the title and description, in the stock text style.
 
 ## Milestones
 
 1. [01 Tooltip wrapper that works on touch](01-touch-tooltip.md)
 2. [02 Error and warning status marks](02-status-marks.md)
 3. [03 File viewer notices become status marks](03-viewer-status-marks.md)
-4. [04 Every Alert has a title](04-alert-titles.md)
+4. [04 Every Alert has a title and holds its own details](04-alert-titles.md)
 
 Milestones 01–03 depend on each other in that order; 04 depends on none of them but runs after 03, which removes the
 viewer's Alert-based notices so 04 need not convert them.
