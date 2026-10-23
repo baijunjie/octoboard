@@ -24,7 +24,7 @@ export function sessionQuotaBarOf(session: Session | undefined, source: SessionQ
     return undefined;
   }
   const quota = accountQuotaOf(source.accountQuotas, session.agent, session.account_id ?? null);
-  return quota && !quota.unavailable ? usageBarWindows(quota.windows) : undefined;
+  return quota && !quota.unavailable ? usageBarWindows(quota) : undefined;
 }
 
 /** The same account and window identification for quota indicators on the rail and native menus, naming

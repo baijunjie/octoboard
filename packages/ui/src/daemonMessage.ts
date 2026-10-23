@@ -1,3 +1,4 @@
+import { AGENT_LABEL } from "./agents";
 import { EXAMPLE_CONVERSATION_ID } from "./conversationId";
 import { format, isMessageKey, messageText, globalParam } from "./i18n/catalog";
 import { joinPhrases } from "./i18n/joinPhrases";
@@ -403,13 +404,22 @@ export function withUiParams(code: string, params: MessageParams): MessageParams
   return { ...UI_PARAMS[messageCode(code, params)], ...params };
 }
 
-/** The English window names `account_quota_exhausted` carries, and the messages that word them. */
-const QUOTA_WINDOW_KEYS: Record<string, "quota.windowPhrase.session" | "quota.windowPhrase.weekly" | "quota.windowPhrase.monthly" | "quota.windowPhrase.credits"> = {
-  "5-hour": "quota.windowPhrase.session",
+type QuotaWindowKey = "quota.windowPhrase.session" | "quota.windowPhrase.fiveHour" | "quota.windowPhrase.weekly" | "quota.windowPhrase.monthly" | "quota.windowPhrase.credits";
+
+/** The English window names `account_quota_exhausted` carries, and the messages that word them. The session
+ * window, `5-hour`, is worded per agent, as that agent's own interface names it. */
+const QUOTA_WINDOW_KEYS: Record<string, QuotaWindowKey> = {
   Weekly: "quota.windowPhrase.weekly",
   Monthly: "quota.windowPhrase.monthly",
   Credits: "quota.windowPhrase.credits",
 };
+
+/** The message that words the standard window `window` that `agent` (its label, as the daemon names it) has
+ * used up, or undefined for a window's own label. */
+export function quotaWindowKey(agent: string | undefined, window: string): QuotaWindowKey | undefined {
+  if (window === "5-hour") return agent === AGENT_LABEL.claude ? "quota.windowPhrase.session" : "quota.windowPhrase.fiveHour";
+  return Object.hasOwn(QUOTA_WINDOW_KEYS, window) ? QUOTA_WINDOW_KEYS[window] : undefined;
+}
 
 /** The codes whose account name param may be the default account's, which the daemon names by its fixed
  * English `DEFAULT_ACCOUNT_NAME`, and the param that holds it. */
@@ -474,9 +484,8 @@ export function daemonParams<V = never>(
   // The daemon names the window in English; the standard names are worded in the UI's language, any other
   // (a window's own label) as a quota of that name.
   if (code === "account_quota_exhausted") {
-    shown.quota = Object.hasOwn(QUOTA_WINDOW_KEYS, all.window)
-      ? format(language, QUOTA_WINDOW_KEYS[all.window], {})
-      : format(language, "quota.windowPhrase.named", { window: shown.window });
+    const key = quotaWindowKey(all.agent, all.window);
+    shown.quota = key ? format(language, key, {}) : format(language, "quota.windowPhrase.named", { window: shown.window });
   }
   // The time left until the account's quota resets, counted from when the message is worded.
   if (messageCode(code, all) === "account_quota_exhausted.resets") {

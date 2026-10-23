@@ -305,7 +305,7 @@ it("has one tab per added agent and lists each agent's accounts with plan and qu
   expect(text()).toContain("Max");
   expect(text()).toContain("Work");
   expect(text()).toContain("Pro");
-  expect(text()).toContain("5-hour 82% remaining");
+  expect(text()).toContain("Session 82% remaining");
   expect(text()).not.toContain("Codex Work");
 
   click(tabs()[1]!);
@@ -564,7 +564,7 @@ it("follows the selected session's actual agent and account, account switches an
   const button = () => host.querySelector("button")!;
   const fill = () => button().querySelector(CAPSULE);
   select(session.id);
-  expect(button().getAttribute("aria-label")).toContain("Claude Code, ⁨Work⁩, 5-hour 82% remaining");
+  expect(button().getAttribute("aria-label")).toContain("Claude Code, ⁨Work⁩, Session 82% remaining");
   expect(remaining(button())).toEqual(["82%"]);
   act(() => store.setState({ settings: { ...store.getState().settings, accounts: [{ ...accounts[0]!, config_dir: "/home/dev/.claude-other" }] } }));
   expect(fill()).toBeNull();
@@ -583,7 +583,7 @@ it("follows the selected session's actual agent and account, account switches an
   const both = quota("codex", null, "plus");
   both.windows = [{ ...both.windows[0]!, used_percent: 18 }, { ...both.windows[0]!, kind: "weekly", used_percent: 64 }];
   act(() => store.setState({ accountQuotas: [both] }));
-  expect(button().getAttribute("aria-label")).toContain("5-hour 82% remaining, Weekly 36% remaining");
+  expect(button().getAttribute("aria-label")).toContain("5h 82% remaining, Weekly 36% remaining");
   expect(remaining(button())).toEqual(["82%", "36%"]);
   select();
   expect(fill()).toBeNull();
@@ -696,10 +696,10 @@ it("draws the button's window full, and says so, once its reset time passes whil
   ));
   const button = host.querySelector("button")!;
   expect(remaining(button)).toEqual(["0%"]);
-  expect(button.getAttribute("aria-label")).toContain("5-hour 0% remaining");
+  expect(button.getAttribute("aria-label")).toContain("5h 0% remaining");
   advance(10 * MINUTE);
   expect(remaining(button)).toEqual(["100%"]);
-  expect(button.getAttribute("aria-label")).toContain("5-hour 100% remaining");
+  expect(button.getAttribute("aria-label")).toContain("5h 100% remaining");
 });
 
 it("hides the mini bar for unread, failed, stale or unavailable quota instead of showing another account", () => {

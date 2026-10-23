@@ -25,9 +25,9 @@ a gap above them. They use the octopus's monochrome tint and span the icon's wid
 keeping the octopus at its original scale; the icon keeps its **18 pt** footprint. As on the rail, they come in two
 looks:
 
-- **Two layers**, when the account has both a 5-hour and an account-wide Weekly window: two **outlined capsules**,
-  each with a hollow unfilled portion — about **18 × 3.3 pt** for the 5-hour window and, about 0.8 pt beneath it,
-  about **18 × 2.5 pt** for the Weekly window. The 5-hour capsule, the gap and the Weekly capsule stand 4 : 1 : 3, the
+- **Two layers**, when the account has both a five-hour and an account-wide weekly window: two **outlined capsules**,
+  each with a hollow unfilled portion — about **18 × 3.3 pt** for the five-hour window and, about 0.8 pt beneath it,
+  about **18 × 2.5 pt** for the weekly window. The five-hour capsule, the gap and the weekly capsule stand 4 : 1 : 3, the
   same proportion as the rail's two layers.
 - **One bar** otherwise: an **outlined capsule** of about **18 × 4.1 pt**, with a hollow unfilled portion; its outline is
   a fifth of its height, as on the rail's single bar.
@@ -114,19 +114,19 @@ From top to bottom:
      small secondary text ("Updated 3 minutes ago", "Updated just now" under a minute), also when they are kept after a
      newer reading failed, and assistive technology reads the line as one phrase ("Default · Max · updated 3 minutes
      ago"); it is left out for an account still being read or with no windows to show;
-   - under the header, each window is one row, except as the next point says: its name on the left ("5-hour"), "N%
-     remaining · resets in <countdown>" ("82% remaining · resets in 1h 57m", "resets now" once the time has passed, no countdown for a
+   - under the header, each window is one row, except as the next point says: its name on the left, as in "Quota
+     windows" in `docs/product/account-quotas.md` ("5h", "Session"), "N% remaining · resets in <countdown>" ("82% remaining · resets in 1h 57m", "resets now" once the time has passed, no countdown for a
      window with no reset time) right-aligned in the secondary text colour, and a bar of what remains directly
      below, on a translucent grey track. The bar is orange for Claude Code and blue for Codex, each one fixed colour
      whether the menu is light or dark (their contrast against the track is not measured), and the text colour for
      Grok Build. A row whose text needs more room than the submenu's usual width widens the submenu rather than
-     being cut short. A row is read by assistive technology once, as one phrase ("5-hour 82% remaining · resets in
+     being cut short. A row is read by assistive technology once, as one phrase ("5h 82% remaining · resets in
      1h 57m"), by its menu item alone: neither the name, the detail nor the bar is read on its own;
-   - an account with both a **5-hour** and an account-wide **Weekly** window shows the two as **one meter row**, in
-     the 5-hour window's place: the 5-hour name and detail with its bar, directly beneath that bar a thinner one,
-     about **3 pt** tall, for the Weekly window, and beneath it the Weekly name and detail, both in the secondary
-     text colour. Assistive technology reads the row once, as the two windows' phrases joined ("5-hour 82% remaining ·
-     resets in 1h 57m, Weekly 40% remaining · resets in 2d 3h"). Every other window keeps a row of its own, and the
+   - an account with both a five-hour and an account-wide weekly window shows the two as **one meter row**, in
+     the five-hour window's place: its name and detail with its bar, directly beneath that bar a thinner one,
+     about **3 pt** tall, for the weekly window, and beneath it the weekly window's name and detail, both in the
+     secondary text colour. Assistive technology reads the row once, as the two windows' phrases joined ("5h 82%
+     remaining · resets in 1h 57m, Weekly 40% remaining · resets in 2d 3h"). Every other window keeps a row of its own, and the
      order of windows is unchanged;
    - a row, a header and a note are not dimmed the way a menu line that cannot be chosen is: the window's name is at
      full strength, and none ever highlights under the pointer. Their text and the bar's track take the system's
@@ -143,9 +143,10 @@ From top to bottom:
    Each submenu's opening line can show **remaining-quota bars** at its right, before the submenu arrow.
    It uses that agent's account configured for the **current console**, independently of the selected session that
    supplies the menu bar icon's capsule. A missing, deleted or wrong-agent account reference falls back to the
-   agent's default account. With no current console there are no opener bars. When the account has both a 5-hour
-   and an account-wide Weekly window, the 5-hour bar has a thinner Weekly bar beneath it. Otherwise there is one
-   bar, with window priority 5-hour, then Weekly, then the credit pool; model-specific weekly limits are excluded.
+   agent's default account. With no current console there are no opener bars. When the account has both a five-hour
+   and an account-wide weekly window, the five-hour bar has a thinner weekly bar beneath it. Otherwise there is one
+   bar, with window priority five-hour, then account-wide weekly, then the credit pool; model-specific weekly limits
+   are excluded.
    An unread account, a reading without an eligible window or a failed latest reading has no opener bars,
    including when the submenu retains stale windows. Switching consoles or editing their account choices updates
    the bars. The bars are placed for a menu at most **640 pt** wide: a menu whose lines ask for more is laid out as
@@ -220,9 +221,11 @@ being dimmed, never highlighting, and how assistive technology reads them), **No
 headers in a submenu; the session lines' agent marks and the headings' status glyphs in a dark menu; either look on a
 light menu bar, and the octopus alone while the icon is highlighted with its menu open; opening the menu asking for
 a refresh of the quotas; a menu changing between light and dark while the app runs; a quota detail row never
-highlighting under the pointer; a row widened by a long window name; the meter row that joins an account's 5-hour
-and Weekly windows (the window rows observed above were seen before it existed); and the opener bars staying in view
-in a menu whose session lines would make it wider than 640 pt.
+highlighting under the pointer; a row widened by a long window name; the meter row that joins an account's five-hour
+and weekly windows (the window rows observed above were seen before it existed); the window names as each agent's own
+interface words them (a Claude Code account's **Session** and **Weekly · all models**, a Codex account's **5h**), the
+rows observed above having been seen under the earlier **5-hour** name; and the opener bars staying in view in a menu
+whose session lines would make it wider than 640 pt.
 
 **Observed in native previews and probes:** an AppKit image-view preview showed the original icon without a quota
 and capsules at 0%, 65% and 100% in light and dark appearances. A native menu
@@ -233,7 +236,7 @@ launch the packaged application.
 **Observed in a packaged application with preview fixtures:** the full-size octopus with its larger capsule and
 enlarged orange dot at the upper right in the system menu bar. Clicking that application's own icon opened its native dark
 menu, showing Claude at 65% and Codex at 88% as capsules aligned at the right before the submenu arrows. The native
-quota submenu showed the account-wide Weekly window at 65% before Fable weekly at 10%. These checks did not
+quota submenu showed the account-wide weekly window at 65% before Fable weekly at 10%. These checks did not
 establish packaged-app behavior during an in-place theme change, keyboard submenu opening or quota-label
 accessibility; the latter two were checked in the native probe above. The orange dot without a readable quota and
 its behavior during waiting-state changes have not yet been observed in the packaged application.

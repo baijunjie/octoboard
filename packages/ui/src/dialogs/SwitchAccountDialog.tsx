@@ -42,7 +42,8 @@ export function SwitchAccountDialog({
   const quotas = useDaemonStore((s) => s.accountQuotas);
   const now = useNow();
   // The account being switched to may have no quota left: the daemon refuses the switch, so Confirm is held.
-  const exhaustedBy = exhaustedQuotaWindow(accountQuotaOf(quotas, session.agent, account), now);
+  const quota = accountQuotaOf(quotas, session.agent, account);
+  const exhaustedBy = exhaustedQuotaWindow(quota, now);
   const [scope, setScope] = useState<Scope>("session");
   // A session an account switch already holds is left out: it is on its way, and cannot be claimed twice.
   const eligible = (candidate: Session) => candidate.console_id === session.console_id
@@ -54,7 +55,7 @@ export function SwitchAccountDialog({
   );
   const counts = { session: targetsIn(sessions, "session").length, console: targetsIn(sessions, "console").length };
   const { confirmLaunch, confirmation } = useConfirmIncompleteLaunch(onClose);
-  const usedUp = exhaustedBy && quotaUsedUpCopy(t, accountName, exhaustedBy, now);
+  const usedUp = exhaustedBy && quota && quotaUsedUpCopy(t, quota, accountName, exhaustedBy, now);
   const agent = <InlineReference dir="auto" wrap>{AGENT_LABEL[session.agent]}</InlineReference>;
   const several = scope === "console" || counts.session > 1;
   return (

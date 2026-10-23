@@ -26,7 +26,7 @@ function Track({ percent, thin }: { percent?: number; thin?: boolean }): React.R
  * track, so names line up. It is decorative: the list's option states the same numbers in words
  * (`usageBarSummary`). */
 export function AccountUsageBar({ agent, quota, now }: { agent: Agent; quota: AccountQuota | undefined; now: number }): React.ReactElement {
-  const bar = quota && !quota.unavailable ? usageBarWindows(quota.windows) : undefined;
+  const bar = quota && !quota.unavailable ? usageBarWindows(quota) : undefined;
   return (
     <span aria-hidden="true" className={`flex w-8 shrink-0 flex-col gap-0.5 quota-meter--${agent}`}>
       <Track percent={bar && remainingPercentAt(bar.main, now)} />

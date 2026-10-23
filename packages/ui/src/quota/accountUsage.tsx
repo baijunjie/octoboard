@@ -17,7 +17,8 @@ export function accountUsage(
   now: number,
 ): { icon: React.ReactElement } & ({ detail?: undefined; reason?: undefined } | { detail: string; reason?: Reason }) {
   const icon = <AccountUsageBar agent={agent} quota={quota} now={now} />;
-  if (exhaustedBy) return { icon, detail: quotaUsedUpDetail(t, exhaustedBy, now), reason: quotaUsedUpShort(t, exhaustedBy, now) };
-  const bar = quota && !quota.unavailable ? usageBarWindows(quota.windows) : undefined;
+  // A used-up account always has the reading that says so, which names the window.
+  if (exhaustedBy && quota) return { icon, detail: quotaUsedUpDetail(t, quota, exhaustedBy, now), reason: quotaUsedUpShort(t, exhaustedBy, now) };
+  const bar = quota && !quota.unavailable ? usageBarWindows(quota) : undefined;
   return bar ? { icon, detail: usageBarSummary(t, bar, now) } : { icon };
 }

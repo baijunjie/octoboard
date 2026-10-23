@@ -686,8 +686,8 @@ A line of the menu bar icon's menu that only shows information (a heading, an ac
 window) is a menu item with a view of its own, not a plain disabled item: AppKit dims a disabled item's text whatever
 colour it names, so the view draws its own text in the system's label colours, and it never highlights.
 
-The menu item is the one accessibility element: its title is the whole phrase, read once ("5-hour 82% remaining · resets
-in 1h 57m"); a line that draws two windows as one meter (5-hour over Weekly) has the two phrases joined as a list in the
+The menu item is the one accessibility element: its title is the whole phrase, read once ("5h 82% remaining · resets
+in 1h 57m"); a line that draws two windows as one meter (5h over Weekly) has the two phrases joined as a list in the
 UI's language for its title, still read once. It stays a disabled menu item, so assistive technology reports it as dimmed. Nothing inside the view is
 an element: the view, its texts, its bar and a heading's picture are all marked non-element, and the texts are drawn by
 a view rather than set in `NSTextField`s, since marking a text field non-element leaves its cell exposed as a static

@@ -4876,7 +4876,7 @@ fn refuse_if_account_quota_exhausted(
             "{account} has used up its {} quota ({}){resets_in}. Choose another account, or wait \
              for the quota to reset.",
             agent.label(),
-            exhausted.window
+            exhausted.named_for(agent)
         ),
         &params,
     ))

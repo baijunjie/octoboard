@@ -30,7 +30,7 @@ const available = new Map<Agent, AgentAvailability>(
   ALL_AGENTS.map((agent) => [agent, { agent, availability: "available", default_account_dir: `/Users/dev/.${agent}` }]),
 );
 
-/** Claude Code's readings: the default account with plenty left in both windows, Work's five-hour window spent (it resets
+/** Claude Code's readings: the default account with plenty left in both windows, Work's session window spent (it resets
  * in two hours), Personal with 4% and 12% left, and none for Client, which has not been read yet. */
 const claudeQuotas: AccountQuota[] = [
   quotaOf("claude", null, "max", [quotaWindow("session", 22, 190), quotaWindow("weekly", 41, 3 * 24 * 60 + 4 * 60)]),
@@ -38,14 +38,14 @@ const claudeQuotas: AccountQuota[] = [
   quotaOf("claude", "a-personal", "pro", [quotaWindow("session", 96, 40), quotaWindow("weekly", 88, 24 * 60 + 90)]),
 ];
 
-/** Claude Code's readings as `claudeQuotas` has them, but Work's five-hour window, spent when it was read eight minutes
+/** Claude Code's readings as `claudeQuotas` has them, but Work's session window, spent when it was read eight minutes
  * ago, reset a minute ago and no newer reading has arrived. */
 const workResetPassedQuotas: AccountQuota[] = claudeQuotas.map((quota) =>
   quota.account === "a-work"
     ? { ...quota, fetched_at: minutesAgo(8), windows: quota.windows.map((window) => window.kind === "session" ? quotaWindow("session", 100, -1) : window) }
     : quota);
 
-/** Codex with both its accounts spent: the default one in its five-hour window, Team in its weekly one. */
+/** Codex with both its accounts spent: the default one in its 5h window, Team in its weekly one. */
 const codexSpent: AccountQuota[] = [
   quotaOf("codex", null, "plus", [quotaWindow("session", 100, 95), quotaWindow("weekly", 52, 5 * 24 * 60)]),
   quotaOf("codex", "a-team", "pro", [quotaWindow("session", 30, 200), quotaWindow("weekly", 100, 3 * 24 * 60 + 60)]),
@@ -142,7 +142,8 @@ const teamIncomplete: Settings = {
 };
 const onTeam = { ...searchApi, codex_account_id: { kind: "account" as const, id: "a-team" } };
 
-/** When the daemon, which holds a newer reading than the window, refuses: the five-hour window resets in 95 minutes. */
+/** When the daemon, which holds a newer reading than the window, refuses: the session window resets in 95 minutes.
+ * Its wire name stays "5-hour"; the app words it "session" for Claude Code. */
 const refusedWithReset = {
   code: "account_quota_exhausted",
   params: { agent: "Claude Code", account: "Work", window: "5-hour", resets_at: String(minutesFromNow(95)) },
@@ -161,7 +162,7 @@ export const quotaGatingScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "New session, account picker with quota bars",
-    description: "Website would run on Work, whose quota is used up, so the Claude Code account field opens on Default, the first account with quota left, and the open picker lists every account with a compact usage bar before its name: the five-hour window's bar with the weekly window's thin one right under it. Default has plenty left and is selected; Work is unselectable, its name and bar faded and its reason at full contrast under the name on two lines, \"Used up\" and when it resets; Personal is nearly empty; Client has no reading yet and shows an empty track.",
+    description: "Website would run on Work, whose quota is used up, so the Claude Code account field opens on Default, the first account with quota left, and the open picker lists every account with a compact usage bar before its name: the session window's bar with the weekly window's thin one right under it. Default has plenty left and is selected; Work is unselectable, its name and bar faded and its reason at full contrast under the name on two lines, \"Used up\" and when it resets; Personal is nearly empty; Client has no reading yet and shows an empty track.",
     state: launchState([onWork], claudeQuotas),
     steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Claude Code"))],
   },
@@ -179,7 +180,7 @@ export const quotaGatingScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "New session, account whose spent window has since reset",
-    description: "Website runs on Work, whose five-hour window was spent when it was read 8 minutes ago but reset a minute ago, before any newer reading. The Claude Code account field keeps Work selected, not used up, and the open picker lists Work's bar with the five-hour part full over the weekly window's 37%, its summary reading 5-hour 100% remaining; Personal is nearly empty and Client has no reading.",
+    description: "Website runs on Work, whose session window was spent when it was read 8 minutes ago but reset a minute ago, before any newer reading. The Claude Code account field keeps Work selected, not used up, and the open picker lists Work's bar with the session part full over the weekly window's 37%, its summary reading Session 100% remaining; Personal is nearly empty and Client has no reading.",
     state: launchState([onWork], workResetPassedQuotas),
     steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Claude Code"))],
   },
@@ -216,7 +217,7 @@ export const quotaGatingScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "New session, every account of the agent is used up",
-    description: "Both of Codex's accounts are used up (Default in its five-hour window, Team in its weekly one), so none can be preselected: Open is disabled and a stock danger alert at the top of the dialog names the unavailable account in its status-coloured title, with the quota reason and reset time in its muted description.",
+    description: "Both of Codex's accounts are used up (Default in its 5h window, Team in its weekly one), so none can be preselected: Open is disabled and a stock danger alert at the top of the dialog names the unavailable account in its status-coloured title, with the quota reason and reset time in its muted description.",
     state: launchState([searchApi], codexSpent),
     steps: [openSessionDialog],
   },
@@ -280,7 +281,7 @@ export const quotaGatingScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Session launch refused, the account's quota is used up",
-    description: "The daemon holds a newer reading than the window: Work's five-hour quota is used up. An error dialog opens over the session dialog, which stays behind it: it names the account and the agent, says the 5-hour quota is used up and in how long it resets, and advises another account or waiting.",
+    description: "The daemon holds a newer reading than the window: Work's session quota is used up. An error dialog opens over the session dialog, which stays behind it: it names the account and the agent, says the session quota is used up and in how long it resets, and advises another account or waiting.",
     state: launchState([onWork], []),
     sessionOpenError: refusedWithReset,
     steps: [openSessionDialog, (ui) => ui.confirm()],
@@ -290,7 +291,7 @@ export const quotaGatingScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Switch account menu, an account used up",
-    description: "The row's Switch account submenu lists Default (current), Work, Personal and Client; each account shows its compact usage bar in place of the key icon, as in the account picker. Work, whose five-hour quota is used up, is greyed out and cannot be chosen, with its reason on two lines under its name, \"Used up\" and when it resets (arrow keys still reach it, and its accessible name carries the reason); Personal, nearly spent, and Client, not read yet (an empty track), can be chosen.",
+    description: "The row's Switch account submenu lists Default (current), Work, Personal and Client; each account shows its compact usage bar in place of the key icon, as in the account picker. Work, whose session quota is used up, is greyed out and cannot be chosen, with its reason on two lines under its name, \"Used up\" and when it resets (arrow keys still reach it, and its accessible name carries the reason); Personal, nearly spent, and Client, not read yet (an empty track), can be chosen.",
     state: switchState(claudeQuotas),
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Review the release checklist" })),
@@ -365,7 +366,7 @@ export const quotaGatingScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Hand off, the only Codex account is used up",
-    description: "Hub hands off to Codex, which has only its default account, and that is used up: Hand off is disabled and a stock danger alert at the top of the dialog, above the lines about what moves, names the unavailable account in its status-coloured title, with the quota reason and reset time in its muted description. The account picker beside the agent select holds that one account, Default, with its two-layer usage bar, the five-hour bar empty over the part-filled weekly one, and the picker stays closed.",
+    description: "Hub hands off to Codex, which has only its default account, and that is used up: Hand off is disabled and a stock danger alert at the top of the dialog, above the lines about what moves, names the unavailable account in its status-coloured title, with the quota reason and reset time in its muted description. The account picker beside the agent select holds that one account, Default, with its two-layer usage bar, the 5h bar empty over the part-filled weekly one, and the picker stays closed.",
     state: { ...launchState([], [codexSpent[0]]), settings: { ...settings, accounts: accounts.filter((account) => account.agent === "claude") } },
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: hub.title })),

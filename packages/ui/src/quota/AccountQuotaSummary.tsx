@@ -130,8 +130,8 @@ export function AccountQuotaSummary({ quota, single }: {
         if (layers?.weekly && window === layers.weekly) return null;
         const key = `${window.kind}:${window.label ?? ""}`;
         return layers?.weekly && window === layers.session
-          ? <QuotaMeterPair key={key} agent={quota.agent} session={window} weekly={layers.weekly} />
-          : <QuotaMeter key={key} agent={quota.agent} window={window} />;
+          ? <QuotaMeterPair key={key} naming={quota} session={window} weekly={layers.weekly} />
+          : <QuotaMeter key={key} naming={quota} window={window} />;
       })}
     </div>
   );

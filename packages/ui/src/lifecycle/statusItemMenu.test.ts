@@ -199,9 +199,9 @@ describe("buildStatusItemMenu quota submenus", () => {
       { kind: "header", title: "Default · Max", detail: "Updated 1 minute ago", label: "Default · Max · updated 1 minute ago" },
       {
         kind: "window",
-        name: "5-hour",
+        name: "Session",
         detail: "82% remaining · resets in 1h 57m",
-        label: "5-hour 82% remaining · resets in 1h 57m",
+        label: "Session 82% remaining · resets in 1h 57m",
         fraction: 0.82,
         agent: "claude",
       },
@@ -216,15 +216,15 @@ describe("buildStatusItemMenu quota submenus", () => {
     ]);
   });
 
-  it("joins the 5-hour and the account-wide weekly window into one two-layer item read once", () => {
+  it("joins the session and the account-wide weekly window into one two-layer item read once", () => {
     const menu = menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [quotaOf("claude", null)] }));
     expect(menu.submenus[0].items).toEqual([
       { kind: "header", title: "Default · Max", detail: "Updated 1 minute ago", label: "Default · Max · updated 1 minute ago" },
       {
         kind: "meter",
-        session: { name: "5-hour", detail: "82% remaining · resets in 1h 57m", fraction: 0.82 },
+        session: { name: "Session", detail: "82% remaining · resets in 1h 57m", fraction: 0.82 },
         weekly: { name: "Weekly", detail: "95% remaining", fraction: 0.95 },
-        label: "5-hour 82% remaining · resets in 1h 57m, Weekly 95% remaining",
+        label: "Session 82% remaining · resets in 1h 57m, Weekly 95% remaining",
         agent: "claude",
       },
     ]);
@@ -253,7 +253,7 @@ describe("buildStatusItemMenu quota submenus", () => {
     const original = structuredClone(reading.windows);
     const menu = menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [reading] }));
     expect(menu.submenus[0].items.flatMap((item) => item.kind === "window" ? [item.name] : item.kind === "meter" ? [item.session.name, item.weekly.name] : [])).toEqual([
-      "5-hour", "Weekly", "Credits", `${isolate("Fable")} weekly`, `${isolate("Sonnet")} weekly`,
+      "Session", "Weekly · all models", "Credits", `${isolate("Fable")} weekly`, `${isolate("Sonnet")} weekly`,
     ]);
     expect(reading.windows).toEqual(original);
   });
@@ -267,10 +267,10 @@ describe("buildStatusItemMenu quota submenus", () => {
     }));
     expect(labels(menu)).toEqual([
       "Default | Updated 1 minute ago",
-      "5-hour | 82% remaining · resets in 1h 57m",
+      "5h | 82% remaining · resets in 1h 57m",
       "---",
       `${isolate("Work")} · Pro Lite | Updated 1 minute ago`,
-      "5-hour | 0% remaining · resets in 1h 57m",
+      "5h | 0% remaining · resets in 1h 57m",
     ]);
   });
 
@@ -293,16 +293,16 @@ describe("buildStatusItemMenu quota submenus", () => {
   it("keeps the last windows of an out-of-date reading under a line saying so", () => {
     const stale = quotaOf("claude", null, { fetched_at: NOW - 12 * MINUTE, windows: [window({})], unavailable: { code: "quota_timed_out", params: {}, message: "" } });
     const lines = labels(menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [stale] })));
-    expect(lines.slice(0, 3)).toEqual(["Default · Max | Updated 12 minutes ago", "⚠︎ Out of date: the last read failed", "5-hour | 82% remaining · resets in 1h 57m"]);
+    expect(lines.slice(0, 3)).toEqual(["Default · Max | Updated 12 minutes ago", "⚠︎ Out of date: the last read failed", "Session | 82% remaining · resets in 1h 57m"]);
   });
 
   it("counts the countdown from the moment given and says so once the reset has passed, the window drawn full", () => {
     const quota = quotaOf("claude", null, { windows: [window({ resets_at: NOW - MINUTE })] });
     const menu = menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [quota] }));
-    expect(labels(menu)[1]).toBe("5-hour | 100% remaining · resets now");
-    expect(menu.submenus[0].items[1]).toMatchObject({ fraction: 1, label: "5-hour 100% remaining · resets now" });
+    expect(labels(menu)[1]).toBe("Session | 100% remaining · resets now");
+    expect(menu.submenus[0].items[1]).toMatchObject({ fraction: 1, label: "Session 100% remaining · resets now" });
     const [opener] = buildQuotaSubmenus(t, source({ agentAvailability: available("claude"), accountQuotas: [quota] }), consoles[0]);
     expect(opener!.quota_remaining).toBe(100);
-    expect(opener!.quota_label).toContain("5-hour 100% remaining");
+    expect(opener!.quota_label).toContain("Session 100% remaining");
   });
 });

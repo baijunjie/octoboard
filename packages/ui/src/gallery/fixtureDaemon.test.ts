@@ -1344,6 +1344,16 @@ describe("the fixture daemon's quota gate", () => {
     expect(refused.params).not.toHaveProperty("resets_at");
   });
 
+  it("keeps the session window's wire name `5-hour` and words the refusal as each agent's own interface does", async () => {
+    const codex = [quotaOf("codex", null, "plus", [quotaWindow("session", 100, 30)])];
+    const claudeRefusal = await daemon().request({ type: "open_session", console_id: "c", project_id: "p", account: null }).catch((error) => error);
+    expect(claudeRefusal).toMatchObject({ params: { agent: "Claude Code", window: "5-hour" } });
+    expect(claudeRefusal.message).toContain("session quota");
+    const codexRefusal = await daemon([], codex).request({ type: "hand_off_session", session: "s", agent: "codex" }).catch((error) => error);
+    expect(codexRefusal).toMatchObject({ params: { agent: "Codex", window: "5-hour" } });
+    expect(codexRefusal.message).toContain("5h quota");
+  });
+
   it("lets through an account nearly spent, one never read, one with only a model's window used up, and one whose window has reset", async () => {
     for (const account of ["a-free", "a-unread", "a-model", "a-stale"]) {
       await expect(daemon().request({ type: "open_session", console_id: "c", project_id: "p", account })).resolves.toMatchObject({ type: "session_opened" });

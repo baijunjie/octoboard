@@ -132,13 +132,19 @@ it.each([
 });
 
 it("words an exhausted account's quota, with the time left when the reset is known and the window in the UI's language", () => {
-  const params = { agent: "Claude Code", account: "Work", window: "5-hour" };
+  const params = { agent: "Codex", account: "Work", window: "5-hour" };
   expect(daemonMessage("en", "account_quota_exhausted", params, "x", records)).toBe(
-    `${isolate("Work")} (${isolate("Claude Code")}) cannot run a session because it has used up its 5-hour quota.`,
+    `${isolate("Work")} (${isolate("Codex")}) cannot run a session because it has used up its 5h quota.`,
   );
   const resetsAt = String(Date.now() + 2 * 60 * 60_000 + 30_000);
   expect(daemonMessage("zh-Hans", "account_quota_exhausted", { ...params, resets_at: resetsAt }, "x", records)).toContain("5 小时额度已用完");
   expect(daemonMessage("en", "account_quota_exhausted", { ...params, resets_at: resetsAt }, "x", records)).toContain("It resets in 2h");
+});
+
+it("words the session window as the agent's own interface names it", () => {
+  const params = { agent: "Claude Code", account: "Work", window: "5-hour" };
+  expect(daemonMessage("en", "account_quota_exhausted", params, "x", records)).toContain("has used up its session quota.");
+  expect(daemonMessage("zh-Hans", "account_quota_exhausted", params, "x", records)).toContain("会话额度已用完");
 });
 
 it("words an exhausted credit pool as credits and any other window as a quota of its own name", () => {

@@ -6,7 +6,7 @@ import type { Language } from "../i18n/languages";
 import type { StatusItemSubmenu, StatusItemSubmenuItem } from "../platform";
 import { joinPhrases } from "../i18n/joinPhrases";
 import type { Account, AccountQuota, Agent, AgentAvailability, Console, QuotaWindow, Settings } from "../protocol";
-import { isNotLoggedIn, orderedQuotaWindows, planLabel, quotaResetsIn, quotaWindowLabel, remainingPercentAt, twoLayerWindows, usageBarWindows } from "../quota/quotaFormat";
+import { isNotLoggedIn, orderedQuotaWindows, planLabel, quotaResetsIn, quotaWindowLabel, remainingPercentAt, twoLayerWindows, usageBarWindows, type QuotaNaming } from "../quota/quotaFormat";
 import { formatRelativeTime, isJustNow } from "../relativeTime";
 import { accountQuotaLabel } from "../quota/sessionQuota";
 import { accountQuotaOf } from "../quota/accountQuotaOf";
@@ -42,10 +42,10 @@ export interface StatusItemQuotaSource {
 
 /** A window as the shell shows it: its name, its detail ("82% remaining · resets in 1h 57m"), how full its
  * bar is, and the whole as one phrase. */
-function windowParts(t: Translate, source: StatusItemQuotaSource, window: QuotaWindow) {
+function windowParts(t: Translate, source: StatusItemQuotaSource, naming: QuotaNaming, window: QuotaWindow) {
   const resets = quotaResetsIn(t, window, source.now);
   const percent = remainingPercentAt(window, source.now);
-  const name = quotaWindowLabel(t, window);
+  const name = quotaWindowLabel(t, naming, window);
   return {
     name,
     detail: resets ? t("statusItem.quota.detail", { percent, resets }) : t("statusItem.quota.detailNoReset", { percent }),
@@ -80,8 +80,8 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
   for (const window of orderedQuotaWindows(quota.windows)) {
     if (layers?.weekly && window === layers.weekly) continue;
     if (layers?.weekly && window === layers.session) {
-      const session = windowParts(t, source, window);
-      const weekly = windowParts(t, source, layers.weekly);
+      const session = windowParts(t, source, quota, window);
+      const weekly = windowParts(t, source, quota, layers.weekly);
       lines.push({
         kind: "meter",
         session: { name: session.name, detail: session.detail, fraction: session.fraction },
@@ -91,7 +91,7 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
       });
       continue;
     }
-    const { name: windowName, detail, label, fraction } = windowParts(t, source, window);
+    const { name: windowName, detail, label, fraction } = windowParts(t, source, quota, window);
     lines.push({ kind: "window", name: windowName, detail, label, fraction, agent });
   }
   return lines;
@@ -112,7 +112,7 @@ export function buildQuotaSubmenus(t: Translate, source: StatusItemQuotaSource, 
     ]);
     const accountId = currentConsole ? consoleAccount(currentConsole, agent, source.accounts) : undefined;
     const reading = accountId !== undefined ? accountQuotaOf(source.accountQuotas, agent, accountId) : undefined;
-    const bar = reading && !reading.unavailable ? usageBarWindows(reading.windows) : undefined;
+    const bar = reading && !reading.unavailable ? usageBarWindows(reading) : undefined;
     const accountName = source.accounts.find((account) => account.id === accountId)?.name;
     return [{
       title: t("statusItem.quota", { agent: AGENT_SHORT_NAME[agent] }),

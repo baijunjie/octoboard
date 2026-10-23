@@ -18,8 +18,8 @@ const source = (patch: Partial<SessionQuotaSource> = {}): SessionQuotaSource => 
 });
 
 it("draws the bar of the account the session runs on", () => {
-  expect(sessionQuotaBarOf(session(), source())).toEqual({ main: window, thin: undefined });
-  expect(sessionQuotaBarOf(session({ account_id: "a-work", config_dir: work.config_dir }), source())).toEqual({ main: window, thin: undefined });
+  expect(sessionQuotaBarOf(session(), source())).toMatchObject({ main: window, thin: undefined, naming: { agent: "claude" } });
+  expect(sessionQuotaBarOf(session({ account_id: "a-work", config_dir: work.config_dir }), source())).toMatchObject({ main: window, thin: undefined, naming: { agent: "claude" } });
 });
 
 it("draws nothing without a session or for an agent that is not available", () => {

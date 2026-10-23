@@ -559,14 +559,30 @@ impl AccountQuotas {
     }
 }
 
+/// The wire name of the session window, whichever agent it belongs to. Each agent's own interface
+/// calls it something else ([`Exhausted::named_for`]).
+const SESSION_WINDOW: &str = "5-hour";
+
 /// The window that keeps an account from opening a session.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Exhausted {
-    /// The window's name in English: `5-hour`, `Weekly`, `Monthly` or `Credits`, or the window's own
-    /// label when it carries one.
+    /// The window's name in English, the same for every agent: `5-hour`, `Weekly`, `Monthly` or
+    /// `Credits`, or the window's own label when it carries one.
     pub window: String,
     /// When it resets, in milliseconds since the epoch; `None` when the agent does not say.
     pub resets_at: Option<i64>,
+}
+
+impl Exhausted {
+    /// The window's name for a sentence about `agent`'s account, as that agent's own interface
+    /// calls it: Claude Code's `session`, Codex's `5h`; any other name as `window` has it.
+    pub fn named_for(&self, agent: Agent) -> &str {
+        match (self.window.as_str(), agent) {
+            (SESSION_WINDOW, Agent::Claude) => "session",
+            (SESSION_WINDOW, _) => "5h",
+            (name, _) => name,
+        }
+    }
 }
 
 /// The window of the account's reading that keeps it from opening a session at `now`, if any: a
@@ -617,7 +633,7 @@ fn window_name(window: &QuotaWindow) -> String {
         return label.clone();
     }
     match window.kind {
-        QuotaWindowKind::Session => "5-hour",
+        QuotaWindowKind::Session => SESSION_WINDOW,
         QuotaWindowKind::Weekly | QuotaWindowKind::WeeklyModel => "Weekly",
         QuotaWindowKind::CreditPeriod => match window.window_minutes {
             Some(minutes) if (6 * 24 * 60..=8 * 24 * 60).contains(&minutes) => "Weekly",
@@ -2255,5 +2271,20 @@ mod tests {
         assert_eq!(named(Some(30 * 24 * 60)), "Monthly");
         assert_eq!(named(Some(10 * 24 * 60)), "Credits");
         assert_eq!(named(None), "Credits");
+    }
+
+    #[test]
+    fn the_session_window_is_named_as_each_agents_own_interface_names_it() {
+        let exhausted = |kind| {
+            exhausted_of(vec![window(kind, 100.0, Some(NOW + 1))]).expect("a used-up window")
+        };
+        let session = exhausted(QuotaWindowKind::Session);
+        assert_eq!(session.window, "5-hour");
+        assert_eq!(session.named_for(Agent::Claude), "session");
+        assert_eq!(session.named_for(Agent::Codex), "5h");
+        assert_eq!(
+            exhausted(QuotaWindowKind::Weekly).named_for(Agent::Claude),
+            "Weekly"
+        );
     }
 }

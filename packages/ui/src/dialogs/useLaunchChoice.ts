@@ -93,8 +93,8 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
     /** No agent that may be picked. */
     blocked,
     /** Why the chosen account cannot run a session, when its quota is used up or its sharing change runs. */
-    unavailable: exhaustedBy && chosenEntry
-      ? quotaUsedUpCopy(t, chosenEntry.name, exhaustedBy, now)
+    unavailable: exhaustedBy && chosenEntry?.quota
+      ? quotaUsedUpCopy(t, chosenEntry.quota, chosenEntry.name, exhaustedBy, now)
       : changingSharing && chosenEntry
         ? { title: t("accountChoice.sharingChange.title"), description: t("accountChoice.sharingChange.description", { name: isolate(chosenEntry.name) }) }
         : undefined,

@@ -1044,7 +1044,8 @@ const GET_ACCOUNT_QUOTAS: ToolDef = ToolDef {
     description: "How much plan quota each account has left, read-only: every account of every \
                   agent, the agent's default account (`account: \"default\"`) and the stored \
                   ones, with its `account_name`, `plan`, and its quota `windows` (`kind` \
-                  `session` is the 5-hour window, `weekly` the weekly one across all models, \
+                  `session` is the five-hour window (Claude Code's session limit, Codex's 5h \
+                  limit), `weekly` the weekly one across all models, \
                   `weekly_model` a weekly window of the model named by `label`, `credit_period` \
                   a pool of credits over a billing period). All values are percentages of a \
                   window: `used_percent` and `remaining_percent`, with `resets_at` \

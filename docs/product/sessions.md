@@ -245,12 +245,16 @@ handoff's receiving session, or an approved session request — a new session wh
 account a session uses" below), is used up by the reading the daemon holds at that moment (see "A used-up account" in
 `docs/product/account-quotas.md`) is refused with `account_quota_exhausted`, and nothing is recorded; the user's own
 request is refused too. The refusal carries `agent`, `account` (the account's name), `window` (the used-up window's
-name: `5-hour`, `Weekly`, `Monthly` or `Credits`) and, when the agent gives a reset time, `resets_at` in milliseconds
-since the epoch. In the window it is shown in an error alert, in the UI's language, saying the account cannot run a
-session because it has used up that quota and, when known, how long until it resets, counted from when the alert is
-shown; the next step is to choose another account that still has quota, or to try again once the quota resets. An
-agent's tool call is refused with a reason in English naming the account, the agent and the window, about how long
-until it resets when known, and saying to choose another account or wait for the reset. A session request is refused
+name in English, the same for every agent: `5-hour`, `Weekly`, `Monthly` or `Credits`, or a window's own label when it
+carries one) and, when the agent gives a reset time, `resets_at` in milliseconds since the epoch. In the window it is
+shown in an error alert, in the UI's language, saying the account cannot run a session because it has used up that
+quota — `5-hour` worded as the agent's own interface names it, Claude Code's "session quota" and Codex's "5h quota",
+and `Weekly` as "weekly quota" for every agent (see "Quota windows" in `docs/product/account-quotas.md`) — and, when
+known, how long until it resets, counted from when the alert is shown; the next step is to choose another account
+that still has quota, or to try again once the quota resets. An agent's tool call is refused with a reason in English
+naming the account, the agent and the window (the five-hour window as "session" for Claude Code and "5h" for Codex,
+any other by its `window` name), about how long until it resets when known, and saying to choose another account or
+wait for the reset. A session request is refused
 that way before the user is asked, and again on approval should the account be used up by then (see
 `docs/product/session-requests.md`). Only a session being opened is checked: a session already on the account keeps
 running, and resuming, reopening or restarting it is never refused for this.
@@ -405,21 +409,21 @@ console, a session the caller owns always being in it.
 The dialog and the daemon rank the same way:
 
 - Candidates are that agent's accounts that can still open a session. An account is not a candidate when it is used up
-  (see "A used-up account" in `docs/product/account-quotas.md`): a 5-hour, account-wide weekly, or credit-pool window
+  (see "A used-up account" in `docs/product/account-quotas.md`): a five-hour, account-wide weekly, or credit-pool window
   at 100% or more, whose reset is still ahead or absent, drops the whole account. A model-specific weekly limit never
   does that, and it does not drive this pick either.
 - The default account is a candidate ahead of that agent's stored accounts, in the order they are kept.
 - The window that ranks is an account-wide weekly window, or a credit pool whose period is about a week (6 to 8 days,
-  the ends included), the window "Quota windows" in `docs/product/account-quotas.md` calls **Weekly**. A 5-hour
-  window, a model-specific weekly window, and a monthly credit pool do not rank. How much of the 5-hour window remains
-  is not a key.
+  the ends included), the window "Quota windows" in `docs/product/account-quotas.md` calls **Weekly**. A five-hour
+  window, a model-specific weekly window, and a monthly credit pool do not rank. How much of the five-hour window
+  remains is not a key.
 - The share used must be a finite number below 100, and the reset must be strictly in the future. A reset that has
   passed or is missing does not rank.
 - On one account, the soonest such reset wins, then the larger remainder.
 - Across accounts, the soonest reset wins, so quota about to reset is spent first; a larger remainder breaks a tie;
   an equal tie keeps the earlier candidate. One percent left that resets in an hour is chosen over ninety percent that
   resets in three days.
-- An account used up on its 5-hour window is not chosen even when its weekly window resets soon.
+- An account used up on its five-hour window is not chosen even when its weekly window resets soon.
 - The reading used is the one held for that account under the directory it points at now. A reading taken under
   another directory does not count (see "Which accounts have a quota" in `docs/product/account-quotas.md`).
 

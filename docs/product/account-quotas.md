@@ -75,17 +75,28 @@ Each finished reading reaches every connected window straight away.
 
 ## Quota windows
 
-What each agent reports, and what each window is called:
+What each agent reports, and what each window is called. A window is named the way the agent's own interface names
+it, so the same kind of window can carry a different name for different agents:
 
 | Agent | Windows |
 |---|---|
-| Claude Code | **5-hour**, **Weekly**, and one weekly window per model that has a weekly limit of its own, named after the model (for example "Fable weekly") |
-| Codex | **5-hour** and **Weekly** |
+| Claude Code | The **five-hour window**, called **Session**; the **account-wide weekly window**, called **Weekly · all models** when the same reading also has a model's own weekly window, and **Weekly** when it has none; and one weekly window per model that has a weekly limit of its own, named after the model (for example "Fable weekly") |
+| Codex | The **five-hour window**, called **5h**, and the **account-wide weekly window**, called **Weekly** |
 | Grok Build | One credit pool, named after its current period: **Weekly** for a period of about a week (6 to 8 days), **Monthly** for one of about a month (28 to 31 days), and **Credits** when the period is anything else or not given |
 
-In Settings, the rail's quota panel and the native menu's account details, windows appear in this order: **5-hour**,
-then the account-wide **Weekly**, then a credit pool, then **model-specific weekly** limits. Windows within the
-same kind keep the order the agent reported, including the model-specific limits.
+Inside a sentence — a used-up account's reason, an alert — a window is named the same way, as a quota: Claude Code's
+"session quota", Codex's "5h quota", "weekly quota" ("weekly quota for all models" where the name above is
+**Weekly · all models**), "Fable weekly quota", "monthly quota", and a credit pool named **Credits** as "credits".
+Every place that names a window follows this: the meters in Settings and the rail's quota panel, the account pickers'
+and the Switch account submenu's descriptions of an account, the selected session's quota indicator, the menu bar
+icon and its quota submenus, and the used-up alerts. The UI's other languages name the windows by the same rule, in
+their own words. The one exception is the daemon's refusal of a used-up account (see "Opening a session" in
+`docs/product/sessions.md`), which names the window without the account's other windows: there Claude Code's
+account-wide weekly window is always "weekly quota".
+
+In Settings, the rail's quota panel and the native menu's account details, windows appear in this order: the
+five-hour window, then the account-wide weekly window, then a credit pool, then **model-specific weekly** limits.
+Windows within the same kind keep the order the agent reported, including the model-specific limits.
 
 The plan is shown as the agent names it, with each word capitalised (`max` as **Max**, `plus` as **Plus**, `pro_lite`
 as **Pro Lite**); a name that already has capitals inside it keeps its own casing (**SuperGrok**). Only the plan and
@@ -122,13 +133,13 @@ Each notices the reset passing on its own clock: within 30 seconds in Settings, 
 at the reset time itself on the rail's button, as of its opening in the Switch account submenu, and in the menu bar
 as "The icon's menu" in `docs/product/menu-bar-icon.md` says.
 
-An account with both a **5-hour** and an account-wide **Weekly** window shows the two as **one meter**: the 5-hour
-line and its bar, directly beneath it a thinner bar for the Weekly window, and beneath that the Weekly window's line,
-in the muted text colour. Every other window — Grok Build's credit pool, a model-specific weekly limit, a Weekly
-window with no 5-hour window beside it — keeps a meter of its own.
+An account with both a five-hour and an account-wide weekly window shows the two as **one meter**: the five-hour
+window's line and its bar, directly beneath it a thinner bar for the weekly window, and beneath that the weekly
+window's line, in the muted text colour. Every other window — Grok Build's credit pool, a model-specific weekly limit,
+an account-wide weekly window with no five-hour window beside it — keeps a meter of its own.
 
 In Settings the meters sit two to a row, and one to a row in a window narrower than 640 px; in the rail's account
-quota panel they are always one to a row. For assistive technology each bar, the thin Weekly one included,
+quota panel they are always one to a row. For assistive technology each bar, the thin weekly one included,
 is named by its window and carries the remaining percent and the countdown as its value, and the drawn lines are not
 read separately.
 
@@ -136,10 +147,11 @@ read separately.
 
 In the account picker of the session dialog and the handoff dialog (see the **Agent** field in "Opening a session" in
 `docs/product/sessions.md`), each account carries a compact, wordless usage bar before its name, in the agent's
-colour: what remains of the 5-hour window, with the Weekly window's thin bar beneath it, or, for an account without a
-5-hour window, one bar for its Weekly window or its credit pool. An account with nothing to draw — not read yet, not
-logged in, unavailable, or whose latest reading failed so that its windows are out of date — shows an empty track. Each
-track has a faint edge, so an empty one still shows on any surface; the thin Weekly track's edge is drawn around its
+colour: what remains of the five-hour window, with the account-wide weekly window's thin bar beneath it, or, for an
+account without a five-hour window, one bar for its account-wide weekly window or its credit pool. An account with
+nothing to draw — not read yet, not logged in, unavailable, or whose latest reading failed so that its windows are out
+of date — shows an empty track. Each track has a faint edge, so an empty one still shows on any surface; the thin
+weekly track's edge is drawn around its
 outside, and the track is inset so that this edge ends where the main track's ends do. The bar is not read by
 assistive technology; the account's option states what remains of those windows in words instead, or, for a used-up
 account, why it cannot be chosen (see "A used-up account" below).
@@ -182,7 +194,7 @@ The reason is one of these, in the UI's language:
 
 ## A used-up account
 
-An account is **used up** while the reading held for it has a **5-hour**, account-wide **Weekly** or credit-pool window
+An account is **used up** while the reading held for it has a five-hour, account-wide weekly or credit-pool window
 that is 100% used or more and whose reset time is still to come or not given. The daemon and the window judge it the
 same way:
 
@@ -215,8 +227,8 @@ The window does not offer what the daemon would refuse:
 Where it is said in short, under an account's name in a picker or a menu, it is shown on two lines: "Used up", and
 beneath it the countdown to the window's reset as in "How an account's quota is shown" above ("resets in 1h 57m"),
 with "Used up" alone when the agent gives no reset time. The short form is only drawn; assistive technology reads the
-full form, as the account's description. Said in full, it names the account, the window used up (its 5-hour
-quota, weekly quota, monthly quota or credits) and when it resets. In an open dialog the judgement follows the clock,
+full form, as the account's description. Said in full, it names the account, the window used up (as a quota, named
+as in "Quota windows" above) and when it resets. In an open dialog the judgement follows the clock,
 so an account becomes usable again within 30 seconds of its reset time passing, without waiting for a newer reading.
 The new-session dialog and the handoff dialog use that same clock when they show the account whose weekly quota
 resets soonest (see "Which account a session uses" in `docs/product/sessions.md`): for up to one tick after a weekly
@@ -318,8 +330,8 @@ fully round ends. What remains of a window is a solid fill from the reading dire
 right-to-left language), its end square where it stops short of the capsule's round end; the rest of the capsule is
 hollow inside its outline:
 
-- **Two layers** when the account has both a **5-hour** and an account-wide **Weekly** window: a capsule 4 px tall for
-  the 5-hour window and, 1 px beneath it, one 3 px tall for the Weekly window.
+- **Two layers** when the account has both a five-hour and an account-wide weekly window: a capsule 4 px tall for
+  the five-hour window and, 1 px beneath it, one 3 px tall for the weekly window.
 - **One capsule** otherwise, 5 px tall.
 
 It follows session selection, a session's account switch and new quota readings, and fills a window's capsule once
@@ -329,9 +341,9 @@ does not choose this reading.
 The macOS menu bar icon shows the same session's quota using the same window selection and hiding rules below.
 Its appearance and update timing are described in "The icon's look" in `docs/product/menu-bar-icon.md`.
 
-The windows drawn are those of an account picker's usage bar (see "In an account picker" above): the 5-hour window,
-with the Weekly window beneath it when the account has one; for an account without a 5-hour window, one bar for its
-Weekly window, or else its credit pool, labelled as in "Quota windows" above. A model-specific weekly limit is never
+The windows drawn are those of an account picker's usage bar (see "In an account picker" above): the five-hour window,
+with the account-wide weekly window beneath it when the account has one; for an account without a five-hour window,
+one bar for its account-wide weekly window, or else its credit pool, each named as in "Quota windows" above. A model-specific weekly limit is never
 used. The button's accessible name identifies the agent and account name and, for each window drawn, the window and
 its whole remaining percent; the bars are not read separately. The button has no tooltip (see "Tooltips on icon-only
 controls" in `docs/product/labels-and-tooltips.md`).
@@ -362,7 +374,9 @@ list lists no accounts; one not detected yet lists its accounts as not read yet.
 (whether the account is used up, by the rule in "A used-up account" above) and `exhausted_until` (when the window that
 keeps it used up resets, in milliseconds since the epoch; `null` when it is not used up or the agent gives no reset
 time), `unavailable` (the reason a reading is missing or could not be refreshed, else `null`) and its `windows`, each
-with `kind`, `label`, `used_percent`, `remaining_percent` (100 less the used share, never below 0), `resets_at` and
+with `kind` (`session` for the five-hour window, whichever agent's it is; `weekly` for the account-wide weekly window;
+`weekly_model` for a model's own weekly window, the model named by `label`; `credit_period` for a credit pool),
+`label`, `used_percent`, `remaining_percent` (100 less the used share, never below 0), `resets_at` and
 `window_minutes`. Values are percentages only; no absolute token or money amount is given.
 
 It answers from the readings already held and never waits for a new one, so an entry is as old as its `fetched_at`.

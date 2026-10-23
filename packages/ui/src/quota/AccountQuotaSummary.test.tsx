@@ -73,13 +73,13 @@ it("shows short and general weekly windows before model windows with their remai
   const container = mount(<AccountQuotaSummary quota={quota({ windows: reversed })} />);
   expect(reversed).toEqual([windows[2], windows[1], windows[0]]);
   expect(headlines(container)).toEqual([
-    "5-hour 82% remainingresets in 1h 57m",
-    "Weekly 95% remainingresets in 3d 0h",
+    "Session 82% remainingresets in 1h 57m",
+    "Weekly · all models 95% remainingresets in 3d 0h",
     "Fable weekly 100% remaining",
   ]);
   const meters = Array.from(container.querySelectorAll('[data-slot="meter"]'));
   expect(meters.map((meter) => meter.getAttribute("aria-valuenow"))).toEqual(["82", "95", "100"]);
-  expect(meters.map((meter) => meter.getAttribute("aria-label"))).toEqual(["5-hour", "Weekly", `${isolate("Fable")} weekly`]);
+  expect(meters.map((meter) => meter.getAttribute("aria-label"))).toEqual(["Session", "Weekly · all models", `${isolate("Fable")} weekly`]);
   expect(meters[0]!.getAttribute("aria-valuetext")).toBe("82% remaining, resets in 1h 57m");
   expect(meters[2]!.getAttribute("aria-valuetext")).toBe("100% remaining");
   expect(meters.every((meter) => meter.classList.contains("quota-meter--claude"))).toBe(true);
@@ -89,7 +89,7 @@ it("shows short and general weekly windows before model windows with their remai
 it("counts the reset down as time passes", () => {
   const container = mount(<AccountQuotaSummary quota={quota()} />);
   act(() => vi.advanceTimersByTime(60 * MINUTE));
-  expect(headlines(container)[0]).toBe("5-hour 82% remainingresets in 57m");
+  expect(headlines(container)[0]).toBe("Session 82% remainingresets in 57m");
 });
 
 it("waits for the first reading of an account that has no entry yet", () => {
@@ -189,11 +189,11 @@ it("shows no plan when the agent names none", () => {
   expect(mount(<QuotaPlan quota={quota({ plan: null })} />).textContent).toBe("");
 });
 
-it("draws the 5-hour and weekly windows as one two-layer meter, each bar keeping its own label", () => {
+it("draws the session and weekly windows as one two-layer meter, each bar keeping its own label", () => {
   const container = mount(<AccountQuotaSummary quota={quota()} />);
   const pairs = container.querySelectorAll(".grid > div");
   expect(pairs).toHaveLength(2);
-  expect(Array.from(pairs[0]!.querySelectorAll('[data-slot="meter"]'), (meter) => meter.getAttribute("aria-label"))).toEqual(["5-hour", "Weekly"]);
+  expect(Array.from(pairs[0]!.querySelectorAll('[data-slot="meter"]'), (meter) => meter.getAttribute("aria-label"))).toEqual(["Session", "Weekly · all models"]);
 });
 
 it("keeps a single bar for an account without a 5-hour window", () => {

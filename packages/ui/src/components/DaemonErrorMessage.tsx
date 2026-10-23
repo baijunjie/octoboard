@@ -3,7 +3,7 @@ import React from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { DaemonRequestError } from "../daemon-client";
-import { daemonParams, DETAIL_BLOCK_CODES, RECOVERY_CODES, hasTrustDiagnostic, leftBranchGroups, leftBranchItems, leftBranchName, richMessageCode, sharingFailureItems, sharingStateKey, sharingCauseGroups, sharingCauseKey, sharingFixKey, hasSharingReason, sharingReasonKey, sharingItemLabel, runningSessionIds, type LeftBranchItem, type SharingFailureItem } from "../daemonMessage";
+import { daemonParams, DETAIL_BLOCK_CODES, RECOVERY_CODES, hasTrustDiagnostic, leftBranchGroups, leftBranchItems, leftBranchName, richMessageCode, sharingFailureItems, sharingStateKey, sharingCauseGroups, sharingCauseKey, sharingFixKey, hasSharingReason, sharingReasonKey, sharingItemLabel, runningSessionIds, quotaWindowKey, type LeftBranchItem, type SharingFailureItem } from "../daemonMessage";
 import { hasCodeParams, hasShellTimeoutDetails, isUncataloguedFailure, type ErrorPresentation } from "../errorPresentation";
 import { errorText } from "../errorText";
 import { globalParam, isMessageKey } from "../i18n/catalog";
@@ -85,7 +85,7 @@ function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?:
       params.session = <InlineReference dir="auto" wrap><Message id="session.displayTitle" params={{ title: <bdi>{task}</bdi>, name: <bdi>{holder.title}</bdi> }} /></InlineReference>;
     }
   }
-  if (error.code === "account_quota_exhausted" && error.params.window && !["5-hour", "Weekly", "Monthly", "Credits"].includes(error.params.window)) {
+  if (error.code === "account_quota_exhausted" && error.params.window && !quotaWindowKey(error.params.agent, error.params.window)) {
     params.quota = <Message id="quota.windowPhrase.named" params={{ window: <InlineReference dir="auto" wrap>{error.params.window}</InlineReference> }} />;
   }
   const running = error.code === "session_has_running_sessions" ? runningSessionIds(error.params) : undefined;

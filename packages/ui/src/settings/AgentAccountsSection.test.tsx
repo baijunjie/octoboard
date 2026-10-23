@@ -905,7 +905,7 @@ it("shows the plan and the quota of the default account and of an owned one, eac
   expect(rows).toHaveLength(2);
   expect(rows[0]!.textContent).toContain("Plus");
   expect(rows[1]!.textContent).toContain("Pro Lite");
-  expect(rows[1]!.textContent).toContain("5-hour 82% remaining");
+  expect(rows[1]!.textContent).toContain("5h 82% remaining");
 });
 
 it("explains the default account in a help tip beside its name rather than in a line of its own", () => {

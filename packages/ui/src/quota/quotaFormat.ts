@@ -1,7 +1,7 @@
 import type { Reason } from "../components/ReasonText";
 import { isolate } from "../i18n/isolate";
 import type { Translate } from "../i18n/catalog";
-import type { AccountQuota, QuotaUnavailable, QuotaWindow } from "../protocol";
+import type { AccountQuota, Agent, QuotaUnavailable, QuotaWindow } from "../protocol";
 
 const MINUTE = 60_000;
 const DAY_MINUTES = 24 * 60;
@@ -46,14 +46,28 @@ export function remainingPercentAt(window: QuotaWindow, now: number): number {
   return window.resets_at != null && window.resets_at <= now ? 100 : remainingPercent(window);
 }
 
-/** The window's name: "5-hour", "Weekly", "<Model> weekly". A credit pool is named for the length
- * of its current period, which the agent bills over (weekly on the measured account). */
-export function quotaWindowLabel(t: Translate, window: QuotaWindow): string {
+/** What names a window besides its own kind: the agent, whose own interface the names follow, and the
+ * account's other windows. Any `AccountQuota` serves. */
+export interface QuotaNaming {
+  agent: Agent;
+  windows: readonly QuotaWindow[];
+}
+
+/** Whether `window` is Claude's account-wide weekly window shown beside a model's own weekly one, which
+ * Claude's interface then names "Weekly · all models". Alone, it is just "Weekly". */
+function isWeeklyAllModels(naming: QuotaNaming, window: QuotaWindow): boolean {
+  return window.kind === "weekly" && naming.agent === "claude" && naming.windows.some((other) => other.kind === "weekly_model");
+}
+
+/** The window's name: "Session" or "5h" (as the agent's own interface calls its short window), "Weekly",
+ * "Weekly · all models" (Claude's account-wide one beside a model's own), "<Model> weekly". A credit pool is named for the length of its current period, which the agent bills over
+ * (weekly on the measured account). */
+export function quotaWindowLabel(t: Translate, naming: QuotaNaming, window: QuotaWindow): string {
   switch (window.kind) {
     case "session":
-      return t("quota.window.session");
+      return t(naming.agent === "claude" ? "quota.window.session" : "quota.window.fiveHour");
     case "weekly":
-      return t("quota.window.weekly");
+      return t(isWeeklyAllModels(naming, window) ? "quota.window.weeklyAll" : "quota.window.weekly");
     case "weekly_model":
       return window.label ? t("quota.window.weeklyModel", { model: isolate(window.label) }) : t("quota.window.weekly");
     case "credit_period": {
@@ -65,9 +79,9 @@ export function quotaWindowLabel(t: Translate, window: QuotaWindow): string {
   }
 }
 
-/** The window's headline: "5-hour 82% remaining". */
-export function quotaHeadline(t: Translate, window: QuotaWindow, now: number): string {
-  return t("quota.remaining", { window: quotaWindowLabel(t, window), percent: remainingPercentAt(window, now) });
+/** The window's headline: "5h 82% remaining". */
+export function quotaHeadline(t: Translate, naming: QuotaNaming, window: QuotaWindow, now: number): string {
+  return t("quota.remaining", { window: quotaWindowLabel(t, naming, window), percent: remainingPercentAt(window, now) });
 }
 
 /** The time left until `resetsAt` as "2d 3h", "1h 57m" or "12m", rounded up to the minute so a
@@ -127,14 +141,14 @@ export function exhaustedQuotaWindow(quota: AccountQuota | "loading" | undefined
   return blocking;
 }
 
-/** The window as a noun phrase inside a sentence, in lower case: "5-hour quota", "weekly quota", "credits". Unlike
- * `quotaWindowLabel` it follows "its", so a credit pool is "credits" rather than "Credits quota". */
-export function quotaWindowPhrase(t: Translate, window: QuotaWindow): string {
+/** The window as a noun phrase inside a sentence, in lower case: "session quota", "5h quota", "weekly quota",
+ * "credits". Unlike `quotaWindowLabel` it follows "its", so a credit pool is "credits" rather than "Credits quota". */
+export function quotaWindowPhrase(t: Translate, naming: QuotaNaming, window: QuotaWindow): string {
   switch (window.kind) {
     case "session":
-      return t("quota.windowPhrase.session");
+      return t(naming.agent === "claude" ? "quota.windowPhrase.session" : "quota.windowPhrase.fiveHour");
     case "weekly":
-      return t("quota.windowPhrase.weekly");
+      return t(isWeeklyAllModels(naming, window) ? "quota.windowPhrase.weeklyAll" : "quota.windowPhrase.weekly");
     case "weekly_model":
       return window.label ? t("quota.windowPhrase.weeklyModel", { model: isolate(window.label) }) : t("quota.windowPhrase.weekly");
     case "credit_period": {
@@ -153,25 +167,25 @@ export function quotaUsedUpShort(t: Translate, window: QuotaWindow, now: number)
   return detail ? { state: t("quota.usedUp"), detail } : { state: t("quota.usedUp") };
 }
 
-/** The same in full, for assistive technology: "Used up: 5-hour quota · resets in 2h". */
-export function quotaUsedUpDetail(t: Translate, window: QuotaWindow, now: number): string {
+/** The same in full, for assistive technology: "Used up: 5h quota · resets in 2h". */
+export function quotaUsedUpDetail(t: Translate, naming: QuotaNaming, window: QuotaWindow, now: number): string {
   const resets = quotaResetsIn(t, window, now);
-  const quota = quotaWindowPhrase(t, window);
+  const quota = quotaWindowPhrase(t, naming, window);
   return resets ? t("quota.usedUpDetailResets", { quota, resets }) : t("quota.usedUpDetail", { quota });
 }
 
-/** Why `account` cannot be used, as a sentence: "Work cannot be used for now because it has used up its 5-hour
+/** Why `account` cannot be used, as a sentence: "Work cannot be used for now because it has used up its 5h
  * quota. It resets in 2h." */
-export function quotaUsedUpSentence(t: Translate, account: string, window: QuotaWindow, now: number): string {
+export function quotaUsedUpSentence(t: Translate, naming: QuotaNaming, account: string, window: QuotaWindow, now: number): string {
   const resets = quotaResetsIn(t, window, now);
-  const params = { account: isolate(account), quota: quotaWindowPhrase(t, window) };
+  const params = { account: isolate(account), quota: quotaWindowPhrase(t, naming, window) };
   return resets ? t("quota.accountUsedUp.resets", { ...params, resets }) : t("quota.accountUsedUp", params);
 }
 
 /** The short title and explanation used by an inline quota Alert. */
-export function quotaUsedUpAlert(t: Translate, account: string, window: QuotaWindow, now: number): { title: string; description: string } {
+export function quotaUsedUpAlert(t: Translate, naming: QuotaNaming, account: string, window: QuotaWindow, now: number): { title: string; description: string } {
   const resets = quotaResetsIn(t, window, now);
-  const quota = quotaWindowPhrase(t, window);
+  const quota = quotaWindowPhrase(t, naming, window);
   return {
     title: t("quota.accountUsedUp.title", { account: isolate(account) }),
     description: resets ? t("quota.accountUsedUp.descriptionResets", { quota, resets }) : t("quota.accountUsedUp.description", { quota }),
@@ -186,24 +200,26 @@ export function twoLayerWindows(windows: readonly QuotaWindow[]): { session: Quo
   return session && { session, weekly: windows.find((window) => window.kind === "weekly") };
 }
 
-/** The windows a compact usage bar draws: the main one, and the thin one beneath it if any. */
+/** The windows a compact usage bar draws: the main one, and the thin one beneath it if any. `naming` is the
+ * reading they come from, which names them. */
 export interface QuotaBar {
   main: QuotaWindow;
   thin?: QuotaWindow;
+  naming: QuotaNaming;
 }
 
 /** The windows a compact usage bar draws: the 5-hour window with the weekly one beneath it, else the
  * account's one primary window (a credit pool, or a weekly window with no 5-hour one). `undefined`
  * for a reading with nothing to draw. */
-export function usageBarWindows(windows: readonly QuotaWindow[]): QuotaBar | undefined {
-  const layers = twoLayerWindows(windows);
-  if (layers) return { main: layers.session, thin: layers.weekly };
-  const main = primaryQuotaWindow([...windows]);
-  return main && { main };
+export function usageBarWindows(quota: QuotaNaming): QuotaBar | undefined {
+  const layers = twoLayerWindows(quota.windows);
+  if (layers) return { main: layers.session, thin: layers.weekly, naming: quota };
+  const main = primaryQuotaWindow([...quota.windows]);
+  return main && { main, naming: quota };
 }
 
-/** What a compact usage bar shows, in words: "5-hour 82% remaining, Weekly 40% remaining". */
+/** What a compact usage bar shows, in words: "5h 82% remaining, Weekly 40% remaining". */
 export function usageBarSummary(t: Translate, bar: QuotaBar, now: number): string {
-  const main = quotaHeadline(t, bar.main, now);
-  return bar.thin ? t("quota.usageSummary", { main, thin: quotaHeadline(t, bar.thin, now) }) : main;
+  const main = quotaHeadline(t, bar.naming, bar.main, now);
+  return bar.thin ? t("quota.usageSummary", { main, thin: quotaHeadline(t, bar.naming, bar.thin, now) }) : main;
 }
