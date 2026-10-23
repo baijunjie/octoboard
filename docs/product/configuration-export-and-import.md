@@ -29,24 +29,29 @@ file; either is told in the import dialog, and another file can be chosen.
 
 **Exporting** opens a dialog that asks what to export: the console the sidebar shows, or everything; with no console
 there is only everything. Each choice says whether the application settings go with it: everything carries them, a
-single console does not. Under that choice, before anything is saved, the dialog says that the file contains the path
-of each project on the machine running Octoboard, which may not be the one the window is on, so sharing it is a choice
-made knowing so. The dialog's **Export** button then asks the daemon for the document and opens the save dialog. In the
-desktop app a toast names the file it was saved as. A browser files a download itself, under its own name and wherever
+single console does not. Under that choice is a checkbox, **Include full project paths**, unchecked by default; its
+note says that without them the file records only each project's directory name, and that an import then places each
+project in the default clone directory or clones it from its remote (see "Project paths" below). Only while it is
+checked, and so before anything is saved, a warning says that the file contains each project's full directory path on
+the machine running Octoboard, which may not be the device the user is on, that those paths can reveal details such as
+the user name, and that the file is to be shared only with people the user trusts. The dialog's **Export** button then
+asks the daemon for the document and opens the save dialog. In the desktop app a toast names the file it was saved as. A browser files a download itself, under its own name and wherever
 its settings say, and does not report one that was blocked or cancelled, so there the toast says only that the
 configuration was downloaded and names no file. Dismissing the desktop app's save dialog saves nothing and leaves the
 export dialog open; a file that could not be written is said in the dialog.
 
-**Importing** opens a dialog in three steps. The user picks a file — the step says beforehand that a file of every
-console also holds the application settings and a file of a single console does not — and the window sends its document
-to the daemon to be inspected; a file that is not JSON, or that the daemon refuses (not a configuration, a version this
+**Importing** opens a dialog in three steps. The user picks a file — the step says beforehand that the file is one
+exported earlier, that its contents can be reviewed and where each project goes on the machine running Octoboard chosen
+before anything is created, and that an export of everything also includes the application settings — and the window
+sends its document to the daemon to be inspected; a file that is not JSON, or that the daemon refuses (not a configuration, a version this
 Octoboard does not read, unreadable), is told with its reason, and another can be chosen. A browser too old to report a
 dismissed file picker never answers for one, so the dialog is not held while the picker is open: it can be closed, or
 the picker opened again. What the daemon answers is then **reviewed before anything is created**: for each console, a
 row for each of its projects, with its name and, at the end of the same line, the choice of where the project goes;
 under them the path the project had on the exporting machine and the directory the choice would use, or where a clone
-would come from and go to. A row offers only the choices its state allows, with the daemon's default preselected, and
-always offers **Another directory**, which asks for a path (typed or browsed to) and refuses one that is not absolute or
+would come from and go to. A project the document records by its directory name alone has no exported path line; its
+row keeps only the sentence saying where the project was found, or that it was not found and whether it can be cloned.
+A row offers only the choices its state allows, with the daemon's default preselected, and always offers **Another directory**, which asks for a path (typed or browsed to) and refuses one that is not absolute or
 does not start with `~/`, and **Leave out**. A project left out says nothing more, unless it was found nowhere on the
 daemon's host, which the row then says. Four buttons apply one way to every project that offers it (exported paths, the
 default clone directory, clone from remotes) or leave every project out, and a project they do not reach keeps its row.
@@ -118,9 +123,23 @@ description is imported with none. Export and import preserve the full length of
 including values beyond the editing limits in "Project names" and "The project's description" in
 `docs/product/projects.md`; an import neither rejects nor truncates them for their length.
 
-A project's path is **the one path of the exporting machine anywhere in the document**, which is the thing to look at
-before handing the file to someone else. An import treats it as a starting point and never as a place to write (see
-"Where an imported project goes" below).
+An import treats a project's path as a starting point and never as a place to write (see "Where an imported project
+goes" below).
+
+### Project paths
+
+An export either includes full project paths or leaves them out; the export dialog leaves them out unless its checkbox
+is checked, and a request to the daemon that does not say which includes them. Either way the document has the same
+format and version.
+
+- **Full paths included** — each project's path is its absolute directory path on the exporting machine, and its remote
+  URL is the one recorded for it, whatever it is. A project's path, and a remote URL that is itself a local path or a
+  `file://` URL, are the only paths of the exporting machine anywhere in the document, which is the thing to look at
+  before handing the file to someone else.
+- **Full paths left out** — each project's path is only the last segment of its directory path, its directory name
+  (empty for a path with none, such as `/`), and its remote URL is kept only when it may be cloned from (see "What may be
+  cloned from" below); any other remote URL, such as a local path or a `file://` URL, is left out. Such a document holds
+  no path of the exporting machine.
 
 ### How an account travels
 
@@ -216,12 +235,14 @@ comes to on the daemon's host, and which of them is the default:
 | Where | The directory it uses | When it is offered |
 |---|---|---|
 | The recorded path | the project's path as the document records it | only when that path is absolute and is an existing directory on the daemon's host |
-| Under the default clone directory | the last segment of the recorded path, under the host's default clone directory (`~/Projects` unless the user has set one) | only when that directory already exists; this is the ordinary case of the same layout of projects under another root |
+| Under the default clone directory | the last segment of the recorded path — or, for a project recorded by its directory name alone, that name — under the host's default clone directory (`~/Projects` unless the user has set one) | only when that directory already exists; this is the ordinary case of the same layout of projects under another root |
 | A fresh clone | a clone of the project's recorded remote URL, into the default clone directory | only when that URL may be cloned from (see below) and the directory the clone would create does not exist yet |
 | A directory the user points at | that directory | never offered: only the user can name one, and any project can be placed this way |
 
 The **default** is the first of the recorded path, the derived path and the clone that is offered, and there is no
-default when none of them is. A project with nothing offered is left out of the import unless the user points at a
+default when none of them is. A project recorded by its directory name alone (see "Project paths" above) is never
+offered the recorded path, since a name is not an absolute path, so it can be offered only the directory under the
+default clone directory and a fresh clone; an empty name derives no directory, which leaves only the clone. A project with nothing offered is left out of the import unless the user points at a
 directory for it.
 
 A directory the user points at has to be absolute, or to start with `~/`, which is expanded to the home directory of

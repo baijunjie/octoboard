@@ -35,16 +35,34 @@ it("opens with focus on the Export button, since it has no text field", () => {
   expect(document.activeElement?.textContent).toBe("Export");
 });
 
-it("states that the file carries project paths, and whose, while the scope is still being chosen, before any request is made", () => {
+const pathsBox = () => document.body.querySelector<HTMLInputElement>("input[type=checkbox]")!;
+
+it("leaves full project paths out by default, with no warning about them, before any request is made", () => {
   const { sent } = mount();
-  expect(text()).toContain("The file contains project paths");
-  expect(text()).toContain("the machine running Octoboard, which may not be the one this window is on");
+  expect(pathsBox().checked).toBe(false);
+  expect(pathsBox().labels?.[0]?.textContent).toBe("Include full project paths");
+  expect(text()).toContain("Without them, the file records only each project's directory name");
+  expect(text()).not.toContain("The file contains project paths");
   expect(sent()).toEqual([]);
 });
 
+it("states that the file carries project paths, and whose, once they are asked for", async () => {
+  mount();
+  await act(async () => pathsBox().click());
+  expect(text()).toContain("The file contains project paths");
+  expect(text()).toContain("the machine running Octoboard, which may not be the device you are using now");
+});
+
+it("asks for the paths only when the box is checked", async () => {
+  const mounted = mount();
+  await act(async () => pathsBox().click());
+  await press("Export");
+  expect(mounted.sent()).toEqual([{ type: "export_configuration", console: "c-main", include_paths: true }]);
+});
+
 it.each([
-  { scope: undefined, sent: { type: "export_configuration", console: "c-main" } },
-  { scope: "Everything", sent: { type: "export_configuration" } },
+  { scope: undefined, sent: { type: "export_configuration", console: "c-main", include_paths: false } },
+  { scope: "Everything", sent: { type: "export_configuration", include_paths: false } },
 ])("asks for the document of the scope chosen: $scope", async ({ scope, sent }) => {
   const mounted = mount();
   if (scope) {

@@ -1592,7 +1592,7 @@ pub enum RequestBody {
         /// `hostfs::detect_agent`). Absent is true; a client that has already shown the user the
         /// detection, and so sends what it showed, sends false to have "inherit from console"
         /// kept as chosen.
-        #[serde(default = "detect_by_default")]
+        #[serde(default = "default_true")]
         detect_default_agent: bool,
         /// Absent means no tags.
         tags: Option<Vec<String>>,
@@ -1697,10 +1697,15 @@ pub enum RequestBody {
     /// The configuration document of the console `console`, or, when it is absent, of every
     /// console and the application settings, answered with `configuration_exported`. A console
     /// that does not exist is refused with `unknown_console`. Reads what is stored; touches no
-    /// session, runs no `git`.
+    /// session, runs no `git`. `include_paths` says whether each project's absolute directory path
+    /// is written; absent is true. False writes only the directory's name, and a remote that
+    /// cannot be cloned from (a local path) is left out, so the file reveals no path of this
+    /// machine.
     ExportConfiguration {
         #[serde(default)]
         console: Option<String>,
+        #[serde(default = "default_true")]
+        include_paths: bool,
     },
     /// Reads a configuration document and answers with `configuration_inspected`: for each project
     /// which directories it could be placed in on this machine, and for each account reference
@@ -3102,7 +3107,7 @@ pub enum TermControl {
     Resize { cols: u16, rows: u16 },
 }
 
-fn detect_by_default() -> bool {
+fn default_true() -> bool {
     true
 }
 
@@ -3711,6 +3716,15 @@ mod tests {
     use super::{
         Event, HistoryMessage, HistorySpeaker, ProjectAccount, ProjectSource, Request, RequestBody,
     };
+
+    #[test]
+    fn an_absent_include_paths_means_true() {
+        let json = r#"{"type":"export_configuration"}"#;
+        match serde_json::from_str::<Request>(json).unwrap().body {
+            RequestBody::ExportConfiguration { include_paths, .. } => assert!(include_paths),
+            _ => panic!("not export_configuration"),
+        }
+    }
 
     #[test]
     fn an_absent_detect_default_agent_means_true() {

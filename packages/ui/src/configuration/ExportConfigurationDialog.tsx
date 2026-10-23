@@ -1,10 +1,11 @@
 import { ActionableError } from "../errorRecovery";
 import { Alert, Description, Label, Radio, RadioGroup } from "@heroui/react";
-import React, { useState } from "react";
+import React, { useId, useState } from "react";
 
 import { appConfig } from "../appConfig";
 import { InlineChip } from "../components/InlineChip";
 import { TintedAlert } from "../components/TintedAlert";
+import { ConfirmOption } from "../dialogs/ConfirmOption";
 import { Dialog, useDialogAction } from "../dialogs/Dialog";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
@@ -26,12 +27,12 @@ export function exportFileName(console?: Pick<Console, "name">): string {
 
 /**
  * Exports configuration to a file the user picks the place of. The scope is chosen here, between
- * the console in hand (`console`, absent when there is none) and everything, and the notice that
- * the file carries the project paths of the daemon's host stands under that choice, so it is read
- * before the document exists. The daemon builds the document; this saves it as the daemon sent it,
- * through the platform's save dialog, and says what became of it: the name it was saved under, or
- * only that it was downloaded where the platform cannot say more. Dismissing the save dialog leaves
- * this one open.
+ * the console in hand (`console`, absent when there is none) and everything. Full project paths of
+ * the daemon's host are left out unless asked for, and the notice that the file then carries them
+ * appears with that choice, so it is read before the document exists. The daemon builds the
+ * document; this saves it as the daemon sent it, through the platform's save dialog, and says what
+ * became of it: the name it was saved under, or only that it was downloaded where the platform
+ * cannot say more. Dismissing the save dialog leaves this one open.
  */
 export function ExportConfigurationDialog({
   console: inHand,
@@ -45,12 +46,14 @@ export function ExportConfigurationDialog({
   const { configurationFile } = usePlatform();
   const { busy, run } = useDialogAction();
   const [scope, setScope] = useState<Scope>(inHand ? "console" : "all");
+  const [includePaths, setIncludePaths] = useState(false);
+  const warningId = useId();
   const exported = scope === "console" ? inHand : undefined;
 
   const submit = () => {
     if (!configurationFile || busy) return;
     void run(async () => {
-      const reply = (await request({ type: "export_configuration", console: exported?.id })) as Extract<
+      const reply = (await request({ type: "export_configuration", console: exported?.id, include_paths: includePaths })) as Extract<
         Event,
         { type: "configuration_exported" }
       >;
@@ -103,15 +106,25 @@ export function ExportConfigurationDialog({
       ) : (
         <p className="text-sm">{t("configuration.export.scope.all.description")}</p>
       )}
+      <ConfirmOption
+        isSelected={includePaths}
+        onChange={setIncludePaths}
+        isReadOnly={busy}
+        label={t("configuration.export.paths.include")}
+        hint={t("configuration.export.paths.include.description")}
+        describedBy={includePaths ? warningId : undefined}
+      />
       {/* HeroUI's own warning tint rather than its default surface, which is the dialog's own fill and
           leaves the callout unmarked. */}
-      <TintedAlert status="warning">
-        <Alert.Indicator />
-        <Alert.Content>
-          <Alert.Title>{t("configuration.export.paths.title")}</Alert.Title>
-          <Alert.Description><Message id="configuration.export.paths.description" /></Alert.Description>
-        </Alert.Content>
-      </TintedAlert>
+      {includePaths && (
+        <TintedAlert id={warningId} status="warning">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>{t("configuration.export.paths.title")}</Alert.Title>
+            <Alert.Description><Message id="configuration.export.paths.description" /></Alert.Description>
+          </Alert.Content>
+        </TintedAlert>
+      )}
     </Dialog>
   );
 }

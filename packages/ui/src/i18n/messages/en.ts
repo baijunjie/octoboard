@@ -1507,16 +1507,19 @@ export const en = {
   "configuration.export.scope.console.description": "The console and its projects. No application settings.",
   "configuration.export.scope.all": "Everything",
   "configuration.export.scope.all.description": "Every console with its projects, and the application settings.",
+  "configuration.export.paths.include": "Include full project paths",
+  "configuration.export.paths.include.description":
+    "Without them, the file records only each project's directory name, and an import places each project in the default clone directory or clones it from its remote.",
   "configuration.export.paths.title": "The file contains project paths",
   "configuration.export.paths.description":
-    "Each project's directory is written into it as a path on the machine running {appName}, which may not be the one this window is on. Share the file only with people you are happy to show those paths to.",
+    "The file records each project's full directory path on the machine running {appName}, which may not be the device you are using now. These paths can reveal details such as your user name, so share the file only with people you trust.",
   "configuration.export.submit": "Export",
   "configuration.export.saved": "Configuration saved as {name}.",
   "configuration.export.downloaded": "Configuration downloaded.",
   "configuration.export.failed": "Could not save the file: {detail}",
   "configuration.import.title": "Import configuration",
   "configuration.import.choose.intro":
-    "Choose a file exported from {appName}. You will review what it holds, and decide where each project goes on the machine running {appName}, before anything is created. A file of every console also holds the application settings; a file of a single console does not.",
+    "Choose an exported configuration file. Before anything is created, you can review its contents and choose where each project goes on the machine running {appName}. An export of everything also includes the application settings.",
   "configuration.import.choose.submit": "Choose file",
   "configuration.import.readFailed": "Could not read the file: {detail}",
   "configuration.file.tooLarge": "The file is too large to be a configuration file.",

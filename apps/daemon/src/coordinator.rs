@@ -653,9 +653,12 @@ async fn handle_inner(
             Ok(None)
         }
 
-        RequestBody::ExportConfiguration { console } => Ok(Some(Event::ConfigurationExported {
+        RequestBody::ExportConfiguration {
+            console,
+            include_paths,
+        } => Ok(Some(Event::ConfigurationExported {
             id: request_id,
-            document: config_export::build(&state.store, console.as_deref())?,
+            document: config_export::build(&state.store, console.as_deref(), include_paths)?,
         })),
 
         RequestBody::InspectConfiguration { document } => {

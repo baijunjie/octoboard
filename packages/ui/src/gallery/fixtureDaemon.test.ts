@@ -1392,3 +1392,45 @@ describe("the fixture daemon's session history", () => {
     expect(daemon.store.getState().sessions.get(archived.id)?.status).toBe("archived");
   });
 });
+
+describe("the fixture daemon's configuration export", () => {
+  const exportProjects = async (include_paths?: boolean) => {
+    const daemon = createFixtureDaemon({
+      id: "export-paths",
+      group: "Configuration",
+      category: "normal",
+      title: "",
+      state: snapshotState({
+        consoles: [consoleOf("c-1", "Work")],
+        projects: [
+          projectOf("p-1", "c-1", "Website", { path: "/Users/ana/code/website", source: "git", remote_url: "git@github.com:acme/website.git" }),
+          projectOf("p-2", "c-1", "Local", { path: "/Users/ana/code/local", source: "git", remote_url: "/Users/ana/origin.git" }),
+          projectOf("p-3", "c-1", "File", { path: "/Users/ana/code/file", source: "git", remote_url: "file:///Users/ana/origin.git" }),
+          projectOf("p-4", "c-1", "Root", { path: "/", source: "git", remote_url: "https://example.com/root.git" }),
+        ],
+      }),
+    });
+    const reply = (await daemon.request({ type: "export_configuration", include_paths })) as { document: ReturnType<typeof exportedDocument> };
+    return reply.document.consoles.flatMap((console) => console.projects.map((project) => ({ name: project.name, path: project.path, remote_url: project.remote_url })));
+  };
+
+  it("records a project's path and remote in full, unless asked to leave paths out", async () => {
+    const full = [
+      { name: "File", path: "/Users/ana/code/file", remote_url: "file:///Users/ana/origin.git" },
+      { name: "Local", path: "/Users/ana/code/local", remote_url: "/Users/ana/origin.git" },
+      { name: "Root", path: "/", remote_url: "https://example.com/root.git" },
+      { name: "Website", path: "/Users/ana/code/website", remote_url: "git@github.com:acme/website.git" },
+    ];
+    expect(await exportProjects()).toEqual(full);
+    expect(await exportProjects(true)).toEqual(full);
+  });
+
+  it("records only the directory's name of a project, and only a remote that can be cloned, when paths are left out", async () => {
+    expect(await exportProjects(false)).toEqual([
+      { name: "File", path: "file", remote_url: null },
+      { name: "Local", path: "local", remote_url: null },
+      { name: "Root", path: "", remote_url: "https://example.com/root.git" },
+      { name: "Website", path: "website", remote_url: "git@github.com:acme/website.git" },
+    ]);
+  });
+});

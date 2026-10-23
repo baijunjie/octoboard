@@ -60,7 +60,7 @@ the request id as if it were a record id.
 | `start_account_login` | `agent`, `account?` (an account id; absent or null is the agent's default account) | Signs the account in with its agent's own CLI, run in the background (no terminal, no window) against the account's config directory; see "Account login" below. Answered with `ack` once the CLI is running; progress and outcome follow as `account_login_updated`. Refused: `unknown_account`, `agent_not_available`, `shell_environment_timeout`, `binary_not_found`, `login_already_running` (this account has a login running), `login_codex_busy` (a Codex login runs for any account) |
 | `cancel_account_login` | `agent`, `account?` | Ends the account's running login and kills the CLI. Answered with `ack`; `account_login_updated` with `cancelled` follows. Refused: `login_not_running`; it looks only at the logins running, so a login whose account was just deleted can still be cancelled |
 | `refresh_account_quotas` | `agent?`, `account?` | Answered with `ack` at once. Re-reads the plan quota of the accounts it selects whose last attempt is older than the polling interval (five minutes, longer for an account that keeps failing), and also those whose last attempt is over 30 seconds old and which hold no windows because the account is not signed in or has no quota to report (a sign-in done outside Octoboard shows up at once): `agent` limits it to one agent's accounts, `account` (an account id) to that one account, and with neither it covers every account of every available agent. An `account` that does not exist or belongs to another `agent` is refused with `unknown_account`. Each reading that finishes follows as `account_quotas_updated`; any other account that is not due, or whose reading is already running, is left alone. See "Account quotas" below |
-| `export_configuration` | `console?` | Answered with `configuration_exported`: the configuration document (see "Configuration export" below) of the console `console` names, or, when it is absent, of every console and the application settings. A `console` that does not exist is refused with `unknown_console` rather than answered with an empty document. A read of what is stored: it runs no `git` and touches no session |
+| `export_configuration` | `console?`, `include_paths?` | Answered with `configuration_exported`: the configuration document (see "Configuration export" below) of the console `console` names, or, when it is absent, of every console and the application settings. `include_paths` is a bool, true when absent; false exports each project's `path` as its last segment alone and drops a `remote_url` that cannot be cloned from (see "Configuration export"). A `console` that does not exist is refused with `unknown_console` rather than answered with an empty document. A read of what is stored: it runs no `git` and touches no session |
 | `inspect_configuration` | `document` | Answered with `configuration_inspected`: for each project of the configuration document `document` (see "Configuration import" below) the directories it could be placed in on this machine, and for each account reference whether it falls back to a default account. Changes nothing and runs no `git`. Its existence checks of paths together have a 15 second deadline; a project whose check did not come back in that time is offered nothing. A document that is not a configuration document, is of a version this daemon does not read, or cannot be read is refused with `configuration_not_recognised`, `configuration_version_unsupported` or `configuration_unreadable` |
 | `import_configuration` | `document`, `resolutions?`, `apply_settings?` | Answered with `configuration_imported`: creates a new console for each console of `document` and associates each project with the directory its entry in `resolutions` chooses (see "Configuration import" below). A project with no entry is left out. The document is refused as `inspect_configuration` refuses it, and a resolution that names a console or project the document does not have, names one twice, or chooses a `directory` that is neither an absolute path nor starts with `~/`, is refused with `import_resolution_invalid`; all of that before anything is created, as is anything `create_console` would refuse of a console of the document (an avatar that is not an image, say). `apply_settings` (absent means false) also applies the document's application settings; asking for them of a document that carries none is refused with `import_settings_missing`, before anything is created. A project that cannot be placed after that is not an error of the request (see "Configuration import") |
 | `get_project_source` | `project`, `slot?` | Where the project's files are read from: its resolved directory and, when it is inside a Git repository, the repository, the worktree holding it, its place in that worktree and every worktree of the repository, that one included. Answered with `project_source`. A browse request: see "Browsing a project" below for the rules every browse request shares (`slot`, budgets, its own outbound queue) |
@@ -1052,7 +1052,8 @@ DocumentConsole { name, icon?, default_agent,
                   grok_project_session_model?, grok_project_session_effort?,
                   console_session_prompt?,                          // absent in an older document: none
                   projects: DocumentProject[] }
-DocumentProject { name, path, source: "local"|"parent"|"git", remote_url?, default_agent?, pinned, tags: string[],
+DocumentProject { name, path,                                       // absolute; only the last segment without paths
+                  source: "local"|"parent"|"git", remote_url?, default_agent?, pinned, tags: string[],
                   description?,                                     // absent in an older document: none
                   claude_account, codex_account, grok_account,       // each a ProjectAccountRef
                   claude_session_model?, claude_session_effort?,
@@ -1088,9 +1089,13 @@ ProjectAccountRef { kind: "inherit" } | { kind: "default" } | { kind: "account",
   of `Settings` are not in it either, being bound to this machine's accounts.
 - **Machine-local paths.** `Project.path` is an absolute path of the exporting machine, as stored, and is only a
   starting point for an import to resolve against its own filesystem. It is the one machine-local path in the
-  document.
+  document. With `include_paths` false the export writes only the path's last segment instead (`""` for a path with
+  none, such as `/`), so the document names no directory of the exporting machine; the format `version` is unchanged,
+  and an import reads such a name as a directory name, not a path (see "Configuration import").
 - **`remote_url`** is what is recorded for the project (see "Records"); the export reads it from the stored record
-  and runs no `git`. It is absent for a directory that is not a repository and for one with no remote.
+  and runs no `git`. It is absent for a directory that is not a repository and for one with no remote. With
+  `include_paths` false it is kept only when it may be cloned from (`git_remote::is_clonable_url`); a local path or a
+  `file:` URL is dropped, as it would point into the exporting machine.
 - **Models and efforts** are exported as stored. They are free text read only when a session is launched, so a value
   the importing machine's agent does not offer is not an error here.
 - **Version.** `format` tells a configuration document from any other JSON; `version` is an integer, 1 today. It is
@@ -1179,7 +1184,9 @@ Failure           { code, params, message }             // as an `error` reply c
   or read a path of this machine. This is stricter than `add_project`, which leaves the choice to git: a few transports
   git supports are not accepted here. The recorded path is likewise taken only if it is absolute (not relative, not
   starting with `~`), and the derived path is built from the last segment of the path after its `.` and `..` are
-  resolved.
+  resolved. A bare name, a `path` of one plain segment (what an export without paths records), is never a recorded path
+  and so never offers `exported_path`; it is taken only as the directory name of the derived choice. `""`, `.`, `..`
+  and a relative path of several segments yield no derived path either.
 - **Accounts.** A reference is rebound to the account of the agent whose field holds it with the same name, compared
   without regard to case. One that matches no account is bound to that agent's default account (`null` on a console,
   `default` on a project, pinned rather than inheriting) and is listed in `account_fallbacks`: on the console for its

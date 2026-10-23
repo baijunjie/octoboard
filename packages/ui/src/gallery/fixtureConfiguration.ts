@@ -23,10 +23,20 @@ import { refuseUnfillable } from "./banner";
 import type { FixtureError } from "./fixtures/projectFiles";
 import type { ConfigurationFixture } from "./scenario";
 
+/** The last segment of `path`, or an empty string where it has none (the filesystem root). */
+const directoryName = (path: string): string => path.split("/").filter(Boolean).at(-1) ?? "";
+
+/** Whether a remote can be cloned from on another machine: a URL of a network scheme, or the
+ * `host:path` form, and not a local path or a `file://` URL. */
+const isClonableRemote = (url: string): boolean =>
+  /^(https?|ssh|git|git\+ssh|ssh\+git):\/\/\S/i.test(url) || /^[^\s/:]+:(?![:/]{1,2})\S/.test(url);
+
 /** The document `export_configuration` answers: the console named, or every console and the
  * application settings; consoles by creation time and a console's projects by name, with no id and
- * no console working directory in it, and an account carried by its name alone. */
-export function exportedDocument(state: State, consoleId?: string): ConfigurationDocument {
+ * no console working directory in it, and an account carried by its name alone. Without
+ * `includePaths` a project's path is only its directory's name, and its remote is kept only where
+ * it can be cloned from. */
+export function exportedDocument(state: State, consoleId?: string, includePaths = true): ConfigurationDocument {
   const accountName = (agent: Agent, id: string | null | undefined): AccountName | null => {
     const account = state.settings.accounts.find((candidate) => candidate.id === id && candidate.agent === agent);
     return account ? { name: account.name } : null;
@@ -38,9 +48,9 @@ export function exportedDocument(state: State, consoleId?: string): Configuratio
   };
   const documentProject = (project: Project): DocumentProject => ({
     name: project.name,
-    path: project.path,
+    path: includePaths ? project.path : directoryName(project.path),
     source: project.source,
-    remote_url: project.remote_url,
+    remote_url: includePaths || (project.remote_url && isClonableRemote(project.remote_url)) ? project.remote_url : null,
     default_agent: project.default_agent,
     pinned: project.pinned,
     tags: project.tags,
@@ -148,7 +158,7 @@ export function createConfigurationReplies(
   return (body) => {
     switch (body.type) {
       case "export_configuration":
-        return { type: "configuration_exported", document: exportedDocument(getState(), body.console) };
+        return { type: "configuration_exported", document: exportedDocument(getState(), body.console, body.include_paths) };
       case "inspect_configuration": {
         const inspection = fixture?.inspection;
         if (inspection === undefined) return refuseUnfillable("the scenario gives no inspection to answer inspect_configuration with");

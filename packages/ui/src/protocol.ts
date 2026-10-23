@@ -645,7 +645,8 @@ export type DocumentProjectAccount = { kind: "inherit" } | { kind: "default" } |
 
 export interface DocumentProject {
   name: string;
-  /** An absolute path of the exporting machine: the one machine-local path in the document. */
+  /** An absolute path of the exporting machine, or only the directory's name when the export left
+   * paths out. */
   path: string;
   source: ProjectSource;
   remote_url?: string | null;
@@ -1165,8 +1166,10 @@ export type RequestBody =
   | { type: "locate_conversation_to_resume"; project: string; agent_session_id: string }
   /** Answered with `configuration_exported`: the document of the console `console` names, or, with
    * none, of every console and the application settings. Refused with `unknown_console` for a
-   * console that does not exist. */
-  | { type: "export_configuration"; console?: string }
+   * console that does not exist. With `include_paths` false (absent is true) each project's path
+   * is written as only its directory's name and a remote that cannot be cloned from (a local path)
+   * is left out, so the file reveals no path of the daemon's host. */
+  | { type: "export_configuration"; console?: string; include_paths?: boolean }
   /** Answered with `configuration_inspected`: what importing `document` would meet on this machine.
    * Changes nothing. The document is untrusted input; refused with `configuration_not_recognised`,
    * `configuration_version_unsupported` or `configuration_unreadable`. */

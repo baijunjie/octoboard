@@ -66,7 +66,7 @@ it("falls back to the first console when the one the sidebar chose is gone", asy
 it("opens the import from its own button", async () => {
   mount([main]);
   await press("Import…");
-  expect(document.body.textContent).toContain("Choose a file exported from");
+  expect(document.body.textContent).toContain("Choose an exported configuration file");
 });
 
 it("has nothing to press where the platform cannot save or open a file", () => {

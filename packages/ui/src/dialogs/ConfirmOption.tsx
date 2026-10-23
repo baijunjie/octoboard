@@ -1,9 +1,10 @@
 import { Checkbox, Description, Label } from "@heroui/react";
 import React from "react";
 
-/** The checkbox, with its note, that a confirmation offers for widening what it does: moving
- * something outside Octoboard's own records to the Trash, or taking along what git refuses to
- * remove. Unchecked by default, by whoever holds its state. */
+/** A dialog's option checkbox with its note: what a confirmation offers for widening what it does
+ * (moving something outside Octoboard's own records to the Trash, or taking along what git refuses
+ * to remove), or a choice that changes what a dialog produces. Its default is set by whoever holds
+ * its state. */
 export function ConfirmOption({
   isSelected,
   onChange,

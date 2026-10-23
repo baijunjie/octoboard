@@ -379,14 +379,33 @@ fn exported_directory(recorded: &str) -> Option<PathBuf> {
         .then(|| hostfs::lexically_normalise(path))
 }
 
-/// The recorded path's last segment under `clone_dir`. `None` when the path has no last segment
-/// (the filesystem root), and so never a path outside `clone_dir`.
+/// The recorded path's last segment under `clone_dir`. A document exported without paths records
+/// only a directory's name, which is that segment as it stands. `None` when the path has no last
+/// segment (the filesystem root, `.`, `..`, empty), and so never a path outside `clone_dir`.
 fn derived_directory(clone_dir: &str, recorded: &str) -> Option<PathBuf> {
     let clone_dir = Path::new(clone_dir);
     if !clone_dir.is_absolute() {
         return None;
     }
-    Some(clone_dir.join(exported_directory(recorded)?.file_name()?))
+    let name = match exported_directory(recorded) {
+        Some(path) => path.file_name()?.to_owned(),
+        None => bare_name(recorded)?,
+    };
+    Some(clone_dir.join(name))
+}
+
+/// `recorded` when it is a single plain segment, a directory's name and no path.
+fn bare_name(recorded: &str) -> Option<std::ffi::OsString> {
+    single_segment(recorded).map(ToOwned::to_owned)
+}
+
+/// `name` when it is a single plain path segment.
+fn single_segment(name: &str) -> Option<&std::ffi::OsStr> {
+    let mut components = Path::new(name).components();
+    match (components.next(), components.next()) {
+        (Some(Component::Normal(name)), None) => Some(name),
+        _ => None,
+    }
 }
 
 /// The directory a clone of `remote_url` into `clone_dir` would create, when the URL may be cloned
@@ -397,11 +416,8 @@ fn clone_directory(clone_dir: &str, remote_url: &str) -> Option<PathBuf> {
         return None;
     }
     let name = hostfs::repo_name(remote_url)?;
-    let mut components = Path::new(&name).components();
-    match (components.next(), components.next()) {
-        (Some(Component::Normal(_)), None) => Some(clone_dir.join(name)),
-        _ => None,
-    }
+    single_segment(&name)?;
+    Some(clone_dir.join(name))
 }
 
 /// What a project's directory choices come to on the disk of this machine.
@@ -1077,7 +1093,15 @@ mod tests {
             Some(Path::new("/home/u/Projects/tool"))
         );
         assert_eq!(derived_directory("/home/u/Projects", "/"), None);
-        assert_eq!(derived_directory("/home/u/Projects", "app"), None);
+        // A document exported without paths records a directory's name alone.
+        assert_eq!(
+            derived_directory("/home/u/Projects", "app").as_deref(),
+            Some(Path::new("/home/u/Projects/app"))
+        );
+        assert_eq!(derived_directory("/home/u/Projects", "work/app"), None);
+        assert_eq!(derived_directory("/home/u/Projects", ""), None);
+        assert_eq!(derived_directory("/home/u/Projects", "."), None);
+        assert_eq!(derived_directory("/home/u/Projects", ".."), None);
         assert_eq!(derived_directory("Projects", "/Users/x/app"), None);
 
         assert_eq!(
@@ -1098,6 +1122,45 @@ mod tests {
             .set_default_clone_dir(Some(&clone_dir.to_string_lossy()))
             .unwrap();
         (state, dir)
+    }
+
+    #[tokio::test]
+    async fn a_project_recorded_by_its_directory_name_alone_is_offered_the_derived_directory_and_a_clone(
+    ) {
+        let area = ScratchDir::new("import-bare-area");
+        let clone_dir = directory(&area, "projects");
+        let (state, _dir) = state_cloning_into("import-bare", &clone_dir);
+        directory(&clone_dir, "present");
+        // A bare name is no recorded path: nothing is offered as the exported path, only the
+        // derived directory in the clone directory.
+        let mut present = project("present", "present");
+        present.remote_url = Some("https://example.com/o/present.git".to_string());
+        let mut cloneable = project("cloneable", "cloneable");
+        cloneable.remote_url = Some("https://example.com/o/cloneable.git".to_string());
+        let nameless = project("nameless", "..");
+
+        let consoles = inspect(
+            &state,
+            &document(vec![console("Hub", vec![present, cloneable, nameless])]),
+        )
+        .await
+        .expect("inspected")
+        .consoles;
+        let projects = &consoles[0].projects;
+
+        assert!(projects.iter().all(|p| p.offers.exported_path.is_none()));
+        assert_eq!(
+            projects[0].offers.default_clone_dir.as_deref(),
+            Some(&*clone_dir.join("present").to_string_lossy())
+        );
+        assert_eq!(projects[0].default, Some(ChoiceKind::DefaultCloneDir));
+        assert_eq!(projects[1].offers.default_clone_dir, None);
+        assert_eq!(
+            projects[1].offers.clone.as_deref(),
+            Some(&*clone_dir.join("cloneable").to_string_lossy())
+        );
+        assert_eq!(projects[1].default, Some(ChoiceKind::Clone));
+        assert_eq!(projects[2].default, None);
     }
 
     #[tokio::test]
@@ -1623,7 +1686,7 @@ mod tests {
         stored.default_agent = Some(Agent::Codex);
         source.store.insert_project(&stored).unwrap();
         let exported =
-            serde_json::to_value(config_export::build(&source.store, None).unwrap()).unwrap();
+            serde_json::to_value(config_export::build(&source.store, None, true).unwrap()).unwrap();
 
         let (target, _target_dir) = app_state("import-roundtrip-target");
         let consoles = inspect(&target, &exported).await.unwrap().consoles;
@@ -1749,10 +1812,11 @@ mod tests {
         source.store.set_auto_start_quota_windows(true).unwrap();
         let hub = crate::test_support::console(&source_dir);
         source.store.insert_console(&hub).unwrap();
-        let full = serde_json::to_value(crate::config_export::build(&source.store, None).unwrap())
-            .unwrap();
+        let full =
+            serde_json::to_value(crate::config_export::build(&source.store, None, true).unwrap())
+                .unwrap();
         let single = serde_json::to_value(
-            crate::config_export::build(&source.store, Some(&hub.id)).unwrap(),
+            crate::config_export::build(&source.store, Some(&hub.id), true).unwrap(),
         )
         .unwrap();
         assert!(single
@@ -1788,8 +1852,9 @@ mod tests {
             .store
             .insert_console(&crate::test_support::console(&source_dir))
             .unwrap();
-        let full = serde_json::to_value(crate::config_export::build(&source.store, None).unwrap())
-            .unwrap();
+        let full =
+            serde_json::to_value(crate::config_export::build(&source.store, None, true).unwrap())
+                .unwrap();
         assert_eq!(full["settings"]["auto_approve_session_requests"], true);
         assert_eq!(full["settings"]["auto_approve_resume_requests"], true);
 
@@ -1915,7 +1980,7 @@ mod tests {
         .await
         .unwrap();
         let exported =
-            serde_json::to_value(config_export::build(&state.store, None).unwrap()).unwrap();
+            serde_json::to_value(config_export::build(&state.store, None, true).unwrap()).unwrap();
         let (target, _target_dir) = app_state("import-legacy-project-text-target");
         import(
             &target,

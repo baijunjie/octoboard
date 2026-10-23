@@ -81,6 +81,16 @@ it("shows a row for every project with where it was, and the directory its choic
   expect(row("Notes").textContent).not.toContain("Placed in");
 });
 
+it("shows no exported path for a project the export recorded by its directory name alone, and still says where it was found", async () => {
+  const bare = (body: RequestBody): Promise<Event> =>
+    body.type === "inspect_configuration"
+      ? Promise.resolve({ type: "configuration_inspected", ...REVIEW, consoles: REVIEW.consoles.map((c) => ({ ...c, projects: c.projects.map((p) => ({ ...p, path: p.name.toLowerCase().replace(/\s+/g, "-") })) })) })
+      : reply(body);
+  await reviewing({ reply: bare });
+  expect(row("Search API").textContent).not.toContain("Exported path");
+  expect(row("Search API").textContent).toContain("Found in the default clone directory.");
+});
+
 it("keeps the dialog on the file step, with the daemon's reason, for a document it refuses", async () => {
   const refuse = (body: RequestBody) =>
     body.type === "inspect_configuration"
@@ -93,7 +103,7 @@ it("keeps the dialog on the file step, with the daemon's reason, for a document 
   expect(product.textContent).toBe("Octoboard");
   expect(product.getAttribute("dir")).toBe("auto");
   expect(product.textContent).not.toMatch(/[\u2066-\u2069]/);
-  expect(text()).toContain("Choose a file exported from");
+  expect(text()).toContain("Choose an exported configuration file");
 });
 
 it("refuses a file that is not JSON without asking the daemon", async () => {
@@ -106,7 +116,7 @@ it("refuses a file that is not JSON without asking the daemon", async () => {
 it("does nothing when the open dialog is dismissed", async () => {
   const mounted = await reviewing({ text: undefined });
   expect(mounted.sent()).toEqual([]);
-  expect(text()).toContain("Choose a file exported from");
+  expect(text()).toContain("Choose an exported configuration file");
 });
 
 it("changes only the row whose choice was changed", async () => {

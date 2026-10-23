@@ -175,6 +175,34 @@ const SINGLE: Omit<Inspection, "type"> = {
   ],
 };
 
+/** A document exported without full project paths, which records only each directory's name: one
+ * project found under the default clone directory, one to be cloned, and one nothing places. */
+const NO_PATHS: Omit<Inspection, "type"> = {
+  consoles: [
+    {
+      name: "Work laptop",
+      account_fallbacks: [],
+      projects: [
+        project({
+          name: "Website",
+          path: "website",
+          remote_url: "git@github.com:acme/website.git",
+          offers: { exported_path: null, default_clone_dir: `${DEFAULT_CLONE_DIR}/website`, clone: null },
+          default: "default_clone_dir",
+        }),
+        project({
+          name: "Design System",
+          path: "design-system",
+          remote_url: "https://github.com/acme/design-system.git",
+          offers: { exported_path: null, default_clone_dir: null, clone: `${DEFAULT_CLONE_DIR}/design-system` },
+          default: "clone",
+        }),
+        project({ name: "Notes", path: "notes" }),
+      ],
+    },
+  ],
+};
+
 /** The same document of a full export made before archive cleanup, automatic account selection, the
  * sidebar's status ordering, starting usage windows and the automatic approval of agents' requests
  * were carried, so it holds only the automatic pull, which is off where this machine has it on. */
@@ -324,9 +352,21 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Export, from Settings with a console in the sidebar",
-    description: "Choose the console the sidebar shows or everything, with the local-paths notice beneath. Export closes the dialog and raises a toast naming the saved file.",
+    description: "Choose the console the sidebar shows or everything; Include full project paths starts unchecked and no notice stands beneath it. Export closes the dialog and raises a toast naming the saved file.",
     state,
     steps: exportFromSettings,
+  },
+  {
+    id: "configuration-export-with-paths",
+    group: GROUP,
+    category: "normal",
+    title: "Export, with full project paths included",
+    description: "Checking Include full project paths brings up the warning that the file carries the paths on the machine running Octoboard.",
+    state,
+    steps: [
+      ...exportFromSettings,
+      (ui) => ui.press(ui.t("configuration.export.paths.include")),
+    ],
   },
   {
     id: "configuration-export-everything-only",
@@ -379,7 +419,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, choosing the file",
-    description: "Opened from the welcome screen, where a new computer starts. The intro ends by saying which files hold application settings. The picker is never reported dismissed, as in a browser without the file input's cancel event: Choose file shows that it is waiting and ignores another press, while Cancel, the close button and Escape still work.",
+    description: "Opened from the welcome screen, where a new computer starts. The intro ends by saying that an export of everything also includes the application settings. The picker is never reported dismissed, as in a browser without the file input's cancel event: Choose file shows that it is waiting and ignores another press, while Cancel, the close button and Escape still work.",
     state: noConsoleState,
     configuration: { file: "pending" },
     steps: [
@@ -503,6 +543,19 @@ export const configurationScenarios: Scenario[] = [
       "A single console document has no application-settings checkbox; unavailable placement choices are disabled.",
     state,
     configuration: { file: FILE, inspection: SINGLE, imported: CLEAN_RESULT },
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+    ],
+  },
+  {
+    id: "configuration-import-review-no-paths",
+    group: GROUP,
+    category: "normal",
+    title: "Import, review of a document exported without full paths",
+    description: "A project recorded only by its directory's name shows no exported-path line, just whether it was found, can be cloned or nothing places it.",
+    state,
+    configuration: { file: FILE, inspection: NO_PATHS },
     steps: [
       ...importFromSettings,
       chooseFile,

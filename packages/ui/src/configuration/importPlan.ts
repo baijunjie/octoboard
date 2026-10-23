@@ -68,6 +68,12 @@ export function applyToAll(
   );
 }
 
+/** Whether the path a project was exported with is a path and not only the directory's name, which
+ * is all an export made without full paths records. */
+export function hasRecordedPath(path: string): boolean {
+  return /[\\/]/.test(path);
+}
+
 /** Whether `path` is one the daemon takes as a directory the user pointed at: absolute, or starting
  * with `~/`, which it expands. Only the shape is judged. */
 export function isUsableDirectory(path: string): boolean {

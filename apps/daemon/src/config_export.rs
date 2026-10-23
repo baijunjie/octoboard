@@ -15,10 +15,12 @@
 //! reason: an import places projects under the *importing* machine's own.
 
 use std::collections::HashMap;
+use std::path::Path;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
+use crate::git_remote;
 use crate::protocol::{
     Account, Agent, CodedError, Console, Project, ProjectAccount, ProjectSource,
 };
@@ -133,9 +135,11 @@ pub struct DocumentConsole {
     pub projects: Vec<DocumentProject>,
 }
 
-/// One project's configuration. `path` is an absolute path of the exporting machine, and
-/// `remote_url` is what was recorded for the project, absent for a directory that is not a
-/// repository or a repository with no remote.
+/// One project's configuration. `path` is an absolute path of the exporting machine, or only the
+/// directory's name when the export left paths out. `remote_url` is what was recorded for the
+/// project, absent for a directory that is not a repository or a repository with no remote, and
+/// also when the export left paths out and the remote is not one that can be cloned from (a local
+/// path would reveal one).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DocumentProject {
     pub name: String,
@@ -160,8 +164,14 @@ pub struct DocumentProject {
 
 /// The document for the console `console`, or for every console and the application settings when
 /// it is `None`. A console that does not exist is refused rather than exported as an empty
-/// document.
-pub fn build(store: &Store, console: Option<&str>) -> Result<ConfigurationDocument> {
+/// document. With `include_paths` false a project's `path` is only its last segment, so the
+/// document carries nothing of this machine's layout; an import takes such a name for what it is
+/// (see `config_import`).
+pub fn build(
+    store: &Store,
+    console: Option<&str>,
+    include_paths: bool,
+) -> Result<ConfigurationDocument> {
     let mut consoles = match console {
         Some(id) => vec![store
             .get_console(id)?
@@ -200,7 +210,7 @@ pub fn build(store: &Store, console: Option<&str>) -> Result<ConfigurationDocume
                 .filter(|project| project.console_id == console.id)
                 .cloned()
                 .collect();
-            document_console(&console, own, &accounts)
+            document_console(&console, own, &accounts, include_paths)
         })
         .collect();
     Ok(ConfigurationDocument {
@@ -216,6 +226,7 @@ fn document_console(
     console: &Console,
     projects: Vec<Project>,
     accounts: &HashMap<String, Account>,
+    include_paths: bool,
 ) -> DocumentConsole {
     let reference = |agent: Agent, id: &Option<String>| account_ref(accounts, agent, id.as_deref());
     DocumentConsole {
@@ -241,12 +252,16 @@ fn document_console(
         console_session_prompt: console.console_session_prompt.clone(),
         projects: projects
             .into_iter()
-            .map(|project| document_project(project, accounts))
+            .map(|project| document_project(project, accounts, include_paths))
             .collect(),
     }
 }
 
-fn document_project(project: Project, accounts: &HashMap<String, Account>) -> DocumentProject {
+fn document_project(
+    project: Project,
+    accounts: &HashMap<String, Account>,
+    include_paths: bool,
+) -> DocumentProject {
     let reference = |agent: Agent, account: &ProjectAccount| match account {
         ProjectAccount::Inherit => ProjectAccountRef::Inherit,
         ProjectAccount::Default => ProjectAccountRef::Default,
@@ -260,9 +275,15 @@ fn document_project(project: Project, accounts: &HashMap<String, Account>) -> Do
         codex_account: reference(Agent::Codex, &project.codex_account_id),
         grok_account: reference(Agent::Grok, &project.grok_account_id),
         name: project.name,
-        path: project.path,
+        path: if include_paths {
+            project.path
+        } else {
+            directory_name(&project.path)
+        },
         source: project.source,
-        remote_url: project.remote_url,
+        remote_url: project
+            .remote_url
+            .filter(|url| include_paths || git_remote::is_clonable_url(url)),
         default_agent: project.default_agent,
         pinned: project.pinned,
         tags: project.tags,
@@ -274,6 +295,15 @@ fn document_project(project: Project, accounts: &HashMap<String, Account>) -> Do
         grok_session_model: project.grok_session_model,
         grok_session_effort: project.grok_session_effort,
     }
+}
+
+/// The last segment of `path`, or an empty string when it has none (the filesystem root), which an
+/// import rejects as naming no directory rather than reading `path` as a recorded absolute path.
+fn directory_name(path: &str) -> String {
+    Path::new(path)
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 
 /// The reference for the account `id` as the setting of `agent`, or `None` when there is none:
@@ -441,7 +471,7 @@ mod tests {
     fn exported(console: Option<&str>) -> (ConfigurationDocument, String) {
         let (state, _dir) = crate::test_support::app_state("config-export");
         populated(&state.store);
-        let document = build(&state.store, console).expect("built");
+        let document = build(&state.store, console, true).expect("built");
         let text = serde_json::to_string(&document).unwrap();
         (document, text)
     }
@@ -529,6 +559,67 @@ mod tests {
             (plain.source, plain.remote_url.as_deref()),
             (ProjectSource::Local, None)
         );
+    }
+
+    #[test]
+    fn an_export_without_paths_records_each_projects_directory_name_and_nothing_of_the_layout() {
+        let (state, _dir) = crate::test_support::app_state("config-export-no-paths");
+        populated(&state.store);
+        let document = build(&state.store, None, false).expect("built");
+        let hub = document
+            .consoles
+            .iter()
+            .find(|console| console.name == "Hub")
+            .unwrap();
+        assert_eq!(hub.projects[0].path, "cloned");
+        let paths: Vec<&str> = document
+            .consoles
+            .iter()
+            .flat_map(|console| &console.projects)
+            .map(|project| project.path.as_str())
+            .collect();
+        assert!(paths.iter().all(|path| !path.contains('/')), "{paths:?}");
+        assert!(paths.contains(&"twin-a") && paths.contains(&"twin-b"));
+        let text = serde_json::to_string(&document).unwrap();
+        assert!(!text.contains("/work"), "{text}");
+    }
+
+    #[test]
+    fn an_export_without_paths_keeps_only_a_remote_that_can_be_cloned_from() {
+        let (state, _dir) = crate::test_support::app_state("config-export-remotes");
+        populated(&state.store);
+        let mut local = project("project-local", "console-1", "local-remote");
+        local.source = ProjectSource::Git;
+        local.remote_url = Some("/Users/someone/origin.git".to_string());
+        state.store.insert_project(&local).unwrap();
+
+        let projects = |include_paths| {
+            build(&state.store, None, include_paths)
+                .expect("built")
+                .consoles
+                .into_iter()
+                .flat_map(|console| console.projects)
+                .map(|project| (project.name, project.remote_url))
+                .collect::<HashMap<_, _>>()
+        };
+        let without = projects(false);
+        assert_eq!(
+            without["cloned"].as_deref(),
+            Some("git@example.com:team/cloned.git")
+        );
+        assert_eq!(without["local-remote"], None);
+        assert_eq!(
+            projects(true)["local-remote"].as_deref(),
+            Some("/Users/someone/origin.git")
+        );
+    }
+
+    #[test]
+    fn a_directory_name_is_the_last_segment_and_a_path_without_one_has_none() {
+        assert_eq!(directory_name("/work/app"), "app");
+        assert_eq!(directory_name("/work/app/"), "app");
+        assert_eq!(directory_name("app"), "app");
+        assert_eq!(directory_name("/"), "");
     }
 
     #[test]
@@ -657,7 +748,7 @@ mod tests {
         trusted.trust_consent = true;
         state.store.update_project(&trusted).unwrap();
 
-        let text = serde_json::to_string(&build(&state.store, None).unwrap()).unwrap();
+        let text = serde_json::to_string(&build(&state.store, None, true).unwrap()).unwrap();
 
         for absent in [
             "secret-dir",
@@ -691,6 +782,7 @@ mod tests {
             Some("req-1".to_string()),
             RequestBody::ExportConfiguration {
                 console: Some("no-such-console".to_string()),
+                include_paths: true,
             },
         )
         .await
@@ -701,7 +793,10 @@ mod tests {
         let reply = crate::coordinator::handle(
             &state,
             Some("req-2".to_string()),
-            RequestBody::ExportConfiguration { console: None },
+            RequestBody::ExportConfiguration {
+                console: None,
+                include_paths: true,
+            },
         )
         .await
         .expect("answered");

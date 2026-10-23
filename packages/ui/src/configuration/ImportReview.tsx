@@ -20,6 +20,7 @@ import {
   availableFor,
   choicesFor,
   directoryProblem,
+  hasRecordedPath,
   isUsableDirectory,
   targetOf,
   withRow,
@@ -121,6 +122,7 @@ function ProjectRow({
   const [picking, setPicking] = useState(false);
   const target = targetOf(project, row);
   const inPlace = row.choice === "exported_path" && target === project.path;
+  const recordedPath = hasRecordedPath(project.path);
   return (
     <li className="@container flex flex-col gap-1.5 groove-b py-2.5 last:border-b-0">
       {/* The name and the choice made for it are one decision, so they share a line; the choice is
@@ -143,20 +145,26 @@ function ProjectRow({
           line then says both. */}
       {/* The state is a sentence of its own beside the path, so the row stays two lines. */}
       <p>
-        <span>
-          <Message
-            id={
-              inPlace
-                ? "configuration.import.project.exportedPathUsed"
-                : "configuration.import.project.exportedPath"
-            }
-            params={{ path: <InlineChip monospace wrap>{project.path}</InlineChip> }}
-          />
-        </span>
+        {/* An export made without full paths records only the directory's name, which is no path to show. */}
+        {recordedPath && (
+          <span>
+            <Message
+              id={
+                inPlace
+                  ? "configuration.import.project.exportedPathUsed"
+                  : "configuration.import.project.exportedPath"
+              }
+              params={{ path: <InlineChip monospace wrap>{project.path}</InlineChip> }}
+            />
+          </span>
+        )}
         {/* A project found at its exported path and placed there is already said by the path's own line. */}
         {!(inPlace && project.default === "exported_path") && (
           <>
-            {" "}<span className="ms-2"><Message id={STATE_LABEL[project.default ?? "none"]} /></span>
+            {recordedPath && " "}
+            <span className={recordedPath ? "ms-2" : undefined}>
+              <Message id={STATE_LABEL[project.default ?? "none"]} />
+            </span>
           </>
         )}
       </p>
