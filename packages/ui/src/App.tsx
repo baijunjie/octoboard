@@ -68,6 +68,7 @@ import { LoginPageOpener } from "./settings/AccountLogin";
 import { SettingsDialog } from "./settings/SettingsDialog";
 import { registerSettingsLauncher } from "./settings/settingsLauncher";
 import { useSettingsDialog } from "./settings/useSettingsDialog";
+import { useSessionActionShortcuts } from "./sidebar/useSessionActionShortcuts";
 import { belongsToFocus, focusAfterSelect, focusFor, focusKey, KEY_SWITCH_SELECTION, resolveFocus, shortcutOutcome } from "./sidebar/focus";
 import { useFocusShortcut } from "./sidebar/focusShortcut";
 import { useLastSessionPerConsole } from "./sidebar/lastSessionPerConsole";
@@ -881,6 +882,12 @@ export function App(): React.ReactElement {
   const stableQuickCreateSession = useStableHandler(quickCreateSession);
   const stableReopenSession = useStableHandler(reopenSession);
   const stableArchiveSession = useStableHandler(archiveSession);
+  useSessionActionShortcuts(selectedSession, {
+    onSetLocked: setLocked,
+    onSetPinned: setPinned,
+    onArchiveSession: archiveSession,
+    onCopySessionId: copySessionId,
+  });
   const stableSetSessionColour = useStableHandler(setSessionColour);
   const stableOpenArchive = useStableHandler(openArchive);
   const stableBrowseProject = useStableHandler(browseProject);

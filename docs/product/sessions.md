@@ -286,9 +286,11 @@ The empty rows' and the terminal's **New session** and **New console session** o
 open the dialog.
 
 A **+** button pressed with the modifier opens with defaults even when the hold had not been noticed before the press.
-A project chosen from the console session focus mode's menu follows whether the modifier is held at the moment it is
-chosen. The hold ends when the key is released, when the window loses focus and when the page is hidden; a modifier
-already down while the window was in the background is picked up once the pointer moves or a key is pressed.
+A project chosen from the console session focus mode's menu opened with the pointer follows whether the modifier is
+held at the moment it is chosen. Keyboard creation in focus mode follows "Creating sessions from the keyboard" in
+`docs/product/focus-mode.md`. The hold ends when the key is released, when the window loses focus and when the page is
+hidden; a modifier already down while the window was in the background is picked up once the pointer moves or a key
+is pressed.
 
 The session opened is the one the dialog would open if submitted untouched:
 

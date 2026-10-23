@@ -252,6 +252,23 @@ archive reaches it: bound to it, or bound to a lead session that is archived too
 narrower one, so an archived session of a lead session that is **still live** belongs to its project's focus mode only,
 and selecting it from the console session's focus mode leaves that focus mode.
 
+## Creating sessions from the keyboard
+
+In either focus mode, **Cmd+N** on an Apple keyboard or **Ctrl+N** elsewhere takes the header's **+** action;
+adding **Shift** takes its quick form, opening a session with defaults (see "Opening a session with defaults" in
+`docs/product/sessions.md`). The header's tooltip shows the normal shortcut, or the quick shortcut while the primary
+modifier is held. These creation shortcuts are available only in focus mode.
+
+In a project's focus mode, the normal shortcut opens its new-session dialog and the quick shortcut creates an
+unbound session in that project. In a console session's focus mode, either shortcut opens the header's project menu;
+choosing a project opens its dialog or creates with defaults, bound to the console session in focus. Releasing the
+shortcut keys before choosing the project does not change which action was requested. A menu opened with the pointer
+continues to follow the held modifier instead.
+
+The shortcuts match the physical N key whatever the keyboard layout, work across the window including the terminal,
+and do nothing while a dialog or menu is open or during input-method composition. Holding the keys does not repeat
+creation. The header's existing availability and quick-creation refusals apply to the shortcuts too.
+
 ## The focus mode shortcut
 
 **A keyboard shortcut toggles focus mode**: `Shift+Cmd+F` on a Mac (the macOS application, or a browser on a Mac),

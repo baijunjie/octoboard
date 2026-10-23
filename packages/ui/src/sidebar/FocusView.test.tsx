@@ -174,6 +174,62 @@ const hold = () => act(() => void window.dispatchEvent(new KeyboardEvent("keydow
 const noAgent = new Map(AGENT_OPTIONS.map(({ value }) => [value, { agent: value, availability: "unavailable" as const }]));
 const bound = { kind: "bound", to: hub1 } as const;
 
+function createShortcut(quick = false, repeat = false): KeyboardEvent {
+  const event = new KeyboardEvent("keydown", { key: "n", code: "KeyN", ...(IS_MAC ? { metaKey: true } : { ctrlKey: true }), shiftKey: quick, repeat, cancelable: true, bubbles: true });
+  act(() => void window.dispatchEvent(event));
+  return event;
+}
+
+it.each([false, true])("project focus creation shortcut opens an unbound session (quick: %s)", (quick) => {
+  const { handlers } = mount((h) => (
+    <ProjectFocusView handlers={h} console={main} project={web} sessions={[]} owners={owners} />
+  ));
+  expect(createShortcut(quick).defaultPrevented).toBe(true);
+  const request = { kind: "new-session", console: main, project: web, binding: { kind: "unbound" } };
+  if (quick) {
+    expect(handlers.onQuickCreateSession).toHaveBeenCalledExactlyOnceWith(request, "New session with defaults");
+    expect(handlers.onOpenDialog).not.toHaveBeenCalled();
+  } else {
+    expect(handlers.onOpenDialog).toHaveBeenCalledExactlyOnceWith(request);
+    expect(handlers.onQuickCreateSession).not.toHaveBeenCalled();
+  }
+  createShortcut(quick, true);
+  expect(quick ? handlers.onQuickCreateSession : handlers.onOpenDialog).toHaveBeenCalledTimes(1);
+});
+
+it.each([false, true])("console focus creation shortcut keeps its chosen mode after releasing modifiers (quick: %s)", (quick) => {
+  const { handlers } = mount((h) => (
+    <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web, api]} sessions={sessions} />
+  ), sessions);
+  hold();
+  createShortcut(quick);
+  expect(handlers.onOpenDialog).not.toHaveBeenCalled();
+  expect(handlers.onQuickCreateSession).not.toHaveBeenCalled();
+  act(() => void window.dispatchEvent(new KeyboardEvent("keyup")));
+  const item = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find((el) => el.textContent === "Website");
+  expect(item).toBeDefined();
+  act(() => item?.click());
+  const request = { kind: "new-session", console: main, project: web, binding: bound };
+  if (quick) {
+    expect(handlers.onQuickCreateSession).toHaveBeenCalledExactlyOnceWith(request, "New session with defaults");
+    expect(handlers.onOpenDialog).not.toHaveBeenCalled();
+  } else {
+    expect(handlers.onOpenDialog).toHaveBeenCalledExactlyOnceWith(request);
+    expect(handlers.onQuickCreateSession).not.toHaveBeenCalled();
+  }
+});
+
+it("creation shortcuts leave the unavailable controls closed", () => {
+  const { handlers } = mount((h) => (
+    <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web]} sessions={[]} />
+  ), [], noAgent);
+  createShortcut();
+  createShortcut(true);
+  expect(document.querySelector('[role="menu"]')).toBeNull();
+  expect(handlers.onOpenDialog).not.toHaveBeenCalled();
+  expect(handlers.onQuickCreateSession).not.toHaveBeenCalled();
+});
+
 it("with the modifier held, a project group's new-session button quick-creates instead of opening the dialog", () => {
   const { container, handlers, unmount } = mount((h) => (
     <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web, api]} sessions={sessions} />

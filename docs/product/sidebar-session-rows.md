@@ -96,7 +96,7 @@ A session row's action menu offers:
   session at its prompt or interrupted, with no unarchived session under it, is archived at once, unless a branch or
   worktree bound to it needs the user's word (see "The confirmation" in `docs/product/branch-and-worktree-cleanup.md`);
   any other asks for confirmation first, and so does one still being resumed or shown as switching its account. When the archived row takes keyboard focus with it, focus
-  goes to the terminal. For a console session this is the user's only way to archive it — the console session can
+  goes to the terminal. The console session can
   also archive itself once nothing under it is unarchived (see "A session archiving itself" in
   `docs/product/hub-orchestration.md`); its confirmation lists the
   interrupted sessions under it — bound to it, or to a lead session bound to it (see "Lead sessions" in
@@ -128,6 +128,33 @@ nor moves keyboard focus. Its tooltip is "Delete" or "Archive", while the name a
 also names the session ("Delete session …" or "Archive session …"). It shows with the row's other controls (see "Rows,
 names and keyboard focus" in `docs/product/sidebar.md`). When a shortcut goes away while holding keyboard focus, focus
 goes to the row.
+
+## Session keyboard shortcuts
+
+These shortcuts act on the **selected session**, regardless of which row or control has keyboard focus, including
+while typing in the terminal. They work both inside and outside focus mode. Use **Cmd** on an Apple keyboard or
+**Ctrl** elsewhere:
+
+| Action | Shortcut | Availability |
+|---|---|---|
+| Lock / Unlock | Cmd/Ctrl+Shift+L | A session that is not archived |
+| Pin / Unpin | Cmd/Ctrl+Shift+P | A session that is not archived |
+| Archive | Cmd/Ctrl+Shift+A | An unlocked session that is not archived |
+| Copy session ID | Cmd/Ctrl+Shift+C | Any selected session, including an archived one |
+
+Pinning also works when the selected session is the console session whose focus mode is open, even though its own
+card offers no pin control. The archive shortcut follows the normal archive confirmation and protection rules (see
+"Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`); for an unused session
+it still archives, even when its menu and button offer Delete. It never deletes the session.
+
+The corresponding session menu items show their shortcut, and the Unlock, Unpin and Archive button tooltips show it
+too. Project pin controls have no session shortcut hint. Menu and button actions still act on their own session;
+the keyboard shortcuts always act on the selected one.
+
+The shortcuts match physical letter keys whatever the keyboard layout. With no selected session, the key combinations
+are left alone. With a selection, holding a combination does not repeat its action; unavailable actions do nothing.
+No action runs while a dialog or menu is open or during input-method composition. Outside composition, recognized
+combinations are withheld from the terminal even when the action is unavailable.
 
 ## The binding badge
 

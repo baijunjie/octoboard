@@ -1,5 +1,7 @@
 import { FolderOpen, Plus, Zap } from "lucide-react";
-import React from "react";
+import React, { useRef, useState } from "react";
+import { flushSync } from "react-dom";
+import { setInteractionModality } from "react-aria";
 import { useShallow } from "zustand/react/shallow";
 
 import { ActionMenu } from "../components/ActionMenu";
@@ -8,6 +10,8 @@ import { quickCreateUsedUp } from "../dialogs/openSessionRequest";
 import { useT } from "../i18n/react";
 import type { Project } from "../protocol";
 import { useDaemonStore } from "../store";
+import { matchCreateShortcut, ShortcutTooltip } from "./sessionShortcuts";
+import { useWindowShortcut } from "../useWindowShortcut";
 import { sortProjects } from "./order";
 import { RowIconButton } from "./rows";
 import { useNewSessionMode } from "./useNewSessionMode";
@@ -36,7 +40,22 @@ export function NewSessionMenu({
   onQuickCreate: (target: NewSessionRequest, action: string) => void;
 }): React.ReactElement {
   const t = useT();
-  const { quick, blocked } = useNewSessionMode();
+  const { quick: heldQuick, blocked } = useNewSessionMode();
+  // A shortcut chooses the action before the project picker opens; releasing its keys must not
+  // change that choice. Pointer-opened menus keep following the held modifier.
+  const [shortcutMode, setShortcutMode] = useState<"create" | "quickCreate">();
+  const quick = shortcutMode === undefined ? heldQuick : shortcutMode === "quickCreate";
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  useWindowShortcut((event) => {
+    const action = matchCreateShortcut(event);
+    return action === undefined ? undefined : { action, repeat: event.repeat };
+  }, ({ action, repeat }) => {
+    if (repeat || blocked || projects.length === 0) return;
+    flushSync(() => setShortcutMode(action));
+    setInteractionModality("keyboard");
+    triggerRef.current?.focus();
+    triggerRef.current?.click();
+  });
   // In the quick form, the projects whose agent has no account left to run a session on cannot be chosen.
   // The time is read as the store is: the modifier is held only for a moment.
   const usedUp = useDaemonStore(useShallow((s) => {
@@ -53,7 +72,9 @@ export function NewSessionMenu({
   return (
     <ActionMenu
       label={name}
-      tooltip={name}
+      tooltip={<ShortcutTooltip action={quick ? "quickCreate" : "create"}>{name}</ShortcutTooltip>}
+      triggerRef={triggerRef}
+      onClosed={() => setShortcutMode(undefined)}
       trigger={quick ? <Zap aria-hidden="true" className="size-4" /> : <Plus aria-hidden="true" className="size-4" />}
       items={sortProjects(projects, () => []).map((project) => {
         const reason = usedUp.has(project.id) ? { state: t("sidebar.project.openSessionQuickUsedUpShort") } : undefined;

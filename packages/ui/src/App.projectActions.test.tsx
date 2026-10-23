@@ -68,9 +68,14 @@ function mountApp(narrow = false, clipboard?: { writeText: (text: string) => Pro
   return { container, daemon, project: projects[0] };
 }
 
+const controlName = (element: Element) => element.getAttribute("aria-label")
+  ?? element.getAttribute("aria-labelledby")?.split(/\s+/).map((id) => document.getElementById(id)?.textContent ?? "").join(" ")
+  ?? (element.matches("[role=menuitem], [role=menuitemradio]") ? element.querySelector('[data-slot="label"]')?.textContent : undefined)
+  ?? element.textContent;
+
 async function press(label: string) {
   const target = Array.from(document.querySelectorAll<HTMLElement>("button, [role=menuitem]")).find((element) =>
-    element.getAttribute("aria-label") === label || element.textContent === label,
+    controlName(element) === label,
   );
   expect(target, label).toBeDefined();
   await act(async () => {
@@ -83,7 +88,7 @@ async function press(label: string) {
   });
 }
 
-const menuHas = (label: string) => Array.from(document.querySelectorAll("[role=menuitem]")).some((item) => item.textContent === label);
+const menuHas = (label: string) => Array.from(document.querySelectorAll("[role=menuitem]")).some((item) => controlName(item) === label);
 const openProjectMenu = (name: string) => press(`Actions for project ${isolate(name)}`);
 
 it.each([false, true])("reopens a hidden project's Files pane when narrow=%s", async (narrow) => {

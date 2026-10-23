@@ -136,7 +136,7 @@ export function ProjectFocusView({
         <FocusTitle heading={project.name} overline={parentConsole.name} />
         <GitBadge status={gitStatus} />
         <RowIconGroup>
-          <NewSessionButton label={t("sidebar.project.openSession")} quickLabel={t("sidebar.project.openSessionQuick")} target={newSession} onOpen={handlers.onOpenDialog} onQuickCreate={handlers.onQuickCreateSession} />
+          <NewSessionButton shortcut label={t("sidebar.project.openSession")} quickLabel={t("sidebar.project.openSessionQuick")} target={newSession} onOpen={handlers.onOpenDialog} onQuickCreate={handlers.onQuickCreateSession} />
           <ActionMenu
             label={t("sidebar.project.actions", { name: isolate(project.name) })}
             items={projectMenu(t, handlers, project, archived, { placement: "focused", gitRepository: gitStatus?.repository })}
@@ -614,7 +614,7 @@ const SessionCard = memo(function SessionCard({
         <span className="flex-1" />
         {/* The controls reach 4px past the status line above and below so it keeps the agent line's
             height, leaving the card's top and bottom edges the same distance from their text. */}
-        <RowControls always className="-my-1" fixed={session.locked || showPin ? <>{session.locked && <LockButton name={sessionDisplayTitle(t, session)} onUnlock={() => handlers.onSetLocked(session, false)} returnFocusTo={rowRef} />}{showPin && <PinButton name={sessionDisplayTitle(t, session)} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} />}</> : undefined}>
+        <RowControls always className="-my-1" fixed={session.locked || showPin ? <>{session.locked && <LockButton name={sessionDisplayTitle(t, session)} onUnlock={() => handlers.onSetLocked(session, false)} returnFocusTo={rowRef} />}{showPin && <PinButton shortcut name={sessionDisplayTitle(t, session)} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} />}</> : undefined}>
           <SessionActions handlers={handlers} session={session} accounts={accounts} hasBoundSessions={hasBound} rowRef={rowRef} placement={own ? "focused" : undefined} />
         </RowControls>
       </RowIconLine>

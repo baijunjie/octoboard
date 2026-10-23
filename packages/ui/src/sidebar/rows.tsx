@@ -10,6 +10,7 @@ import { useFocusVisibleProps } from "../components/useFocusVisibleProps";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { useStickyHeadingFocus } from "../components/stickyHeadingFocus";
 import { isolate } from "../i18n/isolate";
+import { ShortcutTooltip } from "./sessionShortcuts";
 import { useT } from "../i18n/react";
 
 /** Stops a row's own mousedown from moving focus off whatever had it (typically the terminal) —
@@ -180,10 +181,12 @@ export function RowIconButton({
 export function PinButton({
   name,
   onUnpin,
+  shortcut = false,
   returnFocusTo,
 }: {
   name: string;
   onUnpin: () => void;
+  shortcut?: boolean;
   returnFocusTo: RefObject<HTMLElement | null>;
 }): React.ReactElement {
   const t = useT();
@@ -194,7 +197,7 @@ export function PinButton({
   };
   return (
     <div ref={holder} className="flex shrink-0" onClick={(e) => e.stopPropagation()}>
-      <TitledControl title={t("sidebar.unpin")}>
+      <TitledControl title={shortcut ? <ShortcutTooltip action="pin">{t("sidebar.unpin")}</ShortcutTooltip> : t("sidebar.unpin")}>
         <Button
           isIconOnly
           size="xs"
@@ -221,7 +224,7 @@ export function LockButton({ name, onUnlock, returnFocusTo }: {
   const holder = useRef<HTMLDivElement>(null);
   return (
     <div ref={holder} className="flex shrink-0" onClick={(e) => e.stopPropagation()}>
-      <TitledControl title={t("sidebar.session.unlock")}>
+      <TitledControl title={<ShortcutTooltip action="lock">{t("sidebar.session.unlock")}</ShortcutTooltip>}>
         <Button
           isIconOnly
           size="xs"

@@ -350,6 +350,7 @@ export function ActionMenu({
   label,
   items,
   trigger,
+  triggerRef,
   className = "shrink-0",
   tooltip,
   contextTargetRef,
@@ -362,11 +363,13 @@ export function ActionMenu({
   items: ActionMenuEntry[] | (() => ActionMenuEntry[]);
   /** What the trigger shows; a vertical ellipsis by default. */
   trigger?: React.ReactNode;
+  /** The trigger control, for a shortcut to open this menu. */
+  triggerRef?: React.Ref<HTMLButtonElement>;
   className?: string;
   /** The trigger's tooltip: "More actions" by default, short where `label` (its accessible name)
    * has to name the row it belongs to so each trigger is told apart; off for a trigger whose
    * visible text already says what it does. */
-  tooltip?: string | false;
+  tooltip?: React.ReactNode;
   /** An element whose right-click (context menu) opens this same menu at the pointer: the row or
    * header the menu belongs to. A menu opened that way is anchored to the pointer, not the trigger. */
   contextTargetRef?: React.RefObject<HTMLElement | null>;
@@ -552,6 +555,7 @@ export function ActionMenu({
             the terminal); the menu itself takes focus once it opens. */}
         <TitledControl title={tooltip === false ? undefined : (tooltip ?? t("common.moreActions"))}>
           <Dropdown.Trigger
+            ref={triggerRef}
             aria-label={label}
             hidden={contextOnly}
             excludeFromTabOrder={contextOnly}

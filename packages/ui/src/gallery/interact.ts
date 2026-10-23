@@ -18,13 +18,20 @@ import { STATUS_LABELS, type StatusKey } from "../viewer/statusMarks";
 const PRESSABLE =
   "button, [role=button], [role=menuitem], [role=menuitemradio], [role=tab], [role=option], [role=row], a[href], input[type=checkbox], input[type=radio], summary, [role=separator][tabindex]";
 
-/** The name a control is found by: its `aria-label`, otherwise its text, and for a checkbox, radio or switch
+/** The name a control is found by: its `aria-label`, otherwise its text (a menu item uses its labelled span), and for a checkbox, radio or switch
  * the text of its label, or of the element its `aria-labelledby` names when the label stands beside
  * it. Deliberately not the browser's accessible-name computation, which folds in the label of a
  * `role="img"` child — such a child inside a control does not enter the name a `Matcher` is
  * handed. */
 function nameOf(element: Element): string {
   let label: string | undefined;
+  if (element.matches('[role="menuitem"], [role="menuitemradio"]')) {
+    // The menu label excludes its trailing keyboard hint and description.
+    const labelledBy = element.getAttribute("aria-labelledby");
+    label = labelledBy
+      ? labelledBy.split(/\s+/).map((id) => element.ownerDocument.getElementById(id)?.textContent ?? "").join(" ")
+      : element.querySelector("[data-slot=label]")?.textContent ?? undefined;
+  }
   if (element instanceof HTMLInputElement) {
     // A switch's label may hold only its control, with the words in a sibling it is labelled by.
     const labelledBy = element.getAttribute("aria-labelledby");

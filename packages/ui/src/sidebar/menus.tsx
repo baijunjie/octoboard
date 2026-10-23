@@ -13,6 +13,7 @@ import type { Translate } from "../i18n/catalog";
 import type { Account, AccountSharing, Console, Project, Session, Settings } from "../protocol";
 import { accountUsage } from "../quota/accountUsage";
 import { sessionChoiceTitle, sessionDisplayTitle } from "../sessionLabel";
+import { SessionShortcutKbd } from "./sessionShortcuts";
 import { FocusShortcutKbd } from "./focusShortcut";
 import { archivePreviewSessions, isUnusedSession } from "./order";
 import { SessionColourSwatches } from "./SessionColourSwatches";
@@ -246,8 +247,7 @@ function colourSubmenu(t: Translate, handlers: SidebarHandlers, session: Session
  * `hasBoundSessions` says whether any session is bound to this one, which makes it used. Resuming
  * an interrupted session happens on selection; an archived session offers Reopen and Delete. Shared by a
  * project session's row and a console session's row (`ConsoleSessionsSection` in `Sidebar.tsx`) —
- * this is the user's only way to archive a console session (see "A session archiving itself" in
- * `docs/product/hub-orchestration.md`), and the only place to switch its account. Focus mode is
+ * this is also where the user switches a console session's account. Focus mode is
  * offered for a console session alone; its own card in its focus mode (`placement` `focused`)
  * leaves out Focus mode and Pin / Unpin. `canHandOff` is whether another agent could take a session over.
  * `quota` is what the Switch account entries are judged against, for the accounts used up, and `sharing` for the
@@ -272,9 +272,9 @@ export function sessionMenu(
   const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts, defaultNames, quota, sharing);
   const focusable = session.role === "console" && !archived && !focused;
   return [
-    ...(!archived ? [{ label: t(session.locked ? "sidebar.session.unlock" : "sidebar.session.lock"), icon: session.locked ? LockOpen : Lock, onClick: () => handlers.onSetLocked(session, !session.locked) }] : []),
+    ...(!archived ? [{ label: t(session.locked ? "sidebar.session.unlock" : "sidebar.session.lock"), icon: session.locked ? LockOpen : Lock, end: <SessionShortcutKbd action="lock" />, onClick: () => handlers.onSetLocked(session, !session.locked) }] : []),
     ...(archived ? [{ label: t("sidebar.session.reopen"), icon: RotateCcw, onClick: () => handlers.onReopenSession(session) }] : []),
-    ...(archived || focused ? [] : [pinItem(t, session.pinned, () => handlers.onSetPinned({ session }, !session.pinned))]),
+    ...(archived || focused ? [] : [{ ...pinItem(t, session.pinned, () => handlers.onSetPinned({ session }, !session.pinned)), end: <SessionShortcutKbd action="pin" /> }]),
     ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <FocusShortcutKbd />, onClick: () => handlers.onFocus({ consoleSession: session }) }] : []),
     ...(!archived ? ["separator" as const] : []),
     ...(!archived ? [{ label: t("sidebar.session.rename"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) }] : []),
@@ -292,6 +292,7 @@ export function sessionMenu(
       ),
       description: session.id,
       icon: Copy,
+      end: <SessionShortcutKbd action="copyId" />,
       onClick: () => handlers.onCopySessionId(session),
     },
     ...(session.role === "console" && !archived ? [colourSubmenu(t, handlers, session)] : []),
@@ -302,6 +303,6 @@ export function sessionMenu(
     "separator",
     offersDelete(session, hasBoundSessions)
       ? { label: t("sidebar.session.delete"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-session", session }), destructive: true, disabled: session.locked }
-      : { label: t("sidebar.session.archive"), icon: Archive, onClick: () => handlers.onArchiveSession(session), disabled: session.locked },
+      : { label: t("sidebar.session.archive"), icon: Archive, end: <SessionShortcutKbd action="archive" />, onClick: () => handlers.onArchiveSession(session), disabled: session.locked },
   ];
 }

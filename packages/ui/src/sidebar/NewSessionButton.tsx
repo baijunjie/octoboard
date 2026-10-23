@@ -3,7 +3,8 @@ import React from "react";
 
 import { useT } from "../i18n/react";
 import type { NewSessionRequest } from "../dialogs/dialogRequest";
-import { isPrimaryModifier } from "../useWindowShortcut";
+import { isPrimaryModifier, useWindowShortcut } from "../useWindowShortcut";
+import { matchCreateShortcut, ShortcutTooltip } from "./sessionShortcuts";
 import { RowIconButton } from "./rows";
 import { useNewSessionMode } from "./useNewSessionMode";
 
@@ -25,6 +26,7 @@ export function NewSessionButton({
   target,
   onOpen,
   onQuickCreate,
+  shortcut = false,
   ref,
 }: {
   label: string;
@@ -34,18 +36,31 @@ export function NewSessionButton({
   target: () => NewSessionRequest | undefined;
   onOpen: (target: NewSessionRequest) => void;
   onQuickCreate: (target: NewSessionRequest, action: string) => void;
+  /** Registers the focus header's creation shortcuts. */
+  shortcut?: boolean;
   /** The element around the button, for focus to be handed to. */
   ref?: React.Ref<HTMLDivElement>;
 }): React.ReactElement {
   const t = useT();
   const { quick, blocked, usedUp } = useNewSessionMode(target);
+  useWindowShortcut((event) => {
+    const action = matchCreateShortcut(event);
+    return action === undefined ? undefined : { action, repeat: event.repeat };
+  }, ({ action, repeat }) => {
+    if (repeat || blocked) return;
+    const request = target();
+    if (!request) return;
+    if (action === "quickCreate") onQuickCreate(request, quickLabel);
+    else onOpen(request);
+  }, shortcut);
   const quickUnavailable = quick && usedUp ? t("sidebar.project.openSessionQuickUsedUpShort") : undefined;
+  const tooltip = quick ? (quickTitle ?? quickLabel) : (title ?? label);
   return (
     <RowIconButton
       ref={ref}
       icon={quick ? Zap : Plus}
       label={quick ? quickLabel : label}
-      title={quick ? quickTitle : title}
+      title={shortcut ? <ShortcutTooltip action={quick ? "quickCreate" : "create"}>{tooltip}</ShortcutTooltip> : tooltip}
       isDisabled={blocked}
       unavailable={quickUnavailable}
       onPress={(event) => {

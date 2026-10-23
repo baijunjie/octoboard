@@ -98,6 +98,17 @@ it("press takes the control inside a band of the same name, not the band", async
   expect(pressed).toEqual(["fold"]);
 });
 
+it("press names a menu item by its label without its keyboard hint", async () => {
+  document.body.innerHTML = '<div role="menuitem"><span><label data-slot="label"><span>Archive</span></label></span><kbd slot="keyboard">⇧⌘A</kbd></div>';
+  const item = document.querySelector<HTMLElement>('[role="menuitem"]')!;
+  const pressed = vi.fn();
+  item.addEventListener("click", pressed);
+  const done = createUi(document, "en").press("Archive");
+  await vi.advanceTimersByTimeAsync(500);
+  await done;
+  expect(pressed).toHaveBeenCalledOnce();
+});
+
 it("pressEach presses every control of that name once, in document order", async () => {
   document.body.innerHTML = "<button id=\"a\">Details</button><button id=\"b\">Details</button><button id=\"c\">Other</button>";
   const pressed: string[] = [];

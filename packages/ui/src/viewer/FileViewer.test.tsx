@@ -778,9 +778,8 @@ it("reports a user-triggered external Markdown link failure", async () => {
   const cause = new Error("Browser launch failed");
   const links = { open: vi.fn(async () => { throw cause; }) };
   show({ key: "document-link", path: "README.md", content: { state: "file", body: { kind: "text", text: "[Documentation](https://example.com/docs)", size: 48 } } }, undefined, { links, toasts: { error, notice: vi.fn() } });
-  for (let i = 0; i < 100 && !document.querySelector('a[href="https://example.com/docs"]'); i += 1) {
-    await act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
-  }
+  // A cold document renderer can take longer to load than a fixed polling budget allows.
+  await act(async () => { await import("./MarkdownDocument"); });
   await act(async () => document.querySelector<HTMLAnchorElement>('a[href="https://example.com/docs"]')!.click());
   expect(links.open).toHaveBeenCalledExactlyOnceWith("https://example.com/docs");
   expect(error).not.toHaveBeenCalled();

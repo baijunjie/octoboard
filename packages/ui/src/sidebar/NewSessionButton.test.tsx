@@ -17,7 +17,7 @@ const request: NewSessionRequest = { kind: "new-console-session", console: conso
 /** The platform's shortcut modifier, as a keyboard event's init. */
 const MODIFIER = IS_MAC ? { metaKey: true } : { ctrlKey: true };
 
-function mount(initial: Partial<State> = {}) {
+function mount(initial: Partial<State> = {}, shortcut = false) {
   const daemon: Daemon = {
     store: createStateStore(initial),
     request: vi.fn(),
@@ -34,7 +34,7 @@ function mount(initial: Partial<State> = {}) {
   const root = createRoot(container);
   act(() => root.render(
     <DaemonProvider value={daemon}>
-      <NewSessionButton label="New session" quickLabel="New session with defaults" target={() => request} onOpen={onOpen} onQuickCreate={onQuickCreate} />
+      <NewSessionButton shortcut={shortcut} label="New session" quickLabel="New session with defaults" target={() => request} onOpen={onOpen} onQuickCreate={onQuickCreate} />
     </DaemonProvider>,
   ));
   onTestFinished(() => {
@@ -51,6 +51,24 @@ function mount(initial: Partial<State> = {}) {
 }
 
 const noAgent = new Map(AGENT_OPTIONS.map(({ value }) => [value, { agent: value, availability: "unavailable" as const }]));
+
+it("does not register creation shortcuts outside a focus header", () => {
+  const { onOpen, onQuickCreate } = mount();
+  const event = new KeyboardEvent("keydown", { code: "KeyN", key: "n", ...MODIFIER, cancelable: true });
+  act(() => void window.dispatchEvent(event));
+  expect(event.defaultPrevented).toBe(false);
+  expect(onOpen).not.toHaveBeenCalled();
+  expect(onQuickCreate).not.toHaveBeenCalled();
+});
+
+it("does not run creation shortcuts without an available agent", () => {
+  const { onOpen, onQuickCreate } = mount({ agentAvailability: noAgent }, true);
+  for (const shiftKey of [false, true]) {
+    act(() => void window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyN", key: "n", ...MODIFIER, shiftKey })));
+  }
+  expect(onOpen).not.toHaveBeenCalled();
+  expect(onQuickCreate).not.toHaveBeenCalled();
+});
 
 it("turns into the quick-create button while the modifier is held and back when it is let go", () => {
   const { button, key } = mount();
