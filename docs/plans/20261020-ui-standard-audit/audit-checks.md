@@ -62,6 +62,6 @@ against current source.
   sweeps exited 130. The first authored Alert fill failed Chinese/light contrast at 3.838:1; the corrected fill
   is covered by 03a's qualified results above.
 
-Open scopes and their accepted findings are in the 09–11 and 14 briefs. Recreate current-source evidence for the
+Open scopes and their accepted findings are in the 10, 11 and 14 briefs. Recreate current-source evidence for the
 affected implementation; the historical source inventories and full raw logs were removed after their live scope
 was transferred to those briefs. The remaining milestones must preserve these qualifications in their closure.

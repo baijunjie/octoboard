@@ -1,5 +1,5 @@
 import { Spinner, Surface } from "@heroui/react";
-import { Bot, FolderPlus, MessageSquarePlus, Plus, SquareTerminal, TriangleAlert, Unplug } from "lucide-react";
+import { Bot, BotOff, FolderPlus, MessageSquarePlus, Plus, SquareTerminal, Unplug } from "lucide-react";
 import React, { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 
 import "@xterm/xterm/css/xterm.css";
@@ -537,7 +537,7 @@ export function TerminalPane({
             noAgents === "add" ? (
               <EmptyPanel icon={Bot} message={t("agents.noneAdded")} description={t("agents.addPrompt")} action={{ label: t("agents.addAction"), onPress: onAddAgent }} />
             ) : (
-              <EmptyPanel icon={TriangleAlert} message={<Message id="agents.noneFound" params={PATH_VAR_PARAMS} />} description={<Message id="welcome.toolsHint" params={PATH_VAR_PARAMS} />} />
+              <EmptyPanel icon={BotOff} message={<Message id="agents.noneFound" params={PATH_VAR_PARAMS} />} description={<Message id="welcome.toolsHint" params={PATH_VAR_PARAMS} />} />
             )
           ) : newSession ? (
             <EmptyPanel

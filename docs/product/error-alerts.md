@@ -98,7 +98,7 @@ words is announced again. The places with an empty-state failure:
 - the file viewer: a file or change that cannot be opened, and an image that cannot be decoded (see "Notices and
   stand-ins" in `docs/product/file-viewer.md`). The viewer's failure notices over content it still shows open no error
   alert either;
-- an archived session's history that could not be loaded or is unavailable (see "Loading, empty, unavailable and
+- an archived session's history that could not be loaded (see "Loading, empty, unavailable and
   failed" in `docs/product/session-history.md`);
 - the report panel's pages that could not be listed while it has no page to show (see "Paging through the history" in
   `docs/product/report-panel.md`).

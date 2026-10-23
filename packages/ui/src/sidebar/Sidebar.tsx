@@ -1,5 +1,6 @@
 import {
   Bot,
+  BotOff,
   ChevronDown,
   ChevronRight,
   FolderPlus,
@@ -7,7 +8,6 @@ import {
   ListChevronsUpDown,
   MessageSquarePlus,
   SearchX,
-  TriangleAlert,
 } from "lucide-react";
 import { ringForAutomaticFocus } from "../touchInput";
 import React, { memo, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
@@ -648,9 +648,9 @@ function ConsoleSessionsSection({
         {t("sidebar.consoleSessions.headingWithCount", { count: live.length })}
       </StickySectionHeading>
       {/* Not the glyph the rows below carry: this row is the one in the section that offers nothing to
-          press, and the console header's `+` is disabled. The bot says an agent is waiting to be added,
-          which is a normal state; the warning says none is installed. */}
-      {blocked && <EmptyPanel compact icon={noAgents === "add" ? Bot : TriangleAlert} message={noAgents === "add" ? t("agents.noneAdded") : <Message id="agents.noneFound" params={PATH_VAR_PARAMS} />} />}
+          press, and the console header's `+` is disabled. The bot says an agent is waiting to be added;
+          the crossed-out bot says none is installed. Both are ordinary absences, so neither is a warning. */}
+      {blocked && <EmptyPanel compact icon={noAgents === "add" ? Bot : BotOff} message={noAgents === "add" ? t("agents.noneAdded") : <Message id="agents.noneFound" params={PATH_VAR_PARAMS} />} />}
       {live.length === 0 && !blocked && (
         <EmptyPanel
           compact

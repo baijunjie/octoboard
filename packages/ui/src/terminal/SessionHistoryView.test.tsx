@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
-import { detailsButton, openDetails } from "../components/detailsTestSupport";
+import { openDetails } from "../components/detailsTestSupport";
 import { errorAlerts } from "../errorAlerts";
 import type { Event, HistoryMessage } from "../protocol";
 import { SessionHistoryView } from "./SessionHistoryView";
@@ -91,16 +91,18 @@ it("says nothing was said in a session with no messages", async () => {
 it("points at reopening when the record is unavailable", async () => {
   const container = await mount({ type: "session_history", session: "s-1", messages: [], unavailable: true });
   expect(container.textContent).toContain("History unavailable");
-  // A read failure that leaves the pane empty is an empty-state panel in the danger tone, not an
-  // Alert: the heading says what failed, the line why, and the remedy under it, with no Details button
-  // as there is no raw text.
+  // The record's state, not a failed load, so it is a neutral empty panel rather than a failure or an
+  // Alert: the heading says what is missing, the line why, and the remedy under it, with no Try again
+  // and no Details button.
   const panel = container.querySelector('[data-slot="empty-state"]')!;
   expect(container.querySelector('[data-slot="alert-root"]')).toBeNull();
+  expect(panel.querySelector(".bg-danger-soft")).toBeNull();
   expect(panel.querySelector("h2")?.textContent).toBe("History unavailable");
   expect(panel.querySelector("p")?.textContent).toBe("The agent's record of this session could not be read.");
   expect(panel.querySelectorAll("p")[1]?.textContent).toBe("Reopen the session to see its terminal.");
-  expect(detailsButton(panel)).toBeUndefined();
-  // The status region speaks it, so the panel does not announce itself as well.
+  expect(panel.querySelector("button")).toBeNull();
+  // The status region speaks it, so the panel is silent and does not announce itself as well.
+  expect(panel.getAttribute("aria-hidden")).toBe("true");
   expect(container.querySelector("[role=alert]")).toBeNull();
 });
 

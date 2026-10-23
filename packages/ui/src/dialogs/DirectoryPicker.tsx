@@ -1,8 +1,9 @@
 import { Description, Input, ListBox } from "@heroui/react";
-import { CornerLeftUp, Folder } from "lucide-react";
+import { CornerLeftUp, Folder, FolderX } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { Button } from "../components/Button";
+import { EmptyPanel } from "../components/EmptyPanel";
 import { FailureAlert } from "../components/FailureAlert";
 import { PathText } from "../components/MarkedPath";
 import { useStickyHeadingFocus } from "../components/stickyHeadingFocus";
@@ -246,9 +247,13 @@ function DirectoryList({ listRef, entries, showParent, onOpen }: {
           ))}
           {entries.length === 0 && (
           // Inside the list, as an option that cannot be acted on: arrow keys skip it, and the
-          // list is never left without an option, which a listbox needs.
-            <ListBox.Item data-marquee-scope id={EMPTY_KEY} isDisabled textValue={t("directoryPicker.empty")}>
-              <FadeOverflow className="min-w-0 flex-1" titleWhenClipped={t("directoryPicker.empty")}>{t("directoryPicker.empty")}</FadeOverflow>
+          // list is never left without an option, which a listbox needs. Its content is the shared
+          // compact empty row, the form a nested list's nothing takes ("The compact row" in `docs/product/empty-states.md`),
+          // so a message too long for the dialog wraps rather than being clipped; the option drops
+          // its own padding and dimming, as the row carries the padding and its message is no
+          // disabled control.
+            <ListBox.Item id={EMPTY_KEY} isDisabled textValue={t("directoryPicker.empty")} className="p-0 data-[disabled=true]:opacity-100">
+              <EmptyPanel compact icon={FolderX} message={t("directoryPicker.empty")} />
             </ListBox.Item>
           )}
         </ListBox>,

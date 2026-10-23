@@ -322,6 +322,9 @@ it("offers the contextual session action and hands focus on when it disappears",
 it("shows the installation step without a creation control when no agent is available", () => {
   const { container } = mountEmpty({ noAgents: "install" });
   expect(container.textContent).toContain("install at least one tool");
+  // An ordinary absence, so its glyph is a neutral one rather than a warning.
+  expect(container.querySelector('[data-slot="empty-state"] svg.lucide-bot-off')).not.toBeNull();
+  expect(container.querySelector("svg.lucide-triangle-alert")).toBeNull();
   expect(container.textContent).not.toContain("Select a session");
   expect(container.querySelector<HTMLButtonElement>("button:not([hidden])")).toBeNull();
 });

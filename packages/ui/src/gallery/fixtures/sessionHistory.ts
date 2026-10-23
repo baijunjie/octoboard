@@ -196,10 +196,9 @@ export const sessionHistoryScenarios: Scenario[] = [
   },
   {
     ...base,
-    category: "exceptional",
     id: "history-unavailable",
     title: "Archived session history unavailable",
-    description: "The agent's record of the session is missing or unreadable: the pane takes the empty-state shape with a danger glyph, the heading and the reason, and under it the remedy of reopening the session to see its terminal; there is no Try again, since reading it again would not help, and no Details, since there is no raw text.",
+    description: "The agent's record of the session is missing or unreadable: a silent, neutral empty panel with a muted glyph, the heading and the reason, and under it the remedy of reopening the session to see its terminal. It is no failure, so there is no danger glyph, no Try again, since reading it again would not help, and no Details, since there is no raw text.",
     sessionHistory: { [archived.id]: "unavailable" },
     steps: openHistory,
   },

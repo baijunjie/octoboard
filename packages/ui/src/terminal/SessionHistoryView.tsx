@@ -1,5 +1,5 @@
 import { Spinner, Switch } from "@heroui/react";
-import { MessageSquareOff } from "lucide-react";
+import { FileQuestion, MessageSquareOff } from "lucide-react";
 import React, { Suspense, lazy, useCallback, useId, useRef, useState } from "react";
 
 import { useHasPainted } from "../components/useHasPainted";
@@ -76,8 +76,12 @@ export function SessionHistoryView({ sessionId }: { sessionId: string }): React.
       )}
       {history.state === "failed" && <PaneFailure title={t("history.failed")} message={history.error} announce={painted} onRetry={() => reload()} />}
       {history.state === "unavailable" && (
-        // Spoken by the status region above, with its remedy, so it does not announce itself as well.
-        <PaneFailure title={t("history.unavailable")} summary={t("history.unavailable.description")} remedy={t("history.unavailable.remedy")} announce={false} />
+        // The record's state, not a failed load: reading it again would not change the answer, so it
+        // is an empty state rather than a failure. Spoken by the status region above, with its
+        // remedy, so it is silent here.
+        <div className="flex flex-1 items-center justify-center-safe">
+          <EmptyPanel icon={FileQuestion} message={t("history.unavailable")} description={t("history.unavailable.description")} remedy={t("history.unavailable.remedy")} silent />
+        </div>
       )}
       {history.state === "loaded" &&
         (messages.length === 0 ? (

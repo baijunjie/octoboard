@@ -52,7 +52,6 @@ F6 entry and RTL behavior. Shell remains on one header row; retain the title all
   (`quota/RailQuotaEntry.tsx`, `AccountQuotaSummary.tsx`), because that branch edits `AccountQuotaSummary.tsx`,
   `RailQuotaEntry.test.tsx` and `AgentAccountsSection.test.tsx`. The rest of this milestone may proceed. Once it
   lands, decide whether quota meters appearing and disappearing (`AccountQuotaSummary.tsx:128-136`) are in scope.
-- 09 also edits `Sidebar.tsx`; merge the two one at a time.
 
 Dynamic collection behavior and its reduced-motion path share one validation contract; parent may split I-04
 cleanup separately if preferred.

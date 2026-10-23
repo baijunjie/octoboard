@@ -10,7 +10,7 @@ import { isolate } from "../i18n/isolate";
 import { PANE_ID } from "../layout/paneOverlay";
 import type { PanePeek } from "../layout/usePaneToggles";
 import { PlatformProvider } from "../platform/react";
-import type { Session } from "../protocol";
+import type { Agent, AgentAvailability, Session } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { Sidebar } from "./Sidebar";
 import type { FocusTarget, SidebarHandlers } from "./types";
@@ -89,7 +89,7 @@ function mountSidebar(initial: SidebarTestProps, beside?: React.ReactNode) {
       );
     });
   render(initial);
-  return { container, root, render };
+  return { container, root, render, daemon };
 }
 
 it("announces a project filter's empty result once, clears it when matches return, and leaves focus in the field", async () => {
@@ -541,4 +541,15 @@ it("follows a project's sessions while a console session's focus mode replaces t
   render({ projects, sessions: [...archived, bound], focus: { consoleSession: hub1 } });
   render({ projects, sessions: [...archived, bound], focus: undefined });
   expect(isExpanded(container, web.id)).toBe(true);
+});
+
+it("says no agent is installed in the console's sessions with a neutral glyph, not a warning one", () => {
+  const { container, daemon } = mountSidebar({});
+  const none = new Map<Agent, AgentAvailability>(["claude", "codex", "grok"].map((agent) => [agent as Agent, { agent, availability: "unavailable" } as AgentAvailability]));
+  act(() => daemon.store.setState({ agentAvailability: none }));
+  const row = [...container.querySelectorAll('[data-slot="empty-state"]')].find((node) => node.textContent?.includes("No agent found on"))!;
+  expect(row).toBeDefined();
+  expect(row.querySelector("svg")?.classList.contains("lucide-bot-off")).toBe(true);
+  expect(row.querySelector("svg.lucide-triangle-alert")).toBeNull();
+  expect(row.closest("button")).toBeNull();
 });

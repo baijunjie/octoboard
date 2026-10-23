@@ -281,7 +281,8 @@ the filesystem root — muted, marked with an up-arrow icon and labelled as the 
 announced as to assistive technology — each directory marked with a folder icon, and a "git" badge at the end of each
 entry that is a git repository. Clicking an entry, or pressing Enter on it, lists that directory. The list is a single
 Tab stop: the arrow keys, Home and End move between its entries. A directory with no subdirectories shows an entry
-saying so, which does nothing. When the browser is opened on a path that does not exist (such as a default clone
+saying so, in the compact empty-state row (see "The compact row" in `docs/product/empty-states.md`), which does nothing and
+is skipped by the arrow keys. When the browser is opened on a path that does not exist (such as a default clone
 directory not created yet), it lists the nearest ancestor that does exist instead (a `~/` path goes no higher than the
 home directory), so there is always somewhere to navigate from; any other failure is reported as described next.
 

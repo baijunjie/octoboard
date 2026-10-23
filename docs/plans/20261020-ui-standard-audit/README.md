@@ -70,14 +70,14 @@ The closed audit changed no production UI; fix milestones implement its findings
 - 06 Separate choice status and direction (closed)
 - 07 Correct form defaults and blocked validity (closed)
 - 08 Keep horizontal tab strips at content width (closed)
-- [09 Use consistent neutral empty states](09-consistent-empty-states.md)
+- 09 Use consistent neutral empty states (closed)
 - [10 Apply shared collection and reduced-motion behavior](10-collection-and-reduced-motion.md)
 - [11 Defer initial terminal status announcements](11-terminal-status-announcements.md)
 - 12 Hand focus off when report pages are replaced (closed)
 - 13 Use the shared button primitive for tree chevrons (closed)
 - [14 Final confirmation](14-final-confirmation.md)
 
-Milestones 09–11 and 14 remain open. Their briefs carry the findings, current-source handoffs and validation
+Milestones 10, 11 and 14 remain open. Their briefs carry the findings, current-source handoffs and validation
 limits needed to resume work. Detailed source inventories and generated index files were pruned after the open
 scope was transferred; the original finding records stay in Git history:
 `git show 7d7fdb2da^:docs/plans/20261020-ui-standard-audit/{audit-states,audit-interactions,audit-gallery}.md`.
@@ -86,7 +86,7 @@ Retained raw evidence stays outside Git.
 ## Evidence baseline
 
 The detailed audit inventories were collected against an older source baseline and did not certify later quota,
-resume, history or MCP integrations. Completed milestones refreshed their assigned callers; 09, 10 and 11 were
+resume, history or MCP integrations. Completed milestones refreshed their assigned callers; 10 and 11 were
 re-inventoried against main at `19f58fc79`, and each must recheck its affected source again before changing it.
 Historical counts are not current coverage claims.
 
@@ -95,11 +95,8 @@ Historical counts are not current coverage claims.
 There is no integration branch: milestones merge individually into the local main branch. Continue from the
 then-current main and re-inventory affected callers; do not resume from the historical audit baseline.
 
-- **09** is next: the directory-picker empty listing, the no-installed-agent empty states, and the
-  `history-unavailable` reclassification.
-- **10** then **11**; the order is not strictly required. 09 and 11 both edit `TerminalPane.tsx`, and 09 and 10 both
-  edit `Sidebar.tsx`, so merge them one at a time. 10 preserves 08's Shell single-row, conditional title and
-  pane-minimum contract.
+- **10** then **11**; the order is not strictly required. 10 preserves 08's Shell single-row, conditional title
+  and pane-minimum contract.
 - **14** is the end point, placed last.
 
 The 08 report and its machine-readable evidence remain under `/tmp/octoboard-08/`; `audit-checks.md` keeps the

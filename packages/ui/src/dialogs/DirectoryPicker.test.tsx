@@ -127,3 +127,36 @@ it("keeps Try again where it is, pending and focused, while its listing is out",
   expect(retry.getAttribute("aria-disabled")).not.toBe("true");
   expect(document.activeElement).toBe(retry);
 });
+
+async function mountListing(path: string, entries: unknown[]): Promise<HTMLElement> {
+  const request = vi.fn(async () => ({ type: "dir_listing", path, entries }));
+  const daemon = { store: createStateStore(), request } as unknown as Daemon;
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  await act(async () => root.render(<DaemonProvider value={daemon}><DirectoryPicker title="Choose directory" onPick={() => {}} onClose={() => {}} /></DaemonProvider>));
+  return document.body;
+}
+
+it("shows an empty listing as the shared compact row in a disabled option, under the parent row", async () => {
+  const body = await mountListing("/home/me", []);
+  const options = [...body.querySelectorAll('[role="option"]')];
+  expect(options.map((option) => option.getAttribute("aria-label") ?? option.textContent)).toEqual(["Parent directory", "No subdirectories"]);
+  const empty = options[1]!;
+  expect(empty.getAttribute("aria-disabled")).toBe("true");
+  // The shared compact empty row: a glyph and a message in a plain row, with no heading and no button.
+  expect(empty.querySelector('[data-slot="empty-state"] svg')).not.toBeNull();
+  expect(empty.querySelector("h2, h3, button")).toBeNull();
+});
+
+it("shows an empty listing at the root as the only option, with no parent row", async () => {
+  const body = await mountListing("/", []);
+  const options = [...body.querySelectorAll('[role="option"]')];
+  expect(options).toHaveLength(1);
+  expect(options[0]!.textContent).toBe("No subdirectories");
+  expect(options[0]!.getAttribute("aria-disabled")).toBe("true");
+  expect(options[0]!.querySelector('[data-slot="empty-state"] svg')).not.toBeNull();
+});

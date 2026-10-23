@@ -606,7 +606,7 @@ export const focusScenarios: Scenario[] = [
   {
     id: "focus-project-empty-no-agent-added",
     group: GROUP,
-    category: "exceptional",
+    category: "normal",
     title: "Project with no sessions yet, no agent added",
     state: { ...state, settings: { ...settings, added_agents: [] } },
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${freshProject.id}` },

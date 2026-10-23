@@ -46,7 +46,7 @@ export const emptyScenarios: Scenario[] = [
   {
     id: "empty-no-consoles-no-agent",
     group: GROUP,
-    category: "exceptional",
+    category: "normal",
     title: "No consoles, no agent installed",
     description: "Every supported tool remains listed with its brand icon and a neutral Not detected badge. The PATH hint explains how to make a tool available, while New console and Import configuration stay enabled.",
     state: {
@@ -65,10 +65,10 @@ export const emptyScenarios: Scenario[] = [
   {
     id: "empty-console-no-agent",
     group: "Sidebar sessions",
-    category: "exceptional",
+    category: "normal",
     title: "A console, no agent installed",
     description:
-      "Under Console sessions the row says no agent was found on PATH and the console header's \"+\" (New console session) is disabled; the console session left over from before still shows beneath it. Website's \"No sessions yet\" row has no action, and the project's \"+\", which a hover over its row reveals, is disabled too. The main area says the same as the row, with no button. Modifier: Held changes nothing here.",
+      "Under Console sessions the row says no agent was found on PATH, beside a crossed-out bot glyph rather than a warning, and the console header's \"+\" (New console session) is disabled; the console session left over from before still shows beneath it. Website's \"No sessions yet\" row has no action, and the project's \"+\", which a hover over its row reveals, is disabled too. The main area says the same as the row under a crossed-out bot glyph, with the PATH hint beneath and no button. Modifier: Held changes nothing here.",
     state: {
       ...snapshotState({
         consoles: [consoleOf("c-1", "Main")],
@@ -82,7 +82,7 @@ export const emptyScenarios: Scenario[] = [
   {
     id: "empty-console-no-agent-added",
     group: "Sidebar sessions",
-    category: "exceptional",
+    category: "normal",
     title: "A console, agents installed but none added",
     description:
       "Under Console sessions the row says \"No agent added\" with nothing about PATH, and the console header's \"+\" (New console session) is disabled; the console session left over from before still shows beneath it. Website's \"No sessions yet\" row has no action, and the project's \"+\", which a hover over its row reveals, is disabled too. The row carries a bot glyph. With Website selected, the main area has a bot glyph too, says the same and asks for an agent to be added, with an Add agent… button beneath that opens Settings → Agent accounts.",
