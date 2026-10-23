@@ -88,7 +88,7 @@ export function SwitchAccountDialog({
             <Radio value="console">
               <Radio.Content>
                 <Radio.Control><Radio.Indicator /></Radio.Control>
-                <Label><Message id="dialog.switchAccount.scopeConsole" params={{ agent }} /></Label>
+                <Label>{t("dialog.switchAccount.scopeConsole")}</Label>
               </Radio.Content>
               <Description>{t("dialog.switchAccount.countConsole", { count: counts.console })}</Description>
             </Radio>

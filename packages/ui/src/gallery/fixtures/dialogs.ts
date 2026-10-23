@@ -438,7 +438,7 @@ const openSwitchAccount = (title: string) => [
 ];
 const submitConsoleSwitch = [
   ...openSwitchAccount("Review the release checklist"),
-  (ui: Ui) => ui.press(ui.t("dialog.switchAccount.scopeConsole", { agent: "Claude Code" })),
+  (ui: Ui) => ui.press(ui.t("dialog.switchAccount.scopeConsole")),
   (ui: Ui) => ui.confirm(),
 ];
 
@@ -484,7 +484,7 @@ const submitCodexSwitch = [
   (ui: Ui) => ui.press(ui.t("sidebar.session.actions", { title: "Review the release checklist" })),
   (ui: Ui) => ui.press(ui.t("sidebar.session.switchAccount")),
   (ui: Ui) => ui.press(codexWork.name),
-  (ui: Ui) => ui.press(ui.t("dialog.switchAccount.scopeConsole", { agent: "Codex" })),
+  (ui: Ui) => ui.press(ui.t("dialog.switchAccount.scopeConsole")),
   (ui: Ui) => ui.confirm(),
 ];
 
@@ -558,7 +558,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "Switch account confirmation",
-    description: "Opened from the hub, which has a bound session. Under the message, a radio group \"Sessions to switch\" starts on \"This session and its sub-sessions\", its note counting 2 sessions that can switch (the hub and its bound session); the other option, \"Every Claude Code session in this console\", counts 3 (the independent project session joins). Below the group, one line says only Claude Code sessions are switched and archived sessions and sessions already on this account are skipped; sessions of other consoles are not counted either. There is no progress bar: Confirm closes the dialog at once.",
+    description: "Opened from the hub, which has a bound session. Under the message, a radio group \"Sessions to switch\" starts on \"This session and its sub-sessions\", its note counting 2 sessions that can switch (the hub and its bound session); the other option, \"Every session in this console\", counts 3 (the independent project session joins). Below the group, one line says only Claude Code sessions are switched and archived sessions and sessions already on this account are skipped; sessions of other consoles are not counted either. There is no progress bar: Confirm closes the dialog at once.",
     state: switchAccountState,
     steps: openSwitchAccount("Release coordinator"),
   },

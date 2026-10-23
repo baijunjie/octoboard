@@ -356,7 +356,7 @@ it("switches every eligible session of the agent in the console when that scope 
   const onSwitchAccounts = vi.fn();
   mount({ kind: "switch-account", session: lead, account: account.id, accountName: account.name }, [hub, lead, bound, unrelated, ...excluded], [account], { onSwitchAccounts });
   expect(document.body.textContent).toContain("2 sessions can switch");
-  chooseScope(/Every Claude Code session/);
+  chooseScope(/Every session in this console/);
   await submitDialog();
   const [ids] = onSwitchAccounts.mock.calls[0] as [string[]];
   expect([...ids].sort()).toEqual([bound.id, hub.id, lead.id, unrelated.id].sort());

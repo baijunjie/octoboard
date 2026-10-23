@@ -14,7 +14,7 @@ The confirmation asks which sessions to switch, as two options of a radio group;
 
 - **This session and its sub-sessions** — the session and every session under it: those bound to it, those bound to
   them, and so on to any depth, reached through archived sessions as well.
-- **Every <agent> session in this console** — every session of the same agent in that console: console sessions,
+- **Every session in this console** — every session of the same agent in that console: console sessions,
   project sessions and bound sessions, across all projects in the console.
 
 In both, only sessions of the session's own agent are switched, and archived sessions, sessions already on the target

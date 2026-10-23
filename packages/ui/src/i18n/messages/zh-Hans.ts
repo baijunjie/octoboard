@@ -1179,7 +1179,7 @@ export const zhHans: Translation<"other"> = {
   "dialog.switchAccount.message": "会话进程将在新账户下重新启动，对话会在其中继续。会话将读取新账户的配置，并保留明确指定的模型和推理强度。当前账户中会保留一份对话副本。",
   "dialog.switchAccount.messageFresh": "会话进程将在新账户下重新启动，并开始一段新的对话，因为尚未向它输入过内容。会话将读取新账户的配置，并保留明确指定的模型和推理强度。",
   "dialog.switchAccount.confirm": "切换",
-  "dialog.switchAccount.scopeConsole": "此控制台的所有 {agent} 会话",
+  "dialog.switchAccount.scopeConsole": "此控制台的所有会话",
   "dialog.switchAccount.scopeLabel": "要切换的会话",
   "dialog.switchAccount.scopeSession": "此会话及其子会话",
   "dialog.switchAccount.countSession": {

@@ -1271,7 +1271,7 @@ export const en = {
   "dialog.switchAccount.messageFresh":
     "Its process restarts under the new account with a fresh conversation, as nothing has been typed into it yet. The session reads that account's configuration and keeps its explicit model and reasoning effort settings.",
   "dialog.switchAccount.confirm": "Switch",
-  "dialog.switchAccount.scopeConsole": "Every {agent} session in this console",
+  "dialog.switchAccount.scopeConsole": "Every session in this console",
   "dialog.switchAccount.scopeLabel": "Sessions to switch",
   "dialog.switchAccount.scopeSession": "This session and its sub-sessions",
   "dialog.switchAccount.countSession": {
