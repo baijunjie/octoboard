@@ -75,15 +75,17 @@ export function QuotaUpdated({ quota }: { quota: QuotaReading }): React.ReactEle
   );
 }
 
-/** The line naming an account: its `name`, its plan badge when the agent names one, with `showLoginState` a badge
- * for an account known to be logged in or not, the mark of a reading with nothing to show, a `help` tip, and at
- * its end, unless `showUpdated` is off for a surface that places it elsewhere, when the reading was taken and
- * whether it is out of date. */
-export function AccountNameLine({ name, quota, help, showLoginState = false, showUpdated = true, children }: { children?: React.ReactNode; name: React.ReactNode; quota: QuotaReading; help?: React.ReactNode; showLoginState?: boolean; showUpdated?: boolean }): React.ReactElement {
+/** The line naming an account: its `name`, its plan badge when the agent names one, with `usedUp` a "Used up"
+ * badge and the name in the muted colour, with `showLoginState` a badge for an account known to be logged in or not,
+ * the mark of a reading with nothing to show, a `help` tip, and at its end, unless `showUpdated` is off for a
+ * surface that places it elsewhere, when the reading was taken and whether it is out of date. */
+export function AccountNameLine({ name, quota, help, usedUp = false, showLoginState = false, showUpdated = true, children }: { children?: React.ReactNode; name: React.ReactNode; quota: QuotaReading; help?: React.ReactNode; usedUp?: boolean; showLoginState?: boolean; showUpdated?: boolean }): React.ReactElement {
+  const t = useT();
   return (
     <div className="flex items-center gap-2 text-sm font-medium">
-      <div className="min-w-0">{name}</div>
+      <div className={`min-w-0 ${usedUp ? "text-app-muted" : ""}`}>{name}</div>
       <QuotaPlan quota={quota} />
+      {usedUp && <StatusBadge variant="soft">{t("quota.usedUp")}</StatusBadge>}
       {showLoginState && <LoginStateBadge quota={quota} />}
       {children}
       <QuotaFailureMark quota={quota} />
@@ -105,10 +107,12 @@ export function AccountNameLine({ name, quota, help, showLoginState = false, sho
  * When a current reading was taken is shown beside the account's name (`QuotaUpdated`), not here.
  *
  * The 5-hour and weekly windows share one two-layer meter. */
-export function AccountQuotaSummary({ quota, single }: {
+export function AccountQuotaSummary({ quota, single, usedUp }: {
   quota: QuotaReading;
   /** One window to a row whatever the viewport, for a surface narrower than the window. */
   single?: boolean;
+  /** The account is used up: its meters recede (`QuotaMeter`). */
+  usedUp?: boolean;
 }): React.ReactElement | null {
   const t = useT();
   if (quota === "loading") return <div className="text-sm text-app-muted">{t("quota.loading")}</div>;
@@ -130,8 +134,8 @@ export function AccountQuotaSummary({ quota, single }: {
         if (layers?.weekly && window === layers.weekly) return null;
         const key = `${window.kind}:${window.label ?? ""}`;
         return layers?.weekly && window === layers.session
-          ? <QuotaMeterPair key={key} naming={quota} session={window} weekly={layers.weekly} />
-          : <QuotaMeter key={key} naming={quota} window={window} />;
+          ? <QuotaMeterPair key={key} naming={quota} session={window} weekly={layers.weekly} usedUp={usedUp} />
+          : <QuotaMeter key={key} naming={quota} window={window} usedUp={usedUp} />;
       })}
     </div>
   );

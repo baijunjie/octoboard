@@ -129,6 +129,20 @@ const resetPassedState = railQuotaState(
   ],
 );
 
+/** Claude Code's default account usable, Work used up by its session window (its weekly window has room), and Side
+ * project used up by its weekly window while its session window has room. */
+const usedUpState = railQuotaState(
+  [
+    { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
+    { id: "a-side", agent: "claude", name: "Side project", config_dir: "/Users/dev/.claude-side" },
+  ],
+  [
+    quotaOf("claude", null, "max", [quotaWindow("session", 18, 117), quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60)]),
+    quotaOf("claude", "a-work", "pro", [quotaWindow("session", 100, 42), quotaWindow("weekly", 63, 2 * 24 * 60 + 5 * 60)], { fetched_at: minutesAgo(7) }),
+    quotaOf("claude", "a-side", "pro", [quotaWindow("session", 40, 195), quotaWindow("weekly", 100, 2 * 24 * 60 + 5 * 60)], { fetched_at: minutesAgo(5) }),
+  ],
+);
+
 export const railQuotaScenarios: Scenario[] = [
   {
     id: "rail-quota-selected-session",
@@ -175,7 +189,7 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Rail quota panel, floated in by hovering",
-    description: "No session is selected, so the quota button has no mini bar. The panel floats in beside it, above Settings, after the pointer rests on it, with the button marked open. Claude Code's default account, under the name the user gave it (Studio laptop), shows its session and weekly quota as one two-layer bar (the thick bar for the session, the thin one beneath it for the week, headlined \"Weekly · all models\" because Fable has its own weekly window) and Fable last; Work, with no model window, headlines its week plain \"Weekly\". Codex's tab names its short window \"5h\". Each account's name line ends, at the far right, with a small muted \"Updated N ago\" (the default account's says 1 minute). Work (spent, both bars empty, read 7 minutes ago) follows, then an account that is nearly spent, whose clipped name fades out before its plan badge. Manage accounts is at the bottom. Grok Build is added but not installed, so it has no tab.",
+    description: "No session is selected, so the quota button has no mini bar. The panel floats in beside it, above Settings, after the pointer rests on it, with the button marked open. Claude Code's default account, under the name the user gave it (Studio laptop), shows its session and weekly quota as one two-layer bar (the thick bar for the session, the thin one beneath it for the week, headlined \"Weekly · all models\" because Fable has its own weekly window) and Fable last; Work, with no model window, headlines its week plain \"Weekly\". Codex's tab names its short window \"5h\". Each account's name line ends, at the far right, with a small muted \"Updated N ago\" (the default account's says 1 minute). Work (spent, so receded with a \"Used up\" badge, both bars empty, read 7 minutes ago) follows, then an account that is nearly spent, whose clipped name fades out before its plan badge. Manage accounts is at the bottom. Grok Build is added but not installed, so it has no tab.",
     state: readState,
     steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
   },
@@ -199,12 +213,21 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Rail quota button and panel, a window whose reset has passed",
-    description: "Hub uses Claude Code's default account, whose reading (taken 9 minutes ago) has its session window spent, but that window's reset was a minute ago and no newer reading has arrived. The quota button's indicator shows that window full (100% remaining, over the weekly 59%), and in the panel the default account's session bar is full and its headline reads 100% remaining with \"resets now\". Work, whose session window is also spent but resets later, stays empty by comparison.",
+    description: "Hub uses Claude Code's default account, whose reading (taken 9 minutes ago) has its session window spent, but that window's reset was a minute ago and no newer reading has arrived. The quota button's indicator shows that window full (100% remaining, over the weekly 59%), and in the panel the default account's session bar is full and its headline reads 100% remaining with \"resets now\". Work, whose session window is also spent but resets later, stays empty by comparison and is receded with a \"Used up\" badge, which the default account does not get.",
     state: resetPassedState,
     steps: [
       (ui) => ui.press(ui.session("Hub")),
       (ui) => ui.hoverPanel(describing("quota button with a session's bar", (name) => name.startsWith(ui.t("rail.quota"))), ui.t("rail.quota")),
     ],
+  },
+  {
+    id: "rail-quota-used-up",
+    group: GROUP,
+    category: "normal",
+    title: "Rail quota panel, accounts that are used up beside a usable one",
+    description: "The panel floated in on Claude Code's tab lists the default account as a normal row, then two accounts that cannot be used and recede: Work, whose session window is spent (its weekly window still has 37% remaining), and Side project, whose weekly window is spent while its session window still has 60% remaining. A receded row has its name and headline muted, a soft \"Used up\" badge after the plan badge, and neutral grey bars in place of Claude Code's colour.",
+    state: usedUpState,
+    steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
   },
   {
     id: "rail-quota-pinned-codex",

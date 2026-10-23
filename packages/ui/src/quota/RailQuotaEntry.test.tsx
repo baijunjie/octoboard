@@ -336,6 +336,28 @@ it("marks a failed reading on its account's name line, and the mark's popover op
   expect(panel()).not.toBeNull();
 });
 
+it("recedes a used-up account, naming it used up, and draws it as before once its window resets", () => {
+  withFakeTimers();
+  const { button, store } = mount();
+  const used = quota("claude", "claude-work", "pro");
+  used.windows = [{ ...used.windows[0]!, used_percent: 100, resets_at: NOW + 10 * MINUTE }];
+  act(() => store.setState({ accountQuotas: [quota("claude", null, "max"), used] }));
+  click(button);
+  const rows = () => Array.from(document.querySelectorAll<HTMLElement>('[role="tabpanel"]:not([data-inert="true"]) .groove-b'));
+  const [usable, usedUp] = rows();
+  expect(usable!.textContent).not.toContain("Used up");
+  expect(usable!.querySelector(".quota-meter--claude")).not.toBeNull();
+  expect(usedUp!.textContent).toContain("Used up");
+  expect(usedUp!.querySelector("div.min-w-0.text-app-muted")?.textContent).toBe("Work");
+  expect(usable!.querySelector("div.min-w-0.text-app-muted")).toBeNull();
+  expect(usedUp!.querySelector(".quota-meter--used-up")).not.toBeNull();
+  expect(usedUp!.querySelector(".quota-meter--claude")).toBeNull();
+
+  advance(10 * MINUTE + 1000);
+  expect(rows()[1]!.textContent).not.toContain("Used up");
+  expect(rows()[1]!.querySelector(".quota-meter--claude")).not.toBeNull();
+});
+
 it("holds the panel's height across tabs, so that choosing a tab with fewer accounts moves nothing under the pointer", () => {
   withFakeTimers();
   const { button } = mount();

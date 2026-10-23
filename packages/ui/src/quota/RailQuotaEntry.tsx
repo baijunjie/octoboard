@@ -16,10 +16,11 @@ import { Message, useT } from "../i18n/react";
 import type { Account, Agent, QuotaWindow } from "../protocol";
 import type { SettingsSectionId } from "../settings/SettingsDialog";
 import { useDaemon, useDaemonStore } from "../store";
+import { useNow } from "../useNow";
 import { AccountNameLine, AccountQuotaSummary } from "./AccountQuotaSummary";
 import { MODAL_OPEN } from "../layout/useRegionCycle";
 import { useAccountQuota } from "./useAccountQuota";
-import { remainingPercentAt, type QuotaBar } from "./quotaFormat";
+import { exhaustedQuotaWindow, remainingPercentAt, type QuotaBar } from "./quotaFormat";
 import { accountQuotaLabel, sessionQuotaBarOf } from "./sessionQuota";
 
 /** How long the pointer rests on the button before the panel floats in. */
@@ -418,13 +419,16 @@ function AgentPanel({ agent, owned, currentAccount }: { agent: Agent; owned: Acc
   );
 }
 
-/** One account of the panel: its name and plan, and its quota beneath. */
+/** One account of the panel: its name and plan, and its quota beneath. An account that is used up recedes, its
+ * name and meters muted and a "Used up" badge saying so, so the accounts that can still be used stand out. */
 function QuotaAccount({ agent, account, name, rowRef }: { agent: Agent; account: string | null; name: React.ReactNode; rowRef?: React.Ref<HTMLDivElement> }): React.ReactElement {
   const quota = useAccountQuota(agent, account);
+  const now = useNow();
+  const usedUp = exhaustedQuotaWindow(quota, now) !== undefined;
   return (
     <div ref={rowRef} className="flex flex-col gap-2 groove-b py-3 last:border-b-0">
-      <AccountNameLine name={name} quota={quota} />
-      <AccountQuotaSummary quota={quota} single />
+      <AccountNameLine name={name} quota={quota} usedUp={usedUp} />
+      <AccountQuotaSummary quota={quota} single usedUp={usedUp} />
     </div>
   );
 }

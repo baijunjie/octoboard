@@ -115,7 +115,8 @@ owns" in `docs/product/agent-accounts.md`). Beneath the account each window has:
   has not arrived yet. A window the agent gives no reset time for has no countdown;
 - a bar of what remains, full when nothing is used. The bar has one colour per agent: an orange for Claude Code, a
   blue for Codex, and the text colour for Grok Build, each set off against the bar's track in both light and dark
-  appearance.
+  appearance. In the rail's panel a used-up account's bars are a neutral grey instead (see "A used-up account"
+  below).
 
 How long ago the windows shown were read is shown in small muted text at the end of a line — the account's directory
 line in Settings, its name line in the rail's panel (which shows no directories), and its header in the menu bar
@@ -234,6 +235,15 @@ resets soonest (see "Which account a session uses" in `docs/product/sessions.md`
 reset, either can still show an account whose reset has passed, and a session opened or handed off from the dialog
 while it still shows that account runs on it. A session opened with defaults, and a session an agent starts, are
 judged at the moment they are opened.
+
+In the rail's account quota panel (see "What the panel shows" below) a used-up account stays listed in its place and
+recedes, so that the accounts still usable stand out: its name is in the muted text colour, a neutral **Used up**
+badge follows its plan badge on the name line, its windows' lines are in the muted text colour, and its bars are a
+neutral grey instead of the agent's colour. A usable account looks as usual. Assistive technology reads the badge as
+part of the account's name line, like the plan badge; the panel adds no full sentence, and each bar's value still
+gives the window's countdown (see "How an account's quota is shown" above). The panel judges on the clock as an open
+dialog does, so the account returns to its usual look within 30 seconds of its reset time passing, without waiting for
+a newer reading. Settings' **Agent accounts** section does not mark a used-up account.
 
 ## Starting a window that has not begun counting
 
@@ -402,7 +412,8 @@ the accounts' quotas without opening Settings.
 - **The selected agent's accounts**: its default account, under the name the user gave it or else "Default" (see "The
   default account" in `docs/product/agent-accounts.md`), then the accounts the user owns. Each shows
   its name, its plan badge and its quota beneath, in the states of "Quota states" above, as "How an account's quota is
-  shown" above describes. A name too long for its space fades as in "Names too long for their space" in
+  shown" above describes; a used-up account recedes, with a **Used up** badge after its plan badge (see "A used-up
+  account" below). A name too long for its space fades as in "Names too long for their space" in
   `docs/product/labels-and-tooltips.md`. The panel shows no directories and offers nothing to edit.
 - The list of accounts is at most 384 px high, or 60% of the window's height where that is less, and the panel is as
   tall as the tallest agent's list, so choosing a tab with fewer accounts never moves the tab strip from under the

@@ -94,6 +94,12 @@ A select option or menu item that cannot be chosen and says why (an account whos
 line under its name at full opacity and fades only its name and icon with HeroUI's `--disabled-opacity`, instead of
 letting HeroUI fade the whole row: the reason is the text that explains the disabled state, so it must stay readable.
 
+A used-up account in the rail's quota panel, which is not a control, recedes the same way without fading anything: its
+name and its meters' headlines take the secondary text colour (6.0:1 light, 6.7:1 dark on the panel's popover), a
+neutral "Used up" badge on its name line says why in words, and its bars are drawn in a neutral grey
+(`.quota-meter--used-up` in `packages/ui/src/style.css`) that keeps 3:1 against the meter's track while sitting
+fainter on it than the agent colours. A veil over the row is not used: it would take its text below AA.
+
 A notice toast (HeroUI's accent variant) tints its indicator with the title's `--accent-soft-foreground`, as HeroUI
 does itself for its success, warning and danger toasts, instead of leaving it in the plain foreground under an accent
 title.
