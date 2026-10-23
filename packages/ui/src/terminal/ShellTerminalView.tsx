@@ -7,6 +7,7 @@ import { Button } from "../components/Button";
 import type { ViewedFile } from "../browser/TerminalFileViewer";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { reportExternalLinkFailure } from "../components/ExternalLink";
+import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useLatest } from "../components/useLatest";
 import { useT } from "../i18n/react";
@@ -262,15 +263,20 @@ export function ShellTerminalView({
           )}
         </div>
       )}
-      {/* Announced from a region that stays mounted, as a live region has to exist before its
-          content changes; only the shown tab's speaks. */}
-      <div role="status" className="sr-only">
-        {shown && trouble ? t(trouble === "disconnected" ? "terminal.disconnected" : "terminal.reconnecting") : undefined}
-      </div>
-      <div role="status" className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
+      {/* Spoken from status regions mounted empty with each showing of the tab and written after the
+          first delay (`StatusAnnouncer`): the tab's root is `display: none` while hidden, so a region kept
+          there would write its text in the render that shows the tab, together with the region. The
+          delay is the one for a focus move, which pressing a tab or starting a terminal makes into the
+          view. The exit sentence is hidden from assistive technology on screen, so nothing is said
+          twice, and its button stays reachable. */}
+      {shown && <StatusAnnouncer text={trouble ? t(trouble === "disconnected" ? "terminal.disconnected" : "terminal.reconnecting") : undefined} firstWriteDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} />}
+      {shown && <StatusAnnouncer text={!running ? t("shellTerminal.exited") : undefined} firstWriteDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} />}
+      <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
         {shown && !running && (
           <Surface className="pointer-events-auto flex items-center gap-3 rounded-lg px-3 py-2 text-sm shadow-lg">
-            <span className="text-app-muted">{t("shellTerminal.exited")}</span>
+            <span aria-hidden="true" className="text-app-muted">
+              {t("shellTerminal.exited")}
+            </span>
             <Button size="sm" variant="secondary" preventFocusOnPress onPress={onClose}>
               {t("shellTerminal.close")}
             </Button>

@@ -269,6 +269,25 @@ export const quotaGatingScenarios: Scenario[] = [
     steps: [(ui) => ui.press(ui.session("Port the importer to the new parser"))],
   },
   {
+    id: "terminal-not-running-bar",
+    group: "Terminal",
+    category: "normal",
+    title: "Interrupted session selected and left not running",
+    description: "The question about starting on Client was closed without answering, so nothing was resumed: the selected session keeps its last output on screen, with a \"Not running\" bar and a primary Resume button floating at the bottom, and its row and the title bar show the interrupted pause sign. Pressing Resume starts the session.",
+    state: {
+      ...snapshotState({
+        consoles: [console_],
+        projects: [website],
+        sessions: [
+          sessionOf("s-resume-incomplete", console_.id, website.id, "Port the importer to the new parser", "interrupted", { account_id: "a-client", config_dir: "/Users/dev/.claude-client" }),
+        ],
+        settings: clientIncomplete,
+      }),
+      agentAvailability: available,
+    },
+    steps: [(ui) => ui.press(ui.session("Port the importer to the new parser")), (ui) => ui.press(ui.t("common.close"))],
+  },
+  {
     id: "settings-accounts-from-incomplete-launch",
     group: "Settings",
     category: "exceptional",

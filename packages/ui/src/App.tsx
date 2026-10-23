@@ -434,9 +434,10 @@ export function App(): React.ReactElement {
   // own launches (a resume, a quick create) go through it and render it at this level.
   const { confirmLaunch, confirmation: launchConfirmation } = useConfirmIncompleteLaunch();
 
+  const otherModalOpen = dialogRequest !== undefined || questionPending || exitConfirmOpen || launchConfirmation !== undefined;
   const { settingsOpen, settingsNavigation, openSettings, openSettingsAt, closeSettings } = useSettingsDialog({
     ready: hosts !== undefined,
-    otherModalOpen: dialogRequest !== undefined || questionPending || exitConfirmOpen || launchConfirmation !== undefined,
+    otherModalOpen,
     focusTerminal,
   });
 
@@ -1104,6 +1105,7 @@ export function App(): React.ReactElement {
                     session={selectedSession}
                     onResume={resumeSession}
                     resuming={selectedSessionId !== undefined && resumingIds.has(selectedSessionId)}
+                    modalOpen={otherModalOpen || settingsOpen}
                     onAddProject={emptyState?.kind === "add-project" && currentConsole
                       ? () => openDialog({ kind: "new-project", console: currentConsole })
                       : undefined}

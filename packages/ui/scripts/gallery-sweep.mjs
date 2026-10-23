@@ -328,7 +328,6 @@ function select(all, { patterns, group }) {
  * The floating bar sits over the history view, which covers the terminal beneath it. DOM clicks bypass
  * hit testing; drive the actual pointer and verify the fixture session becomes live. */
 async function checkArchivedReopen(page, language) {
-  await page.getByRole("status").getByRole("button").first().waitFor({ state: "attached", timeout: READ_TIMEOUT_MS });
   const labels = await page.evaluate(async (language) => {
     const { format } = await import("/src/i18n/catalog.ts");
     const { sessionAriaLabel } = await import("/src/sessionLabel.ts");
@@ -339,7 +338,9 @@ async function checkArchivedReopen(page, language) {
       liveSession: sessionAriaLabel((key, params) => format(language, key, params), language, { ...session, status: "idle" }, []),
     };
   }, language);
-  const button = page.getByRole("status").getByRole("button", { name: labels.reopen, exact: true });
+  // Found by its name in the terminal pane: the bar's button sits outside the live region that speaks its sentence.
+  const button = page.locator("[data-region=terminal]").getByRole("button", { name: labels.reopen, exact: true });
+  await button.waitFor({ state: "attached", timeout: READ_TIMEOUT_MS });
   const target = await button.evaluate((button) => {
     const { x, y, width, height } = button.getBoundingClientRect();
     const point = { x: x + width / 2, y: y + height / 2 };

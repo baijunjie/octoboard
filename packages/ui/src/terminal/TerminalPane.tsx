@@ -9,6 +9,7 @@ import { reportExternalLinkFailure } from "../components/ExternalLink";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { PATH_VAR_PARAMS } from "../components/literalParams";
 import { focusTopBar } from "../components/regionFocus";
+import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useLatest } from "../components/useLatest";
 import { Message, useT } from "../i18n/react";
@@ -36,6 +37,9 @@ interface TerminalPaneProps {
   onResume: (sessionId: string) => Promise<boolean>;
   /** A resume of `session` is in flight: its process is being started. */
   resuming?: boolean;
+  /** A modal dialog is open over the window, which hides the pane from assistive technology: the
+   * dormant bar's sentence is written once it has closed and its focus move has been spoken. */
+  modalOpen?: boolean;
   /** Adds a project when the current console already has a console session but no projects. */
   onAddProject?: () => void;
   /** Offers session creation for the current console and focus scope. */
@@ -78,6 +82,7 @@ export function TerminalPane({
   session,
   onResume,
   resuming = false,
+  modalOpen = false,
   onAddProject,
   newSession,
   noAgents,
@@ -454,6 +459,36 @@ export function TerminalPane({
     return () => clearTimeout(timer);
   }, [awaitingOutput, session?.id, status]);
   const loading = awaitingOutput && !loadingExpired;
+  // The bar offering to resume a dormant session or reopen an archived one.
+  const dormantBar =
+    session && isDormant && !resuming && !switching
+      ? session.status === "archived"
+        ? { sessionId: session.id, sentence: t("terminal.archived"), action: t("sidebar.session.reopen") }
+        : { sessionId: session.id, sentence: t("terminal.notRunning"), action: t("terminal.resume") }
+      : undefined;
+  // A sentence that arrives or changes under a modal (selecting an interrupted session on an account
+  // whose sharing change did not finish asks first) would be written into a hidden region, and
+  // closing the modal moves focus over it, so it waits for the close and the focus move. One already
+  // spoken stays in the region through a modal: clearing and rewriting it would say it again.
+  const barSentence = dormantBar?.sentence;
+  const [bar, setBar] = useState<{ held: boolean; spoken: string | undefined }>({ held: false, spoken: undefined });
+  useEffect(() => {
+    if (!barSentence) {
+      setBar((b) => (b.held || b.spoken !== undefined ? { held: false, spoken: undefined } : b));
+      return;
+    }
+    if (modalOpen) {
+      if (bar.spoken !== barSentence) setBar({ held: true, spoken: bar.spoken });
+      return;
+    }
+    if (!bar.held) {
+      if (bar.spoken !== barSentence) setBar({ held: false, spoken: barSentence });
+      return;
+    }
+    const timer = setTimeout(() => setBar({ held: false, spoken: barSentence }), AFTER_FOCUS_MOVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [barSentence, modalOpen]);
+  const barSaid = modalOpen || bar.held ? (bar.spoken === barSentence ? barSentence : undefined) : barSentence;
   const cover: { text: string; spinner: boolean } | undefined = switching
     ? { text: t("terminal.switchingAccount"), spinner: true }
     : trouble
@@ -521,13 +556,11 @@ export function TerminalPane({
           )}
         </div>
       )}
-      {/* A live region has to exist before its content changes to be announced, so the cover's
-          text is announced from this one, which stays mounted. The loading and reconnecting covers
-          are hidden from assistive technology; the disconnected one is not, so that its button
-          stays reachable, and browsing meets its message a second time. */}
-      <div role="status" className="sr-only">
-        {cover?.text}
-      </div>
+      {/* The cover's text is spoken from a status region that is mounted empty and written after
+          its first delay (`StatusAnnouncer`). The loading and reconnecting covers are hidden from
+          assistive technology; the disconnected one is not, so that its button stays reachable, and
+          browsing meets its message a second time. */}
+      <StatusAnnouncer text={cover?.text} />
       {!session && (
         // `held`: a creation button goes away when its list gains content, from this window
         // or another, and a focused element that is removed leaves focus on `<body>`. It is the
@@ -559,17 +592,19 @@ export function TerminalPane({
         </div>
       )}
       {/* Floats over the terminal rather than covering it: a session that has just ended keeps its
-          last output on screen (`TerminalController.detach`), and that output is what says why. The
-          live region stays mounted and only its content comes and goes, as a live region has to
-          exist before its content changes to be announced. */}
-      <div role="status" className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
-        {session && isDormant && !resuming && !switching && (
+          last output on screen (`TerminalController.detach`), and that output is what says why. Its
+          sentence is spoken from a status region that stays mounted while the bar comes and goes (the
+          pane never opens on a dormant session); the visible sentence is hidden from assistive
+          technology so nothing is said twice, and the button stays reachable. */}
+      <StatusAnnouncer text={barSaid} />
+      <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
+        {dormantBar && (
           <Surface ref={barRef} className="pointer-events-auto flex items-center gap-3 rounded-lg px-3 py-2 text-sm shadow-lg">
-            <span className="text-app-muted">
-              {t(session.status === "archived" ? "terminal.archived" : "terminal.notRunning")}
+            <span aria-hidden="true" className="text-app-muted">
+              {dormantBar.sentence}
             </span>
-            <Button size="sm" variant="primary" preventFocusOnPress onPress={() => onResume(session.id)}>
-              {t(session.status === "archived" ? "sidebar.session.reopen" : "terminal.resume")}
+            <Button size="sm" variant="primary" preventFocusOnPress onPress={() => onResume(dormantBar.sessionId)}>
+              {dormantBar.action}
             </Button>
           </Surface>
         )}

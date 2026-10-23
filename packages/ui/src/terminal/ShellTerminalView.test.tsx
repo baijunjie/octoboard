@@ -63,13 +63,14 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-function mount(shown = true) {
+function mount(shown = true, record: ShellTerminal = terminal) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
   const ref = createRef<ShellTerminalViewHandle>();
-  act(() => root.render(<ShellTerminalView terminal={terminal} shown={shown} onClose={() => {}} ref={ref} />));
-  return { container, ref };
+  const show = (next: boolean) => act(() => root.render(<ShellTerminalView terminal={record} shown={next} onClose={() => {}} ref={ref} />));
+  show(shown);
+  return { container, ref, show };
 }
 
 const landing = (container: HTMLElement) => Array.from(container.querySelectorAll("[data-region-landing]"));
@@ -141,4 +142,61 @@ it("reports no focus when it did not land in the view", () => {
   const { ref } = mount();
   vi.spyOn(FakeController.last, "focus").mockImplementation(() => {});
   expect(ref.current!.focus()).toBe(false);
+});
+
+const FIRST_WRITE_MS = 1500;
+const regions = (container: HTMLElement) => Array.from(container.querySelectorAll<HTMLElement>("[role=status]:not([data-slot=spinner])"));
+const spoken = (container: HTMLElement) => regions(container).map((region) => region.textContent).filter(Boolean);
+
+it("mounts an exited shell's status empty and writes the sentence after the first write delay, keeping Close reachable", () => {
+  const { container } = mount(true, { ...terminal, state: "exited" });
+  expect(regions(container).every((region) => region.textContent === "")).toBe(true);
+  const close = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Close terminal")!;
+  expect(close.closest("[aria-hidden=true]")).toBeNull();
+  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+  expect(spoken(container)).toEqual(["The shell has exited"]);
+});
+
+it("mounts the trouble status empty and writes it after the first write delay, then follows later changes in place", () => {
+  const { container } = mount();
+  const before = regions(container);
+  FakeController.last.settle("closed");
+  expect(spoken(container)).toEqual([]);
+  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+  expect(spoken(container)).toEqual(["Reconnecting the terminal…"]);
+  expect(regions(container)).toEqual(before);
+  FakeController.last.settle("open");
+  expect(spoken(container)).toEqual([]);
+});
+
+it("announces nothing from a tab that is not shown", () => {
+  const { container } = mount(false, { ...terminal, state: "exited" });
+  FakeController.last.settle("closed");
+  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+  expect(spoken(container)).toEqual([]);
+  expect(container.querySelector("button")).toBeNull();
+});
+
+it("mounts empty status regions as an exited tab is shown, and writes after the focus-move delay", () => {
+  const { container, show } = mount(false, { ...terminal, state: "exited" });
+  expect(regions(container)).toEqual([]);
+  show(true);
+  expect(regions(container).every((region) => region.textContent === "")).toBe(true);
+  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS - 1));
+  expect(spoken(container)).toEqual([]);
+  act(() => void vi.advanceTimersByTime(1));
+  expect(spoken(container)).toEqual(["The shell has exited"]);
+  // Hidden again and shown again: a fresh empty region, not the text kept from before.
+  show(false);
+  show(true);
+  expect(spoken(container)).toEqual([]);
+});
+
+it("mounts empty status regions as a troubled tab is shown", () => {
+  const { container, show } = mount(false);
+  FakeController.last.settle("closed");
+  show(true);
+  expect(spoken(container)).toEqual([]);
+  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+  expect(spoken(container)).toEqual(["Reconnecting the terminal…"]);
 });

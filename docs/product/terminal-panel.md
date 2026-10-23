@@ -129,7 +129,9 @@ then sent away with its Close panel button or by moving the pointer away. In the
 A tab whose shell has exited (see "When the shell exits on its own" in `docs/product/shell-terminals.md`) keeps its
 final screen and is never reconnected. Its name reads "*title* (exited)", and while it is the shown tab a notice at the
 bottom of the terminal says the shell has exited, with a **Close terminal** button, which closes it without asking.
-Assistive technology is told of the notice as it appears. The tab stays until it is closed.
+Assistive technology is told the notice's sentence, only while the tab is shown: as the notice appears in the shown
+tab, and, for a tab that had already exited, about 1.5 seconds after the tab is shown. The Close terminal button is not
+part of what is said; it is reached as any other control. The tab stays until it is closed.
 
 ## Reconnecting
 
@@ -139,7 +141,8 @@ saying it is reconnecting; then a cover saying it is disconnected, with a **Reco
 connection to the daemon is open. Pressing Reconnect starts the attempts over and puts keyboard focus in the terminal.
 A terminal whose attempts are spent is tried again by Reconnect, or by itself when the application re-reads the
 daemon's whole state on a new connection to the daemon. Each tab reconnects on its own, shown or hidden; only the shown
-tab's state is told to assistive technology. A reconnect in the background never moves keyboard focus.
+tab's state is told to assistive technology, as it begins, and, for a tab already reconnecting or disconnected, about
+1.5 seconds after the tab is shown. A reconnect in the background never moves keyboard focus.
 
 Keyboard focus and Reconnect:
 

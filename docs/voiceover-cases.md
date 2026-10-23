@@ -681,8 +681,9 @@ not a literal HTML serialization. PLAIN-1 and PLAIN-2 are hand-built regions and
 - **Environment.** E4.
 - **Date.** 2026-10-20.
 - **Reuse scope.** Covers a persistent, visible `role="status"` that fills in place with text and a button, without a
-  focus move, in the main window. The archived or dormant agent surface of `TerminalPane` is a candidate only where its
-  whole region, focus and exposure agree; no agent resume path was recorded.
+  focus move, in the main window. The recorded mechanism has since been replaced: `ShellTerminalView` now speaks the
+  sentence from a `StatusAnnouncer` and the button sits outside the region, so this result stays as history and
+  matches the current code only as a candidate (see the caller table).
 
 ### Known not to work
 
@@ -817,26 +818,24 @@ items, and was not itself heard. A candidate still has to pass the checks under 
 | `viewer/CodeSurface.tsx` | expansion loading and note | SA-K and FOCUS-2 for the loading text and the focus after an expansion; no match for the outcome notes | Heard | Loading heard while the pressed button had focus, and focus restored to the surviving control or the code frame on E5. Notes, failure and capped outcomes were not exercised. |
 | `dialogs/LaunchSettingsFields.tsx`, `AdvancedSection` | models loading, unavailable, failed | SA-M for loading and failed; no match for the unavailable text | Heard | Region mounted with each opening outside the folded body, heard for a fresh opening and two reopenings. The unavailable text was not heard separately. |
 | `terminal/ShellTerminalPanel.tsx` | shell starting | none | none | Text can be present at the first render at default delay and clears as a terminal appears and takes focus, a write at a focus move; the starting status was not observed populated. |
+| `terminal/TerminalPane.tsx`, cover and dormant status | loading, starting, resuming, reconnecting, disconnected and switching covers; the dormant bar's "Not running" or "This session is archived" | SA-A for the writes into the mounted regions (the pane always mounts with no session, so SA-H applies only to test and gallery mounts); no match for a write made as selecting a session moves focus into the terminal, and none for the dormant bar's button | Candidate | Two `StatusAnnouncer` regions mounted with the pane, default delay (browser-observed: regions inserted empty, text written 100 to 250 ms later). The bar's sentence is `aria-hidden` and its button stays reachable, so only the sentence is spoken, not sentence and button as PLAIN-2 heard. The bar's sentence is held while a modal is open (selecting an interrupted session on an incomplete account asks first) and written `AFTER_FOCUS_MOVE_DELAY_MS` after the close, so it is not written under the modal (KNW-2). A sentence already spoken stays in the region unchanged through a modal, so closing it says nothing. Nothing was heard on the pane itself. An archived bar and `SessionHistoryView`'s own region can both hold text while the history loads (different sentences, no duplicate). |
+| `terminal/ShellTerminalView.tsx`, trouble and exited status | disconnected, reconnecting and exited, for the shown tab only | close to SA-H for the first write after a keyboard tab switch (focus stays on the tab; the regions are mounted with each showing, but with the longer `AFTER_FOCUS_MOVE_DELAY_MS`), a candidate only; no case matches a pointer switch or a new terminal, where focus moves into the view (open item); SA-A for trouble changes; PLAIN-2 for the exit filling in place while the terminal input keeps focus, with the sentence only | Candidate | Two `StatusAnnouncer` regions per shown tab, empty when mounted (browser-observed); a hidden tab has none, so switching to an exited or troubled tab writes its text after the delay rather than with the region. PLAIN-2 heard the earlier hand-built region holding the sentence and the Close terminal button, spoken as `The shell has exited Close terminal`; the button is now outside the region, so the match is for the sentence only, by decision, and it has to be listened to again before it is claimed. The write after a tab switch made with the pointer comes with a focus move into the view, which no case covers. |
 | `viewer/viewerStates.tsx`, `Notice` | the notice's sentence | none | none | The announcing branch is dormant: every call that speaks uses the failed tone, which suppresses its announcer, so no reachable non-failed speaking instance exists. SA-J is the nearest case by delay and exposure if one appears. |
 | `viewer/inlineNotice.tsx`, `InlineNotice` | the notice's sentence | none | none | As `Notice`; the only non-failed speaking branch cannot be reached because the daemon refuses files over its limit first. |
 | `App.tsx`, account switch outcome | a batch of account switches finished | none | none | Written seconds after the switch dialog has closed, once the batch finishes without failures, and cleared after 10 s. The credential-free fixture does not produce conversation records to switch, so it was not recorded. |
 
-Totals: of 19 callers, 12 were heard for the writes named (`Sidebar`, `ConnectionBanner`, `AccountLoginDialog`,
+Totals: of 21 callers, 12 were heard for the writes named (`Sidebar`, `ConnectionBanner`, `AccountLoginDialog`,
 `AccountLoginAnnouncer`, `PermissionsAnnouncer`, `ViewerContentView`, `UnchangedView`, `CopyButton`, `GitView`,
-`ActionMenu`, `CodeSurface`, `AdvancedSection`), 3 are candidates (`ImportReview`, `ChangeList`, `ProjectBrowser`) and 4
+`ActionMenu`, `CodeSurface`, `AdvancedSection`), 5 are candidates (`ImportReview`, `ChangeList`, `ProjectBrowser`, `TerminalPane`, `ShellTerminalView`) and 4
 match no case (`ShellTerminalPanel`, `Notice`, `InlineNotice`, the account switch outcome in `App`). Of the heard callers,
 `ConnectionBanner` and `AccountLoginAnnouncer` match for every write they make; the other ten match for some writes
-only. Of the candidates, `ImportReview` matches for every write it makes; `ChangeList` and `ProjectBrowser` for some.
+only. Of the candidates, `ImportReview` matches for every write it makes; `ChangeList`, `ProjectBrowser`, `TerminalPane` and `ShellTerminalView` for some.
 
 Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
 
 | Element (file, symbol) | Case | Why |
 |---|---|---|
-| `terminal/ShellTerminalView.tsx`, visible exit status | PLAIN-2 | Heard: persistent status filled in place with text and a button, terminal input keeping focus. |
 | `WelcomeScreen.tsx` | none | A plain status populated on mount, then replaced in place from "Checking…" to Installed or Not detected when availability arrives. The populated-on-mount shape is the one not spoken for the earlier Permissions rows (KNW-7); not mounted or tested separately. |
-| `terminal/TerminalPane.tsx`, visible dormant status | none | A source candidate for PLAIN-2 only where the whole region, focus and exposure agree; no agent archive or resume was recorded. |
-| `terminal/TerminalPane.tsx`, `sr-only` cover status | none | The always-mounted region says the cover's text, which covers loading, reconnecting and disconnected, not trouble only. A clean exposed disconnect was not obtained: stopping the daemon raises an error alert that masks it. |
-| `terminal/ShellTerminalView.tsx`, `sr-only` trouble status | none | Says disconnected or reconnecting for the shown tab only; masked in the same way. |
 | `browser/GitView.tsx`, notices region | none | The "branch deleted" notice was not reached: the review drops a gone selected branch and returns to its own branch. |
 
 ## Open items
@@ -853,8 +852,16 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
   opened directly onto Permissions (no production control opens it there, so it is untested); `GitView`'s replacement
   sequences and notices region (no fixture reached them); `ProjectBrowser`'s search loading (not recorded);
   the account switch outcome in `App` (the credential-free fixture does not produce conversation records to
-  switch); `ShellTerminalPanel`'s starting status (not observed populated); the `sr-only` terminal statuses and the
-  dormant `TerminalPane` status (an error alert masks the first, no agent archive was recorded for the second).
+  switch); `ShellTerminalPanel`'s starting status (not observed populated); the terminal statuses of
+  `TerminalPane` and `ShellTerminalView` (see the open items below).
+- Terminal statuses, written through `StatusAnnouncer`, not yet listened to: the agent cover texts (loading, starting,
+  resuming, reconnecting, disconnected, switching account) and the dormant bar's sentences; the shell tab's trouble and
+  exited sentences. Open questions: whether the exited sentence alone, with the Close terminal button outside the
+  region, still speaks as PLAIN-2 did with the button inside (accepted by decision); writes made as selecting a session
+  or pressing a shell tab moves focus into the terminal match no case (the same focus-move gap as SA-C and SA-I). The
+  interrupted dormant bar is staged by the gallery scenario `terminal-not-running-bar`; its sentence is held while the
+  "Start on <account>?" question is open and written after it closes, a write after a modal closes that no passing case
+  covers directly. The close-terminal confirmation of `ShellTerminalPanel` is not counted in the pane's modal flag (rare: the session would have to end during that confirmation).
 - A write made while the region is under an open modal outside a marker: heard failing in the login success form
   (KNW-2); no passing case.
 - A window visible but not frontmost, and a minimized window with the application also not frontmost (KNW-4's condition,

@@ -114,7 +114,9 @@ connected — a first connection that hangs, an attempt started with Reconnect, 
 the loading state stays, however long that takes. While the terminal is reconnecting
 or disconnected, the cover described in "Reconnecting" above is shown in its place. While the session is shown as
 switching its account, the cover described in "While a session is switching" in
-`docs/product/switching-session-accounts.md` is shown in place of all of these.
+`docs/product/switching-session-accounts.md` is shown in place of all of these. Assistive technology is told the line
+of the loading state and of the switching cover as each begins, by the terminal's area alone, as it is told the
+covers in "Reconnecting" above.
 
 ## Interrupted, archived and dormant sessions
 
@@ -126,7 +128,13 @@ switching its account, the cover described in "While a session is switching" in
   it is under way, the terminal shows a card at its bottom centre, raised over it by a large shadow with no outline
   (see "The window chrome and the content panel" in `docs/product/window-layout.md`): for an interrupted session it
   reads "Not running" and offers "Resume"; for an archived one it says the session is archived and offers "Reopen".
-  The card is hidden while the session is being resumed or is shown as switching its account.
+  The card is hidden while the session is being resumed or is shown as switching its account. Assistive technology
+  is told the card's sentence once, as the card appears or its sentence changes; its button is not part of what is
+  said, and is reached as any other control. When the card appears or its sentence changes while a dialog is open over
+  the window — the confirmation that selecting an interrupted session can ask first (see "Starting a session on an
+  account whose last change is incomplete" in `docs/product/sharing-the-default-configuration.md`), for one — the
+  sentence is told about 1.5 seconds after the dialog closes, after what the return of keyboard focus says. A sentence
+  already told before a dialog opened is not told again when it closes.
 - **An archived session shows its history, not its terminal**: a read-only list of what was said in it, read from the
   agent's own record (see `docs/product/session-history.md`). Its terminal cannot be reached: nothing typed or pasted
   goes anywhere, and typing does not reopen it. Reopening it — the card's "Reopen", or the other ways in "Archiving,

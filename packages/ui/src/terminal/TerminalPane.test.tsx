@@ -108,7 +108,11 @@ function failAttempt(): void {
   act(() => void vi.advanceTimersByTime(8000));
 }
 
-const status = (container: HTMLElement) => container.querySelector(".sr-only")?.textContent;
+const FIRST_WRITE_MS = 100;
+/** Lets the status regions pass their first write delay. */
+const speak = () => act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+/** The cover's spoken text: its region is the first status region the pane renders. */
+const status = (container: HTMLElement) => container.querySelector("[role=status]:not([data-slot=spinner])")?.textContent;
 
 it("keeps the loading cover up past the limit while the first connect hangs", () => {
   const { container } = mount();
@@ -118,6 +122,7 @@ it("keeps the loading cover up past the limit while the first connect hangs", ()
 
 it("keeps the cover up past the loading limit while the connection is failing", () => {
   const { container } = mount();
+  speak();
   expect(status(container)).toBe("Loading terminal…");
   failAttempt();
   expect(status(container)).toBe("Reconnecting the terminal…");
@@ -346,6 +351,7 @@ it("covers the terminal with the switching state, inert and ahead of a failing c
   const terminal = () => container.querySelector("[data-region=terminal] > .isolate")!;
   expect(terminal().hasAttribute("inert")).toBe(false);
   render(root, { ...session, switching_account: true });
+  speak();
   expect(status(container)).toBe("Switching account…");
   expect(terminal().hasAttribute("inert")).toBe(true);
   expect(container.querySelector("[data-slot=spinner]")).not.toBeNull();
@@ -362,6 +368,7 @@ it("offers no Resume over the cover while an account switch holds an interrupted
   render(root, interrupted);
   expect(container.textContent).toContain("Not running");
   render(root, { ...interrupted, switching_account: true });
+  speak();
   expect(status(container)).toBe("Switching account…");
   expect(container.textContent).not.toContain("Not running");
   expect([...container.querySelectorAll("button")].map((button) => button.textContent)).not.toContain("Resume");
@@ -375,6 +382,7 @@ it("covers a starting session with its own message and attaches only once it is 
   render(root, starting);
   const controller = FakeController.last;
   expect(controller.attaches).toBe(0);
+  speak();
   expect(status(container)).toBe("Starting session…");
   expect(container.querySelector("[data-slot=spinner]")).not.toBeNull();
   // No process to connect to, so no error cover, no Reconnect and no unavailable message.
@@ -463,6 +471,7 @@ it("covers the history with the loading state while a reopen is under way", asyn
   const { container, show } = mountArchived();
   await act(async () => {});
   show({ resuming: true });
+  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
   expect(container.querySelector("[inert] section")).not.toBeNull();
   const statuses = [...container.querySelectorAll("[role=status]")].map((node) => node.textContent);
   expect(statuses).toContain("Resuming session…");
@@ -501,4 +510,100 @@ it("hands focus back to the history when a reopen ends with the session still ar
   expect(document.activeElement).toBe(document.body);
   show({ resuming: false });
   expect(container.querySelector("section")?.contains(document.activeElement)).toBe(true);
+});
+
+const statusRegions = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>("[role=status]:not([data-slot=spinner])")];
+
+it("mounts the cover's status region empty and writes its first text after the first write delay", () => {
+  const { container } = mount();
+  const [region] = statusRegions(container);
+  expect(region.textContent).toBe("");
+  expect(container.textContent).toContain("Loading terminal…");
+  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS - 1));
+  expect(region.textContent).toBe("");
+  act(() => void vi.advanceTimersByTime(1));
+  expect(region.textContent).toBe("Loading terminal…");
+  // Later changes go into the same region at once.
+  FakeController.last.settle("closed");
+  expect(statusRegions(container)[0]).toBe(region);
+  expect(region.textContent).toBe("Reconnecting the terminal…");
+});
+
+it("mounts the switching and resuming statuses empty, then writes them", () => {
+  const { container, root } = mount();
+  render(root, { ...session, switching_account: true });
+  const switching = statusRegions(container)[0];
+  expect(switching.textContent).toBe("");
+  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+  expect(switching.textContent).toBe("Switching account…");
+  const dormant = mountArchived();
+  dormant.show({ resuming: true });
+  expect(statusRegions(dormant.container).map((region) => region.textContent)).toEqual(["", "", ""]);
+  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+  expect(statusRegions(dormant.container).map((region) => region.textContent)).toContain("Resuming session…");
+});
+
+it("speaks a dormant bar's sentence once, from a region mounted empty, and leaves the button reachable", () => {
+  const interrupted = sessionOf("s-1", "c-1", undefined, "Work", "interrupted");
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  render(root, interrupted);
+  const spoken = () => statusRegions(container).map((region) => region.textContent);
+  expect(spoken().every((text) => text === "")).toBe(true);
+  const sentence = [...container.querySelectorAll("[aria-hidden=true]")].find((node) => node.textContent === "Not running");
+  expect(sentence).toBeDefined();
+  expect(container.querySelector("button")?.closest("[aria-hidden=true]")).toBeNull();
+  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+  expect(spoken().filter((text) => text === "Not running")).toHaveLength(1);
+  // Resume's own cover takes the bar's place without a second copy of the bar's sentence.
+  render(root, { ...interrupted, switching_account: true });
+  expect(spoken().filter((text) => text === "Not running")).toHaveLength(0);
+});
+
+it("speaks an archived bar's sentence and leaves the history's own announcer to its own states", async () => {
+  daemon.request.mockResolvedValueOnce({ type: "session_history", messages: [{ speaker: "user", text: "Hello", turn: 1 }] } as { type: string });
+  const { container } = mountArchived();
+  await act(async () => {});
+  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+  const spoken = statusRegions(container).map((region) => region.textContent).filter(Boolean);
+  expect(spoken).toEqual(["This session is archived"]);
+});
+
+it("holds the dormant sentence while a modal is open and writes it after the close and the focus move", () => {
+  const interrupted = sessionOf("s-1", "c-1", undefined, "Work", "interrupted");
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  const show = (modalOpen: boolean) => act(() => root.render(<TerminalPane session={interrupted} modalOpen={modalOpen} onResume={async () => true} onAddAgent={() => {}} />));
+  const spoken = () => statusRegions(container).map((region) => region.textContent).filter(Boolean);
+  show(true);
+  speak();
+  expect(spoken()).toEqual([]);
+  show(false);
+  act(() => void vi.advanceTimersByTime(1499));
+  expect(spoken()).toEqual([]);
+  act(() => void vi.advanceTimersByTime(1));
+  expect(spoken()).toEqual(["Not running"]);
+});
+
+it("keeps a sentence already spoken in the region while a modal opens and closes over it", () => {
+  const interrupted = sessionOf("s-1", "c-1", undefined, "Work", "interrupted");
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  const show = (modalOpen: boolean) => act(() => root.render(<TerminalPane session={interrupted} modalOpen={modalOpen} onResume={async () => true} onAddAgent={() => {}} />));
+  show(false);
+  speak();
+  const region = () => statusRegions(container).find((node) => node.textContent === "Not running");
+  expect(region()).toBeDefined();
+  const text = () => statusRegions(container).map((node) => node.textContent).filter(Boolean);
+  show(true);
+  expect(text()).toEqual(["Not running"]);
+  act(() => void vi.advanceTimersByTime(500));
+  expect(text()).toEqual(["Not running"]);
+  show(false);
+  expect(text()).toEqual(["Not running"]);
+  act(() => void vi.advanceTimersByTime(3000));
+  expect(text()).toEqual(["Not running"]);
 });
