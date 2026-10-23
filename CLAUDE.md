@@ -101,11 +101,31 @@ At delivery:
    update them via the `agent-docs` skill.
 4. **UI preview**: preview for the user via the `agent-gallery` skill; whether to preview and whether to wait for
    confirmation is up to its judgement.
-5. **Formatting and checks**: first run the project's agreed formatting commands to rewrite the code, then run all
-   of the project's agreed checks — format checks, type checking, lint, build, tests — and confirm they all pass;
-   if they do not, fix and re-run all of the checks. Skip any the project has not agreed on.
+5. **Formatting and checks**: first run the project's agreed formatting commands to rewrite the code, then run the
+   checks by the scope of the change and confirm they all pass; if they do not, fix, then re-determine the scope from
+   the changes as they now stand and run again. Scope:
 
-The full formatting and checks run only in the "Formatting and checks" step, before the final commit and delivery
+   - **The full set** is the check commands the project states in its instruction file or docs (whichever of format
+     checks, type checking, lint, build, and tests it states). If it states none, take the local check commands of those
+     kinds that the project configuration already has as the full set (excluding anything with external side effects,
+     such as publishing or deploying), and tell the user to write the full set into the instruction file; if there are
+     none at all, tell the user there are no checks to run this time.
+   - **Changes only to files that the build, type checking, and tests never read** (usually docs, instruction files, and
+     skill and subagent definitions; those that a build or test validates do not count): run only the format checks and
+     lint that cover those files; if there are none, run nothing and tell the user.
+   - **Apart from files of that kind, changes only within one package or module**, for which the project states its own
+     check commands in its instruction file or docs, and which no other package depends on: run that package's checks,
+     and run the checks for the files outside the package as in the previous bullet.
+   - **Everything else runs the full set**: changes to a shared layer that many places depend on (shared code and types,
+     a package that other packages depend on, the configuration of formatting, type checking, build, tests, and lint,
+     dependency versions), changes spanning several packages, or a case that cannot be judged.
+
+   The changes that set the scope are all of the branch's changes relative to the point where it diverged from the
+   target branch (relative to before the change, for changes made directly on the target branch); where a rebase or
+   merge brought in new code, they also include the brought-in range (the difference between the two divergence points
+   before and after the rebase or merge) and the places changed while resolving conflicts, not only the original change.
+
+Formatting and checks run only in the "Formatting and checks" step, before the final commit and delivery
 (push, PR or merge); the earlier steps do not run them separately (the related tests a step runs to confirm its
 own change do not count).
 
@@ -114,8 +134,7 @@ own change do not count).
   mechanical fixes such as formatting or type annotations do not go through again.
 - **The same content is not re-run**: if the content has not changed since the self-check (such as only
   squashing), a later push, PR or merge does not redo it; if a rebase or merge brought in someone else's new code,
-  re-run formatting and checks on the whole current content, the brought-in code included, not only the original
-  change.
+  re-run formatting and checks, with the scope counting the brought-in code in with the changes.
 - **Clean-up**: after formatting and checks pass, and before the branch is merged or a PR is opened, clean up via
   the `agent-gallery` skill; do the same before this round's changes are abandoned or the working copy is deleted.
 
@@ -124,5 +143,25 @@ own change do not count).
 - Within "Documentation update": `docs/ui-accessibility.md`, the UI's accessibility standard, has no writer subagent
   of its own — you maintain it yourself, from what the change turned up and from what a writer subagent hands back as
   belonging to it. Skip it when this round's changes touch nothing it states.
+- The full set for "Formatting and checks": `pnpm format:check` (ESLint and rustfmt), `pnpm typecheck`,
+  `pnpm -r test`, `pnpm --filter @octoboard/web check:locales`, and `cargo test` from the root (build the daemon
+  sidecar first with `pnpm --filter @octoboard/desktop build:daemon` when it is missing). `pnpm build` is not in it;
+  run it too when a change touches build configuration or build scripts.
+- Each package's own checks for "Formatting and checks" (`<files>` is the package's changed files that still
+  exist; skip ESLint when there are none):
+  - `packages/ui`: `pnpm --filter @octoboard/ui typecheck`, `pnpm --filter @octoboard/ui test`, and
+    `pnpm exec eslint --max-warnings 0 --no-warn-ignored <files>`.
+  - `apps/web`: `pnpm --filter @octoboard/web typecheck`, `pnpm --filter @octoboard/web test`,
+    `pnpm --filter @octoboard/web check:locales`, and `pnpm exec eslint --max-warnings 0 --no-warn-ignored <files>`.
+  - `apps/daemon`: `cargo fmt -p octoboardd -- --check` and `cargo test -p octoboardd`.
+
+  These count as spanning packages, and run the full set: a change to what `apps/web` imports from
+  `packages/ui/src` (`i18n/matchLanguage.ts` and what it imports); a change to the inputs of the preview build
+  `apps/web` takes from `packages/ui` (`vite.preview.config.ts`, `website-preview.html`, `src/website-preview/`),
+  which needs `pnpm build` as well; a change to the wire protocol `apps/daemon/PROTOCOL.md` specifies, which the UI and
+  the desktop shell's sidecar handling consume; a change to a contract between `apps/desktop` and `packages/ui`, such
+  as the Tauri commands and events, the window URL's parameters, the menu message keys and the status item icons.
+  Bundling the other packages' build output alone does not. `apps/desktop` has no entry of its own: a change to it
+  runs the full set.
 
 <!-- setup-agent:workflow:end -->
