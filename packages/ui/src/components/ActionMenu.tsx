@@ -291,7 +291,7 @@ function LoadedMenuItems({ load }: { load: () => Promise<ActionMenuEntry[]> }): 
     <MenuItems entries={entries ?? (error ? [
       { label: t("menu.loadFailed", { detail: isolate(error) }), icon: TriangleAlert, disabled: true, onClick: () => {} },
       { label: t("error.tryAgain"), icon: RefreshCw, closeOnSelect: false, onClick: refresh },
-    ] : [{ label: t("menu.loading"), icon: LoaderCircle, disabled: true, onClick: () => {} }])} />
+    ] : [{ label: t("menu.loading"), icon: LoaderCircle, iconClassName: "motion-safe:animate-spin", disabled: true, onClick: () => {} }])} />
   </>;
 }
 
