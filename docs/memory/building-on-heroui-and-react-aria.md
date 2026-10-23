@@ -70,6 +70,21 @@ on a state attribute, check in that same file that the hook setting it is not di
 it is, use the CSS pseudo-class through Tailwind (`hover:`, `group-hover/<name>:`). The jsdom tests never hover, so
 only a real pointer in the running page shows the miss.
 
+## Inside a list or menu item, HeroUI's `Label` and `Description` take no pointer events
+
+HeroUI's stylesheets for a `ListBox.Item` and a menu item (`list-box-item.css`, `menu-item.css` under
+`packages/ui/node_modules/@heroui/styles/dist/components/`) set `pointer-events: none` on the item's
+`[data-slot="label"]` and `[data-slot="description"]` — what HeroUI's `Label` and `Description` render. The property
+is inherited, so anything hover-driven placed inside one never fires: a tooltip opened on `pointerenter`, a
+`FadeOverflow` marquee, a `hover:` style. A click still reaches the item, which is why the part looks fine.
+
+Where such a part has to hold something that answers the pointer, put `pointer-events-auto` on that element itself,
+as the path under each directory in `packages/ui/src/dialogs/DirectoryPicker.tsx` does; a press on it still bubbles to
+the item. Text outside those two parts, a direct child of the item, is unaffected. Before relying on hover inside any
+other HeroUI part, search its stylesheet in that directory for `pointer-events-none`. The jsdom tests and the
+gallery's hover steps dispatch events to an element rather than hit-testing, so they pass either way; only a real
+pointer in the running page shows the miss.
+
 ## An ancestor's context decides a react-aria element's props, so the default in its own file is not what renders
 
 A react-aria-components element merges a context value over the props it was given (`useContextProps`), and a parent

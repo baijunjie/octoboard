@@ -231,6 +231,17 @@ const HOME_LISTING = [
   "work",
 ].map((name) => ({ name, path: `/Users/dev/${name}`, is_git_repo: ["code", "dotfiles", "repos", "scratch"].includes(name) }));
 
+/** A directory on the daemon host outside its home directory, so no path in it can be written with `~`. */
+const OUTSIDE_HOME_LISTING = [
+  { name: "api", is_git_repo: true },
+  { name: "site", is_git_repo: true },
+  { name: "shared-assets", is_git_repo: false },
+].map(({ name, is_git_repo }) => ({ name, path: `/srv/projects/${name}`, is_git_repo }));
+
+/** The host's root directory, with more subdirectories than the picker's list is tall. */
+const ROOT_LISTING = ["Applications", "Library", "System", "Users", "Volumes", "bin", "cores", "dev", "etc", "home", "opt", "private", "sbin", "srv", "tmp", "usr", "var"]
+  .map((name) => ({ name, path: `/${name}`, is_git_repo: false }));
+
 /** Compatible console and project cases coexist; menus select the entity to inspect. */
 const dialogState = {
   ...accountsState,
@@ -1419,7 +1430,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Directory picker",
-    description: "Short directory names and a long directory row share the list, and a repository ends in a neutral \"git\" badge; the long name fades and runs as a marquee on hover while its folder icon stays visible.",
+    description: "Each row shows the directory's name with its full path beneath in small muted text, the home directory written as ~, and a repository ends in a neutral \"git\" badge. On the long row the name fades and runs as a marquee on hover, and the path is cut from its start so the directory's own name at its end stays visible, with the folder icon level with the name.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
@@ -1446,6 +1457,53 @@ export const dialogScenarios: Scenario[] = [
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
       (ui) => ui.press(ui.t("common.browse")),
       (ui) => ui.press("Documents"),
+    ],
+  },
+  {
+    ...dialogFixture,
+    id: "dialog-directory-picker-outside-home",
+    group: "Projects",
+    category: "normal",
+    title: "Directory picker outside the home directory",
+    description: "A listing that does not sit under the home directory: each row's path is written in full, with no ~, and carries no tooltip.",
+    directories: { ...dialogFixture.directories, "/srv/projects": OUTSIDE_HOME_LISTING },
+    steps: [
+      consoleActions,
+      (ui) => ui.press(ui.t("sidebar.console.addProject")),
+      (ui) => ui.focus(ui.t("dialog.project.directory")),
+      (ui) => ui.type("/srv/projects"),
+      (ui) => ui.press(ui.t("common.browse")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    id: "dialog-directory-picker-scrolled",
+    group: "Projects",
+    category: "normal",
+    title: "Directory picker scrolled",
+    description: "The list is scrolled partway: the Parent directory row stays pinned at the top of the list, fully opaque and not faded, while the rows pass under it and the list's top fade starts just below it.",
+    steps: [
+      consoleActions,
+      (ui) => ui.press(ui.t("sidebar.console.addProject")),
+      (ui) => ui.press(ui.t("common.browse")),
+      (ui) => ui.scrollCollection(ui.t("directoryPicker.subdirectories"), 126),
+    ],
+  },
+  {
+    ...dialogFixture,
+    id: "dialog-directory-picker-root-scrolled",
+    group: "Projects",
+    category: "normal",
+    title: "Directory picker at the root directory, scrolled",
+    description: "The root has no parent, so the list has no Parent directory row and reserves nothing at its top: scrolled partway, rows run up to the list's edge under the top fade.",
+    directories: { ...dialogFixture.directories, "/": ROOT_LISTING },
+    steps: [
+      consoleActions,
+      (ui) => ui.press(ui.t("sidebar.console.addProject")),
+      (ui) => ui.focus(ui.t("dialog.project.directory")),
+      (ui) => ui.type("/"),
+      (ui) => ui.press(ui.t("common.browse")),
+      (ui) => ui.scrollCollection(ui.t("directoryPicker.subdirectories"), 126),
     ],
   },
   {

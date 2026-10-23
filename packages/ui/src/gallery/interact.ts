@@ -165,7 +165,7 @@ export interface Ui {
    * named by the dialog's title, and the startup screen's message. A step cannot press Tab itself:
    * a script's key event moves nothing. */
   tabToRegion: (name: Matcher) => Promise<void>;
-  /** Scrolls a named grid or tree to a settled offset without moving keyboard focus. */
+  /** Scrolls a named grid, tree or list box to a settled offset without moving keyboard focus. */
   scrollCollection: (name: Matcher, top: number) => Promise<void>;
   /** Scrolls the tab panel named `name` (a Settings section, by its tab's name) to a settled offset without moving
    * keyboard focus: the first element inside it that scrolls vertically, the section's own scroller. An offset past
@@ -572,7 +572,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     },
     async scrollCollection(matcher, top) {
       const collection = await waitFor(
-        () => Array.from(doc.querySelectorAll<HTMLElement>('[role="grid"], [role="treegrid"], [role="tree"]')).find((element) => matches(matcher, nameOf(element))),
+        () => Array.from(doc.querySelectorAll<HTMLElement>('[role="grid"], [role="treegrid"], [role="tree"], [role="listbox"]')).find((element) => matches(matcher, nameOf(element))),
         `No collection named ${String(matcher)} to scroll`,
       );
       collection.scrollTo({ top, behavior: "instant" });

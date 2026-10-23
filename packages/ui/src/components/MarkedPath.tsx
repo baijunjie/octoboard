@@ -26,17 +26,19 @@ export function PlainMarkedPath({
   return (
     <span className="flex min-w-0 items-center gap-1.5">
       {React.isValidElement(Icon) ? Icon : <Icon size={14} aria-hidden className="shrink-0 text-app-muted" />}
-      <FadeOverflow
-        as="span"
-        className="min-w-0 flex-1 font-mono text-xs leading-5"
-        dir="ltr"
-        clip="start"
-        titleWhenClipped={path}
-        title={shown === path ? undefined : path}
-      >
-        {shown}
-      </FadeOverflow>
+      <PathText path={path} shown={shown} className="min-w-0 flex-1 font-mono text-xs leading-5" />
     </span>
+  );
+}
+
+/** The path text alone, with no icon or type style of its own: cut from its start when too long so
+ * its own last name stays visible, with the full path as the tooltip while it is clipped or while
+ * `shown` words it differently. `className` supplies the sizing, as for `FadeOverflow`. */
+export function PathText({ path, shown = path, className }: { path: string; shown?: string; className: string }): React.ReactElement {
+  return (
+    <FadeOverflow as="span" className={className} dir="ltr" clip="start" titleWhenClipped={path} title={shown === path ? undefined : path}>
+      {shown}
+    </FadeOverflow>
   );
 }
 

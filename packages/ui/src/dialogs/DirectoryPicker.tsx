@@ -1,18 +1,22 @@
-import { Input, ListBox } from "@heroui/react";
+import { Description, Input, ListBox } from "@heroui/react";
 import { CornerLeftUp, Folder } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { Button } from "../components/Button";
 import { FailureAlert } from "../components/FailureAlert";
+import { PathText } from "../components/MarkedPath";
+import { useStickyHeadingFocus } from "../components/stickyHeadingFocus";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { StatusBadge } from "../components/StatusBadge";
 import { DaemonRequestError } from "../daemon-client";
 import { FadeOverflow } from "../components/FadeOverflow";
-import { useScrollFade } from "../components/scrollFade";
+import { useStickyScrollFade } from "../components/scrollFade";
 import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
-import { useT } from "../i18n/react";
+import { joinPhrases } from "../i18n/joinPhrases";
+import { useCurrentLanguage, useT } from "../i18n/react";
 import type { DirEntry, Event } from "../protocol";
-import { useDaemon } from "../store";
+import { abbreviateHome } from "../pathDisplay";
+import { useDaemon, useDaemonStore } from "../store";
 import { Dialog, useRefocusIfLost } from "./Dialog";
 import { useTrimmedField } from "./useTrimmedField";
 
@@ -20,6 +24,10 @@ import { useTrimmedField } from "./useTrimmedField";
  * path, which neither of these can be. */
 const PARENT_KEY = "..";
 const EMPTY_KEY = "empty";
+
+/** The parent-directory row's height, the 4px the list keeps above it for its focus ring included:
+ * what the row occupies while it is pinned, and so where the fade starts. */
+const PARENT_ROW_HEIGHT = 40;
 
 /** The directory containing `path`, `~` once there is nothing above it. */
 function ancestorOf(path: string): string {
@@ -66,11 +74,6 @@ export function DirectoryPicker({
   // taking a second press, and the failure stays shown until the listing answers.
   const [retrying, setRetrying] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
-  // The list scrolls on its own inside the dialog, which `Dialog`'s body fade does not reach. The
-  // rows' focus ring and its offset fit within the `ListBox`'s own `p-1`, so the scroller does not
-  // clip it.
-  const fade = useScrollFade({ ref: listRef, className: "max-h-72 overflow-y-auto" });
-
   const load = async (targetPath: string, initial = false) => {
     try {
       const event = (await request({ type: "list_dir", path: targetPath })) as Extract<Event, { type: "dir_listing" }>;
@@ -154,49 +157,102 @@ export function DirectoryPicker({
         />
       )}
       {entries && (
-        // The frame is this picker's own: it composes HeroUI's `ListBox` into a higher-level
-        // browser and marks out the scrolling region within the dialog, an addition on top of
-        // HeroUI rather than a redrawn default, so work that restores HeroUI's own look leaves it
-        // alone. It sits outside the scroller so the scroll fade dims the rows, never the frame, and
-        // is a flex column so the list shrinks with a short dialog body and its last rows stay
-        // reachable rather than being cut off.
-        <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-separator">
-          <ListBox
-            {...fade}
-            aria-label={t("directoryPicker.subdirectories")}
-            // `selectionMode` stays `none`: an entry is only ever entered, never picked. Activating
-            // one (click, Enter) calls `onAction`.
-            onAction={(key) => void load(key === PARENT_KEY ? parentOf(resolvedPath ?? "/") : String(key))}
-          >
-            {resolvedPath && resolvedPath !== "/" && (
-              <ListBox.Item data-marquee-scope id={PARENT_KEY} textValue={t("directoryPicker.parent")} aria-label={t("directoryPicker.parent")}>
-                <CornerLeftUp aria-hidden="true" className="size-4 shrink-0 text-app-muted rtl:-scale-x-100" />
-                <FadeOverflow className="min-w-0 flex-1 text-app-muted" titleWhenClipped={t("directoryPicker.parent")}>{t("directoryPicker.parent")}</FadeOverflow>
-              </ListBox.Item>
-            )}
-            {entries.map((entry) => (
-              <ListBox.Item data-marquee-scope key={entry.path} id={entry.path} textValue={entry.name}>
-                <Folder aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
-                <FadeOverflow dir="auto" className="min-w-0 flex-1 text-foreground" titleWhenClipped={entry.name}>
-                  {entry.name}
-                </FadeOverflow>
-                {entry.is_git_repo && (
-                  <StatusBadge className="ms-auto">
-                    git
-                  </StatusBadge>
-                )}
-              </ListBox.Item>
-            ))}
-            {entries.length === 0 && (
-            // Inside the list, as an option that cannot be acted on: arrow keys skip it, and the
-            // list is never left without an option, which a listbox needs.
-              <ListBox.Item data-marquee-scope id={EMPTY_KEY} isDisabled textValue={t("directoryPicker.empty")}>
-                <FadeOverflow className="min-w-0 flex-1" titleWhenClipped={t("directoryPicker.empty")}>{t("directoryPicker.empty")}</FadeOverflow>
-              </ListBox.Item>
-            )}
-          </ListBox>
-        </div>
+        <DirectoryList
+          listRef={listRef}
+          entries={entries}
+          showParent={!!resolvedPath && resolvedPath !== "/"}
+          onOpen={(key) => void load(key === PARENT_KEY ? parentOf(resolvedPath ?? "/") : key)}
+        />
       )}
     </Dialog>
+  );
+}
+
+/** The framed list of a listing's directories. It is a component of its own so the fade's hook
+ * mounts together with the list: `useStickyScrollFade` binds to the scroller once, and the list
+ * only exists after the first listing. */
+function DirectoryList({ listRef, entries, showParent, onOpen }: {
+  listRef: React.RefObject<HTMLDivElement | null>;
+  entries: DirEntry[];
+  /** Whether the listing has a directory above it (anything but `/`). */
+  showParent: boolean;
+  /** Receives the activated entry's id: `PARENT_KEY` or a directory's path. */
+  onOpen: (key: string) => void;
+}): React.ReactElement {
+  const t = useT();
+  const language = useCurrentLanguage();
+  const home = useDaemonStore((s) => s.homeDir);
+  // The list scrolls on its own inside the dialog, which `Dialog`'s body fade does not reach. The
+  // rows' focus ring and its offset fit within the `ListBox`'s own `p-1`, so the scroller does not
+  // clip it. The parent-directory row stays pinned above the entries, so the fade is the overlay
+  // kind that paints below it instead of a mask that would dim it.
+  const { props: fade, wrap } = useStickyScrollFade({ ref: listRef, className: "max-h-72 overflow-y-auto", stickyHeadingHeight: showParent ? PARENT_ROW_HEIGHT : 0, stickySurface: "overlay" });
+  const pinnedFocus = useStickyHeadingFocus(PARENT_ROW_HEIGHT);
+  return (
+    // The frame is this picker's own: it composes HeroUI's `ListBox` into a higher-level
+    // browser and marks out the scrolling region within the dialog, an addition on top of
+    // HeroUI rather than a redrawn default, so work that restores HeroUI's own look leaves it
+    // alone. It sits outside the scroller so the scroll fade covers the rows, never the frame, and
+    // is a flex column so the list shrinks with a short dialog body and its last rows stay
+    // reachable rather than being cut off.
+    <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-separator">
+      {wrap(
+        <ListBox
+          {...fade}
+          aria-label={t("directoryPicker.subdirectories")}
+          // `selectionMode` stays `none`: an entry is only ever entered, never picked. Activating
+          // one (click, Enter) calls `onAction`.
+          onAction={(key) => onOpen(String(key))}
+        >
+          {showParent && (
+            // Pinned at the list's top, opaque so the entries scrolling under it do not show
+            // through. A shadow paints the 4px the list keeps above the row in the same colour,
+            // beneath the focus ring's own shadow layers, so the entries do not pass through that
+            // strip either and the ring stays whole. Of the sticky-heading props only the scroll
+            // hold of the focus handlers does anything here: the scroll margin and the heading
+            // marker are for a heading's inner controls and for `FadedScroller`.
+            <ListBox.Item
+              {...pinnedFocus}
+              data-marquee-scope
+              id={PARENT_KEY}
+              textValue={t("directoryPicker.parent")}
+              aria-label={t("directoryPicker.parent")}
+              className={`sticky top-0 z-3 bg-overlay shadow-[0_-4px_0_0_var(--color-overlay)] data-[hovered=true]:bg-default ${pinnedFocus.className}`}
+            >
+              <CornerLeftUp aria-hidden="true" className="size-4 shrink-0 text-app-muted rtl:-scale-x-100" />
+              <FadeOverflow className="min-w-0 flex-1 text-app-muted" titleWhenClipped={t("directoryPicker.parent")}>{t("directoryPicker.parent")}</FadeOverflow>
+            </ListBox.Item>
+          )}
+          {entries.map((entry) => (
+            // The name and the path under it are two labels, so each runs its own marquee rather
+            // than the row being one marquee scope. The row is named by the directory's name and
+            // its git badge, leaving the path out of the name; the path is its description. That
+            // label already joins the name and the badge, so the badge adds no comma of its own.
+            <ListBox.Item key={entry.path} id={entry.path} textValue={entry.name} aria-label={entry.is_git_repo ? joinPhrases(language, [entry.name, "git"]) : entry.name}>
+              {/* Centred on the name's 20px line rather than on the two-line row. */}
+              <Folder aria-hidden="true" className="mt-0.5 size-4 shrink-0 self-start text-app-muted" />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <FadeOverflow dir="auto" className="min-w-0 text-foreground" titleWhenClipped={entry.name}>
+                  {entry.name}
+                </FadeOverflow>
+                <Description className="flex min-w-0">
+                  {/* HeroUI turns pointer events off on an item's description, which would leave
+                      the path without its tooltip and marquee. */}
+                  <PathText path={entry.path} shown={abbreviateHome(entry.path, home)} className="pointer-events-auto min-w-0 flex-1" />
+                </Description>
+              </span>
+              {entry.is_git_repo && <StatusBadge separated={false}>git</StatusBadge>}
+            </ListBox.Item>
+          ))}
+          {entries.length === 0 && (
+          // Inside the list, as an option that cannot be acted on: arrow keys skip it, and the
+          // list is never left without an option, which a listbox needs.
+            <ListBox.Item data-marquee-scope id={EMPTY_KEY} isDisabled textValue={t("directoryPicker.empty")}>
+              <FadeOverflow className="min-w-0 flex-1" titleWhenClipped={t("directoryPicker.empty")}>{t("directoryPicker.empty")}</FadeOverflow>
+            </ListBox.Item>
+          )}
+        </ListBox>,
+      )}
+    </div>
   );
 }

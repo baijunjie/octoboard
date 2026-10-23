@@ -30,20 +30,23 @@ Which API a site takes follows from its scroller:
   has settled, and the fade's `animation-timeline: scroll()` animation never finishes, so a fade on a `Popover` or a
   `Tabs.Panel` leaves it on screen for good. `getAnimations()` does not look at the subtree, so that fade goes on the
   scrolling list or panel inside, never on the popover or the panel itself.
-- `useStickyScrollFade` is for a virtualized scroller whose section headings must remain above the fade. It leaves
-  the scroller on the collection element and supplies an overlay wrapper; a mask on that element would dim the
-  headings regardless of their z-index. A wrapper scroller with the same need uses `FadedScroller` with
-  `stickyHeadingHeight` instead. Both take the heading height; the module supplies the fade size and matching scroll
-  padding.
-  That padding covers the heading too, so a control inside a pinned heading scrolls the list on every focus move
-  unless exempted. Under a `FadedScroller` with `stickyHeadingHeight`, the sticky element spreads the props of
-  `useStickyHeadingFocus` (`packages/ui/src/components/stickyHeadingFocus.ts`) — they also mark it
-  `data-sticky-heading`, which is how the scroller finds the heading to place its top fade by, so a sticky element
+- `useStickyScrollFade` is for a scroller that has to be the element itself, for any of the reasons above, and keeps
+  something pinned at its top that must remain above the fade: section headings, or a single pinned row of the
+  collection's own (the directory picker's parent-directory row). It leaves the scroller on the collection element and
+  supplies an overlay wrapper; a mask on that element would dim the pinned element regardless of its z-index. A
+  wrapper scroller with the same need uses `FadedScroller` with `stickyHeadingHeight` instead. Both take the pinned
+  element's height; the module supplies the fade size and matching scroll padding. Only `FadedScroller` finds the
+  pinned element to place its top fade by; `useStickyScrollFade` places it at the height it is given, so where the
+  pinned element can be absent, pass 0 while it is — a fixed height leaves an opaque band over the top rows.
+  That padding covers the pinned element too, so focus landing on it, or on a control inside it, scrolls the list on
+  every focus move unless exempted: under either API, the sticky element spreads the props of
+  `useStickyHeadingFocus` (`packages/ui/src/components/stickyHeadingFocus.ts`). Under `FadedScroller` they also mark
+  it `data-sticky-heading`, which is how that scroller finds the heading to place its top fade by, so a sticky element
   built without them leaves that fade in the wrong place as well. `StickySectionHeading` in
   `packages/ui/src/sidebar/rows.tsx` already does, so a heading built from it needs nothing more. The overlay fades
-  default to the side panes' colour; a `FadedScroller` on any other surface passes `stickySurface`.
+  default to the side panes' colour; on any other surface, pass `stickySurface` (both APIs take it).
 
-Sticky-heading surfaces use overlay fades (the "What both views show" section of `docs/product/focus-mode.md` and
+Surfaces with a pinned heading or row use overlay fades (the "What both views show" section of `docs/product/focus-mode.md` and
 the "Folding a section" section of `docs/product/project-pane-git-change-list.md`); other surfaces apply the fade as a
 `mask-image` on the scroller. For a masked scroller, the mask clips by that element's border box, so:
 

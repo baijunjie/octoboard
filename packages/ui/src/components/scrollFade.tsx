@@ -258,12 +258,17 @@ function StickyFadeFrame({ children, visibility, gutter, topOffset, bottomGutter
   );
 }
 
-/** A virtualized scroller with sticky section headings: native scrolling and its collection role
- * stay on the element, while fades paint in a shared stacking context below its headings. */
-export function useStickyScrollFade({ ref: forwarded, className, stickyHeadingHeight }: {
+/** A scroller with sticky section headings or one pinned row, virtualized or not, that has to be the
+ * element itself: native scrolling and its collection role stay on the element, while fades paint in
+ * a shared stacking context below the pinned element. Unlike `FadedScroller` it does not follow
+ * `data-sticky-heading`: the top fade sits at the fixed `stickyHeadingHeight`, so a caller whose
+ * pinned element can be absent passes 0 then. */
+export function useStickyScrollFade({ ref: forwarded, className, stickyHeadingHeight, stickySurface }: {
   ref?: Ref<HTMLDivElement>;
   className: string;
   stickyHeadingHeight: number;
+  /** The surface the overlay fades fade into: the side panes' by default. */
+  stickySurface?: StickySurface;
 }): {
   props: { ref: RefObject<HTMLDivElement | null>; className: string; style: CSSProperties };
   wrap: (children: React.ReactNode) => React.ReactElement;
@@ -288,7 +293,7 @@ export function useStickyScrollFade({ ref: forwarded, className, stickyHeadingHe
   });
   return {
     props: { ref, className, style: { ...scrollPadding("vertical"), scrollPaddingTop: stickyScrollPaddingTop(stickyHeadingHeight) } },
-    wrap: (children) => <StickyFadeFrame visibility={visibility} gutter={gutter} topOffset={stickyHeadingHeight} bottomGutter={bottomGutter}>{children}</StickyFadeFrame>,
+    wrap: (children) => <StickyFadeFrame visibility={visibility} gutter={gutter} topOffset={stickyHeadingHeight} bottomGutter={bottomGutter} surface={stickySurface}>{children}</StickyFadeFrame>,
   };
 }
 

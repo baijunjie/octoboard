@@ -438,13 +438,13 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   through its supported variants and slots, keeping its default appearance while adapting layout and sizing, and the
   per-component stylesheet under `@heroui/styles` as the readable source of what the component imposes, imported one
   by one in `style.css` so a newly used component needs its sheet added (and the `tw-animate-css` pin moved on a
-  HeroUI upgrade); why a Tailwind class name has to stand in the source as literal text and how to confirm its utility was emitted, why a `docked:`
+  HeroUI upgrade); why a `className` background on a HeroUI part needs its state fills restored; why a Tailwind class name has to stand in the source as literal text and how to confirm its utility was emitted, why a `docked:`
   utility loses to an `sm:` or `rtl:` twin on the same property and what to write instead, dimming a region with a veil
   rather than `opacity` in the app's WKWebView, and taking a style that follows a layout measurement in an effect with
   no dependency array plus a `ResizeObserver`, since an observer alone misses a box whose content changes without its
   size and an element React swaps underneath it.
 - [Fading the edge of a scroller](memory/fading-the-edge-of-a-scroller.md) — every surface that hides content behind
-  its own edge taking the fade from one module, including sticky-heading overlays, the three reasons the scrolling element
+  its own edge taking the fade from one module, including overlays for a pinned heading or row, the three reasons the scrolling element
   itself has to carry it, where padding and a focus ring go around a mask that clips by the border box, and the fade
   being a hint over an ordinary overflow container.
 - [UI text and reading direction](memory/ui-text-and-reading-direction.md) — every string the user reads going through

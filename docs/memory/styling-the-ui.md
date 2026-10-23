@@ -45,7 +45,7 @@ components under jsdom) never evaluate the CSS, so a class whose utility was nev
 passes lint and tests, builds clean and reads fine in a diff. After adding or changing a utility class, grep the
 built `packages/ui/dist/assets/*.css` for it.
 
-## A `className` cannot override a utility a project component sets itself; give the component a prop
+## A `className` loses to a project component's own utility, and beats a HeroUI part's state fills
 
 `packages/ui` merges no classes (there is no `tailwind-merge`). A component of the project's own that appends the
 caller's `className` to its own utilities emits both, and where both set the same property the one Tailwind emits later
@@ -55,6 +55,12 @@ comes from HeroUI, where a `className` does win, only because `packages/ui/src/s
 the `components` layer, which Tailwind's `utilities` layer outranks. So to change a property such a component sets
 itself, add a prop to it that picks the value (as `StatusBadge`'s `single` drops the side padding), rather than passing
 a `className`.
+
+The same layering cuts the other way on a HeroUI part: a background given to it through `className` also beats the
+fills HeroUI's sheet gives its states, such as a `ListBox.Item`'s hover `bg-default`, and the part silently stops
+showing them (the jsdom tests never hover). When giving a HeroUI part a background of its own — an opaque one behind a
+sticky row, say — restore each state fill on the same element with its state attribute's variant
+(`data-[hovered=true]:bg-default`).
 
 ## A `docked:` utility loses to an `sm:` or an `rtl:` twin on the same property
 
