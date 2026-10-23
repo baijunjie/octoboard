@@ -282,6 +282,59 @@ impl AgentAdapter for ClaudeAdapter {
         })
     }
 
+    /// What the user typed, from a transcript `user` line that only the user sent: not one Claude
+    /// Code added itself, nor one with an `origin.kind` other than `human`. A slash command is
+    /// written in tags and reads back as typed, `/name args`, when it was sent as a prompt (the
+    /// line carries a `promptId`); a local command such as `/clear` is written in the same tags
+    /// without one, and like any other tagged line (shell input, a local command's output) is no
+    /// prompt.
+    ///
+    /// Claude Code writes no `ai-title` for a conversation that opens with a slash command, so
+    /// such a session would have no title until the user types a prompt of their own.
+    fn prompt_text(&self, line: &str) -> Option<String> {
+        if !line.contains("\"type\":\"user\"") {
+            return None;
+        }
+        let value: serde_json::Value = serde_json::from_str(line).ok()?;
+        let flag = |key| value.get(key).and_then(|v| v.as_bool()) == Some(true);
+        let sent_by_other = value
+            .pointer("/origin/kind")
+            .is_some_and(|kind| kind.as_str() != Some("human"));
+        if value.get("type")?.as_str()? != "user"
+            || flag("isMeta")
+            || flag("isCompactSummary")
+            || sent_by_other
+        {
+            return None;
+        }
+        let text = match value.get("message")?.get("content")? {
+            serde_json::Value::String(text) => text.clone(),
+            serde_json::Value::Array(blocks) => blocks
+                .iter()
+                .filter(|block| block.get("type").and_then(|t| t.as_str()) == Some("text"))
+                .filter_map(|block| block.get("text")?.as_str())
+                .collect::<Vec<_>>()
+                .join("\n"),
+            _ => return None,
+        };
+        let text = text.trim();
+        if !text.starts_with('<') {
+            return (!text.is_empty()).then(|| text.to_owned());
+        }
+        if !text.starts_with("<command-") || value.get("promptId").is_none() {
+            return None;
+        }
+        let tag = |name: &str| {
+            let open = format!("<{name}>");
+            let start = text.find(&open)? + open.len();
+            let end = start + text[start..].find(&format!("</{name}>"))?;
+            Some(text[start..end].trim())
+        };
+        let name = tag("command-name")?;
+        let args = tag("command-args").unwrap_or_default();
+        Some(format!("{name} {args}").trim_end().to_owned())
+    }
+
     fn plan(&self, spec: &LaunchSpec<'_>) -> anyhow::Result<LaunchPlan> {
         let pinned = super::pinned_config_dir(spec, Agent::Claude)?;
         let mut args = Vec::new();
@@ -410,6 +463,54 @@ mod tests {
             title(r#"{"type":"user","message":"an ai-title mention"}"#),
             None
         );
+    }
+
+    #[test]
+    fn the_typed_prompt_is_read_from_the_lines_the_user_sent() {
+        // A transcript opened with `/clear` and then a skill's command: of the caveat, the local
+        // command, the skill command, the skill body and a tool result, only the skill command is
+        // what the user sent.
+        let capture = std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("testdata/titles_claude_2.1.308_command.jsonl"),
+        )
+        .unwrap();
+        let prompts: Vec<_> = capture
+            .lines()
+            .map(|line| ClaudeAdapter.prompt_text(line))
+            .collect();
+        assert_eq!(
+            prompts,
+            [None, None, Some("/scratch-skill".to_owned()), None, None]
+        );
+
+        let prompt = |content: &str| {
+            ClaudeAdapter.prompt_text(&format!(
+                r#"{{"type":"user","promptId":"p","message":{{"role":"user","content":{content}}}}}"#
+            ))
+        };
+        assert_eq!(
+            prompt(r#"[{"type":"image"},{"type":"text","text":"What is this?"}]"#).as_deref(),
+            Some("What is this?")
+        );
+        assert_eq!(
+            prompt(r#""<command-message>fix</command-message>\n<command-name>/fix</command-name>\n<command-args>docs/bugs/a.md</command-args>""#)
+                .as_deref(),
+            Some("/fix docs/bugs/a.md")
+        );
+        assert_eq!(
+            prompt(r#""Why is <command-name>/fix</command-name> untitled?""#).as_deref(),
+            Some("Why is <command-name>/fix</command-name> untitled?")
+        );
+        assert_eq!(prompt(r#""<bash-input>ls</bash-input>""#), None);
+        assert_eq!(
+            prompt(r#""<bash-input>echo <command-name>/fix</command-name></bash-input>""#),
+            None
+        );
+        let peer = r#"{"type":"user","promptId":"p","origin":{"kind":"peer"},"message":{"role":"user","content":"From another session"}}"#;
+        assert_eq!(ClaudeAdapter.prompt_text(peer), None);
+        let summary = r#"{"type":"user","promptId":"p","isCompactSummary":true,"message":{"role":"user","content":"This session is being continued"}}"#;
+        assert_eq!(ClaudeAdapter.prompt_text(summary), None);
     }
 
     /// With no model or effort set, neither flag is passed, so Claude Code keeps its own choice.

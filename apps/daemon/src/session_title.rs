@@ -16,7 +16,7 @@ use crate::protocol::Agent;
 pub struct RecordTitles {
     /// A title the agent itself or the user named the conversation with.
     pub named: Option<String>,
-    /// A stand-in taken from the conversation's first prompt, for an agent that names nothing.
+    /// A stand-in taken from the conversation's first prompt, for one the agent left unnamed.
     pub prompt: Option<String>,
 }
 

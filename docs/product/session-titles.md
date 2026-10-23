@@ -3,7 +3,7 @@
 A session has a **created name**, chosen when it opens or supplied by its default (see "Opening a session" in
 `docs/product/sessions.md`), and an optional **task title** that says what the agent is working on. Octoboard does not
 generate the task title: it takes it from what the agent itself records or sends to its terminal, and falls back to the
-user's first prompt only for an agent that names nothing.
+user's first prompt when neither names the task.
 
 ## Displayed names
 
@@ -32,12 +32,21 @@ The task title is the first of these that says something:
 2. **The task in the agent's terminal title**, with the agent's decorations taken off: status glyphs and spinners,
    activity and approval markers, the agent's own name, and the project's name where the agent adds it. A terminal
    title that is only decoration, such as a startup placeholder, says nothing.
-3. **The user's first prompt**, for Codex only: its first line that is not a markdown heading, on one line and cut
-   to about 80 characters with an ellipsis.
+3. **The user's first prompt**, for Claude Code and Codex: its first line that is not a markdown heading, on one line
+   and cut to about 80 characters with an ellipsis.
+
+For Claude Code the first prompt is the first message in the conversation's transcript that the user sent: plain text
+as typed, or a slash command sent as a prompt, which reads as typed, `/name args`. Lines Claude Code adds itself are not
+prompts: a skill's body, notes about commands run locally, compaction summaries and tool results. Neither are
+messages that did not come from the user, such as a background task's completion notice or a message from another
+session, nor local commands such as `/clear`, shell input and command output, nor any other message whose text opens
+with `<`.
 
 Codex sessions launched by Octoboard usually fall to the third source: Codex does not name a conversation while an
-MCP server is supplied to it the way Octoboard has to supply one. An agent Octoboard does not know shows its terminal
-title as sent.
+MCP server is supplied to it the way Octoboard has to supply one. A Claude Code conversation that opens with a slash
+command falls to it too, since Claude Code generates no title for one and keeps its placeholder terminal title. A
+Claude Code or Codex session started with a brief shows the brief's first line until its agent names the conversation
+or puts the task in its terminal title. An agent Octoboard does not know shows its terminal title as sent.
 
 ## Following an agent's title
 

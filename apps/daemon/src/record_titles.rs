@@ -1,5 +1,5 @@
 //! The titles an agent's own records give a session: the name the conversation was given, and for
-//! an agent that names nothing the opening line of the first prompt. Only titles are kept: an
+//! one it leaves unnamed the opening line of the first prompt. Only titles are kept: an
 //! account's shared title file is held for the sessions the daemon knows alone, and a prompt is
 //! cut to a line. Which files hold a title, and how a line or a file says it, is each agent's own
 //! knowledge.
@@ -190,7 +190,7 @@ mod tests {
     #[test]
     fn committed_captures_replay_through_each_agents_readers() {
         // Claude: the user's rename, the last line of the transcript, outranks the generated title
-        // before it; the prompt in `last-prompt` is no title for an agent that names its own.
+        // before it; the `last-prompt` line gives no prompt stand-in.
         let claude = replay(Agent::Claude, "titles_claude_2.1.301.jsonl");
         let stored = RecordTitles::default();
         assert_eq!(
@@ -215,6 +215,13 @@ mod tests {
             titles.merged(None, &stored).named.as_deref(),
             Some("Pseudo terminal explanation")
         );
+
+        // Claude, opened with a slash command: no generated title, so the command as typed stands
+        // in, and not the `/clear` before it or the skill body after it.
+        let command = replay(Agent::Claude, "titles_claude_2.1.308_command.jsonl");
+        let command = command.merged(None, &stored);
+        assert_eq!(command.named, None);
+        assert_eq!(command.prompt.as_deref(), Some("/scratch-skill"));
 
         // Codex: the first typed prompt, in either generation's event, and not the injected
         // context beside it.

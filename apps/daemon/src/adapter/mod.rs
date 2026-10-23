@@ -387,7 +387,7 @@ pub trait AgentAdapter {
     }
 
     /// The prompt the user typed, when one line of the conversation's own record is it. Only for an
-    /// agent that offers no title of its own to fall back on.
+    /// agent that can leave a conversation without a title of its own to fall back on.
     fn prompt_text(&self, _line: &str) -> Option<String> {
         None
     }

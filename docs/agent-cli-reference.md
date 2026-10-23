@@ -688,7 +688,9 @@ name):
 - Claude Code — a status glyph, a space and the title: `✳ Claude Code` (a placeholder until the conversation has a
   title), `◐ Claude Code`, `◐ Pseudo terminal explanation`, `✳ Pseudo terminal explanation`, and an empty title at exit.
   The transcript carries `{"type":"custom-title","customTitle"}` (the user's rename) and `{"type":"ai-title","aiTitle"}`
-  lines; the last of each kind wins and the rename outranks the generated one.
+  lines; the last of each kind wins and the rename outranks the generated one. A conversation that opens with a slash
+  command gets no `ai-title` line and its terminal title stays `✳ Claude Code` (2.1.308), until a prompt of the
+  user's own gets one generated.
 - Grok Build — items joined by ` - `, its own name last: `grok` at startup and exit, `⠋ - Waiting for response… - grok`
   and `⠋ - Waiting for response… - Explain in one sentence what a pseudo te… - grok` while working, `Explain in one
   sentence what a pseudo te… - grok` when idle. The session directory's `summary.json` holds `generated_title`.
@@ -701,6 +703,12 @@ name):
   a list of text blocks); no `type: "user"` line carries it. Conversely, `type: "user"` lines whose `origin.kind` is
   present and not `human` are not the user's: `task-notification` (a background task's or subagent's completion,
   text opening with `<task-notification>`) and `peer` (a message from another session).
+- Claude Code slash commands (2.1.308) — a command sent as a prompt is a `type: "user"` line with a `promptId` and the
+  string content `<command-message>x</command-message>\n<command-name>/x</command-name>`, followed by
+  `<command-args>…</command-args>` when given; a skill's body follows as a `user` line with `isMeta: true` sharing the
+  `promptId`, its content a list of text blocks. A local command such as `/clear` is written in the same tags with no
+  `promptId`, after a `<local-command-caveat>` line marked `isMeta: true`. A compaction summary is a `user` line with
+  `isCompactSummary: true`, and tool results are `user` lines whose content is `tool_result` blocks.
 - Compaction — Claude Code and Codex keep the earlier messages in the same record. Grok Build rewrites
   `chat_history.jsonl`: the first `<user_query>` stays, most of the earlier conversation moves to
   `compaction/segment_NNN.md` beside it (indexed by `compaction/INDEX.md`), and the summary is a `user` line with
