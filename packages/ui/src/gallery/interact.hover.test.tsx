@@ -395,6 +395,8 @@ it("hoverPanel fails for a control that is not there", async () => {
 
 const branchStatus = gitStatusOf("p-1", { ahead: 3, behind: 2 });
 const sentenceOf = (status: typeof branchStatus) => gitBadgeAriaLabel("en", createUi(document, "en").t, status);
+/** The sentence as the badge's tooltip shows it: references are chips there, so no isolates. */
+const tooltipSentenceOf = (status: typeof branchStatus) => sentenceOf(status).replace(/[\u2068\u2069]/g, "");
 
 /** The badge as focus mode's header draws it: in the sidebar, and named by itself. */
 function mountFocusBadge(status: typeof branchStatus): void {
@@ -423,7 +425,7 @@ it("hoverGitBadge puts the pointer on the line of a row's badge and puts up the 
   const seen: Element[] = [];
   document.addEventListener("pointerover", (event) => seen.push(event.target as Element), { capture: true });
   await settledLive(createUi(document, "en").hoverGitBadge(branchStatus, "line", (name) => name.startsWith("Website")));
-  expect(openTooltip()?.textContent).toBe(sentenceOf(branchStatus));
+  expect(openTooltip()?.textContent).toBe(tooltipSentenceOf(branchStatus));
   // The row's badge holds its parts in a box of their own, which is not itself one of them.
   expect(seen[0]).toBe(badge.querySelector("[dir=ltr]"));
   release(badge);
@@ -437,7 +439,7 @@ it.each(["idle", "checking", "pulling", "pushing"] as const)("hoverGitBadge puts
     const badge = document.querySelector("[role=img]")!;
     document.addEventListener("pointerover", (event) => targets.push(event.target as Element), { capture: true, once: true });
     await settledLive(createUi(document, "en").hoverGitBadge(status, over));
-    expect(openTooltip()?.textContent).toBe(sentenceOf(status));
+    expect(openTooltip()?.textContent).toBe(tooltipSentenceOf(status));
     release(badge);
     document.body.replaceChildren();
   }
@@ -451,7 +453,7 @@ it.each(["checking", "pulling", "pushing"] as const)("hoverGitBadge takes the ba
   const status = gitStatusOf("p-1", { activity, error: "fetch failed" });
   mountFocusBadge(status);
   await settledLive(createUi(document, "en").hoverGitBadge(status, "glyph"));
-  expect(openTooltip()?.textContent).toBe(sentenceOf(status));
+  expect(openTooltip()?.textContent).toBe(tooltipSentenceOf(status));
   release(document.querySelector("[role=img]")!);
 });
 

@@ -831,9 +831,11 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
         },
         row === undefined ? `No git badge named "${sentence}" in the sidebar` : `No sidebar row matching ${String(row)} with a git badge to hover`,
       );
-      const shown = doc.querySelector("[role=tooltip]")?.textContent;
-      if (shown !== sentence) {
-        throw new Error(`The git badge's tooltip is not its sentence "${sentence}": the last tooltip is ${shown ? `"${shown}"` : "none"}`);
+      // The tooltip shows the sentence as rich content, its references drawn as chips, so it holds no isolates.
+      const spoken = withoutIsolates(sentence);
+      const shown = withoutIsolates(doc.querySelector("[role=tooltip]")?.textContent ?? "").trim();
+      if (shown !== spoken) {
+        throw new Error(`The git badge's tooltip is not its sentence "${spoken}": the last tooltip is ${shown ? `"${shown}"` : "none"}`);
       }
     },
     async terminalContextMenu() {

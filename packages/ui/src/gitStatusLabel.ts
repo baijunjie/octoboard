@@ -21,8 +21,8 @@ function branchPhrase(t: Translate, status: GitStatus): string | undefined {
 }
 
 /**
- * The git badge's accessible name, which is also the text of its one tooltip: the branch (or why
- * there is none), `ahead` and `behind` each only when they are not zero, and the last error, if
+ * The git badge's accessible name, whose words are also the text of its one tooltip (which draws
+ * the branch and error as elements rather than isolating them): the branch (or why there is none), `ahead` and `behind` each only when they are not zero, and the last error, if
  * any — independent facts, joined by `joinPhrases` rather than assembled from translated word
  * fragments, whose order a sentence built in code could not get right in every language.
  */
