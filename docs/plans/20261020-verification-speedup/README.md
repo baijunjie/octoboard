@@ -37,8 +37,8 @@ The test suites and gallery scenarios have also grown without a review for redun
   single-threaded checks.
 - **Tests stay local; no CI test runs** (user decision). Merges are local fast-forwards with no PR flow, so moving
   tests to CI would need branch pushes and macOS runner minutes.
-- **The scoping rules live in one script**, not in each agent's judgement, so no one misses a coupling by hand; the
-  full suite stays available on request.
+- **One command applies the scope rule of `CLAUDE.md`**, not each agent's judgement, so no one misses a coupling by
+  hand; it adds no rules of its own, and the full suite stays available on request.
 - **No shared `CARGO_TARGET_DIR`** across worktrees: concurrent agents would queue on cargo's build lock. Sharing
   goes through a compilation cache instead.
 - **The desktop crate's tests must not need a release build of the daemon**, while a real run of the app without a
@@ -47,14 +47,14 @@ The test suites and gallery scenarios have also grown without a review for redun
 - **Each milestone that changes performance (02, 04, 05) measures the steps it affects before and after its change,
   back to back, under the machine's normal load**, records the load, and records the gain as a ratio or percentage
   in its own milestone doc; a change that measures no gain is dropped rather than kept.
-- **The scoped-verification and verify-once rule is written for agents in the project's own dedicated area that a
-  skill reinstall does not overwrite**; if there is no such area, in `CLAUDE.md`.
+- **The agent instructions for the scoped, verify-once run are a pointer to the command in `CLAUDE.md` "This
+  project"**, the area a skill reinstall does not overwrite; installed skills are not edited.
 
 ## Milestones
 
 1. 01 Measure the baseline (dropped)
 2. 02 Cheap configuration changes (closed)
-3. [03 Scoped verification](03-scoped-verification.md)
+3. 03 Scoped verification (closed)
 4. [04 Shared Rust compilation](04-shared-rust-compilation.md)
 5. [05 Split the slowest UI test files](05-split-the-slowest-ui-test-files.md)
 6. [06 Prune redundant tests and gallery scenarios](06-prune-redundant-tests-and-gallery-scenarios.md)

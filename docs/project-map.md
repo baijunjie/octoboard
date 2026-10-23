@@ -13,7 +13,8 @@ The repository root is two workspace roots at once:
 - The **pnpm workspace**: `package.json`, `pnpm-workspace.yaml` (workspace packages are the `apps/*` and `packages/*`
   directories that have a `package.json`) and `pnpm-lock.yaml`. Dependencies install once from the root with
   `pnpm install`; `pnpm typecheck` and `pnpm build` run the package script of the same name across every workspace
-  package. `apps/daemon/` has no `package.json` and so is not one of them.
+  package; `pnpm verify` runs the checks a change calls for. `apps/daemon/` has no `package.json` and so is not one
+  of them.
 - The **Cargo workspace**: `Cargo.toml` and `Cargo.lock`, with the daemon (`apps/daemon/`) and the desktop shell's
   Tauri crate (`apps/desktop/src-tauri/`) as its two members. `cargo build` and `cargo test` from the root cover
   both, into the one `target/` directory here. The Tauri crate resolves its `octoboardd` sidecar at compile time, so
@@ -41,7 +42,12 @@ Per-package commands are in that package's doc.
   for its signing identity.
   [`.env.install.example`](../.env.install.example) is the template for the gitignored `.env.install.local`, read
   only by the desktop's `build:install` command for its installation directory.
-  Root `scripts/` holds the helpers the build scripts share.
+- [`scripts/`](../scripts/) — the repository-level scripts behind root `package.json` commands: `env.mjs` (the env
+  reader above), `test-rust.mjs` (`pnpm test:rust`) and `verify.mjs` with `verify/` (`pnpm verify`, the pre-delivery
+  checks). `pnpm verify` picks the checks a branch's changes call for (`verify/scope.mjs` implements the scope rule,
+  `verify/steps.mjs` lists the commands), skips steps already passed on the same content and toolchain
+  (`verify/stamp.mjs`), and caps concurrent heavy steps across worktrees (`verify/lock.mjs`); its tests are
+  `verify/*.test.mjs`. The scope rule's source is the "Formatting and checks" step of the root `CLAUDE.md`.
 
 ## Brand artwork
 

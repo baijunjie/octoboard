@@ -8,6 +8,7 @@
     "build": "pnpm -r build",
     "build:install": "pnpm --filter @octoboard/desktop build:install",
     "test:rust": "node scripts/test-rust.mjs",
+    "verify": "node scripts/verify.mjs",
     "lint": "eslint . --cache --cache-strategy content --cache-location node_modules/.cache/eslint/ --max-warnings 0",
     "lint:fix": "pnpm lint --fix",
     "format": "eslint . --fix --fix-type layout && cargo fmt --all",
