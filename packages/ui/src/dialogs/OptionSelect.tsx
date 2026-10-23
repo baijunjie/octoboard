@@ -164,9 +164,9 @@ export function OptionSelect<T extends string>({
         data-marquee-scope
         className={
           joined === "start"
-            ? "w-full rounded-e-none"
+            ? "w-full flex-1 rounded-e-none"
             : joined === "end"
-              ? "w-full rounded-s-none"
+              ? "w-full flex-1 rounded-s-none"
               : undefined
         }
       >
