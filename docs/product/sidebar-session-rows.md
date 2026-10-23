@@ -37,22 +37,30 @@ a small grey badge (the badge described in "Which agents the agent pickers list"
 no badge for a removed account that recorded no directory; it shows the same account, and wraps a long one, as above.
 Confirmations provide the agent and account as hidden accessible text beside the icon.
 
+A live session's action menu separates these groups, in order: Lock / Unlock, Pin / Unpin and Focus mode;
+Rename, Copy session ID and Colour; Switch account, Hand off and Unbind; then Archive or Delete. Items appear only
+where available as described below. An archived session's menu offers Reopen and Copy session ID, then a separator
+and Delete.
+
 A session row's action menu offers:
 
 - **Lock** / **Unlock** — see "Session lock controls" below.
 - **Pin** / **Unpin**.
+- **Focus mode** — a console session's row only: enters that console session's focus mode (see
+  `docs/product/focus-mode.md`).
+  A project session's row has no such entry, and neither has an archived console session's.
 - **Rename** — see "Renaming a session" in `docs/product/sessions.md`.
-- **Copy session ID** — immediately after Rename, copies the session's ID exactly to the clipboard. Available for
-  project and console sessions wherever their action menus are offered, including right-click menus, focus mode and
-  nested sessions. An archived session's menu offers it after Reopen. Where the platform has no clipboard, or it
+- **Copy session ID** — immediately after Rename, shows the session ID below its label in muted monospace text,
+  left to right on one line within the same menu item, fading where it overflows. An overflowing ID scrolls while the
+  pointer is over the ID line and returns to its beginning when the pointer leaves; it stays still under reduced motion.
+  Selecting the item copies the full ID exactly to the clipboard. Available for project and console sessions wherever
+  their action menus are offered, including right-click menus, focus mode and nested sessions. An archived session's
+  menu offers it after Reopen. Where the platform has no clipboard, or it
   refuses, the ID is copied through the browser's selection copy instead. Success raises a notice toast; a copy neither
   way allows raises an error alert.
 - **Colour** — a console session's row only: a submenu of swatches where the user chooses the console session's colour
   (see "The binding badge" below). A project session's row has no such entry, and neither has an archived console
   session's.
-- **Focus mode** — a console session's row only: enters that console session's focus mode (see
-  `docs/product/focus-mode.md`).
-  A project session's row has no such entry, and neither has an archived console session's.
 - **Switch account** — a submenu of the accounts of the session's agent, the default account first, with the one the
   session is on checked and doing nothing; picking another asks for confirmation, then moves the session to it (see
   `docs/product/switching-session-accounts.md`). Its last entry, **Manage accounts…**, opens Settings

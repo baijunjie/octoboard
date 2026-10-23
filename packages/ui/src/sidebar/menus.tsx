@@ -279,10 +279,27 @@ export function sessionMenu(
     ...(!archived ? [{ label: t(session.locked ? "sidebar.session.unlock" : "sidebar.session.lock"), icon: session.locked ? LockOpen : Lock, onClick: () => handlers.onSetLocked(session, !session.locked) }] : []),
     ...(archived ? [{ label: t("sidebar.session.reopen"), icon: RotateCcw, onClick: () => handlers.onReopenSession(session) }] : []),
     ...(archived || focused ? [] : [pinItem(t, session.pinned, () => handlers.onSetPinned({ session }, !session.pinned))]),
-    ...(!archived ? [{ label: t("sidebar.session.rename"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) }] : []),
-    { label: t("sidebar.session.copyId"), icon: Copy, onClick: () => handlers.onCopySessionId(session) },
-    ...(session.role === "console" && !archived ? [colourSubmenu(t, handlers, session)] : []),
     ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <FocusShortcutKbd />, onClick: () => handlers.onFocus({ consoleSession: session }) }] : []),
+    ...(!archived ? ["separator" as const] : []),
+    ...(!archived ? [{ label: t("sidebar.session.rename"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) }] : []),
+    {
+      label: t("sidebar.session.copyId"),
+      ariaLabel: t("sidebar.session.copyId"),
+      content: (
+        <span className="flex min-w-0 max-w-full flex-col">
+          <span>{t("sidebar.session.copyId")}</span>
+          {/* HeroUI's label ignores pointer events; the ID needs its own hover target. */}
+          <span aria-hidden="true" data-marquee-scope className="pointer-events-auto min-w-0">
+            <FadeOverflow as="span" dir="ltr" className="block font-mono text-xs text-app-muted">{session.id}</FadeOverflow>
+          </span>
+        </span>
+      ),
+      description: session.id,
+      icon: Copy,
+      onClick: () => handlers.onCopySessionId(session),
+    },
+    ...(session.role === "console" && !archived ? [colourSubmenu(t, handlers, session)] : []),
+    ...(!archived ? ["separator" as const] : []),
     ...(switchAccount ? [switchAccount] : []),
     ...(archived ? [] : [handOffItem(t, handlers, session, canHandOff, sharing?.get(session.account_id ?? "")?.progress !== undefined)]),
     ...(session.bound_to && !archived ? [{ label: t("sidebar.session.unbind"), icon: Unlink, disabled: session.status === "starting" || session.switching_account === true, onClick: () => handlers.onReleaseSession(session) }] : []),

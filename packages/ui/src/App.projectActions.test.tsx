@@ -259,6 +259,9 @@ it("copies the session ID unchanged and reports success", async () => {
   const clipboard = { writeText: vi.fn(async () => {}) };
   const { daemon } = mountApp(false, clipboard, true);
   await press(`Actions for session ${isolate("Fix bug")}`);
+  const copyItem = document.querySelector('[role=menuitem][aria-label="Copy session ID"]')!;
+  expect(copyItem.querySelector('[dir="ltr"]')?.textContent).toBe("s-archive");
+  expect(document.getElementById(copyItem.getAttribute("aria-describedby")!)?.textContent).toBe("s-archive");
   await press("Copy session ID");
   expect(clipboard.writeText).toHaveBeenCalledExactlyOnceWith("s-archive");
   expect(daemon.toastNotice).toHaveBeenCalledWith("Session ID copied");
@@ -280,7 +283,7 @@ it("copies the session ID through the selection without clipboard support", asyn
   onTestFinished(() => { Reflect.deleteProperty(document, "execCommand"); });
   const { daemon } = mountApp(false, undefined, true);
   await press(`Actions for session ${isolate("Fix bug")}`);
-  expect(menuHas("Copy session ID")).toBe(true);
+  expect(document.querySelector('[role=menuitem][aria-label="Copy session ID"]')).not.toBeNull();
   await press("Copy session ID");
   expect(execCommand).toHaveBeenCalledWith("copy");
   expect(copied).toEqual(["s-archive"]);

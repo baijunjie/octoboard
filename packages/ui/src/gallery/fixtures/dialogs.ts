@@ -417,7 +417,7 @@ const switchAccountState = snapshotState({
 });
 // Never-conversed sessions from all three agents share the same Delete shortcut, regardless
 // of native record presence; the used session keeps Archive instead.
-const unusedSession = sessionOf("s-web-unused", console_.id, web.id, "Draft the migration notes", "idle", { has_conversation: false, started_at: minutesAgo(4) });
+const unusedSession = sessionOf("bb1cf4cb-37e3-4ea1-9907-084ff4104cf8", console_.id, web.id, "Draft the migration notes", "idle", { has_conversation: false, started_at: minutesAgo(4) });
 const unusedCodex = sessionOf("s-codex-unused", console_.id, web.id, "Untouched Codex draft", "idle", { agent: "codex", has_conversation: false });
 const unusedGrok = sessionOf("s-grok-unused", console_.id, web.id, "Untouched Grok draft", "idle", { agent: "grok", has_conversation: false });
 const unusedState = snapshotState({
@@ -549,7 +549,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "Menu of a session that was never used",
-    description: "Copy session ID sits directly after Rename, and the last entry is the destructive Delete in place of Archive. Close the menu and hover or focus the unused row: its Delete shortcut sits immediately before the actions menu, and the untouched Claude Code, Codex and Grok sessions all delete immediately, moving any native records to the Trash without confirmation.",
+    description: "Dividers separate Lock and Pin, Rename and Copy session ID, Hand off, and the final Delete, with no group headings. Copy session ID stays directly after Rename, with the UUID in smaller muted monospace text on one line beneath its label; overflow fades at the end without wrapping, and hovering the ID line scrolls it while the label and icon stay still, inside the same clickable item. The last entry is the destructive Delete in place of Archive. Close the menu and hover or focus the unused row: its Delete shortcut sits immediately before the actions menu, and the untouched Claude Code, Codex and Grok sessions all delete immediately, moving any native records to the Trash without confirmation.",
     state: unusedState,
     sessionRecords: { [unusedSession.id]: "absent", [unusedCodex.id]: "unknown", [unusedGrok.id]: "present" },
     steps: [openUnusedMenu],
