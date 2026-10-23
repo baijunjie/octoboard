@@ -3,39 +3,49 @@
 > Goal: use shared neutral empty presentations.
 > Completion criteria: The directory-picker empty listing uses the shared compact presentation and ordinary unavailable-agent empty states use a neutral/purpose glyph. All listed validation passes, and the independently reviewed result is accepted.
 
-Status: **accepted; implementation not started**. Implementation begins only after the audit passes and the preceding required work is closed.
+Status: **ready; not started**.
 
 ## Scope
 
-The accepted findings are reproduced below so this brief remains self-contained.
+The accepted findings, re-inventoried against main at `19f58fc79`, are reproduced below so this brief remains
+self-contained. The original finding records are in Git: `git show 7d7fdb2da^:docs/plans/20261020-ui-standard-audit/{audit-states,audit-interactions,audit-gallery}.md`.
 
-- **Directory picker (S03):** `DirectoryPicker.tsx` currently uses a disabled list option with fading text only.
-  Keep that valid option and collection semantics, but give the empty listing the shared compact glyph/message
-  presentation. Preserve parent navigation, keyboard skipping and the absence of row actions. The existing
-  `dialog-directory-picker` only shows populated content; add an empty fixture and compare populated, parent,
-  root and failed-list states.
-- **No installed agent (S05/G03):** `TerminalPane.tsx` and `Sidebar.tsx` use a warning triangle for ordinary
-  absence, while the added-but-not-installed state is different. Use a neutral or purpose glyph in these two
-  empty states; retain PATH explanations, disabled creation actions, genuine load failures and the approved
-  warning glyph in `AgentTabList`.
-- **Integrated history handoff:** re-inventory `SessionHistoryView`'s `history-unavailable` and `history-failed`
-  Alerts against "Where an error is shown"; both are on-screen failures with no error dialog, and `history-failed`
-  keeps its reason, details, retry and reconnect behavior. These callers arrived after the original audit baseline.
+- **Directory picker (S03):** `DirectoryPicker.tsx:247-252` still renders the empty listing as a disabled
+  `EMPTY_KEY` `ListBox.Item` with `FadeOverflow` text and no glyph. Keep that valid option and collection semantics,
+  but give it the shared compact glyph/message presentation. The Parent directory row is pinned and rows show their
+  paths, so the empty option sits under the pinned parent row, or alone at `/`. Preserve parent navigation, keyboard
+  skipping and the absence of row actions. Which form the empty list row takes (the compact `EmptyPanel`, whose text
+  wraps, or the current single-line marquee) is an implementation decision: pick the one consistent with the empty-state
+  rules in `docs/ui-accessibility.md`, or settle it with the user.
+- **No installed agent (S05/G03):** `terminal/TerminalPane.tsx:540` and `sidebar/Sidebar.tsx:653` use `TriangleAlert`
+  for `agents.noneFound`, an ordinary absence; rewrite the comment at `Sidebar.tsx:650-652` with the change. Use a
+  neutral or purpose glyph in these two empty states, consistent with `quota/RailQuotaEntry.tsx:323,325` (Bot/Gauge)
+  and `settings/AgentAccountsSection.tsx:191` (Bot). Retain PATH explanations, disabled creation actions, genuine load
+  failures and the approved warning glyph at `AgentTabList.tsx:189`. The copy differs between the two ("No agent found
+  on {PATH}" and "No agent available"); that is noted only, and copy is out of scope.
+- **Session history:** since `2451736c6` both `history-unavailable` and `history-failed` are `PaneFailure`
+  (`SessionHistoryView.tsx:77-81`), not Alerts. **User decision:** `history-unavailable` is reclassified as a neutral
+  empty state, since no retry would change it (`docs/ui-accessibility.md`, "An empty state is a glyph, a heading, and
+  what fills it"). Update its fixture (`gallery/fixtures/sessionHistory.ts:200`) and
+  `docs/product/session-history.md:63-78` during implementation. `history-failed` stays a `PaneFailure` with its reason,
+  details, retry and reconnect behavior; it is only re-verified.
 
 ## Implementation contract
 
 - [ ] Give the empty directory listing the shared compact glyph/message shape within valid collection markup; preserve disabled option semantics and parent navigation.
 - [ ] Replace warning imagery only in ordinary terminal/sidebar no-installed-agent absence; retain PATH explanations and disabled creation actions.
+- [ ] Reclassify `history-unavailable` as a neutral empty state with its fixture and product doc; keep `history-failed` as a `PaneFailure`.
 - [ ] Preserve intentional warning glyph on AgentTabList, true failed-load error states, shared full-panel headings and silent/action exclusivity.
 
 ## Validation requirements
 
-- [ ] Add or settle an empty-directory fixture and compare populated/parent/root/failed-list states. Review empty-console-no-agent against empty-console-no-agent-added in both themes and Chinese/ar. Verify no empty row action, keyboard skipping, valid list semantics, no duplicate creation entry and matching sidebar/main shapes. Run affected gallery and dialog/empty-panel tests and static checks.
+- [ ] Compare the current directory-picker fixtures in `gallery/fixtures/dialogs.ts` (`dialog-directory-picker`, `-failed`, `-outside-home`, `-scrolled`, `-root-scrolled`) and add two empty fixtures: an empty list under the pinned parent row, and an empty list alone at `/`. Review `empty-console-no-agent` against `empty-console-no-agent-added`, and `rail-quota-none` / `rail-quota-none-added`, in both themes and Chinese/ar. Verify no empty row action, keyboard skipping, valid list semantics, no duplicate creation entry and matching sidebar/main shapes. Verify `history-unavailable` and `history-failed` fixtures. Run affected gallery and dialog/empty-panel tests and static checks.
 - [ ] Complete the project gallery/static/change-check/documentation gates; preserve failed or unresolved checks explicitly. Do not skip scenarios or weaken assertions.
 
 ## Dependencies and handoff
 
-None; no token redesign or unrelated empty-state copy changes.
+None; no token redesign or unrelated empty-state copy changes. 09 and 11 both edit `TerminalPane.tsx`, and 09 and
+10 both edit `Sidebar.tsx`; merge them one at a time.
 
 ## Test invocation
 
@@ -45,13 +55,4 @@ selected files and outcome; do not infer a whole-suite pass from a focused check
 
 ## Notes for the developer
 
-Reuse the existing shared components and mechanisms named in the linked finding record. Follow `docs/ui-accessibility.md`, `packages/ui/README.md` “The UI state gallery”, `docs/voiceover-cases.md`, and project gallery/change-check workflows. Only gallery fixtures may stage data. Read the exact baseline evidence and recheck caller inventory after rebasing; other owners’ pending changes are not certified by this audit.
-
-## Integrated archived-history handoff
-
-Local main added history states at `501bd872d`, after the historical audit. The chip, badge and error presentation
-change has since made both history failures on-screen Alerts with no error dialog: `history-unavailable` (the record
-could not be read, then the remedy) and `history-failed` (the rejected request with its reason, details and Try
-again, announced once). Re-inventory them against "Where an error is shown" in `docs/ui-accessibility.md`; preserve
-retry and reconnect re-reading, and refresh normal-absence severity decisions here without treating the earlier audit
-as certification.
+Reuse the existing shared components and mechanisms named in the linked finding records. Follow `docs/ui-accessibility.md`, `packages/ui/README.md` “The UI state gallery”, `docs/voiceover-cases.md`, and project gallery/change-check workflows. Only gallery fixtures may stage data. Read the exact baseline evidence in the finding records and recheck caller inventory after rebasing; other owners’ pending changes are not certified by this audit.

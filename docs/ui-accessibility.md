@@ -1138,6 +1138,9 @@ it does not choose separate colours for the same ellipsis action.
   need 3:1 against the row: the glyph identifies the control, rather than a filled boundary.
 - Keyboard focus keeps the existing focus ring. Revealing an action must not leave it dimmed once
   its visibility transition finishes.
+- Closing a menu that was opened from the focused trigger by the keyboard returns focus to that same trigger while its
+  row survives. A menu opened with the Menu key, Shift+F10 or a right-click goes through the context-menu path and
+  returns focus to the row instead.
 
 Measure both appearances on the rendered resting, hovered and selected surfaces. Read the final
 computed colours after transitions settle, composite translucent ancestor fills, and check the

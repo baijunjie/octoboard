@@ -55,13 +55,13 @@ against current source.
   exited 1 after 47 initial failures, all of which passed its built-in serial diagnosis; that result is not a
   clean initial run.
 - Chromium and Playwright WebKit do not establish AppKit behavior, packaged WKWebView focus rings, VoiceOver
-  speech or native-material contrast. Milestone 11 must match an existing recorded VoiceOver case item by item,
-  or obtain fixture-backed packaged listening when no case matches.
+  speech or native-material contrast. Milestone 11 closes on candidate VoiceOver matches plus automated and browser
+  checks, and records the unmatched writes as open items in `docs/voiceover-cases.md`.
 - The old 1,636-load implementation matrix had three initial failures (two Chinese/light archive-session controls
   and Chinese/dark terminal-path-links); the cause remains unknown despite passing retries/comparison. Two other
   sweeps exited 130. The first authored Alert fill failed Chinese/light contrast at 3.838:1; the corrected fill
   is covered by 03a's qualified results above.
 
-Open scopes and their accepted findings are in the 09–11 and 13 briefs. Recreate current-source evidence for the
+Open scopes and their accepted findings are in the 09–11 and 14 briefs. Recreate current-source evidence for the
 affected implementation; the historical source inventories and full raw logs were removed after their live scope
 was transferred to those briefs. The remaining milestones must preserve these qualifications in their closure.
