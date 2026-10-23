@@ -207,12 +207,15 @@ described under "Web addresses" and "File paths" below; the rest holds for both:
     characters, even when they form a separate word: a finished address at that column and a broken one cannot be
     told apart.
   - **When the row above stops short of the last column**, the piece joins unless the next row starts a separate
-    `http` or `https` address, or the piece ends with an ASCII letter or digit and the next row's run of address
-    characters consists entirely of ASCII letters and digits. Thus `…auto-select-` followed by
-    `account&theme=light&lang=zh-Hans` joins, while `http://a.dev/x` followed by `Hans` stays separate. A break
-    inside an ordinary word may therefore leave an address incomplete; conversely, separate text containing
-    address punctuation may be taken along. Only the terminal's own width counts: output the program laid out
-    narrower than the terminal follows this rule too, however long its lines are.
+    `http` or `https` address, the piece ends with an ASCII letter or digit and the next row's run of address
+    characters consists entirely of ASCII letters and digits, or that run is a list item marker — marks alone,
+    with no letter or digit (`-`, `+`), or a number followed by a period (`1.`). Thus `…auto-select-` followed by
+    `account&theme=light&lang=zh-Hans` joins, while `http://a.dev/x` followed by `Hans` stays separate, and so
+    does `…lang=zh-Hans` followed by the list item `- Show the hint`. A break inside an ordinary word may therefore
+    leave an address incomplete, and a piece made only of punctuation (a lone `/`) or shaped exactly like `12.`
+    is not joined after such a break; conversely, separate text that mixes letters or digits with address
+    punctuation may be taken along. Only the terminal's own width counts: output the program laid out narrower
+    than the terminal follows this rule too, however long its lines are.
   - **A blank next row, or one whose first non-blank character cannot belong to an address**, ends the link. A
     piece followed by a table border or other non-address text on its own row does not join onto a later row.
 

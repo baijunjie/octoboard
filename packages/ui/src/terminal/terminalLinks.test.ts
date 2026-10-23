@@ -94,6 +94,8 @@ it.each([
   ["it stops short of the last column and the next row is a separate word", [row("http://a.dev/x"), row("  Hans")]],
   ["the next row is a separate word", [row("http://a.dev/docs"), row("  frame")]],
   ["the next row starts its own address", [row("http://a.dev/x"), row("  http://b.dev/y")]],
+  ["it stops short of the last column and a list item follows", [row("http://a.dev/?l=zh-Hans"), row("  - Show it")]],
+  ["it stops short of the last column and a numbered item follows", [row("http://a.dev/?l=zh-Hans"), row("  1. Show it")]],
   ["other text follows it on its own row", [row("http://a.dev/sel- now"), row("  account&x=1")]],
   ["a border follows it", [row("http://a.dev/sel-│"), row("  account&x=1")]],
   ["the next row is empty", [row("http://a.dev/xxxxxxxxxxx"), row("")]],

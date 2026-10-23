@@ -103,18 +103,21 @@ function urlRun(cells: string[], from: number): number {
 
 const WORD_CHAR = /^[A-Za-z0-9]$/;
 const WORD_RUN = /^[A-Za-z0-9]+$/;
+/** A run that opens a list item rather than carrying on an address: marks alone (`-`), or a number (`1.`). */
+const LIST_MARKER = /^(?:[^A-Za-z0-9]+|[0-9]+\.)$/;
 
 /**
  * Whether `row` carries on an address that ends on the line `above`, and the column it does from.
  *
  * A line whose last row reaches the terminal's last column always does: a break at the width cannot
  * be told from a word that merely follows, so the word is taken along. A line that stops short
- * does only when the address is its last text and the next row is not a separate word. A program
- * often breaks at its own text width, short of the terminal's last column, and so does a row xterm
- * wrapped after a resize; a mark such as `-` or `&` shows the rows are one address
+ * does only when the address is its last text and the next row is not a separate word or list
+ * marker. A program often breaks at its own text width, short of the terminal's last column, and so
+ * does a row xterm wrapped after a resize; a mark such as `-` or `&` shows the rows are one address
  * (`…auto-select-` / `account&…`). A finished address and a word of letters or digits
- * (`http://a.dev/x` / `Hans`) stay apart. The width of the lines around is no proof for an
- * address, which a word may follow, so only the terminal's own counts.
+ * (`http://a.dev/x` / `Hans`) stay apart, and so do an address and the marker of a list item that
+ * follows it (`-`, `1.`). The width of the lines around is no proof for an address, which a word
+ * may follow, so only the terminal's own counts.
  */
 function continuesAddress(above: LineRow[], row: TerminalRow, layout: LineLayout): number | undefined {
   const from = indentOf(row.cells);
@@ -128,7 +131,7 @@ function continuesAddress(above: LineRow[], row: TerminalRow, layout: LineLayout
   if (start === limit || (start !== indentOf(cells) && cells.slice(start, limit).join("").search(URL_START) < 0)) return undefined;
   if (textEnd(above[above.length - 1].row.cells) >= layout.cols) return from;
   const continuation = row.cells.slice(from, end).join("");
-  if (continuation.search(URL_START) === 0) return undefined;
+  if (continuation.search(URL_START) === 0 || LIST_MARKER.test(continuation)) return undefined;
   return WORD_CHAR.test(cells[limit - 1]) && WORD_RUN.test(continuation) ? undefined : from;
 }
 
