@@ -15,7 +15,8 @@
 //! moves and Codex redraws only the cells that changed, so no phrase is ever in the bytes. A
 //! dialog is a set of strings that must all be on the screen at once, a title and its footer where
 //! the screen has one, so a transcript that quotes a title does not match; an entry whose screen
-//! has no measured footer relies on its title and options together instead. Nothing here sends a
+//! has no measured footer relies on its title and options together instead, and one whose text a
+//! quote or a task's name could contain must be a whole row of the screen. Nothing here sends a
 //! key to a dialog. The ages, token counts and model names the screens print vary, so no string
 //! uses them.
 //!
@@ -59,7 +60,7 @@ struct Entry {
     /// Whitespace-free strings that must all be on the screen.
     all_of: &'static [&'static str],
     /// A whitespace-free row that must be on the screen as a row of its own, for text that would
-    /// also match as part of a longer row (a task named after it).
+    /// also match as part of a longer row (a task named after it, or a sentence quoting it).
     row: Option<&'static str>,
 }
 
@@ -123,30 +124,40 @@ const DIALOGS: &[Entry] = &[
         WrittenMessage::Discarded,
         &["Entertocontinue\u{B7}Esctocancel"],
     ),
+    // Focus moved from the prompt to the task list under the prompt box: a paste is dropped, and
+    // the Enter opens a subagent's view (or, on the main row inside one, returns to the
+    // conversation). The hints are rows of their own, so a transcript quoting them in a sentence
+    // does not match. Inside a subagent's view the hint is what tells the list's focus from the
+    // view itself, so these come before the view's entries.
+    entry_on_row(
+        Agent::Claude,
+        "claude_agent_list_focus",
+        WrittenMessage::Discarded,
+        "Entertoview\u{B7}xtostop",
+    ),
+    entry_on_row(
+        Agent::Claude,
+        "claude_agent_list_focus",
+        WrittenMessage::Discarded,
+        "\u{2191}/\u{2193}toselect",
+    ),
     // A background subagent's transcript in place of the conversation. Its prompt box stays on
     // screen, but what is sent there goes to the subagent, with no `UserPromptSubmit`. The main
-    // row of the task list under the prompt box is filled while the conversation is shown and
-    // hollow while a subagent is. Leaving is never safe to do for the user: Esc stops the agent,
-    // Ctrl+C kills it, and ← opens the agents view below.
+    // row of the task list is filled while the conversation is shown and hollow while a subagent
+    // is; 2.1.309 marks it with `❯` when it is selected without leaving the view, and shows no
+    // hint then. Leaving is never safe to do for the user: Esc stops the agent, Ctrl+C kills it,
+    // and ← opens the agents view below.
     entry_on_row(
         Agent::Claude,
         "claude_subagent_view",
         WrittenMessage::Diverted,
         "\u{25EF}main",
     ),
-    // Focus moved from the prompt to that task list: a paste is dropped, and the Enter opens a
-    // subagent's view (or, on the main row inside one, returns to the conversation).
-    entry(
+    entry_on_row(
         Agent::Claude,
-        "claude_agent_list_focus",
-        WrittenMessage::Discarded,
-        &["Entertoview\u{B7}xtostop"],
-    ),
-    entry(
-        Agent::Claude,
-        "claude_agent_list_focus",
-        WrittenMessage::Discarded,
-        &["\u{2191}/\u{2193}toselect"],
+        "claude_subagent_view",
+        WrittenMessage::Diverted,
+        "\u{276F}\u{25EF}main",
     ),
     // The agents view (`claude agents`), which ← at an empty prompt opens after moving the
     // conversation into a background session of its own: a paste and Enter here start another
@@ -303,6 +314,11 @@ mod tests {
         "❯ \n  Enter to view · x to stop\n  ⏺ main\n❯ ◯ general-purpose  Slow probe agent\n";
     const MAIN_ROW_FOCUS: &str =
         "❯ \n  ↑/↓ to select\n❯ ⏺ main\n  ◯ general-purpose  Slow probe agent\n";
+    // Claude Code 2.1.309's subagent view with the main row selected.
+    const SUBAGENT_VIEW_MAIN_SELECTED: &str = "\u{276F} Message @implement\u{2026}\n  \u{25B8}\u{25B8} auto mode on \u{B7} 2 shells\n\u{276F} \u{25EF} main\n  \u{23FA} implement  Updating FileViewer.test.tsx image assertions\n";
+    // Inside a subagent's view with the list focused, where the hint shows the focus.
+    const VIEW_LIST_FOCUS: &str = "\u{276F} Message @general-purpose\u{2026}\n  \u{2191}/\u{2193} to select\n\u{276F} \u{25EF} main\n  \u{23FA} general-purpose  Slow probe agent\n";
+    const VIEW_AGENT_ROW_FOCUS: &str = "\u{276F} Message @general-purpose\u{2026}\n  Enter to view \u{B7} x to stop\n  \u{25EF} main\n\u{276F} \u{23FA} general-purpose  Slow probe agent\n";
     const AGENTS_VIEW: &str = "New sessions: Opus 5.5 · medium effort\n0 awaiting input · 1 working · 0 completed\nYour conversation moved to the background — enter opens it · esc returns to it\n❯ describe a task for a new session\n  enter to return · space to reply · ctrl+x to delete · ? for shortcuts\n";
 
     #[test]
@@ -322,8 +338,19 @@ mod tests {
             (Agent::Codex, CODEX_RATE_LIMIT, "codex_rate_limit_nudge"),
             (Agent::Grok, GROK_USAGE_LIMIT, "grok_usage_limit"),
             (Agent::Claude, SUBAGENT_VIEW, "claude_subagent_view"),
+            (
+                Agent::Claude,
+                SUBAGENT_VIEW_MAIN_SELECTED,
+                "claude_subagent_view",
+            ),
             (Agent::Claude, AGENT_ROW_FOCUS, "claude_agent_list_focus"),
             (Agent::Claude, MAIN_ROW_FOCUS, "claude_agent_list_focus"),
+            (Agent::Claude, VIEW_LIST_FOCUS, "claude_agent_list_focus"),
+            (
+                Agent::Claude,
+                VIEW_AGENT_ROW_FOCUS,
+                "claude_agent_list_focus",
+            ),
             (Agent::Claude, AGENTS_VIEW, "claude_agents_view"),
             (Agent::Claude, CLAUDE_NOTICE, "claude_notice"),
         ] {
@@ -344,6 +371,11 @@ mod tests {
         assert_eq!(written(AGENT_ROW_FOCUS), WrittenMessage::Discarded);
         assert_eq!(written(RESUME_IDLE), WrittenMessage::Draft);
         assert_eq!(written(SUBAGENT_VIEW), WrittenMessage::Diverted);
+        assert_eq!(
+            written(SUBAGENT_VIEW_MAIN_SELECTED),
+            WrittenMessage::Diverted
+        );
+        assert_eq!(written(VIEW_LIST_FOCUS), WrittenMessage::Discarded);
         assert_eq!(written(AGENTS_VIEW), WrittenMessage::Diverted);
     }
 
@@ -368,6 +400,8 @@ mod tests {
             // A hollow row of a task whose name only begins with `main`, in the ordinary task list.
             "\u{276F} \n  \u{23FA} main\n  \u{25EF} maintenance-bot  Nightly sweep        8s\n",
             "\u{276F} \n  \u{23FA} main\n  \u{25EF} main-loop  Poll the queue        8s\n",
+            // A transcript quoting the agent list's hints in a sentence.
+            "\u{25CF} matches \u{300C}\u{2191}/\u{2193} to select\u{300D} and \u{300C}Enter to view \u{B7} x to stop\u{300D}\n",
             "",
         ] {
             assert_eq!(recognise(Agent::Claude, screen), None, "{screen}");

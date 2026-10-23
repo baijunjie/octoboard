@@ -306,18 +306,19 @@ screen.
 
 **Views of background agents** (2.1.307, reproduced against a local stub). A turn that starts an `Agent` with
 `run_in_background` adds a task list under the prompt box — a filled `⏺ main` row and a row per agent — and the hint
-"↓ to manage". With the footer focused ("↑/↓ to select", and "Enter to view · x to stop" on an agent's row) a paste is
-dropped and a CR opens the agent's view. **In that view** the conversation area shows the subagent's transcript, the
-`❯` prompt box stays (its placeholder reads "Message @<agent type>…"), and the main row turns hollow, `◯ main`. Text
-sent there goes to the subagent, with no `UserPromptSubmit`; sent to a finished agent it resumes it. The view stays up
-after the agent finishes. No single key leaves it safely: Esc in the input stops a running agent, Ctrl+C kills it, and
-← at an empty input opens the agents view; ↓ to the main row and Enter returns to the conversation with the footer
-still focused. **The agents view** (`claude agents`, ← at an empty prompt, hinted as "← for agents" for the first ten
-seconds) moves the conversation into a background session forked under a new session id, starts a transient
-`claude daemon`, and shows "New sessions: …", "0 awaiting input · 1 working · 0 completed" and "describe a task for a
-new session": a paste and CR there start another session with that text. `CLAUDE_CODE_DISABLE_AGENT_VIEW=1` (setting
-`disableAgentView`) removes the agents view and its hint and leaves the subagent view. Octoboard holds its writes while
-either view, or the focused task list, is on screen.
+"↓ to manage". With the footer focused (a hint row of its own: "↑/↓ to select", or "Enter to view · x to stop" while an
+agent's row is selected) a paste is dropped and a CR opens the agent's view. **In that view** the conversation area
+shows the subagent's transcript, the `❯` prompt box stays (its placeholder reads "Message @<agent type>…"), and the main
+row turns hollow, `◯ main`; on 2.1.309, selecting that row without leaving the view marks it `❯ ◯ main` and shows no
+hint (seen in a user's screenshot, not reproduced). Text sent there goes to the subagent, with no `UserPromptSubmit`;
+sent to a finished agent it resumes it. The view stays up after the agent finishes. No single key leaves it safely: Esc
+in the input stops a running agent, Ctrl+C kills it, and ← at an empty input opens the agents view; ↓ to the main row
+and Enter returns to the conversation with the footer still focused. **The agents view** (`claude agents`, ← at an empty
+prompt, hinted as "← for agents" for the first ten seconds) moves the conversation into a background session forked
+under a new session id, starts a transient `claude daemon`, and shows "New sessions: …", "0 awaiting input · 1 working ·
+0 completed" and "describe a task for a new session": a paste and CR there start another session with that text.
+`CLAUDE_CODE_DISABLE_AGENT_VIEW=1` (setting `disableAgentView`) removes the agents view and its hint and leaves the
+subagent view. Octoboard holds its writes while either view, or the focused task list, is on screen.
 
 ## Codex
 
