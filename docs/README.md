@@ -71,10 +71,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Session titles](product/session-titles.md) — the task title alongside created session names: where it is
   displayed, what renaming edits, where it comes from (the agent's records, its decorated terminal title, the first
   prompt), how titles are retained, and the accepted terminal sequences.
-- [Session context size](product/session-context.md) — the session's current context size (the main conversation's latest
-  request): per-agent sources, Claude Code's context window from its status line and when it is missing, when the size
-  is unknown or drops, the context-size chip and its Limit tooltip, refresh, and what
-  happens on archiving, upgrading and account switches.
+- [Session context size](product/session-context.md) — the session's current context size (the main conversation's
+  latest request): per-agent sources, Claude Code's context window from its status line and when it is missing, when the
+  size is unknown or drops, the context-size chip (a badge, led by a ring of the share used when a window is known) and
+  its Context window card, refresh, and what happens on archiving, upgrading and account switches.
 - [Sidebar](product/sidebar.md) — the sidebar's frame: one console at a time, the console header, the console sessions
   section and the project list, filtering the project list and folding every project from its heading, the shared
   shape of the empty row a section with nothing to list takes, row names and keyboard focus, right-clicking a row,

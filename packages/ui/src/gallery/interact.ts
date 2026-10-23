@@ -267,10 +267,10 @@ export interface Ui {
    * no tooltip, and fails here rather than hover the activity marker beside it. */
   hoverGitBadge: (status: GitStatus, over: "glyph" | "line", row?: Matcher) => Promise<void>;
   /** Moves the pointer onto the context size of the session card or row named `row` and leaves it
-   * there, as `hoverIndicator` does, for the tooltip that gives it exactly. The size is the
-   * `role="img"` trigger whose name starts with the tooltip's "Context" heading, which a card's
-   * status glyph does not, so a card or row with no size (hidden, or none reported) fails there,
-   * naming `row`. The step then fails if the tooltip that opens does not carry that heading. */
+   * there, as `hoverIndicator` does, for the context window card. The size is the `role="img"`
+   * trigger whose name starts with the "Context" heading, which a card's status glyph does not, so
+   * a card or row with no size (hidden, or none reported) fails there, naming `row`. The step then
+   * fails if the tooltip that opens does not carry the card's "Context window" title. */
   hoverSessionContext: (row: Matcher) => Promise<void>;
   /** Moves the pointer onto the agent's mark of the session row or focus mode card named `row`
    * (`session(title)`) and leaves it there, as `hoverIndicator` does, for the tooltip that names `agent`
@@ -726,9 +726,11 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
           ),
         `No session card or row matching ${String(row)} with a context size to hover`,
       );
+      // The mark's name starts with the heading; the tooltip is the context window card, which does not.
+      const title = t("session.context.title");
       const shown = doc.querySelector("[role=tooltip]")?.textContent ?? "";
-      if (!withoutIsolates(shown).includes(withoutIsolates(heading))) {
-        throw new Error(`The context size of ${String(row)} did not open its tooltip, which starts with ${heading.trim()}: ${shown === "" ? "no tooltip" : shown} is up`);
+      if (!withoutIsolates(shown).includes(withoutIsolates(title))) {
+        throw new Error(`The context size of ${String(row)} did not open its tooltip, which holds ${title}: ${shown === "" ? "no tooltip" : shown} is up`);
       }
     },
     async hoverSessionAgent(row, agent, details) {

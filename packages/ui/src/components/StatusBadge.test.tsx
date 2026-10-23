@@ -10,7 +10,7 @@ it("keeps the neutral bordered badge as the default, with the comma for assistiv
   expect(markup).toContain('<span class="sr-only">, </span>');
   expect(markup).toContain('data-color="default"');
   expect(markup).toContain('data-variant="bordered"');
-  expect(markup).toContain("bg-[var(--tint-default-bg)] text-[var(--tint-default-fg)]");
+  expect(markup).toContain("bg-[var(--tint-default-bg)] text-[var(--default-foreground)]");
   expect(markup).toContain("ring-1 ring-inset");
   expect(markup).toContain("ring-[var(--tint-default-edge)]");
   expect(markup).not.toContain("--default-soft");
@@ -24,7 +24,7 @@ it("draws a soft badge from the shared tint's fill and text and gives it no edge
     expect(markup).not.toContain("ring-");
   }
   const neutral = html(<StatusBadge variant="soft">x</StatusBadge>);
-  expect(neutral).toContain("bg-[var(--tint-default-bg)] text-[var(--tint-default-fg)]");
+  expect(neutral).toContain("bg-[var(--tint-default-bg)] text-[var(--default-foreground)]");
   expect(neutral).not.toContain("--default-soft");
   expect(neutral).not.toContain("ring-");
 });

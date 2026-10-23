@@ -806,7 +806,10 @@ export const en = {
     other: "Context {tokens} tokens",
   },
   "session.context.limit": "Limit",
-  "session.context.limitValue": "{limit} ({percent} used)",
+  "session.context.title": "Context window",
+  "session.context.amount": "{tokens} / {limit}",
+  "session.context.used": "{percent} used",
+  "session.context.left": "{tokens} left",
   "session.context.entry": "{label}: {value}",
   "archive.loadingMore": "Loading more…",
 

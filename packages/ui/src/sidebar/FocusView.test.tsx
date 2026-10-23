@@ -517,6 +517,14 @@ it.each(["idle", "archived"] as const)("runs only the hovered text of an %s focu
   expectIndependentMarquees(labels, [row, ...row.querySelectorAll("button, svg")]);
 });
 
+it("leads an archived preview's context badge with the ring of the share used where the agent reported a window", () => {
+  const archived = sessionOf("old-window", main.id, web.id, "Old window", "archived", { ended_at: 1000, context: { tokens: 130000, window: 200000, used_percent: 65 } });
+  const { container } = mount((h) => <ProjectFocusView handlers={h} console={main} project={web} sessions={[archived]} owners={owners} />);
+  const row = Array.from(container.querySelectorAll<HTMLElement>('div[role="button"]')).find((element) => element.getAttribute("aria-label")?.startsWith(isolate(archived.title)))!;
+  expect(row.querySelector("[data-variant] > .progress-circle")).not.toBeNull();
+  expect(row.textContent).toContain("130K");
+});
+
 it("updates the context size on active cards and keeps archived previews compact without dates", () => {
   let update!: () => void;
   const zeroContext = { tokens: 0 };

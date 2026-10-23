@@ -473,7 +473,7 @@ function BoundElsewhere({
               aria-hidden="true"
               style={{
                 "--badge-bg": "var(--tint-default-bg)",
-                "--badge-fg": "var(--tint-default-fg)",
+                "--badge-fg": "var(--default-foreground)",
                 "--badge-border": "transparent",
               } as React.CSSProperties}
             >

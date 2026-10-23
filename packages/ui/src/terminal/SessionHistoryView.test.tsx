@@ -6,7 +6,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { DaemonRequestError } from "../daemon-client";
 import { openDetails } from "../components/detailsTestSupport";
 import { errorAlerts } from "../errorAlerts";
-import type { Event, HistoryMessage } from "../protocol";
+import { isolate } from "../i18n/isolate";
+import type { Event, HistoryMessage, SessionContext } from "../protocol";
 import { SessionHistoryView } from "./SessionHistoryView";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -43,7 +44,7 @@ const history: HistoryMessage[] = [
   { speaker: "agent", text: "The query scans the table.", turn: 2 },
 ];
 
-async function mount(reply: Event | Promise<Event> | Error): Promise<HTMLElement> {
+async function mount(reply: Event | Promise<Event> | Error, context?: SessionContext): Promise<HTMLElement> {
   daemon.request.mockImplementation(async () => {
     if (reply instanceof Error) throw reply;
     return reply;
@@ -51,7 +52,7 @@ async function mount(reply: Event | Promise<Event> | Error): Promise<HTMLElement
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  await act(async () => root.render(<SessionHistoryView sessionId="s-1" />));
+  await act(async () => root.render(<SessionHistoryView sessionId="s-1" context={context} />));
   // The lazily loaded renderer settles after the reply.
   await act(async () => {});
   return container;
@@ -59,6 +60,23 @@ async function mount(reply: Event | Promise<Event> | Error): Promise<HTMLElement
 
 const articles = (container: HTMLElement) =>
   [...container.querySelectorAll("article")].map((node) => document.getElementById(node.getAttribute("aria-labelledby")!)?.textContent);
+
+it("shows the context size beside the heading, before the switch, which keeps its name", async () => {
+  const container = await mount({ type: "session_history", session: "s-1", messages: history }, { tokens: 130000, window: 200000, used_percent: 65 });
+  const header = container.querySelector("header")!;
+  const badge = header.querySelector<HTMLElement>('[role="img"]')!;
+  expect(header.querySelector("h2")!.compareDocumentPosition(badge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(badge.compareDocumentPosition(header.querySelector("input")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(badge.getAttribute("aria-label")).toContain(`${isolate("65%")} used`);
+  expect(badge.querySelector("[data-variant] > .progress-circle")).not.toBeNull();
+  const label = header.querySelector("[aria-labelledby]")!;
+  expect(document.getElementById(label.getAttribute("aria-labelledby")!)?.textContent).toBe("Show agent replies");
+});
+
+it("shows no context badge in the header for a session whose size is unknown", async () => {
+  const container = await mount({ type: "session_history", session: "s-1", messages: history });
+  expect(container.querySelector('header [role="img"]')).toBeNull();
+});
 
 it("asks for the session's history and lists the user's and Octoboard's messages by default", async () => {
   const container = await mount({ type: "session_history", session: "s-1", messages: history });

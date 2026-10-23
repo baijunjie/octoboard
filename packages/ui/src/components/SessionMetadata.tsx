@@ -1,3 +1,4 @@
+import { Meter, ProgressCircle } from "@heroui/react";
 import React from "react";
 
 import { isolate } from "../i18n/isolate";
@@ -11,64 +12,120 @@ export function hasVisibleContext(context: SessionContext | null | undefined): c
   return (context?.tokens ?? 0) > 0;
 }
 
-/** The context size as its heading, then a table of the limit and how much of it is used when the agent gives one. */
-function ContextTooltip({ heading, rows }: {
-  heading: string;
-  rows: { key: string; label: string; value: string }[];
-}): React.ReactElement {
+/** The tone class (`context-tone--*` in style.css) for how full the window is: filling up above
+ * half, nearly full above 80%. */
+function contextTone(percent: number): string {
+  if (percent > 80) return "context-tone--danger";
+  if (percent > 50) return "context-tone--warning";
+  return "context-tone--accent";
+}
+
+/** The share of the window used as HeroUI's `ProgressCircle`, shrunk to sit before the size inside
+ * its badge, its arc in the tone of how full the window is. */
+function ContextRing({ label, percent }: { label: string; percent: number }): React.ReactElement {
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="font-medium">{heading}</div>
-      {rows.length > 0 && (
+    <ProgressCircle aria-label={label} value={percent} className={`context-ring shrink-0 ${contextTone(percent)}`}>
+      <ProgressCircle.Track className="size-3">
+        <ProgressCircle.TrackCircle />
+        <ProgressCircle.FillCircle />
+      </ProgressCircle.Track>
+    </ProgressCircle>
+  );
+}
+
+interface ContextUsage {
+  percent: number;
+  used: string;
+  left: string;
+}
+
+/** The context window as a card: its name with the size used against the limit, a meter of the
+ * share used, and that share with what is left beneath. Without a limit it is the name and the size
+ * alone. The meter is hidden from assistive technology, since the indicator's name already says
+ * the share. */
+function ContextTooltip({ title, amount, usage }: { title: string; amount: string; usage?: ContextUsage }): React.ReactElement {
+  return (
+    <div className="flex min-w-56 flex-col gap-2 py-0.5">
+      <div className="flex items-baseline justify-between gap-x-6">
+        <span className="text-app-muted">{title}</span>
+        <span dir="ltr" className="tabular-nums">{amount}</span>
+      </div>
+      {usage && (
         <>
-          <hr className="groove-t" />
-          <dl className="grid grid-cols-[auto_auto] gap-x-4 gap-y-0.5">
-            {rows.map((row) => (
-              <React.Fragment key={row.key}>
-                <dt className="text-app-muted">{row.label}</dt>
-                <dd className="text-end tabular-nums">{row.value}</dd>
-              </React.Fragment>
-            ))}
-          </dl>
+          <div aria-hidden="true">
+            <Meter aria-label={title} value={usage.percent} className={`gap-0 ${contextTone(usage.percent)}`}>
+              <Meter.Track>
+                <Meter.Fill />
+              </Meter.Track>
+            </Meter>
+          </div>
+          <div className="flex items-baseline justify-between gap-x-6 text-app-muted tabular-nums">
+            <span>{usage.used}</span>
+            <span>{usage.left}</span>
+          </div>
         </>
       )}
     </div>
   );
 }
 
-/** `plain` leaves the tooltip out, for a menu's transient surface, where no mark carries one; the
- * size then reaches assistive technology through its name alone. */
-export function SessionContextLabel({ context, plain }: { context?: SessionContext | null; plain?: boolean }): React.ReactElement | null {
+/** What is known of a session's context, in words: one plain sentence with exact counts for an
+ * accessible name, and the compact size against the limit with the share used and what is left for
+ * display, where the agent gives a limit. */
+function useContextFacts(context: SessionContext): { details: string; title: string; compactSize: string; amount: string; usage?: ContextUsage } {
   const t = useT();
   const language = useCurrentLanguage();
-  if (!hasVisibleContext(context)) return null;
   const number = new Intl.NumberFormat(language);
-  const heading = t("session.context.heading", { count: context.tokens, tokens: isolate(number.format(context.tokens)) });
-  const rows = [];
-  if (context.window != null) {
-    const limit = isolate(number.format(context.window));
-    rows.push({
-      key: "limit",
-      label: t("session.context.limit"),
-      value: context.used_percent == null
-        ? limit
-        : t("session.context.limitValue", { limit, percent: isolate(new Intl.NumberFormat(language, { style: "percent" }).format(context.used_percent / 100)) }),
-    });
-  }
-  // The accessible name is one plain sentence; the tooltip lays the same facts out as a table.
-  const details = joinPhrases(language, [heading, ...rows.map((row) => t("session.context.entry", { label: row.label, value: row.value }))]);
   const compact = new Intl.NumberFormat(language, { notation: "compact", maximumFractionDigits: 1 });
-  // The compact size is a badge, so the metadata line stays as tall as the text beside it; the
-  // exact count is in the name and the tooltip.
-  const badge = (
+  const phrases = [t("session.context.heading", { count: context.tokens, tokens: isolate(number.format(context.tokens)) })];
+  const compactSize = compact.format(context.tokens);
+  let amount = isolate(compactSize);
+  let usage: ContextUsage | undefined;
+  if (context.window != null) {
+    const remaining = Math.max(0, context.window - context.tokens);
+    // The daemon sends the agent's own share, a whole percent, with every limit; working it out is
+    // only a fallback.
+    const percent = context.used_percent ?? Math.round((context.tokens / context.window) * 100);
+    const share = isolate(new Intl.NumberFormat(language, { style: "percent" }).format(percent / 100));
+    amount = t("session.context.amount", { tokens: amount, limit: isolate(compact.format(context.window)) });
+    usage = {
+      percent,
+      used: t("session.context.used", { percent: share }),
+      left: t("session.context.left", { tokens: isolate(compact.format(remaining)) }),
+    };
+    phrases.push(
+      t("session.context.entry", { label: t("session.context.limit"), value: isolate(number.format(context.window)) }),
+      usage.used,
+      t("session.context.left", { tokens: isolate(number.format(remaining)) }),
+    );
+  }
+  return { details: joinPhrases(language, phrases), title: t("session.context.title"), compactSize, amount, usage };
+}
+
+/** The context size as a badge of the compact size, led by a ring of the share used when the agent
+ * gives a limit; the exact counts are in the name and the tooltip's card. `plain` leaves the tooltip
+ * out, for a menu's transient surface, where no mark carries one; the size then reaches assistive
+ * technology through its name alone. */
+export function SessionContextLabel({ context, plain }: { context?: SessionContext | null; plain?: boolean }): React.ReactElement | null {
+  if (!hasVisibleContext(context)) return null;
+  return <ContextLabel context={context} plain={plain} />;
+}
+
+function ContextLabel({ context, plain }: { context: SessionContext; plain?: boolean }): React.ReactElement {
+  const { details, title, compactSize, amount, usage } = useContextFacts(context);
+  // The badge keeps the metadata line as tall as the text beside it, the ring included.
+  const mark = (
     <span aria-hidden="true" className="contents">
-      <StatusBadge separated={false}>{compact.format(context.tokens)}</StatusBadge>
+      <StatusBadge separated={false} className={usage ? "inline-flex items-center gap-1 ps-1" : ""}>
+        {usage && <ContextRing label={title} percent={usage.percent} />}
+        {compactSize}
+      </StatusBadge>
     </span>
   );
-  if (plain) return <span role="img" aria-label={details} className="flex shrink-0">{badge}</span>;
+  if (plain) return <span role="img" aria-label={details} className="flex shrink-0 items-center">{mark}</span>;
   return (
-    <IndicatorTooltip tooltip={<ContextTooltip heading={heading} rows={rows} />} label={details} className="flex shrink-0">
-      {badge}
+    <IndicatorTooltip tooltip={<ContextTooltip title={title} amount={amount} usage={usage} />} label={details} className="flex shrink-0 items-center">
+      {mark}
     </IndicatorTooltip>
   );
 }

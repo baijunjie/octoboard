@@ -2,7 +2,7 @@ import { AGENT_LABEL } from "../../agents";
 import type { Session, SessionContext } from "../../protocol";
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
-import { ALL_AGENTS, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState, switchingAccount } from "./builders";
+import { ALL_AGENTS, consoleOf, contextOf, minutesAgo, projectOf, sessionOf, snapshotState, switchingAccount } from "./builders";
 
 const GROUP = "Focus mode";
 
@@ -204,6 +204,7 @@ const combinedState = {
   sessions: new Map([...scrollingFocusState.sessions].map(([id, session]) => [id, {
     ...session,
     ...observedLaunches[id],
+    context: id === "s-1" ? contextOf(30) : id === lead.id ? contextOf(65) : id === "s-2" ? contextOf(90) : id === "s-lead-1" ? lead.context : session.context,
     account_id: id === "s-2" ? "a-long" : id === "s-lead-2" ? "a-release" : id === "s-3b" ? "a-removed" : session.account_id,
     config_dir: id === "s-3b" ? REMOVED_ACCOUNT_DIR : session.config_dir,
     terminal_title: id === "s-2"
@@ -230,14 +231,14 @@ const observedModelState = {
 
 // "Add idempotency keys" is a Claude session. A session's context size comes with a window only once its agent
 // has reported one, which a Claude session may not have yet (nor on an older Claude Code, or with managed status
-// line settings); the tooltip that names a limit is the same for every agent that does report it.
+// line settings); the tooltip that draws a usage bar is the same for every agent that does report it.
 const withContext = (context: SessionContext) => ({
   ...scrollingFocusState,
   sessions: new Map([...scrollingFocusState.sessions].map(([id, session]) => [id, id === "s-1" ? { ...session, context } : session])),
 });
 const limitContextState = withContext({ tokens: 90_227, window: 200_000, used_percent: 45 });
-// A single token exercises the heading's singular form.
-const singleTokenContextState = withContext({ tokens: 1 });
+const warningContextState = withContext({ tokens: 126_450, window: 200_000, used_percent: 63 });
+const dangerContextState = withContext({ tokens: 182_400, window: 200_000, used_percent: 91 });
 
 // Project focus also shows a newer unbound foreground session behind the older migration watcher.
 const runningInBackgroundState = {
@@ -260,8 +261,10 @@ const hierarchyState = {
         : id === "s-3" ? { ...session, pinned: true }
           : id === "s-2" ? { ...session, terminal_title: "Review search result accuracy and verify long session row titles scroll only while hovering their text" }
             : session;
-      const hasContext = [hub1.id, longHub.id, "s-lead-1", "s-2"].includes(id);
-      return [id, hasContext ? { ...row, context: lead.context } : row] as const;
+      // The badges led by a ring in each of its three tones, at about 30%, 65% and 90%, and the number-only
+      // badge of a size whose agent reported no window, beside the sizes `s-1` and `lead` carry.
+      const context = id === longHub.id ? contextOf(30) : id === hub1.id ? contextOf(65) : id === "s-lead-1" ? contextOf(90) : id === "s-2" ? lead.context : undefined;
+      return [id, context ? { ...row, context } : row] as const;
     }),
     // Locking also protects an unused session that would otherwise offer immediate deletion.
     ["s-unused", sessionOf("s-unused", console_.id, project.id, "Draft the release notes", "idle", { has_conversation: false, locked: true })] as const,
@@ -304,7 +307,7 @@ const projectArchiveInConsoleState = {
   sessions: new Map([
     ...[...consoleFocusState.sessions].map(([id, session]) => [
       id,
-      id === "s-lead-archived" ? { ...session, context: { tokens: 192_345 } }
+      id === "s-lead-archived" ? { ...session, context: contextOf(65) }
         : id === "s-scroll-archive-1" ? { ...session, context: { tokens: 12_345 } }
           : session,
     ] as const),
@@ -345,7 +348,7 @@ export const focusScenarios: Scenario[] = [
     state: hierarchyState,
     sessionRecords: { "s-unused": "absent" },
     preferences: { sidebarWidth: 280, sidebarConsole: console_.id },
-    description: "At the sidebar’s 280px minimum width, context-size badges follow console, project and nested session titles, staying visible beside long clipped titles; a zero or missing size leaves no badge. Hover a badge for its heading with the exact count. The console header keeps New console session immediately before its actions menu. Scroll the sidebar: Console sessions stays pinned until Projects pushes it away, then Projects and its controls stay above the fade. Rounded branches join each project session to its nested sessions and end at the last child. Binding dots and pins stay visible while action menus hide. Hover or focus a row to compare the evenly spaced controls, then unpin a session to see the remaining controls close together. An Archive button precedes the menu only on a session that archives without confirmation: idle or interrupted, with no unarchived session bound under it, like Rework the retry loop. The pinned, locked Profile the slow query shows a persistent Unlock icon without a lock border, and its menu offers Unlock with Archive disabled. The unused but locked Draft the release notes has no Delete shortcut, and its menu offers Unlock with Delete disabled. Set Modifier to Held to see the console header's and each project row's new-session buttons as the bolt that creates with defaults.",
+    description: "At the sidebar’s 280px minimum width, context marks follow console, project and nested session titles, staying visible beside long clipped titles; a zero or missing size leaves no mark. Every mark is a badge with the compact size; where the agent reported a window a small ring filled to the share used leads the number, in the accent colour at about 30% (Review release readiness), warning at about 65% (Hub) and danger at about 90% (Chase the flaky test); where it did not, the badge is the number alone (Prevent duplicate API requests, Compare ranking strategies, Review search result accuracy). Hover a mark for its Context window card. The console header keeps New console session immediately before its actions menu. Scroll the sidebar: Console sessions stays pinned until Projects pushes it away, then Projects and its controls stay above the fade. Rounded branches join each project session to its nested sessions and end at the last child. Binding dots and pins stay visible while action menus hide. Hover or focus a row to compare the evenly spaced controls, then unpin a session to see the remaining controls close together. An Archive button precedes the menu only on a session that archives without confirmation: idle or interrupted, with no unarchived session bound under it, like Rework the retry loop. The pinned, locked Profile the slow query shows a persistent Unlock icon without a lock border, and its menu offers Unlock with Archive disabled. The unused but locked Draft the release notes has no Delete shortcut, and its menu offers Unlock with Delete disabled. Set Modifier to Held to see the console header's and each project row's new-session buttons as the bolt that creates with defaults.",
   },
   {
     id: "sidebar-session-agent-tooltip",
@@ -406,7 +409,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project focus including console sessions",
     state: combinedState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}`, projectFocusIncludeConsoleSessions: true },
-    description: "The metadata line shows the agent's mark, the account, model and effort on its left, and a compact context-size badge, a grey pill (80% foreground on a light tint with a hairline ring), and the creation age on its right. A zero or missing context size omits the badge without adding a row. The account, model and effort, not the agent's name, follow the mark (hovering the mark lists them under labels), the account first and a card on an agent's default account reading Default: Add idempotency keys reads Work · Opus 5.5 · high, the Codex session under Rework the result ranking Default · gpt-6.1-sol · xhigh, Watch the ranking build (also Codex, its records naming a model but no effort) Default · gpt-6.1-sol · medium rather than a Default effort, Document the retry policy (Grok) Default · grok-4.7 · high, and Rework the retry loop Default · Haiku 4.5 with a Default effort. Write the migration follows the project's own setting, Default · Sonnet · medium, as do the other cards left unchanged; Check the index sizes, launched with the agent's defaults, reads Default · Default model. Where the account name is long (Fix the rounding of partial results, Review search result first paint timing) or a removed account leaves a recorded directory (Profile the slow query), the line fades out before the model; the directory reads left to right. Bound cards keep status, owner and agent marks in one column, with owner badges before long single-line titles. Hover a badge for the owner's name. Titles scroll only when their text is hovered, and titles without a badge start at the content edge. Nested cards inherit their owner's colour. Rounded branches connect the single child under Write the migration and the three under Rework the result ranking. A vertical rail crosses the card gaps and stops at the last child's centre, with none beside top-level cards. Arabic mirrors the branches. Pinned cards come first, then Waiting for you, Awaiting instructions, Working in background, Working and Interrupted. The older migration watcher precedes the newer Document the retry policy, while pinned Add idempotency keys stays above the unpinned cards. Under Rework the result ranking, the older Watch the ranking build precedes the newer Chase the flaky test.",
+    description: "The metadata line shows the agent's mark, the account, model and effort on its left, and the context mark and the creation age on its right: always a compact-size badge (80% foreground on a light tint with a hairline ring), led by a small ring filled to the share of the window used where the agent reported one (30% accent on Add idempotency keys, 65% warning on the selected Rework the result ranking, where the ring's track stays visible on the selected card, 90% danger on Fix the rounding of partial search results) and the number alone where it did not (Chase the flaky test). A zero or missing context size omits the mark without adding a row. The account, model and effort, not the agent's name, follow the mark (hovering the mark lists them under labels), the account first and a card on an agent's default account reading Default: Add idempotency keys reads Work · Opus 5.5 · high, the Codex session under Rework the result ranking Default · gpt-6.1-sol · xhigh, Watch the ranking build (also Codex, its records naming a model but no effort) Default · gpt-6.1-sol · medium rather than a Default effort, Document the retry policy (Grok) Default · grok-4.7 · high, and Rework the retry loop Default · Haiku 4.5 with a Default effort. Write the migration follows the project's own setting, Default · Sonnet · medium, as do the other cards left unchanged; Check the index sizes, launched with the agent's defaults, reads Default · Default model. Where the account name is long (Fix the rounding of partial results, Review search result first paint timing) or a removed account leaves a recorded directory (Profile the slow query), the line fades out before the model; the directory reads left to right. Bound cards keep status, owner and agent marks in one column, with owner badges before long single-line titles. Hover a badge for the owner's name. Titles scroll only when their text is hovered, and titles without a badge start at the content edge. Nested cards inherit their owner's colour. Rounded branches connect the single child under Write the migration and the three under Rework the result ranking. A vertical rail crosses the card gaps and stops at the last child's centre, with none beside top-level cards. Arabic mirrors the branches. Pinned cards come first, then Waiting for you, Awaiting instructions, Working in background, Working and Interrupted. The older migration watcher precedes the newer Document the retry policy, while pinned Add idempotency keys stays above the unpinned cards. Under Rework the result ranking, the older Watch the ranking build precedes the newer Chase the flaky test.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Compare ranking strategies", name: "Rework the result ranking" }))),
     ],
@@ -442,7 +445,7 @@ export const focusScenarios: Scenario[] = [
     state: projectArchiveInConsoleState,
     sessionRecords: unusedBoundRecords,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
-    description: "Search API's heading menu is open on View archive. The submenu lists only that project's archived sessions in Hub's archive: the archived lead session and the older, completed ones bound to Hub, with context-size badges on two of them. Archived work for Hub 2, Last week's spike (unbound) and Archived work of the active lead stay out, as does the archived lead's own child, which View all keeps. View all opens Hub's archive, the same as View all under the Archived list.",
+    description: "Search API's heading menu is open on View archive. The submenu lists only that project's archived sessions in Hub's archive: the archived lead session and the older, completed ones bound to Hub, with a compact-size badge on the archived lead session (it reported a window, so a small warning-coloured ring at 65% leads its number) and on one of the older ones (the number alone). Archived work for Hub 2, Last week's spike (unbound) and Archived work of the active lead stay out, as does the archived lead's own child, which View all keeps. View all opens Hub's archive, the same as View all under the Archived list.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),
@@ -502,8 +505,8 @@ export const focusScenarios: Scenario[] = [
     id: "focus-context-tooltip",
     group: GROUP,
     category: "normal",
-    title: "Context size tooltip",
-    description: "The pointer rests on the context-size badge of Add idempotency keys, a Claude session whose agent has not reported a window. The tooltip holds only its heading, which gives the context size as 200,704 tokens, counted with the current language's plural form, with no divider and no Limit row. Compare the badge's accessible name: one plain phrase, not the badge's compact number.",
+    title: "Context window tooltip without a limit",
+    description: "The pointer rests on the context-size badge of Add idempotency keys, a Claude session whose agent has not reported a window. The Context window card has its muted title at the start and just the compact size, 200.7K, at the end: no bar and no line beneath. The badge's accessible name is one plain phrase with the exact count of 200,704 tokens, not the compact number.",
     state: scrollingFocusState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
     steps: [(ui) => ui.hoverSessionContext(addIdempotencyKeys(ui))],
@@ -512,19 +515,29 @@ export const focusScenarios: Scenario[] = [
     id: "focus-context-tooltip-limit",
     group: GROUP,
     category: "normal",
-    title: "Context size tooltip with a limit",
-    description: "The same badge once the agent has reported the window. The heading reads Context 90,227 tokens; below it sit a divider and a Limit row, the muted label at the start and the value, 200,000 (45% used), aligned to the end (mirrored under right-to-left).",
+    title: "Context window tooltip, plenty of room",
+    description: "The same mark once the agent has reported the window, 45% used: the badge is now led by a small ring filled to just under half in the accent colour, before the number 90.2K. The card's size reads 90.2K / 200K at the end of the title row; an 8px bar below it is filled to just under half in the accent colour on its track; the muted line beneath has 45% used at the start and 109.8K left at the end (mirrored under right-to-left).",
     state: limitContextState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
     steps: [(ui) => ui.hoverSessionContext(addIdempotencyKeys(ui))],
   },
   {
-    id: "focus-context-tooltip-single-token",
+    id: "focus-context-tooltip-warning",
     group: GROUP,
     category: "normal",
-    title: "Context size tooltip, one token",
-    description: "The chip reads just 1 and the heading gives the context size as 1 token, counted with the current language's singular form where the language has one. There is no divider and no Limit row.",
-    state: singleTokenContextState,
+    title: "Context window tooltip, filling up",
+    description: "The window is 63% used, 126.5K / 200K: the badge's ring and the bar's fill are the warning colour, not the accent, about two thirds of the circle and of the track.",
+    state: warningContextState,
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
+    steps: [(ui) => ui.hoverSessionContext(addIdempotencyKeys(ui))],
+  },
+  {
+    id: "focus-context-tooltip-danger",
+    group: GROUP,
+    category: "normal",
+    title: "Context window tooltip, nearly full",
+    description: "The window is 91% used, 182.4K / 200K, with 17.6K left: the badge's ring and the bar's fill are the danger colour and almost fill the circle and the track.",
+    state: dangerContextState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
     steps: [(ui) => ui.hoverSessionContext(addIdempotencyKeys(ui))],
   },

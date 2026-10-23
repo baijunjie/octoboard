@@ -18,6 +18,7 @@ import { StatusIcon } from "../components/StatusIcon";
 import { TitledControl } from "../components/TitledControl";
 import { leave, mountForTooltip, openTooltip } from "../components/tooltipTestSupport";
 import { gitBadgeAriaLabel } from "../gitStatusLabel";
+import { isolate } from "../i18n/isolate";
 import { LanguageProvider } from "../i18n/react";
 import type { Account, ChangeEntry } from "../protocol";
 import { GitBadge } from "../sidebar/GitBadge";
@@ -523,7 +524,7 @@ function mountCard(context?: { tokens: number; window?: number; used_percent?: n
 it("hoverSessionContext puts up the tooltip of the card's context size", async () => {
   mountCard({ tokens: 1500, window: 475000, used_percent: 40 });
   await settledLive(createUi(document, "en").hoverSessionContext((name) => name.startsWith("Add idempotency keys")));
-  expect(Array.from(openTooltip()!.querySelectorAll("dt"), (term) => term.textContent)).toEqual(["Limit"]);
+  expect(openTooltip()!.textContent).toBe(`Context window${isolate("1.5K")} / ${isolate("475K")}${isolate("40%")} used${isolate("473.5K")} left`);
   release(document.querySelector("[role=img]")!);
 });
 

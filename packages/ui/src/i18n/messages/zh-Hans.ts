@@ -733,7 +733,10 @@ export const zhHans: Translation<"other"> = {
     other: "上下文 {tokens} 个 token",
   },
   "session.context.limit": "上限",
-  "session.context.limitValue": "{limit}（已用 {percent}）",
+  "session.context.title": "上下文窗口",
+  "session.context.amount": "{tokens} / {limit}",
+  "session.context.used": "已用 {percent}",
+  "session.context.left": "剩余 {tokens}",
   "session.context.entry": "{label}：{value}",
   "archive.loadingMore": "更多内容加载中…",
 

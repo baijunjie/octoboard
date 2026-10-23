@@ -495,7 +495,7 @@ export function TerminalPane({
         // Under the cover, which a resume raises over it; inert meanwhile, so what is hidden is
         // out of reach too.
         <div ref={historyRef} {...held} inert={resuming} className="contents">
-          <SessionHistoryView key={session.id} sessionId={session.id} />
+          <SessionHistoryView key={session.id} sessionId={session.id} context={session.context} />
         </div>
       )}
       {cover && (

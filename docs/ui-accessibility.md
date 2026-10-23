@@ -32,9 +32,9 @@ a second recipe for a role that already has a token, or overrides a HeroUI compo
 | Role | Source |
 | --- | --- |
 | Solid fill and the text on it (a primary button, a count badge, a selected segment, the resize line) | HeroUI `--{colour}` and `--{colour}-foreground` |
-| Soft fill (an Alert's background, a chip's and a badge's fill) | HeroUI `--{colour}-soft`; the neutral soft fill is the project's tint, HeroUI's `--default-soft` all but vanishing on a white surface |
-| An icon or glyph of that meaning on a surface (a failure mark, a status dot, a lock, a Git badge); a destructive menu item's icon takes its label's `--danger`, as HeroUI colours that label | HeroUI `--{colour}-soft-foreground`, the role HeroUI itself gives an Alert's and a Toast's indicator |
-| Text in that colour (a chip's and a badge's text, +N / −M line counts, the diff viewer's added and removed text) | The project's tint text token: HeroUI's soft foreground pulled toward the foreground just enough to keep 4.5:1 on every surface |
+| Soft fill (an Alert's background, a chip's and a badge's fill) | HeroUI `--{colour}-soft`; the neutral fill of a chip or badge is the foreground at 8% in light and 10% in dark, translucent so it deepens on a grey surface, and an Alert's neutral fill is the secondary text colour at 16%, HeroUI's `--default-soft` all but vanishing on a white surface (1.09:1) |
+| An icon or glyph of that meaning on a surface (a failure mark, a status dot, a lock, a Git badge, the session context badge's ring and its card's meter fill); a destructive menu item's icon takes its label's `--danger`, as HeroUI colours that label | HeroUI `--{colour}-soft-foreground`, the role HeroUI itself gives an Alert's and a Toast's indicator |
+| Text in that colour (a chip's and a badge's text, +N / −M line counts, the diff viewer's added and removed text) | The project's tint text token: HeroUI's soft foreground pulled toward the foreground just enough to keep 4.5:1 on every surface (neutral: HeroUI's `--default-foreground`, which has no token) |
 | A hairline edge (a bordered badge) | The project's tint edge token, mixed from HeroUI's solid colour |
 | Focus | HeroUI `--focus`, for HeroUI controls and the application's own rings alike |
 | Accent, links included | HeroUI `--accent`; link text uses the accent text token where it sits in copy |
@@ -73,11 +73,13 @@ change status or size, "Read-only"), is a badge after the name, never parenthesi
   "Same as console" and the value it resolves to, the context size. It adds a hairline edge in its colour.
 
 Badge and inline reference serve different purposes but share one colour configuration: a single set of generic tint
-tokens in `packages/ui/src/style.css`, per colour a fill, a text colour and an edge, which both components read, so a
-chip and a badge of the same colour never differ. A coloured fill is HeroUI's `--{colour}-soft`, its edge the solid
-`--{colour}` mixed down (HeroUI has no border token); the neutral fill is the secondary text colour at 16% over
-whatever it sits on, with text at 80% foreground and an edge of the same tint at 28%. Only the bordered badge draws
-the edge; a chip never has one.
+tokens in `packages/ui/src/style.css`, per colour a fill, a text colour (neutral reads HeroUI's `--default-foreground`
+instead of a token) and an edge, which both components read, so a chip and a badge of the same colour never differ. A
+coloured fill is HeroUI's `--{colour}-soft`, its edge the solid `--{colour}` mixed down (HeroUI has no border token);
+the neutral fill is the foreground at 8% in light and 10% in dark, translucent like the coloured ones, so it is close to
+HeroUI's `--default` over white and deepens on a grey surface (a hovered or selected row, an Alert) instead of vanishing
+into it, 1.19:1 to 1.20:1 off a light surface and 1.14:1 to 1.31:1 off a dark one. Its edge is the secondary text colour
+at 28%. Only the bordered badge draws the edge; a chip never has one.
 
 Every colour and variant keeps at least 4.5:1 for its text on every surface it sits on (fields, dialogs, popovers,
 tooltips, sidebar rows and cards), measured as drawn over each surface; where HeroUI's soft foreground falls short on
@@ -86,9 +88,11 @@ dropping the colour. A badge has a screen-reader-only comma between name and qua
 running copy: it belongs at the end of a name, row or label line. A user-typed value in it takes `dir="auto"` and a path
 `dir="ltr"`; in a tooltip, whose width is bounded, it wraps instead of overflowing. A badge that completes its name
 rather than qualifying it ("Same as console" and the value that resolves to) sits inside the name's fade in a select and
-is clipped together with it. The session context-size indicator is the same badge on its own, without the comma. An
-agent row that cannot be picked is dimmed by its name taking the secondary text colour (still at least 4.5:1) and its
-icon fading; the text is never faded below AA by opacity.
+is clipped together with it. The session context-size indicator is the same badge on its own, without the comma; where
+the agent reports a context window, a small HeroUI `ProgressCircle` in the tone of the share used leads the number
+inside the badge, live and archived sessions alike, its exact counts in the trigger's name; an archived session's
+history pane shows the same indicator after its heading. An agent row that cannot be picked is dimmed by its name taking
+the secondary text colour (still at least 4.5:1) and its icon fading; the text is never faded below AA by opacity.
 
 A select option or menu item that cannot be chosen and says why (an account whose quota is used up) keeps the reason
 line under its name at full opacity and fades only its name and icon with HeroUI's `--disabled-opacity`, instead of
@@ -110,13 +114,14 @@ line, so it cannot be told from the dialog under it. In light it keeps HeroUI's 
 sets it apart. The rule is the `.tooltip` one under `html:has(.modal__backdrop, …)` in `packages/ui/src/style.css`.
 
 A tooltip or popover is portalled to the end of `<body>`, so it never inherits the `.control-fills` that the pane or
-dialog around its trigger carries, and a neutral soft chip inside it would sit at about 1.09:1 against its `--overlay`
-surface. The shared tooltip and popover components (`IndicatorTooltip`, `AnchoredTooltip`, `TitledControl`,
-`HelpTip`'s popover) therefore carry `control-fills` themselves, giving 1.27:1 in light and 1.45:1 in dark. A dark
-tooltip over a dialog sits a step lighter, so it takes its own fill (`--tooltip-on-dialog-fill`, 1.27:1) from the same
-`.tooltip` rule as `--tooltip-on-dialog`. A new tooltip or popover that can hold a chip carries `control-fills` too.
-The project filter's popover keeps HeroUI's own fills: it holds a search field, and the remap would leave the field's
-`--field-border` and `--field-focus`, computed from the root's `--default`, no longer matching its fill.
+dialog around its trigger carries, and a control drawn from `--default` inside it, a secondary button or a ghost
+button's hover, would sit at about 1.19:1 against its `--overlay` surface. The shared tooltip and popover components
+(`IndicatorTooltip`, `AnchoredTooltip`, `TitledControl`, `HelpTip`'s popover) therefore carry `control-fills`
+themselves, giving 1.27:1 in light and 1.45:1 in dark. A dark tooltip over a dialog sits a step lighter, so it takes its
+own fill (`--tooltip-on-dialog-fill`, 1.27:1) from the same `.tooltip` rule as `--tooltip-on-dialog`. A new tooltip or
+popover that can hold a control drawn from `--default` carries `control-fills` too. The project filter's popover keeps
+HeroUI's own fills: it holds a search field, and the remap would leave the field's `--field-border` and `--field-focus`,
+computed from the root's `--default`, no longer matching its fill.
 
 ## Keyboard
 
@@ -619,7 +624,7 @@ One gap is left open on purpose: no mark on a menu's transient surface carries a
 menu item does carry its own through the anchored shape, as in the Switch account submenu, but no indicator there
 does — so the agent icon beside each session in the archive submenu says which agent it is to nobody, its `svg`
 being `aria-hidden` as well. The agent is read from the archive view's own rows instead, where that icon carries its
-tooltip and the agent is in the row's accessible name. The context-size chip at the end of those archive items is drawn
+tooltip and the agent is in the row's accessible name. The context-size mark at the end of those archive items is drawn
 without its tooltip too (`SessionContextLabel`'s `plain`); it keeps its `role="img"` name, which the menu item's own
 name takes in after the title, so the size is still read there.
 
@@ -629,7 +634,10 @@ agent and its account, as text and a `StatusBadge`, reading the same once the ba
 lists the model and the effort, the account joins them as a labelled list under the agent, since a bare value such as
 "high" does not say what it is, and the labels are the tooltip's own keys); its own key only where the only string naming it folds
 it into the name of what carries it ("{name}, a session is waiting for you"), since reusing that would make the
-tooltip repeat the row's visible name, and composing it out of a fragment is worse to translate.
+tooltip repeat the row's visible name, and composing it out of a fragment is worse to translate. The session context
+mark's card is the one accepted exception: it follows a card design with its own title ("Context window") and its own
+compact "used / limit", "used" and "left" lines, while the trigger's name is one sentence of exact counts; the "used"
+line is the one string the two share.
 
 The anchored shape takes the hover from its caller rather than listening for one itself, so it can be scoped to a
 single mark wherever that mark can carry the pointer handlers: the Git mode's change row hands it the hover from the
@@ -891,14 +899,15 @@ file-path row retain their shared path components, including their icons, clippi
 input fields and source or Markdown content also retain their own layouts.
 
 Inline references retain HeroUI's colours, soft fill and shape; the help hue is the project's purple extension. Their
-fill and text come from the tint tokens shared with `StatusBadge` (see "Confirmed visual choices"); HeroUI's own
-neutral `--default-soft` all but vanishes on a white surface (about 1.05:1), so the neutral chip does not use it. `CodeBlock` uses
-the shared Typography wrapper for multi-line diagnostics. Outside an Alert, both default to neutral and may choose a
-colour. `TintedAlert` supplies `CodeToneContext`, passing each status straight through as the chip's colour: default stays neutral, and accent, success,
-warning and danger use their matching colours. A chip drawn off that fill — in the Alert's Details popover — leaves the tone and keeps its own colour. The nearest status context takes precedence over an explicit colour,
-including field errors and toast titles. Do not hand-colour individual literals within a status message. HeroUI's
-Alert parts remain the indicator, content, title and description primitives. Syntax-highlighted source and foreign
-renderer markup retain their own palettes.
+fill and text come from the tint tokens shared with `StatusBadge` (see "Confirmed visual choices"); the neutral chip is
+the neutral tint (the foreground at 8% in light and 10% in dark) rather than HeroUI's `--default-soft`, which all but
+vanishes on a white surface (1.09:1). `CodeBlock` uses the shared Typography wrapper for multi-line diagnostics. Outside
+an Alert, both default to neutral and may choose a colour. `TintedAlert` supplies `CodeToneContext`, passing each status
+straight through as the chip's colour: default stays neutral, and accent, success, warning and danger use their matching
+colours. A chip drawn off that fill — in the Alert's Details popover — leaves the tone and keeps its own colour. The
+nearest status context takes precedence over an explicit colour, including field errors and toast titles. Do not
+hand-colour individual literals within a status message. HeroUI's Alert parts remain the indicator, content, title and
+description primitives. Syntax-highlighted source and foreign renderer markup retain their own palettes.
 
 ### External links
 

@@ -40,6 +40,7 @@
 @import "@heroui/styles/components/empty-state.css" layer(components);
 @import "@heroui/styles/components/meter.css" layer(components);
 @import "@heroui/styles/components/progress-bar.css" layer(components);
+@import "@heroui/styles/components/progress-circle.css" layer(components);
 @import "@heroui/styles/components/spinner.css" layer(components);
 @import "@heroui/styles/components/toast.css" layer(components);
 @import "@heroui/styles/components/checkbox-group.css" layer(components);
@@ -376,6 +377,30 @@ html {
   box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 30%, transparent);
 }
 
+/* The session context mark's ring (`ContextRing`) and its card's meter, in the tone of how full the
+   window is. A mark of meaning drawn on a surface takes HeroUI's soft foreground of that colour (see
+   docs/ui-accessibility.md's "One definition per semantic colour" section), not the solid colour. The
+   ring's track is the foreground at 20% rather than HeroUI's `--default`, which vanishes on a selected
+   sidebar row and a control fill. */
+.context-ring {
+  --progress-circle-track-stroke: color-mix(in oklab, var(--foreground) 20%, transparent);
+}
+
+.context-tone--accent {
+  --progress-circle-stroke: var(--accent-soft-foreground);
+  --meter-fill: var(--accent-soft-foreground);
+}
+
+.context-tone--warning {
+  --progress-circle-stroke: var(--warning-soft-foreground);
+  --meter-fill: var(--warning-soft-foreground);
+}
+
+.context-tone--danger {
+  --progress-circle-stroke: var(--danger-soft-foreground);
+  --meter-fill: var(--danger-soft-foreground);
+}
+
 /* The fill of an account quota bar (`QuotaMeter`): one colour per agent. Claude's is its brand
    orange darkened to keep 3:1 against the meter's track, lightened on the dark track; Codex's is a
    blue; Grok's is the foreground, as its mark is. Measured against Settings' track, `--control-fill`
@@ -572,17 +597,15 @@ html {
 }
 
 /* The fills of HeroUI's `--default` family on a surface of the app's own: a dialog, whose surface is
-   `--overlay`, and the project pane, whose surface is `--panel-sidebar` (the pane's tabs, header and
-   Git mode; the report panel on the same surface takes `.sidebar-fills`). HeroUI tunes `--default` for
-   the page background (dark L 0.12), and these are lighter (dark L 0.21 and 0.27): a control drawn
-   from `--default` lands almost on its surface (1.19:1 and 1.08:1 in light, 1.19:1 and 1.01:1 in dark,
-   against a dialog and the panel), and a neutral soft chip, half of `--default` over it, no longer
-   reads as a tag (1.09:1 in light, 1.08:1 in dark on a dialog). `--control-fill` and
-   `--control-fill-hover` are opaque steps off the surface instead: 1.27:1 resting and 1.39:1
-   hovered against a light dialog, 1.15:1 and 1.26:1 against the light panel, 1.45:1 and 1.63:1
-   against a dark dialog and 1.23:1 and 1.39:1 against the dark panel. The family is overridden
-   whole, as `.sidebar-fills` does, since `--default-hover` and `--default-soft` are computed on
-   `<html>`.
+   `--overlay`, and the project pane, whose surface is `--panel-sidebar` (the pane's tabs, header and Git
+   mode; the report panel on the same surface takes `.sidebar-fills`). HeroUI tunes `--default` for the
+   page background (dark L 0.12), and these are lighter (dark L 0.21 and 0.27): a control drawn from
+   `--default` lands almost on its surface (1.19:1 and 1.08:1 in light, 1.19:1 and 1.01:1 in dark, against
+   a dialog and the panel). `--control-fill` and `--control-fill-hover` are opaque steps off the surface
+   instead: 1.27:1 resting and 1.39:1 hovered against a light dialog, 1.15:1 and 1.26:1 against the light
+   panel, 1.45:1 and 1.63:1 against a dark dialog and 1.23:1 and 1.39:1 against the dark panel. The family
+   is overridden whole, as `.sidebar-fills` does, since `--default-hover` and `--default-soft` are
+   computed on `<html>`.
 
    Unlike `.sidebar-fills`, whose tints are translucent so that a control on a hovered or selected
    row stacks its own on top, these are opaque, because a dialog's and the pane's surfaces are flat
@@ -594,7 +617,7 @@ html {
    this class, so the shared tooltip and popover components carry it themselves (see "Confirmed
    visual choices" in docs/ui-accessibility.md); a tooltip over a dialog then takes its own fills in
    `--tooltip-on-dialog-fill`, below. Everything a dialog, the pane or such a tooltip or popover (also
-   on `--overlay`) draws from `--default` takes the fills: a neutral tag, a secondary button, a tab
+   on `--overlay`) draws from `--default` takes the fills: a secondary button, a tab
    list, a ghost button's hover, a toggle button, a search field and a select in their secondary
    variant, and the file viewer's image checkerboard (`.viewer-checkerboard`), whose squares step
    1.10:1 from its ground in light and 1.28:1 in dark (1.04:1 and 1.05:1 on HeroUI's own fill),
@@ -641,13 +664,14 @@ html {
 }
 
 /* An Alert draws two things itself (`TintedAlert`, `ErrorAlert`). Its background is HeroUI's soft fill for
-   its status; the neutral one is the shared neutral tint (`--tint-default-bg`), HeroUI's `--default-soft`
+   its status; the neutral one is `--app-muted` at 16% (`--alert-fill-default`), HeroUI's `--default-soft`
    all but vanishing on a white surface. Its shadow is HeroUI's `--surface-shadow` in light, three layers
    (`0 2px 4px`, `0 1px 2px`, `0 0 1px`, at 4%, 6% and 6%, from HeroUI 3.2.6's `variables.css`), which in
    grey reads as a rim on a tinted fill; it keeps those offsets, blurs and strengths and takes its colour
    from the Alert's status instead (the neutral Alert from the secondary text colour, as its fill is),
    defined once here as `--alert-shadow-{status}`. Dark keeps HeroUI's own, no shadow. */
 :root {
+  --alert-fill-default: color-mix(in oklab, var(--app-muted) 16%, transparent);
   --alert-shadow-default: 0 2px 4px 0 color-mix(in oklab, var(--app-muted) 4%, transparent), 0 1px 2px 0 color-mix(in oklab, var(--app-muted) 6%, transparent), 0 0 1px 0 color-mix(in oklab, var(--app-muted) 6%, transparent);
   --alert-shadow-accent: 0 2px 4px 0 color-mix(in oklab, var(--accent) 4%, transparent), 0 1px 2px 0 color-mix(in oklab, var(--accent) 6%, transparent), 0 0 1px 0 color-mix(in oklab, var(--accent) 6%, transparent);
   --alert-shadow-success: 0 2px 4px 0 color-mix(in oklab, var(--success) 4%, transparent), 0 1px 2px 0 color-mix(in oklab, var(--success) 6%, transparent), 0 0 1px 0 color-mix(in oklab, var(--success) 6%, transparent);
@@ -665,7 +689,7 @@ html {
 }
 
 .alert-fill-default {
-  background-color: var(--tint-default-bg);
+  background-color: var(--alert-fill-default);
   --surface-shadow: var(--alert-shadow-default);
 }
 
@@ -700,14 +724,17 @@ html {
   --toggle-button-fg-selected: var(--toggle-button-fg);
 }
 
-/* The one colour configuration of a tag: a `StatusBadge` and an `InlineReference` both draw their fill (`--tint-{colour}-bg`)
-   and text (`--tint-{colour}-fg`) from it, and the badge's hairline (`--tint-{colour}-edge`) is the badge's alone.
-   The neutral tint is `--app-muted` at 16% with the foreground at 80% as text; the four HeroUI colours take its soft
-   fill and its soft foreground pulled toward the foreground where it misses 4.5:1 on a surface a tag sits on (the
-   measured minima are in `StatusBadge`'s comment); the help one is the app's purple. */
+/* The one colour configuration of a tag: a `StatusBadge` and an `InlineReference` both draw their fill
+   (`--tint-{colour}-bg`) and text (`--tint-{colour}-fg`) from it, and the badge's hairline (`--tint-{colour}-edge`) is
+   the badge's alone. The neutral fill is the foreground at 8% in light and 10% in dark, translucent like the coloured
+   ones, so it deepens on a grey surface (a hovered or selected row, an Alert) instead of vanishing into it as an opaque
+   grey would; over white it is close to HeroUI's light `--default`; dark takes 10% rather than the 8% that would match
+   its `--default` over a dialog, which would sit only 1.10:1 off `--background`. Its text is HeroUI's
+   `--default-foreground` and its hairline `--app-muted` at 28%. The four HeroUI colours take their soft fill and their
+   soft foreground pulled toward the foreground where it misses 4.5:1 on a surface a tag sits on (the measured minima
+   are in `StatusBadge`'s comment); the help one is the app's purple. */
 :root {
-  --tint-default-bg: color-mix(in oklab, var(--app-muted) 16%, transparent);
-  --tint-default-fg: color-mix(in oklab, var(--foreground) 80%, transparent);
+  --tint-default-bg: color-mix(in oklab, var(--foreground) 8%, transparent);
   --tint-default-edge: color-mix(in oklab, var(--app-muted) 28%, transparent);
   --tint-accent-bg: var(--accent-soft);
   --tint-accent-fg: color-mix(in oklab, var(--accent-soft-foreground) 85%, var(--foreground));
@@ -728,6 +755,7 @@ html {
 
 .dark,
 [data-theme="dark"] {
+  --tint-default-bg: color-mix(in oklab, var(--foreground) 10%, transparent);
   --tint-success-fg: var(--success-soft-foreground);
   --tint-warning-fg: var(--warning-soft-foreground);
   --tint-danger-fg: color-mix(in oklab, var(--danger-soft-foreground) 75%, var(--foreground));
@@ -1270,11 +1298,12 @@ html.pane-resizing * {
   font: inherit;
   font-family: var(--font-mono);
 }
-/* A chip is drawn from the shared tints (`--tint-*` above, also the badge's): its fill and text are `--tint-{colour}-bg` and
-   `--tint-{colour}-fg` for the colour it carries, an alert's included, and it never takes the hairline. HeroUI's soft
-   default is half of `--default` over the surface, 1.09:1 on a light card and 1.08:1 on a dark one, which does not
-   read as a tag. Only the colours are set here: the shape is HeroUI's and the size follows the text (above). */
-.inline-reference.chip--soft[data-color="default"] { --chip-bg: var(--tint-default-bg); --chip-fg: var(--tint-default-fg); }
+/* A chip is drawn from the shared tints (`--tint-*` above, also the badge's): its fill and text are `--tint-{colour}-bg`
+   and `--tint-{colour}-fg` for the colour it carries, an alert's included, and it never takes the hairline (the neutral
+   text is HeroUI's `--default-foreground`). HeroUI's soft default is half of `--default` over the surface, 1.09:1 on a
+   light card and 1.08:1 on a dark one, which does not read as a tag. Only the colours are set here: the shape is
+   HeroUI's and the size follows the text (above). */
+.inline-reference.chip--soft[data-color="default"] { --chip-bg: var(--tint-default-bg); --chip-fg: var(--default-foreground); }
 .inline-reference.chip--soft[data-color="accent"] { --chip-bg: var(--tint-accent-bg); --chip-fg: var(--tint-accent-fg); }
 .inline-reference.chip--soft[data-color="help"] { --chip-bg: var(--tint-help-bg); --chip-fg: var(--tint-help-fg); }
 .inline-reference.chip--soft[data-color="success"] { --chip-bg: var(--tint-success-bg); --chip-fg: var(--tint-success-fg); }

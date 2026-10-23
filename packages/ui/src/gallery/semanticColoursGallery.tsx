@@ -21,24 +21,29 @@ interface Meaning {
   label: string;
   /** Solid fill and the text on it; absent where no token exists. */
   solid: { fill: string; text?: string };
+  /** The soft fill, with a second name or description of it: the project tint it is read through, or what it is made of. */
   soft: { token: string; alias: string };
+  /** The fill the neutral Alert draws instead of the soft fill. */
+  alertFill?: string;
+  /** The colour of text in the meaning outside a solid fill. */
+  text: string;
   icon: string;
   badge: string;
   sample: string;
 }
 
 const MEANINGS: Meaning[] = [
-  { color: "default", label: "Neutral (default)", solid: { fill: "--default", text: "--default-foreground" }, soft: { token: "--tint-default-bg", alias: "the project's neutral tint" }, icon: "--default-soft-foreground", badge: "Not detected", sample: "Claude Code" },
-  { color: "accent", label: "Accent", solid: { fill: "--accent", text: "--accent-foreground" }, soft: { token: "--accent-soft", alias: "--tint-accent-bg" }, icon: "--accent-soft-foreground", badge: "Renamed", sample: "Working" },
-  { color: "success", label: "Success", solid: { fill: "--success", text: "--success-foreground" }, soft: { token: "--success-soft", alias: "--tint-success-bg" }, icon: "--success-soft-foreground", badge: "Logged in", sample: "Idle" },
-  { color: "warning", label: "Warning", solid: { fill: "--warning", text: "--warning-foreground" }, soft: { token: "--warning-soft", alias: "--tint-warning-bg" }, icon: "--warning-soft-foreground", badge: "Not logged in", sample: "Waiting for you" },
-  { color: "danger", label: "Danger", solid: { fill: "--danger", text: "--danger-foreground" }, soft: { token: "--danger-soft", alias: "--tint-danger-bg" }, icon: "--danger-soft-foreground", badge: "Deleted", sample: "Failed" },
-  { color: "help", label: "Help (purple)", solid: { fill: "--help" }, soft: { token: "--tint-help-bg", alias: "mixed from --help" }, icon: "--tint-help-fg", badge: "Agent", sample: "Shared" },
+  { color: "default", label: "Neutral (default)", solid: { fill: "--default", text: "--default-foreground" }, soft: { token: "--tint-default-bg", alias: "translucent foreground" }, alertFill: "--alert-fill-default", text: "--default-foreground", icon: "--default-soft-foreground", badge: "Not detected", sample: "Claude Code" },
+  { color: "accent", label: "Accent", solid: { fill: "--accent", text: "--accent-foreground" }, soft: { token: "--accent-soft", alias: "--tint-accent-bg" }, text: "--tint-accent-fg", icon: "--accent-soft-foreground", badge: "Renamed", sample: "Working" },
+  { color: "success", label: "Success", solid: { fill: "--success", text: "--success-foreground" }, soft: { token: "--success-soft", alias: "--tint-success-bg" }, text: "--tint-success-fg", icon: "--success-soft-foreground", badge: "Logged in", sample: "Idle" },
+  { color: "warning", label: "Warning", solid: { fill: "--warning", text: "--warning-foreground" }, soft: { token: "--warning-soft", alias: "--tint-warning-bg" }, text: "--tint-warning-fg", icon: "--warning-soft-foreground", badge: "Not logged in", sample: "Waiting for you" },
+  { color: "danger", label: "Danger", solid: { fill: "--danger", text: "--danger-foreground" }, soft: { token: "--danger-soft", alias: "--tint-danger-bg" }, text: "--tint-danger-fg", icon: "--danger-soft-foreground", badge: "Deleted", sample: "Failed" },
+  { color: "help", label: "Help (purple)", solid: { fill: "--help" }, soft: { token: "--tint-help-bg", alias: "mixed from --help" }, text: "--tint-help-fg", icon: "--tint-help-fg", badge: "Agent", sample: "Shared" },
 ];
 
 type AlertColor = "default" | "accent" | "success" | "warning" | "danger";
 
-const tint = (color: StatusBadgeColor, role: "bg" | "fg" | "edge"): string => `--tint-${color}-${role}`;
+const edge = (color: StatusBadgeColor): string => `--tint-${color}-edge`;
 const use = (token: string): string => `var(${token})`;
 
 function Swatch({ role, tokens, children, style }: { role: string; tokens: string[]; children: React.ReactNode; style: React.CSSProperties }): React.ReactElement {
@@ -56,7 +61,7 @@ function Swatch({ role, tokens, children, style }: { role: string; tokens: strin
 /** Every role of one meaning as a labelled swatch, drawn on a white surface so the translucent fills read as they do
  * on a card. */
 function Swatches({ meaning }: { meaning: Meaning }): React.ReactElement {
-  const { color, solid, soft, icon } = meaning;
+  const { color, solid, soft, text, icon } = meaning;
   return (
     <div data-semantic-swatches={color} className="flex flex-wrap gap-4">
       <Swatch role="Solid and the text on it" tokens={solid.text ? [solid.fill, solid.text] : [solid.fill, "no foreground token"]} style={{ background: use(solid.fill), color: solid.text ? use(solid.text) : "white" }}>Aa</Swatch>
@@ -65,8 +70,8 @@ function Swatches({ meaning }: { meaning: Meaning }): React.ReactElement {
         <CircleAlert aria-hidden="true" className="size-6" style={{ color: use(icon) }} />
         <Info aria-hidden="true" className="ms-2 size-6" style={{ color: use(icon) }} />
       </Swatch>
-      <Swatch role="Text in the colour" tokens={[tint(color, "fg")]} style={{ color: use(tint(color, "fg")) }}>Text Aa</Swatch>
-      <Swatch role="Hairline edge" tokens={[tint(color, "edge")]} style={{ border: `1px solid ${use(tint(color, "edge"))}`, color: use("--foreground") }}>Aa</Swatch>
+      <Swatch role="Text in the colour" tokens={[text]} style={{ color: use(text) }}>Text Aa</Swatch>
+      <Swatch role="Hairline edge" tokens={[edge(color)]} style={{ border: `1px solid ${use(edge(color))}`, color: use("--foreground") }}>Aa</Swatch>
     </div>
   );
 }
@@ -110,12 +115,12 @@ function SampleAlert({ meaning }: { meaning: Meaning }): React.ReactElement {
 
 /** The real components drawn in one meaning, on whatever surface they are placed. */
 function Specimen({ meaning, chip, alert, rowClassName = "" }: { meaning: Meaning; chip: boolean; alert: boolean; rowClassName?: string }): React.ReactElement {
-  const { color, badge, label, sample } = meaning;
+  const { color, badge, label, sample, text } = meaning;
   return (
     <div data-semantic-specimen={color} className="flex min-w-0 flex-col gap-1.5">
       <div className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-lg text-sm ${rowClassName}`}>
         <span className="w-24 shrink-0 text-xs text-app-muted">{label}</span>
-        <span style={{ color: use(tint(color, "fg")) }}>{sample}</span>
+        <span style={{ color: use(text) }}>{sample}</span>
         <StatusBadge color={color} variant="soft" separated={false}>{badge}</StatusBadge>
         <StatusBadge color={color} variant="bordered" separated={false}>{badge}</StatusBadge>
         <Mark color={color} />
@@ -170,6 +175,7 @@ export function SemanticColoursGallery(): React.ReactElement {
                 <div key={meaning.color} className="flex flex-col gap-2">
                   <h3 className="text-sm font-medium">{meaning.label}</h3>
                   <Swatches meaning={meaning} />
+                  {meaning.alertFill && <p className="text-xs text-app-muted">The neutral Alert uses <code className="font-mono">{meaning.alertFill}</code>.</p>}
                 </div>
               ))}
             </div>

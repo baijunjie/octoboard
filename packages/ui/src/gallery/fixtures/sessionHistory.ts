@@ -1,17 +1,30 @@
-import type { HistoryMessage } from "../../protocol";
+import type { HistoryMessage, Session, SessionContext } from "../../protocol";
 import type { Scenario } from "../scenario";
-import { consoleOf, minutesAgo, projectOf, sessionOf, snapshotState } from "./builders";
+import { consoleOf, contextOf, minutesAgo, projectOf, sessionOf, snapshotState } from "./builders";
 
 const GROUP = "Terminal";
 
 const console_ = consoleOf("c-1", "Main");
 const project = projectOf("p-1", console_.id, "Website");
-const archived = sessionOf("s-history", console_.id, project.id, "Speed up the pricing page", "archived", { ended_at: minutesAgo(60 * 20) });
-const state = snapshotState({
-  consoles: [console_],
-  projects: [project],
-  sessions: [sessionOf("s-console", console_.id, undefined, "Hub", "idle"), archived],
-});
+
+/** The archived session with the context its agent last reported, which the history header shows as the context badge beside its heading. */
+function archivedWith(context?: SessionContext): Session {
+  return sessionOf("s-history", console_.id, project.id, "Speed up the pricing page", "archived", { ended_at: minutesAgo(60 * 20), ...(context && { context }) });
+}
+const archived = archivedWith();
+function stateWith(context?: SessionContext) {
+  return snapshotState({
+    consoles: [console_],
+    projects: [project],
+    sessions: [sessionOf("s-console", console_.id, undefined, "Hub", "idle"), archivedWith(context)],
+  });
+}
+
+// The three tones of the header badge's ring, and the agent that reported a size but no window.
+const warningContext = contextOf(65);
+const dangerContext = contextOf(91);
+const accentContext = contextOf(30);
+const windowlessContext: SessionContext = { tokens: 130_000 };
 
 // A failure the application has no words for, so the pane shows its generic sentence and the raw
 // message behind Details.
@@ -148,7 +161,7 @@ const MESSAGES: HistoryMessage[] = [
 const preferences = { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` } satisfies Scenario["preferences"];
 const openHistory: NonNullable<Scenario["steps"]> = [(ui) => ui.press(ui.session(archived.title))];
 
-const base = { group: GROUP, category: "normal", state, preferences } satisfies Partial<Scenario>;
+const base = { group: GROUP, category: "normal", state: stateWith(warningContext), preferences } satisfies Partial<Scenario>;
 
 export const sessionHistoryScenarios: Scenario[] = [
   {
@@ -156,7 +169,7 @@ export const sessionHistoryScenarios: Scenario[] = [
     id: "history-loaded",
     title: "Archived session history",
     description:
-      "The pane shows the session's history in place of a terminal. The brief, the notice and the report that Octoboard wrote into the session are labelled with the app's name and set apart by a rule and muted text, not hidden; the user's messages are labelled You. The long message wraps, the long path breaks inside the column and a Chinese message ends the list; scroll to reach it. \"Show agent replies\" is off. The floating bar at the bottom says the session is archived and offers Reopen; the last message scrolls clear of it.",
+      "The pane shows the session's history in place of a terminal. The brief, the notice and the report that Octoboard wrote into the session are labelled with the app's name and set apart by a rule and muted text, not hidden; the user's messages are labelled You. Right after the \"Session history\" heading sits the context badge, 130K, led by a ring in the warning colour for the 65% used; hovering it shows the Context window card. The \"Show agent replies\" switch stays at the end of the header. The long message wraps, the long path breaks inside the column and a Chinese message ends the list; scroll to reach it. \"Show agent replies\" is off. The floating bar at the bottom says the session is archived and offers Reopen; the last message scrolls clear of it.",
     sessionHistory: { [archived.id]: MESSAGES },
     steps: openHistory,
   },
@@ -165,7 +178,8 @@ export const sessionHistoryScenarios: Scenario[] = [
     id: "history-replies",
     title: "Archived session history with agent replies",
     description:
-      "With \"Show agent replies\" on, each turn's final reply follows its opening message as a Markdown document on a code-coloured surface: headings, ordered and bullet lists, inline code, fenced code blocks, bold text and a table. A turn opened by Octoboard gets a reply too. Scroll for the code blocks and the table.",
+      "With \"Show agent replies\" on, each turn's final reply follows its opening message as a Markdown document on a code-coloured surface: headings, ordered and bullet lists, inline code, fenced code blocks, bold text and a table. A turn opened by Octoboard gets a reply too. Scroll for the code blocks and the table. Beside the heading the context badge, 182K, has a ring in the danger colour for the 91% used.",
+    state: stateWith(dangerContext),
     sessionHistory: { [archived.id]: MESSAGES },
     steps: [...openHistory, (ui) => ui.press(ui.t("history.showReplies")), (ui) => ui.wait(500)],
   },
@@ -182,7 +196,8 @@ export const sessionHistoryScenarios: Scenario[] = [
     ...base,
     id: "history-empty",
     title: "Archived session with no messages",
-    description: "The record holds no message: an empty panel says so, under the \"Show agent replies\" switch, which stays available.",
+    description: "The record holds no message: an empty panel says so, under the \"Show agent replies\" switch, which stays available. The context badge beside the heading, 60K, has a ring in the accent colour for the 30% used.",
+    state: stateWith(accentContext),
     sessionHistory: { [archived.id]: [] },
     steps: openHistory,
   },
@@ -190,7 +205,8 @@ export const sessionHistoryScenarios: Scenario[] = [
     ...base,
     id: "history-loading",
     title: "Archived session history loading",
-    description: "The daemon has not answered yet: a spinner and \"Loading history…\" fill the pane. The floating bar already offers Reopen.",
+    description: "The daemon has not answered yet: a spinner and \"Loading history…\" fill the pane. The floating bar already offers Reopen. The agent reported no window, so the badge beside the heading shows only the compact size, 130K, with no ring.",
+    state: stateWith(windowlessContext),
     sessionHistory: { [archived.id]: "pending" },
     steps: openHistory,
   },

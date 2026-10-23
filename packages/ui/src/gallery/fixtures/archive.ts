@@ -1,6 +1,6 @@
 import type { Agent } from "../../protocol";
 import type { Scenario } from "../scenario";
-import { branchItemOf, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState, worktreeItemOf } from "./builders";
+import { branchItemOf, consoleOf, contextOf, minutesAgo, projectOf, sessionOf, snapshotState, worktreeItemOf } from "./builders";
 
 const GROUP = "Archive view";
 
@@ -14,7 +14,7 @@ const archived = Array.from({ length: 70 }, (_, i) =>
     ...(i === 0 ? { terminal_title: "Explain the differences between the three galleries" } : i === 1 ? { terminal_title: "Review a very long archived agent task title and preserve its original session name" } : {}),
     started_at: minutesAgo(120 + i * 400),
     ended_at: minutesAgo(20 + i * 400),
-    ...(i === 0 ? { context: { tokens: 428_771 } } : i === 1 ? { context: { tokens: 0 } } : {}),
+    ...(i === 0 ? { context: contextOf(43, 1_000_000) } : i === 1 ? { context: { tokens: 0 } } : {}),
   }),
 );
 const consoleSessions = Array.from({ length: 8 }, (_, i) =>
@@ -62,7 +62,7 @@ export const unboundArchived = sessionOf("s-unbound-archived", console_.id, proj
 // `ArchiveView.test.tsx`, as the sessions above are.
 export const archivedLead = sessionOf("s-lead-archived", console_.id, project.id, "Release lead session", "archived", {
   bound_to: boundConsoleSession.id,
-  context: { tokens: 192_345 },
+  context: contextOf(65),
   ended_at: minutesAgo(8),
 });
 export const underArchivedLead = Array.from({ length: 2 }, (_, i) =>
@@ -130,7 +130,7 @@ const longArchiveState = {
       const session = sessionOf(`s-older${i}`, console_.id, boundProject.id, `Older archived session ${i + 1}`, "archived", {
         agent: AGENTS[i % 3],
         ended_at: minutesAgo(200 + i * 30),
-        ...(i % 2 === 0 ? { context: { tokens: 12_345 + i * 98_000 } } : {}),
+        ...(i === 0 ? { context: contextOf(91) } : i % 2 === 0 ? { context: { tokens: 12_345 + i * 98_000 } } : {}),
       });
       return [session.id, session] as const;
     }),
@@ -207,7 +207,7 @@ export const archiveScenarios: Scenario[] = [
     category: "normal",
     title: "Project archive menu, ten newest",
     state: longArchiveState,
-    description: "The menu lists the ten newest of thirteen archived rows, with their last active task titles, then View all; the three oldest are left to the full archive. Each item ends in a compact context-size badge, absent for a zero size and for a session that never reported one. The archived child of the active lead is listed on its own, while the two children of the archived lead stay out. Long archived names fade at the menu edge and run as a marquee when their row is hovered.",
+    description: "The menu lists the ten newest of thirteen archived rows, with their last active task titles, then View all; the three oldest are left to the full archive. Each item ends in a compact-size badge, absent for a zero size and for a session that never reported one; where the agent reported a window (Release lead session, Older archived session 1) a small ring of the share used, in the tone of how full it is, leads the number, and the menu has no tooltip. The archived child of the active lead is listed on its own, while the two children of the archived lead stay out. Long archived names fade at the menu edge and run as a marquee when their row is hovered.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: boundProject.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),
@@ -219,7 +219,7 @@ export const archiveScenarios: Scenario[] = [
     category: "normal",
     title: "Project archive with live and archived owners",
     state: archiveState,
-    description: "The full archive shows each last active task title beside the original session name, the archived lead's children nested under it and the archived child of the active lead as a standalone row. A compact context-size badge follows the agent name, hidden for a zero or absent size; only dates sit on the right, archived above created. Each row is a button. Hover or Tab to it to compare its background and focus ring with the Reopen and Delete fills. The archived lead is the selected session. Pressing another row closes the archive and shows that session's history. Delete an entry or a nested child to watch the rows slide into place, then close the archive and reopen it through the project menu to review both transitions.",
+    description: "The full archive shows each last active task title beside the original session name, the archived lead's children nested under it and the archived child of the active lead as a standalone row. A compact-size badge follows the agent name, hidden for a zero or absent size, and led by a small ring of the share used where the agent reported a window (the archived lead session, selected, on the selected row's background); hover a badge for its Context window card with the meter at 65% in warning; only dates sit on the right, archived above created. Each row is a button. Hover or Tab to it to compare its background and focus ring with the Reopen and Delete fills. The archived lead is the selected session. Pressing another row closes the archive and shows that session's history. Delete an entry or a nested child to watch the rows slide into place, then close the archive and reopen it through the project menu to review both transitions.",
     steps: [
       // Selecting the archived lead from the menu, then opening the full archive, marks its row.
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: boundProject.name })),
@@ -236,7 +236,7 @@ export const archiveScenarios: Scenario[] = [
     category: "normal",
     title: "Project archive, many entries",
     state: archiveState,
-    description: "Seventy entries are loaded thirty at a time; the newest keep their last active task titles (one of them long) and the first shows a context-size badge and the second, whose size is zero, none. Rows offer Reopen and Delete, without lock controls. Delete an entry: it fades out to the right by a quarter of its own width over 300ms while the remaining rows slide into place, and the reduced-motion preference keeps the change immediate.",
+    description: "Seventy entries are loaded thirty at a time; the newest keep their last active task titles (one of them long) and the first shows a compact-size badge (430K, led by a small accent ring as the agent reported a window; hover it for the card with the meter at 43%, accent) and the second, whose size is zero, no mark. Rows offer Reopen and Delete, without lock controls. Delete an entry: it fades out to the right by a quarter of its own width over 300ms while the remaining rows slide into place, and the reduced-motion preference keeps the change immediate.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),

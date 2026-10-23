@@ -115,6 +115,14 @@ it("shows a row's account, model and effort beside its agent mark, which its acc
   expect(row.querySelector("[role=button]")?.getAttribute("aria-label")?.endsWith(`${isolate("Opus 5.5")} · ${isolate("high")}`)).toBe(true);
 });
 
+it("leads a row's context badge with the ring of the share used where the agent reported a window", () => {
+  const sized: Session = { ...boundArchived[0], context: { tokens: 130000, window: 200000, used_percent: 65 } };
+  const { container } = renderArchiveView(undefined, undefined, [sized]);
+  const row = container.querySelector<HTMLElement>("ul > li:has(button)")!;
+  expect(row.querySelector("[data-variant] > .progress-circle")).not.toBeNull();
+  expect(row.textContent).toContain("130K");
+});
+
 it("shows the model and effort a row's session inherits from its console where it set and showed none", () => {
   const session = boundArchived[0];
   const owner = { ...console_, [AGENT_CONSOLE_PROJECT_MODEL_FIELD[session.agent]]: "claude-sonnet-5-5", [AGENT_CONSOLE_PROJECT_EFFORT_FIELD[session.agent]]: "low" };

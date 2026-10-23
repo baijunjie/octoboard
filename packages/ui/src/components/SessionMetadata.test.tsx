@@ -7,6 +7,7 @@ import { sessionOf } from "../gallery/fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import type { SessionContext } from "../protocol";
 import { ArchivedSessionMetadata, SessionContextLabel } from "./SessionMetadata";
+import { enter, mountForTooltip, openTooltip, trigger, withFakeTimers } from "./tooltipTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -21,19 +22,81 @@ function mount(element: React.ReactNode) {
 
 const context: SessionContext = { tokens: 190123, window: 475000, used_percent: 40 };
 
-it("shows the compact context size, and its exact count with the limit and share used in the name and tooltip", () => {
+it("leads the compact-size badge with a ring of the share used, and names the exact count, limit, share used and what is left", () => {
   const { container } = mount(<SessionContextLabel context={context} />);
   expect(container.textContent).toBe("190.1K");
   const badge = container.querySelector('[aria-hidden="true"] > span:not(.sr-only)')!;
-  expect(badge.textContent).toBe("190.1K");
   expect(badge.getAttribute("data-variant")).toBe("bordered");
-  expect(container.querySelector(".sr-only")).toBeNull();
+  expect(badge.firstElementChild?.matches(".progress-circle")).toBe(true);
   const indicator = container.querySelector<HTMLElement>('[role="img"]')!;
-  expect(indicator.getAttribute("aria-label")).toBe(`Context ${isolate("190,123")} tokens, Limit: ${isolate("475,000")} (${isolate("40%")} used)`);
+  expect(indicator.getAttribute("aria-label")).toBe(`Context ${isolate("190,123")} tokens, Limit: ${isolate("475,000")}, ${isolate("40%")} used, ${isolate("284,877")} left`);
   expect(indicator.tabIndex).toBe(-1);
   expect(indicator.querySelector(":scope > [aria-hidden]")?.getAttribute("aria-hidden")).toBe("true");
   expect(container.querySelector("button")).toBeNull();
   expect(indicator.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }))).toBe(false);
+});
+
+it("draws the same ring-led badge without a tooltip on a menu's surface, named by the same sentence", () => {
+  const { container } = mount(<SessionContextLabel context={context} plain />);
+  expect(container.textContent).toBe("190.1K");
+  expect(container.querySelector("[data-variant] > .progress-circle")).not.toBeNull();
+  expect(container.querySelector('[role="img"]')?.getAttribute("aria-label")).toBe(`Context ${isolate("190,123")} tokens, Limit: ${isolate("475,000")}, ${isolate("40%")} used, ${isolate("284,877")} left`);
+});
+
+it("shows the compact size as a badge when the agent records no limit", () => {
+  const { container } = mount(<SessionContextLabel context={{ tokens: 190123 }} />);
+  expect(container.querySelector("svg")).toBeNull();
+  const badge = container.querySelector('[aria-hidden="true"] > span:not(.sr-only)')!;
+  expect(badge.textContent).toBe("190.1K");
+  expect(badge.getAttribute("data-variant")).toBe("bordered");
+});
+
+/** Mounts the mark of a window with a share used and opens its card: the card, and the tone class
+ * the ring and the card's meter each carry. */
+function hoverCard(used_percent: number, tokens = 1000, window = 2000) {
+  const runOut = withFakeTimers();
+  const container = mountForTooltip(<SessionContextLabel context={{ tokens, window, used_percent }} />);
+  const ring = container.querySelector<HTMLElement>(".progress-circle")!;
+  enter(trigger(container));
+  runOut();
+  const card = openTooltip()!;
+  const meter = card.querySelector<HTMLElement>(".meter")!;
+  const tone = (element: Element) => Array.from(element.classList).find((name) => name.startsWith("context-tone--"));
+  return { ringTone: tone(ring), meterTone: tone(meter), card };
+}
+
+it.each([
+  [0, "accent"], [50, "accent"], [51, "warning"], [80, "warning"], [81, "danger"], [100, "danger"],
+])("draws %i%% used in the %s tone, in the ring and the card's meter alike", (percent, tone) => {
+  const { ringTone, meterTone } = hoverCard(percent);
+  expect(ringTone).toBe(`context-tone--${tone}`);
+  expect(meterTone).toBe(`context-tone--${tone}`);
+});
+
+it("lays the card out as the window's size against its limit, then the share used and what is left", () => {
+  const { card } = hoverCard(91, 182400, 200000);
+  expect(card.textContent).toBe(`Context window${isolate("182.4K")} / ${isolate("200K")}${isolate("91%")} used${isolate("17.6K")} left`);
+});
+
+it("leaves nothing left, not a negative count, once the size passes the limit", () => {
+  const { card } = hoverCard(100, 210000, 200000);
+  expect(card.textContent).toContain(`${isolate("0")} left`);
+});
+
+it("works the share out from the counts, as a whole percent, when the agent gives a limit without one", () => {
+  const { container } = mount(<SessionContextLabel context={{ tokens: 100600, window: 200000 }} />);
+  expect(container.querySelector('[role="img"]')?.getAttribute("aria-label")).toContain(`${isolate("50%")} used`);
+  expect(container.querySelector(".progress-circle")!.classList).toContain("context-tone--accent");
+});
+
+it("draws the card of a size without a limit as its name and size alone", () => {
+  const runOut = withFakeTimers();
+  const container = mountForTooltip(<SessionContextLabel context={{ tokens: 190123 }} />);
+  enter(trigger(container));
+  runOut();
+  const card = openTooltip()!;
+  expect(card.textContent).toBe(`Context window${isolate("190.1K")}`);
+  expect(card.querySelector(".meter")).toBeNull();
 });
 
 it("names the context size alone when the agent records no limit", () => {

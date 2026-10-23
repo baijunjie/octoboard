@@ -1,4 +1,4 @@
-import type { AccountQuota, AccountSharing, Agent, Console, FileContent, GitStatus, Host, Page, Project, Session, SessionBranchItem, SessionBranchState, SessionStatus, Settings, ShellTerminal } from "../../protocol";
+import type { AccountQuota, AccountSharing, Agent, Console, FileContent, GitStatus, Host, Page, Project, Session, SessionBranchItem, SessionBranchState, SessionContext, SessionStatus, Settings, ShellTerminal } from "../../protocol";
 import type { SessionRequest, State, TrustPrompt } from "../../store";
 
 /** Every agent, as the list of added agents of a user who has added them all (in the default order). */
@@ -48,6 +48,11 @@ export function projectOf(id: string, consoleId: string, name: string, extra: Pa
     grok_account_id: { kind: "inherit" },
     ...extra,
   };
+}
+
+/** A context size with its window and the share of it the daemon reports. */
+export function contextOf(percent: number, window = 200_000): SessionContext {
+  return { tokens: Math.round((window * percent) / 100), window, used_percent: percent };
 }
 
 export function sessionOf(

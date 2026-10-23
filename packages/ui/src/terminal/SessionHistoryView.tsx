@@ -6,13 +6,14 @@ import { useHasPainted } from "../components/useHasPainted";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { PaneFailure } from "../components/PaneFailure";
 import { PaneTitle } from "../components/PaneTitle";
+import { SessionContextLabel } from "../components/SessionMetadata";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useFadeRegion, useScrollFade } from "../components/scrollFade";
 import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
-import type { HistoryMessage } from "../protocol";
+import type { HistoryMessage, SessionContext } from "../protocol";
 import { useOctoboardTheme } from "../theme";
 import { RendererBoundary } from "../viewer/codeRenderer";
 import { CODE_THEMES } from "../viewer/codeTheme";
@@ -25,9 +26,10 @@ const MarkdownDocument = lazy(() => import("../viewer/MarkdownDocument").then((m
 /**
  * What an archived session was about, in place of its terminal: the messages the user sent, told
  * apart from those Octoboard wrote into the session, and on request the agent's final reply to
- * each turn. Read-only; the way back to the terminal is reopening the session.
+ * each turn, with its context size beside the heading. Read-only; the way back to the
+ * terminal is reopening the session.
  */
-export function SessionHistoryView({ sessionId }: { sessionId: string }): React.ReactElement {
+export function SessionHistoryView({ sessionId, context }: { sessionId: string; context?: SessionContext | null }): React.ReactElement {
   const t = useT();
   const { history, reload } = useSessionHistory(sessionId);
   const painted = useHasPainted();
@@ -53,7 +55,11 @@ export function SessionHistoryView({ sessionId }: { sessionId: string }): React.
       {/* A pane header: its height and groove run its bottom line on from the sidebar's and the side
           pane's headers. */}
       <header className="flex h-(--pane-header-height) shrink-0 items-center gap-2 groove-b px-(--pane-inset)">
-        <PaneTitle heading={t("history.title")} />
+        {/* The context badge follows the heading and never shrinks; the heading clips first. */}
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <PaneTitle heading={t("history.title")} className="min-w-0" />
+          <SessionContextLabel context={context} />
+        </div>
         <div className="control-fills flex shrink-0 items-center gap-2">
           <span id={switchLabelId} className="text-sm">
             {t("history.showReplies")}

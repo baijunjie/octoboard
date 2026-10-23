@@ -60,6 +60,17 @@ as Markdown, its headings ranking below the history's own title; a web address i
 The record is looked for as the handoff package's conversation is (see "The handoff package" in
 `docs/product/handing-off-sessions.md`): in every account of the agent that could hold it.
 
+## The context size beside the heading
+
+The history's header shows the session's last known context size right after the history's "Session history" heading,
+whatever state the history is in, as the session's context-size chip (see "The context-size chip" in
+`docs/product/session-context.md`): the same compact number badge as the sidebar's session rows, led by a ring of the
+share in use when a window is known, with the same Context window card on hover and the same accessible name. With
+the context size unknown or zero, nothing follows the heading.
+
+The Show agent replies switch stays at the header's end. As the header narrows, the heading clips and fades while the
+chip keeps its size. Pressing the chip does not move keyboard focus.
+
 ## Loading, empty, unavailable and failed
 
 - **Loading**: a spinner and a line saying the history is loading.

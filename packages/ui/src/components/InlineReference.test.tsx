@@ -116,9 +116,10 @@ it("defaults to xs and marks an unbroken chip", () => {
 it("draws each colour's fill and text from the shared tint, the badge's, and never its edge", () => {
   // jsdom resolves no `var()`, so the rules are read from style.css.
   const css = readFileSync(resolve(import.meta.dirname, "../style.css"), "utf8");
-  const tints = { default: "default", accent: "accent", help: "help", success: "success", warning: "warning", danger: "danger" };
-  for (const [color, tint] of Object.entries(tints)) {
-    expect(css).toContain(`.inline-reference.chip--soft[data-color="${color}"] { --chip-bg: var(--tint-${tint}-bg); --chip-fg: var(--tint-${tint}-fg); }`);
+  // The neutral chip's text is HeroUI's `--default-foreground`.
+  expect(css).toContain('.inline-reference.chip--soft[data-color="default"] { --chip-bg: var(--tint-default-bg); --chip-fg: var(--default-foreground); }');
+  for (const tint of ["accent", "help", "success", "warning", "danger"]) {
+    expect(css).toContain(`.inline-reference.chip--soft[data-color="${tint}"] { --chip-bg: var(--tint-${tint}-bg); --chip-fg: var(--tint-${tint}-fg); }`);
   }
   expect(css).not.toMatch(/\.inline-reference[^{]*\{[^}]*--tint-\w+-edge/);
 });
