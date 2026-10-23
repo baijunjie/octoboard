@@ -17,7 +17,7 @@ it.each(["en", "zh-Hans", "ar"] as const)("keeps fixed product references rich a
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); setLanguage(before); });
   for (const [id, expected] of [
-    ["settings.accounts.dirHintGrok", ["Octoboard", "Grok", "Grok", "Octoboard"]],
+    ["settings.accounts.dirHintGrok", ["Grok", "Grok"]],
     ["settings.accounts.approval.codexDescription", ["Codex"]],
     ["settings.accounts.approval.claudeDescription", ["Claude Code"]],
     ["settings.permissions.lead", ["Octoboard", "Octoboard", "macOS"]],

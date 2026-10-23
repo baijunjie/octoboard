@@ -1632,16 +1632,16 @@ export const en = {
   "settings.markdownStyle.description": "How Markdown documents are styled in the file viewer.",
   "settings.language.label": "Language",
   "settings.language.description":
-    "The language of {appName}'s interface. It is picked from the system's languages the first time {appName} opens.",
+    "The language of the interface. It is picked from the system's languages on first launch.",
   "settings.cloneDir.label": "Default clone directory",
   "settings.cloneDir.description.gitUrl":
     "Projects added from a {git} URL are cloned into this directory unless you choose another.",
   "settings.cloneDir.placeholder": "~/Projects",
   "settings.archiveCleanup.label": "Automatically delete archived sessions whose conversation is gone",
   "settings.archiveCleanup.description.off":
-    "Once this is on, an archived session is deleted automatically when its agent no longer keeps its conversation. {appName} checks each time it starts, then about once a day. Pinned and locked sessions are kept.",
+    "Once this is on, an archived session is deleted automatically when its agent no longer keeps its conversation. Archived sessions are checked each time the app starts, then about once a day. Pinned and locked sessions are kept.",
   "settings.archiveCleanup.description.on":
-    "An archived session is deleted automatically when its agent no longer keeps its conversation. {appName} checks each time it starts, then about once a day. Pinned and locked sessions are kept.",
+    "An archived session is deleted automatically when its agent no longer keeps its conversation. Archived sessions are checked each time the app starts, then about once a day. Pinned and locked sessions are kept.",
   "settings.sidebarOrder.label": "Order the sidebar by status",
   "settings.sidebarOrder.description.off":
     "Sessions are listed newest first and projects by name, pinned ones first, so one waiting for you or at work does not move up. Projects with no unarchived session end the list. Once this is on, sessions and projects move as their status changes, so the ones waiting for you come first after the pinned ones.",
@@ -1680,7 +1680,7 @@ export const en = {
   "settings.git.autoPull.remoteCheck":
     "The remote is checked every few minutes whichever way this is set, so the branch always shows how far ahead or behind it is.",
   "settings.trusted.description":
-    "Under these folders, {appName} presses every agent's trust confirmation without asking, for every project, including projects added later. Each agent then records the trust in its own configuration and applies the project's own permission rules and hooks. A folder is trusted from a session's trust dialog. Trust a folder only if you trust everything that ends up inside it.",
+    "Under these folders, every agent's trust confirmation is accepted for you without asking, for every project, including projects added later. Each agent then records the trust in its own configuration and applies the project's own permission rules and hooks. A folder is trusted from a session's trust dialog. Trust a folder only if you trust everything that ends up inside it.",
   "settings.trusted.empty": "No trusted folders yet",
   "settings.trusted.removeTooltip": "Stop trusting this folder",
   "settings.trusted.removeTitle": "Remove trusted folder {path}?",
@@ -1806,9 +1806,9 @@ export const en = {
   "settings.accounts.agent": "Agent",
   "settings.accounts.nameExample": "Ex. Work",
   "settings.accounts.configDir": "Config directory",
-  "settings.accounts.dirHint": "{appName} does not require the directory to exist yet.",
+  "settings.accounts.dirHint": "The directory does not need to exist yet.",
   "settings.accounts.dirHintGrok":
-    "{appName} does not require the directory to exist yet, but sessions only keep their login and conversation if it is a {grok} home that {grok} has already been run against. {appName} checks that when a session launches, not here.",
+    "The directory does not need to exist yet, but sessions only keep their login and conversation if it is a {grok} home that {grok} has already been run against. That is checked when a session launches, not here.",
   "settings.accounts.dirNotAbsolute": "Enter an absolute path, or one starting with {tilde}.",
   "settings.accounts.nameTaken": "{agent} already has an account named {name}.",
   "settings.accounts.nameTakenDefault": "{name} is the name of the default {agent} account.",
@@ -1854,7 +1854,7 @@ export const en = {
   "settings.notifications.system": "{appName} sends them directly. Turn them off in the system's notification settings.",
   "settings.notifications.enable": "Enable",
   "settings.permissions.unavailable": "Permissions can only be managed in the {macOS} app.",
-  "settings.permissions.unreadable": "{appName} could not read which permissions it has been granted.",
+  "settings.permissions.unreadable": "Could not read which permissions have been granted.",
   "settings.permissions.lead": "Agents running in {appName}'s terminals act as {appName} as far as {macOS} is concerned. Granting these here, ahead of time, stops a system prompt from appearing out of nowhere in the middle of a task.",
   "settings.permissions.screenRecording.label": "Screen Recording",
   "settings.permissions.screenRecording.description": "Lets agents take screenshots to check what they built.",

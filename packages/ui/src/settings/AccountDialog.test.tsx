@@ -119,7 +119,7 @@ it("lifts the directory's refusal when a directory is picked", async () => {
 
 it("shows the config directory hint as a visible description", () => {
   render(work, () => Promise.resolve());
-  expect(document.body.textContent).toContain("does not require the directory to exist yet.");
+  expect(document.body.textContent).toContain("does not need to exist yet.");
   expect(document.body.textContent).not.toContain("sessions only keep their login");
 });
 

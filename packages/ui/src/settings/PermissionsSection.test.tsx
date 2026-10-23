@@ -74,7 +74,7 @@ it.each([
 it("says the grants could not be read when the shell refuses the read", async () => {
   const { container, buttons } = await mount({ unreadable: true });
   expect(buttons()).toEqual([]);
-  expect(container.textContent).toContain("could not read");
+  expect(container.textContent).toContain("Could not read which permissions");
   expect(container.textContent).not.toContain("only be managed in the macOS app");
 });
 

@@ -1478,16 +1478,16 @@ export const zhHans: Translation<"other"> = {
   "settings.markdownStyle.label": "Markdown 样式",
   "settings.markdownStyle.description": "文件查看器中 Markdown 文档的呈现样式。",
   "settings.language.label": "语言",
-  "settings.language.description": "{appName} 界面的语言。首次打开时按系统语言选定。",
+  "settings.language.description": "界面的语言。首次打开时按系统语言选定。",
   "settings.cloneDir.label": "默认克隆目录",
   "settings.cloneDir.description.gitUrl":
     "通过 {git} 仓库网址添加项目时，默认克隆到此目录，也可另选目录。",
   "settings.cloneDir.placeholder": "~/Projects",
   "settings.archiveCleanup.label": "自动删除对话已丢失的已归档会话",
   "settings.archiveCleanup.description.off":
-    "开启后，智能体不再保留已归档会话的对话时，将自动删除该会话。{appName} 每次启动时检查一次，之后约每天检查一次。置顶和锁定的会话会保留。",
+    "开启后，智能体不再保留已归档会话的对话时，将自动删除该会话。应用每次启动时检查一次，之后约每天检查一次。置顶和锁定的会话会保留。",
   "settings.archiveCleanup.description.on":
-    "智能体不再保留已归档会话的对话时，将自动删除该会话。{appName} 每次启动时检查一次，之后约每天检查一次。置顶和锁定的会话会保留。",
+    "智能体不再保留已归档会话的对话时，将自动删除该会话。应用每次启动时检查一次，之后约每天检查一次。置顶和锁定的会话会保留。",
   "settings.sidebarOrder.label": "侧边栏按状态排序",
   "settings.sidebarOrder.description.off":
     "会话按启动时间从新到旧排列，项目按名称排列，置顶的排在最前，等待你处理或正在工作的不会因此上移；没有未归档会话的项目排在最后。开启后，会话和项目会随状态变化移动位置，除置顶项外，等待你处理的排在最前。",
@@ -1524,7 +1524,7 @@ export const zhHans: Translation<"other"> = {
   "settings.git.autoPull.help": "关于自动拉取",
   "settings.git.autoPull.remoteCheck": "无论此设置如何，都会每隔几分钟检查一次远程，因此分支始终会显示领先或落后的提交数。",
   "settings.trusted.description":
-    "对于这些文件夹下的每个项目（包括之后添加的项目），{appName} 会直接按下每个智能体的信任确认，而不再询问。随后各智能体会在自己的配置中记录信任，并应用项目自身的权限规则和钩子。在会话的信任对话框中可以信任某个文件夹。只有当你信任文件夹内最终出现的所有内容时，才应信任该文件夹。",
+    "这些文件夹下的每个项目（包括之后添加的项目），每个智能体的信任确认都会自动替你接受，不再询问。随后各智能体会在自己的配置中记录信任，并应用项目自身的权限规则和钩子。在会话的信任对话框中可以信任某个文件夹。只有当你信任文件夹内最终出现的所有内容时，才应信任该文件夹。",
   "settings.trusted.empty": "还没有受信任的文件夹",
   "settings.trusted.removeTooltip": "停止信任此文件夹",
   "settings.trusted.removeTitle": "确认移除受信任的文件夹 {path}？",
@@ -1645,9 +1645,9 @@ export const zhHans: Translation<"other"> = {
   "settings.accounts.agent": "智能体",
   "settings.accounts.nameExample": "例如：工作",
   "settings.accounts.configDir": "配置目录",
-  "settings.accounts.dirHint": "{appName} 不要求该目录已经存在。",
+  "settings.accounts.dirHint": "该目录不必已存在。",
   "settings.accounts.dirHintGrok":
-    "{appName} 不要求该目录已经存在，但只有当它是已运行过 {grok} 的 {grok} 主目录时，会话才会保留登录信息和对话。{appName} 会在会话启动时检查，而不是在这里。",
+    "该目录不必已存在，但只有当它是已运行过 {grok} 的 {grok} 主目录时，会话才会保留登录信息和对话。这一点会在会话启动时检查，而不是在这里。",
   "settings.accounts.dirNotAbsolute": "请输入绝对路径，或以 {tilde} 开头的路径。",
   "settings.accounts.nameTaken": "{agent} 已有名为 {name} 的账户。",
   "settings.accounts.nameTakenDefault": "{name} 是 {agent} 默认账户的名称。",
@@ -1693,7 +1693,7 @@ export const zhHans: Translation<"other"> = {
   "settings.notifications.system": "由 {appName} 直接发出通知。请在系统的通知设置中关闭。",
   "settings.notifications.enable": "启用",
   "settings.permissions.unavailable": "权限只能在 {macOS} 应用中管理。",
-  "settings.permissions.unreadable": "{appName} 无法读取自己已获得哪些权限。",
+  "settings.permissions.unreadable": "无法读取已获得的权限。",
   "settings.permissions.lead": "在 {appName} 终端中运行的智能体，在 {macOS} 看来就是 {appName}。提前在此授权，可避免任务进行到一半时突然弹出系统提示。",
   "settings.permissions.screenRecording.label": "录屏",
   "settings.permissions.screenRecording.description": "让智能体截取屏幕，以检查它们的成果。",

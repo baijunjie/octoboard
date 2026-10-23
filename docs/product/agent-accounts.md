@@ -305,8 +305,8 @@ directory, which can be typed or picked with the directory browser (see "Browsin
 `docs/product/projects.md`). Editing an account offers its name and its directory, never its agent: a directory
 belongs to one agent's layout. The directory is checked for being absolute (or starting with `~/`) and for not being
 already used by another account of the same agent, the default account included (the full rules are in "Agent config
-directories" in `docs/product/consoles.md`); one that does not exist yet is accepted, and the form says that Octoboard
-does not require it to exist. A directory already in use is reported, once saving is attempted, under the directory
+directories" in `docs/product/consoles.md`); one that does not exist yet is accepted, and the form says that it
+need not exist yet. A directory already in use is reported, once saving is attempted, under the directory
 field, naming the account that uses it — the default account by the name it is shown under; the report goes away as
 soon as the directory is changed, typed or picked, or another agent is picked. For a Grok Build account the form adds
 that the directory has to be a Grok home that Grok has already been run against, which is checked when a session

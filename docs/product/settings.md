@@ -288,7 +288,7 @@ keeps no refusal for.
 
 **Outside the macOS application** — in a browser, or a desktop shell not running on macOS — the section is a single
 line saying that permissions can only be managed in the macOS application. Where a desktop shell is there but the read
-of the grants fails, it says instead that Octoboard could not read which permissions it has been granted. Until the
+of the grants fails, it says instead that the granted permissions could not be read. Until the
 first read comes back the section shows neither line and nothing else either.
 
 ## Agent permissions
