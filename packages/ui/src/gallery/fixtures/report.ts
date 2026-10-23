@@ -45,6 +45,18 @@ const twoSessions = snapshotState({
   },
 });
 
+// Two console sessions whose page list the daemon refuses: one that already holds pages from the
+// snapshot, and one that has none yet, so nothing but the failure is known about it.
+const listFailure = { code: "internal_error", params: { detail: "database is locked" }, message: "database is locked" };
+const stale = sessionOf("s-hub-stale", console_.id, undefined, "Stale pages", "idle", { colour: "yellow" });
+const unlisted = sessionOf("s-hub-unlisted", console_.id, undefined, "Pages never listed", "idle", { colour: "cyan" });
+const failedLists = snapshotState({
+  consoles: [console_],
+  projects: [project],
+  sessions: [stale, unlisted],
+  pages: { [stale.id]: [pageOf("stale-1", stale.id, summary("Earlier report"), 60 * 3)] },
+});
+
 export const reportScenarios: Scenario[] = [
   {
     id: "report-two-console-sessions",
@@ -101,6 +113,30 @@ export const reportScenarios: Scenario[] = [
     state: twoSessions,
     steps: [
       (ui) => ui.press(ui.session("Old report")),
+    ],
+  },
+  {
+    id: "report-list-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Reports that could not be listed, none known yet",
+    description: "The console session has no page the panel knows of, so the failure takes the panel's place in the empty-state shape, under the panel header: a danger glyph, the heading and the application's generic sentence. Try again is the primary button and Details the secondary one, which holds the daemon's raw message.",
+    state: failedLists,
+    pageListErrors: { [unlisted.id]: listFailure },
+    steps: [
+      (ui) => ui.press(ui.session("Pages never listed")),
+    ],
+  },
+  {
+    id: "report-list-failed-with-pages",
+    group: GROUP,
+    category: "exceptional",
+    title: "Reports that could not be listed again, earlier ones kept",
+    description: "The page already in hand stays readable below one warning Alert, not danger-coloured, between the panel header and the page's bar. It holds the application's generic sentence, with Details (the daemon's raw message) on the right and Try again at the trailing edge in the warning colour.",
+    state: failedLists,
+    pageListErrors: { [stale.id]: listFailure },
+    steps: [
+      (ui) => ui.press(ui.session("Stale pages")),
     ],
   },
 ];

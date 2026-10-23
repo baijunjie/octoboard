@@ -3,7 +3,6 @@ import { act } from "react";
 import { setInteractionModality } from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { errorAlerts } from "../errorAlerts";
 import { DaemonRequestError } from "../daemon-client";
 import { MIXED_RESULT, REVIEW } from "../gallery/fixtures/configuration";
 import { isolate } from "../i18n/isolate";
@@ -206,7 +205,7 @@ it("stops before any request when a project is to go to a directory that is miss
   });
 });
 
-it("tells each project's result in a table row, with the reason beside a failure, and the accounts that fell back apart", async () => {
+it("tells each project's result in a table row, with a mark and a popover for a failure, and the accounts that fell back apart", async () => {
   await reviewing();
   await press("Import");
   const line = (project: string) =>
@@ -214,24 +213,43 @@ it("tells each project's result in a table row, with the reason beside a failure
   expect(line("Search API")).toContain("Work laptop");
   expect(line("Search API")).toContain("Created");
   expect(line("Search API")).toContain("In the default clone directory");
-  expect(line("Website")).toContain("Failed");
-  expect(line("Website")).toContain("/Users/ana/code/website does not exist.");
+  const rowOf = (project: string) => Array.from(document.body.querySelectorAll("tbody tr")).find((tr) => tr.querySelectorAll("td")[1]?.textContent?.endsWith(project))!;
+  // A failed line is the glyph and the word "Failed", not a sentence: the reason opens from them in a popover.
+  const popover = async (project: string) => {
+    const mark = rowOf(project).querySelector<HTMLElement>("button[aria-label$=' failed']")!;
+    expect(mark).not.toBeNull();
+    expect(mark.textContent).toBe("Failed");
+    await act(async () => {
+      for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) mark.dispatchEvent(new MouseEvent(type, { bubbles: true, button: 0 }));
+    });
+    const dialog = document.body.querySelector(`[role="dialog"][aria-label="${mark.getAttribute("aria-label")}"]`)!;
+    expect(dialog).not.toBeNull();
+    return dialog;
+  };
+  const closePopover = () => act(async () => void document.body.querySelector("[role=\"dialog\"][aria-label$=' failed']")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  expect(line("Website")).not.toContain("does not exist");
+  expect((await popover("Website")).textContent).toContain("/Users/ana/code/website does not exist.");
+  await closePopover();
   expect(line("Notes")).toContain("Left out");
-  expect(line("Design System")).toContain("Failed");
-  expect(line("Design System")).toContain("Git could not clone this repository.");
-  const failedRow = Array.from(document.body.querySelectorAll("tbody tr")).find((tr) => tr.querySelectorAll("td")[1]?.textContent?.endsWith("Design System"))!;
-  const diagnostic = failedRow.querySelector("pre")!;
+  expect(line("Design System")).not.toContain("Git could not clone");
+  const failedRow = rowOf("Design System");
+  expect(failedRow.querySelector("pre")).toBeNull();
+  const reason = await popover("Design System");
+  expect(reason.textContent).toContain("Git could not clone this repository.");
+  const diagnostic = reason.querySelector("pre")!;
   const failure = MIXED_RESULT.consoles.flatMap((console) => console.projects).find((project) => project.name === "Design System")!.error!;
   expect(diagnostic.textContent).toBe(failure.params.detail);
   expect(diagnostic.getAttribute("dir")).toBe("ltr");
-  expect(failedRow.querySelectorAll("pre")).toHaveLength(1);
-  const summary = Array.from(failedRow.querySelectorAll("span")).find((node) => node.textContent === "Git could not clone this repository.")!;
+  expect(reason.querySelectorAll("pre")).toHaveLength(1);
+  const summary = Array.from(reason.querySelectorAll("span")).find((node) => node.textContent === "Git could not clone this repository.")!;
   expect(summary.contains(diagnostic)).toBe(false);
   const product = summary.querySelector("[data-inline-chip]")!;
   expect(product.textContent).toBe("Git");
   expect(product.getAttribute("dir")).toBe("auto");
   expect(product.textContent).not.toMatch(/[\u2066-\u2069]/);
-  expect(line("The console itself")).toContain("the data directory cannot be written");
+  await closePopover();
+  expect((await popover("The console itself")).textContent).toContain("the data directory cannot be written");
+  await closePopover();
   expect(line("Dotfiles")).toContain("Not attempted");
   expect(line("Dotfiles")).toContain("Its console could not be created.");
   const section = (title: string) => Array.from(document.body.querySelectorAll("section")).find((s) => s.querySelector(":scope > h3")?.textContent === title)?.textContent ?? "";
@@ -253,9 +271,8 @@ it("names the result step in its title and takes focus to the dialog, wherever f
   act(() => close.focus());
   await act(async () => answer({ type: "configuration_imported", ...MIXED_RESULT }));
   expect(dialog.querySelector("h2")?.textContent).toBe("Import finished");
-  expect(document.activeElement).toBe(document.querySelector('[role="alertdialog"]'));
-  act(() => errorAlerts.acknowledge());
-  expect(dialog.querySelector("h2")?.textContent).toBe("Import finished");
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  expect(document.activeElement).toBe(dialog);
 });
 
 // A browser without the file input's `cancel` event never answers for a dismissed picker.

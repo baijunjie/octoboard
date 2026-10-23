@@ -66,16 +66,16 @@ default, whose label names what it removes and how many; a short hint; and under
 collapsed by default and left as the user sets it while it is shown, over the items it covers grouped by what keeps
 them, each group led by one line saying so (that these worktrees have uncommitted changes, say) over the names. A
 worktree is named by its path, with the home directory written as `~`, and the branch it has checked out (or that its
-`HEAD` is detached); a branch by its name.
+`HEAD` is detached); a branch by its name. Paths and branch names are plain monospace text.
 
 - **What git cannot remove safely** — worktrees with uncommitted changes, worktrees with initialized submodules, and
   unmerged branches, one group each — comes under **Also force-remove the worktrees and branches Git keeps (n)**. Its
   hint says that their uncommitted changes and unmerged commits cannot be recovered. Checked, those worktrees are
   removed with `git worktree remove --force` and those branches deleted with `git branch -D`.
-- **Locked worktrees** come under a block of their own, **Also delete the locked worktrees (n)**, each one marked when
-  it has uncommitted changes. Its hint says they go despite their locks and cannot be recovered. Checked, they are
-  removed past the lock (`git worktree remove` forced twice); the branch one had checked out then follows the branch
-  rules above.
+- **Locked worktrees** come under a block of their own, **Also delete the locked worktrees (n)**, each one marked, by
+  an amber badge after its name, when it has uncommitted changes. Its hint says they go despite their locks and cannot
+  be recovered. Checked, they are removed past the lock (`git worktree remove` forced twice); the branch one had
+  checked out then follows the branch rules above.
 - Neither block is shown while it has nothing to cover.
 - **What a ticked option does is said below the confirmation's one warning alert.** The warning and its details sit
   below its options and above its buttons. The alert summarizes the sessions archived or deleted along with the
@@ -120,7 +120,7 @@ Deleting an unused session asks for no confirmation (see "Deleting an unused ses
 After a user's archive or deletion, and after a project's removal with its folder moved to the Trash, what was to go
 and is still there is reported to every window as one error alert, `session_branches_not_removed` (see
 `docs/product/error-alerts.md`). It groups the items by why each is still there, in this order, each group led by
-one line saying so over the names, set apart as chips:
+one line saying so over the names:
 
 - removing it failed — with git's message, or why the move to the Trash failed, under the item's name as a block of
   code;

@@ -3,11 +3,13 @@ import { CornerLeftUp, Folder } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { Button } from "../components/Button";
-import { InlineChip } from "../components/InlineChip";
+import { FailureAlert } from "../components/FailureAlert";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
+import { StatusBadge } from "../components/StatusBadge";
 import { DaemonRequestError } from "../daemon-client";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { useScrollFade } from "../components/scrollFade";
-import { reportError } from "../reportError";
+import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
 import { useT } from "../i18n/react";
 import type { DirEntry, Event } from "../protocol";
 import { useDaemon } from "../store";
@@ -34,8 +36,9 @@ function ancestorOf(path: string): string {
  *
  * Failure here is a normal path, not an edge case: a packaged application raises a macOS
  * file-access prompt per volume, and the user may decline it or leave it unanswered (see "Known
- * pitfalls of the Tauri / Rust approach" in docs/architecture.md), so a failed listing requires acknowledgement
- * while the previous listing stays available.
+ * pitfalls of the Tauri / Rust approach" in docs/architecture.md), so a failed listing is the state of
+ * what the picker shows: an Alert under the path field with the reason and Try again, while the
+ * previous listing stays available.
  */
 export function DirectoryPicker({
   title,
@@ -55,15 +58,23 @@ export function DirectoryPicker({
   const pathField = useTrimmedField(path, setPath);
   const [entries, setEntries] = useState<DirEntry[]>();
   const [resolvedPath, setResolvedPath] = useState<string>();
+  // The last listing that failed and why, until a listing succeeds; `count` numbers the failures, so
+  // one that repeats in the same words is announced again, and `initial` marks the listing made as
+  // the picker mounted.
+  const [failure, setFailure] = useState<{ target: string; error: ErrorPresentation; count: number; initial: boolean }>();
+  // Whether Try again's listing is out: its button stays where it is, unavailable, rather than
+  // taking a second press, and the failure stays shown until the listing answers.
+  const [retrying, setRetrying] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   // The list scrolls on its own inside the dialog, which `Dialog`'s body fade does not reach. The
   // rows' focus ring and its offset fit within the `ListBox`'s own `p-1`, so the scroller does not
   // clip it.
   const fade = useScrollFade({ ref: listRef, className: "max-h-72 overflow-y-auto" });
 
-  const load = async (targetPath: string, fallBackToAncestor = false) => {
+  const load = async (targetPath: string, initial = false) => {
     try {
       const event = (await request({ type: "list_dir", path: targetPath })) as Extract<Event, { type: "dir_listing" }>;
+      setFailure(undefined);
       setResolvedPath(event.path);
       setEntries(event.entries);
       // Keeps the field in sync with what was actually resolved (e.g. `~` becoming the real home
@@ -75,10 +86,10 @@ export function DirectoryPicker({
       // leave nothing to navigate from, so the first listing walks up to the nearest ancestor that
       // lists. Only that failure does: a declined volume prompt or an unreadable directory is
       // shown as it is.
-      if (fallBackToAncestor && targetPath !== "~" && err instanceof DaemonRequestError && err.code === "path_not_found") {
+      if (initial && targetPath !== "~" && err instanceof DaemonRequestError && err.code === "path_not_found") {
         return load(ancestorOf(targetPath), true);
       }
-      reportError(err as Error);
+      setFailure((last) => ({ target: targetPath, error: errorPresentation(err), count: (last?.count ?? 0) + 1, initial }));
       // Deliberately not clearing `entries`/`resolvedPath`: a denied or not-yet-answered volume
       // prompt is the expected failure here, and it should not yank the previous listing (and its
       // parent-directory row back up) out from under the user along with it.
@@ -125,6 +136,23 @@ export function DirectoryPicker({
           {t("directoryPicker.go")}
         </Button>
       </div>
+      {failure && (
+        // A listing is asked for after the picker opened, so its failure always announces itself. The
+        // one for the listing made on mount may come while the path field is still taking focus, so
+        // it waits that out.
+        <FailureAlert
+          announce
+          announceDelayMs={failure.initial ? AFTER_FOCUS_MOVE_DELAY_MS : undefined}
+          attempt={failure.count}
+          title={t("directoryPicker.failed")}
+          message={failure.error}
+          pending={retrying}
+          onRetry={() => {
+            setRetrying(true);
+            void load(failure.target).finally(() => setRetrying(false));
+          }}
+        />
+      )}
       {entries && (
         // The frame is this picker's own: it composes HeroUI's `ListBox` into a higher-level
         // browser and marks out the scrolling region within the dialog, an addition on top of
@@ -153,9 +181,9 @@ export function DirectoryPicker({
                   {entry.name}
                 </FadeOverflow>
                 {entry.is_git_repo && (
-                  <InlineChip size="sm" variant="soft" className="ms-auto">
+                  <StatusBadge className="ms-auto">
                     git
-                  </InlineChip>
+                  </StatusBadge>
                 )}
               </ListBox.Item>
             ))}

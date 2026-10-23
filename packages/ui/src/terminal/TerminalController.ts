@@ -246,7 +246,7 @@ export class TerminalController {
     this.term.onScroll(() => {
       if (this.term.buffer.active.viewportY !== this.hoveredViewportY) this.handlers.onLinkHover?.(undefined);
     });
-    this.linkColors = new TerminalLinkColors(this.term, initialColorTheme, paths?.segments);
+    this.linkColors = new TerminalLinkColors(this.term, paths?.segments);
 
     const keepModifiersFromArming = keepModifiersFromArmingKeyDownSeen(this.term);
 
@@ -434,7 +434,7 @@ export class TerminalController {
    */
   setColorTheme(mode: "light" | "dark"): void {
     this.term.options.theme = XTERM_THEMES[mode];
-    this.linkColors.setTheme(mode);
+    this.linkColors.reset();
   }
 
   /**

@@ -1,4 +1,5 @@
 import { AGENT_LABEL } from "../../agents";
+import { describing } from "../interact";
 import type { AccountLogin, AccountSharing, Agent, AgentAvailability } from "../../protocol";
 import type { Scenario, Step } from "../scenario";
 import { ALL_AGENTS, SAMPLE, accountSharingOf, minutesAgo, snapshotState } from "./builders";
@@ -454,7 +455,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Permissions",
-    description: "Neither Screen Recording nor Accessibility has been granted. Press each Grant to see the refused request point at System Settings; revisiting the section offers Grant again.",
+    description: "Neither Screen Recording nor Accessibility has been granted, so each row ends in a Grant button and no badge. Press each Grant to see the refused request point at System Settings; revisiting the section offers Grant again.",
     state,
     macosPermissions: { screenRecording: false, accessibility: false, screenRecordingAtLaunch: false },
     steps: [
@@ -467,7 +468,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Permissions, granted since launch",
-    description: "Screen Recording is granted but was not when the process started, so a restart is still owed.",
+    description: "Both permissions are granted, each marked by a soft success Granted badge at the right end of its row, where the Grant button would be, and its description no longer says Granted. Screen Recording was not granted when the process started, so its row still says a restart is owed.",
     state,
     macosPermissions: { screenRecording: true, accessibility: true, screenRecordingAtLaunch: false },
     steps: [
@@ -480,7 +481,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Permissions, the shell cannot be asked",
-    description: "What a broken IPC looks like: the grants could not be read, on the platform that has them.",
+    description: "What a broken IPC looks like: the grants could not be read, on the platform that has them. The failure is a danger Alert in place of the table of grants.",
     state,
     macosPermissions: "unreadable",
     steps: [
@@ -532,7 +533,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Claude Code tab",
-    description: "The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each as wide as its icon and name and the strip starting at the left edge, and Claude Code is open. The default account's name line ends with a small muted \"?\" after Default and its plan chip, with only its config directory beneath. Each account's plan sits beside its name, with its quota beneath: the five-hour window's headline with what remains and the countdown at the end of its line, a thick bar of that remainder in the agent's colour, and the weekly window's thin bar directly under it with its own headline, so the two read as one two-layer bar; the default account lists that pair first and Fable last, in a row of its own with no countdown. Work is spent: 0% remaining, also where use went past 100%. A small muted \"Updated N ago\" ends the directory line, under the name, of each account that has a reading, at the far right (Work's says 7 minutes, the default account's 1). Client has no quota yet and says it is being read. Above Add agent, the account-selection switch is followed directly by the \"Start usage windows automatically\" switch, both off, each description starting with \"Once this is on\". Add agent stays above the tab strip; Add account begins the selected tab on the same row as the vertically centered Permission approval column heading, with a help button for its explanation: the default account is set to Automatic, Work to Approve everything and Client follows its account configuration. The heading and selectors align with the start of the right-hand quota column, and account actions stay at the far right. Remove Work or Client: the account fades out while sliding to the right while the remaining accounts slide into place.",
+    description: "The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each as wide as its icon and name and the strip starting at the left edge, and Claude Code is open. The default account's name line ends with a small muted \"?\" after Default and its plan badge, with only its config directory beneath. Each account's plan sits beside its name, with its quota beneath: the five-hour window's headline with what remains and the countdown at the end of its line, a thick bar of that remainder in the agent's colour, and the weekly window's thin bar directly under it with its own headline, so the two read as one two-layer bar; the default account lists that pair first and Fable last, in a row of its own with no countdown. Work is spent: 0% remaining, also where use went past 100%. A small muted \"Updated N ago\" ends the directory line, under the name, of each account that has a reading, at the far right (Work's says 7 minutes, the default account's 1). Client has no quota yet and says it is being read. Above Add agent, the account-selection switch is followed directly by the \"Start usage windows automatically\" switch, both off, each description starting with \"Once this is on\". Add agent stays above the tab strip; Add account begins the selected tab on the same row as the vertically centered Permission approval column heading, with a help button for its explanation: the default account is set to Automatic, Work to Approve everything and Client follows its account configuration. The heading and selectors align with the start of the right-hand quota column, and account actions stay at the far right. Remove Work or Client: the account fades out while sliding to the right while the remaining accounts slide into place.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -888,7 +889,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, accounts not logged in yet",
-    description: "Work (never logged in) and Client (whose config directory does not exist yet) both carry the amber \"Not logged in\" badge after the name, immediately followed by a compact Log in button with an outbound arrow on the same line, with no quota line and no raw CLI error beneath; the default account above them carries the green \"Logged in\" badge beside its plan and reads its quota as usual, so the two badges sit side by side.",
+    description: "Work (never logged in) and Client (whose config directory does not exist yet) both carry the soft warning \"Not logged in\" badge after the name, immediately followed by a compact Log in button with an outbound arrow on the same line, with no quota line and no raw CLI error beneath; the default account above them carries the soft success \"Logged in\" badge beside its plan and reads its quota as usual, so the two badges sit side by side.",
     state: notSignedInState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -983,7 +984,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Approve everything confirmation",
-    description: "Choosing Approve everything for Client opens a destructive confirmation instead of saving: the account name is a chip in the title, and the red button repeats the choice. Cancelling leaves Client on Follow account configuration.",
+    description: "Choosing Approve everything for Client opens a destructive confirmation instead of saving: the account name is a chip in the title, and the danger-coloured button repeats the choice. Cancelling leaves Client on Follow account configuration.",
     state: quotaState,
     steps: bypassSteps,
   },
@@ -1084,7 +1085,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Sharing change could not be finished",
-    description: "Turning sharing off for Work did not finish, so its switch sits at its position before the change, on, and the usual caption is hidden. Under it one warning alert (not red) holds everything about the failure; nothing of it sits outside the yellow box. First the title, \"Could not finish turning sharing off\", and the reasons grouped by cause: no permission to change skills/ and 1 more, followed by \"Check that the files and folders involved can be changed and are not locked.\", and plugins/ in use, followed by \"Close other programs using the files involved, such as an agent in a terminal, an editor or a sync tool.\" Each cause is one compact line with its fix sentence run on after it. Below the reasons, still inside the box, come the advice to turn the switch off again to try once more and a collapsed Details disclosure; there is no Try again button and no separate error alert. Client, which has nothing to show, is listed before Work so that the section overflows and, scrolled to its end, Work's failure is what fills the view.",
+    description: "Turning sharing off for Work did not finish, so its switch sits at its position before the change, on, and the usual caption is hidden. Under it one warning alert (not danger-coloured) holds everything about the failure; nothing of it sits outside the warning box. The visible copy is at most two sentences: the title, \"Could not finish turning sharing off\", then \"Some files or folders could not be changed.\", and the one main thing to do, to turn the switch off again to try once more. At the end of the box is a Details button for the rest; there is no Try again button and no separate error alert. Client, which has nothing to show, is listed before Work so that the section overflows and, scrolled to its end, Work's failure is what fills the view.",
     state: sharingFailedState,
     steps: [...openAccounts, (ui) => ui.scrollPanel(ui.t("settings.section.accounts"), SCROLLED_TO_END)],
   },
@@ -1093,16 +1094,16 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Sharing change could not be finished, details open",
-    description: "The same failure as above with Details open, inside the warning below the advice: each unfinished entry is one tight row, its chip and what it was left as in words (skills/ and plugins/ left unchanged; the conversation abc, with the titles of the sessions that recorded it, Fix the summary layout and Update the dependencies, joined as a list, left in the default directory) followed by the system's original reason (permission denied, resource busy) as small inline code on the same row, not a separate diagnostic block.",
+    description: "The same failure as above with the Details popover open, holding first the further explanation, the reasons grouped by cause (no permission to change skills/ and 1 more, followed by \"Check that the files and folders involved can be changed and are not locked.\", and plugins/ in use, followed by \"Close other programs using the files involved, such as an agent in a terminal, an editor or a sync tool.\", each one compact line with its fix run on after it), then the raw side: each unfinished entry is one tight row, its chip and what it was left as in words (skills/ and plugins/ left unchanged; the conversation abc, with the titles of the sessions that recorded it, Fix the summary layout and Update the dependencies, joined as a list, left in the default directory) followed by the system's original reason (permission denied, resource busy) as small inline code on the same row, not a separate diagnostic block.",
     state: sharingFailedState,
-    steps: [...openAccounts, (ui) => ui.scrollPanel(ui.t("settings.section.accounts"), SCROLLED_TO_END), (ui) => ui.press(ui.t("branchCleanup.details")), (ui) => ui.scrollPanel(ui.t("settings.section.accounts"), SCROLLED_TO_END)],
+    steps: [...openAccounts, (ui) => ui.scrollPanel(ui.t("settings.section.accounts"), SCROLLED_TO_END), (ui) => ui.press(ui.t("error.details")), (ui) => ui.scrollPanel(ui.t("settings.section.accounts"), SCROLLED_TO_END)],
   },
   {
     id: "settings-accounts-sharing-default-moved",
     group: GROUP,
     category: "exceptional",
     title: "Sharing change failed, the default directory has moved",
-    description: "Work's switch sits at its recorded position, on, with its caption hidden. Under it one warning alert holds the title \"Could not finish turning sharing on\" and the single reason that the default account's directory has moved since sharing was turned on; no entry is named. Below the reason, inside the box, are the advice to turn the switch off, then on again, and a collapsed Details disclosure, which holds the raw reason as small inline code when opened.",
+    description: "Work's switch sits at its recorded position, on, with its caption hidden. Under it one warning alert holds the title \"Could not finish turning sharing on\", the single reason that the default account's directory has moved since sharing was turned on (no entry is named) and the advice to turn the switch off, then on again, and a Details button. Opened, it holds only the raw reason as small inline code.",
     state: sharingDefaultMovedState,
     steps: openAccounts,
   },
@@ -1111,7 +1112,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Sharing change failed, not enough disk space",
-    description: "Turning sharing on for Work did not finish, so its switch sits at its position before the change, off, with its caption hidden. The warning alert holds the title \"Could not finish turning sharing on\" and, on one line, the reason \"There is not enough disk space.\" with its fix \"Free up disk space.\" run on after it; no entry is named. Below that, inside the same box, are the advice to turn the switch on again to try once more and a collapsed Details disclosure.",
+    description: "Turning sharing on for Work did not finish, so its switch sits at its position before the change, off, with its caption hidden. The warning alert holds the title \"Could not finish turning sharing on\", the single cause \"There is not enough disk space.\" and its fix \"Free up disk space.\" as its two visible sentences (no entry is named), and a Details button. Opened, it holds the advice to turn the switch on again to try once more, then the raw reason.",
     state: sharingNoSpaceState,
     steps: openAccounts,
   },
@@ -1120,7 +1121,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Sharing change left unfinished by a restart",
-    description: "Work's choice is recorded as on, but the daemon was restarted in the middle of the change, so its switch sits at its position before the change, off, and the usual caption is hidden. Under it a warning alert holds the title, \"The last attempt to turn sharing on did not finish\", with the advice to turn the switch on again on a line below it, inside the box. There is no Try again button and no Details disclosure, since no entries are known after a restart. Client's switch is off and looks as usual, with its caption.",
+    description: "Work's choice is recorded as on, but the daemon was restarted in the middle of the change, so its switch sits at its position before the change, off, and the usual caption is hidden. Under it a warning alert holds the title, \"The last attempt to turn sharing on did not finish\", with the advice to turn the switch on again on a line below it, inside the box. There is no Try again button and no Details button, since no entries are known after a restart. Client's switch is off and looks as usual, with its caption.",
     state: sharingIncompleteState,
     steps: openAccounts,
   },
@@ -1143,11 +1144,24 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Settings: accounts, Claude Code quota unavailable or out of date",
-    description: "Claude Code's default account and Work have nothing to show: \"Quota unavailable\" with the reason, one a timeout and one a failed command with its detail. Client keeps its last windows under \"Out of date\", with when they were read and why the newer attempt failed above them.",
+    description: "Claude Code's default account and Work have nothing to show: no bars, and a danger-coloured circled \"!\" after the name, for the failure of the reading, one a timeout and one a failed command. Client keeps its last windows and its \"Updated 12 minutes ago\" text, followed by a warning-coloured triangle that marks them as out of date. No sentence of error text sits in the rows; hover a mark for its name.",
     state: unavailableQuotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
+    ],
+  },
+  {
+    id: "settings-accounts-quota-failure-reason",
+    group: GROUP,
+    category: "exceptional",
+    title: "Settings: accounts, the reason an out-of-date quota carries",
+    description: "The warning-coloured triangle after Client's \"Updated 12 minutes ago\" is pressed: its popover holds why the newer reading failed, while the last windows stay under the name.",
+    state: unavailableQuotaState,
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.accounts")),
+      (ui) => ui.press(describing("the out-of-date mark", (name) => name.startsWith(ui.t("quota.stale", { age: "\u0000" }).split("\u0000")[0]))),
     ],
   },
   {
@@ -1280,7 +1294,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: kind === "owned" ? "Add account, config directory used by another account" : "Add account, config directory used by the default account",
-    description: "Once Add is pressed, the daemon's refusal is worded under the config directory field, naming the account that already uses it; the dialog's bottom error stays hidden.",
+    description: "Once Add is pressed, the daemon's refusal, naming the account that already uses the directory, is the error alert dialog's, raised over the dialog; the config directory field and the dialog itself show no error.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),

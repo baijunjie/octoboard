@@ -1,6 +1,6 @@
 import { DaemonRequestError } from "./daemon-client";
 import { CODE_PARAMS, DETAIL_BLOCK_CODES, RECOVERY_CODES, referenceNameParams, leftBranchItems, NAME_PARAMS, runningSessionIds, messageCode, withUiParams } from "./daemonMessage";
-import { globalParam } from "./i18n/catalog";
+import { globalParam, isMessageKey } from "./i18n/catalog";
 import type { MessageParams } from "./protocol";
 
 /** Daemon codes and parameters remain available for rendering and recovery classification. */
@@ -8,6 +8,17 @@ export type ErrorPresentation = string | DaemonRequestError;
 
 export function hasShellTimeoutDetails(error: { code: string; params: MessageParams }): boolean {
   return error.code === "shell_environment_timeout" && ["shell", "command", "timeout"].every((name) => !!error.params[name]);
+}
+
+/** Whether the application has no message of its own for `error`, so the only words it has are the
+ * daemon's raw text: a code the catalog lacks, or `internal_error` / `unexpected_error`, whose
+ * message is whatever the system said. Such a failure is shown as the application's generic
+ * sentence with the raw text behind Details. A failure with no code at all is the application's
+ * own wording, and a string is too. */
+export function isUncataloguedFailure(error: ErrorPresentation | { code: string; params: MessageParams }): boolean {
+  if (typeof error === "string" || error.code === "") return false;
+  if (error.code === "internal_error" || error.code === "unexpected_error") return true;
+  return !isMessageKey(`daemon.${messageCode(error.code, withUiParams(error.code, error.params))}`);
 }
 
 /** Whether `error` has every param its message shows as a chip, the UI's own included. */

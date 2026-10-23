@@ -124,9 +124,9 @@ From the top, below the header:
   saying how many of its sessions are under console sessions, naming none of them, and below it a row of chips,
   wrapping onto as many lines as it needs — one chip per console session they are under, in the order the console
   sessions section lists them. A chip shows the console session's colour, its title (faded out when too long, the
-  full title then its tooltip) and an inline count badge with the same gray background and contrasting text
-  across all chips. Both the total and each chip's count include a lead session **and** the sessions under it, since
-  the lead session's team is listed with it in that console session's focus mode. Pressing a chip enters that console
+  full title then its tooltip) and an inline count badge in the neutral grey tint the neutral badges and chips share,
+  the same on every chip. Both the total and each chip's count include a lead session **and** the sessions under it,
+  since the lead session's team is listed with it in that console session's focus mode. Pressing a chip enters that console
   session's focus mode; assistive technology hears it as entering that focus mode, with the count.
 - **Archived (n)** counts all of the project's archived sessions, including those under a lead session that is
   still live. The switch changes only the live list; the archive's count, preview and View all

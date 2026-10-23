@@ -3,6 +3,7 @@ import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import { DaemonRequestError } from "../daemon-client";
 import { PlatformProvider } from "../platform/react";
 import type { Event, GitStatus, Project, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
@@ -449,4 +450,20 @@ it("puts the Files / Changes switch right after the project name, and only icon 
   const end = [...header.children].find((child) => child.contains(refresh))!;
   expect(end.contains(tabs)).toBe(false);
   expect(end.querySelector('[role="tab"]')).toBeNull();
+});
+
+it("announces a files failure that appears after the panel painted, but not one already there when the tab is switched back to", async () => {
+  await mount("files-fail-announce", "files");
+  const index = pending.findIndex((request) => request.body.type === "list_project_dir");
+  const [request] = pending.splice(index, 1);
+  await act(async () => request.reject(new DaemonRequestError("no access", "unexpected_error", {})));
+  expect(document.querySelector('[data-slot="empty-state"]')).not.toBeNull();
+  expect(document.querySelector("[role=alert]")?.textContent).toContain("Something unexpected went wrong.");
+  expect(document.querySelector("[role=alert]")?.textContent).not.toContain("no access");
+
+  const tab = (key: string) => document.querySelector<HTMLElement>(`[role="tab"][data-key="${key}"]`)!;
+  await act(async () => tab("changes").click());
+  await act(async () => tab("files").click());
+  expect(document.querySelector('[data-slot="empty-state"]')?.textContent).toContain("Something unexpected went wrong.");
+  expect(document.querySelector("[role=alert]")).toBeNull();
 });

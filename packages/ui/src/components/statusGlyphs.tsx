@@ -10,7 +10,7 @@ import React from "react";
  * (`contain-layout`; not `contain-paint`, which would clip the ping's copy where it grows past the
  * glyph), so the loop never asks the browser for a layout. */
 export function WorkingDot({ small, background }: { small?: boolean; background?: boolean }): React.ReactElement {
-  const fill = background ? "border-2 border-success" : "bg-accent-glyph";
+  const fill = background ? "border-2 border-success-soft-foreground" : "bg-accent-soft-foreground";
   return (
     <span className={`flex shrink-0 items-center justify-center ${small ? "size-3" : "size-4"}`}>
       <span className="relative flex size-2 contain-layout">
@@ -23,5 +23,5 @@ export function WorkingDot({ small, background }: { small?: boolean; background?
 
 /** The waving hand of a session waiting for the user. */
 export function WavingHand({ className }: { className: string }): React.ReactElement {
-  return <Hand className={`${className} origin-[70%_90%] text-warning-glyph motion-safe:animate-status-wave`} />;
+  return <Hand className={`${className} origin-[70%_90%] text-warning-soft-foreground motion-safe:animate-status-wave`} />;
 }

@@ -315,6 +315,27 @@ it("has one tab per added agent and lists each agent's accounts with plan and qu
   expect(text()).not.toContain("Pro");
 });
 
+it("marks a failed reading on its account's name line, and the mark's popover opens without closing the panel", async () => {
+  withFakeTimers();
+  const { button, store } = mount();
+  act(() => store.setState({ accountQuotas: [{ ...quota("claude", "claude-work", "pro"), unavailable: { code: "quota_timed_out", params: { agent: "Claude Code" }, message: "timed out" } }] }));
+  click(button);
+  const mark = document.querySelector<HTMLElement>('[role="tabpanel"] button[aria-label^="Out of date"]')!;
+  expect(mark).not.toBeNull();
+  click(mark);
+  // The popover portals in beside modals; the panel's watch for a covering modal must not take it for one.
+  await act(async () => {});
+  expect(panel()).not.toBeNull();
+  const reason = document.querySelector<HTMLElement>("[data-failure-mark-popover]")!;
+  expect(reason.textContent?.replace(/[\u2066-\u2069]/g, "")).toContain("took too long to report its quota");
+  click(reason);
+  expect(panel()).not.toBeNull();
+  expect(document.querySelector("[data-failure-mark-popover]")).not.toBeNull();
+  act(() => void reason.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  expect(document.querySelector("[data-failure-mark-popover]")).toBeNull();
+  expect(panel()).not.toBeNull();
+});
+
 it("holds the panel's height across tabs, so that choosing a tab with fewer accounts moves nothing under the pointer", () => {
   withFakeTimers();
   const { button } = mount();

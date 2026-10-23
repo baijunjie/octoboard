@@ -16,8 +16,10 @@ The Files panel itself is read-only: there is no editing, saving, creating, rena
 nothing is staged, committed or checked out. A row can open its live file or folder in an external application
 (see "A row's actions" below).
 
-Failures to load the pane, list a folder or query files also require acknowledgement in an error alert; their durable
-explanation and retry controls remain in the pane afterwards (see "Error alerts" in `docs/product/error-alerts.md`).
+Failures to load the pane, list the project's directory or search its files are shown in the pane alone, each as an
+empty-state failure in place of what could not be loaded, with **Try again**, and a folder that could not be listed is
+marked on its row; none of them opens an error alert (see "Failures shown on the screen" and "Failures marked on a
+row" in `docs/product/error-alerts.md`).
 
 ## Opening a project's files
 
@@ -133,15 +135,18 @@ A folder that is not simply listed says so in a row of its own under it:
 
 - **loading** while it is being read;
 - **empty** when it has nothing in it;
-- **unreadable**, with the reason (see "Errors" below); pressing the row reads it again;
+- **unreadable**: a red failure mark, named as the folder that could not be listed, then a line offering to try
+  again. Pressing the mark opens a popover with the reason (see "Errors" below); pressing the row elsewhere reads the
+  folder again. The mark is a stop of its own for Tab and for the row's arrow keys (Right from the row);
 - **cut short** — "not every entry is shown" — after the entries read before a limit stopped the listing: at most
   10,000 entries of one folder, or 2 MiB of names, are listed. These are the entries read first, not a chosen subset.
 
 For the project's own directory the same states take the whole pane: a loading line while it is first read, announced to
 assistive technology, an empty panel saying the project folder is empty (see "The full panel" in
 `docs/product/empty-states.md`), a line under the tree when it is cut short, and, when it cannot be read at all, an
-error naming the reason (with the folder shown as its path, `~` standing for the home directory) and **Try again** in
-place of the tree. Try again pressed from the keyboard hands keyboard focus to the header's Refresh, which stays while
+empty-state failure in place of the tree, headed that the project's files could not be listed, with the reason (the
+folder shown as its path, `~` standing for the home directory) and **Try again**; it is announced to assistive technology when it appears
+after the panel was drawn. Try again pressed from the keyboard hands keyboard focus to the header's Refresh, which stays while
 the error and its button go.
 
 ### Always a folder tree
@@ -181,8 +186,9 @@ restores the unfiltered tree.
   same actions as tree rows do (see "A row's actions" below). The viewer's Previous/Next controls follow the
   visible result rows in this order, skipping folded folders.
 - Typing waits **250 ms** before searching. A changed query shows a searching state until its own results arrive;
-  a reply to an earlier query never replaces them. A failure shows its reason and a retry action. No matches has a
-  distinct empty state, leaving the field available to change or clear.
+  a reply to an earlier query never replaces them. A failure shows, in place of the results, an empty-state failure
+  headed that the search failed, with its reason and **Try again**. No matches has a distinct empty state, leaving the
+  field available to change or clear.
 - A search is bounded to **250,000 visited entries**, **2,000 matching files**, **2 MiB of encoded result paths**,
   **128 directory levels** and **5 seconds**. An unreadable subdirectory or entry also makes the result incomplete.
   Incomplete results carry a notice that not every matching file may be shown, even when no matches were found;
@@ -337,6 +343,6 @@ file viewer's header already shows that path (see "Notices and stand-ins" in `do
 
 The Files panel's own code loads the first time a Files panel is shown in the window. Meanwhile its card is in place,
 empty. A load that fails shows, in the Files panel only, under its header — the project's name as its title, and the
-panel's own controls — that the project pane could not be loaded, with **Try again**; the rest of the window is unaffected. Try again pressed from the keyboard hands keyboard focus to the terminal
+panel's own controls — an empty-state failure headed that the project pane could not be loaded, with **Try again**; the rest of the window is unaffected. Try again pressed from the keyboard hands keyboard focus to the terminal
 while the next load runs. A project pane that fails while it is shown, with keyboard focus inside it, shows the same
 failure and puts keyboard focus on its Try again.

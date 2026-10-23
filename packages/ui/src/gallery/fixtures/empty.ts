@@ -40,7 +40,7 @@ export const emptyScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Fresh install, detected supported tools",
-    description: "New console is the primary action beside the secondary Import configuration button, in a centred row that wraps on narrow windows. Claude Code and Grok Build are Installed and Codex is Not detected, each with its brand icon. Narrow or shorten the window to inspect wrapping and scrolling.",
+    description: "New console is the primary action beside the secondary Import configuration button, in a centred row that wraps on narrow windows. Claude Code and Grok Build carry a soft success Installed badge with a check, and Codex a neutral Not detected one, each tool with its brand icon. Narrow or shorten the window to inspect wrapping and scrolling.",
     state: { ...snapshotState({}), agentAvailability: DETECTED_AGENTS },
   },
   {
@@ -48,7 +48,7 @@ export const emptyScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "No consoles, no agent installed",
-    description: "Every supported tool remains listed with its brand icon and Not detected badge. The PATH hint explains how to make a tool available, while New console and Import configuration stay enabled.",
+    description: "Every supported tool remains listed with its brand icon and a neutral Not detected badge. The PATH hint explains how to make a tool available, while New console and Import configuration stay enabled.",
     state: {
       ...snapshotState({}),
       agentAvailability: NO_AGENTS,
@@ -59,7 +59,7 @@ export const emptyScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Fresh install, checking supported tools",
-    description: "Before PATH detection completes, every supported tool is already visible with its brand icon and a Checking badge. New console and Import configuration remain available while detection is pending.",
+    description: "Before PATH detection completes, every supported tool is already visible with its brand icon and a neutral Checking badge. New console and Import configuration remain available while detection is pending.",
     state: snapshotState({}),
   },
   {

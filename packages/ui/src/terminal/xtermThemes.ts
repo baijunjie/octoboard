@@ -66,14 +66,3 @@ export const XTERM_THEMES: Record<"light" | "dark", ITheme> = {
     brightWhite: "#1b1c1f",
   },
 };
-
-/**
- * The colour a detected link is drawn in on each theme, as xterm has no theme slot for it. Both
- * reach the WCAG text ratio (4.5, what the terminal's `minimumContrastRatio` enforces) against
- * their own `background` as they are, so the terminal never has to shift them: about 7.7 on
- * `dark`, 6.1 on `light`.
- */
-export const XTERM_LINK_COLORS: Record<"light" | "dark", string> = {
-  dark: "#6cb6ff",
-  light: "#0b57d0",
-};

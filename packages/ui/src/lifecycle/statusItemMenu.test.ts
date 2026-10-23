@@ -293,7 +293,7 @@ describe("buildStatusItemMenu quota submenus", () => {
   it("keeps the last windows of an out-of-date reading under a line saying so", () => {
     const stale = quotaOf("claude", null, { fetched_at: NOW - 12 * MINUTE, windows: [window({})], unavailable: { code: "quota_timed_out", params: {}, message: "" } });
     const lines = labels(menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [stale] })));
-    expect(lines.slice(0, 3)).toEqual(["Default · Max", "Out of date: last read 12 minutes ago", "5-hour | 82% remaining · resets in 1h 57m"]);
+    expect(lines.slice(0, 3)).toEqual(["Default · Max | Updated 12 minutes ago", "⚠︎ Out of date: the last read failed", "5-hour | 82% remaining · resets in 1h 57m"]);
   });
 
   it("counts the countdown from the moment given and says so once the reset has passed, the window drawn full", () => {

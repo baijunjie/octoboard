@@ -112,14 +112,8 @@ the restriction while a menu is open are in "Moving focus between regions with F
 Failures a user has to know about use the acknowledgement dialog described in "Error alerts" in
 `docs/product/error-alerts.md`, including a daemon process that exits unexpectedly, a failed report-page submission,
 and the failure of a dialog's own action. Session notices that are not failures use toasts; see `docs/product/toasts.md`.
-
-**What is wrong with one field**, such as a required field left blank, is said under that field instead, and the field
-is marked invalid. A field is never marked before the user has tried to submit: the message appears on the first attempt —
-which sends nothing while any field is still wanting — and from then on follows what is typed, so it goes as soon as
-the field is corrected and comes back if the field is emptied again. A rejection by the daemon that is about one
-field's value is said under that field too, where the dialog knows which field it concerns: the session dialog's
-refusals of a conversation to resume (see "Resuming a conversation by its session ID" in
-`docs/product/sessions.md`).
+What is wrong with one field is said under that field instead (see "Validation under a field" in
+`docs/product/error-alerts.md`).
 
 ## Closing the window
 

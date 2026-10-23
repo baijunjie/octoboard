@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 
 import { useT } from "../i18n/react";
-import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "./Dialog";
+import { Dialog, useDialogAction, useSubmitValidation } from "./Dialog";
 import { TextInput } from "./TextInput";
 import { exceedsTextLimit } from "./textLength";
 
@@ -31,7 +31,7 @@ export function RenameDialog({
 }): React.ReactElement {
   const t = useT();
   const [value, setValue] = useState(initialValue);
-  const { error, busy, run } = useDialogAction();
+  const { busy, run } = useDialogAction();
   const { shown, attempt } = useSubmitValidation();
   const valueError = !value.trim() ? requiredMessage
     : characterLimit !== undefined && exceedsTextLimit(value, characterLimit, initialValue) ? tooLongMessage : undefined;
@@ -55,7 +55,6 @@ export function RenameDialog({
         characterLimit={characterLimit}
         autoFocus
       />
-      <DialogError message={error} />
     </Dialog>
   );
 }

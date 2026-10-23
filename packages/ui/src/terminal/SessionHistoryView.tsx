@@ -1,13 +1,10 @@
 import { Spinner, Switch } from "@heroui/react";
-import { MessageSquareOff, TriangleAlert } from "lucide-react";
+import { MessageSquareOff } from "lucide-react";
 import React, { Suspense, lazy, useCallback, useId, useRef, useState } from "react";
 
-import { Button } from "../components/Button";
-import { CodeToneContext } from "../components/codeTone";
-import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
-import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
+import { useHasPainted } from "../components/useHasPainted";
 import { EmptyPanel } from "../components/EmptyPanel";
-import { ErrorAlert } from "../components/ErrorAlert";
+import { PaneFailure } from "../components/PaneFailure";
 import { PaneTitle } from "../components/PaneTitle";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useFocusHandoff } from "../components/useFocusHandoff";
@@ -20,7 +17,6 @@ import { useOctoboardTheme } from "../theme";
 import { RendererBoundary } from "../viewer/codeRenderer";
 import { CODE_THEMES } from "../viewer/codeTheme";
 import { FencedCode } from "../viewer/FencedCode";
-import { LINK_COLOURS } from "../viewer/MarkdownSurface";
 import { useSessionHistory } from "./useSessionHistory";
 
 // The Markdown renderer, with its library, loads the first time a reply is shown.
@@ -34,7 +30,7 @@ const MarkdownDocument = lazy(() => import("../viewer/MarkdownDocument").then((m
 export function SessionHistoryView({ sessionId }: { sessionId: string }): React.ReactElement {
   const t = useT();
   const { history, reload } = useSessionHistory(sessionId);
-  useErrorAcknowledgement(history.state === "failed" ? history.error : undefined, t("history.failed"));
+  const painted = useHasPainted();
   const [showReplies, setShowReplies] = useState(false);
   const switchLabelId = useId();
   const rootRef = useRef<HTMLElement>(null);
@@ -78,25 +74,10 @@ export function SessionHistoryView({ sessionId }: { sessionId: string }): React.
           {t("history.loading")}
         </div>
       )}
-      {history.state === "failed" && (
-        <div className="flex flex-1 flex-col items-center justify-center-safe gap-3 p-4 text-sm">
-          <CodeToneContext value="danger">
-            <div className="flex w-full min-w-0 max-w-lg flex-col gap-3">
-              <ErrorAlert title={t("history.failed")}>
-                <DaemonErrorMessage error={history.error} part="summary" />
-              </ErrorAlert>
-              <DaemonErrorMessage error={history.error} part="details" />
-            </div>
-          </CodeToneContext>
-          <Button size="sm" variant="secondary" preventFocusOnPress onPress={reload}>
-            {t("error.tryAgain")}
-          </Button>
-        </div>
-      )}
+      {history.state === "failed" && <PaneFailure title={t("history.failed")} message={history.error} announce={painted} onRetry={() => reload()} />}
       {history.state === "unavailable" && (
-        <div className="flex flex-1 items-center justify-center-safe">
-          <EmptyPanel icon={TriangleAlert} message={t("history.unavailable")} description={t("history.unavailable.description")} silent />
-        </div>
+        // Spoken by the status region above, with its remedy, so it does not announce itself as well.
+        <PaneFailure title={t("history.unavailable")} summary={t("history.unavailable.description")} remedy={t("history.unavailable.remedy")} announce={false} />
       )}
       {history.state === "loaded" &&
         (messages.length === 0 ? (
@@ -119,7 +100,7 @@ function MessageList({ messages, showReplies }: { messages: HistoryMessage[]; sh
   const region = useFadeRegion({ label: t("history.messages"), always: true });
   const fade = useScrollFade({ region, className: "min-h-0 flex-1 overflow-auto px-(--pane-inset) pt-4 pb-24" });
   return (
-    <div className={`flex min-h-0 flex-1 flex-col rounded-xl ${region.focused ? "ring-2 ring-app-focus ring-inset" : ""}`}>
+    <div className={`flex min-h-0 flex-1 flex-col rounded-xl ${region.focused ? "ring-2 ring-focus ring-inset" : ""}`}>
       <div {...fade}>
         <ol className="flex flex-col gap-4">
           {messages.map((message, index) =>
@@ -165,7 +146,7 @@ function Message({ message }: { message: HistoryMessage }): React.ReactElement {
       {message.speaker === "agent" ? (
         <div
           className="rounded-xl p-3 text-sm leading-6"
-          style={{ backgroundColor: colours.background, color: colours.foreground, "--document-link": LINK_COLOURS[theme] } as React.CSSProperties}
+          style={{ backgroundColor: colours.background, color: colours.foreground }}
         >
           <RendererBoundary resetKey={message.text} fallback={plain}>
             <Suspense fallback={plain}>

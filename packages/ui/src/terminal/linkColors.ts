@@ -2,7 +2,7 @@ import type { IDecoration, IDisposable, IMarker, Terminal } from "@xterm/xterm";
 
 import { segmentKey } from "./terminalLines";
 import { type ExtraLinkSegments, visibleLinkSegments } from "./terminalLinks";
-import { XTERM_LINK_COLORS } from "./xtermThemes";
+import { resolveCssColour } from "../cssColour";
 
 let nextFixedMarkerId = -1;
 
@@ -47,7 +47,6 @@ export class TerminalLinkColors {
 
   constructor(
     private readonly term: Terminal,
-    private mode: "light" | "dark",
     /** The cells to colour besides the addresses: the file paths the daemon found. */
     private readonly extra?: ExtraLinkSegments,
   ) {
@@ -60,12 +59,8 @@ export class TerminalLinkColors {
     ];
   }
 
-  setTheme(mode: "light" | "dark"): void {
-    this.mode = mode;
-    this.reset();
-  }
-
-  /** Drops every decoration and draws them afresh at the next frame. */
+  /** Drops every decoration and draws them afresh at the next frame, which also reads the link colour again
+   * (a theme change). */
   reset(): void {
     for (const { decoration } of this.decorations) this.drop(decoration);
     this.decorations = [];
@@ -112,6 +107,9 @@ export class TerminalLinkColors {
       else this.drop(decoration);
     }
     const { baseY, cursorY } = term.buffer.active;
+    // The accent text token every other link takes, read where the page is now: 7.02:1 on the light
+    // terminal's background and 7.73:1 on the dark one, above the 4.5:1 xterm's `minimumContrastRatio` asks.
+    const foregroundColor = resolveCssColour("var(--tint-accent-fg)");
     for (const { y, col, width } of wanted.values()) {
       const marker = term.buffer.active.type === "alternate"
         ? fixedMarker(y - 1)
@@ -120,7 +118,7 @@ export class TerminalLinkColors {
         marker,
         x: col,
         width,
-        foregroundColor: XTERM_LINK_COLORS[this.mode],
+        foregroundColor,
         layer: "top",
       });
       if (decoration) kept.push({ decoration, col, width });

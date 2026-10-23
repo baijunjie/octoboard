@@ -68,7 +68,7 @@ export function TrustedFoldersSection(): React.ReactElement {
       )}
       {removing && (
         <ConfirmDialog
-          title={<Message id="settings.trusted.removeTitle" params={{ path: <InlineChip monospace wrap size="inherit">{abbreviateHome(removing, home)}</InlineChip> }} />}
+          title={<Message id="settings.trusted.removeTitle" params={{ path: <InlineChip monospace wrap>{abbreviateHome(removing, home)}</InlineChip> }} />}
           message={t("settings.trusted.removeMessage")}
           confirmLabel={t("common.remove")}
           destructive

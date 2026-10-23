@@ -298,8 +298,9 @@ function tauriNativeWindow(): NativeWindowCapability {
     async setTheme(theme) {
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
       // Passing no theme is what tells the window to resume following the OS appearance; on
-      // macOS this clears the app's own `NSAppearance` override rather than freezing it at
-      // whatever the OS happened to be at the moment of the call.
+      // macOS this sets (or, with none, clears) the app-level `NSAppearance` (tao calls
+      // `NSApp setAppearance:`), so the web view's `prefers-color-scheme` and the native menu both
+      // follow it, rather than freezing at whatever the OS happened to be at the moment of the call.
       await getCurrentWindow().setTheme(theme ?? null);
     },
     async reveal() {

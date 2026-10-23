@@ -32,7 +32,7 @@ it.each(["en", "zh-Hans", "ar"] as const)("keeps fixed product references rich a
     expect([...container.querySelectorAll("[data-inline-chip]")].map((chip) => chip.textContent).sort()).toEqual([...expected].sort());
     for (const chip of container.querySelectorAll("[data-inline-chip]")) {
       expect(chip.getAttribute("dir")).toBe("auto");
-      expect(chip.getAttribute("data-size")).toBe("inherit");
+      expect(chip.getAttribute("data-size")).toBe("xs");
       expect(chip.querySelector("code")).toBeNull();
       expect(chip.textContent).not.toMatch(/[\u2066-\u2069]/);
     }
@@ -45,10 +45,10 @@ it.each(["en", "zh-Hans", "ar"] as const)("keeps fixed product references rich a
       expect(container.textContent).toBe(format(language, id, { count }));
     }
   }
-  act(() => root.render(<Message id="startup.noAddress.shell" params={{ port: <InlineChip monospace wrap size="inherit">?port=</InlineChip> }} />));
+  act(() => root.render(<Message id="startup.noAddress.shell" params={{ port: <InlineChip monospace wrap>?port=</InlineChip> }} />));
   expect([...container.querySelectorAll("[data-inline-chip]")].map((chip) => chip.textContent)).toEqual(["Tauri", "?port="]);
   const name = "مراجعة/中文/Work";
-  act(() => root.render(<Message id="dialog.session.ownerFixed" params={{ name: <InlineChip dir="auto" wrap size="inherit">{name}</InlineChip> }} />));
+  act(() => root.render(<Message id="dialog.session.ownerFixed" params={{ name: <InlineChip dir="auto" wrap>{name}</InlineChip> }} />));
   expect(container.querySelector("[data-inline-chip]")?.textContent).toBe(name);
   expect(container.textContent).toBe(format(language, "dialog.session.ownerFixed", { name }));
   // Whole labels can deliberately supply their existing presentation instead of a referenced product chip.

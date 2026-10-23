@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
+import { errorAlerts } from "../errorAlerts";
 import type { Account, Agent, AgentAvailability, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { AccountDialog } from "./AccountDialog";
@@ -86,35 +87,31 @@ it("lists only the added agents, in the list's order", async () => {
 const taken = () =>
   new DaemonRequestError("taken", "config_dir_taken", { agent: "Claude Code", name: "Work" });
 
-it("words a refused directory under the directory field, not as the dialog's failure line", async () => {
+it("reports a refused directory in the error alert dialog, leaving the field and its value alone", async () => {
   render(work, () => Promise.reject(taken()));
+  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   type("Config directory", "/home/dev/.claude-other");
   await submit();
+  // The refusal comes after the submit, so it is no mark on the field.
+  expect(errorAlerts.getSnapshot().map((alert) => alert.error)).toEqual([expect.objectContaining({ code: "config_dir_taken" })]);
   const field = input("Config directory");
-  expect(field.getAttribute("aria-invalid")).toBe("true");
-  const message = document.body.textContent ?? "";
-  expect(message.match(/already uses this config directory/g)).toHaveLength(1);
-});
-
-it("lifts the directory's refusal once the directory is edited", async () => {
-  render(work, () => Promise.reject(taken()));
-  type("Config directory", "/home/dev/.claude-other");
-  await submit();
-  type("Config directory", "/home/dev/.claude-another");
-  expect(input("Config directory").getAttribute("aria-invalid")).not.toBe("true");
+  expect(field.getAttribute("aria-invalid")).not.toBe("true");
+  expect(field.value).toBe("/home/dev/.claude-other");
   expect(document.body.textContent).not.toContain("already uses this config directory");
 });
 
-it("lifts the directory's refusal when a directory is picked", async () => {
-  render(work, () => Promise.reject(taken()));
+it("keeps a directory picked after a refusal and the dialog open for another try", async () => {
+  const request = vi.fn(() => Promise.reject(taken()));
+  render(work, request);
+  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   type("Config directory", "/home/dev/.claude-other");
   await submit();
-  expect(document.body.textContent).toContain("already uses this config directory");
   const press = (text: string) => act(async () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === text)!.click());
   await press("Browse");
   await press("Pick");
   expect(input("Config directory").value).toBe("/home/dev/.claude-picked");
-  expect(document.body.textContent).not.toContain("already uses this config directory");
+  await submit();
+  expect(request).toHaveBeenCalledTimes(2);
 });
 
 it("shows the config directory hint as a visible description", () => {

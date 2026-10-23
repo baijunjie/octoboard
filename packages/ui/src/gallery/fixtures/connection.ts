@@ -132,7 +132,7 @@ export const connectionScenarios: Scenario[] = [
     group: TERMINAL,
     category: "normal",
     title: "Links in a full-screen terminal response",
-    description: "The localhost address and the labelled \"layout notes\" hyperlink are blue without hovering, even inside muted output, while the prose around them stays muted. Clicking opens their addresses.",
+    description: "The localhost address and the labelled \"layout notes\" hyperlink are in the accent text colour without hovering, even inside muted output, while the prose around them stays muted. Clicking opens their addresses.",
     terminal: "fullscreen",
     preferences: { panelStacks: { project: { open: [], shares: {} }, report: { open: [], shares: {} } } },
     state: connected("open"),
@@ -171,7 +171,7 @@ export const connectionScenarios: Scenario[] = [
     category: "normal",
     title: "File paths in terminal output",
     description:
-      "The paths the daemon finds are in the same blue as the address on the last line, without hovering: the one in Read(...), the absolute project path, src/summary/Summary.tsx:42:7, docs/summary-notes.md:13, the side worktree's src/ui.ts:7, bin/helper, the folder docs/plans/summary-layout, the temp-folder path and the one after @, where the colour starts at src, not at the @. " +
+      "The paths the daemon finds are in the same accent text colour as the address on the last line, without hovering: the one in Read(...), the absolute project path, src/summary/Summary.tsx:42:7, docs/summary-notes.md:13, the side worktree's src/ui.ts:7, bin/helper, the folder docs/plans/summary-layout, the temp-folder path and the one after @, where the colour starts at src, not at the @. " +
       "The closing parenthesis, the full stop after :42:7, the commas after :13 and after the temp path and the semicolon after the @ mention stay in the output's own colour. " +
       "Three paths stay plain: src/summary/Draft.ts, which does not exist, src/shared/index.ts, which the daemon answers none for as it would one that more than one of the project's folders holds, and app/[id]/page.tsx, a route that is not looked up at all. " +
       "The pointer is on src/summary/Summary.tsx:42:7, which is underlined from its first character to the 7, not the full stop.",

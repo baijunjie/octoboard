@@ -54,7 +54,9 @@ The failures of one confirmed set are reported together, in one error alert (see
   the target's record of the Codex thread could not be updated; or the copy did not complete and an older item could
   not be put back, naming the folder it is kept in until the daemon next starts or the session is next switched into
   that account (see "Carrying the conversation" below). An unexpected failure with no sentence of its own reads only
-  that it failed unexpectedly.
+  that it failed unexpectedly, and any other failure with none reads that something unexpected went wrong; neither
+  shows the system's own text, which is in **Error details** (see "Failures shown on the screen" in
+  `docs/product/error-alerts.md`).
 - **Remedies after the list, each said once**: a failure whose code has a remedy sentence of its own gets it once for
   that code, a login shell environment that could not be read in time included; the other failures with a known
   remedy share one sentence per kind of remedy. A conversation that could not be moved has the remedy of its cause,
@@ -63,9 +65,9 @@ The failures of one confirmed set are reported together, in one error alert (see
   with **Report issue** in the footer (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`).
 - **Error details** holds, under a heading naming each session, what says more than its row: the system's own text
   of a conversation that could not be moved; for a login shell environment that could not be read in time, the
-  command that was run and how long it was given; or, for an unexpected failure with no sentence of its own, its
-  message, followed by its stack when it is an error of the window's own. A session whose row says it all has no entry
-  there, and when no session has one the alert has no **Error details**, even when a failure is unexpected.
+  command that was run and how long it was given; or, for a failure with no sentence of its own, its message,
+  followed by its stack when it is an unexpected error of the window's own. A session whose row says it all has no
+  entry there, and when no session has one the alert has no **Error details**, even when a failure is unexpected.
 - **The footer** is the alert's usual one, with no retry: the acknowledgement button, **Report issue** when a failure
   is unexpected, and a remedy's button when every failure shares that remedy. The user switches a failed session again
   from its menu; a session that did switch is on the target account already.

@@ -32,7 +32,7 @@ it("keeps badge text in native choices without changing raw selected keys or ric
     const [value, setValue] = useState("listed");
     return <OptionSelect label="Model" value={value} onChange={(next) => { changed(next); setValue(next); }} options={[
       { value: "listed", label: "Listed" },
-      { value: key, label, badge, labelContent: <InlineChip dir="auto" wrap size="inherit">{label}</InlineChip> },
+      { value: key, label, badge, labelContent: <InlineChip dir="auto" wrap>{label}</InlineChip> },
     ]} />;
   }
   const container = document.body.appendChild(document.createElement("div"));

@@ -50,7 +50,7 @@ function activityMarker(activity: Activity): React.ReactElement | null {
         </span>
       );
     case "running":
-      return <MessageCircleMore aria-hidden="true" className="size-3.5 shrink-0 text-success" />;
+      return <MessageCircleMore aria-hidden="true" className="size-3.5 shrink-0 text-success-soft-foreground" />;
     default:
       return null;
   }
@@ -75,10 +75,10 @@ export function ActivityBadge({ activity, className = "" }: { activity: Activity
       );
     case "working":
       return (
-        <span aria-hidden="true" className={`${disc} border-2 border-success bg-background`}>
+        <span aria-hidden="true" className={`${disc} border-2 border-success-soft-foreground bg-background`}>
           <span className="relative flex size-1.5 contain-layout">
-            <span className="absolute inline-flex size-full rounded-full bg-accent-glyph opacity-75 motion-safe:animate-ping" />
-            <span className="relative inline-flex size-1.5 rounded-full bg-accent-glyph" />
+            <span className="absolute inline-flex size-full rounded-full bg-accent-soft-foreground opacity-75 motion-safe:animate-ping" />
+            <span className="relative inline-flex size-1.5 rounded-full bg-accent-soft-foreground" />
           </span>
         </span>
       );

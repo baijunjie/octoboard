@@ -23,7 +23,7 @@ import { useDaemon, useDaemonStore } from "../store";
 import { AvatarField } from "./AvatarField";
 import { ConsoleAccountsField } from "./ConsoleAccountsField";
 import { ConsoleLaunchFields } from "./ConsoleLaunchFields";
-import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "./Dialog";
+import { Dialog, useDialogAction, useSubmitValidation } from "./Dialog";
 import { GroupRow, GroupRows } from "./GroupRows";
 import { LabelledGroup } from "./LabelledGroup";
 import { OptionSelect } from "./OptionSelect";
@@ -69,7 +69,7 @@ export function ConsoleDialog({
   const [fields, setFields] = useState(initial);
   const [icon, setIcon] = useState<string | null>(editing?.icon ?? null);
   const [sessionPrompt, setSessionPrompt] = useState(editing?.console_session_prompt ?? "");
-  const { error, setError, busy, run } = useDialogAction();
+  const { busy, run } = useDialogAction();
   // Settings, opened over this dialog from the accounts table. It is rendered beside the dialog
   // rather than inside it, as its forms would otherwise submit this one.
   const [managingAccounts, setManagingAccounts] = useState(false);
@@ -91,18 +91,17 @@ export function ConsoleDialog({
   const [decoding, setDecoding] = useState(false);
 
   const chooseImage = async (file: File) => {
-    setError(undefined);
     setDecoding(true);
     try {
       setIcon(await imageToAvatar(file));
     } catch {
+      // The avatar's own failure is not a field's: it opens the error alert dialog, as a failed submit does.
       reportError(new ActionableError(t("dialog.console.avatarUnreadable"), "image"));
     } finally {
       setDecoding(false);
     }
   };
 
-  // The avatar's own failure is not a field's, and stays at the foot of the dialog.
   const { shown, attempt } = useSubmitValidation();
   const nameError = name ? undefined : t("dialog.nameRequired");
 
@@ -230,7 +229,6 @@ export function ConsoleDialog({
             description={t("dialog.console.sessionInstructionsNote")}
           />
         </ConsoleLaunchFields>
-        <DialogError message={error} />
       </Dialog>
       {managingAccounts && <SettingsDialog initialSection="accounts" onClose={() => setManagingAccounts(false)} />}
     </>

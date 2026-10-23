@@ -3,7 +3,9 @@ import type { LucideIcon } from "lucide-react";
 import React, { useId } from "react";
 
 import { Button } from "./Button";
+import { DetailsButton } from "./DetailsButton";
 import { TitledControl } from "./TitledControl";
+import { useAnnouncement } from "./useAnnouncement";
 
 /** HeroUI's `EmptyState` with the shape every empty list in the app takes: a glyph, a heading
  * saying what is missing, an optional line explaining it and the action that fills it when there is
@@ -14,16 +16,29 @@ import { TitledControl } from "./TitledControl";
  * `silent` is for a state another region already announces: it hides this copy from assistive
  * technology so the state is not read twice. It cannot be combined with an action, the primary one
  * or the secondary: a button inside an `aria-hidden` subtree stays reachable by Tab yet has no name
- * or role. A plain compact row accepts it too. */
+ * or role. A plain compact row accepts it too.
+ *
+ * `tone="danger"` is the shape of a failure that is the whole state of what the panel fills (a pane
+ * whose subject could not be loaded): a danger glyph, the heading saying what could not be loaded,
+ * and in the centred row the recovery `action` and Details, the button that opens `details` in a
+ * popover (further explanation in the application's own words, then raw text). `remedy` is the one
+ * main thing to do, a second line under the first. `announce`, `announceKey` and `announceDelayMs` are
+ * `ErrorAlert`'s: the heading and the first line, and nothing else, are spoken as an alert. */
 export function EmptyPanel({
   icon: Icon,
   message,
   headingLevel = 2,
   description,
+  remedy,
   action,
   secondaryAction,
+  details,
   compact,
   silent,
+  tone,
+  announce = false,
+  announceKey,
+  announceDelayMs,
 }: {
   icon: LucideIcon;
   message: React.ReactNode;
@@ -36,19 +51,39 @@ export function EmptyPanel({
   /** The full panel's line under the heading, explaining what the heading leaves out; a compact
    * row has no room for one. It sits in a `p`, so it takes phrasing content only. */
   description?: React.ReactNode;
+  /** Under the description, outside the announcement: the one main thing to do. */
+  remedy?: React.ReactNode;
   compact?: boolean;
+  /** The full panel's tone: `danger` for a failure. */
+  tone?: "danger";
+  announce?: boolean;
+  announceKey?: number;
+  announceDelayMs?: number;
 } & (
   | {
-    /** `icon` shows only on the full panel's button; a compact row already leads with its glyph. */
-    action?: { label: string; icon?: LucideIcon; variant?: "primary" | "secondary"; onPress: () => void };
+    /** `icon` shows only on the full panel's button; a compact row already leads with its glyph.
+     * `isPending` keeps the button where it is, unavailable, while what it started runs; `landing`
+     * marks it as the F6 landing of its region. */
+    action?: {
+      label: string;
+      icon?: LucideIcon;
+      variant?: "primary" | "secondary";
+      isPending?: boolean;
+      landing?: boolean;
+      onPress: () => void;
+    };
     /** A second way out beside the action, quieter than it, for a full panel only. */
     secondaryAction?: { label: string; icon?: LucideIcon; onPress: () => void };
+    /** What a failure's Details button opens (further explanation, then raw text), in the centred
+     * row after the actions; with none there is no Details button. The full panel only, and like the actions never with `silent`. */
+    details?: React.ReactNode;
     silent?: never;
   }
-  | { action?: never; secondaryAction?: never; silent?: true }
+  | { action?: never; secondaryAction?: never; details?: never; silent?: true }
 )): React.ReactElement {
   const messageId = useId();
   const actionId = useId();
+  const announcement = useAnnouncement(announce, announceKey, announceDelayMs);
   if (compact) {
     // A `span` rather than a `p`: inside a button only phrasing content is valid.
     const row = (
@@ -97,21 +132,31 @@ export function EmptyPanel({
   const SecondaryIcon = secondaryAction?.icon;
   return (
     <EmptyState aria-hidden={silent} className="flex flex-col items-center gap-3 px-4 py-10 text-center">
-      <span className="flex size-12 items-center justify-center rounded-full bg-default text-app-muted">
+      <span className={`flex size-12 items-center justify-center rounded-full ${tone === "danger" ? "bg-danger-soft text-danger-soft-foreground" : "bg-default text-app-muted"}`}>
         <Icon aria-hidden="true" className="size-6" />
       </span>
       {/* The heading carries its own size and colour: HeroUI's `.empty-state` base sets `text-sm
           text-muted` on the whole panel, so a heading left to inherit would come out at the
           explaining line's size and colour both, leaving the weight as the only thing telling the
           two apart — too little to read as a heading. */}
-      <Heading className="text-base font-semibold text-foreground">{message}</Heading>
-      {description && <p className="max-w-sm text-sm break-words text-app-muted">{description}</p>}
-      {(action || secondaryAction) && (
+      <div key={announcement.key} role={announcement.role} className="flex min-w-0 max-w-full flex-col items-center gap-3">
+        <Heading className="text-base font-semibold text-foreground">{message}</Heading>
+        {description && <p className="max-w-sm text-sm break-words text-app-muted">{description}</p>}
+      </div>
+      {remedy && <p className="-mt-3 max-w-sm text-sm break-words text-app-muted">{remedy}</p>}
+      {(action || secondaryAction || details) && (
         <div className="flex flex-wrap items-center justify-center gap-3">
           {action && (
             // A press never takes focus: it would drop to `<body>` when the panel goes away, and
             // whatever the action opens or starts places focus itself.
-            <Button size="sm" variant={action.variant ?? "secondary"} preventFocusOnPress onPress={action.onPress}>
+            <Button
+              data-region-landing={action.landing ? "" : undefined}
+              size="sm"
+              variant={action.variant ?? "secondary"}
+              preventFocusOnPress
+              isPending={action.isPending}
+              onPress={action.onPress}
+            >
               {ActionIcon && <ActionIcon aria-hidden="true" className="size-4" />}
               {action.label}
             </Button>
@@ -122,6 +167,7 @@ export function EmptyPanel({
               {secondaryAction.label}
             </Button>
           )}
+          {details && <DetailsButton placement="bottom">{details}</DetailsButton>}
         </div>
       )}
     </EmptyState>

@@ -147,3 +147,120 @@ it("lands a tap's focus on the page, and F6's or a pointer's on the header's fir
   expect(document.activeElement?.tagName).toBe("BUTTON");
   expect(container.contains(document.activeElement)).toBe(true);
 });
+
+it("shows a failed page listing in the panel with its reason and Try again, and opens no error alert dialog", async () => {
+  const request = vi.fn().mockRejectedValueOnce(new Error("Daemon busy")).mockResolvedValue({ type: "ack" });
+  const toastError = vi.fn();
+  const store = createStateStore({ connectionState: "open" });
+  const daemon: Daemon = {
+    store, request, toastError, toastNotice: vi.fn(),
+    onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
+  };
+  const container = document.body.appendChild(document.createElement("section"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  await act(async () => root.render(
+    <PlatformProvider value={{ kind: "browser" }}>
+      <DaemonProvider value={daemon}>
+        <PanelFrameProvider value={{ canMaximize: false, maximized: false, onToggleMaximized: () => {}, onClose: () => {} }}>
+          <ReportPanel consoleSessionId="console-session" peek={undefined}
+            onEscape={() => {}} onCycleRegion={() => {}} onMoveHistory={() => {}} onMoveConsoleSession={() => {}} />
+        </PanelFrameProvider>
+      </DaemonProvider>
+    </PlatformProvider>,
+  ));
+  const panel = container.querySelector('[data-slot="empty-state"]')!;
+  expect(panel.querySelector("h2")?.textContent).toBe("Could not load the pages of this session");
+  expect(panel.textContent).toContain("Something unexpected went wrong.");
+  expect(container.querySelector("[role=alert]")).not.toBeNull();
+  expect(toastError).not.toHaveBeenCalled();
+  const retry = [...panel.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
+  await act(async () => retry.click());
+  expect(request).toHaveBeenCalledTimes(2);
+  expect(container.querySelector('[data-slot="empty-state"]')).toBeNull();
+});
+
+it("hands focus on from Try again when the listing succeeds and the warning above the pages goes", async () => {
+  const request = vi.fn().mockRejectedValueOnce(new Error("Daemon busy")).mockResolvedValue({ type: "ack" });
+  const pages = [pageOf("page-0", "console-session", "<p>Page 0</p>", 0), pageOf("page-1", "console-session", "<p>Page 1</p>", 1)];
+  const store = createStateStore({ connectionState: "open", pages: new Map([["console-session", pages]]) });
+  const daemon: Daemon = {
+    store, request, toastError: vi.fn(), toastNotice: vi.fn(),
+    onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
+  };
+  const container = document.body.appendChild(document.createElement("section"));
+  container.dataset.region = "panel-report";
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  await act(async () => root.render(
+    <PlatformProvider value={{ kind: "browser" }}>
+      <DaemonProvider value={daemon}>
+        <PanelFrameProvider value={{ canMaximize: false, maximized: false, onToggleMaximized: () => {}, onClose: () => {} }}>
+          <ReportPanel consoleSessionId="console-session" peek={undefined}
+            onEscape={() => {}} onCycleRegion={() => {}} onMoveHistory={() => {}} onMoveConsoleSession={() => {}} />
+        </PanelFrameProvider>
+      </DaemonProvider>
+    </PlatformProvider>,
+  ));
+  const retry = [...container.querySelectorAll('[data-slot="alert-root"] button')].find((button) => button.textContent === "Try again") as HTMLButtonElement;
+  act(() => retry.focus());
+  await act(async () => retry.click());
+  await act(async () => { await Promise.resolve(); });
+  expect(container.querySelector('[data-slot="alert-root"]')).toBeNull();
+  expect(document.activeElement).not.toBe(document.body);
+  expect(container.contains(document.activeElement)).toBe(true);
+});
+
+it("keeps the warning above the pages while Try again's listing is out, its button pending and focused, and announces a second failure", async () => {
+  let finish!: (error: Error) => void;
+  const request = vi
+    .fn()
+    .mockRejectedValueOnce(new Error("Daemon busy"))
+    .mockReturnValueOnce(new Promise((_, reject) => void (finish = reject)));
+  const pages = [pageOf("page-0", "console-session", "<p>Page 0</p>", 0)];
+  const store = createStateStore({ connectionState: "open", pages: new Map([["console-session", pages]]) });
+  const daemon: Daemon = {
+    store, request, toastError: vi.fn(), toastNotice: vi.fn(),
+    onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
+  };
+  const container = document.body.appendChild(document.createElement("section"));
+  container.dataset.region = "panel-report";
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  await act(async () => root.render(
+    <PlatformProvider value={{ kind: "browser" }}>
+      <DaemonProvider value={daemon}>
+        <PanelFrameProvider value={{ canMaximize: false, maximized: false, onToggleMaximized: () => {}, onClose: () => {} }}>
+          <ReportPanel consoleSessionId="console-session" peek={undefined}
+            onEscape={() => {}} onCycleRegion={() => {}} onMoveHistory={() => {}} onMoveConsoleSession={() => {}} />
+        </PanelFrameProvider>
+      </DaemonProvider>
+    </PlatformProvider>,
+  ));
+  const retry = [...container.querySelectorAll('[data-slot="alert-root"] button')].find((button) => button.textContent === "Try again") as HTMLButtonElement;
+  const first = container.querySelector("[role=alert]")!;
+  act(() => retry.focus());
+  await act(async () => retry.click());
+  expect(request).toHaveBeenCalledTimes(2);
+  expect(container.querySelector('[data-slot="alert-root"]')).not.toBeNull();
+  expect(retry.isConnected).toBe(true);
+  expect(retry.getAttribute("aria-disabled")).toBe("true");
+  expect(retry.hasAttribute("data-pending")).toBe(true);
+  expect(document.activeElement).toBe(retry);
+  await act(async () => finish(new Error("Daemon busy")));
+  expect(retry.isConnected).toBe(true);
+  expect(retry.getAttribute("aria-disabled")).not.toBe("true");
+  expect(document.activeElement).toBe(retry);
+  const second = container.querySelector("[role=alert]")!;
+  expect(second).not.toBe(first);
+  expect(second.textContent).toContain("Something unexpected went wrong.");
+});

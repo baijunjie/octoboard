@@ -1,9 +1,11 @@
 import { Button } from "../components/Button";
-import { errorPresentation } from "../errorPresentation";
+import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
 import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import React, { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 
-import { InlineChip } from "../components/InlineChip";
+import { FailureAlert } from "../components/FailureAlert";
+import { PaneFailure } from "../components/PaneFailure";
+import { StatusBadge } from "../components/StatusBadge";
 import { HandOffOnUnmount } from "../components/HandOffOnUnmount";
 import { focusAfterLoss, focusFirstIn } from "../components/regionFocus";
 import { PanelHeader } from "../components/PanelHeader";
@@ -73,22 +75,49 @@ export function ReportPanel({
   // (a reconnect's re-list, or a `page_created` appending) because it is looked up fresh on every
   // render instead of being carried across one as a stale index would be.
   const [anchorId, setAnchorId] = useState<string>();
+  // Why the last listing failed, until one succeeds; `attempt` asks again. The failure is the state of
+  // the panel, shown in it, and it arrives after the panel was drawn, so it announces itself.
+  const [listFailure, setListFailure] = useState<ErrorPresentation>();
+  // Counts the failures, so one that repeats in the same words is announced again.
+  const [failures, setFailures] = useState(0);
+  const [attempt, setAttempt] = useState(0);
+  // Whether Try again's listing is out: its button stays where it is, unavailable, rather than
+  // taking a second press, and the failure stays shown until the listing answers.
+  const [retrying, setRetrying] = useState(false);
 
   // `snapshotEpoch` (rather than `connectionState` alone) is what makes lag recovery re-list too:
   // the daemon answers a lagged broadcast receiver with a fresh `snapshot` on the same socket, so
   // the connection never goes through a state change of its own.
   useEffect(() => {
-    if (connectionState !== "open") return;
+    if (connectionState !== "open") {
+      setRetrying(false);
+      return;
+    }
     // Guards against a slow reply for a console session the user has since switched away from (and
     // possibly back to) landing a now-stale error after the fact.
     let stale = false;
-    request({ type: "list_pages", console_session: consoleSessionId }).catch((err) => {
-      if (!stale) toastError(errorPresentation(err as Error));
-    });
+    request({ type: "list_pages", console_session: consoleSessionId }).then(
+      () => {
+        if (stale) return;
+        setListFailure(undefined);
+        setRetrying(false);
+      },
+      (err: unknown) => {
+        if (stale) return;
+        setListFailure(errorPresentation(err));
+        setFailures((n) => n + 1);
+        setRetrying(false);
+      },
+    );
     return () => {
       stale = true;
     };
-  }, [consoleSessionId, connectionState, snapshotEpoch, request, toastError]);
+  }, [consoleSessionId, connectionState, snapshotEpoch, attempt, request]);
+
+  const retryList = () => {
+    setRetrying(true);
+    setAttempt((n) => n + 1);
+  };
 
   const handleSubmit = useCallback(
     (page: Page, data: unknown) => {
@@ -110,7 +139,19 @@ export function ReportPanel({
 
   // The panel keeps its place while the first `list_pages` is in flight: dropping out and back
   // would resize the terminal pane, a real SIGWINCH to the agent, on every console session switch.
-  if (sessionPages === undefined) return <PanelHeader title={t("panel.report.name")} />;
+  if (sessionPages === undefined && listFailure === undefined) return <PanelHeader title={t("panel.report.name")} />;
+  if (sessionPages === undefined || (sessionPages.length === 0 && listFailure !== undefined)) {
+    return (
+      <>
+        <PanelHeader title={t("panel.report.name")} />
+        {listFailure && (
+          <FailureGoes className="contents">
+            <PaneFailure title={t("report.listFailed")} message={listFailure} announce attempt={failures} pending={retrying} onRetry={retryList} />
+          </FailureGoes>
+        )}
+      </>
+    );
+  }
 
   if (sessionPages.length === 0) {
     return (
@@ -177,6 +218,12 @@ export function ReportPanel({
           </TitledControl>
         </div>
       </PanelHeader>
+      {listFailure && (
+        // Pages already here stay usable, so this is a warning above them.
+        <FailureGoes className="shrink-0 px-(--pane-inset) py-2">
+          <FailureAlert status="warning" announce attempt={failures} title={t("report.listFailed")} message={listFailure} pending={retrying} onRetry={retryList} />
+        </FailureGoes>
+      )}
       {/* The timestamp's width is whatever the user's locale makes of it, so it is the element
           that gives way, rather than pushing the badge off the panel's edge when narrow. */}
       <div className="flex h-8 shrink-0 items-center gap-2 px-(--pane-inset) text-xs text-app-muted">
@@ -184,9 +231,9 @@ export function ReportPanel({
           {new Date(page.created_at).toLocaleString(language)}
         </FadeOverflow>
         {isHistory && (
-          <InlineChip size="sm" variant="soft" color="warning" className="shrink-0">
+          <StatusBadge variant="soft" color="warning">
             {t("report.readOnly")}
-          </InlineChip>
+          </StatusBadge>
         )}
       </div>
       <PageFrame
@@ -218,6 +265,19 @@ function handFocusToReport(): void {
   queueMicrotask(() => {
     if (document.activeElement === document.body) focusAfterLoss(() => focusFirstIn("panel-report"));
   });
+}
+
+/** Holds a failure shown in the panel, and hands focus on when it goes while it holds focus (the
+ * listing answered after Try again was pressed from the keyboard): its button goes with it, and
+ * the focus would fall to the page. */
+function FailureGoes({ className, children }: { className: string; children: React.ReactNode }): React.ReactElement {
+  const id = useId();
+  return (
+    <>
+      <HandOffOnUnmount from={`[id="${id}"]`} to={handFocusToReport} />
+      <div id={id} className={className}>{children}</div>
+    </>
+  );
 }
 
 /**

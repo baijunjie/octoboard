@@ -46,8 +46,9 @@ alone on purpose: a free-text area and the tags field's input, which trims what 
 
 In a `packages/ui` dialog, a message about one field's value — empty, malformed, not allowed — belongs to that
 field: `TextInput` (`packages/ui/src/dialogs/TextInput.tsx`) takes it as `errorMessage`, which marks the field
-invalid and renders the message right under it. Execution failures follow `docs/product/error-alerts.md`,
-"Error alerts"; never send a verdict on a single field through `useDialogAction().setError` or `DialogError`.
+invalid and renders the message right under it. Only the form's own check at submit goes there: anything that fails
+once the submit has passed it — a daemon refusal about that same field's value included — opens the error alert
+instead, as the "Where an error is shown" section of `docs/ui-accessibility.md` sets out.
 
 Compute each field's message on every render from the current value and pass it through `useSubmitValidation`
 (`packages/ui/src/dialogs/Dialog.tsx`): `shown(message)` holds it back until `attempt(...messages)` has gated a

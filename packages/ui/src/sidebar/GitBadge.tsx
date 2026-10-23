@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowDown, ArrowUp, GitBranch, GitCommitHorizontal, RefreshCw } from "lucide-react";
+import { ArrowDown, ArrowUp, CircleAlert, GitBranch, GitCommitHorizontal, RefreshCw } from "lucide-react";
 import React from "react";
 
 import { FadeOverflow } from "../components/FadeOverflow";
@@ -31,9 +31,9 @@ function ScrollingCountArrow({ direction }: { direction: "up" | "down" }): React
  * told apart without reading the accessible name), and every in-flight activity a spinning
  * `RefreshCw`. The ahead count's arrow scrolls upward during a push; the behind count's arrow
  * scrolls downward during a fast-forward. Both scroll inside a fixed count-arrow-sized clip.
- * A failed check replaces the idle glyph with a red `AlertTriangle`; the in-flight glyph wins
- * over it while the next operation runs. The ahead/behind counts and the error glyph are likewise
- * never colour alone.
+ * A failed check replaces the idle glyph with a red `CircleAlert`, the circled `!` of every
+ * danger mark; the in-flight glyph wins over it while the next operation runs. The ahead/behind
+ * counts and the error glyph are likewise never colour alone.
  *
  * The whole badge is one `IndicatorTooltip` (hover only, so it adds no tab stop to its row) whose
  * rich facts mirror the accessible-name sentence: one tooltip for the glyph, the branch and both
@@ -77,7 +77,7 @@ export function GitBadge({ status, decorative }: { status: GitStatus | undefined
       {status.activity !== "idle" ? (
         <RefreshCw aria-hidden="true" className="size-3.5 shrink-0 motion-safe:animate-spin-slow" />
       ) : status.error ? (
-        <AlertTriangle aria-hidden="true" className="size-3.5 shrink-0 text-app-danger" />
+        <CircleAlert aria-hidden="true" className="size-3.5 shrink-0 text-danger-soft-foreground" />
       ) : status.detached ? (
         <GitCommitHorizontal aria-hidden="true" className="size-3.5 shrink-0" />
       ) : (

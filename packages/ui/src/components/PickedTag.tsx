@@ -6,11 +6,12 @@ import { useCurrentLanguage, useT } from "../i18n/react";
 import { FadeOverflow } from "./FadeOverflow";
 import { TitledControl } from "./TitledControl";
 
-/** HeroUI has no accent variant for a removable tag, so this uses its selected tag's colour tokens
- * without introducing selection behaviour. The 3rem minimum applies only while the remove button
+/** HeroUI has no accent variant for a removable tag, so this takes its selected tag's fill and the
+ * shared accent text colour (`--tint-accent-fg`, a text on `--accent-soft` as a badge's is) without
+ * introducing selection behaviour. The 3rem minimum applies only while the remove button
  * is visible, keeping a short label clear of the button and its fade while fitting the content at rest. */
 const TAG_CLASS =
-  "group/tag min-w-0 hover:min-w-12 data-focus-visible:min-w-12 max-w-full bg-accent-soft text-accent-soft-foreground hover:bg-accent-soft-hover";
+  "group/tag min-w-0 hover:min-w-12 data-focus-visible:min-w-12 max-w-full bg-accent-soft text-(--tint-accent-fg) hover:bg-accent-soft-hover";
 
 /** Laid over the tag's end rather than in the row, so it does not reserve space in the row:
  * 0.25rem from the end, inside the tag's 0.5rem end padding, so the 0.75rem glyph
@@ -22,9 +23,10 @@ const TAG_CLASS =
 const REMOVE_CLASS =
   "absolute inset-y-0 end-1 my-auto opacity-0 transition-opacity duration-100 motion-reduce:transition-none group-hover/tag:opacity-100 group-data-focus-visible/tag:opacity-100 bg-transparent";
 
-/** The glyph and its hover fill are drawn from the tag's own foreground. */
+/** The glyph takes the tag's text colour; its hover fill is HeroUI's accent soft hover, the fill a
+ * selected tag takes on hover. */
 const REMOVE_COLOUR_CLASS =
-  "text-accent-soft-foreground/80 hover:bg-accent-soft-foreground/15 hover:text-accent-soft-foreground";
+  "text-(--tint-accent-fg) hover:bg-accent-soft-hover";
 
 /** While the remove button shows, the label fades out ahead of it: opaque until 0.75rem before the
  * button's edge, fading to transparent at it, toward the tag's end, where the button sits.

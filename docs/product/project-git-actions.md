@@ -88,7 +88,9 @@ in byte order of branch names, with the project's own worktree's current branch 
 closes the menu without requesting a switch.
 
 While the list is being read, the submenu shows a loading state. No local branches produces an unavailable empty
-item. A failed read shows its reason and **Try again**, which reloads without closing the menu. At most 10,000
+item. A failed read shows, in the submenu in place of its items, one alert with its reason and **Try again**, which
+reloads without closing the menu; it opens no error alert. Keyboard focus inside the submenu moves to Try again when the
+read fails, and back to the submenu when the reload starts. At most 10,000
 branches, or as many as 2 MiB of encoded names hold, are listed; a truncated list carries an incomplete-list notice.
 
 Selecting another branch closes the menus and switches immediately, without confirmation. It changes the project's

@@ -1,9 +1,9 @@
 import { Description, Disclosure } from "@heroui/react";
-import React, { useState } from "react";
+import React, { useId, useState } from "react";
 
 import type { LaunchPair } from "../agents";
 import { effortLevels, launchSettingOptions } from "../agentLaunchSettings";
-import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
+import { FailureAlert } from "../components/FailureAlert";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { daemonMessage } from "../daemonMessage";
 import { DaemonRequestError } from "../daemon-client";
@@ -25,7 +25,9 @@ function modelName(t: Translate, model: AgentModel): string {
 /** What the launch pickers of one agent and account need to know of the models it offers, asked of
  * the daemon while `enabled` (see `useAgentModels`). While the answer is out the pickers are locked,
  * showing what is stored; when the daemon has no list the model picker offers the stored value alone
- * and says why. */
+ * and `modelAlert` says why, an Alert for the caller to put directly under the model field (the list
+ * is a lookup the form makes on its own). `modelText` is the same note as plain text, for the status
+ * region that speaks it. */
 export function useLaunchModels(agent: Agent, account: string | null, enabled: boolean) {
   const t = useT();
   const language = useCurrentLanguage();
@@ -40,9 +42,12 @@ export function useLaunchModels(agent: Agent, account: string | null, enabled: b
   const modelText = loading ? t("dialog.agentSettings.modelsLoading") : (unavailableText ?? (error !== undefined ? errorText(error) : undefined));
   // Why there are no models, with what it names set as code where the message has such params.
   const reason = unavailable ? new DaemonRequestError(unavailableText ?? unavailable.message, unavailable.code, unavailable.params) : error;
-  const modelDescription = !loading && reason !== undefined ? <DaemonErrorMessage error={reason} part="summary" /> : modelText;
-  const modelDetails = !loading && reason !== undefined ? <DaemonErrorMessage error={reason} part="details" /> : undefined;
-  return { loading, models, modelText, modelDescription, modelDetails };
+  const modelDescription = loading ? modelText : undefined;
+  const modelAlertId = useId();
+  const modelAlert = !loading && reason !== undefined ? (
+    <FailureAlert id={modelAlertId} announce={false} message={reason} />
+  ) : undefined;
+  return { loading, models, modelText, modelDescription, modelAlert, modelAlertId: modelAlert ? modelAlertId : undefined };
 }
 
 export type LaunchModels = ReturnType<typeof useLaunchModels>;
@@ -76,7 +81,7 @@ type PickerProps = {
 );
 
 /** The Model picker of one pair of settings, empty while unset. It carries the note on the model list
- * (loading, or why there is none). */
+ * while it loads; why there is none is `LaunchModels.modelAlert`, under the field, which describes the picker. */
 export function ModelPicker({
   launch,
   model,
@@ -106,8 +111,7 @@ export function ModelPicker({
       placeholderBadge={inheritedText?.placeholderBadge}
       isDisabled={isDisabled || launch.loading}
       description={launch.modelDescription}
-      descriptionDetails={launch.modelDetails}
-      describedBy={describedBy}
+      describedBy={[describedBy, launch.modelAlertId].filter(Boolean).join(" ") || undefined}
     />
   );
 }
@@ -167,7 +171,10 @@ function LaunchPickers({
 }): React.ReactElement {
   return (
     <>
-      <ModelPicker launch={launch} model={model} onChange={onModelChange} inherit={inherit} isDisabled={isDisabled} />
+      <div className="flex flex-col gap-2">
+        <ModelPicker launch={launch} model={model} onChange={onModelChange} inherit={inherit} isDisabled={isDisabled} />
+        {launch.modelAlert}
+      </div>
       <EffortPicker launch={launch} model={model} effort={effort} onChange={onEffortChange} inherit={inherit} isDisabled={isDisabled} />
     </>
   );

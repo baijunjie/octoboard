@@ -448,6 +448,9 @@ function renderForResume(projectOverride: Partial<typeof project> | null = {}, l
   return rendered;
 }
 
+/** What the lookup the Resume tab makes found wrong with the ID, as the Alert under the field says it. */
+const resumeAlert = () => document.body.querySelector<HTMLElement>('[data-slot="alert-root"]');
+
 /** The text of the line under the Session ID field. */
 const resumeStatusText = () => document.body.querySelector('[role="status"]:not([data-slot="spinner"])')?.textContent ?? "";
 
@@ -498,7 +501,7 @@ it.each([
   for (const code of document.body.querySelectorAll('[role="alert"] code')) expect(code.getAttribute("data-color")).toBe("danger");
 });
 
-it("shows the daemon's refusal of the conversation under the Session ID field and takes it away once the ID changes", async () => {
+it("reports the daemon's refusal of the conversation in the error alert dialog and keeps the field as it was", async () => {
   const { daemon } = renderForResume();
   answerRequests(daemon, record("claude", null), () => Promise.reject(
     new DaemonRequestError("plain", "conversation_to_resume_not_found", { agent: "Claude Code", path: "/Users/dev/.claude", id: UUID }),
@@ -508,14 +511,14 @@ it("shows the daemon's refusal of the conversation under the Session ID field an
   await settle();
   await submit();
   const field = resumeField()!;
-  expect(field.getAttribute("aria-invalid")).toBe("true");
+  // It comes after the submit, so it is the error alert dialog's, not a mark on the field.
+  expect(errorAlerts.getSnapshot().some((alert) => alert.error instanceof DaemonRequestError && alert.error.code === "conversation_to_resume_not_found")).toBe(true);
+  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
+  expect(field.getAttribute("aria-invalid")).not.toBe("true");
+  expect(resumeAlert()).toBeNull();
+  expect(field.value).toBe(UUID);
+  // Where focus returns once the alert is acknowledged.
   expect(document.activeElement).toBe(field);
-  const refusal = field.closest('[data-slot="textfield"], [role="group"]')?.textContent ?? "";
-  expect(refusal).toContain("was found in /Users/dev/.claude");
-  // Under the field, not in the alert at the dialog's foot.
-  expect(document.body.querySelectorAll('[role="alert"]')).toHaveLength(1);
-  typeResumeId("11111111-2222-3333-4444-555555555556");
-  expect(document.body.textContent).not.toContain("was found in");
 });
 
 const nameInput = () => Array.from(document.body.querySelectorAll<HTMLInputElement>("input")).find((input) => input.labels?.[0]?.textContent === "Name");
@@ -603,7 +606,7 @@ it("announces exhausted quota only when the selected conversation requires a new
     heldBy("live_session", interrupted.id),
     { ...claudeAccounts, sessions: new Map([[interrupted.id, interrupted]]) },
   );
-  const quotaAlert = () => document.body.querySelector('[data-slot="alert-content"][role="alert"]');
+  const quotaAlert = () => document.body.querySelector('[role="alert"]');
   expect(quotaAlert()).toBeNull();
   expect(openDisabled()).toBe(false);
   // The quota arrives after the form opened, so its title and reason must announce together.
@@ -657,7 +660,7 @@ it("holds Open back, with why, when the only account left is changing its sharin
     }],
     accountSharing: new Map([["a-work", { account: "a-work", progress: { share: true, phase: "changing" as const, done: 0, total: 2 } }]]),
   });
-  const alert = document.body.querySelector('[data-slot="alert-content"][role="alert"]');
+  const alert = document.body.querySelector('[role="alert"]');
   expect(alert?.querySelector('[data-slot="alert-title"]')?.textContent).toBe("Sharing is being changed");
   expect(alert?.querySelector('[data-slot="alert-description"]')?.textContent).toContain("Choose another account or wait for the change to finish.");
   expect(openDisabled()).toBe(true);
@@ -911,7 +914,7 @@ it("asks again when the session the lookup named is not in the store, and goes b
   await settle();
   expect(locateRequests(daemon)).toHaveLength(2);
   expect(resumeStatusText()).toBe("");
-  expect(resumeField()!.getAttribute("aria-invalid")).toBe("true");
+  expect(resumeAlert()).not.toBeNull();
   expect(openDisabled()).toBe(true);
 });
 
@@ -920,7 +923,7 @@ it("says the agent that holds the conversation is no longer offered, and never o
   await chooseResume();
   typeResumeId(UUID);
   await settle();
-  expect(resumeField()!.closest('[data-slot="textfield"], [role="group"]')?.textContent).toContain("no longer available");
+  expect(resumeAlert()?.textContent).toContain("no longer available");
   expect(resumeStatusText()).toBe("");
   expect(buttons().some((button) => button.textContent === "Advanced")).toBe(false);
   expect(openDisabled()).toBe(true);
@@ -951,9 +954,7 @@ it.each([
   await chooseResume();
   typeResumeId(UUID);
   await settle();
-  const field = resumeField()!;
-  expect(field.getAttribute("aria-invalid")).toBe("true");
-  expect(field.closest('[data-slot="textfield"], [role="group"]')?.textContent).toContain(message);
+  expect(resumeAlert()?.textContent).toContain(message);
   expect(openDisabled()).toBe(true);
   await submit();
   expect(sentOpenSession(daemon)).toBeUndefined();
@@ -972,7 +973,7 @@ it.each([
   await chooseResume();
   typeResumeId(UUID);
   await settle();
-  const reason = resumeField()!.closest('[data-slot="textfield"], [role="group"]')!;
+  const reason = resumeAlert()!;
   expect(reason.textContent).toContain(message);
   expect(Array.from(reason.querySelectorAll("[data-inline-chip]"), (chip) => [chip.textContent, chip.getAttribute("dir")])).toEqual(names.map((name) => [name, "auto"]));
   expect(reason.textContent).not.toMatch(/[\u2066-\u2069]/);
@@ -980,7 +981,7 @@ it.each([
   expect(nameInput()).toBeUndefined();
 });
 
-it("names the holder in the open-time refusal too, when the store knows the session", async () => {
+it("reports the open-time refusal of a conversation held elsewhere in the error alert dialog", async () => {
   const { daemon } = renderForResume({}, record("claude", null), { sessions: new Map([[elsewhere.id, elsewhere]]), projects: new Map([[otherProject.id, otherProject]]) });
   answerRequests(daemon, record("claude", null), (body) =>
     body.type === "open_session" ? Promise.reject(new DaemonRequestError("plain", "conversation_outside_project", { id: UUID, session: elsewhere.id })) : Promise.resolve({ type: "ack" }));
@@ -988,9 +989,9 @@ it("names the holder in the open-time refusal too, when the store knows the sess
   typeResumeId(UUID);
   await settle();
   await submit();
-  const reason = resumeField()!.closest('[data-slot="textfield"], [role="group"]')!;
-  expect(reason.textContent).toContain("held by the session Invoices in Billing");
-  expect(Array.from(reason.querySelectorAll("[data-inline-chip]"), (chip) => [chip.textContent, chip.getAttribute("dir")])).toEqual([["Invoices", "auto"], ["Billing", "auto"]]);
+  expect(errorAlerts.getSnapshot().some((alert) => alert.error instanceof DaemonRequestError && alert.error.code === "conversation_outside_project")).toBe(true);
+  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
+  expect(resumeAlert()).toBeNull();
 });
 
 it("shows a failed lookup under the field with the daemon's reason, and holds Open back", async () => {
@@ -998,7 +999,9 @@ it("shows a failed lookup under the field with the daemon's reason, and holds Op
   await chooseResume();
   typeResumeId(UUID);
   await settle();
-  expect(resumeField()!.getAttribute("aria-invalid")).toBe("true");
+  expect(resumeAlert()).not.toBeNull();
+  // The Alert describes the field it is under.
+  expect(resumeField()!.getAttribute("aria-describedby")?.split(" ")).toContain(resumeAlert()!.parentElement!.id);
   expect(openDisabled()).toBe(true);
   await submit();
   expect(sentOpenSession(daemon)).toBeUndefined();
@@ -1015,7 +1018,7 @@ it("drops the answer for an ID since changed, and asks again for the new one", a
   await settle();
   expect(locateRequests(daemon)).toHaveLength(2);
   await act(async () => replies.get(UUID)!(heldBy("not_found")));
-  expect(resumeField()!.getAttribute("aria-invalid")).not.toBe("true");
+  expect(resumeAlert()).toBeNull();
   expect(resumeStatusText()).toBe("Looking up the conversation…");
   await act(async () => replies.get(other)!(record("claude", null)));
   expect(resumeStatusText()).toBe(`Found a record on Claude Code · ${isolate("Default")}`);

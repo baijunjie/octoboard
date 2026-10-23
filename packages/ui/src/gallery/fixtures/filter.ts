@@ -62,7 +62,7 @@ export const filterScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Project filter",
-    description: "Selected tags have checkmarks and the normal vocabulary fits without scrolling. The popover stays open as conditions are picked: the heading chips fade in from the left and out to the right while the others slide, and matching projects enter and exit as the sidebar reorders. After closing it, the heading's Funnel X clears all conditions.",
+    description: "Selected tags have checkmarks and the normal vocabulary fits without scrolling. The popover stays open as conditions are picked: the conditions on the heading (plain text) fade in from the left and out to the right while the others slide, and matching projects enter and exit as the sidebar reorders. After closing it, the heading's Funnel X clears all conditions.",
     state,
     preferences: { sidebarConsole: console_.id },
     steps: [
@@ -76,7 +76,7 @@ export const filterScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Matching projects",
-    description: "Projects (1) counts the single matching project. The keyword and the tag sit beside the heading, between its label and the Funnel X, which clears them together; they are not interactive. Scroll the project sessions: the heading and its conditions stay pinned.",
+    description: "Projects (1) counts the single matching project. The keyword and the tag sit beside the heading as plain text, between its label and the Funnel X, which clears them together; they are not interactive. Scroll the project sessions: the heading and its conditions stay pinned.",
     state: scrollingMatchState,
     preferences: { sidebarConsole: console_.id },
     steps: [
@@ -91,7 +91,7 @@ export const filterScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Conditions wider than the heading",
-    description: "The keyword and four tags do not fit beside the Projects label: they stay on one line at full width, fade at the clipped end and run as one marquee when the strip is hovered with a real pointer. Its tooltip shows the whole filter as the same chips as the heading, wrapped onto as many lines as it needs, the longest tag shrinking to the tooltip's width and breaking inside its own chip.",
+    description: "The keyword and four tags do not fit beside the Projects label: they stay on one line at full width, fade at the clipped end and run as one marquee when the strip is hovered with a real pointer. Its tooltip shows the whole filter as the same plain-text conditions as the heading, wrapped onto as many lines as it needs, the longest tag shrinking to the tooltip's width and breaking inside itself.",
     state: overflowingState,
     preferences: { sidebarConsole: console_.id },
     steps: [

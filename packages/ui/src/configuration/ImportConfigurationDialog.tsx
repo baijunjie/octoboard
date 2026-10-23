@@ -6,7 +6,7 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { errorAlerts } from "../errorAlerts";
 import { InlineChip } from "../components/InlineChip";
-import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "../dialogs/Dialog";
+import { Dialog, useDialogAction, useSubmitValidation } from "../dialogs/Dialog";
 import { dialogAround } from "../dialogs/dialogElement";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
@@ -44,8 +44,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
   const t = useT();
   const { request } = useDaemon();
   const { configurationFile } = usePlatform();
-  const { error, setError, busy, run } = useDialogAction();
-  const failure = error;
+  const { busy, run } = useDialogAction();
   const { shown, attempt } = useSubmitValidation();
   const [stage, setStage] = useState<Stage>({ kind: "choose" });
   const [review, setReview] = useState<ReviewState>([]);
@@ -89,7 +88,6 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
 
   const choose = async () => {
     if (!configurationFile || busy || waitingRef.current) return;
-    setError(undefined);
     const picker = ++pickerRef.current;
     waitingRef.current = true;
     setWaiting(true);
@@ -114,7 +112,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
         errorAlerts.report({
           message: t("configuration.import.notJson", { name: isolate(opened.name) }),
           recovery: "configuration",
-          content: <Message id="configuration.import.notJson" params={{ name: <InlineChip monospace wrap size="inherit">{opened.name}</InlineChip> }} />,
+          content: <Message id="configuration.import.notJson" params={{ name: <InlineChip monospace wrap>{opened.name}</InlineChip> }} />,
         });
         return;
       }
@@ -142,14 +140,9 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
     });
   };
 
-  // The footer's buttons stay while the body changes; execution failures use the shared alert.
+  // The footer's buttons stay while the body changes.
   const reviewFooter = (
     <>
-      {failure && (
-        <div className="basis-full">
-          <DialogError message={failure} />
-        </div>
-      )}
       <Button type="button" variant="secondary" onPress={onClose} isDisabled={busy}>
         {t("common.cancel")}
       </Button>
@@ -193,12 +186,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
       {...frame}
     >
       <div ref={bodyRef} className="flex flex-col gap-4">
-        {stage.kind === "choose" && (
-          <>
-            <p className="text-sm"><Message id="configuration.import.choose.intro" /></p>
-            <DialogError message={failure} />
-          </>
-        )}
+        {stage.kind === "choose" && <p className="text-sm"><Message id="configuration.import.choose.intro" /></p>}
         {stage.kind === "review" && (
           <ImportReview
             fileName={stage.fileName}

@@ -25,7 +25,7 @@ function ContextTooltip({ heading, rows }: {
           <dl className="grid grid-cols-[auto_auto] gap-x-4 gap-y-0.5">
             {rows.map((row) => (
               <React.Fragment key={row.key}>
-                <dt className="text-muted">{row.label}</dt>
+                <dt className="text-app-muted">{row.label}</dt>
                 <dd className="text-end tabular-nums">{row.value}</dd>
               </React.Fragment>
             ))}

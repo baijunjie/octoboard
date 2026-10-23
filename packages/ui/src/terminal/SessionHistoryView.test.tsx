@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
+import { detailsButton, openDetails } from "../components/detailsTestSupport";
 import { errorAlerts } from "../errorAlerts";
 import type { Event, HistoryMessage } from "../protocol";
 import { SessionHistoryView } from "./SessionHistoryView";
@@ -90,15 +91,32 @@ it("says nothing was said in a session with no messages", async () => {
 it("points at reopening when the record is unavailable", async () => {
   const container = await mount({ type: "session_history", session: "s-1", messages: [], unavailable: true });
   expect(container.textContent).toContain("History unavailable");
-  expect(container.textContent).toContain("Reopen the session to see its terminal.");
+  // A read failure that leaves the pane empty is an empty-state panel in the danger tone, not an
+  // Alert: the heading says what failed, the line why, and the remedy under it, with no Details button
+  // as there is no raw text.
+  const panel = container.querySelector('[data-slot="empty-state"]')!;
+  expect(container.querySelector('[data-slot="alert-root"]')).toBeNull();
+  expect(panel.querySelector("h2")?.textContent).toBe("History unavailable");
+  expect(panel.querySelector("p")?.textContent).toBe("The agent's record of this session could not be read.");
+  expect(panel.querySelectorAll("p")[1]?.textContent).toBe("Reopen the session to see its terminal.");
+  expect(detailsButton(panel)).toBeUndefined();
+  // The status region speaks it, so the panel does not announce itself as well.
+  expect(container.querySelector("[role=alert]")).toBeNull();
 });
 
 it("shows a failed request as an error with Try again, and reads again when it is pressed", async () => {
   const container = await mount(new Error("gone"));
   expect(container.textContent).toContain("Could not load the history of this session");
-  expect(container.textContent).toContain("gone");
-  expect(container.querySelector("[role=alert]")).toBeNull();
-  expect(errorAlerts.report).toHaveBeenCalledTimes(1);
+  expect(container.textContent).toContain("Something unexpected went wrong.");
+  expect(container.textContent).not.toContain("gone");
+  // It arrived after the view painted, so the title and the reason announce themselves, and nothing else does.
+  const announcement = container.querySelector("[role=alert]")!;
+  expect(announcement.textContent).toBe("Could not load the history of this sessionSomething unexpected went wrong.");
+  // The reason and Try again are inside the one panel.
+  const panel = container.querySelector('[data-slot="empty-state"]')!;
+  expect(openDetails(panel).textContent).toBe("gone");
+  expect([...panel.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Try again", "Details"]);
+  expect(errorAlerts.report).not.toHaveBeenCalled();
   expect(container.textContent).not.toContain("History unavailable");
   daemon.request.mockResolvedValue({ type: "session_history", session: "s-1", messages: history });
   const retry = [...container.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
@@ -169,17 +187,14 @@ it("keeps focus in the view when Try again goes away under it, on the switch whi
 });
 
 
-it("retains the daemon reason for rich durable rendering and acknowledgement without a second announcement", async () => {
+it("retains the daemon reason for rich rendering inside the Alert, which announces it once and opens no error alert dialog", async () => {
   const failure = new DaemonRequestError("Session missing-session was not found.", "unknown_session", { session: "missing-session" });
   const container = await mount(failure);
   expect(container.querySelector("code")?.textContent).toBe("missing-session");
-  expect(container.querySelector("[role=alert]")).toBeNull();
-  expect(errorAlerts.report).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-    error: failure,
-    message: failure.message,
-    title: "Could not load the history of this session",
-  }));
+  expect(container.querySelectorAll("[role=alert]")).toHaveLength(1);
+  expect(container.querySelector("[role=alert]")?.querySelector("button")).toBeNull();
+  expect(errorAlerts.report).not.toHaveBeenCalled();
   await act(async () => roots[0]!.render(<SessionHistoryView sessionId="s-1" />));
-  expect(errorAlerts.report).toHaveBeenCalledTimes(1);
+  expect(container.querySelectorAll("[role=alert]")).toHaveLength(1);
   expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Try again")).toBe(true);
 });

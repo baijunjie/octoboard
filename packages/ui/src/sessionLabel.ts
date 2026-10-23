@@ -19,10 +19,17 @@ export function sessionChoiceTitle(t: Translate, session: Session): string {
   return titleText(t, session, (value) => value);
 }
 
+/** The agent's current task, when the session shows one beside the name the user gave it: the
+ * terminal title, unless it is empty or the same as that name. */
+export function sessionTask(session: Pick<Session, "title" | "terminal_title">): string | undefined {
+  const task = session.terminal_title?.trim();
+  return task && task !== session.title.trim() ? task : undefined;
+}
+
 function titleText(t: Translate, session: Session, mark: (value: string) => string): string {
-  const terminalTitle = session.terminal_title?.trim();
-  if (!terminalTitle || terminalTitle === session.title.trim()) return session.title;
-  return t("session.displayTitle", { title: mark(terminalTitle), name: mark(session.title) });
+  const task = sessionTask(session);
+  if (!task) return session.title;
+  return t("session.displayTitle", { title: mark(task), name: mark(session.title) });
 }
 
 /** Where to tell the user a session is, since the daemon's `Session` record itself only carries

@@ -88,7 +88,7 @@ export function TreeRow({
       data-selected={selected || undefined}
       data-locked={locked || undefined}
       {...focusVisible}
-      className={`group flex cursor-pointer rounded-lg text-sm outline-none select-none transition-colors hover:bg-panel-hover data-focus-visible:ring-2 data-focus-visible:ring-app-focus data-selected:bg-panel-selected ${className}`}
+      className={`group flex cursor-pointer rounded-lg text-sm outline-none select-none transition-colors hover:bg-panel-hover data-focus-visible:ring-2 data-focus-visible:ring-focus data-selected:bg-panel-selected ${className}`}
       onMouseDown={keepFocus}
       onClick={onActivate}
       onKeyDown={rowKeyHandler(onActivate)}
@@ -232,7 +232,7 @@ export function LockButton({ name, onUnlock, returnFocusTo }: {
             handFocusOff(holder.current, returnFocusTo.current, true);
             onUnlock();
           }}
-          className="group/lock shrink-0 rounded-md text-warning-glyph hover:text-foreground"
+          className="group/lock shrink-0 rounded-md text-warning-soft-foreground hover:text-foreground"
         >
           <Lock aria-hidden="true" className="size-4 group-hover/lock:hidden group-data-[focus-visible=true]/lock:hidden" />
           <LockOpen aria-hidden="true" className="hidden size-4 group-hover/lock:block group-data-[focus-visible=true]/lock:block" />

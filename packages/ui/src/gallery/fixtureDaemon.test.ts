@@ -56,6 +56,26 @@ describe("the fixture daemon's conversation lookup", () => {
   });
 });
 
+describe("the fixture daemon's listings that the scenario refuses", () => {
+  const error = { code: "permission_denied", params: { path: "/Users/dev/Documents", detail: "Operation not permitted" }, message: "Operation not permitted" };
+  const unreadable = { ...error, code: "directory_unreadable" };
+
+  it("refuses a directory listing with the error given for its path and lists the others", async () => {
+    const daemon = createFixtureDaemon({ id: "dirs", group: "Projects", category: "exceptional", title: "", directories: { "/Users/dev/Documents": unreadable, "/Users/dev": [] } });
+    await expect(daemon.request({ type: "list_dir", path: "/Users/dev/Documents" })).rejects.toMatchObject({ code: "directory_unreadable" });
+    await expect(daemon.request({ type: "list_dir", path: "~" })).resolves.toMatchObject({ type: "dir_listing", path: "/Users/dev", entries: [] });
+  });
+
+  it("refuses the page list of the console session named, and no other", async () => {
+    const hub = sessionOf("hub", "c", undefined, "Hub", "idle");
+    const other = sessionOf("other", "c", undefined, "Other", "idle");
+    const daemon = createFixtureDaemon({ id: "pages", group: "Report panel", category: "exceptional", title: "", state: snapshotState({ sessions: [hub, other] }), pageListErrors: { [hub.id]: error } });
+    await expect(daemon.request({ type: "list_pages", console_session: hub.id })).rejects.toMatchObject({ code: "permission_denied" });
+    expect(daemon.store.getState().pages.has(hub.id)).toBe(false);
+    await expect(daemon.request({ type: "list_pages", console_session: other.id })).resolves.toMatchObject({ type: "page_list", pages: [] });
+  });
+});
+
 describe("the fixture daemon's session reopening", () => {
   it("restores an archived session and its archived owners while preserving its children", async () => {
     const owner = sessionOf("owner", "c", undefined, "Hub", "archived", { ended_at: 10 });

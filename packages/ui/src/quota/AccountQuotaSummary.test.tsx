@@ -55,6 +55,16 @@ function mount(element: React.ReactNode): HTMLElement {
 /** The text with the bidi isolates that wrap the values put into a sentence taken out. */
 const plain = (container: HTMLElement) => container.textContent?.replace(/[\u2068\u2069]/g, "");
 
+function press(element: HTMLElement) {
+  act(() => {
+    for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
+      element.dispatchEvent(new MouseEvent(type, { bubbles: true, button: 0 }));
+    }
+  });
+}
+
+const dialog = () => document.querySelector('[role="dialog"]');
+
 const headlines = (container: HTMLElement) =>
   Array.from(container.querySelectorAll('[aria-hidden="true"]'), (row) => row.textContent);
 
@@ -88,19 +98,25 @@ it("waits for the first reading of an account that has no entry yet", () => {
   expect(container.querySelector('[data-slot="meter"]')).toBeNull();
 });
 
-it("says why an account that was never read has no quota", () => {
+it("marks an account that was never read as unavailable on its name line and says why in the mark's popover", () => {
   const unavailable = { code: "quota_timed_out", params: { agent: "Claude Code" }, message: "timed out" };
-  const container = mount(<AccountQuotaSummary quota={quota({ windows: [], unavailable })} />);
-  expect(container.textContent).toContain("Quota unavailable");
-  expect(plain(container)).toContain("Claude Code took too long to report its quota.");
-  expect(container.querySelector('[data-slot="meter"]')).toBeNull();
+  const reading = quota({ windows: [], unavailable });
+  const summary = mount(<AccountQuotaSummary quota={reading} />);
+  expect(summary.textContent).toBe("");
+  const container = mount(<AccountNameLine name="Work" quota={reading} />);
+  const mark = container.querySelector("button")!;
+  expect(mark.getAttribute("aria-label")).toBe("Quota unavailable");
+  expect(container.textContent).not.toContain("took too long");
+  press(mark);
+  expect(dialog()?.getAttribute("aria-label")).toBe("Quota unavailable");
+  expect(plain(dialog() as HTMLElement)).toContain("Claude Code took too long to report its quota.");
 });
 
 it("tells an account that is not signed in, or whose directory is missing, to log in and not that reading failed", () => {
   for (const code of ["quota_not_signed_in", "quota_config_dir_missing"]) {
     const unavailable = { code, params: { agent: "Claude Code", dir: "/home/dev/.claude-work" }, message: "raw text" };
     const container = mount(<AccountQuotaSummary quota={quota({ windows: [], unavailable })} />);
-    const recovery = container.querySelector("p")!;
+    const recovery = container.querySelector("span.block")!;
     expect(recovery.textContent).toBe("Log in to use this account.");
     expect(container.querySelector("span")?.textContent).toBe("Not logged in yet.");
     expect(recovery.previousElementSibling?.textContent).toBe("Not logged in yet.");
@@ -110,40 +126,54 @@ it("tells an account that is not signed in, or whose directory is missing, to lo
 
 it("sets the binary and its path variable apart as code in a missing-binary failure", () => {
   const unavailable = { code: "quota_binary_not_found", params: { binary: "claude" }, message: "not found" };
-  const container = mount(<AccountQuotaSummary quota={quota({ windows: [], unavailable })} />);
-  expect(Array.from(container.querySelectorAll("code"), (code) => code.textContent)).toEqual(["claude", "PATH"]);
+  mount(<AccountNameLine name="Work" quota={quota({ windows: [], unavailable })} />);
+  press(document.querySelector("button")!);
+  expect(Array.from(dialog()!.querySelectorAll("code"), (code) => code.textContent)).toEqual(["claude", "PATH"]);
 });
 
 it("ends the account's name line with when a current reading was taken, just now within a minute", () => {
-  expect(mount(<AccountNameLine name="Work" quota={quota()} />).textContent).toBe("WorkMaxUpdated 5 minutes ago");
-  expect(mount(<AccountNameLine name="Work" quota={quota({ fetched_at: NOW - 10_000 })} />).textContent).toBe("WorkMaxUpdated just now");
+  expect(mount(<AccountNameLine name="Work" quota={quota()} />).textContent).toBe("Work, MaxUpdated 5 minutes ago");
+  expect(mount(<AccountNameLine name="Work" quota={quota({ fetched_at: NOW - 10_000 })} />).textContent).toBe("Work, MaxUpdated just now");
   expect(mount(<AccountQuotaSummary quota={quota()} />).textContent).not.toContain("Updated");
 });
 
-it("keeps the last good windows as out of date, with when they were read and why the newer read failed", () => {
+it("keeps the last good windows, and marks them out of date on the name line with when they were read and why", () => {
   const unavailable = { code: "quota_command_failed", params: { agent: "Claude Code", detail: "exit 1" }, message: "failed" };
   const container = mount(<AccountQuotaSummary quota={quota({ unavailable })} />);
-  expect(container.textContent).toContain("Out of date: last read 5 minutes ago");
-  // The out-of-date line says when it was read, so the name line does not say it again.
-  expect(mount(<AccountNameLine name="Work" quota={quota({ unavailable })} />).textContent).not.toContain("Updated");
-  const summary = Array.from(container.querySelectorAll("span")).find((node) => node.textContent === "Claude Code could not report its quota.")!;
+  expect(container.textContent).not.toContain("Out of date");
+  expect(container.querySelectorAll('[data-slot="meter"]')).toHaveLength(3);
+  const nameLine = mount(<AccountNameLine name="Work" quota={quota({ unavailable })} />);
+  // When the last good windows were read stays visible, with the warning mark right after it.
+  expect(nameLine.textContent).toContain("Updated 5 minutes ago");
+  const mark = nameLine.querySelector("button")!;
+  expect(mark.previousElementSibling?.textContent).toBe("Updated 5 minutes ago");
+  expect(mark.getAttribute("aria-label")).toBe("Out of date: last read 5 minutes ago");
+  expect(mark.querySelector("svg")?.getAttribute("class")).toContain("text-warning-soft-foreground");
+  press(mark);
+  const summary = Array.from(dialog()!.querySelectorAll("span")).find((node) => node.textContent === "Claude Code could not report its quota.")!;
   expect(summary).toBeDefined();
   const agent = summary.querySelector("[data-inline-chip]")!;
   expect(agent.textContent).toBe("Claude Code");
   expect(agent.getAttribute("dir")).toBe("auto");
   expect(agent.textContent).not.toMatch(/[\u2066-\u2069]/);
-  const diagnostic = container.querySelector("pre")!;
+  const diagnostic = dialog()!.querySelector("pre")!;
   expect(diagnostic.textContent).toBe("exit 1");
   expect(diagnostic.getAttribute("dir")).toBe("ltr");
-  expect(container.querySelectorAll("pre")).toHaveLength(1);
+  expect(dialog()!.querySelectorAll("pre")).toHaveLength(1);
   expect(summary.contains(diagnostic)).toBe(false);
-  expect(container.querySelectorAll('[data-slot="meter"]')).toHaveLength(3);
+});
+
+it("puts no failure mark on a current reading or on an account that is not logged in", () => {
+  expect(mount(<AccountNameLine name="Work" quota={quota()} />).querySelector("button")).toBeNull();
+  const unavailable = { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" };
+  expect(mount(<AccountNameLine name="Work" quota={quota({ windows: [], unavailable })} />).querySelector("button")).toBeNull();
 });
 
 it("falls back to the daemon's own wording for a failure code it has no message for", () => {
   const unavailable = { code: "quota_from_the_future", params: {}, message: "Newer daemon wording" };
-  const container = mount(<AccountQuotaSummary quota={quota({ windows: [], unavailable })} />);
-  expect(container.textContent).toContain("Newer daemon wording");
+  mount(<AccountNameLine name="Work" quota={quota({ windows: [], unavailable })} />);
+  press(document.querySelector("button")!);
+  expect(dialog()!.textContent).toContain("Newer daemon wording");
 });
 
 it("shows nothing for an account the daemon has not reported on", () => {
@@ -152,7 +182,7 @@ it("shows nothing for an account the daemon has not reported on", () => {
 });
 
 it("shows the plan the agent names", () => {
-  expect(mount(<QuotaPlan quota={quota({ plan: "max" })} />).textContent).toBe("Max");
+  expect(mount(<QuotaPlan quota={quota({ plan: "max" })} />).textContent).toBe(", Max");
 });
 
 it("shows no plan when the agent names none", () => {

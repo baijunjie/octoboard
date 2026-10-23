@@ -11,10 +11,10 @@ import { DaemonRequestError } from "../daemon-client";
 import { format } from "../i18n/catalog";
 import { RecoveryGuidance, recoveryParams } from "./ErrorGuidance";
 import { errorPresentation } from "../errorPresentation";
-import { DialogError, useDialogAction } from "../dialogs/Dialog";
+import { useDialogAction } from "../dialogs/Dialog";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
-import { DaemonErrorMessage } from "./DaemonErrorMessage";
+import { DaemonErrorMessage, hasErrorDetails, hasErrorRemedy } from "./DaemonErrorMessage";
 import { ErrorAlert } from "./ErrorAlert";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -42,7 +42,7 @@ it("retains the structured request failure through the dialog action and respond
   function Subject() {
     const action = useDialogAction();
     run = action.run;
-    return <DialogError message={action.error} />;
+    return null;
   }
   mount(<><Subject /><ErrorAlerts /></>);
   const error = failure();
@@ -165,7 +165,16 @@ it("names each branch or worktree still there as code with its reason, a comma i
   ]);
   // Git's own messages are code blocks, never chips inside the sentence.
   expect(Array.from(container.querySelectorAll("pre"), (block) => block.textContent)).toEqual(["error: refused", "error: one\nhint: two"]);
-  expect(Array.from(container.querySelectorAll("[data-inline-chip]"), (chip) => chip.textContent)).toEqual(["fix/a,b", "long", "~/wt, two", "a", "uncommitted changes"]);
+  // The names shown in the list are plain monospace text; only the uncommitted tag is a badge.
+  expect(container.querySelector("[data-inline-chip]")).toBeNull();
+  expect(Array.from(container.querySelectorAll("li .font-mono"), (name) => name.textContent)).toEqual(["fix/a,b", "long", "~/wt, two", "a"]);
+  expect(Array.from(container.querySelectorAll("[data-variant]"), (badge) => badge.textContent)).toEqual(["uncommitted changes"]);
+  expect(container.querySelector("[data-variant]")?.getAttribute("data-color")).toBe("warning");
+  // The badge ends the row's line in a wrapper of its own, after the name, with the comma only a screen reader hears.
+  const badge = container.querySelector("[data-variant]")!;
+  expect(badge.parentElement?.className).toContain("flex-wrap");
+  expect(badge.previousElementSibling?.className).toBe("sr-only");
+  expect(badge.parentElement?.firstElementChild?.textContent).toContain("~/wt, two");
 });
 
 it("keeps a sharing repair's own reason behind Details when it names no entry, and lists the entries there once it does", () => {
@@ -173,11 +182,14 @@ it("keeps a sharing repair's own reason behind Details when it names no entry, a
   const reason = "account `Work`'s links to the default configuration could not be checked: permission denied";
   const empty = new DaemonRequestError(reason, "account_sharing_repair_failed", { account: "a1", name: "Work", items: "[]", cause: "permission_denied" });
   const unnamed = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={empty} /></DaemonProvider>);
-  expect(unnamed.querySelector("[hidden] [data-inline-chip]")?.textContent).toBe(reason);
+  // Alone on its line in Details it is plain monospace text, not a chip.
+  expect(unnamed.querySelector("[hidden] code")?.textContent).toBe(reason);
+  expect(unnamed.querySelector("[hidden] [data-inline-chip]")).toBeNull();
   expect(unnamed.textContent).toContain("could not be brought up to date");
   expect(unnamed.textContent).toContain("You do not have permission to change the account’s directory.");
   act(() => unnamed.querySelector("button")!.click());
-  expect(unnamed.querySelector("[data-inline-chip] code")?.textContent).toBe(reason);
+  expect(unnamed.querySelector("code")?.textContent).toBe(reason);
+  expect(unnamed.querySelector("[data-inline-chip] code")).toBeNull();
   expect(unnamed.querySelector("pre")).toBeNull();
   const items = JSON.stringify([{ item: "skills/", left: "unchanged", detail: "permission denied", cause: "busy" }]);
   const listed = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={new DaemonRequestError(reason, "account_sharing_repair_failed", { account: "a1", name: "Work", items })} /></DaemonProvider>);
@@ -316,20 +328,27 @@ it("retains a named quota window as a rich name and a plain isolated value", () 
   expect(daemonMessage("en", "account_quota_exhausted", params, "fallback", createStateStore({}).getState())).toContain(`\u2068${params.window}\u2069`);
 });
 
-it.each(["path_not_absolute", "project_directory_shared", "agent_not_available", "console_has_running_sessions", "trust_answer_failed", "conversation_in_session", "session_locked", "queued_messages_lost"])("keeps %s recovery external and preserves the complete plain wording", (code) => {
+it.each(["path_not_absolute", "project_directory_shared", "agent_not_available", "console_has_running_sessions", "trust_answer_failed", "conversation_in_session", "session_locked", "queued_messages_lost"])("keeps %s recovery visible as the remedy, with only its own further explanation for Details, and preserves the complete plain wording", (code) => {
   const params = { path: "/tmp/مراجعة", project: "Docs", agent: "Codex", reason_code: "screen_gone", session: "missing", reason: "fallback reason" };
   const error = new DaemonRequestError("fallback", code, params);
-  const container = mount(<><section data-summary><DaemonErrorMessage error={error} part="summary" /></section><section data-details><DaemonErrorMessage error={error} part="details" /></section></>);
+  const container = mount(<><section data-summary><DaemonErrorMessage error={error} part="summary" /></section><section data-remedy><DaemonErrorMessage error={error} part="remedy" /></section><section data-details><DaemonErrorMessage error={error} part="details" /></section></>);
   const summary = container.querySelector("[data-summary]")!;
+  const remedy = container.querySelector("[data-remedy]")!;
   const details = container.querySelector("[data-details]")!;
   const normalize = (text: string | null) => text?.replace(/[\u2066-\u2069]/g, "").replace(/\s/g, "");
   const plain = daemonMessage("en", code, params, error.message, createStateStore({}).getState());
   expect(summary.querySelector("div,p,ul,pre")).toBeNull();
-  expect(details.textContent).not.toBe("");
-  expect(details.textContent).not.toContain(summary.textContent);
-  expect(normalize((summary.textContent ?? "") + details.textContent)).toBe(normalize(plain));
+  expect(remedy.textContent).not.toBe("");
+  expect(remedy.textContent).not.toContain(summary.textContent);
+  // The one with a `.details` line has it, and only it, there; the plain sentence runs summary, further explanation, remedy.
+  const further = code === "queued_messages_lost";
+  expect(details.textContent === "").toBe(!further);
+  expect(hasErrorDetails(error)).toBe(further);
+  expect(hasErrorRemedy(error)).toBe(true);
+  const whole = () => normalize((summary.textContent ?? "") + details.textContent + remedy.textContent);
+  expect(whole()).toBe(normalize(plain));
   act(() => setLanguage("zh-Hans"));
-  expect(normalize((summary.textContent ?? "") + details.textContent)).toBe(normalize(daemonMessage("zh-Hans", code, params, error.message, createStateStore({}).getState())));
+  expect(whole()).toBe(normalize(daemonMessage("zh-Hans", code, params, error.message, createStateStore({}).getState())));
 });
 
 it("retains local quota-refusal action metadata in rich copy and a plain fallback", () => {
@@ -360,15 +379,18 @@ it("retains the login producer's detail-only shell failure without inventing a c
   expect(daemonMessage("en", error.code, error.params, fallback, createStateStore({}).getState())).toBe(fallback);
 });
 
-it.each(["project", "console"])("preserves the held %s session's task and name as separate raw directed chips", (owner) => {
+it.each(["project", "console"])("preserves the held %s session's task and name as one raw directed chip", (owner) => {
   const session = { id: "held", title: "مراجعة name", terminal_title: "  Task / 任务  " } as import("../protocol").Session;
   const store = createStateStore({ sessions: new Map([[session.id, session]]), projects: new Map([["owner", { id: "owner", name: "Owner" } as import("../protocol").Project]]), consoles: new Map([["owner", { id: "owner", name: "Owner" } as import("../protocol").Console]]) });
   const params = { session: session.id, [owner]: "owner" };
   const error = new DaemonRequestError("fallback", `conversation_held_in_${owner}`, params);
   const container = mount(<DaemonProvider value={{ store } as Daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
   const chips = [...container.querySelectorAll("[data-inline-chip]")];
-  expect(chips.map((chip) => chip.textContent)).toEqual(["Task / 任务", session.title, "Owner"]);
+  expect(chips.map((chip) => chip.textContent)).toEqual(["Task / 任务｜" + session.title, "Owner"]);
   expect(chips.every((chip) => chip.getAttribute("dir") === "auto" && !/[\u2066-\u2069]/.test(chip.textContent ?? ""))).toBe(true);
+  // One chip around the joined title, each name isolated at element level so mixed directions
+  // cannot reorder across the separator.
+  expect([...chips[0].querySelectorAll("bdi")].map((name) => name.textContent)).toEqual(["Task / 任务", session.title]);
   for (const language of ["en", "zh-Hans"] as const) {
     const plain = daemonMessage(language, error.code, params, error.message, store.getState());
     expect(plain).toContain("\u2068Task / 任务\u2069｜\u2068مراجعة name\u2069");
@@ -416,7 +438,12 @@ it("routes the operating-system reference in directory recovery through the shar
   const system = [...container.querySelectorAll("[data-inline-chip]")].find((chip) => chip.textContent === "macOS")!;
   expect(system.getAttribute("dir")).toBe("auto");
   expect(system.querySelector("code")).toBeNull();
-  expect(system.closest("p")?.textContent).toContain("asks for permission per volume");
+  expect(system.closest("span.block")?.textContent).toContain("asks for permission per volume");
+  // The raw text is Details' diagnostic block, and the visible sentence and remedy hold none of it.
+  const summary = mount(<DaemonErrorMessage error={new DaemonRequestError("fallback", "directory_unreadable", params)} part="summary" />);
+  const remedy = mount(<DaemonErrorMessage error={new DaemonRequestError("fallback", "directory_unreadable", params)} part="remedy" />);
+  expect(summary.textContent + remedy.textContent).not.toContain("permission denied");
+  expect(mount(<DaemonErrorMessage error={new DaemonRequestError("fallback", "directory_unreadable", params)} part="details" />).textContent).toContain("permission denied");
   const plain = daemonMessage("en", "directory_unreadable", params, "fallback", createStateStore({}).getState());
   expect(plain).toContain("\u2068macOS\u2069 asks for permission per volume");
   expect(plain).not.toMatch(/\{\w+\}/);
@@ -433,7 +460,7 @@ it("retains a named key inside a structured trust reason as a technical chip", (
   expect(plain).toContain("so \u2068Enter\u2069 was not sent");
 });
 
-it.each(["account_sharing_failed", "account_sharing_repair_failed"])("says %s short by cause and folds the raw diagnostics behind Details", (code) => {
+it.each(["account_sharing_failed", "account_sharing_repair_failed"])("says %s short by cause at the top of the details part, ahead of the raw diagnostics", (code) => {
   const detail = "permission denied\n    /tmp/مراجعة/file\n";
   const session = { id: "s1", title: "مراجعة / Review, 名称" } as import("../protocol").Session;
   const store = createStateStore({ sessions: new Map([[session.id, session]]) });
@@ -447,6 +474,8 @@ it.each(["account_sharing_failed", "account_sharing_repair_failed"])("says %s sh
     <ErrorAlert><DaemonErrorMessage error={error} part="summary" /></ErrorAlert>
     <section><DaemonErrorMessage error={error} part="details" /></section>
   </DaemonProvider>);
+  // The causes and their fixes are all further explanation: no main remedy of its own.
+  expect(hasErrorRemedy(error)).toBe(false);
   const summary = container.querySelector('[data-slot="alert-description"]')!;
   const details = container.querySelector("section")!;
   for (const language of ["en", "zh-Hans"] as const) {
@@ -454,20 +483,16 @@ it.each(["account_sharing_failed", "account_sharing_repair_failed"])("says %s sh
     expect(summary.textContent).toContain("Work");
     expect(summary.querySelector("div,p,ul,li,pre")).toBeNull();
     expect(details.textContent).not.toContain("Work");
-    const causes = [...details.querySelectorAll("span.flex > span")];
+    const causes = [...details.querySelectorAll("span.flex.flex-col > span")];
     expect(causes).toHaveLength(2);
     expect(causes[0]!.textContent).toBe(language === "en" ? "You do not have permission to change skills/ and 1 more. Check that the files and folders involved can be changed and are not locked." : "没有权限修改 skills/ 和另外 1 项。请检查相关文件和文件夹的权限，并确认它们未被锁定。");
     expect(causes[1]!.textContent).toContain(session.title);
-    expect(details.querySelector("pre")?.closest("[hidden]")).not.toBeNull();
   }
-  const button = details.querySelector("button")!;
-  const folded = details.querySelector(`[id="${button.getAttribute("aria-controls")}"]`)!;
-  expect(button.getAttribute("aria-expanded")).toBe("false");
-  expect(folded.hasAttribute("hidden")).toBe(true);
-  act(() => button.click());
-  expect(button.getAttribute("aria-expanded")).toBe("true");
-  expect(folded.hasAttribute("hidden")).toBe(false);
+  // The details part is what an alert's Details popover shows, so it has no disclosure of its own to open.
+  expect(details.querySelector("button")).toBeNull();
+  expect(details.querySelector("[hidden]")).toBeNull();
   expect(details.querySelectorAll("li")).toHaveLength(3);
+  expect(details.firstElementChild!.querySelectorAll("li")).toHaveLength(0);
   // A one-line message is small inline code after its entry's sentence; one of several lines keeps them in a block.
   expect([...details.querySelectorAll("pre")].map((node) => node.textContent)).toEqual([detail]);
   expect([...details.querySelectorAll("li")].map((item) => item.lastElementChild!.textContent)).toEqual([expect.stringContaining("permission denied"), "second", "busy"]);
@@ -481,9 +506,10 @@ it("names the cause of a change that could not start when no entry is listed", (
   const error = new DaemonRequestError("raw", "account_sharing_failed", { name: "Work", account: "a1", items: "[]", detail: "default dir moved", cause: "conflict" });
   const container = mount(<DaemonProvider value={{ store: createStateStore({}) } as Daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
   expect(container.textContent).toContain("The account’s directory conflicts with what sharing needs.");
-  expect(container.querySelector("[hidden] [data-inline-chip]")?.textContent).toBe("default dir moved");
-  act(() => container.querySelector("button")!.click());
+  expect(container.querySelector("[hidden] code")?.textContent).toBe("default dir moved");
   expect(container.querySelector("[hidden] [data-inline-chip]")).toBeNull();
+  act(() => container.querySelector("button")!.click());
+  expect(container.querySelector("[hidden] code")).toBeNull();
   expect(container.querySelector("code")?.textContent).toBe("default dir moved");
 });
 
@@ -494,11 +520,11 @@ it("joins a whole failure's reason and its guidance in the catalog, and points a
   const busy = mountWith("busy", "x");
   const other = mountWith("other", "x");
   act(() => setLanguage("zh-Hans"));
-  expect(busy.querySelector("p")!.textContent).toBe("此账户目录中有内容正在被使用。请关闭正在使用相关文件的其他程序，例如终端中的智能体、编辑器或同步工具。");
-  expect(other.querySelector("p")!.textContent).toBe("请查看详情。");
+  expect(busy.querySelector("span.block")!.textContent).toBe("此账户目录中有内容正在被使用。请关闭正在使用相关文件的其他程序，例如终端中的智能体、编辑器或同步工具。");
+  expect(other.querySelector("span.block")!.textContent).toBe("请查看详情。");
   act(() => setLanguage("en"));
-  expect(other.querySelector("p")!.textContent).toBe("See Details.");
-  expect(mountWith("other", undefined).querySelector("p")).toBeNull();
+  expect(other.querySelector("span.block")!.textContent).toBe("See Details.");
+  expect(mountWith("other", undefined).querySelector("span.block")).toBeNull();
 });
 
 it.each([
@@ -531,4 +557,51 @@ it("shows the still-running variant of the resume notice without 'left interrupt
   expect(container.textContent).toContain("may still be running; it was not restarted");
   expect(container.textContent).not.toContain("interrupted");
   expect(container.querySelector("pre")?.textContent).toBe("timed out");
+});
+
+it.each([
+  ["a message with no coded params", "unexpected_error", {}],
+  ["a coded message with nothing more to say", "unknown_account", { account: "missing-account" }],
+  ["a diagnostic block", "git_failed", { detail: "fatal: not a git repository" }],
+  ["a remedy", "session_locked", {}],
+  ["a shell timeout", "shell_environment_timeout", params],
+  ["a trust reason with a diagnostic", "trust_answer_failed", { agent: "Codex", reason_code: "terminal_write_failed", detail: "EPIPE" }],
+  ["a nested cause with a remedy", "launch_failed", { agent: "Codex", reason: "x", reason_code: "agent_not_available" }],
+  ["a sharing failure with a reason for the whole change", "account_sharing_failed", { name: "Work", account: "a1", items: "[]", detail: "default dir moved", cause: "conflict" }],
+  ["a sharing failure with no reason to give", "account_sharing_failed", { name: "Work", account: "a1", items: "[]", cause: "other" }],
+])("tells without rendering whether the details part of %s has anything", (_name, code, failureParams) => {
+  const error = new DaemonRequestError("raw", code, failureParams as never);
+  const container = mount(<DaemonProvider value={{ store: createStateStore({}) } as Daemon}><DaemonErrorMessage error={error} part="details" /></DaemonProvider>);
+  expect(hasErrorDetails(error)).toBe(container.innerHTML !== "");
+});
+
+it.each([
+  ["a message with no coded params", "unexpected_error", {}],
+  ["a coded message with nothing more to say", "unknown_account", { account: "missing-account" }],
+  ["a diagnostic block", "git_failed", { detail: "fatal: not a git repository" }],
+  ["a recovery", "session_locked", {}],
+  ["a recovery and a further explanation", "queued_messages_lost", {}],
+  ["a shell timeout", "shell_environment_timeout", params],
+  ["a trust reason with a diagnostic", "trust_answer_failed", { agent: "Codex", reason_code: "terminal_write_failed", detail: "EPIPE" }],
+  ["a nested cause with a remedy", "launch_failed", { agent: "Codex", reason: "x", reason_code: "agent_not_available" }],
+  ["a nested cause with none", "launch_failed", { agent: "Codex", reason: "x", reason_code: "unknown_account", account: "a" }],
+  ["a sharing failure", "account_sharing_failed", { name: "Work", account: "a1", items: "[]", detail: "default dir moved", cause: "conflict" }],
+])("tells without rendering whether the remedy part of %s has anything", (_name, code, failureParams) => {
+  const error = new DaemonRequestError("raw", code, failureParams as never);
+  const container = mount(<DaemonProvider value={{ store: createStateStore({}) } as Daemon}><DaemonErrorMessage error={error} part="remedy" /></DaemonProvider>);
+  expect(hasErrorRemedy(error)).toBe(container.innerHTML !== "");
+});
+
+it("splits a shell timeout into the sentence, the one remedy, and the consequence then the command in Details", () => {
+  const error = failure();
+  const container = mount(<><section data-summary><DaemonErrorMessage error={error} part="summary" /></section><section data-remedy><DaemonErrorMessage error={error} part="remedy" /></section><section data-details><DaemonErrorMessage error={error} part="details" /></section></>);
+  const remedy = container.querySelector("[data-remedy]")!;
+  const details = container.querySelector("[data-details]")!;
+  expect(hasErrorRemedy(error)).toBe(true);
+  expect(remedy.textContent).not.toContain("/bin/zsh");
+  expect(remedy.querySelector("p,div")).toBeNull();
+  const [consequence, command] = [...details.querySelectorAll("p")];
+  expect(consequence!.textContent).not.toContain("/bin/zsh");
+  expect(command!.textContent).toContain("/bin/zsh -l -i -c 'env -0'");
+  expect(details.textContent).not.toContain(remedy.textContent!);
 });

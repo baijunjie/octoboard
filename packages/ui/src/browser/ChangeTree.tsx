@@ -2,13 +2,12 @@ import React, { useMemo, useRef } from "react";
 import { Collection, Tree, TreeHeader, TreeItem, TreeItemContent, TreeSection, Virtualizer, type Key } from "react-aria-components";
 
 import { FadeOverflow } from "../components/FadeOverflow";
-import { InlineChip } from "../components/InlineChip";
 import { useStickyScrollFade } from "../components/scrollFade";
 import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { ChangeLayout } from "./changeLayout";
 import { ChangeRowBody, changeRowText } from "./changeRow";
-import { changeGroups, sectionKey, type ChangeItem, type ChangeNode, type CommitRef } from "./changes";
+import { changeGroups, sectionKey, type ChangeItem, type ChangeNode, type ChangeSection, type CommitRef } from "./changes";
 import { ChangeSectionHeading, ChangeSectionHeadingStops, ChangeListLayout, CHANGE_SCROLL_CLASS, HEADING_CLASS, HEADING_HEIGHT } from "./changeSectionHeading";
 import { shortCommit } from "./shortCommit";
 import { BrowserListMotion, useBrowserListMotion } from "./useBrowserListMotion";
@@ -48,6 +47,7 @@ export function ChangeTree({
   layout,
   collapsed,
   onCollapsedChange,
+  failures,
 }: {
   items: ChangeItem[];
   /** The key of the change the viewer showed last. */
@@ -59,9 +59,12 @@ export function ChangeTree({
   /** Row keys of the sections, the commits and the directories folded away. */
   collapsed: ReadonlySet<string>;
   onCollapsedChange: (collapsed: ReadonlySet<string>) => void;
+  /** The mark of a section's failure to be listed, which that section's heading carries; a section
+   * with none of its rows keeps its heading for it. */
+  failures?: ReadonlyMap<ChangeSection, React.ReactNode>;
 }): React.ReactElement {
   const language = useCurrentLanguage();
-  const groups = useMemo(() => changeGroups(items, layout).map((group, index, all) => ({ id: group.section, previousSection: all[index - 1]?.section, ...group })), [items, layout]);
+  const groups = useMemo(() => changeGroups(items, layout, failures?.keys()).map((group, index, all) => ({ id: group.section, previousSection: all[index - 1]?.section, ...group })), [items, layout, failures]);
   // Only the commits and directories of the sections on screen: a folded section renders none of
   // its rows, so whether a row inside one is folded is not this list's to decide. react-aria hands
   // an expanded key it knows nothing of back unchanged, so those keys would survive either way;
@@ -154,7 +157,7 @@ export function ChangeTree({
             onAction={onAction}
             // `collapsed` among the dependencies, or the collection keeps the rows of a section that
             // has just been folded: nothing else about it changed.
-            dependencies={[language, selected, collapsed, layout]}
+            dependencies={[language, selected, collapsed, layout, failures]}
           >
             {(group) => (
               <TreeSection className="h-full" id={group.section}>
@@ -162,6 +165,7 @@ export function ChangeTree({
                   <ChangeSectionHeading
                     section={group.section}
                     count={group.items.length}
+                    failure={failures?.get(group.section)}
                     collapsed={collapsed}
                     onCollapsedChange={onCollapsedChange}
                     topDivider={group.previousSection !== undefined && !collapsed.has(sectionKey(group.previousSection))}
@@ -192,7 +196,7 @@ const commitLabel = (commit: CommitRef, count: number, language: string): string
  * A commit's row inside the committed section, subordinate to the section's band (no fill, and the
  * band's own smaller type) yet the parent of the folders and changes beneath it, which it must not
  * read as lighter than: the rows' text size, a chevron like a directory's, and the commit's short
- * id in a muted monospace chip, then its subject in the normal foreground at medium weight, which
+ * id in muted monospace text, then its subject in the normal foreground at medium weight, which
  * fades out where it is too long with its whole text as its tooltip, and the muted count of its
  * changes, which stays in view after it. It sits in the flow
  * rather than pinned under the band, as a directory's row does; its row is named by `commitLabel`,
@@ -202,7 +206,7 @@ function CommitRow({ commit, count, isExpanded }: { commit: CommitRef; count: nu
   const language = useCurrentLanguage();
   return (
     <RowContent chevron={<ExpandChevron isExpanded={isExpanded} />}>
-      <InlineChip monospace size="xs" className="shrink-0">{shortCommit(commit.commit)}</InlineChip>
+      <span dir="ltr" className="shrink-0 font-mono text-xs text-app-muted">{shortCommit(commit.commit)}</span>
       {commit.subject !== "" ? (
         <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1 font-medium" titleWhenClipped={commit.subject}>
           {commit.subject}

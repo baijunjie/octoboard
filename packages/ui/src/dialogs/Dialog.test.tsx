@@ -5,7 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { errorAlerts } from "../errorAlerts";
-import { Dialog, DialogError } from "./Dialog";
+import { Dialog, useDialogAction } from "./Dialog";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -509,12 +509,19 @@ it("eases the dialog's height when its content changes it, but not for its first
   expect(animate).toHaveBeenCalledWith([{ height: "200px" }, { height: "260px" }], expect.objectContaining({ duration: 200 }));
 });
 
-it("reports a dialog failure to the acknowledgement queue without an inline alert", () => {
+it("reports a failed dialog action to the acknowledgement queue, with no inline alert, and settles busy", async () => {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
+  let action!: ReturnType<typeof useDialogAction>;
+  function Subject() {
+    action = useDialogAction();
+    return null;
+  }
   try {
-    act(() => root.render(<DialogError message="Something failed" />));
+    act(() => root.render(<Subject />));
+    await act(() => action.run(() => Promise.reject(new Error("Something failed"))));
     expect(errorAlerts.getSnapshot().some((error) => error.message === "Something failed")).toBe(true);
+    expect(action.busy).toBe(false);
     expect(container.querySelector('[role="alert"]')).toBeNull();
   } finally {
     act(() => root.unmount());

@@ -4,10 +4,10 @@ import { DaemonErrorMessage, ShellTimeoutCommand } from "./components/DaemonErro
 import { DiagnosticBlock } from "./components/DiagnosticBlock";
 import { RecoveryGuidance } from "./components/ErrorGuidance";
 import { InlineChip } from "./components/InlineChip";
-import { DETAIL_BLOCK_CODES, messageCode, RECOVERY_CODES } from "./daemonMessage";
+import { DETAIL_BLOCK_CODES, RECOVERY_CODES } from "./daemonMessage";
 import { errorAlerts } from "./errorAlerts";
 import { DaemonRequestError } from "./daemon-client";
-import { hasCodeParams, hasShellTimeoutDetails } from "./errorPresentation";
+import { hasCodeParams, hasShellTimeoutDetails, isUncataloguedFailure } from "./errorPresentation";
 import { additionalRecovery, classifyError, type ErrorRecovery } from "./errorRecovery";
 import { errorText, unexpectedFailureDiagnostic } from "./errorText";
 import { isMessageKey } from "./i18n/catalog";
@@ -22,23 +22,18 @@ export interface SwitchFailure {
   error: DaemonRequestError;
 }
 
-/** Whether the catalog words this failure, so that its row can show the sentence rather than the raw message. */
-function hasSentence(error: SwitchFailure["error"]): boolean {
-  return isMessageKey(`daemon.${messageCode(error.code, error.params)}`);
-}
-
-/** Whether the failure is unexpected and has no sentence of the catalog's to show for it: its row says only that, and
- * its message goes to the details. */
+/** Whether the failure is unexpected and the application has no sentence of its own for it (see
+ * `isUncataloguedFailure`): its row says only that, and its message goes to the details. */
 function isUnexpectedWithoutSentence(error: SwitchFailure["error"]): boolean {
-  return !hasSentence(error) && classifyError(error).kind === "unexpected";
+  return isUncataloguedFailure(error) && classifyError(error).kind === "unexpected";
 }
 
 /** What "Error details" holds for a failure, if anything: the diagnostic text the daemon keeps apart from the sentence,
- * a shell-environment failure's command, or what an unexpected failure with no sentence of its own said. A failure
- * whose message is the sentence already shown has none. */
+ * a shell-environment failure's command, or the raw message of a failure the application has no sentence of its own
+ * for, which its row never shows. A failure whose message is the sentence already shown has none. */
 function rawDetails(error: SwitchFailure["error"]): ((labelledBy: string) => React.ReactNode) | undefined {
   if (hasShellTimeoutDetails(error)) return () => <ShellTimeoutCommand params={error.params} />;
-  const text = error.params.detail && DETAIL_BLOCK_CODES.has(error.code) ? error.params.detail : isUnexpectedWithoutSentence(error) ? unexpectedFailureDiagnostic(error) : undefined;
+  const text = error.params.detail && DETAIL_BLOCK_CODES.has(error.code) ? error.params.detail : isUncataloguedFailure(error) ? unexpectedFailureDiagnostic(error) : undefined;
   return text ? (labelledBy) => <DiagnosticBlock labelledBy={labelledBy}>{text}</DiagnosticBlock> : undefined;
 }
 
@@ -98,7 +93,7 @@ export function reportSwitchFailures(failures: SwitchFailure[], accountName: str
   errorAlerts.report({
     // Plain text, which tells two batches to different accounts apart.
     message: [t("dialog.switchAccount.failed", { count, account: accountName }), ...failures.map(({ session, error }) => `${session.id}: ${errorText(error)}`)].join("\n"),
-    title: <Message id="dialog.switchAccount.failed" params={{ count, account: <InlineChip dir="auto" wrap size="inherit">{accountName}</InlineChip> }} />,
+    title: <Message id="dialog.switchAccount.failed" params={{ count, account: <InlineChip dir="auto" wrap>{accountName}</InlineChip> }} />,
     failures: failures.map(({ error }) => ({ error })),
     content: (
       <div className="flex min-w-0 flex-col gap-3 whitespace-normal">
@@ -111,7 +106,7 @@ export function reportSwitchFailures(failures: SwitchFailure[], accountName: str
             </li>
           ))}
         </ul>
-        {[...specific].map(([code, error]) => <DaemonErrorMessage key={code} error={error} part="recovery" />)}
+        {[...specific].map(([code, error]) => <DaemonErrorMessage key={code} error={error} part="remedy" />)}
         {remedies.map((recovery) => <p key={recovery}><RecoveryGuidance recovery={recovery} /></p>)}
       </div>
     ),

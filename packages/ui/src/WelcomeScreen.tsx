@@ -2,7 +2,7 @@ import { Card } from "@heroui/react";
 import { Check, CircleDashed, FileUp, LayoutDashboard, Minus, Plus } from "lucide-react";
 import React, { useId, useImperativeHandle, useRef } from "react";
 
-import { InlineChip } from "./components/InlineChip";
+import { StatusBadge } from "./components/StatusBadge";
 import { AGENT_OPTIONS } from "./agents";
 import { AgentIcon } from "./components/AgentIcon";
 import { EmptyPanel } from "./components/EmptyPanel";
@@ -62,7 +62,7 @@ export function WelcomeScreen({ onOpenDialog, ref }: WelcomeScreenProps): React.
   );
 
   return (
-    <div className={`flex min-h-0 min-w-0 flex-1 ${scrollRegion.focused ? "ring-2 ring-inset ring-app-focus" : ""}`}>
+    <div className={`flex min-h-0 min-w-0 flex-1 ${scrollRegion.focused ? "ring-2 ring-inset ring-focus" : ""}`}>
       <main
         {...scrollProps}
         role="main"
@@ -97,9 +97,10 @@ export function WelcomeScreen({ onOpenDialog, ref }: WelcomeScreenProps): React.
                           <AgentIcon agent={value} className="size-5 shrink-0" />
                           <bdi className="break-words">{label}</bdi>
                         </span>
-                        <InlineChip size="sm" variant="soft" color={available ? "success" : "default"} startContent={<StatusIcon aria-hidden="true" className="size-3.5 shrink-0" />}>
+                        <StatusBadge variant="soft" color={available ? "success" : "default"} className="inline-flex items-center gap-1">
+                          <StatusIcon aria-hidden="true" className="size-3.5 shrink-0" />
                           {t(available ? "welcome.toolInstalled" : unavailable ? "welcome.toolNotFound" : "welcome.toolChecking")}
-                        </InlineChip>
+                        </StatusBadge>
                       </div>
                     </li>
                   );

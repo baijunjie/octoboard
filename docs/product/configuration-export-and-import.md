@@ -62,12 +62,15 @@ request; a project left out is sent none. A directory the user typed that is not
 request and is marked on its row. The dialog cannot be dismissed while the request runs, which with clones can be long.
 The **result** replaces the review. It opens with a summary of the totals (only what happened, and that nothing failed
 when so) and, when the application settings were applied, a line for each setting applied, saying it is now on or off;
-when they could not be applied, an error callout saying so with the reason. Under it a table has a line for each project, under
-its console, with its result (created, left out, failed, not tried) and a detail: how a created project was placed (at
-its exported path, in the default clone directory, cloned, in the directory chosen), why a failed one failed, or that a
-project was not tried because its console could not be created. A console that could not be
-created, or that came out with no projects, has a line of its own. In a narrow dialog each line becomes a block that
-names every value. Each account that fell back to a default account is listed under its own heading below.
+when they could not be applied, a red alert saying so with the reason. Under it a table has a line for each project,
+under its console, with its result (created, left out, not tried, each in words with a glyph) and a detail: how a
+created project was placed (at its exported path, in the default clone directory, cloned, in the directory chosen), or
+that a project was not tried because its console could not be created. A line that failed has no detail: its result
+is a red circled `!` followed by the word **Failed**, like the other results, and the two together are one control,
+named for that project — or console — having failed, which opens a popover with why, any raw diagnostic included (see
+"Failures marked on a row" in `docs/product/error-alerts.md`). A console that could not be created, or that came out
+with no projects, has a line of its own. In a narrow dialog each line becomes a block that names every value. Each
+account that fell back to a default account is listed under its own heading below. The result is the only place the import's failures are shown: no error alert opens for them.
 
 Exporting and importing are also requests of the daemon, which any program on its host can reach (see "Who can reach
 the daemon" in `docs/product/application-lifecycle.md`).

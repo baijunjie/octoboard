@@ -117,7 +117,7 @@ export function ClaudeApprovalModeSelect({ account, name, mode }: {
       confirmation={(value) => value === "bypass" ? {
         title: account === null
           ? t("settings.accounts.approval.bypassTitleDefault")
-          : <Message id="settings.accounts.approval.bypassTitle" params={{ name: <InlineChip dir="auto" wrap size="inherit">{name}</InlineChip> }} />,
+          : <Message id="settings.accounts.approval.bypassTitle" params={{ name: <InlineChip dir="auto" wrap>{name}</InlineChip> }} />,
         message: <Message id="settings.accounts.approval.bypassMessage" />,
         confirmLabel: t("settings.accounts.approval.claudeBypass"),
       } : null}

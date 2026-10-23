@@ -55,11 +55,11 @@ export function SwitchAccountDialog({
   const counts = { session: targetsIn(sessions, "session").length, console: targetsIn(sessions, "console").length };
   const { confirmLaunch, confirmation } = useConfirmIncompleteLaunch(onClose);
   const usedUp = exhaustedBy && quotaUsedUpCopy(t, accountName, exhaustedBy, now);
-  const agent = <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[session.agent]}</InlineChip>;
+  const agent = <InlineChip dir="auto" wrap>{AGENT_LABEL[session.agent]}</InlineChip>;
   const several = scope === "console" || counts.session > 1;
   return (
     <ConfirmDialog
-      title={<Message id="dialog.switchAccount.title" params={{ title: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, session)}</InlineChip>, account: <InlineChip dir="auto" wrap size="inherit">{accountName}</InlineChip> }} />}
+      title={<Message id="dialog.switchAccount.title" params={{ title: <InlineChip dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineChip>, account: <InlineChip dir="auto" wrap>{accountName}</InlineChip> }} />}
       message={<>
         {usedUp && <ErrorAlert title={usedUp.title} announce>{usedUp.description}</ErrorAlert>}
         <p>{t(several ? "dialog.switchAccount.messageAll" : session.has_conversation ? "dialog.switchAccount.message" : "dialog.switchAccount.messageFresh")}</p>

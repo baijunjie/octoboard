@@ -7,21 +7,20 @@ import { useT } from "../i18n/react";
 import { useOptionalPlatform } from "../platform/react";
 import { reportError } from "../reportError";
 import { ExternalLinkIcon } from "./ExternalLinkIcon";
-import { InlineChip } from "./InlineChip";
 import { useFocusVisibleProps } from "./useFocusVisibleProps";
 
 export { ExternalLinkIcon } from "./ExternalLinkIcon";
 
 type Props = Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "onClick" | "onAuxClick" | "target" | "rel"> & {
   href: string;
-  appearance?: "text" | "chip" | "button";
+  appearance?: "text" | "button";
   onOpen?: (href: string) => void | Promise<void>;
   isPending?: boolean;
 };
 
 /** Native menu and terminal links share the anchor's visible failure and manual destination. */
 export function reportExternalLinkFailure(t: Translate, href: string, cause: unknown): void {
-  reportError(new ActionableError(t("externalLink.unavailable"), "openExternal", { cause }), undefined, undefined, <><p>{t("externalLink.unavailable")}</p><InlineChip monospace wrap size="inherit">{href}</InlineChip></>);
+  reportError(new ActionableError(t("externalLink.unavailable"), "openExternal", { cause }), undefined, undefined, <><p>{t("externalLink.unavailable")}</p><p dir="ltr" className="font-mono [overflow-wrap:anywhere]">{href}</p></>);
 }
 
 /** A browser destination stays a real anchor while native shells open it outside the application. */
@@ -68,7 +67,7 @@ export function ExternalLink({ href, appearance = "text", onOpen, isPending = fa
       aria-disabled={busy || undefined}
       aria-busy={busy || undefined}
       data-external-link=""
-      className={`outline-none data-focus-visible:ring-2 data-focus-visible:ring-app-focus ${appearance === "button" ? buttonVariants({ variant: "secondary" }) : `rounded-sm break-words ${appearance === "chip" ? "inline-block align-baseline no-underline" : "text-accent underline underline-offset-2"}`} ${className}`}
+      className={`outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus ${appearance === "button" ? buttonVariants({ variant: "secondary" }) : "rounded-sm break-words text-(--tint-accent-fg) underline underline-offset-2"} ${className}`}
       onClick={(event) => {
         if (busy || opening.current) { event.preventDefault(); return; }
         if (!intercepted) return;
@@ -82,7 +81,7 @@ export function ExternalLink({ href, appearance = "text", onOpen, isPending = fa
         void activate();
       }}
     >
-      {appearance === "chip" ? <InlineChip size="inherit" color="accent" wrap>{label}</InlineChip> : label}
+      {label}
     </a>
   );
 }

@@ -29,14 +29,14 @@ What it holds, in this order:
   glyph while the remote is being checked, the branch is being pulled or the current branch is being pushed.
   Idle and in-flight states differ in shape, not in motion alone, and nothing animates where the system asks for reduced
   motion.
-- **A warning triangle**, in red, when the last check failed, standing in for the branch or commit glyph; the refresh
+- **A failure mark**, a red circled `!`, when the last check failed, standing in for the branch or commit glyph; the refresh
   glyph takes its place while a check, a pull or a push runs. The message `git` or the operating system itself
   gave is then part of what the badge says — in its tooltip and in its name, shown as it came inside localized wording
-  (see "What follows the language" in `docs/product/language.md`) — and the triangle itself carries nothing of its own.
+  (see "What follows the language" in `docs/product/language.md`) — and the mark itself carries nothing of its own.
   A failed check does not blank the rest of the badge: the branch and the counts are still read from the repository and
-  shown beside the warning.
+  shown beside the failure mark.
 - **The branch name** — or the short commit id, when `HEAD` is detached. A repository with no commit yet says so in its
-  place, and nothing stands there when the branch could not be read at all, the warning carrying the reason instead.
+  place, and nothing stands there when the branch could not be read at all, the failure mark carrying the reason instead.
 - **How far the branch is ahead of its upstream**, after an up arrow, and **how far behind**, after a down arrow, each
   shown only while it is not zero and each number written in the current language. A branch with no upstream shows
   neither. During a push, the ahead count's arrow scrolls continuously upward; during a pull, the behind count's
@@ -45,7 +45,7 @@ What it holds, in this order:
   indication when the relevant count is zero. Reduced motion keeps the arrows still too.
 
 **While a check is in flight the badge keeps what it was showing** — the branch name (or short commit id), the
-counts and a failed check's message — and only its glyph turns into the spinning refresh glyph, the warning triangle
+counts and a failed check's message — and only its glyph turns into the spinning refresh glyph, the failure mark
 included; the whole badge is replaced once the check finishes. The glyph turns only once the check has been running
 for about 0.4 seconds, so a check that finishes sooner goes straight from the old state to the new one without
 showing as in flight; a check asked for with **Pull current branch** shows as in flight at once. A project waiting
@@ -159,8 +159,8 @@ project whose `.git` has gone is not re-read: its badge keeps what it showed unt
 directory is not a repository.
 
 The re-read changes only the branch, its upstream and the counts. It also runs while a check, a pull or a push is in
-flight, and leaves the badge's in-flight indication alone. A warning the last check left stays on the badge, since a
-local read says nothing about the remote. A re-read that fails puts its own message on the badge as the warning, and
+flight, and leaves the badge's in-flight indication alone. A failure the last check left stays on the badge, since a
+local read says nothing about the remote. A re-read that fails puts its own message on the badge as the failure, and
 the branch and the counts stay as they were. A project with no status yet — never checked, or not since the daemon
 restarted — gets its badge from the re-read.
 
@@ -270,7 +270,7 @@ nowhere near the remote; the four at once does, shared with the checks. A projec
 its turn is skipped and left to that check, which reads the switch itself.
 
 The badge shows the pull in flight exactly as during a check, and a fast-forward `git` refuses records its
-message for the badge the same way. A warning the last check left stays on the badge: it stands for that check
+message for the badge the same way. A failure the last check left stays on the badge: it stands for that check
 against the remote, which a local fast-forward says nothing about. An error this pass records for a project of a
 console that is current in no window therefore stays on it until that console is current again and its projects are
 checked, since a status is dropped only when the project or its console is deleted.

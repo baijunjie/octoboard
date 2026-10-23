@@ -11,9 +11,8 @@ import { createStateStore, DaemonProvider, type Daemon, type State } from "../st
 import type { StatusItemMenuDraft } from "./statusItemMenu";
 import { useStatusItemMenu } from "./useStatusItemMenu";
 
-vi.mock("./statusItemIcons", () => ({
-  withIcons: async (draft: StatusItemMenuDraft) => ({ ...draft, icons: {} }),
-}));
+const withIcons = vi.hoisted(() => vi.fn(async (draft: StatusItemMenuDraft, _appearance: "light" | "dark") => ({ ...draft, icons: {} })));
+vi.mock("./statusItemIcons", () => ({ withIcons }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -216,4 +215,31 @@ it("pushes the menu again at each whole minute of a reading's age, so the age in
   await act(async () => void vi.advanceTimersByTime(60_000));
   expect(setMenu).toHaveBeenCalledTimes(3);
   expect(JSON.stringify(setMenu.mock.lastCall![0])).toContain("updated 2 minutes ago");
+});
+
+it("draws the pictures in the system's appearance, not the page's theme, and pushes the menu again when it changes", async () => {
+  let dark = false;
+  const listeners = new Set<() => void>();
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    get matches() { return query.includes("dark") && dark; },
+    addEventListener: (_type: string, listener: () => void) => void listeners.add(listener),
+    removeEventListener: (_type: string, listener: () => void) => void listeners.delete(listener),
+  }));
+  onTestFinished(() => void vi.unstubAllGlobals());
+  document.documentElement.dataset.theme = "light";
+  onTestFinished(() => void delete document.documentElement.dataset.theme);
+  withIcons.mockClear();
+  const setMenu = vi.fn<StatusItemCapability["setMenu"]>(() => Promise.resolve());
+  const statusItem: StatusItemCapability = { setMenu, onSessionChosen: () => () => {}, onOpened: () => () => {} };
+  mount(statusItem, vi.fn());
+  await act(async () => {});
+  expect(withIcons.mock.lastCall![1]).toBe("light");
+  expect(setMenu).toHaveBeenCalledTimes(1);
+  dark = true;
+  await act(async () => listeners.forEach((listener) => listener()));
+  // Nothing in the menu's own content changed, but its pictures are drawn in other colours.
+  expect(withIcons.mock.lastCall![1]).toBe("dark");
+  expect(setMenu).toHaveBeenCalledTimes(2);
+  await act(async () => listeners.forEach((listener) => listener()));
+  expect(setMenu).toHaveBeenCalledTimes(2);
 });

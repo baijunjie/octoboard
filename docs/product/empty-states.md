@@ -3,8 +3,9 @@
 Wherever a view, a list or a panel has nothing to show — no rows to list, no session selected, nothing to compare,
 nothing left to draw — it puts an **empty state** in the content's place rather than leaving the area blank. Every one
 of them takes one of two forms, a full panel or a compact row, so the same kind of nothing reads the same wherever it
-turns up. A region that is still loading, or whose content failed, says so in a shape of its own instead; each of those
-is described where it appears.
+turns up. A region that is still loading says so in a shape of its own instead, described where it appears. A whole
+subject that could not be loaded takes the full panel's shape too, as an empty-state failure (see "Failures shown on
+the screen" in `docs/product/error-alerts.md`).
 
 This is only the shape the empty states share. Which state a view shows, and in what words, is described where that
 view is.

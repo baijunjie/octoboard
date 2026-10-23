@@ -1,23 +1,18 @@
-import { Alert, Label, ProgressBar } from "@heroui/react";
+import { Label, ProgressBar } from "@heroui/react";
 import React, { useEffect, useId, useRef, useState } from "react";
 
-import { SharingCauseSummary, SharingDetails, SharingFailureReason } from "../components/DaemonErrorMessage";
+import { SharingCauseLine, SharingCauseSummary, SharingDetails, SharingFailureReason } from "../components/DaemonErrorMessage";
+import { ErrorAlert } from "../components/ErrorAlert";
 import { HelpTip } from "../components/HelpTip";
 import { InlineChip } from "../components/InlineChip";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
-import { TintedAlert } from "../components/TintedAlert";
-import { hasSharingReason, parseSharingItems } from "../daemonMessage";
+import { parseSharingItems, sharingCauseGroups, sharingFixKey, sharingReasonKey } from "../daemonMessage";
 import { errorPresentation } from "../errorPresentation";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { Account, AccountSharing } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { SettingSwitch } from "./SettingRow";
-
-/** An `unbroken` chip is an inline-block, whose box is a whole line tall and so touches the chip on the next line; at
- * 1.2 it is as tall as the inline chip beside it, which keeps the gap between lines (important: `inline-chip--inherit`
- * sets `line-height: inherit` outside the layers). */
-const TIGHT_CHIP = "leading-[1.2]!";
 
 /** An account's Share default configuration switch (see "The sharing choice" in
  * `docs/product/sharing-the-default-configuration.md`), shown for every account but the agent's default one. A
@@ -28,9 +23,11 @@ const TIGHT_CHIP = "leading-[1.2]!";
  *   (`in_use`), saying so;
  * - unavailable while the change runs (`progress`), under a progress bar that every window shows from the
  *   daemon's `account_sharing` event;
- * - after a failure, or a change the daemon restarted in the middle of (`share_default_config_incomplete`), one warning
- *   saying what did not finish, why when it is known and what to do about each cause, and, inside it after that, the
- *   way to try again and the raw diagnostics behind Details.
+ * - after a failure, or a change the daemon restarted in the middle of (`share_default_config_incomplete`), one compact
+ *   warning saying what did not finish and, for a failure, two sentences: with a single cause, that cause's own line
+ *   and its fix; with several, that some files or folders could not be changed and the way to try again (turning the
+ *   switch). Behind its Details button are the line of each cause with its fix (when there are several), the way to try
+ *   again (when the fix took its place), the note on idle sessions and the raw diagnostics.
  *   The switch then shows the position it had before the change, so turning it is asking for the recorded choice once
  *   more, which the daemon treats as the retry (but for a default directory that moved, which only turning sharing
  *   off and on again mends; the switch then shows the recorded choice). The warning describes the switch in place of
@@ -100,9 +97,8 @@ export function AccountSharingSwitch({ account }: { account: Account }): React.R
     progress && `${id}-value`,
     progress && progress.phase === "changing" && progress.item !== undefined && `${id}-current`,
     unfinished && `${id}-title`,
-    unfinished && failure && hasReason(failure) && `${id}-reason`,
-    unfinished && `${id}-guidance`,
-    unfinished && idle > 0 && `${id}-idle`,
+    unfinished && failure && `${id}-reason`,
+    unfinished && `${id}-remedy`,
   ].filter(Boolean).join(" ") || undefined;
   return (
     <div ref={root} data-sharing-account={account.id} className="col-span-full">
@@ -114,13 +110,13 @@ export function AccountSharingSwitch({ account }: { account: Account }): React.R
             <p>
               {account.agent === "claude"
                 ? <Message id="settings.accounts.sharing.helpNeverClaude" params={{
-                  claudeJson: <InlineChip dir="ltr" monospace wrap unbroken size="inherit" className={TIGHT_CHIP}>.claude.json</InlineChip>,
-                  plans: <InlineChip dir="ltr" monospace wrap unbroken size="inherit" className={TIGHT_CHIP}>plans/</InlineChip>,
+                  claudeJson: <InlineChip dir="ltr" monospace wrap unbroken>.claude.json</InlineChip>,
+                  plans: <InlineChip dir="ltr" monospace wrap unbroken>plans/</InlineChip>,
                 }} />
                 : account.agent === "grok"
                   ? <Message id="settings.accounts.sharing.helpNeverGrok" params={{
-                    trustedFolders: <InlineChip dir="ltr" monospace wrap unbroken size="inherit" className={TIGHT_CHIP}>trusted_folders.toml</InlineChip>,
-                    hooksPaths: <InlineChip dir="ltr" monospace wrap unbroken size="inherit" className={TIGHT_CHIP}>hooks-paths</InlineChip>,
+                    trustedFolders: <InlineChip dir="ltr" monospace wrap unbroken>trusted_folders.toml</InlineChip>,
+                    hooksPaths: <InlineChip dir="ltr" monospace wrap unbroken>hooks-paths</InlineChip>,
                   }} />
                   : t("settings.accounts.sharing.helpNever")}
             </p>
@@ -180,24 +176,22 @@ function SharingProgress({ id, progress }: { id: string; progress: NonNullable<A
       </ProgressBar>
       {entries && (
         <p id={`${id}-current`} className="[overflow-wrap:anywhere]">
-          <Message id="settings.accounts.sharing.current" params={{ item: <InlineChip dir="ltr" monospace wrap unbroken size="inherit" className={TIGHT_CHIP}>{progress.item}</InlineChip> }} />
+          <Message id="settings.accounts.sharing.current" params={{ item: <InlineChip dir="ltr" monospace wrap unbroken>{progress.item}</InlineChip> }} />
         </p>
       )}
     </div>
   );
 }
 
-/** Whether a failure has something to say about why: entries it names, or a reason for the whole change. One answer for
- * the warning and for the switch's description of it. */
-function hasReason(failure: NonNullable<AccountSharing["failure"]>): boolean {
-  return parseSharingItems(failure.items) !== undefined || hasSharingReason(failure.cause, failure.detail);
-}
-
-/** The change that did not finish, whether it failed just now or the daemon restarted in the middle of it. One warning
- * holds everything about it: what did not finish and, when the failure says, why and what to do about each cause, in
- * one live region that is all a screen reader is told when it appears; and after that region, still inside the
- * warning, the way to try again and the raw entries behind Details, so that opening them does not write into the
- * announcement. */
+/** The change that did not finish, whether it failed just now or the daemon restarted in the middle of it. One compact
+ * warning: the title and, for a failure, two sentences, in the one live region that is all a screen reader is told when
+ * it appears (the remedy, under it and not announced, is described by the switch too). With a single cause the
+ * sentences are that cause's own line and its fix, or, where the cause has no fix of its own (`not_found`, a default
+ * directory that moved), the way to try again; with several, that some files or folders could not be changed and the
+ * way to try again (turning the switch, so there is no retry button). Behind its Details button, which opens a popover,
+ * are first the further explanation: each cause's line with its fix when there are several, the way to try again when
+ * the fix took its place, and the note on idle sessions, then the raw entries and the system's own reason; with none of
+ * it there is no Details button. */
 function SharingIncomplete({ id, failure, share, guidance, announce, idle }: {
   id: string;
   idle: number;
@@ -208,21 +202,30 @@ function SharingIncomplete({ id, failure, share, guidance, announce, idle }: {
 }): React.ReactElement {
   const t = useT();
   const items = parseSharingItems(failure?.items);
-  const reason = failure && hasReason(failure)
-    ? items ? <SharingCauseSummary items={items} /> : <SharingFailureReason cause={failure.cause} detail={failure.detail} />
-    : undefined;
+  const groups = items?.length ? sharingCauseGroups(items) : undefined;
+  // A single cause is said by itself: one named group of entries, or the change's own cause with no entry to name.
+  const group = groups?.length === 1 ? groups[0] : undefined;
+  const whole = !groups && failure && sharingReasonKey(failure.cause) ? failure.cause : undefined;
+  const single = group !== undefined || whole !== undefined;
+  const fix = group ? sharingFixKey(group.cause) : sharingFixKey(whole);
+  const guided = <span>{t(guidance)}</span>;
+  // With several causes, a cause with no line of its own points at the raw reason, which is right below it here, so it
+  // says nothing; a single cause (a group or the change's own) is said by the guidance and fix below, not here.
+  const reason = single || !groups ? undefined : <SharingCauseSummary items={items!} />;
+  const raw = failure && (items?.length || failure.detail) ? <SharingDetails items={items ?? []} detail={failure.detail} folded={false} /> : undefined;
+  const note = idle > 0 ? <span>{t("settings.accounts.sharing.idleSessions", { count: idle })}</span> : undefined;
+  const later = single && fix ? <span className="block">{t(guidance)}</span> : undefined;
+  const details = reason || later || note || raw ? <>{reason}{later}{note}{raw}</> : undefined;
   return (
-    <TintedAlert status="warning" className="mt-2 w-full text-start">
-      <Alert.Indicator aria-hidden="true" />
-      <Alert.Content className="min-w-0">
-        <div role={announce ? "alert" : undefined}>
-          <Alert.Title><span id={`${id}-title`}>{t(failure ? (share ? "settings.accounts.sharing.failedOn" : "settings.accounts.sharing.failedOff") : (share ? "settings.accounts.sharing.incompleteOn" : "settings.accounts.sharing.incompleteOff"))}</span></Alert.Title>
-          {reason && <Alert.Description><span id={`${id}-reason`}>{reason}</span></Alert.Description>}
-        </div>
-        <p id={`${id}-guidance`} className="mt-1 text-sm text-app-muted">{t(guidance)}</p>
-        {idle > 0 && <p id={`${id}-idle`} className="mt-1 text-sm text-app-muted">{t("settings.accounts.sharing.idleSessions", { count: idle })}</p>}
-        {failure && <div className="mt-1 min-w-0 max-w-full text-sm text-app-muted"><SharingDetails items={items ?? []} detail={failure.detail} /></div>}
-      </Alert.Content>
-    </TintedAlert>
+    <ErrorAlert
+      status="warning"
+      className="mt-2 w-full"
+      announce={announce}
+      title={<span id={`${id}-title`}>{t(failure ? (share ? "settings.accounts.sharing.failedOn" : "settings.accounts.sharing.failedOff") : (share ? "settings.accounts.sharing.incompleteOn" : "settings.accounts.sharing.incompleteOff"))}</span>}
+      remedy={<span id={`${id}-remedy`}>{single && fix ? <Message id={fix} /> : guided}</span>}
+      details={details}
+    >
+      {failure && <span id={`${id}-reason`}>{group ? <SharingCauseLine group={group} withFix={false} /> : whole ? <SharingFailureReason cause={whole} withFix={false} /> : t("settings.accounts.sharing.failedSummary")}</span>}
+    </ErrorAlert>
   );
 }

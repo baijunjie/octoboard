@@ -13,7 +13,7 @@ coloured as the change's letter in the list is (green, red, amber, blue; the sam
 or unstaged change has its stage — Staged or Unstaged — as a second, neutral tag after the kind: the two things a
 change says, what kind it is and whether it is staged, are kept apart, the first coloured and the second not. Both tags
 come after the name, and read with it as "server.ts: Modified, Unstaged". An untracked file is always new, so its only
-tag is Untracked, in the muted coral the list's U has, which is no kind of change and shares no colour with Added or
+tag is Untracked, in the neutral grey the list's U has, which is no kind of change and shares no colour with Added or
 Deleted; a path in conflict has only a Conflicted tag, coloured as its C is. Neither has a stage tag, its status tag
 already saying where it is from; a committed change has none either. The tags read as one group,
 spaced closer to each other than the group is to the name, and each of them, the neutral stage tag included, is visibly

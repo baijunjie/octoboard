@@ -45,7 +45,7 @@ export function DirectoryRow({ name, isExpanded, link = false, children }: { nam
  * would hold an actions button that never appears. */
 export const ROW_CLASS = [
   "group mx-(--row-fill-inset) my-0.5 cursor-default rounded-md text-sm outline-none select-none hover:bg-panel-hover data-[current]:bg-panel-selected",
-  "data-[focus-visible]:ring-2 data-[focus-visible]:ring-app-focus data-[focus-visible]:ring-inset",
+  "data-[focus-visible]:ring-2 data-[focus-visible]:ring-focus data-[focus-visible]:ring-inset",
 ].join(" ");
 
 // A flat row below the first level adds a chevron slot and its gap (1.375rem) once, whatever its depth.

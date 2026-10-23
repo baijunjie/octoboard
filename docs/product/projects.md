@@ -37,17 +37,17 @@ For a single directory, the form asks the daemon about the path as soon as it is
 when typed): the path must be an existing directory, and its agent is read and preselected in the Default agent field,
 which stays changeable; see "The project's default agent". While the answer for the current path is outstanding the
 form says it is checking, and the fields below the path (name, description, tags, default agent) and the submit button
-are disabled;
-a refusal such as "not a directory" is shown under the path field and keeps them disabled. Only the latest path's
-answer counts, and a changed path is read again and its result preselected anew.
+are disabled; a refusal such as "not a directory" is shown in an alert directly under the path field and keeps them
+disabled. Only the latest path's answer counts, and a changed path is read again and its result preselected anew.
 
 For a git URL, the form first checks the repository: once the URL stops changing, the daemon fetches the remote's tip
 commit without file contents or history into a scratch directory, which proves the remote can be read with the user's
 credentials and shows its top-level names. Every field below the URL (clone into, name, description, tags, default
 agent) and the submit button stay disabled until that check has succeeded for the URL as it stands, an empty one included; while it
-runs the form says it is checking, and a failure is shown under the URL field with git's own reason and keeps them
-disabled. A success enables them and preselects the detected agent. The check is bounded by a timeout, and its scratch
-directory is removed when it ends.
+runs the form says it is checking, and a failure is shown in an alert directly under the URL field, saying the
+repository could not be read with git's own reason behind Details, and keeps them disabled. Neither alert opens an error alert (see "Failures shown on the screen" in
+`docs/product/error-alerts.md`). A success enables them and preselects the detected agent. The check is bounded by a
+timeout, and its scratch directory is removed when it ends.
 
 A path may be entered by hand or picked with the directory browser. A leading `~` is expanded to the home directory
 of the host the daemon runs on. The path must then be absolute: a relative path is refused, for every source. It is
@@ -278,7 +278,7 @@ listing always comes from the host the projects live on, never from the applicat
 
 In the browser, the listed directory's subdirectories are one list, with a parent-directory entry at its top except at
 the filesystem root — muted, marked with an up-arrow icon and labelled as the parent directory, which is also what it is
-announced as to assistive technology — each directory marked with a folder icon, and a "git" tag at the end of each
+announced as to assistive technology — each directory marked with a folder icon, and a "git" badge at the end of each
 entry that is a git repository. Clicking an entry, or pressing Enter on it, lists that directory. The list is a single
 Tab stop: the arrow keys, Home and End move between its entries. A directory with no subdirectories shows an entry
 saying so, which does nothing. When the browser is opened on a path that does not exist (such as a default clone
@@ -286,9 +286,11 @@ directory not created yet), it lists the nearest ancestor that does exist instea
 home directory), so there is always somewhere to navigate from; any other failure is reported as described next.
 
 A listing can fail, and that is a normal path rather than an edge case: a packaged application is granted file access
-per volume by macOS, and the user may decline the prompt or leave it unanswered. The failure is reported with the path
-and with the hint that per-volume access has to be granted; whatever was listed before stays on screen so the browser
-can be navigated back out of. The same failure can surface when a session is opened: a project directory the daemon
+per volume by macOS, and the user may decline the prompt or leave it unanswered. The failure is shown in the browser
+itself, in an alert under the path field saying the directory could not be listed, with the reason — naming the path,
+and the hint that per-volume access has to be granted — and **Try again**, which asks for the same directory again; it
+opens no error alert. Whatever was listed before stays on screen so the browser can be navigated back out of, and the
+alert goes once a listing succeeds. The same failure can surface when a session is opened: a project directory the daemon
 cannot reach is reported as such rather than silently starting the agent somewhere else.
 
 ## Hosts

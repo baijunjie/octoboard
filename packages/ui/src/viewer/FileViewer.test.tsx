@@ -3,6 +3,7 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { errorAlerts } from "../errorAlerts";
 import { DaemonRequestError } from "../daemon-client";
 import { isolate } from "../i18n/isolate";
@@ -12,6 +13,7 @@ import { ThemeProvider } from "../theme";
 import { ChangeBodiesError, type ViewerChangeSide, type ViewerContent, type ViewerSubject } from "./content";
 import { diffLayout } from "./diffLayout";
 import { FileViewer, type ViewerNavigation } from "./FileViewer";
+import { detailsButton } from "../components/detailsTestSupport";
 import { ViewerHost } from "./viewerTestSupport";
 import { viewerErrorText } from "./viewerError";
 import { wordWrap } from "./wordWrap";
@@ -124,8 +126,8 @@ it.each(["error", "conflict", "change"] as const)("does not repeat the header pa
   const dialog = document.querySelector("[role=dialog]")!;
   expect(dialog.textContent).toContain("This file does not exist any more.");
   expect(dialog.textContent?.match(/src\/gone\.ts/g)).toHaveLength(1);
-  expect(errorAlerts.getSnapshot()).toMatchObject([{ error }]);
-  expect(errorAlerts.getSnapshot()[0].error).toBe(error);
+  // A screen state: shown on the screen and nowhere else.
+  expect(errorAlerts.getSnapshot()).toEqual([]);
 });
 
 // The code surface draws through a lazily imported renderer. The import settles several microtask
@@ -143,6 +145,7 @@ const layoutToggles = () => controlNamed("Show split diff", "Show unified diff")
 const wrapToggles = () => controlNamed("Wrap lines", "Don't wrap lines");
 const button = (label: string) => document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
 
+const NO_RECORDS = { consoles: new Map(), projects: new Map(), sessions: new Map() };
 const failed: ViewerSubject = { key: "a", path: "src/a.ts", content: { state: "error", message: "src/a.ts is gone." } };
 const binary: ViewerSubject = { key: "b", path: "bin/b.wasm", content: { state: "file", body: { kind: "binary", size: 3 } } };
 
@@ -221,17 +224,57 @@ it("shows an SVG through an image, and as text when it cannot be decoded, never 
   expect(repositoryMarkup()).toBe(0);
 });
 
-it("requires acknowledgement when a raster image cannot be decoded", () => {
+it("shows an empty-state failure that announces itself when a raster image cannot be decoded", () => {
   show({ key: "broken-image", path: "broken.png", content: { state: "file", body: { kind: "image", mediaType: "image/png", url: "data:image/png;base64,broken", size: 10 } } });
   act(() => document.querySelector("img")!.dispatchEvent(new Event("error")));
-  expect(errorAlerts.getSnapshot()).toMatchObject([{ message: "This image cannot be displayed", classification: { kind: "actionable", recovery: "image" } }]);
+  expect(errorAlerts.getSnapshot()).toEqual([]);
+  // The image was the whole subject, so its place on screen is the empty-state failure, not an
+  // Alert; it fails long after the dialog was drawn, so it speaks, and its heading alone says what failed.
+  expect(document.querySelector("img")).toBeNull();
+  const panel = document.querySelector('[data-slot="empty-state"]');
+  expect(document.querySelector('[data-slot="alert-root"]')).toBeNull();
+  // The line under the heading says what is wrong and the remedy follows it, with no raw text and so no Details button.
+  const [summary, remedy] = panel!.querySelectorAll("p");
+  expect(summary?.textContent).toBe("The image file may be damaged, too large or in a format the viewer does not support.");
+  expect(remedy?.textContent).toBe("Repair or replace the file, or choose another image, then open it again.");
+  expect(detailsButton(panel!)).toBeUndefined();
+  expect(panel?.querySelector("[role=alert]")?.textContent).toContain("This image cannot be displayed");
 });
 
-it("queues a read failure with its title and keeps recovery content silent", () => {
+it("shows a read failure the viewer opened with in the empty-state shape, without an error alert dialog or an announcement", () => {
   show(failed);
-  expect(errorAlerts.getSnapshot()).toMatchObject([{ message: "src/a.ts is gone.", title: "Could not open this file" }]);
+  expect(errorAlerts.getSnapshot()).toEqual([]);
+  expect(dialog()?.querySelector('[data-slot="alert-root"]')).toBeNull();
+  expect(dialog()?.querySelector('[data-slot="empty-state"] h2')?.textContent).toBe("Could not open this file");
   expect(dialog()?.textContent).toContain("src/a.ts is gone.");
   expect(document.querySelectorAll("[role=alert]")).toHaveLength(0);
+});
+
+it("announces a read failure that arrives as the viewer opens after the dialog's focus move, title and reason only", () => {
+  vi.useFakeTimers();
+  const loading: ViewerSubject = { ...failed, content: { state: "loading" } };
+  show(loading);
+  expect(dialog()?.querySelector('[data-slot="empty-state"]')).toBeNull();
+  show(failed);
+  expect(dialog()?.querySelector('[data-slot="empty-state"]')).not.toBeNull();
+  expect(document.querySelectorAll("[role=alert]")).toHaveLength(0);
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+  const announcement = document.querySelectorAll("[role=alert]");
+  expect(announcement).toHaveLength(1);
+  expect(announcement[0].querySelector("h2")?.textContent).toBe("Could not open this file");
+  expect(announcement[0].textContent).toContain("src/a.ts is gone.");
+  expect(announcement[0].querySelector("button")).toBeNull();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
+});
+
+it("announces at once a read failure that arrives after moving to another file", () => {
+  vi.useFakeTimers();
+  show(binary);
+  show({ ...failed, content: { state: "loading" } });
+  show(failed);
+  const announcement = document.querySelectorAll("[role=alert]");
+  expect(announcement).toHaveLength(1);
+  expect(announcement[0].textContent).toContain("src/a.ts is gone.");
 });
 
 it("moves to the previous and next subject with Left and Right, as its buttons do", () => {
@@ -353,7 +396,7 @@ it("falls back to saying nothing changed when that content cannot be read", asyn
 it.each([false, true])("does not repeat the path when unchanged content fails to load, renamed %s", async (renamed) => {
   const path = "src/gone.ts";
   const side = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file" });
-  const message = viewerErrorText(t, new DaemonRequestError("gone", "file_not_found", { path }), path);
+  const message = viewerErrorText(t, "en", new DaemonRequestError("gone", "file_not_found", { path }), path, NO_RECORDS);
   const loadBodies = () => Promise.reject(new ChangeBodiesError("failed", message));
   show({ key: "missing-content", path, content: { state: "change", change: { old: side(renamed ? "src/old.ts" : path), new: side(path), patch: "", loadBodies } } });
   await settled();
@@ -364,7 +407,7 @@ it.each([false, true])("does not repeat the path when unchanged content fails to
 it("does not repeat the path in an expansion failure", async () => {
   const path = "src/gone.ts";
   const side: ViewerChangeSide = { state: "present", path, kind: "file" };
-  const message = viewerErrorText(t, new DaemonRequestError("gone", "file_not_found", { path }), path);
+  const message = viewerErrorText(t, "en", new DaemonRequestError("gone", "file_not_found", { path }), path, NO_RECORDS);
   const loadBodies = () => Promise.reject(new ChangeBodiesError("failed", message));
   show({ key: "missing-lines", path, content: { state: "change", change: { old: side, new: side, patch: "@@ -1 +1 @@\n-a\n+b\n", loadBodies } } });
   await settled();
@@ -494,7 +537,7 @@ it("shows the raw patch when the diff cannot be rendered", async () => {
   }
 });
 
-it("queues a rendering failure for acknowledgement without a duplicate status announcement", async () => {
+it("says a rendering failure once, as a status, with its visible copy hidden and no error alert dialog", async () => {
   const side: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "file" };
   const error = vi.spyOn(console, "error").mockImplementation(() => {});
   try {
@@ -507,8 +550,8 @@ it("queues a rendering failure for acknowledgement without a duplicate status an
     const sentence = "Shown as a plain patch because the diff could not be rendered.";
     const block = Array.from(dialog()!.querySelectorAll("[aria-hidden=true]")).find((e) => e.textContent === sentence);
     expect(block).toBeTruthy();
-    expect(Array.from(dialog()!.querySelectorAll("[role=status]")).map((e) => e.textContent)).not.toContain(sentence);
-    expect(errorAlerts.getSnapshot()).toMatchObject([{ message: sentence, error: expect.objectContaining({ message: "The patch cannot be read" }), classification: { kind: "unexpected" } }]);
+    expect(dialog()!.querySelectorAll("[role=status]").length).toBeGreaterThan(0);
+    expect(errorAlerts.getSnapshot()).toEqual([]);
   } finally {
     error.mockRestore();
   }
@@ -576,12 +619,12 @@ const modified = (path = "src/c.ts"): ViewerSubject => {
 };
 
 // The kind of change and the stage are tags after the name in the title, the kind coloured and the
-// stage neutral; the description line has the path and the layout choice at its end.
+// stage a neutral bordered badge; the description line has the path and the layout choice at its end.
 it("puts the status and the stage in the title and the layout choice on the description's row", () => {
   show(modified());
   const heading = dialog()!.querySelector("h2")!;
   expect(titleName()).toBe("c.ts: Modified, Unstaged");
-  const tags = heading.querySelectorAll(".chip");
+  const tags = heading.querySelectorAll("[data-variant]");
   expect([...tags].map((tag) => tag.textContent)).toEqual(["Modified", "Unstaged"]);
   const drawn = heading.querySelector('[aria-hidden="true"]')!;
   expect([...tags].every((tag) => drawn.contains(tag))).toBe(true);
@@ -603,7 +646,7 @@ it("keeps the tags in one group and each detail as an item of its own, the paths
     source: "main at 1234567 to feature at fedcba0",
     content: { state: "change", change: { old: side("src/old.ts"), new: side("src/c.ts") } },
   }, undefined, { clipboard: { writeText: async () => {} } });
-  const tags = dialog()!.querySelectorAll(".chip");
+  const tags = dialog()!.querySelectorAll("[data-variant]");
   expect(tags[0].parentElement).toBe(tags[1].parentElement);
   expect(tags[0].parentElement!.children.length).toBe(2);
   const row = dialog()!.querySelector<HTMLElement>("[data-viewer-description]")!;
@@ -637,7 +680,7 @@ it("shows no stage tag for an untracked, conflicted or compared change, and the 
 });
 
 // An untracked file has no old side, which reads as added; the list says untracked, and so does the
-// chip, with no note repeating that there is nothing to compare it with.
+// badge, with no note repeating that there is nothing to compare it with.
 it("marks an untracked file Untracked, with no note that it is new content", () => {
   const body = { kind: "text", text: "x\n", size: 2 } as const;
   const content: ViewerContent = {
@@ -646,11 +689,11 @@ it("marks an untracked file Untracked, with no note that it is new content", () 
   };
   show({ key: "u", path: "src/n.ts", status: "untracked", content });
   expect(titleName()).toBe("n.ts: Untracked");
-  expect(dialog()!.querySelector("h2 .chip")!.classList).toContain("chip-untracked");
+  expect(dialog()!.querySelector("h2 [data-variant]")!.getAttribute("data-color")).toBe("default");
   expect(dialog()!.textContent).not.toMatch(/new content/i);
   show({ key: "a", path: "src/n.ts", content });
   expect(titleName()).toBe("n.ts: Added");
-  expect(dialog()!.querySelector("h2 .chip")!.classList).not.toContain("chip-untracked");
+  expect(dialog()!.querySelector("h2 [data-variant]")!.getAttribute("data-color")).toBe("success");
   // The status the list gave holds while the content is not read, and when reading it failed.
   show({ key: "l", path: "src/n.ts", status: "untracked", content: { state: "loading" } });
   expect(titleName()).toBe("n.ts: Untracked");
@@ -683,11 +726,11 @@ it("shows where a compared change is from as a subtitle in the header, under the
   expect(subtitle()).toBeNull();
 });
 
-it("draws the size as a chip after the path", () => {
+it("draws the size as a badge after the path", () => {
   show(binary);
   const items = [...dialog()!.querySelector("[data-viewer-description]")!.children].slice(1);
   expect(items.map((item) => item.textContent)).toEqual(["bin/b.wasm", "3 bytes"]);
-  expect(items[1].querySelector(".chip")!.textContent).toBe("3 bytes");
+  expect(items[1].querySelector("[data-variant]")!.textContent).toBe("3 bytes");
 });
 
 // The header offers Copy path, as a row does, and copies the path the path item shows.

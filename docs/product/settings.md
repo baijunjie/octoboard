@@ -246,7 +246,7 @@ state:
 
 | State | What the row shows |
 |---|---|
-| Granted | That it is granted, and no control. |
+| Granted | A **Granted** badge in the success colour at the row's end, in place of a control; the row's description says nothing more about the state. |
 | Not granted | That it is not granted, with a **Grant…** button. Pressing it raises the system's permission prompt; this is the only thing in Octoboard that ever raises one. |
 | A request made in this window came back without the grant | That it is not granted and where to switch it on, with an **Open System Settings** button in place of Grant…, which opens that permission's own pane in System Settings. |
 
@@ -288,8 +288,9 @@ keeps no refusal for.
 
 **Outside the macOS application** — in a browser, or a desktop shell not running on macOS — the section is a single
 line saying that permissions can only be managed in the macOS application. Where a desktop shell is there but the read
-of the grants fails, it says instead that the granted permissions could not be read. Until the
-first read comes back the section shows neither line and nothing else either.
+of the grants fails, the section is instead a red alert saying that the granted permissions could not be read, which
+opens no error alert (see "Failures shown on the screen" in `docs/product/error-alerts.md`). Until the first read comes
+back the section shows neither line and nothing else either.
 
 ## Agent permissions
 

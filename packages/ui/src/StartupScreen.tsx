@@ -44,7 +44,7 @@ export function StartupScreen({ message, action }: StartupScreenProps): React.Re
             title bar; `m-auto` centres it while it fits, where `justify-center` would clip its top.
             The ring is drawn on the wrapper around the scroller, inset because the scroller spans the
             window. */}
-        <main className={`flex min-h-0 flex-1 flex-col ${region.focused ? "ring-2 ring-app-focus ring-inset" : ""}`}>
+        <main className={`flex min-h-0 flex-1 flex-col ${region.focused ? "ring-2 ring-focus ring-inset" : ""}`}>
           <FadedScroller region={region} className="flex min-h-0 flex-1 flex-col">
             <div className="m-auto flex w-full min-w-0 flex-col items-center gap-4 p-8 text-center">
               <div className="w-full min-w-0 max-w-xl">{message}</div>
@@ -78,7 +78,7 @@ export function DaemonFailedMessage({ error }: { error: string }): React.ReactEl
 /** What the screen says when there is no daemon address to connect to, and how to give it one. */
 export function NoAddressMessage(): React.ReactElement {
   const t = useT();
-  const code = (text: string) => <InlineChip monospace wrap size="inherit">{text}</InlineChip>;
+  const code = (text: string) => <InlineChip monospace wrap>{text}</InlineChip>;
   return (
     <CodeToneContext value="danger">
       <div className="flex min-w-0 flex-col gap-4">

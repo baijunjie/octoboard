@@ -8,7 +8,7 @@ const GROUP = "Window layout";
 
 const { console: console_, web, api, sessions } = SAMPLE;
 
-/** A name too long for the panel's width, so it clips with its fade and the plan chip stays whole beside it. */
+/** A name too long for the panel's width, so it clips with its fade and the plan badge stays whole beside it. */
 const LONG_NAME = "Acme Corporation internal platform research and billing";
 
 /** The window under the rail's quota entry: the sample console, and the accounts the panel lists. By default Claude
@@ -175,7 +175,7 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Rail quota panel, floated in by hovering",
-    description: "No session is selected, so the quota button has no mini bar. The panel floats in beside it, above Settings, after the pointer rests on it, with the button marked open. Claude Code's default account, under the name the user gave it (Studio laptop), shows its five-hour and weekly quota as one two-layer bar (the thick bar for five hours, the thin one beneath it for the week) and Fable last. Each account's name line ends, at the far right, with a small muted \"Updated N ago\" (the default account's says 1 minute). Work (spent, both bars empty, read 7 minutes ago) follows, then an account that is nearly spent, whose clipped name fades out before its plan chip. Manage accounts is at the bottom. Grok Build is added but not installed, so it has no tab.",
+    description: "No session is selected, so the quota button has no mini bar. The panel floats in beside it, above Settings, after the pointer rests on it, with the button marked open. Claude Code's default account, under the name the user gave it (Studio laptop), shows its five-hour and weekly quota as one two-layer bar (the thick bar for five hours, the thin one beneath it for the week) and Fable last. Each account's name line ends, at the far right, with a small muted \"Updated N ago\" (the default account's says 1 minute). Work (spent, both bars empty, read 7 minutes ago) follows, then an account that is nearly spent, whose clipped name fades out before its plan badge. Manage accounts is at the bottom. Grok Build is added but not installed, so it has no tab.",
     state: readState,
     steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
   },
@@ -211,7 +211,7 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Rail quota panel, pinned from the keyboard on Codex's tab",
-    description: "Pressing the button with the keyboard pins the panel and puts focus on its tabs, and the arrow key has moved on to Codex: its tab is selected and carries the focus ring. Automation has no plan chip.",
+    description: "Pressing the button with the keyboard pins the panel and puts focus on its tabs, and the arrow key has moved on to Codex: its tab is selected and carries the focus ring. Automation has no plan badge.",
     state: readState,
     steps: [
       (ui) => ui.focusControl(ui.t("rail.quota")),
@@ -293,7 +293,7 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Rail quota panel, accounts without a whole reading",
-    description: "Hub uses Work, whose failed refresh leaves an older reading: the quota button has no mini bar. Three accounts have no current reading: the default account has nothing to show, with the timeout as the reason; Work keeps its older windows under \"Out of date\" with the failure above them; Client says the quota is being read.",
+    description: "Hub uses Work, whose failed refresh leaves an older reading: the quota button has no mini bar. Three accounts have no current reading: the default account has no bars and a danger mark after its name (Quota unavailable); Work keeps its older windows, with \"Updated 12 minutes ago\" at the end of its name line followed by a warning mark (Out of date); Client says the quota is being read. The reasons are in the marks' popovers.",
     state: {
       ...unreadState,
       sessions: new Map(sessions.map((session) => [session.id, session.id === "s-console" ? { ...session, account_id: "a-work" } : session])),
@@ -301,6 +301,19 @@ export const railQuotaScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.session("Hub")),
       (ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota")),
+    ],
+  },
+  {
+    id: "rail-quota-failure-reason",
+    group: GROUP,
+    category: "exceptional",
+    title: "Rail quota panel, the reason an account's reading failed",
+    description: "The panel is pinned open from the keyboard and the default account's danger mark (Quota unavailable) is pressed: its popover, holding why Claude Code's reading could not be had, is open beside the mark, and the panel stays open under it.",
+    state: unreadState,
+    steps: [
+      (ui) => ui.focusControl(ui.t("rail.quota")),
+      (ui) => ui.key("Enter"),
+      (ui) => ui.press(ui.t("quota.unavailable")),
     ],
   },
   {

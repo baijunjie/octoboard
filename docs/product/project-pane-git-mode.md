@@ -10,10 +10,12 @@ in `docs/product/project-pane-git-change-list.md`. Each change opens in the proj
 header and switching modes are in `docs/product/project-pane.md` (see "Files and Git" there), and the file viewer in
 general in `docs/product/file-viewer.md`.
 
-Failures to load branches, list changes or compare commits open an error alert requiring acknowledgement; the
-pane retains its failure explanation and recovery controls afterwards (see "Error alerts" in
-`docs/product/error-alerts.md`). A worktree found gone while its changes are listed is not such a failure and opens no
-alert (see "Uncommitted changes" in `docs/product/project-pane-git-change-list.md`).
+Failures to read the repository, load branches, list changes or compare commits are shown in the pane alone: one
+that leaves nothing to show takes the place of what failed as an empty-state failure, and one of a part while the rest
+is shown is a mark on that part, whose popover holds its reason and **Try again**; none of them opens an error alert
+(see "Failures shown on the screen" and "Failures marked on a row" in `docs/product/error-alerts.md`). A worktree
+found gone while its changes are listed is not such a failure and is not shown as one (see "Uncommitted changes" in
+`docs/product/project-pane-git-change-list.md`).
 
 ## Reading only
 
@@ -56,7 +58,8 @@ project's own folder.
 
 - A project in no repository says it is not in a Git repository.
 - A repository Git cannot read — `git` not installed or older than 2.36, a repository belonging to another user, a
-  damaged one — says Git review is unavailable, with Git's own message.
+  damaged one — shows an empty-state failure headed that Git review is unavailable, with Git's own message behind
+  Details and no Try again.
 - Either way the Files mode still works.
 
 The repository's worktrees are every one there is now — not a bare main repository, and not a worktree Git reports as
@@ -124,9 +127,11 @@ the worktrees are, when one of the project's sessions is selected and when the w
 found gone. A branch created, moved or deleted in the meantime
 shows in the selector then.
 
-When the branches cannot be read, the view says so with the reason: in place of the change list, with **Try again**,
-while no branch is shown and no list of branches has been read yet; otherwise in a line under the selector, announced
-to assistive technology, the branches already offered staying on offer, until the branches are read again.
+When the branches cannot be read, the view says so: in place of the change list, as an empty-state failure with
+**Try again**, while no branch is shown and no list of branches has been read yet; otherwise as a red mark beside the
+selector, named as the branches that could not be listed, whose popover holds the reason and **Try again**, the
+branches already offered staying on offer, until the branches are read again. Either is announced to assistive
+technology once when it appears after the view was drawn.
 
 ## Following the selected session
 

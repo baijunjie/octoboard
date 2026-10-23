@@ -18,7 +18,7 @@ import { liveConsoleSessions } from "../sidebar/order";
 import { useDaemon, useDaemonStore } from "../store";
 import { useOctoboardTheme } from "../theme";
 import { AgentAccountField } from "./AgentAccountField";
-import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "./Dialog";
+import { Dialog, useDialogAction, useSubmitValidation } from "./Dialog";
 import type { NewSessionBinding } from "./dialogRequest";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
 import { ResumeConversationFields } from "./ResumeConversationFields";
@@ -32,8 +32,9 @@ import { TextInput } from "./TextInput";
 
 type Conversation = "new" | "resume";
 
-/** The daemon's refusals that are about the conversation to resume, shown under the Session ID
- * field rather than at the foot of the dialog. */
+/** The daemon's refusals that are about the conversation to resume. They arrive after the submit, so
+ * they are the error alert dialog's like any other; the Session ID field takes focus back, and the
+ * answer the lookup holds is asked for again where it may be stale. */
 const RESUME_REFUSALS = new Set([
   "conversation_to_resume_not_found",
   "conversation_in_session",
@@ -107,7 +108,8 @@ export function SessionDialog({
   sessions: Session[];
   onClose: () => void;
   onOpened: (sessionId: string) => void;
-  /** Resumes an archived or interrupted session the way the Resume action does; rejects with the reason, shown at the dialog's foot. */
+  /** Resumes an archived or interrupted session the way the Resume action does; rejects with the
+   * reason, which the dialog's action reports in the error alert dialog. */
   onResume: (sessionId: string) => Promise<void>;
 }): React.ReactElement {
   const t = useT();
@@ -123,9 +125,7 @@ export function SessionDialog({
   const [resumeId, setResumeId] = useState("");
   // The name typed over an archived session's own, for that session only; unedited, the field shows its title.
   const [heldName, setHeldName] = useState<{ session: string; value: string }>();
-  // A refusal of the conversation to resume, with the ID and (for a record) the agent and account it refused.
-  const [refusal, setRefusal] = useState<{ error: DaemonRequestError; id: string; record?: string }>();
-  const { error, busy, run } = useDialogAction();
+  const { busy, run } = useDialogAction();
   const { confirmLaunch, confirmation } = useConfirmIncompleteLaunch(onClose);
 
   // A resumed conversation is always a plain session, so choosing to resume takes the choice of
@@ -185,12 +185,6 @@ export function SessionDialog({
   const foundSession = target && target.kind !== "record" ? target.session : undefined;
   const foundName = target?.kind === "archived" && heldName?.session === target.session.id ? heldName.value : foundSession?.title ?? "";
 
-  // A refusal stands under the field only while the ID and the record are still those it refused,
-  // since changing either asks a different question; between its answers the lookup has no record,
-  // and an answer that is no record settles the matter.
-  const recordKey = record && JSON.stringify([record.agent, record.account]);
-  const refused = resuming && refusal?.id === resumeId && (resume.looking || recordKey === refusal.record) ? refusal.error : undefined;
-
   const submit = () => {
     if (fixedOwnerGone) return;
     if (!attempt(resume.idProblem)) {
@@ -200,7 +194,6 @@ export function SessionDialog({
     // A running session is only gone to; any other launch starts on the session's own account or the chosen one.
     const launchAccount = target && target.kind !== "record" ? (target.kind === "running" ? undefined : target.session.account_id) : choice.account;
     void confirmLaunch(launchAccount, () => void run(async () => {
-      setRefusal(undefined);
       if (target && target.kind !== "record") {
         // The session continues its own conversation, so only a name the user changed to another
         // one is applied: a rename that fails after the resume is reported, not allowed to hold
@@ -222,12 +215,14 @@ export function SessionDialog({
         overrides,
         appearance,
       })).catch((err: unknown) => {
-        if (!(err instanceof DaemonRequestError) || !resuming || !RESUME_REFUSALS.has(err.code)) throw err;
-        setRefusal({ error: err, id: resumeId, record: recordKey });
-        // Anything but a conversation that is not there at all may mean the answer held is stale
-        // (it was taken into a session, say), so the daemon is asked again.
-        if (err.code !== "conversation_to_resume_not_found") resume.reask();
-        resumeFieldRef.current?.querySelector("input")?.focus();
+        if (err instanceof DaemonRequestError && resuming && RESUME_REFUSALS.has(err.code)) {
+          // Anything but a conversation that is not there at all may mean the answer held is stale
+          // (it was taken into a session, say), so the daemon is asked again.
+          if (err.code !== "conversation_to_resume_not_found") resume.reask();
+          // Where focus returns to once the alert is acknowledged.
+          resumeFieldRef.current?.querySelector("input")?.focus();
+        }
+        throw err;
       });
       if (!reply) return;
       if (reply.type === "session_opened") onOpened(reply.session.id);
@@ -261,8 +256,8 @@ export function SessionDialog({
       {fixedOwner && (
         <div data-marquee-scope className="flex items-center gap-2 text-sm">
           <BindingBadge owner={fixedOwner} decorative />
-          <FadeOverflow dir="auto" className="min-w-0 flex-1" titleWhenClipped={<Message id="dialog.session.ownerFixed" params={{ name: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, fixedOwner)}</InlineChip> }} />}>
-            {<Message id="dialog.session.ownerFixed" params={{ name: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, fixedOwner)}</InlineChip> }} />}
+          <FadeOverflow dir="auto" className="min-w-0 flex-1" titleWhenClipped={<Message id="dialog.session.ownerFixed" params={{ name: <InlineChip dir="auto" wrap>{sessionDisplayTitle(t, fixedOwner)}</InlineChip> }} />}>
+            {<Message id="dialog.session.ownerFixed" params={{ name: <InlineChip dir="auto" wrap>{sessionDisplayTitle(t, fixedOwner)}</InlineChip> }} />}
           </FadeOverflow>
         </div>
       )}
@@ -288,8 +283,8 @@ export function SessionDialog({
   return (
     <Dialog
       title={project
-        ? <Message id="dialog.session.title" params={{ project: <InlineChip dir="auto" wrap size="inherit">{project.name}</InlineChip> }} />
-        : <Message id="dialog.consoleSession.title" params={{ console: <InlineChip dir="auto" wrap size="inherit">{parentConsole.name}</InlineChip> }} />}
+        ? <Message id="dialog.session.title" params={{ project: <InlineChip dir="auto" wrap>{project.name}</InlineChip> }} />
+        : <Message id="dialog.consoleSession.title" params={{ console: <InlineChip dir="auto" wrap>{parentConsole.name}</InlineChip> }} />}
       onClose={onClose}
       submitLabel={t(target ? SUBMIT_LABEL[target.kind] : "dialog.session.open")}
       busy={busy}
@@ -328,7 +323,6 @@ export function SessionDialog({
               resumeId={resumeId}
               onResumeIdChange={setResumeId}
               shownProblem={shownProblem}
-              refusal={refused}
               resume={resume}
               name={foundName}
               onNameChange={(value) => target && target.kind !== "record" && setHeldName({ session: target.session.id, value })}
@@ -340,7 +334,6 @@ export function SessionDialog({
         </Tabs>
       )}
       {!resumable && sharedFields}
-      <DialogError message={error} />
       {/* Inside this dialog's tree, though it shows in its own layer: a focus scope that is not
           nested in the one beneath it is bounced back to it. */}
       {confirmation}

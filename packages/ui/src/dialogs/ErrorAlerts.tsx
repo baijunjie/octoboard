@@ -37,7 +37,7 @@ function DiagnosticDetails({ text }: { text: string }): React.ReactElement {
   return (
     <details className="min-w-0 max-w-full">
       <summary id={summaryId}>{t("error.diagnostics")}</summary>
-      <div className={`min-w-0 max-w-full rounded-md bg-default ${region.focused ? "ring-2 ring-app-focus" : ""}`}>
+      <div className={`min-w-0 max-w-full rounded-md bg-default ${region.focused ? "ring-2 ring-focus" : ""}`}>
         <FadedScroller dir="ltr" orientation="horizontal" region={region} className="min-w-0 max-w-full overflow-x-auto overflow-y-hidden rounded-md">
           <CodeBlock dir="ltr" wrap={false} className="[&>.app-code]:rounded-none [&>.app-code]:bg-transparent">{text}</CodeBlock>
         </FadedScroller>
@@ -73,7 +73,7 @@ export function ErrorAlerts({ daemon }: { daemon?: Daemon }): React.ReactElement
         message: t("error.issue.openFailed"),
         error: cause,
         recovery: "issueLink",
-        content: <><p>{t("error.issue.openFailed")}</p><p><InlineChip size="inherit" monospace wrap>{issueUrl}</InlineChip></p></>,
+        content: <><p>{t("error.issue.openFailed")}</p><p dir="ltr" className="font-mono [overflow-wrap:anywhere]">{issueUrl}</p></>,
       }, { immediate: true });
     } finally {
       reporting.current = false;
@@ -104,8 +104,8 @@ export function ErrorAlerts({ daemon }: { daemon?: Daemon }): React.ReactElement
       {error.classification.kind === "unexpected"
         ? <>
           <p>{manualIssue
-            ? <Message id="error.unexpected.manualAddressGuidance" params={{ address: <InlineChip size="inherit" monospace wrap>{issueUrl}</InlineChip> }} />
-            : <Message id="error.unexpected.reportGuidance" params={{ report: <InlineChip size="inherit">{t("error.issue.report")}</InlineChip> }} />}</p>
+            ? <Message id="error.unexpected.manualAddressGuidance" params={{ address: <InlineChip monospace wrap>{issueUrl}</InlineChip> }} />
+            : <Message id="error.unexpected.reportGuidance" params={{ report: <InlineChip>{t("error.issue.report")}</InlineChip> }} />}</p>
           {error.details === undefined && diagnostics.length > 0 && <DiagnosticDetails text={[...new Set(diagnostics)].join("\n\n")} />}
         </>
         : !error.failures?.length && error.classification.recovery !== "none" && <p><RecoveryGuidance recovery={error.classification.recovery} /></p>}

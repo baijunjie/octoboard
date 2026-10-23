@@ -35,7 +35,7 @@ export function RecoveryGuidance({ recovery }: { recovery: ErrorRecovery }): Rea
   const t = useT();
   if (recovery === "none") return null;
   const id = `error.recovery.${recovery}` as const;
-  const params = recoveryParams(t, (value, monospace) => <InlineChip dir={monospace ? "ltr" : "auto"} monospace={monospace} wrap size="inherit">{value}</InlineChip>);
+  const params = recoveryParams(t, (value, monospace) => <InlineChip dir={monospace ? "ltr" : "auto"} monospace={monospace} wrap>{value}</InlineChip>);
   return <Message id={id} params={params as never} />;
 }
 

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 
 import { Button } from "../components/Button";
+import { ErrorAlert } from "../components/ErrorAlert";
+import { StatusBadge } from "../components/StatusBadge";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useWindowAttended } from "../components/useWindowAttended";
 import { Message, useT } from "../i18n/react";
@@ -44,6 +46,13 @@ export function PermissionsSection(): React.ReactElement {
   const t = useT();
   const { macosPermissions } = usePlatform();
   const { status, loaded, unreadable, refused, pending, request, openSystemSettings } = useMacosPermissions();
+  // Whether a read had come in before this render: grants that become unreadable on a later read (the
+  // one on each window focus) are announced, while a section that opens on an unreadable first read
+  // shows it as part of what it opened with. `ErrorAlert` reads `announce` when it mounts.
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    if (loaded) setSettled(true);
+  }, [loaded]);
   // A button unmounts when its permission is granted, and the Accessibility one the moment its
   // request resolves; either can be the control the keyboard was on. The deps are the resolved
   // flags rather than the objects holding them: `status` is a fresh object after every read,
@@ -87,7 +96,7 @@ export function PermissionsSection(): React.ReactElement {
     // A shell that cannot be asked is not a shell with nothing to report: on macOS the command
     // always answers, so a refused read means the IPC itself is broken (a missing ACL entry, say),
     // and saying "only in the macOS app" there would misdiagnose the one platform that has this.
-    if (unreadable) return line("settings.permissions.unreadable");
+    if (unreadable) return <ErrorAlert announce={settled}><Message id="settings.permissions.unreadable" /></ErrorAlert>;
     if (!rows) return line("settings.permissions.unavailable");
 
     return (
@@ -107,23 +116,25 @@ export function PermissionsSection(): React.ReactElement {
                   {/* Every sentence here is a line of its own rather than spliced onto the one before
                       it: a separator written in code is a half-width space, which belongs between two
                       English sentences and nowhere near the full stop a language like Chinese ends
-                      its own with. The state is the row's own description, read where it stands; it
-                      is announced from the section's status region (`PermissionsAnnouncer`). */}
-                  <span className="block"><Message id={stateKey} /></span>
+                      its own with. A state still to act on is the row's own description, read where it
+                      stands; a granted one is the success badge at the row's end instead. Either is
+                      announced from the section's status region (`PermissionsAnnouncer`). */}
+                  {!granted && <span className="block"><Message id={stateKey} /></span>}
                   {restart && <span className="block"><Message id="settings.permissions.restart" /></span>}
                 </>
               }
             >
-              {!granted &&
-                (refused[kind] ? (
-                  <Button size="sm" variant="secondary" preventFocusOnPress onPress={() => void openSystemSettings(kind)}>
-                    {t("settings.permissions.openSettings")}
-                  </Button>
-                ) : (
-                  <Button size="sm" variant="primary" preventFocusOnPress isPending={pending[kind]} onPress={() => void request(kind)}>
-                    {t("settings.permissions.grant")}
-                  </Button>
-                ))}
+              {granted ? (
+                <StatusBadge color="success" variant="soft" separated={false}>{t("settings.permissions.grantedBadge")}</StatusBadge>
+              ) : (refused[kind] ? (
+                <Button size="sm" variant="secondary" preventFocusOnPress onPress={() => void openSystemSettings(kind)}>
+                  {t("settings.permissions.openSettings")}
+                </Button>
+              ) : (
+                <Button size="sm" variant="primary" preventFocusOnPress isPending={pending[kind]} onPress={() => void request(kind)}>
+                  {t("settings.permissions.grant")}
+                </Button>
+              ))}
             </SettingRow>
           ))}
         </div>

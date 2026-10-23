@@ -461,5 +461,5 @@ it("opens the project repository through the platform and reports an opening fai
   await press("Open in");
   await press("GitLab");
   expect(errorAlerts.getSnapshot().some((failure) => failure.message === "Could not open the external link.")).toBe(true);
-  expect(document.querySelector('[role="alertdialog"] [data-inline-chip]')?.textContent).toBe("https://gitlab.com/team/app");
+  expect(document.querySelector('[role="alertdialog"] p[dir=ltr]')?.textContent).toBe("https://gitlab.com/team/app");
 });

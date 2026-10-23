@@ -363,7 +363,7 @@ const heldElsewhereState = {
   projects: new Map([...resumeState.projects, [otherProject.id, otherProject]]),
   sessions: new Map([
     ...resumeState.sessions,
-    ["s-api-held", sessionOf("s-api-held", console_.id, otherProject.id, "Add idempotency keys", "waiting_user")],
+    ["s-api-held", sessionOf("s-api-held", console_.id, otherProject.id, "Add idempotency keys", "waiting_user", { terminal_title: "Prevent duplicate API requests" })],
   ]),
 };
 
@@ -905,7 +905,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Session resume, conversation held by a session of another project",
-    description: "The Session ID is marked invalid in the danger tone, saying the conversation is already held by the session \"Add idempotency keys\" in Website API; nothing appears below the field and the footer button is disabled.",
+    description: "A danger Alert directly under the Session ID says the conversation is already held by a session in Website API, named by its task and its own name, \"Prevent duplicate API requests | Add idempotency keys\", as one chip, with the project as a chip of its own; nothing else appears below the field and the footer button is disabled.",
     conversationLocation: { kind: "outside_project", session: "s-api-held" },
     steps: resumeLookup,
   },
@@ -916,7 +916,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Session resume, conversation held by a console session",
-    description: "The Session ID is marked invalid in the danger tone, saying the conversation is already held by the console session \"Hub\" in Main; nothing appears below the field and the footer button is disabled.",
+    description: "A danger Alert directly under the Session ID says the conversation is already held by the console session \"Hub\" in Main; nothing else appears below the field and the footer button is disabled.",
     conversationLocation: { kind: "outside_project", session: "s-console" },
     steps: resumeLookup,
   },
@@ -927,7 +927,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Session resume, no conversation with this ID",
-    description: "Under the Session ID, no conversation with this ID was found in any account; nothing appears below the field and the footer button is disabled.",
+    description: "A danger Alert directly under the Session ID says no conversation with this ID was found in any account; nothing else appears below the field and the footer button is disabled.",
     conversationLocation: { kind: "not_found" },
     steps: resumeLookup,
   },
@@ -938,7 +938,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Session resume, account holding the conversation no longer offered",
-    description: "The record sits in a Codex account that is no longer set up: under the Session ID stands that the agent or account is no longer available; nothing appears below the field and the footer button is disabled.",
+    description: "The record sits in a Codex account that is no longer set up: a danger Alert directly under the Session ID says that the agent or account is no longer available; nothing else appears below the field and the footer button is disabled.",
     conversationLocation: { kind: "record", agent: "codex", account: "a-removed" },
     steps: resumeLookup,
   },
@@ -949,7 +949,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Session resume, lookup refused",
-    description: "The daemon refused the lookup, and its reason stands under the Session ID in the danger tone; nothing appears below the field and the footer button is disabled.",
+    description: "The daemon refused the lookup, and its reason, in the application's own words, is a danger Alert directly under the Session ID, with no Details since there is no raw text; nothing else appears below the field and the footer button is disabled.",
     conversationLocation: { code: "unknown_project", params: { project: "p-web" }, message: "unknown project p-web" },
     steps: resumeLookup,
   },
@@ -966,7 +966,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Session resume, conversation gone when opened",
-    description: "The lookup found the conversation in an agent's record, but it was removed before Open was pressed: the refusal stands under the Session ID, which is focused, with the directory path set as code in the danger tone and the typed ID not repeated. The Name and Agent and Account fields stay below it, as the record is still on offer, and the dialog has no alert at its foot.",
+    description: "The lookup found the conversation in an agent's record, but it was removed before Open was pressed: the daemon's refusal is the error alert dialog's, raised over the dialog, with the directory path set as code and the typed ID not repeated; nothing is written into the dialog itself. Behind it the Session ID is focused and the Name and Agent and Account fields stay, as the record is still on offer.",
     steps: [...resumeLookup, (ui) => ui.confirm()],
   },
   {
@@ -1069,7 +1069,7 @@ export const dialogScenarios: Scenario[] = [
     ...removeProjectTrash,
     id: "dialog-remove-project-trash-expanded",
     title: "Remove project to the Trash, lists opened",
-    description: "Both disclosures are open (What goes with it, Details), and the locked-worktree option is ticked: under the Trash option, the worktrees moved to the Trash with the folder (one on a detached HEAD) and the branches deleted permanently; under the locked option, the four locked worktrees in each wording, those with uncommitted changes ending \"uncommitted changes\". The stock warning under the options is followed by consequence lines, including one for the locked worktrees moved to the Trash; the locked worktree's branch, now going with it, joins the branches.",
+    description: "Both disclosures are open (What goes with it, Details), and the locked-worktree option is ticked: under the Trash option, the worktrees moved to the Trash with the folder (one on a detached HEAD) and the branches deleted permanently; under the locked option, the four locked worktrees in each wording, those with uncommitted changes ending in a soft warning \"uncommitted changes\" badge. The stock warning under the options is followed by consequence lines, including one for the locked worktrees moved to the Trash; the locked worktree's branch, now going with it, joins the branches.",
     steps: [...removeDocsSite, (ui) => ui.press(ui.t("branchCleanup.along", { count: 4 })), (ui) => ui.pressEach(ui.t("branchCleanup.details")), (ui) => ui.press(ui.t("dialog.removeProject.alongLockedRemove", { count: 4 }))],
   },
   {
@@ -1138,7 +1138,7 @@ export const dialogScenarios: Scenario[] = [
     ...archiveConsoleSession,
     id: "dialog-archive-console-session-expanded",
     title: "Archive console session, lists opened",
-    description: "Both Details disclosures are open and both options ticked: under the force-remove option, the worktrees with uncommitted changes and with initialized submodules (each with its branch chip, or plain detached HEAD text) and the unmerged branch, each group under its lead line; under the locked option, the locked worktree with its row ending \"uncommitted changes\". The stock warning under the options is followed by the affected sessions and a separate consequence line for each ticked option saying it also permanently deletes them. The confirming button reads \"Archive and delete\" in the danger colour because deletion options are ticked.",
+    description: "Both Details disclosures are open and both options ticked: under the force-remove option, the worktrees with uncommitted changes and with initialized submodules (each named by its path as plain monospace text, with its branch after a branch icon, or plain detached HEAD text) and the unmerged branch, each group under its lead line; under the locked option, the locked worktree with its row ending in a soft warning \"uncommitted changes\" badge. The stock warning under the options is followed by the affected sessions and a separate consequence line for each ticked option saying it also permanently deletes them. The confirming button reads \"Archive and delete\" in the danger colour because deletion options are ticked.",
     steps: [
       ...archiveConsoleSession.steps!,
       (ui) => ui.pressEach(ui.t("branchCleanup.details")),
@@ -1297,6 +1297,29 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
+    id: "dialog-edit-project-models-unavailable",
+    group: "Projects",
+    category: "exceptional",
+    title: "Edit a project whose agent cannot list its models",
+    description: "In Advanced, the project's Model picker offers the stored model alone and a danger Alert directly under it says the agent was not found, with the effort picker beneath it; the Alert follows the field, where the console dialog's matrix has one for both columns.",
+    agentModels: {
+      claude: {
+        models: [],
+        unavailable: {
+          code: "models_binary_not_found",
+          params: { binary: "claude" },
+          message: "claude was not found on the login shell's PATH",
+        },
+      },
+    },
+    steps: [
+      (ui) => projectActions(ui, configured.name),
+      (ui) => ui.press(ui.t("sidebar.project.edit")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+    ],
+  },
+  {
+    ...dialogFixture,
     id: "dialog-edit-project-model-choices",
     group: "Projects",
     category: "normal",
@@ -1331,7 +1354,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Project settings that follow the console throughout",
-    description: "Default agent and its account, side by side, both read Same as console with a grey badge after it naming what it stands for (Claude Code; the console's long account name). The field is too narrow for either whole: the badge fades out with the label at the clipped edge rather than standing apart. Advanced does the same: Model and Reasoning effort read Same as console followed by the console's long retained value, mixing scripts and keeping its own reading order.",
+    description: "Default agent and its account, side by side, both read Same as console with a grey badge after it naming what it stands for (Claude Code; the console's long account name). The field is too narrow for either whole: the badge fades out with the label at the clipped edge rather than standing apart. Advanced does the same: Model and Reasoning effort read Same as console followed by a grey badge holding the console's long retained value, mixing scripts and keeping its own reading order.",
     steps: [
       (ui) => projectActions(ui, inheriting.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),
@@ -1396,11 +1419,33 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Directory picker",
-    description: "Short directory names and a long directory row share the list; the long name fades and runs as a marquee on hover while its folder icon stays visible.",
+    description: "Short directory names and a long directory row share the list, and a repository ends in a neutral \"git\" badge; the long name fades and runs as a marquee on hover while its folder icon stays visible.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
       (ui) => ui.press(ui.t("common.browse")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    directories: {
+      ...dialogFixture.directories,
+      "/Users/dev/Documents": {
+        code: "directory_unreadable",
+        params: { path: "/Users/dev/Documents", detail: "Operation not permitted (os error 1)" },
+        message: "`/Users/dev/Documents` could not be read. On a volume the application has no file access to, macOS asks for permission per volume \u2014 grant it and try again: Operation not permitted (os error 1)",
+      },
+    },
+    id: "dialog-directory-picker-failed",
+    group: "Projects",
+    category: "exceptional",
+    title: "Directory picker, a directory that could not be listed",
+    description: "Documents was entered and refused. One danger Alert under the path field says Could not list this directory, then that the path could not be read and the remedy of granting the application access to the volume, a Details button holding the macOS explanation and then the system's reason, and Try again inside it; the home listing it came from stays available below it.",
+    steps: [
+      consoleActions,
+      (ui) => ui.press(ui.t("sidebar.console.addProject")),
+      (ui) => ui.press(ui.t("common.browse")),
+      (ui) => ui.press("Documents"),
     ],
   },
   {
@@ -1438,7 +1483,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Project path refused",
-    description: "The refusal stands under the Directory field with the missing path as code in the danger tone.",
+    description: "A danger Alert directly under the Directory field says the path does not exist, with the missing path as code in it.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
@@ -1515,6 +1560,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Unreadable Git source",
+    description: "The probe of the repository failed: a danger Alert directly under the Repository URL says it could not be read, with Git's diagnostic behind its Details button on the right, and the fields below stay locked.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
@@ -1543,7 +1589,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "exceptional",
     title: "Edit a console whose agent cannot list its models",
-    description: "The daemon found no binary for the agent, so the model picker offers the stored model alone and says why; the effort picker still works over what is stored.",
+    description: "The daemon found no binary for the agent, so the model picker offers the stored model alone and a danger Alert below the launch settings table says why; the effort picker still works over what is stored.",
     state: dialogState,
     agentModels: {
       claude: {
@@ -1566,7 +1612,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "exceptional",
     title: "Model command failed with raw diagnostics",
-    description: "The model picker retains its stored choice and presents the named agent's failure with multiline diagnostics below the short reason.",
+    description: "The model picker retains its stored choice, and one danger Alert below the launch settings table says the named agent could not list its models, with its multiline diagnostics in the Details popover on the right of the Alert.",
     state: dialogState,
     agentModels: { claude: { models: [], unavailable: {
       code: "models_command_failed",

@@ -4,11 +4,9 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "re
 import type { Key } from "react-aria-components";
 
 import { Button } from "../components/Button";
-import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
-import { ErrorAlert } from "../components/ErrorAlert";
-import { CodeToneContext } from "../components/codeTone";
-import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
+import { PaneFailure } from "../components/PaneFailure";
+import { useHasPainted } from "../components/useHasPainted";
 import { handFocusOff } from "../components/handFocusOff";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { FADE_SIZE } from "../components/scrollFade";
@@ -17,7 +15,6 @@ import { TitledControl } from "../components/TitledControl";
 import { ROW_ICON_BUTTON_CLASS } from "../components/RowControls";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useStableHandler } from "../components/useLatest";
-import type { ErrorPresentation } from "../errorPresentation";
 import { useT } from "../i18n/react";
 import { PanelHeader } from "../components/PanelHeader";
 import type { Project } from "../protocol";
@@ -46,6 +43,13 @@ const TREE_PADDING = 4;
  * as having happened: half a turn of the slow spin (2 s per turn). The icon looks the same every
  * half turn, so stopping there does not visibly jump. */
 const MIN_SPIN_MS = 1000;
+
+/** Gives `children` whether the Files panel it mounts with has painted, so a failure that appears
+ * once it has is announced and one the panel opened with is not. Switching back to the panel mounts
+ * a fresh one. */
+function WhenPainted({ children }: { children: (painted: boolean) => React.ReactNode }): React.ReactElement {
+  return <>{children(useHasPainted())}</>;
+}
 
 /**
  * A project's browser, the content of the Files panel (`panels/panelRegistry.tsx`) in the right pane
@@ -274,47 +278,53 @@ export function ProjectBrowser({
           </PanelHeader>
           <FileFilterField contextKey={tab} state={activeFilter} label={t("browser.filter.label")} placeholder={t(mode === "files" ? "browser.filter.placeholder" : "git.filter.placeholder")} />
           {mode === "files" ? <Tabs.Panel key="files" id="files" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
-            <div className="flex min-h-0 flex-1 flex-col" onFocus={filesFocus.onFocus} onBlur={filesFocus.onBlur}>
-              <StatusAnnouncer text={rootLoading ? loadingLabel : undefined} />
-              {rootLoading ? (
-                <div aria-hidden="true" className="flex flex-1 items-center justify-center gap-2 text-sm text-app-muted">
-                  <Spinner size="sm" aria-hidden="true" />
-                  {loadingLabel}
-                </div>
-              ) : searching && search.result.state === "error" ? (
-                <RootError title={t("browser.filter.error")} message={search.result.message} onRetry={(from) => { handFocusOff(from, refreshRef.current, true); search.refresh(); }} />
-              ) : !searching && root?.state === "error" ? (
-                <RootError
-                  message={root.message}
-                  onRetry={(from) => {
-                  // The error and its button go as the listing starts again; focus on it moves to the
-                  // header's Refresh, which stays.
-                    handFocusOff(from, refreshRef.current, true);
-                    dirs.refresh([""]);
-                  }}
-                />
-              ) : tree.nodes.length === 0 && (searching || root?.state === "loaded" && root.complete) ? (
-                <>
-                  <CenteredEmptyPanel icon={searching ? SearchX : FolderX} message={t(searching ? "browser.filter.noMatch" : "browser.empty")} />
-                  {searching && search.result.state === "loaded" && !search.result.complete && <PaneNote divided>{t("browser.filter.partial")}</PaneNote>}
-                </>
-              ) : (
-                <>
-                  <RowPathScope.Provider value={{ project: project.id }}>
-                    <FileTree
-                      nodes={tree.nodes}
-                      expanded={expandedKeys}
-                      label={t("browser.tree.label")}
-                      onExpandedChange={onExpandedChange}
-                      onOpenFile={openFile}
-                      onRetry={(dir) => dirs.refresh([dir])}
-                      treeRef={treeRef}
+            <WhenPainted>
+              {(painted) => (
+                <div className="flex min-h-0 flex-1 flex-col" onFocus={filesFocus.onFocus} onBlur={filesFocus.onBlur}>
+                  <StatusAnnouncer text={rootLoading ? loadingLabel : undefined} />
+                  {rootLoading ? (
+                    <div aria-hidden="true" className="flex flex-1 items-center justify-center gap-2 text-sm text-app-muted">
+                      <Spinner size="sm" aria-hidden="true" />
+                      {loadingLabel}
+                    </div>
+                  ) : searching && search.result.state === "error" ? (
+                    <PaneFailure title={t("browser.filter.error")} message={search.result.message} announce={painted} onRetry={(from) => { handFocusOff(from, refreshRef.current, true); search.refresh(); }} />
+                  ) : !searching && root?.state === "error" ? (
+                    <PaneFailure
+                      title={t("browser.error.root")}
+                      message={root.message}
+                      announce={painted}
+                      onRetry={(from) => {
+                        // The error and its button go as the listing starts again; focus on it moves to the
+                        // header's Refresh, which stays.
+                        handFocusOff(from, refreshRef.current, true);
+                        dirs.refresh([""]);
+                      }}
                     />
-                  </RowPathScope.Provider>
-                  {(searching ? search.result.state === "loaded" && !search.result.complete : root?.state === "loaded" && !root.complete) && <PaneNote divided>{t(searching ? "browser.filter.partial" : "browser.partial")}</PaneNote>}
-                </>
+                  ) : tree.nodes.length === 0 && (searching || root?.state === "loaded" && root.complete) ? (
+                    <>
+                      <CenteredEmptyPanel icon={searching ? SearchX : FolderX} message={t(searching ? "browser.filter.noMatch" : "browser.empty")} />
+                      {searching && search.result.state === "loaded" && !search.result.complete && <PaneNote divided>{t("browser.filter.partial")}</PaneNote>}
+                    </>
+                  ) : (
+                    <>
+                      <RowPathScope.Provider value={{ project: project.id }}>
+                        <FileTree
+                          nodes={tree.nodes}
+                          expanded={expandedKeys}
+                          label={t("browser.tree.label")}
+                          onExpandedChange={onExpandedChange}
+                          onOpenFile={openFile}
+                          onRetry={(dir) => dirs.refresh([dir])}
+                          treeRef={treeRef}
+                        />
+                      </RowPathScope.Provider>
+                      {(searching ? search.result.state === "loaded" && !search.result.complete : root?.state === "loaded" && !root.complete) && <PaneNote divided>{t(searching ? "browser.filter.partial" : "browser.partial")}</PaneNote>}
+                    </>
+                  )}
+                </div>
               )}
-            </div>
+            </WhenPainted>
           </Tabs.Panel> : <Tabs.Panel key="changes" id="changes" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
             <RowPathScope.Provider value={{ project: project.id, worktree: git.worktree }}>
               <GitView
@@ -355,27 +365,5 @@ export function ProjectBrowser({
         />
       )}
     </>
-  );
-}
-
-/** The project's own directory could not be listed: why, and a way to try again. */
-function RootError({ message, onRetry, title }: { title?: string; message: ErrorPresentation; onRetry: (from: Element | null) => void }): React.ReactElement {
-  const t = useT();
-  const ref = useRef<HTMLDivElement>(null);
-  useErrorAcknowledgement(message, title ?? t("browser.error.root"));
-  return (
-    <div ref={ref} className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-sm">
-      <CodeToneContext value="danger">
-        <div className="flex w-full min-w-0 max-w-lg flex-col gap-3">
-          <ErrorAlert title={title ?? t("browser.error.root")}>
-            <DaemonErrorMessage error={message} part="summary" />
-          </ErrorAlert>
-          <DaemonErrorMessage error={message} part="details" />
-        </div>
-      </CodeToneContext>
-      <Button size="sm" variant="secondary" preventFocusOnPress onPress={() => onRetry(ref.current)}>
-        {t("error.tryAgain")}
-      </Button>
-    </div>
   );
 }

@@ -26,7 +26,7 @@ it("shows the compact context size, and its exact count with the limit and share
   expect(container.textContent).toBe("190.1K");
   const badge = container.querySelector('[aria-hidden="true"] > span:not(.sr-only)')!;
   expect(badge.textContent).toBe("190.1K");
-  expect(badge.className).toContain("rounded-full");
+  expect(badge.getAttribute("data-variant")).toBe("bordered");
   expect(container.querySelector(".sr-only")).toBeNull();
   const indicator = container.querySelector<HTMLElement>('[role="img"]')!;
   expect(indicator.getAttribute("aria-label")).toBe(`Context ${isolate("190,123")} tokens, Limit: ${isolate("475,000")} (${isolate("40%")} used)`);

@@ -28,6 +28,9 @@ const HOVER_OPEN_DELAY_MS = 250;
  * crossing the gap between them does not close it. */
 const HOVER_CLOSE_DELAY_MS = 150;
 
+/** The popover of a `FailureMark` in the panel, which is portalled out of it but belongs to it. */
+const NESTED_POPOVER = "[data-failure-mark-popover]";
+
 /** Whether `target` is inside either of `elements`. */
 function insideAny(target: EventTarget | null, ...elements: Array<Element | null>): boolean {
   return target instanceof Node && elements.some((element) => element?.contains(target));
@@ -163,11 +166,12 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: PointerEvent) => {
-      if (insideAny(event.target, button.current, panel.current)) return;
+      if (insideAny(event.target, button.current, panel.current) || (event.target instanceof Element && event.target.closest(NESTED_POPOVER))) return;
       close();
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      // Escape in a failure mark's popover closes that one, and the panel stays.
+      if (event.key !== "Escape" || (event.target instanceof Element && event.target.closest(NESTED_POPOVER))) return;
       // The key is this panel's: it neither reaches the agent in the terminal nor closes a drawer
       // under it (which leaves Escape alone while the panel is marked `data-escape-topmost`).
       event.preventDefault();
@@ -177,9 +181,11 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
     // A modal opened by something other than a press here (Settings from the native menu) covers
     // the panel, which would otherwise stay up under it and take the modal's Escape. Modals and
     // menus portal in as direct children of the body, so only those are watched; this panel is
-    // `aria-modal="false"` and does not match.
+    // `aria-modal="false"` and does not match, and neither does a failure mark's popover opened from
+    // inside it, whose portal would otherwise read as such a modal and close the panel it came from.
     const modalWatch = new MutationObserver(() => {
-      if (document.querySelector(MODAL_OPEN)) close();
+      const covering = Array.from(document.querySelectorAll(MODAL_OPEN)).some((modal) => !modal.closest(NESTED_POPOVER));
+      if (covering) close();
     });
     modalWatch.observe(document.body, { childList: true });
     document.addEventListener("pointerdown", onPointerDown, true);
@@ -392,7 +398,7 @@ function AgentPanel({ agent, owned, currentAccount }: { agent: Agent; owned: Acc
       // and not the library's exit placement out of the flow, which would drop the cell's height.
       className="col-start-1 row-start-1 m-0 self-start p-0 data-[exiting=true]:static data-[inert=true]:invisible"
     >
-      <div className={region.focused ? "ring-2 ring-inset ring-app-focus" : ""}>
+      <div className={region.focused ? "ring-2 ring-inset ring-focus" : ""}>
         <FadedScroller ref={scroller} region={region} className="max-h-[min(24rem,60vh)]">
           <div className="relative flex flex-col px-4">
             <QuotaAccount agent={agent} account={null} name={defaultName} rowRef={currentAccount === null ? currentRow : undefined} />

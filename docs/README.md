@@ -235,9 +235,11 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Empty states](product/empty-states.md) — the two shapes a view, list or panel with nothing to show takes: the full
   panel's glyph, title, explaining line and action, the compact row for a list nested in another, what each part says,
   and how each is announced.
-- [Error alerts](product/error-alerts.md) — runtime failures that require acknowledgement, specific recovery guidance,
-  unexpected-error diagnostics and Issue reporting, their queue and duplicate suppression, retrying the original action,
-  field validation and durable recovery content.
+- [Error alerts](product/error-alerts.md) — where a failure is shown: validation under a field, the error alert that
+  requires acknowledgement (its queue, duplicate suppression, focus and retrying the original action), failures shown
+  on the screen (an empty-state failure in place of a whole subject, or a compact alert with Details among other
+  content), and failures marked on a row or on a part of a pane; names and diagnostic details, recovery guidance,
+  unexpected errors and Issue reporting.
 - [Toasts](product/toasts.md) — notices that need no answer: where they appear, how one about a session
   is titled, when they dismiss themselves, how an identical one replaces rather than stacks, copying their text
   without taking focus off the terminal, and reaching them with F6.

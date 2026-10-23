@@ -346,7 +346,7 @@ function SwitchStrip({
             // current one is marked by the selected card's border alone, so it keeps the tertiary
             // fill's hover and press feedback; the others have a transparent border so that nothing
             // shifts when it changes.
-            className="max-w-48 shrink-0 rounded-full border border-transparent font-medium data-switch-current:border-accent-glyph"
+            className="max-w-48 shrink-0 rounded-full border border-transparent font-medium data-switch-current:border-accent-soft-foreground"
           >
             <BindingBadge owner={consoleSession} decorative />
             <FadeOverflow as="span" dir="auto" className="min-w-0" titleWhenClipped={sessionDisplayTitle(t, consoleSession)}>
@@ -410,8 +410,8 @@ const FocusProjectGroup = memo(function FocusProjectGroup({
             ref={openSessionHolder}
             label={t("sidebar.focus.newSessionIn", { name: isolate(project.name) })}
             quickLabel={t("sidebar.focus.newSessionInQuick", { name: isolate(project.name) })}
-            title={<Message id="sidebar.focus.newSessionIn" params={{ name: <InlineChip size="inherit" dir="auto" wrap>{project.name}</InlineChip> }} />}
-            quickTitle={<Message id="sidebar.focus.newSessionInQuick" params={{ name: <InlineChip size="inherit" dir="auto" wrap>{project.name}</InlineChip> }} />}
+            title={<Message id="sidebar.focus.newSessionIn" params={{ name: <InlineChip dir="auto" wrap>{project.name}</InlineChip> }} />}
+            quickTitle={<Message id="sidebar.focus.newSessionInQuick" params={{ name: <InlineChip dir="auto" wrap>{project.name}</InlineChip> }} />}
             target={newSessionHere}
             onOpen={handlers.onOpenDialog}
             onQuickCreate={handlers.onQuickCreateSession}
@@ -472,8 +472,8 @@ function BoundElsewhere({
               className="static transform-none"
               aria-hidden="true"
               style={{
-                "--badge-bg": "color-mix(in oklab, var(--foreground) 22%, var(--panel-sidebar))",
-                "--badge-fg": "var(--foreground)",
+                "--badge-bg": "var(--tint-default-bg)",
+                "--badge-fg": "var(--tint-default-fg)",
                 "--badge-border": "transparent",
               } as React.CSSProperties}
             >
@@ -607,7 +607,7 @@ const SessionCard = memo(function SessionCard({
       selected={selected}
       locked={session.locked}
       onActivate={() => handlers.onSelectSession(session)}
-      className="min-h-8 flex-col gap-1 border border-transparent shadow-(--panel-shadow) px-[calc(var(--row-content-inset)-1px)] py-[7px] data-selected:border-accent-glyph"
+      className="min-h-8 flex-col gap-1 border border-transparent shadow-(--panel-shadow) px-[calc(var(--row-content-inset)-1px)] py-[7px] data-selected:border-accent-soft-foreground"
     >
       <RowIconLine icon={<StatusIcon status={sessionShownStatusKind(session)} decorative />}>
         <span className="text-xs font-medium text-app-muted">{statusLabel(t, sessionShownStatusKind(session))}</span>

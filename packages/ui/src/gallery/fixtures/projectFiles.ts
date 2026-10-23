@@ -224,6 +224,7 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Folders that are empty, unreadable or cut short",
+    description: "Under the opened folders: \"Empty folder\" in muted italics; for the unreadable folder a danger-coloured circled \"!\" named Could not list this folder, then \"Try again\" and a refresh glyph, no sentence of error text in the row; and \"Not every entry is shown\" for the cut-short one, over the entries it did list.",
     state,
     files: {
       "": { dir: true, complete: false },
@@ -234,6 +235,20 @@ export const projectFilesScenarios: Scenario[] = [
       "notes.md": { text: "Notes\n" },
     },
     steps: [...openFiles, (ui) => ui.press("empty"), (ui) => ui.press("locked"), (ui) => ui.press("many"), (ui) => ui.wait(300)],
+  },
+  {
+    id: "files-folder-failure-reason",
+    group: GROUP,
+    category: "exceptional",
+    title: "The reason a folder could not be listed",
+    description: "The danger-coloured mark on the unreadable folder's row is pressed: its popover holds why it could not be listed, and the row itself still offers Try again.",
+    state,
+    files: {
+      "": { dir: true },
+      locked: unreadableDir("locked"),
+      "notes.md": { text: "Notes\n" },
+    },
+    steps: [...openFiles, (ui) => ui.press("locked"), (ui) => ui.press(ui.t("browser.tree.errorLabel"))],
   },
   {
     id: "files-empty",
@@ -249,7 +264,7 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "A project folder that cannot be read",
-    description: "A required error alert opens over the failed folder. After OK, the failure keeps its stock status-coloured alert title, explanation and a separate Try again control. Narrow shows the same failure in the docked Files card.",
+    description: "The failure takes the empty-state shape in place of the tree: a danger glyph, the heading and the application's own explanation of why the folder cannot be read, with Try again as the primary button and Details, which holds the system's reason, beside it. Narrow shows the same failure in the docked Files card.",
     state,
     files: {
       "": {

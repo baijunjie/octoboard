@@ -65,13 +65,17 @@ the conversation does not carry over: the new session starts by reading a record
 
 - the number of branches the session is responsible for, as the daemon's inspection of the session's branches finds
   them when the dialog opens — a project session only, a console session having no branches. While that inspection is
-  under way the list says the branches are being checked; when it fails, the list says they could not be checked;
+  under way the list says the branches are being checked;
 - the number of sessions it owns, archived ones included;
 - its place under its owner, named, when it is bound to one.
 
 Only the lines that apply are shown. When none does, the dialog says that nothing moves — the session is responsible
-for no branches, owns no sessions and reports to no session; it never says so when the branch inspection failed. While
-the handoff request is under way the list stays as it was when it was sent.
+for no branches, owns no sessions and reports to no session; it never says so when the branch inspection failed.
+**An inspection that fails** is shown under the list in a red alert saying the branches it is responsible for could
+not be checked, with the reason and **Try again**, which inspects them again; the alert stays, its button unavailable,
+while that runs. It is announced to assistive technology when it appears after the dialog was drawn, and it opens no
+error alert (see "Failures shown on the screen" in `docs/product/error-alerts.md`). While the handoff request is under
+way the list stays as it was when it was sent.
 
 Then come the fields:
 

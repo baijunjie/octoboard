@@ -92,7 +92,7 @@ function DeleteProjectDialog({ project, running, onClose }: { project: Project; 
   const cleanup = useProjectRemovalCleanup(project.id, trash, setTrash);
   return (
     <ConfirmDialog
-      title={<Message id="dialog.removeProject.title" params={{ name: <InlineChip dir="auto" wrap size="inherit">{project.name}</InlineChip> }} />}
+      title={<Message id="dialog.removeProject.title" params={{ name: <InlineChip dir="auto" wrap>{project.name}</InlineChip> }} />}
       message={t(trash ? "dialog.removeProject.messageTrash" : "dialog.removeProject.message")}
       warning={<ConfirmWarning title={running.length > 0 ? t("dialog.removeProject.running", { count: running.length }) : undefined} sessions={running.length > 0 ? running : undefined} lines={cleanup.consequences} />}
       confirmLabel={t(running.length > 0 ? "dialog.removeProject.confirmRunning" : "common.remove")}
@@ -134,7 +134,7 @@ function ArchiveSessionDialog({ session, withIt, branches, onClose }: {
   const cleanup = useBranchCleanup([session.id, ...withIt.map((s) => s.id)], branches);
   return (
     <ConfirmDialog
-      title={<Message id="dialog.archiveSession.title" params={{ title: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, session)}</InlineChip> }} />}
+      title={<Message id="dialog.archiveSession.title" params={{ title: <InlineChip dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineChip> }} />}
       message={t(sessionStatusKind(session) === "background" ? "dialog.archiveSession.messageBackground" : "dialog.archiveSession.message")}
       warning={<ConfirmWarning title={withIt.length > 0 ? t("dialog.archiveSession.boundAndEnded", { count: withIt.length }) : undefined} sessions={withIt.length > 0 ? withIt : undefined} lines={cleanup.consequences} />}
       confirmLabel={t(cleanup.forcing ? "dialog.archiveSession.confirmDelete" : "dialog.archiveSession.confirm")}
@@ -184,7 +184,7 @@ function DeleteSessionDialog({ session, withIt, onClose }: { session: Session; w
   const moveRecords = canTrash && trash;
   return (
     <ConfirmDialog
-      title={<Message id="dialog.deleteSession.title" params={{ title: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, session)}</InlineChip> }} />}
+      title={<Message id="dialog.deleteSession.title" params={{ title: <InlineChip dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineChip> }} />}
       message={t("dialog.deleteSession.message")}
       warning={(
         <ConfirmWarning
@@ -317,7 +317,7 @@ export function RequestedDialog({
     case "delete-console":
       return (
         <ConfirmDialog
-          title={<Message id="dialog.deleteConsole.title" params={{ name: <InlineChip dir="auto" wrap size="inherit">{dialog.console.name}</InlineChip> }} />}
+          title={<Message id="dialog.deleteConsole.title" params={{ name: <InlineChip dir="auto" wrap>{dialog.console.name}</InlineChip> }} />}
           message={t("dialog.deleteConsole.message")}
           confirmLabel={t("common.delete")}
           typeToConfirm={t("dialog.typeToConfirm.delete")}
@@ -336,7 +336,7 @@ export function RequestedDialog({
     case "restore-project-changes":
       return (
         <ConfirmDialog
-          title={<Message id="dialog.restoreProjectChanges.title" params={{ name: <InlineChip dir="auto" wrap size="inherit">{dialog.project.name}</InlineChip> }} />}
+          title={<Message id="dialog.restoreProjectChanges.title" params={{ name: <InlineChip dir="auto" wrap>{dialog.project.name}</InlineChip> }} />}
           message={t("dialog.restoreProjectChanges.message")}
           confirmLabel={t("dialog.restoreProjectChanges.confirm")}
           pendingLabel={t("dialog.restoreProjectChanges.pending")}

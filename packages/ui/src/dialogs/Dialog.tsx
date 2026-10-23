@@ -2,42 +2,33 @@ import { AlertDialog, Modal } from "@heroui/react";
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "../components/Button";
-import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { takeMenuFocusToRestore } from "../components/ActionMenu";
 import { FadedScroller, useFadeRegion } from "../components/scrollFade";
 import { TitledControl } from "../components/TitledControl";
 import { useLatest } from "../components/useLatest";
-import { type ErrorPresentation } from "../errorPresentation";
 import { useT } from "../i18n/react";
-import { DaemonRequestError } from "../daemon-client";
 import { reportError } from "../reportError";
-import { errorAlerts } from "../errorAlerts";
 import { dialogAround } from "./dialogElement";
 import { useEscapeWhileTooltipOpen } from "./useEscapeWhileTooltipOpen";
 import { useHeightMotion } from "./useHeightMotion";
 import { useToastClearance } from "./useToastClearance";
 
-/** The error and busy state every dialog that talks to the daemon needs. Execution failures go to
- * the acknowledgement queue; what is wrong with a single field goes to
- * that field's own `errorMessage` instead (see `useSubmitValidation`). `run` clears the
- * error, marks the dialog busy for the duration of `action`, and shows a rejection as the error
- * instead of letting it escape, so the dialog stays open for another try. A dialog reused for
- * successive subjects passes a `resetKey` naming the current one: when it changes the error and
- * busy state are cleared, and an action still running for the previous subject no longer reports
- * into them. */
+/** The busy state every dialog that talks to the daemon needs. Execution failures go to the
+ * acknowledgement queue; what is wrong with a single field goes to
+ * that field's own `errorMessage` instead (see `useSubmitValidation`). `run` marks the dialog busy
+ * for the duration of `action` and reports a rejection to the queue instead of letting it escape,
+ * so the dialog stays open for another try. A dialog reused for successive subjects passes a
+ * `resetKey` naming the current one: when it changes the busy state is cleared, and an action
+ * still running for the previous subject no longer reports into it. */
 export function useDialogAction(resetKey?: string): {
-  error: ErrorPresentation | undefined;
-  setError: (message: string | undefined) => void;
   busy: boolean;
   run: (action: () => Promise<void>) => Promise<void>;
 } {
-  const [error, setFailure] = useState<ErrorPresentation>();
   const [busy, setBusy] = useState(false);
   const [seenKey, setSeenKey] = useState(resetKey);
   const currentKey = useLatest(resetKey);
   if (seenKey !== resetKey) {
     setSeenKey(resetKey);
-    setFailure(undefined);
     setBusy(false);
   }
 
@@ -45,23 +36,16 @@ export function useDialogAction(resetKey?: string): {
     const startedFor = resetKey;
     const stale = () => currentKey.current !== startedFor;
     setBusy(true);
-    setFailure(undefined);
     try {
       await action();
     } catch (err) {
-      if (!stale()) {
-        if (err instanceof DaemonRequestError && err.code === "config_dir_taken") setFailure(err);
-        else reportError(err as Error);
-      }
+      if (!stale()) reportError(err as Error);
     } finally {
       if (!stale()) setBusy(false);
     }
   };
 
-  return { error, setError: (message) => {
-    setFailure(undefined);
-    if (message !== undefined) reportError(message);
-  }, busy, run };
+  return { busy, run };
 }
 
 /** Puts keyboard focus back on the element `target` returns when `deps` change and focus has fallen to `<body>`,
@@ -124,31 +108,6 @@ export function useSubmitValidation(): {
       return messages.every((message) => message === undefined);
     },
   };
-}
-
-/** A deterministic description of message markup, without serializing React internals. */
-function nodeText(node: unknown, seen = new Set<object>()): string {
-  if (typeof node === "string" || typeof node === "number") return String(node);
-  if (!node || typeof node !== "object" || seen.has(node)) return "";
-  seen.add(node);
-  if (React.isValidElement(node)) return nodeText(node.props, seen);
-  return Object.values(node).map((value) => nodeText(value, seen)).filter(Boolean).join(" ");
-}
-
-/** Presents an execution failure above the originating dialog, which stays available for retry. */
-export function DialogError({ message }: { message: ErrorPresentation | React.ReactElement | undefined }): null {
-  const description = !message ? undefined : typeof message === "string" ? message : React.isValidElement(message) ? nodeText(message) : (message as Error).message;
-  const latest = useLatest(message);
-  useEffect(() => {
-    const content = latest.current;
-    if (!description || !content) return;
-    errorAlerts.report({
-      message: description,
-      error: content,
-      content: React.isValidElement(content) ? content : <DaemonErrorMessage error={content as ErrorPresentation} />,
-    });
-  }, [description, latest]);
-  return null;
 }
 
 /** The children HeroUI's modal parts accept. Their typings resolve `ReactNode` against the React 18
@@ -308,10 +267,10 @@ export function Dialog({
           ring needs inside the clip. */}
       {/* The ring of the focusable scroller is drawn on its parent: the fade is a mask on the scroller
             and clips by its border box, so a ring on the scroller itself, which sits outside that box, is
-            cut off. The ring is the project's usual one (2px `--app-focus`), from the scroller's own state. */}
+            cut off. The ring is the project's usual one (2px `--focus`), from the scroller's own state. */}
       <Frame.Body
         id={bodyId}
-        className={`flex flex-col overflow-y-visible rounded-lg ${region.focused ? "ring-2 ring-app-focus" : ""}`}
+        className={`flex flex-col overflow-y-visible rounded-lg ${region.focused ? "ring-2 ring-focus" : ""}`}
       >
         <FadedScroller region={region} className="flex min-h-0 flex-1 flex-col gap-4 p-1">
           {children}

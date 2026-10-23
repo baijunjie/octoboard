@@ -39,13 +39,12 @@ function statusGlyph(status: ShownStatusKind, naming: Naming): React.ReactElemen
         </span>
       );
     case "idle":
-      // HeroUI's own success colour, 1.98:1 on the sidebar and 1.70:1 on a selected row, under the 3:1
-      // a meaningful glyph needs. The exception is deliberate: the green is only a secondary cue, as
-      // the bubble's shape tells idle apart from the working dot and the accessible name says it.
-      return <MessageCircleMore {...naming} className={`${ICON_CLASS} text-success`} />;
+      // HeroUI's success soft foreground, the colour of every glyph of that meaning (3.93:1 at the worst
+      // of the surfaces it sits on, see `style.css`).
+      return <MessageCircleMore {...naming} className={`${ICON_CLASS} text-success-soft-foreground`} />;
     case "background":
-      // The same green and the same exception as the bubble above; the hollow ring's shape tells it
-      // from the bubble and from the filled working dot, and the accessible name says it.
+      // The same green as the bubble above; the hollow ring's shape tells it from the bubble and from the
+      // filled working dot as well.
       return (
         <span {...naming} className="flex shrink-0">
           <WorkingDot background />

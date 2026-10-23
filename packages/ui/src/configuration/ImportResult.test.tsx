@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 import { act } from "react";
+import { isolate } from "../i18n/isolate";
 import { createRoot } from "react-dom/client";
-import { expect, it, onTestFinished } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
+import { openDetails } from "../components/detailsTestSupport";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { ErrorAlerts } from "../dialogs/ErrorAlerts";
 import { errorAlerts } from "../errorAlerts";
 import { setLanguage } from "../i18n/language";
@@ -127,53 +130,53 @@ it("puts no space between the sentences of the summary in a language that has no
   expect(container.textContent).toContain("已创建 1 个控制台。已创建 1 个项目。没有失败项。");
 });
 
-it("requires acknowledgement of partial import failures and retains the result after acknowledgement", () => {
+it("announces a failure to apply the settings once focus has settled, with its title and description only", () => {
+  vi.useFakeTimers();
+  onTestFinished(() => {
+    vi.useRealTimers();
+  });
+  const daemon = { store: createStateStore({}) } as Daemon;
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  const consoles = [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [project(1)] }];
+  const settings_error = { code: "path_not_found", params: { path: "/Users/dev/missing" }, message: "no" };
+  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles, settings_error }} /></DaemonProvider>));
+  expect(container.querySelectorAll('[role="alert"]')).toHaveLength(0);
+  act(() => vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS - 1));
+  expect(container.querySelectorAll('[role="alert"]')).toHaveLength(0);
+  act(() => vi.advanceTimersByTime(1));
+  const alerts = container.querySelectorAll('[role="alert"]');
+  expect(alerts).toHaveLength(1);
+  expect(alerts[0].textContent).toContain("The application settings could not be applied");
+  expect(alerts[0].textContent).not.toContain("/Users/dev/missing is");
+});
+
+it("opens no error alert for partial import failures: the result screen already shows them", () => {
   const daemon = { store: createStateStore({}) } as Daemon;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   const result = {
     type: "configuration_imported" as const,
     consoles: [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [{ ...project(1), status: "failed" as const, error: { code: "path_not_found", message: "Directory unavailable", params: { path: "/missing" } } }] }],
+    settings_error: { code: "internal_error", message: "Settings unavailable", params: { detail: "Settings unavailable" } },
   };
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
-    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
   });
-  while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
-  const render = () => act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={result} /><ErrorAlerts daemon={daemon} /></DaemonProvider>));
-  render();
-  expect(document.querySelector('[role="alertdialog"] code')?.textContent).toBe("/missing");
-  act(() => errorAlerts.acknowledge());
-  render();
+  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={result} /><ErrorAlerts daemon={daemon} /></DaemonProvider>));
+  expect(errorAlerts.getSnapshot()).toHaveLength(0);
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   expect(container.textContent).toContain("1 item failed");
-});
-
-it.each([false, true])("keeps each batch item's remedy and adds Issue guidance only for unexpected members: %s", (unexpected) => {
-  const daemon = { store: createStateStore({}) } as Daemon;
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
-  const failures: ImportedProject[] = [
-    { ...project(1), status: "failed" as const, error: { code: "path_not_found", message: "Missing folder", params: { path: "/missing" } } },
-    { ...project(2), status: "failed" as const, error: { code: "internal_error", message: "No space left on device (os error 28)", params: { detail: "No space left on device (os error 28)" } } },
-    ...(unexpected ? [{ ...project(3), status: "failed" as const, error: { code: "internal_error", message: "Invariant failed", params: { detail: "Invariant failed" } } }] : []),
-  ];
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
-  });
-  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles: [{ name: "C", status: "created", console: "c-1", error: null, account_fallbacks: [], projects: failures }] }} /><ErrorAlerts daemon={daemon} /></DaemonProvider>));
-  const alert = document.querySelector('[role="alertdialog"]')!;
-  const rows = alert.querySelectorAll("li");
-  expect(rows[0].textContent).toContain("Select an existing, accessible folder");
-  expect(rows[1].textContent).toContain("Free space on the disk");
-  expect(alert.textContent?.split("Free space on the disk")).toHaveLength(2);
-  expect(errorAlerts.getSnapshot()).toHaveLength(1);
-  expect(alert.textContent?.includes("Take a screenshot")).toBe(unexpected);
-  if (unexpected) expect(rows[2].textContent).toContain("This failure may be a bug");
+  expect(container.querySelector("table button")).not.toBeNull();
+  // The reason is the application's own sentence; what the system said is behind Details.
+  expect(container.textContent).toContain("Something unexpected went wrong.");
+  expect(container.textContent).not.toContain("Settings unavailable");
+  expect(openDetails(container.querySelector('[data-slot="alert-root"]')!).textContent).toContain("Settings unavailable");
 });
 
 it("tells of each application setting that was applied, and of none the file did not carry", () => {
@@ -199,4 +202,31 @@ it("tells of each application setting that was applied, and of none the file did
   expect(container.textContent).not.toContain("Automatically approve");
   expect(container.textContent).not.toContain("archived sessions");
   expect(container.textContent).not.toContain("Automatically select an account");
+});
+
+it("marks a failed line with the glyph and the word Failed, named after what failed, whose popover holds the reason, and writes no error text into the table", () => {
+  const daemon = { store: createStateStore({}) } as Daemon;
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  const result = {
+    type: "configuration_imported" as const,
+    consoles: [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [{ ...project(1), status: "failed" as const, error: { code: "path_not_found", message: "Directory unavailable", params: { path: "/missing" } } }] }],
+  };
+  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={result} /></DaemonProvider>));
+  const table = container.querySelector("table")!;
+  const mark = table.querySelector("button")!;
+  // Each failed row's mark names what failed, so several of them can be told apart.
+  expect(mark.getAttribute("aria-label")).toBe(`${isolate("P1")} failed`);
+  // The mark reads like the other outcomes: the glyph, then the word.
+  expect(mark.textContent).toBe("Failed");
+  expect(mark.querySelector("svg")).not.toBeNull();
+  expect(table.textContent).not.toContain("/missing");
+  act(() => {
+    for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) mark.dispatchEvent(new MouseEvent(type, { bubbles: true, button: 0 }));
+  });
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain("/missing");
 });

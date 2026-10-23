@@ -1,6 +1,6 @@
 # Toasts
 
-Notices that need no answer are shown as **toasts**. Failures require acknowledgement instead; see
+Notices that need no answer are shown as **toasts**. Failures never are; where each is shown instead is in
 "Error alerts" in `docs/product/error-alerts.md`.
 
 - **At the window's bottom right** (bottom left under a right-to-left language), or, in a window narrower than 640 px,

@@ -76,11 +76,19 @@ it("says the grants could not be read when the shell refuses the read", async ()
   expect(buttons()).toEqual([]);
   expect(container.textContent).toContain("Could not read which permissions");
   expect(container.textContent).not.toContain("only be managed in the macOS app");
+  // Permissions that cannot be read are the state of the section: an Alert, not a muted line.
+  expect(container.querySelector('[data-slot="alert-root"]')?.textContent).toContain("could not read");
+  // Found so on the section's first read, it is what the section opened with, so it is not announced.
+  expect(container.querySelector('[role="alert"]')).toBeNull();
 });
 
-it("offers nothing for a permission that is granted", async () => {
-  const { buttons } = await mount({ statuses: [GRANTED_AT_LAUNCH] });
+it("offers nothing for a permission that is granted, and shows a success badge at the row's end instead", async () => {
+  const { container, buttons } = await mount({ statuses: [GRANTED_AT_LAUNCH] });
   expect(buttons()).toEqual([]);
+  const badges = Array.from(container.querySelectorAll('[data-color="success"][data-variant="soft"]'));
+  expect(badges.map((badge) => badge.textContent)).toEqual(["Granted", "Granted"]);
+  // The badge is the granted state, so the description no longer repeats it.
+  expect(container.querySelector(".groove-t")!.textContent).not.toContain("Granted.");
 });
 
 it("offers Grant… for one that is not, and asks for it on press", async () => {

@@ -5,7 +5,7 @@ type FocusVisibleProps = React.DOMAttributes<Element> & { "data-focus-visible"?:
 
 /**
  * Props that mark a hand-built focusable element `data-focus-visible` while it has keyboard focus,
- * for its ring to be styled from (`data-focus-visible:ring-2 data-focus-visible:ring-app-focus`).
+ * for its ring to be styled from (`data-focus-visible:ring-2 data-focus-visible:ring-focus`).
  *
  * The state is react-aria's rather than CSS `:focus-visible`, because the app's WKWebView decides
  * that one differently from the Playwright `webkit` build: once the last focus came from a click,

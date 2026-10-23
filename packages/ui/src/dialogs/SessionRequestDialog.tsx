@@ -23,11 +23,11 @@ import type { ConfirmDialogProps } from "./ConfirmDialog";
  * They are not text the agent wrote: the daemon checked each is a branch the requester is
  * responsible for. */
 function branchList(language: Language, branches: string[]): React.ReactNode[] {
-  return joinNodes(language, branches.map(displayWirePath), (branch, key) => <InlineChip key={key} monospace wrap size="inherit">{branch}</InlineChip>);
+  return joinNodes(language, branches.map(displayWirePath), (branch, key) => <InlineChip key={key} monospace wrap>{branch}</InlineChip>);
 }
 
 function recordReference(name: string | undefined, id: string, key?: number): React.ReactElement {
-  return <InlineChip key={key} monospace={name === undefined} dir={name === undefined ? "ltr" : "auto"} wrap size="inherit">{name ?? id}</InlineChip>;
+  return <InlineChip key={key} monospace={name === undefined} dir={name === undefined ? "ltr" : "auto"} wrap>{name ?? id}</InlineChip>;
 }
 
 /** The account that holds a conversation's record, as the pickers name it: the default account of
@@ -99,7 +99,7 @@ function SessionRequestMessage({ request }: { request: SessionRequest }): React.
         : <Message id="dialog.sessionRequest.requester.console" params={{ session }} />;
     }
   }
-  const agent = <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[request.agent]}</InlineChip>;
+  const agent = <InlineChip dir="auto" wrap>{AGENT_LABEL[request.agent]}</InlineChip>;
   const params = { requester, console: console_, agent };
   if (request.action === "resume_record") {
     const account = recordAccount(t, accounts, defaultNames, request.agent, request.account);
@@ -115,9 +115,9 @@ function SessionRequestMessage({ request }: { request: SessionRequest }): React.
     // one that recorded an account the store does not know is shown by that id.
     const targetAccount = target && sessionAccount(t, target, accounts, defaultNames);
     const account = !target
-      ? <InlineChip dir="auto" size="inherit">—</InlineChip>
+      ? <InlineChip dir="auto">—</InlineChip>
       : targetAccount
-        ? <InlineChip monospace={targetAccount.isPath} dir={targetAccount.isPath ? "ltr" : "auto"} wrap size="inherit">{targetAccount.name}</InlineChip>
+        ? <InlineChip monospace={targetAccount.isPath} dir={targetAccount.isPath ? "ltr" : "auto"} wrap>{targetAccount.name}</InlineChip>
         : recordReference(undefined, target.account_id ?? "");
     const reports = request.owner === undefined
       ? <Message id="dialog.sessionRequest.reportsTo.user" />

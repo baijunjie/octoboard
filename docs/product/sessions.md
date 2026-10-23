@@ -475,10 +475,13 @@ reopened, one interrupted meanwhile is resumed, and one whose process starts mea
 | An archived session of this project | **Name**, filled in with the session's name and editable; its agent and account, locked | **Reopen** — reopens that session (see "Reopening an archived session from the tab" below) |
 | An interrupted session of this project | **Name**, showing the session's name, and its agent and account, all locked | **Resume** — resumes that session (see "Resuming or going to a session of this project from the tab" below) |
 | A session of this project that is starting or whose process is running | **Name**, showing the session's name, and its agent and account, all locked | **Go to session** — selects that session (see "Resuming or going to a session of this project from the tab" below) |
-| A session of another project, or a console session, in any state | none; an error under the field names that session and where it is (see "Naming a session outside the project" in this section) | disabled |
-| Nowhere | none; an error under the field says no conversation with that ID was found in any account | disabled |
+| A session of another project, or a console session, in any state | none; an alert directly under the field names that session and where it is (see "Naming a session outside the project" in this section) | disabled |
+| Nowhere | none; an alert directly under the field says no conversation with that ID was found in any account | disabled |
 
-A lookup that fails shows its failure under the field, with no fields after it, and the submit button stays disabled.
+A lookup that fails shows its failure in an alert directly under the field, with no fields after it, and the submit
+button stays disabled. These alerts are the lookup's outcome, not a verdict on what was typed: the field is not marked
+invalid, and each is announced to assistive technology as it appears (see "Failures shown on the screen" in
+`docs/product/error-alerts.md`).
 The locked Agent field holds that agent alone; its account half shows the account that holds the conversation whenever
 it has a name to show, including when it is the agent's sole default account.
 
@@ -541,7 +544,8 @@ for the default account.
   already records as its agent's conversation, live or archived, is refused. A session of the same project is named,
   and the user is told to resume or reopen that session instead (`conversation_in_session`); a session outside the
   project — of another project, or a console session — is refused with that session's id
-  (`conversation_outside_project`, with `session`), and the dialog names it as the lookup does (see "Finding the
+  (`conversation_outside_project`, with `session`); the error alert says only that the conversation belongs to a
+  session outside the project, and the lookup the dialog then asks again names that session (see "Finding the
   conversation" above). The check is made again once the new session is recorded, so two requests for the same
   conversation cannot both succeed.
 - **The conversation must be in the session's account directory.** It is looked for in the config directory of the
@@ -550,18 +554,15 @@ for the default account.
   (`conversation_to_resume_not_found`). For the default account, a login shell environment that could not be captured
   refuses the open as well (see "The launch environment" in `docs/product/launching-agents.md`).
 - Every refusal comes before anything is recorded or launched: no session appears, and the reason is shown in an error
-  alert or under the affected field. `open_session` also refuses an ID for a console session
+  alert, the dialog staying open with what was entered. `open_session` also refuses an ID for a console session
   (`resume_for_console_session`).
-- **The refusals about the conversation are shown under the Session ID field**: an ID that is not a conversation ID
-  (`resume_id_invalid`), a conversation already in a session (`conversation_in_session`,
-  `conversation_outside_project`) and one not found (`conversation_to_resume_not_found`). The field is marked invalid
-  and takes focus. A conversation not found leaves the tab as it is, its fields kept, so **Open** can be tried again.
-  Any other of these refusals means the answer the tab holds may be stale, so the lookup is asked again: while it
-  runs the fields after the ID go and the spinner shows, and the new answer decides the fields and the submit button
-  as in "Finding the conversation" above. The refusal stays under the field only while the ID and the agent and
-  account found are those it was given for: it goes when the dialog is submitted again, as soon as the ID is changed,
-  and when the lookup settles on anything else, since that asks about a different conversation; it is not shown on
-  the **New conversation** tab. Any other failure of the open is shown in an error alert.
+- **The refusals about the conversation** — an ID that is not a conversation ID (`resume_id_invalid`), a conversation
+  already in a session (`conversation_in_session`, `conversation_outside_project`) and one not found
+  (`conversation_to_resume_not_found`) — are shown in an error alert like any other failure of the open; once it is
+  acknowledged, keyboard focus is back on the Session ID field. A conversation not found leaves the tab as it is, its
+  fields kept, so **Open** can be tried again. Any other of these refusals means the answer the tab holds may be stale,
+  so the lookup is asked again: while it runs the fields after the ID go and the spinner shows, and the new answer
+  decides the fields and the submit button as in "Finding the conversation" above.
 
 A session opened this way starts by resuming that conversation, and comes up at the agent's prompt like any session
 opened from the dialog. It **has a conversation from the moment it is opened**, not from its first turn: interrupted

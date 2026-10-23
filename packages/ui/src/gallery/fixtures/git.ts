@@ -185,13 +185,13 @@ export const gitScenarios: Scenario[] = [
   {
     id: "git-badges-errors", group: GROUP, category: "exceptional",
     title: "Fetch and branch-read failures",
-    description: "Deliberate fetch and HEAD errors replace the branch glyph with a warning. Hover warnings for their causes.",
+    description: "Deliberate fetch and HEAD errors replace the branch glyph with a danger-coloured circled \"!\". Hover each for its cause.",
     state: failureState, preferences: { sidebarWidth: 280 },
   },
   {
     id: "git-badge-focus-long-error", group: GROUP, category: "exceptional",
     title: "Long branch with a fetch failure in project focus",
-    description: "The warning is deliberate: fetch cannot resolve origin. Hover it for the failure; only the long branch fades and scrolls, while the warning and counts stay visible.",
+    description: "The failure is deliberate: fetch cannot resolve origin. Hover the danger-coloured circled \"!\" for it; only the long branch fades and scrolls, while the mark and counts stay visible.",
     state: longFailureState,
     preferences: { sidebarWidth: 280, sidebarConsole: console_.id, sidebarFocus: `project:${squeezeProject.id}` },
   },
@@ -229,7 +229,7 @@ export const gitScenarios: Scenario[] = [
   {
     id: "git-switch-branch-list-error", group: "Projects", category: "exceptional",
     title: "Local branches could not be read",
-    description: "The third menu shows the listing error and a retry action.",
+    description: "The third menu is replaced by a danger Alert in the popover holding the title Could not load the items, Git's own sentence for the failure, a Details button for Git's diagnostic and Try again at the trailing edge, with no menu items.",
     ...switchFixture,
     projectBranches: { [restoreProject.id]: { code: "git_failed", params: { detail: "fatal: unable to read refs/heads" }, message: "Unable to list local branches" } },
     steps: openSwitch,
@@ -237,7 +237,7 @@ export const gitScenarios: Scenario[] = [
   {
     id: "git-switch-branch-error", group: "Projects", category: "exceptional",
     title: "Branch switch failed",
-    description: "A refused switch reports Git's reason in an error toast. The branch badge stays on main.",
+    description: "A refused switch reports Git's reason in the error alert dialog, which requires OK. The branch badge stays on main.",
     ...switchFixture,
     projectBranchSwitches: { [restoreProject.id]: { [switchBranch]: { code: "git_switch_failed", params: { detail: "error: Your local changes to README.md would be overwritten by checkout. Please commit your changes or stash them before you switch branches." }, message: "Git switch failed" } } },
     steps: [...openSwitch, (ui) => ui.press(switchBranch), (ui) => ui.wait(300)],
@@ -257,7 +257,7 @@ export const gitScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Restore file changes failed",
-    description: "A failed restore stays in the confirmation with an inline error and enabled retry and cancel controls.",
+    description: "A failed restore is the error alert dialog's, raised over the confirmation; nothing is written into the confirmation, which stays behind it with retry and cancel enabled once OK is pressed.",
     ...restoreFixture,
     projectRestores: { [restoreProject.id]: { code: "git_restore_failed", params: { detail: "fatal: Unable to create .git/index.lock: File exists" }, message: "Git restore failed" } },
     steps: [...openRestore, (ui) => ui.confirm(), (ui) => ui.wait(300)],

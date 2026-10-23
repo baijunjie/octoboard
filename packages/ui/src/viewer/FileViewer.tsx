@@ -5,13 +5,15 @@ import { Button } from "../components/Button";
 import { CopyButton } from "../components/CopyButton";
 import { FileTypeIcon } from "../components/FileTypeIcon";
 import { InlineChip } from "../components/InlineChip";
+import { PaneFailure } from "../components/PaneFailure";
+import { StatusBadge } from "../components/StatusBadge";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { PlainMarkedPath } from "../components/MarkedPath";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { TitledControl } from "../components/TitledControl";
 import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../components/RowControls";
 import { type HostPath, useHostPathActions } from "../components/useHostPathActions";
-import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
+import { useHasPainted } from "../components/useHasPainted";
 import { useLatest } from "../components/useLatest";
 import { Dialog, useRefocusIfLost } from "../dialogs/Dialog";
 import { isolate } from "../i18n/isolate";
@@ -40,7 +42,7 @@ import { FrameSurface } from "./FrameSurface";
 import { MarkdownLocationProvider, type MarkdownLocation } from "./markdownLocation";
 import { MarkdownSurface } from "./MarkdownSurface";
 import { hasTwoSides } from "./patch";
-import { StatusChip } from "./StatusChip";
+import { ChangeStatusBadge } from "./ChangeStatusBadge";
 import { STATUS_LABELS, type StatusKey } from "./statusMarks";
 import {
   Disconnected,
@@ -53,6 +55,8 @@ import {
   Unchanged,
   Unreadable,
   Unsupported,
+  ViewerFirstContentContext,
+  ViewerPaintedContext,
 } from "./viewerStates";
 import { useWrapClaims, WrapToggleHost } from "./wordWrap";
 
@@ -222,11 +226,11 @@ export function FileViewer({
                 tags sit closer to each other than the group does to the name. */}
             {tags.length > 0 && (
               <span className="flex shrink-0 items-center gap-1">
-                {status && <StatusChip status={status}>{statusLabel}</StatusChip>}
+                {status && <ChangeStatusBadge status={status}>{statusLabel}</ChangeStatusBadge>}
                 {subject.stage !== undefined && (
-                  <InlineChip size="sm" variant="soft">
+                  <StatusBadge separated={false}>
                     {subject.stage}
-                  </InlineChip>
+                  </StatusBadge>
                 )}
               </span>
             )}
@@ -279,9 +283,9 @@ export function FileViewer({
         </DetailItem>
         {content.state === "file" && (
           <DetailItem>
-            <InlineChip size="xs" variant="soft">
+            <StatusBadge separated={false}>
               {formatFileSize(language, content.body.size)}
-            </InlineChip>
+            </StatusBadge>
           </DetailItem>
         )}
         {renamedFrom !== undefined && <RenamedFrom path={renamedFrom} />}
@@ -402,6 +406,12 @@ function isWaiting(content: ViewerContent): boolean {
 function ViewerContentView(props: React.ComponentProps<typeof ViewerContentBody>): React.ReactElement {
   const t = useT();
   const { content } = props.subject;
+  const painted = useHasPainted();
+  // Set once the first content that is not the wait for it has been drawn.
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    if (!isWaiting(content)) setSettled(true);
+  }, [content]);
   const announcement =
     isWaiting(content)
       ? t("viewer.loading")
@@ -413,7 +423,11 @@ function ViewerContentView(props: React.ComponentProps<typeof ViewerContentBody>
   return (
     <>
       <StatusAnnouncer text={announcement} firstWriteDelayMs={FIRST_ANNOUNCEMENT_DELAY_MS} />
-      <ViewerContentBody {...props} />
+      <ViewerPaintedContext value={painted}>
+        <ViewerFirstContentContext value={!settled}>
+          <ViewerContentBody {...props} />
+        </ViewerFirstContentContext>
+      </ViewerPaintedContext>
     </>
   );
 }
@@ -450,7 +464,7 @@ function ViewerContentBody({
           {content.body ? (
             <BodyView resetKey={key} name={name} body={content.body} theme={theme} />
           ) : content.message !== undefined ? (
-            <Failure title={t("viewer.error")} message={content.message} path={subject.path} />
+            <Failure among title={t("viewer.error")} message={content.message} path={subject.path} />
           ) : (
             <Loading />
           )}
@@ -502,7 +516,8 @@ function BodyView({
 }
 
 /** An image scaled down to fit, never up. One that cannot be decoded falls back to its own text
- * when it has some (an SVG), and to the unsupported presentation otherwise. Keyed by its subject by
+ * when it has some (an SVG), and otherwise is an error in place of the image, since the pane's
+ * subject failed to load. Keyed by its subject by
  * the caller, so a failure is never carried over to the next image. */
 function ImageView({
   name,
@@ -515,17 +530,16 @@ function ImageView({
 }): React.ReactElement {
   const t = useT();
   const [failed, setFailed] = useState(false);
-  useErrorAcknowledgement(failed && body.text === undefined ? t("viewer.image.failed") : undefined, undefined, undefined, "image");
   if (failed) {
     return body.text !== undefined ? (
       <>
         {/* The image fails only once it has been fetched and decoded, long after the dialog was
-            drawn, so the fall back to its text is spoken as well as shown. */}
-        <Notice tone="failed" speak={t("viewer.image.asText")} recovery="image" />
+            drawn, so the fall back to its text, like the alert below, is spoken as well as shown. */}
+        <Notice tone="failed" speak={t("viewer.image.asText")} />
         <CodeSurface resetKey={body.url} name={name} text={body.text} theme={theme} />
       </>
     ) : (
-      <Unsupported message={t("viewer.image.failed")} sizes={[body.size]} />
+      <PaneFailure announce title={t("viewer.image.failed")} summary={t("viewer.image.failed.summary")} remedy={t("viewer.image.failed.remedy")} />
     );
   }
   return (
@@ -566,7 +580,7 @@ function ChangeView({
           <Notice tone="warned">
             <Message
               id={presentation.hidden === "old" ? "viewer.change.outsideOld" : "viewer.change.outsideNew"}
-              params={{ path: <InlineChip monospace wrap size="inherit">{displayWirePath(presentation.repositoryPath)}</InlineChip> }}
+              params={{ path: <InlineChip monospace wrap>{displayWirePath(presentation.repositoryPath)}</InlineChip> }}
             />
           </Notice>
           {shown.state === "present" && shown.body ? (
@@ -653,7 +667,7 @@ function UnchangedView({
   // What the read answered for this subject: its text, or why there is none. A read given up for a
   // newer one is left as `unavailable`, like any other content that is not to be had, rather than
   // as a spinner nothing would resolve.
-  const [read, setRead] = useState<{ key: string; text?: string; why?: "failed" | "unavailable" | "changed"; message?: string; error?: unknown }>();
+  const [read, setRead] = useState<{ key: string; text?: string; why?: "failed" | "unavailable" | "changed"; message?: string }>();
   useEffect(() => {
     if (!loadBodies) return;
     let current = true;
@@ -671,7 +685,7 @@ function UnchangedView({
         if (!current) return;
         const reason = error instanceof ChangeBodiesError ? error.reason : "failed";
         const message = error instanceof Error ? error.message : String(error);
-        setRead({ key: resetKey, why: reason === "superseded" ? "unavailable" : reason, message, error });
+        setRead({ key: resetKey, why: reason === "superseded" ? "unavailable" : reason, message });
       },
     );
     return () => {
@@ -694,7 +708,7 @@ function UnchangedView({
     <>
       {/* Mounted for as long as the change is, so the read's own progress and its outcome are both
           spoken: every one of them arrives after the dialog was drawn. */}
-      <StatusAnnouncer text={done === undefined ? t("viewer.loading") : reason?.tone === "failed" ? undefined : (reason?.text ?? said)} firstWriteDelayMs={FIRST_ANNOUNCEMENT_DELAY_MS} />
+      <StatusAnnouncer text={done === undefined ? t("viewer.loading") : (reason?.text ?? said)} firstWriteDelayMs={FIRST_ANNOUNCEMENT_DELAY_MS} />
       {done === undefined ? (
         <Loading />
       ) : done.text !== undefined ? (
@@ -706,7 +720,7 @@ function UnchangedView({
       ) : (
         <>
           {reason && (
-            <Notice tone={reason.tone} announced error={done.error}>
+            <Notice tone={reason.tone} announced>
               {reason.text}
             </Notice>
           )}

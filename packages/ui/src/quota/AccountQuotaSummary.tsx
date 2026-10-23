@@ -1,7 +1,8 @@
 import React from "react";
 
-import { InlineChip } from "../components/InlineChip";
-import { codedMessageNode } from "../components/DaemonErrorMessage";
+import { StatusBadge } from "../components/StatusBadge";
+import { codedMessageNode, CodedFailureBody } from "../components/DaemonErrorMessage";
+import { FailureMark } from "../components/FailureMark";
 import { daemonMessage } from "../daemonMessage";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { QuotaUnavailable } from "../protocol";
@@ -14,18 +15,19 @@ import type { QuotaReading } from "./useAccountQuota";
 const NO_RECORDS = { consoles: new Map(), projects: new Map(), sessions: new Map() };
 
 /** Why a reading failed, in the current language with the technical literals of its message set
- * apart. None of the quota messages names a record, so none is given. */
-function QuotaFailure({ unavailable }: { unavailable: QuotaUnavailable }): React.ReactElement {
+ * apart. None of the quota messages names a record, so none is given. `inMark` is for a popover: the
+ * sentence, then the remedy, then the raw text of a failure the application has no words for. */
+function QuotaFailure({ unavailable, inMark = false }: { unavailable: QuotaUnavailable; inMark?: boolean }): React.ReactElement {
   const language = useCurrentLanguage();
   const text = daemonMessage(language, unavailable.code, unavailable.params, unavailable.message, NO_RECORDS);
-  return <>{codedMessageNode(unavailable, text)}</>;
+  return inMark ? <CodedFailureBody failure={unavailable} text={text} /> : <>{codedMessageNode(unavailable, text)}</>;
 }
 
 /** The account's plan, in display case ("Max", "Plus", "SuperGrok"); nothing when the agent does
  * not say. */
 export function QuotaPlan({ quota }: { quota: QuotaReading }): React.ReactElement | null {
   if (typeof quota !== "object" || !quota.plan) return null;
-  return <InlineChip className="shrink-0">{planLabel(quota.plan)}</InlineChip>;
+  return <StatusBadge>{planLabel(quota.plan)}</StatusBadge>;
 }
 
 /** The badge of an account's login: logged in, or not logged in yet; nothing while the state is not known (a reading
@@ -35,29 +37,48 @@ function LoginStateBadge({ quota }: { quota: QuotaReading }): React.ReactElement
   const loggedIn = isLoggedIn(quota);
   if (!loggedIn && !(typeof quota === "object" && isNotLoggedIn(quota.unavailable))) return null;
   return (
-    <InlineChip color={loggedIn ? "success" : "warning"} className="shrink-0" startContent={<span aria-hidden="true" className="size-1.5 rounded-full bg-current" />}>
+    <StatusBadge variant="soft" color={loggedIn ? "success" : "warning"} className="inline-flex items-center gap-1.5">
+      <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
       {t(loggedIn ? "settings.accounts.loggedIn" : "settings.accounts.notLoggedIn")}
-    </InlineChip>
+    </StatusBadge>
   );
 }
 
-/** When a current reading with windows was taken ("Updated 3 minutes ago"); nothing otherwise, since the
- * out-of-date line beneath already says when an account was last read. */
+/** The mark of a reading that failed with no windows to show, beside the account's name: its name says
+ * so and its popover holds why. Nothing for an account with windows (an out-of-date one is marked beside
+ * when it was read, by `QuotaUpdated`), one not yet known, or one that is simply not logged in. */
+function QuotaFailureMark({ quota }: { quota: QuotaReading }): React.ReactElement | null {
+  const t = useT();
+  if (typeof quota !== "object" || !quota.unavailable || isNotLoggedIn(quota.unavailable) || quota.windows.length > 0) return null;
+  return <FailureMark label={t("quota.unavailable")}><QuotaFailure inMark unavailable={quota.unavailable} /></FailureMark>;
+}
+
+/** When the reading with windows was taken ("Updated 3 minutes ago"). When the latest read failed and those
+ * windows are the last good ones, the time stays and a warning mark follows it, naming them out of date and
+ * holding why in its popover. Nothing for an account with no windows. */
 export function QuotaUpdated({ quota }: { quota: QuotaReading }): React.ReactElement | null {
   const t = useT();
   const language = useCurrentLanguage();
   const now = useNow();
-  if (typeof quota !== "object" || quota.unavailable || quota.windows.length === 0) return null;
+  if (typeof quota !== "object" || quota.windows.length === 0) return null;
+  const age = formatRelativeTime(language, quota.fetched_at, now);
+  const stale = quota.unavailable && !isNotLoggedIn(quota.unavailable) ? quota.unavailable : undefined;
   return (
-    <span className="ms-auto shrink-0 text-xs font-normal text-app-muted">
-      {isJustNow(quota.fetched_at, now) ? t("quota.updatedNow") : t("quota.updated", { age: formatRelativeTime(language, quota.fetched_at, now) })}
+    <span className="ms-auto flex shrink-0 items-center gap-1 text-xs font-normal text-app-muted">
+      <span>{isJustNow(quota.fetched_at, now) ? t("quota.updatedNow") : t("quota.updated", { age })}</span>
+      {stale && (
+        <FailureMark status="warning" label={t("quota.stale", { age })}>
+          <QuotaFailure inMark unavailable={stale} />
+        </FailureMark>
+      )}
     </span>
   );
 }
 
-/** The line naming an account: its `name`, its plan chip when the agent names one, with `showLoginState` a badge
- * for an account known to be logged in or not, a `help` tip, and at its end, unless `showUpdated` is off for a
- * surface that places it elsewhere, when a current reading was taken. */
+/** The line naming an account: its `name`, its plan badge when the agent names one, with `showLoginState` a badge
+ * for an account known to be logged in or not, the mark of a reading with nothing to show, a `help` tip, and at
+ * its end, unless `showUpdated` is off for a surface that places it elsewhere, when the reading was taken and
+ * whether it is out of date. */
 export function AccountNameLine({ name, quota, help, showLoginState = false, showUpdated = true, children }: { children?: React.ReactNode; name: React.ReactNode; quota: QuotaReading; help?: React.ReactNode; showLoginState?: boolean; showUpdated?: boolean }): React.ReactElement {
   return (
     <div className="flex items-center gap-2 text-sm font-medium">
@@ -65,20 +86,21 @@ export function AccountNameLine({ name, quota, help, showLoginState = false, sho
       <QuotaPlan quota={quota} />
       {showLoginState && <LoginStateBadge quota={quota} />}
       {children}
+      <QuotaFailureMark quota={quota} />
       {help}
       {showUpdated && <QuotaUpdated quota={quota} />}
     </div>
   );
 }
 
-/** One account's quota windows as meters, and what stands in their place or beside them when there
- * is nothing current to show:
+/** One account's quota windows as meters, and what stands in their place when there is nothing
+ * current to show:
  *
  * - `undefined`: nothing at all, the account has no reading to wait for;
  * - `"loading"`: the first reading is still on its way;
- * - an entry with no windows: the reason it is unavailable;
- * - windows and a failure: the last good readings stay, marked as out of date with when they were
- *   taken and why the newer attempt failed.
+ * - an account that is not logged in: the line saying what to do;
+ * - any other failure: no windows, or the last good ones, as the meters say; the failure itself is
+ *   the mark on the account's name line (`AccountNameLine`).
  *
  * When a current reading was taken is shown beside the account's name (`QuotaUpdated`), not here.
  *
@@ -89,8 +111,6 @@ export function AccountQuotaSummary({ quota, single }: {
   single?: boolean;
 }): React.ReactElement | null {
   const t = useT();
-  const language = useCurrentLanguage();
-  const now = useNow();
   if (quota === "loading") return <div className="text-sm text-app-muted">{t("quota.loading")}</div>;
   if (!quota) return null;
   const { windows, unavailable } = quota;
@@ -99,34 +119,20 @@ export function AccountQuotaSummary({ quota, single }: {
     if (isNotLoggedIn(unavailable)) {
       return <div className="text-sm text-app-muted"><QuotaFailure unavailable={unavailable} /></div>;
     }
-    return unavailable && (
-      <div className="text-sm text-app-muted">
-        <div className="font-medium">{t("quota.unavailable")}</div>
-        <div><QuotaFailure unavailable={unavailable} /></div>
-      </div>
-    );
+    return null;
   }
   // An account with a 5-hour window shows it with the weekly window as one two-layer meter; the
   // other windows (a model's weekly limit) keep a meter of their own.
   const layers = twoLayerWindows(windows);
-  const age = formatRelativeTime(language, quota.fetched_at, now);
   return (
-    <div className="flex flex-col gap-3">
-      {unavailable && (
-        <div className="text-sm text-app-muted">
-          <div className="font-medium">{t("quota.stale", { age })}</div>
-          <div><QuotaFailure unavailable={unavailable} /></div>
-        </div>
-      )}
-      <div className={`grid grid-cols-1 gap-x-6 gap-y-3 ${single ? "" : "sm:grid-cols-2"}`}>
-        {orderedQuotaWindows(windows).map((window) => {
-          if (layers?.weekly && window === layers.weekly) return null;
-          const key = `${window.kind}:${window.label ?? ""}`;
-          return layers?.weekly && window === layers.session
-            ? <QuotaMeterPair key={key} agent={quota.agent} session={window} weekly={layers.weekly} />
-            : <QuotaMeter key={key} agent={quota.agent} window={window} />;
-        })}
-      </div>
+    <div className={`grid grid-cols-1 gap-x-6 gap-y-3 ${single ? "" : "sm:grid-cols-2"}`}>
+      {orderedQuotaWindows(windows).map((window) => {
+        if (layers?.weekly && window === layers.weekly) return null;
+        const key = `${window.kind}:${window.label ?? ""}`;
+        return layers?.weekly && window === layers.session
+          ? <QuotaMeterPair key={key} agent={quota.agent} session={window} weekly={layers.weekly} />
+          : <QuotaMeter key={key} agent={quota.agent} window={window} />;
+      })}
     </div>
   );
 }

@@ -145,7 +145,7 @@ export function ResizeSeparator({
       data-region={region}
       {...focusVisible}
       style={style}
-      className={`group touch-none outline-none ${appearance === "grip" ? "flex" : ""} data-focus-visible:ring-2 data-focus-visible:ring-app-focus ${axis.cursor} ${className}`}
+      className={`group touch-none outline-none ${appearance === "grip" ? "flex" : ""} data-focus-visible:ring-2 data-focus-visible:ring-focus ${axis.cursor} ${className}`}
       onPointerEnter={(event) => event.pointerType === "mouse" && setHovered(true)}
       onPointerLeave={() => setHovered(false)}
       onMouseDown={(event) => event.preventDefault()}
@@ -166,7 +166,7 @@ export function ResizeSeparator({
       {appearance === "grip" ? (
         <div ref={gripRef} className={`rounded-full transition-opacity motion-reduce:transition-none ${axis.grip} ${dragging ? "bg-(--grip-active) opacity-100" : "bg-(--grip-hover) opacity-0 group-hover:opacity-100 group-data-focus-visible:opacity-100"}`} />
       ) : (
-        <div className={`transition-colors group-hover:bg-app-accent group-data-focus-visible:bg-app-accent ${axis.line} ${dragging ? "bg-app-accent" : ""}`} />
+        <div className={`transition-colors group-hover:bg-accent group-data-focus-visible:bg-accent ${axis.line} ${dragging ? "bg-accent" : ""}`} />
       )}
       {tooltip && appearance === "grip" && <AnchoredTooltip tooltip={tooltip} anchor={gripRef} hovered={hovered && !dragging} placement={orientation === "vertical" ? "end" : undefined} />}
     </div>

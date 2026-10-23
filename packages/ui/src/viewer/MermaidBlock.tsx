@@ -1,8 +1,7 @@
 import React, { useEffect, useId, useState } from "react";
 
 import { useFadeRegion, useScrollFade } from "../components/scrollFade";
-import { ActionableError } from "../errorRecovery";
-import { DiagramSyntaxError, diagramReading, renderDiagram } from "./diagramConfig";
+import { diagramReading, renderDiagram } from "./diagramConfig";
 import { useT } from "../i18n/react";
 import { Notice } from "./viewerStates";
 
@@ -29,7 +28,7 @@ export function MermaidBlock({
 }): React.ReactElement {
   const t = useT();
   const id = `diagram-${useId().replace(/:/g, "")}`;
-  const [drawn, setDrawn] = useState<{ source: string; theme: string; svg?: string; failure?: { error: unknown } }>();
+  const [drawn, setDrawn] = useState<{ source: string; theme: string; svg?: string; failed?: boolean }>();
   useEffect(() => {
     if (overBudget) return;
     let live = true;
@@ -37,8 +36,8 @@ export function MermaidBlock({
       (svg) => {
         if (live) setDrawn({ source, theme, svg });
       },
-      (error: unknown) => {
-        if (live) setDrawn({ source, theme, failure: { error: error instanceof DiagramSyntaxError ? new ActionableError(error.message, "contentSyntax", { cause: error.cause }) : error } });
+      () => {
+        if (live) setDrawn({ source, theme, failed: true });
       },
     );
     return () => {
@@ -60,10 +59,10 @@ export function MermaidBlock({
       </div>
     );
   }
-  if (current?.failure) {
+  if (current?.failed) {
     return (
       <div className="my-4">
-        <Notice appearance="document" tone="failed" speak={t("viewer.markdown.diagramFailed")} error={current.failure.error} />
+        <Notice appearance="document" tone="failed" speak={t("viewer.markdown.diagramFailed")} />
         {plain}
       </div>
     );
@@ -88,7 +87,7 @@ function DrawnDiagram({ svg, name, alternative }: { svg: string; name: string; a
     className: "max-w-full overflow-auto rounded-sm",
   });
   return (
-    <div className={`my-4 rounded-sm ${region.focused ? "ring-2 ring-app-focus" : ""}`}>
+    <div className={`my-4 rounded-sm ${region.focused ? "ring-2 ring-focus" : ""}`}>
       <div dir="ltr" {...fade} onClick={refuseDiagramLink} onAuxClick={refuseDiagramLink} onKeyDown={refuseDiagramLink}>
         <div role="img" aria-label={name} dangerouslySetInnerHTML={{ __html: svg }} />
         <p className="sr-only">{alternative}</p>

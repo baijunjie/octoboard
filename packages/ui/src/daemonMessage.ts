@@ -325,6 +325,7 @@ export const DETAIL_BLOCK_CODES = new Set([
   "project_branches_not_determined", "account_sharing_failed", "git_failed", "git_clone_failed", "git_remote_unreachable",
   "git_push_failed", "git_switch_failed", "git_restore_failed", "git_unavailable",
   "models_command_failed", "models_shell_environment_failed", "quota_command_failed", "quota_shell_environment_failed", "codex_unarchive_failed", "login_failed", "sharing_resume_failed", "shell_environment_timeout", "relocation_failed",
+  "directory_unreadable", "source_unavailable", "permission_denied",
 ]);
 
 /** These trust reasons carry an OS write/read diagnostic, not another daemon error code. */
@@ -504,15 +505,19 @@ export function daemonParams<V = never>(
 /** What the daemon's `error` or `session_notice` says, in `language`: the catalog's text
  * for its `code` with its params filled in, a record id shown as that record's name (the raw id only
  * when the record is unknown). A code the catalog does not have — a daemon newer than this client —
- * shows the daemon's own English `fallback`. The params are shaped by `daemonParams`. */
+ * shows the daemon's own English `fallback`. The params are shaped by `daemonParams`. With `summary`
+ * a code whose rich sentence leaves out a raw diagnostic (`richMessageCode`) is worded as that sentence
+ * alone, for a plain-text line that has no Details behind it for the raw text. */
 export function daemonMessage(
   language: Language,
   code: string,
   params: MessageParams,
   fallback: string,
   records: RecordNames,
+  summary = false,
 ): string {
-  const key = `daemon.${messageCode(code, params)}`;
+  const summaryKey = `daemon.${richMessageCode(code, params)}`;
+  const key = summary && isMessageKey(summaryKey) ? summaryKey : `daemon.${messageCode(code, params)}`;
   if (!isMessageKey(key)) return fallback;
   if (code === "shell_environment_timeout" && !["shell", "command", "timeout"].every((name) => !!params[name])) return fallback;
   const shown = daemonParams(language, code, params, records);

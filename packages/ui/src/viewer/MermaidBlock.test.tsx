@@ -54,7 +54,8 @@ it("shows the source when a diagram cannot be drawn", async () => {
   expect(document.querySelector("[role=img]")).toBeNull();
   expect(document.body.textContent).toContain("This diagram could not be drawn, so its source is shown.");
   expect(document.body.textContent).toContain("graph TD");
-  expect(errorAlerts.getSnapshot()).toMatchObject([{ error, classification: { kind: "unexpected" } }]);
+  // A failure of what the document shows is on the screen only: no error alert dialog.
+  expect(errorAlerts.getSnapshot()).toEqual([]);
 });
 
 it("shows an over-budget diagram as source without drawing it", async () => {
@@ -67,17 +68,11 @@ it("shows an over-budget diagram as source without drawing it", async () => {
 it.each([
   Object.assign(new Error("Diagram type is unknown"), { name: "UnknownDiagramError" }),
   Object.assign(new Error("Unexpected token"), { hash: { expected: ["NODE"], token: "EOF", line: 2 } }),
-])("offers syntax recovery for a Mermaid parser failure: %s", async (error) => {
+  new TypeError("Library initialization failed"),
+])("shows the source and says so for a Mermaid failure, with no error alert dialog: %s", async (error) => {
   render.mockRejectedValue(error);
   await mount("graph TD\nA-->");
-  expect(errorAlerts.getSnapshot()).toMatchObject([{
-    error: { cause: error }, classification: { kind: "actionable", recovery: "contentSyntax" },
-  }]);
-});
-
-it("preserves a library initialization exception as unexpected", async () => {
-  const error = new TypeError("Library initialization failed");
-  initialize.mockImplementationOnce(() => { throw error; });
-  await mount("graph TD\nA-->B");
-  expect(errorAlerts.getSnapshot()).toMatchObject([{ error, classification: { kind: "unexpected" } }]);
+  expect(document.body.textContent).toContain("This diagram could not be drawn, so its source is shown.");
+  expect(document.body.textContent).toContain("graph TD");
+  expect(errorAlerts.getSnapshot()).toEqual([]);
 });

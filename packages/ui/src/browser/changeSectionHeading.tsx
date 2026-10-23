@@ -124,6 +124,7 @@ export function ChangeSectionHeading({
   collapsed,
   onCollapsedChange,
   topDivider,
+  failure,
 }: {
   section: ChangeSection;
   count: number;
@@ -132,6 +133,9 @@ export function ChangeSectionHeading({
   onCollapsedChange: (collapsed: ReadonlySet<string>) => void;
   /** The first heading shares the selector's divider; adjacent headings share the preceding band's. */
   topDivider: boolean;
+  /** The mark of this section's failure to be listed, at the band's trailing end, outside the
+   * button that folds the section: a control cannot sit inside one. */
+  failure?: React.ReactNode;
 }): React.ReactElement {
   const button = useRef<HTMLButtonElement>(null);
   const key = sectionKey(section);
@@ -151,7 +155,7 @@ export function ChangeSectionHeading({
     }
     onCollapsedChange(next);
   };
-  return (
+  const band = (
     <Button
       ref={button}
       data-section-heading
@@ -159,7 +163,7 @@ export function ChangeSectionHeading({
       excludeFromTabOrder
       preventFocusOnPress
       onPress={toggle}
-      className={`flex h-full w-full min-w-0 items-center gap-2 border-t border-transparent ${topDivider ? "groove-t" : ""} px-(--pane-inset) text-start outline-none data-[focus-visible]:ring-2 data-[focus-visible]:ring-app-focus data-[focus-visible]:ring-inset`}
+      className={`flex h-full w-full min-w-0 items-center gap-2 border-t border-transparent ${topDivider ? "groove-t" : ""} px-(--pane-inset) text-start outline-none ${failure ? "pe-10" : ""} data-[focus-visible]:ring-2 data-[focus-visible]:ring-focus data-[focus-visible]:ring-inset`}
     >
       {/* The chevron mirrors under right-to-left while it points along the text. */}
       {isCollapsed ? (
@@ -170,10 +174,18 @@ export function ChangeSectionHeading({
       <SectionHeadingText section={section} count={count} />
     </Button>
   );
+  if (!failure) return band;
+  return (
+    <div className="relative h-full w-full min-w-0">
+      {band}
+      <div className="absolute inset-y-0 end-(--pane-inset) flex items-center">{failure}</div>
+    </div>
+  );
 }
 
 /**
- * Up and Down across a section heading, for the capture phase of an element around a change list.
+ * Up and Down across a section heading, and Right and Left between its band and its failure mark
+ * (`moveAlongHeading`), for the capture phase of an element around a change list.
  *
  * A react-aria collection manages focus itself: the list is one tab stop, Up and Down walk its
  * rows, and a control inside a row is reached by the arrow key that runs along the row. A section
@@ -201,8 +213,9 @@ export function ChangeSectionHeading({
  * runs before this one, so what this focuses draws its ring without `setInteractionModality`.
  */
 function moveAcrossSectionHeadings(event: React.KeyboardEvent<HTMLElement>): void {
-  if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
   const target = event.target as HTMLElement;
+  if (event.key === "ArrowLeft" || event.key === "ArrowRight") return moveAlongHeading(event, target);
+  if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
   const stop = target.closest<HTMLElement>("[role=row]");
   if (!stop) return;
   // Virtualizer recycles wrappers in DOM order; their original inline layout offsets still give
@@ -219,13 +232,35 @@ function moveAcrossSectionHeadings(event: React.KeyboardEvent<HTMLElement>): voi
   if (from === -1) return;
   const next = stops[from + (event.key === "ArrowDown" ? 1 : -1)];
   const heading = next?.querySelector<HTMLElement>("[data-section-heading]");
-  if (!next || (heading === null && target.closest("[data-section-heading]") === null)) return;
+  if (!next || (heading === null && target.closest("[data-section-heading], [data-section-heading-control]") === null)) return;
   event.preventDefault();
   event.stopPropagation();
   (heading ?? next).focus();
   // The list's scroll padding includes the sticky heading and fade, so this lands clear of
   // both. jsdom implements no `scrollIntoView`, hence the call through `?.`.
   next.scrollIntoView?.({ block: "nearest" });
+}
+
+/**
+ * Right from a heading's band to the failure mark at its end, and Left back, the key that runs along
+ * the heading as a control inside a row of the collection is reached along the row; under a
+ * right-to-left reading direction the mark stands at the other side, so the keys swap. Any other
+ * target, or a heading with no mark, is left to the collection, which a row answers with its own
+ * (a folder row's expansion, the walk to a control in the row).
+ */
+function moveAlongHeading(event: React.KeyboardEvent<HTMLElement>, target: HTMLElement): void {
+  const row = target.closest<HTMLElement>("[role=row]");
+  if (!row) return;
+  const rtl = getComputedStyle(event.currentTarget).direction === "rtl";
+  const toMark = event.key === (rtl ? "ArrowLeft" : "ArrowRight");
+  const from = toMark ? "[data-section-heading]" : "[data-section-heading-control]";
+  const to = toMark ? "[data-section-heading-control]" : "[data-section-heading]";
+  if (target.closest(from) === null) return;
+  const destination = row.querySelector<HTMLElement>(to);
+  if (!destination) return;
+  event.preventDefault();
+  event.stopPropagation();
+  destination.focus();
 }
 
 /** A change list, inside the key handling that makes its section headings stops of the Up and Down

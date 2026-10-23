@@ -43,7 +43,10 @@ function readingCss(theme: "light" | "dark"): string {
  * Diff colours that keep every token at 4.5:1 and mark a change by more than colour. The library
  * marks a changed word with a tint over the changed line's tint, and in the light appearance the
  * palette's grey comments fall short under either tint; so a changed word is underlined instead of
- * tinted in both appearances, and in the light one the line tints are GitHub's, the deletion's
+ * tinted in both appearances, in the application's added and removed text colours (`--tint-success-fg`
+ * and `--tint-danger-fg`, the ones of the change rows' `+N` and `-M`, which a shadow root inherits), and
+ * in the light one the line tints are GitHub's (HeroUI's soft fills would take the palette's comments to
+ * 4.44:1 on an addition and 4.11:1 on a deletion), the deletion's
  * lightened just enough for the comments to keep the ratio, and their line numbers' cells take
  * GitHub's deeper tints rather than the library's mix toward the palette's dark git colours. The
  * dark palette meets the ratio on the library's own line tints. The `+` / `-` indicators mark
@@ -54,7 +57,6 @@ function readingCss(theme: "light" | "dark"): string {
  * library upgrade is checked against them.
  */
 function diffCss(theme: "light" | "dark"): string {
-  const [added, removed] = theme === "light" ? ["#1a7f37", "#cf222e"] : ["#3fb950", "#f85149"];
   const lineTints =
     theme === "light"
       ? `[data-line][data-line-type="change-addition"] { background-color: #dafbe1 !important; }
@@ -129,15 +131,15 @@ function diffCss(theme: "light" | "dark"): string {
     [data-separator="line-info-basic"] { height: calc(var(--diffs-line-height, 20px) * 1.4); }
     [data-separator="line-info-basic"]:has(> [data-separator-multi-button]) { height: calc(var(--diffs-line-height, 20px) * 2); }
     [data-expand-button][data-focus-visible],
-    [data-separator-content][data-focus-visible] { outline: 2px solid var(--app-focus); outline-offset: -2px; }
+    [data-separator-content][data-focus-visible] { outline: 2px solid var(--focus); outline-offset: -2px; }
     [data-line-type="change-addition"] [data-diff-span],
     [data-line-type="change-deletion"] [data-diff-span] {
       background-color: transparent;
       text-decoration: underline 2px;
       text-underline-offset: 3px;
     }
-    [data-line-type="change-addition"] [data-diff-span] { text-decoration-color: ${added}; }
-    [data-line-type="change-deletion"] [data-diff-span] { text-decoration-color: ${removed}; }`;
+    [data-line-type="change-addition"] [data-diff-span] { text-decoration-color: var(--tint-success-fg); }
+    [data-line-type="change-deletion"] [data-diff-span] { text-decoration-color: var(--tint-danger-fg); }`;
 }
 
 /**

@@ -6,6 +6,7 @@ const origin = process.argv[2] ?? "http://localhost:5175";
 const trustOnly = process.argv.includes("--trust-only");
 const browser = await chromium.launch({ headless: true, ...(process.env.OCTOBOARD_CHROMIUM && { executablePath: process.env.OCTOBOARD_CHROMIUM }) });
 const page = await browser.newPage();
+const PADDING = { xs: [0, 4], sm: [1, 6], md: [2, 8], lg: [3, 10] };
 const near = (a, b, subject) => assert.ok(Math.abs(a - b) < 0.75, `${subject}: ${a} != ${b}`);
 async function open(scenario, language, width) {
   await page.setViewportSize({ width, height: 1000 });
@@ -21,7 +22,7 @@ try {
         size: Number(sample.dataset.proseSize),
         chips: [...sample.querySelectorAll("[data-prose-comparison] [data-inline-chip]")].map((chip) => {
           const style = getComputedStyle(chip), rect = chip.getClientRects()[0], code = chip.querySelector("code");
-          return { kind: chip.dataset.chipKind, height: rect.height, top: rect.top, size: parseFloat(style.fontSize), display: style.display, verticalAlign: style.verticalAlign, italic: style.fontStyle, codeSize: code && parseFloat(getComputedStyle(code).fontSize) };
+          return { kind: chip.dataset.chipKind, lineHeight: parseFloat(getComputedStyle(chip.closest("p")).lineHeight), height: rect.height, top: rect.top, size: parseFloat(style.fontSize), display: style.display, verticalAlign: style.verticalAlign, italic: style.fontStyle, codeSize: code && parseFloat(getComputedStyle(code).fontSize) };
         }),
       })));
       assert.equal(samples.length, 3);
@@ -31,13 +32,66 @@ try {
           near(chip.size, sample.size, `${sample.size}px ${chip.kind} font`);
           near(chip.height, sample.chips[0].height, `${sample.size}px ${chip.kind} background height`);
           near(chip.top, sample.chips[0].top, `${sample.size}px ${chip.kind} baseline alignment`);
+          assert.ok(chip.height < chip.lineHeight, `${sample.size}px ${chip.kind}: drawn height ${chip.height} must stay below the line height ${chip.lineHeight}`);
           assert.equal(chip.display, "inline");
           assert.equal(chip.verticalAlign, "baseline");
           if (chip.codeSize !== null) near(chip.codeSize, sample.size, `${sample.size}px code font`);
           if (chip.kind === "confirmation") assert.equal(chip.italic, "italic");
         }
       }
+      const sizes = await page.locator("[data-chip-line-sample]").evaluateAll((cards) => cards.map((card) => ({
+        card: card.dataset.chipLineSample,
+        rows: [...card.querySelectorAll("[data-chip-size-sample]")].map((row) => {
+          const rowStyle = getComputedStyle(row);
+          return {
+            size: row.dataset.chipSizeSample,
+            fontSize: parseFloat(rowStyle.fontSize),
+            lineHeight: parseFloat(rowStyle.lineHeight),
+            chips: [...row.querySelectorAll("[data-inline-chip]")].map((chip) => {
+              const style = getComputedStyle(chip), label = getComputedStyle(chip.querySelector(".chip__label")), code = chip.querySelector("code");
+              return {
+                text: chip.textContent, size: chip.dataset.size, display: style.display, verticalAlign: style.verticalAlign,
+                font: parseFloat(style.fontSize), weight: style.fontWeight, family: style.fontFamily, lineHeight: parseFloat(style.lineHeight),
+                block: parseFloat(style.paddingTop), inline: parseFloat(label.paddingLeft),
+                height: Math.max(...[...chip.getClientRects()].map((rect) => rect.height)),
+                codeSize: code && parseFloat(getComputedStyle(code).fontSize),
+              };
+            }),
+          };
+        }),
+        standalone: [...card.querySelectorAll(":scope > [data-inline-chip]")].map((chip) => ({ size: chip.dataset.size, font: parseFloat(getComputedStyle(chip).fontSize), display: getComputedStyle(chip).display, block: parseFloat(getComputedStyle(chip).paddingTop), inline: parseFloat(getComputedStyle(chip.querySelector(".chip__label")).paddingLeft) })),
+      })));
+      assert.equal(sizes.length, 4);
+      for (const card of sizes) {
+        for (const row of card.rows) {
+          assert.ok(row.chips.length > 0);
+          for (const chip of row.chips) {
+            const subject = `${card.card} ${row.size} ${chip.text}`;
+            assert.equal(chip.size, row.size);
+            near(chip.font, row.fontSize, `${subject} font`);
+            near(chip.lineHeight, row.lineHeight, `${subject} line height`);
+            near(chip.block, PADDING[row.size][0], `${subject} block padding`);
+            near(chip.inline, PADDING[row.size][1], `${subject} inline padding`);
+            assert.equal(chip.display, "inline");
+            assert.equal(chip.verticalAlign, "baseline");
+            assert.equal(chip.weight, "400");
+            if (chip.codeSize !== null) near(chip.codeSize, row.fontSize, `${subject} code font`);
+            assert.ok(chip.height < row.lineHeight, `${subject}: drawn height ${chip.height} must stay below the line height ${row.lineHeight}`);
+          }
+        }
+        for (const chip of card.standalone) {
+          near(chip.block, PADDING[chip.size][0], `${card.card} ${chip.size} block padding`);
+          near(chip.inline, PADDING[chip.size][1], `${card.card} ${chip.size} inline padding`);
+        }
+      }
       await open("code-colors", language, 390);
+      const sizeRowFailures = await page.locator("[data-chip-size-sample]").evaluateAll((rows) => rows.flatMap((row) => {
+        const bounds = row.getBoundingClientRect();
+        return [...row.querySelectorAll("[data-inline-chip]")].flatMap((chip) => [...chip.getClientRects()]
+          .filter((rect) => rect.left < bounds.left - 1 || rect.right > bounds.right + 1)
+          .map(() => `${row.dataset.chipSizeSample} ${chip.textContent}`));
+      }));
+      assert.deepEqual(sizeRowFailures, [], "Narrow size-sample chips must wrap within their row");
       const narrow = await page.locator("[data-prose-size]").evaluateAll((samples) => samples.map((sample) => {
         const failures = [];
         for (const chip of sample.querySelectorAll("[data-inline-chip]")) {
@@ -87,6 +141,6 @@ try {
     }
     console.log(trustOnly
       ? `${language}: trust question, session and path share one paragraph at 1440px/390px`
-      : `${language}: 12px/14px/16px prose geometry, 390px wrapping/RTL, import source/target equality, trust sentence at 1440px/390px passed`);
+      : `${language}: 12px/14px/16px prose geometry, padding sizes below their line heights, 390px wrapping/RTL, import source/target equality, trust sentence at 1440px/390px passed`);
   }
 } finally { await browser.close(); }

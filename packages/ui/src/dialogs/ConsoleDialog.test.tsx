@@ -8,6 +8,7 @@ import { consoleOf } from "../gallery/fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import type { Account, Agent, AgentAvailability, AgentModel, Console, Event, ModelsUnavailable, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { openDetails } from "../components/detailsTestSupport";
 import { imageToAvatar } from "../avatarImage";
 import { ConsoleDialog } from "./ConsoleDialog";
 import { trackMountRefocus } from "./dialogTestSupport";
@@ -368,8 +369,9 @@ it.each([
 ])("says why there is no list for %s, and leaves the form usable", async (code, params, summary, reason) => {
   const request = render(stored, [], async (body) => listing(body, [], { code, params, message: "daemon words" }));
   await openAdvanced();
-  const descriptions = Array.from(document.body.querySelectorAll('[data-slot="description"]')).filter((node) => node.textContent === summary);
-  expect(descriptions).toHaveLength(2);
+  const descriptions = Array.from(document.body.querySelectorAll('[data-slot="alert-description"]')).filter((node) => node.textContent === summary);
+  // One Alert under the table, however many Model pickers it describes.
+  expect(descriptions).toHaveLength(1);
   for (const description of descriptions) {
     expect(description.textContent).not.toMatch(/[\u2066-\u2069]/);
     expect(description.querySelector("pre")).toBeNull();
@@ -383,16 +385,22 @@ it.each([
       expect(reference?.getAttribute("dir")).toBe("auto");
       expect(reference?.querySelector("code")).toBeNull();
     } else expect(reference).toBeNull();
-    if (reference) expect(reference.getAttribute("data-size")).toBe("inherit");
+    if (reference) expect(reference.getAttribute("data-size")).toBe("xs");
   }
-  const diagnostics = Array.from(document.body.querySelectorAll("pre"));
-  const detail = "detail" in params ? params.detail : undefined;
-  expect(diagnostics.map((node) => node.textContent)).toEqual(detail ? [detail, detail] : []);
-  expect(diagnostics.every((node) => !node.closest('[data-slot="description"]'))).toBe(true);
+  expect(document.body.querySelector('[data-slot="alert-root"] pre')).toBeNull();
   await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
   const statuses = Array.from(document.body.querySelectorAll('[role="status"]')).filter((node) => !node.closest("[hidden], [inert], [aria-hidden='true']"));
   expect(statuses.map((node) => node.textContent)).toEqual([reason]);
   expect(statuses[0].querySelector("[data-inline-chip], code, pre")).toBeNull();
+  // The diagnostics are behind the Alert's Details button: in its popover once opened, which is closed again
+  // before the rest, since an open popover hides what is behind it.
+  const detail = "detail" in params ? params.detail : undefined;
+  if (detail) {
+    const alert = document.body.querySelector<HTMLElement>('[data-slot="alert-root"]')!;
+    const dialog = openDetails(alert);
+    expect(Array.from(dialog.querySelectorAll("pre")).map((node) => node.textContent)).toEqual([detail]);
+    act(() => void dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  }
   await click(pickerNamed("Model"));
   expect(optionTexts()).toEqual(["alpha, Not in the list"]);
   await click(pickerNamed("Model"));
@@ -404,10 +412,12 @@ it.each([
   ]);
 });
 
-it("shows the daemon's own words for a reason the catalogue does not know", async () => {
+it("shows the generic sentence for a reason the catalogue does not know, with the daemon's own words behind Details", async () => {
   render(undefined, [], async (body) => listing(body, [], { code: "models_something_new", params: {}, message: "daemon words" }));
   await openAdvanced();
-  expect(document.body.textContent).toContain("daemon words");
+  expect(document.body.textContent).toContain("Something unexpected went wrong.");
+  expect(document.body.textContent).not.toContain("daemon words");
+  expect(openDetails(document.body.querySelector('[data-slot="alert-root"]')!).textContent).toBe("daemon words");
 });
 
 it("narrows the effort picker to the chosen model's levels", async () => {
@@ -668,9 +678,9 @@ it("shows the badge after the name of a row that may not be picked, with the row
   const names = Array.from(document.body.querySelectorAll<HTMLElement>('[aria-hidden="true"].text-sm')).filter((el) => /^(Claude Code|Codex)/.test(el.textContent ?? ""));
   const codex = names.find((el) => el.textContent?.startsWith("Codex"))!;
   const claude = names.find((el) => el.textContent?.startsWith("Claude Code"))!;
-  expect(codex.querySelector(".rounded-full")?.textContent).toBe("Not added");
+  expect(codex.querySelector("[data-variant=bordered]")?.textContent).toBe("Not added");
   expect(codex.querySelector("span.text-app-muted")?.textContent).toBe("Codex");
-  expect(claude.querySelector(".rounded-full")).toBeNull();
+  expect(claude.querySelector("[data-variant=bordered]")).toBeNull();
   expect(claude.querySelector("span.text-foreground")?.textContent).toBe("Claude Code");
 });
 
@@ -801,11 +811,12 @@ it("names each Advanced picker by its sessions and its setting, and describes it
     (groupPicker(group, name).getAttribute("aria-describedby") ?? "").split(" ").map((id) => document.getElementById(id)?.textContent ?? "");
   expect(describedBy("Console sessions", "Reasoning effort")).toEqual([expect.stringContaining("Console sessions opened or resumed from now on")]);
   expect(describedBy("Project sessions", "Reasoning effort")).toEqual([expect.stringContaining("Project sessions opened or resumed from now on")]);
-  // The model list's state stands under both Model pickers, besides the note on their sessions.
-  const notes = Array.from(document.body.querySelectorAll('[data-slot="description"]')).filter((el) => el.textContent?.includes("took too long to list its models"));
-  expect(notes).toHaveLength(2);
-  expect(groupPicker("Console sessions", "Model").getAttribute("aria-describedby")).toContain(notes[0].id);
-  expect(groupPicker("Project sessions", "Model").getAttribute("aria-describedby")).toContain(notes[1].id);
+  // The model list's state is one Alert under the table, which describes both Model pickers besides the note on their sessions.
+  const notes = Array.from(document.body.querySelectorAll('[data-slot="alert-description"]')).filter((el) => el.textContent?.includes("took too long to list its models"));
+  expect(notes).toHaveLength(1);
+  const alertId = notes[0].closest('[data-slot="alert-root"]')!.parentElement!.id;
+  expect(groupPicker("Console sessions", "Model").getAttribute("aria-describedby")).toContain(alertId);
+  expect(groupPicker("Project sessions", "Model").getAttribute("aria-describedby")).toContain(alertId);
   expect(describedBy("Console sessions", "Model")).toHaveLength(2);
   // The headers that name the pickers are hidden from assistive technology, so they are not read a
   // second time beside the names, and no visible text of the table is outside them.

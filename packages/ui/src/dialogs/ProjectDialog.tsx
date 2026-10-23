@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useId, useMemo, useState } from "react";
 
 import { Button } from "../components/Button";
 import { consoleAccount, resolveProjectAccount, settledProjectAccount } from "../accountChoices";
@@ -14,7 +14,7 @@ import {
   projectSessionAgent,
 } from "../agents";
 import { agentIconPickerOptions, AgentIcon } from "../components/AgentIcon";
-import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
+import { FailureAlert } from "../components/FailureAlert";
 import { HelpTip } from "../components/HelpTip";
 import { InlineChip } from "../components/InlineChip";
 import type { PlainMessageKey } from "../i18n/catalog";
@@ -23,7 +23,7 @@ import { tagVocabulary } from "../projectFiltering";
 import type { Agent, Project, ProjectAccount, ProjectSource } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { AgentAccountField } from "./AgentAccountField";
-import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "./Dialog";
+import { Dialog, useDialogAction, useSubmitValidation } from "./Dialog";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
 import { OptionSelect, type Option } from "./OptionSelect";
@@ -117,7 +117,7 @@ export function ProjectDialog({
     [projects, consoleId],
   );
   const [pickingDirectory, setPickingDirectory] = useState(false);
-  const { error, busy, run } = useDialogAction();
+  const { busy, run } = useDialogAction();
 
   // A single directory's agent is read as its path is entered, a git remote's by probing it, which
   // also checks the remote can be read. A parent directory has no pre-read: each repository found
@@ -137,7 +137,12 @@ export function ProjectDialog({
   // Whatever the form asks the daemon about locks the fields below it until the answer for what is
   // entered now has arrived: a failure keeps them locked, and a git URL is asked about from the
   // first character, so it stays locked while empty too.
-  const detectionError = detection.status === "failed" ? <DaemonErrorMessage error={detection.error} showTitle={false} part="summary" /> : undefined;
+  const detectionAlertId = useId();
+  const detectionAlert = detection.status === "failed" ? (
+    // A lookup the form makes on its own, so its failure is an Alert directly under the field it is about,
+    // which describes that field.
+    <FailureAlert id={detectionAlertId} announce message={detection.error} />
+  ) : undefined;
   const locked = !editing && (source === "git" ? detection.status !== "ready" : detection.status === "checking" || detection.status === "failed");
 
   // `path` is required for the `local` and `parent` sources; `git` needs no check here, since its
@@ -244,37 +249,42 @@ export function ProjectDialog({
       >
         {!editing && <OptionSelect label={t("dialog.project.source")} options={SOURCE_OPTIONS.map((option) => ({ ...option, label: t(option.label) }))} value={source} onChange={changeSource} />}
         {!editing && source === "git" && (
-          <TextInput
-            label={t("dialog.project.repositoryUrl")}
-            value={remoteUrl}
-            onChange={setRemoteUrl}
-            dir="ltr"
-            placeholder={t("dialog.project.urlExample")}
-            description={detection.status === "checking" ? t("dialog.project.urlChecking") : undefined}
-            errorMessage={detectionError}
-            errorDetails={detection.status === "failed" && <DaemonErrorMessage error={detection.error} part="details" />}
-          />
+          <div className="flex flex-col gap-2">
+            <TextInput
+              label={t("dialog.project.repositoryUrl")}
+              value={remoteUrl}
+              onChange={setRemoteUrl}
+              dir="ltr"
+              placeholder={t("dialog.project.urlExample")}
+              description={detection.status === "checking" ? t("dialog.project.urlChecking") : undefined}
+              describedBy={detectionAlert ? detectionAlertId : undefined}
+            />
+            {detectionAlert}
+          </div>
         )}
         {!editing && (
-          <TextInput
-            label={source === "git" ? t("dialog.project.cloneInto") : t("dialog.project.directory")}
-            value={path}
-            onChange={setPath}
-            dir="ltr"
-            // The first text field when adding; the source picker above it is not one, and the
-            // repository URL only appears after a switch, which must not take focus off the picker.
-            autoFocus
-            placeholder={source === "git" ? defaultCloneDir : t("dialog.project.directoryExample")}
-            description={source === "local" && detection.status === "checking" ? t("dialog.project.pathChecking") : undefined}
-            errorMessage={shown(pathError) ?? (source === "local" ? detectionError : undefined)}
-            errorDetails={source === "local" && !shown(pathError) && detection.status === "failed" && <DaemonErrorMessage error={detection.error} part="details" />}
-            isDisabled={source === "git" && locked}
-            trailing={
-              <Button type="button" variant="secondary" isDisabled={source === "git" && locked} onPress={() => setPickingDirectory(true)}>
-                {t("common.browse")}
-              </Button>
-            }
-          />
+          <div className="flex flex-col gap-2">
+            <TextInput
+              label={source === "git" ? t("dialog.project.cloneInto") : t("dialog.project.directory")}
+              value={path}
+              onChange={setPath}
+              dir="ltr"
+              // The first text field when adding; the source picker above it is not one, and the
+              // repository URL only appears after a switch, which must not take focus off the picker.
+              autoFocus
+              placeholder={source === "git" ? defaultCloneDir : t("dialog.project.directoryExample")}
+              description={source === "local" && detection.status === "checking" ? t("dialog.project.pathChecking") : undefined}
+              errorMessage={shown(pathError)}
+              describedBy={source === "local" && !shown(pathError) && detectionAlert ? detectionAlertId : undefined}
+              isDisabled={source === "git" && locked}
+              trailing={
+                <Button type="button" variant="secondary" isDisabled={source === "git" && locked} onPress={() => setPickingDirectory(true)}>
+                  {t("common.browse")}
+                </Button>
+              }
+            />
+            {source === "local" && !shown(pathError) && detectionAlert}
+          </div>
         )}
         {!addsParent && (
           <TextInput
@@ -321,11 +331,11 @@ export function ProjectDialog({
                 <Message
                   id="dialog.project.agentDetectMechanism"
                   params={{
-                    detect: <InlineChip dir="auto" wrap size="inherit">{t("dialog.project.agentDetect")}</InlineChip>,
-                    claudeFile: <InlineChip monospace wrap size="inherit">CLAUDE.md</InlineChip>,
-                    agentsFile: <InlineChip monospace wrap size="inherit">AGENTS.md</InlineChip>,
-                    claudeDir: <InlineChip monospace wrap size="inherit">.claude</InlineChip>,
-                    codexDir: <InlineChip monospace wrap size="inherit">.codex</InlineChip>,
+                    detect: <InlineChip dir="auto" wrap>{t("dialog.project.agentDetect")}</InlineChip>,
+                    claudeFile: <InlineChip monospace wrap>CLAUDE.md</InlineChip>,
+                    agentsFile: <InlineChip monospace wrap>AGENTS.md</InlineChip>,
+                    claudeDir: <InlineChip monospace wrap>.claude</InlineChip>,
+                    codexDir: <InlineChip monospace wrap>.codex</InlineChip>,
                   }}
                 />
               </HelpTip>
@@ -366,7 +376,6 @@ export function ProjectDialog({
             isDisabled={locked}
           />
         )}
-        <DialogError message={error} />
       </Dialog>
       {pickingDirectory && (
         <DirectoryPicker

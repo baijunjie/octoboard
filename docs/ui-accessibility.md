@@ -21,44 +21,74 @@ as it is, and do not add a new exception without the user's say.
 
 ### Confirmed visual choices
 
-An Alert's only custom visual treatment is its status background, using the default `flat` fills from
-[HeroUI v2 Alert](https://v2.heroui.com/docs/components/alert), verified against the published
-`@heroui/theme@2.4.26` Alert styles and semantic palettes. Accent maps to primary; no secondary status is added.
-All other styles and component structure stay stock HeroUI 3, as specified under "Standalone errors use the shared
-Alert".
+#### One definition per semantic colour
 
-| Current status | Light background | Dark background, at 50% opacity over the actual surface |
-|---|---|---|
-| default | `#f4f4f5` (`default-100`) | `#18181b` (`default-50` in the reversed dark palette) |
-| accent | `#e6f1fe` (`primary-50`) | `#001731` (`primary-50` in the reversed dark palette) |
-| success | `#e8faf0` (`success-50`) | `#052814` (`success-50` in the reversed dark palette) |
-| warning | `#fefce8` (`warning-50`) | `#312107` (`warning-50` in the reversed dark palette) |
-| danger | `#fee7ef` (`danger-50`) | `#310413` (`danger-50` in the reversed dark palette) |
+Every colour that carries a meaning — neutral, accent, success, warning, danger, and the project's purple help colour —
+comes from one definition, used the same way everywhere in the application. HeroUI 3's own semantic tokens are that
+definition wherever HeroUI has one; the project defines a token only for a role HeroUI lacks, once, in
+`packages/ui/src/style.css`, and every component reads it from there. No component hard-codes a semantic colour, keeps
+a second recipe for a role that already has a token, or overrides a HeroUI component's semantic colours locally.
 
-The user explicitly accepts a contrast exception only for the unchanged stock `Alert.Description` text in light
-Alerts with default, accent, success or danger status. Its current `oklch(0.5517 0.0138 285.94)` colour measures
-approximately 4.397:1, 4.229:1, 4.456:1 and 4.117:1 respectively on those exact fills; the actual Work quota danger
-Alert has the same 4.117:1 result. Warning descriptions pass at approximately 4.673:1. This is a deliberate exception
-for those four descriptions on the custom backgrounds, not an exemption for custom surfaces generally. Titles,
-indicators, inline chips, controls and other custom content on these fills retain their applicable thresholds, and
-dark-mode contrast must still be verified after compositing over the actual surrounding surface. Do not recolour
-the description or dilute the reference fills to remove the accepted shortfalls.
+| Role | Source |
+| --- | --- |
+| Solid fill and the text on it (a primary button, a count badge, a selected segment, the resize line) | HeroUI `--{colour}` and `--{colour}-foreground` |
+| Soft fill (an Alert's background, a chip's and a badge's fill) | HeroUI `--{colour}-soft`; the neutral soft fill is the project's tint, HeroUI's `--default-soft` all but vanishing on a white surface |
+| An icon or glyph of that meaning on a surface (a failure mark, a status dot, a lock, a Git badge); a destructive menu item's icon takes its label's `--danger`, as HeroUI colours that label | HeroUI `--{colour}-soft-foreground`, the role HeroUI itself gives an Alert's and a Toast's indicator |
+| Text in that colour (a chip's and a badge's text, +N / −M line counts, the diff viewer's added and removed text) | The project's tint text token: HeroUI's soft foreground pulled toward the foreground just enough to keep 4.5:1 on every surface |
+| A hairline edge (a bordered badge) | The project's tint edge token, mixed from HeroUI's solid colour |
+| Focus | HeroUI `--focus`, for HeroUI controls and the application's own rings alike |
+| Accent, links included | HeroUI `--accent`; link text uses the accent text token where it sits in copy |
+| Secondary text | The project's `--app-muted`, HeroUI's `--muted` missing 4.5:1 on a selected sidebar row |
+| Help, the project's purple for help and hints | A project token (`--help`), HeroUI having none, with its soft fill, text and edge derived like the others |
+
+Native colours that cannot read CSS — the menu bar icon's status colours — are generated from the same values rather
+than written down separately. The terminal's ANSI palette, syntax highlighting, agent brand colours and identity
+colours (avatars, session dots) are not semantic and keep their own palettes.
+
+The user accepts that HeroUI's accent, used as the solid accent and the focus ring, falls below 3:1 on some light
+surfaces — a selected sidebar row, a control fill and its hover, the window chrome — in exchange for one accent colour
+across the application. A selected segment of a toggle group keeps HeroUI's own selected treatment.
+
+An Alert's only custom visual treatments are its status background, HeroUI's `--{colour}-soft` for its status, and its
+shadow: HeroUI's `--surface-shadow` keeps its shape but takes the status colour instead of grey, so a tinted Alert has no
+grey rim. All other
+styles and component structure stay stock HeroUI 3, as specified under "Errors shown among other content". The stock
+`Alert.Description` keeps its colour on that fill; where it measures below 4.5:1 it is HeroUI's own text on HeroUI's
+own fill, not recoloured.
 
 Tabs in Settings, the project pane's Files / Changes switch, the session dialog's New / Resume conversation switch
 and the agent tabs in the console dialog's Advanced section keep their labels fully opaque on hover and use the
 foreground colour instead of dimming. Preserve this shared visual treatment as an explicit product choice, while retaining the component's
 layout, selection and keyboard behaviour.
 
-A status mark such as "Not added" or "Not installed", and any other qualifier after a name (a session's account in its
-agent mark's tooltip where that names only the agent and its account, "Not in the list"), is a badge after the name,
-never parenthesised text in the name's own style. It is the shared `StatusBadge`: a muted-tint fill with a hairline
-ring, its text at 80% foreground so it keeps at least 4.5:1 on every surface it sits on (fields, dialogs, popovers,
-tooltips, sidebar rows and cards), and a screen-reader-only comma between name and qualifier. A user-typed value in it
-takes `dir="auto"` and a path `dir="ltr"`; in a tooltip, whose width is bounded, it wraps instead of overflowing. A
-badge that completes its name rather than qualifying it ("Same as console" and the value that resolves to) sits inside
-the name's fade in a select and is clipped together with it. The session context-size indicator is the same badge on its
-own, without the comma. An agent row that cannot be picked is dimmed by its name taking the secondary text colour (still
-at least 4.5:1) and its icon fading; the text is never faded below AA by opacity.
+A status mark such as "Not added", "Not installed" or "Logged in", and any other qualifier after a name (a session's
+account in its agent mark's tooltip where that names only the agent and its account, "Not in the list", a file's
+change status or size, "Read-only"), is a badge after the name, never parenthesised text in the name's own style and never an
+`InlineChip`. It is the shared `StatusBadge`, the only small badge component. It takes a semantic colour — `default`
+(neutral), `accent`, `success`, `warning`, `danger` or `help` (the project's purple, for help and hints) — and one of two variants:
+
+- **Borderless** (`variant="soft"`), the usual choice for a state: login state, a tool's installed state, a file's
+  change status, "Read-only".
+- **Bordered** (`variant="bordered"`), for a qualifier that annotates the name before it: the account, "Not added",
+  "Same as console" and the value it resolves to, the context size. It adds a hairline edge in its colour.
+
+Badge and inline chip serve different purposes but share one colour configuration: a single set of generic tint
+tokens in `packages/ui/src/style.css`, per colour a fill, a text colour and an edge, which both components read, so a
+chip and a badge of the same colour never differ. A coloured fill is HeroUI's `--{colour}-soft`, its edge the solid
+`--{colour}` mixed down (HeroUI has no border token); the neutral fill is the secondary text colour at 16% over
+whatever it sits on, with text at 80% foreground and an edge of the same tint at 28%. Only the bordered badge draws
+the edge; a chip never has one.
+
+Every colour and variant keeps at least 4.5:1 for its text on every surface it sits on (fields, dialogs, popovers,
+tooltips, sidebar rows and cards), measured as drawn over each surface; where HeroUI's soft foreground falls short on
+any surface it sits on, that colour's text token is mixed toward the foreground, once per appearance, rather than
+dropping the colour. A badge has a screen-reader-only comma between name and qualifier. A badge never sits in wrapping
+running copy: it belongs at the end of a name, row or label line. A user-typed value in it takes `dir="auto"` and a path
+`dir="ltr"`; in a tooltip, whose width is bounded, it wraps instead of overflowing. A badge that completes its name
+rather than qualifying it ("Same as console" and the value that resolves to) sits inside the name's fade in a select and
+is clipped together with it. The session context-size indicator is the same badge on its own, without the comma. An
+agent row that cannot be picked is dimmed by its name taking the secondary text colour (still at least 4.5:1) and its
+icon fading; the text is never faded below AA by opacity.
 
 A select option or menu item that cannot be chosen and says why (an account whose quota is used up) keeps the reason
 line under its name at full opacity and fades only its name and icon with HeroUI's `--disabled-opacity`, instead of
@@ -141,11 +171,14 @@ the path it copies (`packages/ui/src/viewer/FileViewer.tsx`).
 A control inside a collection's **section header** is reached by neither of those: react-aria's keyboard delegate
 walks the collection's items alone, so the arrow keys never land on a header, Tab inside the collection jumps to the
 last tabbable element and leaves, and focus arriving anywhere in the collection that is not a row is moved to its
-first row. The one such control in the window is the change list's section heading, the band that folds the section
-away (`packages/ui/src/browser/changeSectionHeading.tsx`), and it is reached by this application extending the
-collection's own walk: Up and Down step through the rows **and the headings between them**, while Home and End still
-move between rows alone. Such a control takes no tab stop of its own and must not take focus on a press
-(`preventFocusOnPress`), or a mouse press on it sends focus to the list's first row.
+first row. The change list's section heading — the band that folds the section away
+(`packages/ui/src/browser/changeSectionHeading.tsx`) — and the failure mark a heading can carry are such controls, and
+they are reached by this application extending the collection's own walk: Up and Down step through the rows **and the
+headings between them**, Right from a heading moves to its failure mark and Left back to the band (mirrored in a
+right-to-left reading direction, where the mark sits on the left), while Home and End
+still move between rows alone. Such a control takes no tab stop of its own and must not take focus on a press
+(`preventFocusOnPress`), or a mouse press on it sends focus to the list's first row; a popover opened from it hands
+focus back to its heading when it closes.
 
 The band is react-aria's `rowheader` inside a `role="row"`, not an `<h1>`-`<h6>`, so the rule under "A visual heading
 is a heading element" does not reach it: it is a row of the change list's treegrid, where that markup is what the
@@ -177,10 +210,13 @@ same rule: it keeps focus and is marked `aria-disabled`, a press or Space does n
 `aria-describedby` description. When the control that held focus goes away with the state it belonged to, focus moves
 to the control the state was about, unless the user has already moved it.
 
-A warning that explains why a switch's last change did not finish is part of the switch's description, with the
-sentence saying how to try again and any Details disclosure placed after the Alert, not inside it; the switch itself is
-the way to try again, so there is no retry button. Only a failure that arrives while the warning's view is shown is
-announced (`role="alert"`); the same warning found already there when the view opens, or after a restart, is not.
+A warning that explains why a switch's last change did not finish is part of the switch's description. Its Alert says
+what happened and how to try again, in at most two sentences; any further explanation and the raw entries are in the
+Alert's Details popover, as for every error shown among other content (see "Errors shown among other content"). A
+failure with a single cause says that cause and its fix as its two sentences; one with several says that some files or
+folders could not be changed, and lists the causes in Details. The switch itself is the way to try
+again, so there is no retry button. Only a failure that arrives while the warning's view is shown is announced
+(`role="alert"`); the same warning found already there when the view opens, or after a restart, is not.
 
 A disabled select option or menu item that carries a reason stays in the arrow-key walk (`disabledBehavior:
 "selection"` on the menu and on any single-selection section inside it), so a keyboard user reaches it and hears why;
@@ -281,8 +317,8 @@ focus ring. This overrides WebKit's native inset without changing the component'
 
 An element that removes the outline puts a ring back, never `outline-none` alone, and takes it from
 `useFocusVisibleProps` (`packages/ui/src/components/useFocusVisibleProps.ts`): spread its props on the element and
-style with `data-focus-visible:ring-2 data-focus-visible:ring-app-focus` (`group-data-focus-visible:` from a child).
-The application's custom ring uses `--app-focus`; HeroUI controls retain their own default focus token.
+style with `data-focus-visible:ring-2 data-focus-visible:ring-focus` (`group-data-focus-visible:` from a child).
+The application's custom ring uses HeroUI's `--focus`, the same token HeroUI controls use.
 
 ### Never style focus with CSS `:focus-visible`
 
@@ -654,62 +690,144 @@ A decoration drawn over the menu bar icon itself, such as the raised hand while 
 likewise marked non-element, view and cell: the menu's **Waiting for you** heading is what tells assistive technology
 that state.
 
-### Standalone errors use the shared Alert
+### Where an error is shown
 
-Every runtime failure also opens the dedicated error alert dialog and remains there until the user presses its
-acknowledgement button. Errors never use toasts, timeouts, an outside press, Escape or a close button for dismissal.
-Use HeroUI's `AlertDialog` with its `Icon` set to `status="danger"` and a danger acknowledgement button, retaining
-the library's default visual treatment.
+Where a failure is shown follows from how it arises, not from the screen it arises on:
+
+| The failure | Where it is shown |
+| --- | --- |
+| A form's own validation: a check run synchronously the moment the user submits (empty, malformed, too long, a duplicate of a known name) | Under its field, in the field's `FieldError` |
+| An asynchronous failure of an operation the user started: a submitted form, a switch, a menu or row action, copying, opening | The dedicated error alert dialog, below |
+| A failure that is the state of what the screen shows: a page, pane, section, list or menu that could not load, permissions that cannot be read, a lookup a form makes on its own while the user types (detecting a project folder, looking up a conversation ID, reading the model list) | On the screen, in an Alert: "Errors shown among other content" |
+| A failure belonging to one row, table cell, badge or spot inside a rendered document: a folder in a tree that could not be listed, a repository's fetch error on its sidebar badge, an account whose quota could not be read (in Settings and the rail's quota panel), an import result row that failed, an image in a Markdown paragraph that could not load | A minimal mark: "A failure that belongs to one row" |
+
+Once a submit has passed the form's own validation, anything that goes wrong afterwards — a refusal from the daemon
+included, even one about a single field's value — is an asynchronous failure and opens the error alert dialog; the
+form stays open with its values intact. Field validation never opens the dialog, and neither does a failure shown on
+the screen or as a row's mark: those are the error's only presentation.
+
+#### The error alert dialog
+
+Every asynchronous failure of an operation the user started opens the dedicated error alert dialog and remains there
+until the user presses its acknowledgement button. Errors never use toasts, timeouts, an outside press, Escape or a
+close button for dismissal. Use HeroUI's `AlertDialog` with its `Icon` set to `status="danger"` and a danger
+acknowledgement button, retaining the library's default visual treatment.
 The alert takes focus and announces its title and explanation through `role="alertdialog"`, without a second live
 announcement inside it. Distinct failures wait in a queue; repeated copies of a pending failure do not multiply it.
 An error above a form leaves that form available after acknowledgement, with its values and retry action intact.
-Field validation stays attached to the field and does not open an error dialog.
 
 Distinguish failures the user can resolve from unexpected failures. A recoverable failure explains the specific
 remedy, such as freeing disk space, unlocking a session or correcting a folder's access. An unexpected failure
 preserves its diagnostics, asks the user to take a screenshot and file an issue, and provides the issue entry.
 Do not ask the user to fix a likely application defect or present a known environmental problem as a bug.
 An error alert dialog's recovery action is a secondary button in its footer beside the acknowledgement button,
-never a button inside its body.
-
-An error that stands on its own in a page, pane or dialog uses `ErrorAlert`, the shared HeroUI `Alert` with danger
-status and its original indicator, content, title and description parts. Every Alert's only custom visual treatment
-is a background fill corresponding to its status. All other styles and component structure stay stock HeroUI:
-indicator, typography, spacing, radius and shadow remain unchanged. A danger title uses `Alert.Title` with its
-original status colour; `Alert.Description` keeps its default colour. Do not apply `text-foreground` or another
-colour override to either part, override text sizes, or replace the content structure. Neutral absence, loading and
-unsupported content keep their state presentations. A field's validation stays in its `FieldError`, and so does a
-request's refusal that is about one field's value, with focus moved to that field; a failure attached to a row,
-table cell or rendered document stays in that content's own presentation. A failed page or pane may keep its
-explanation and recovery actions visible after acknowledgement; a form's execution failure is shown in the dedicated
-error dialog. Warnings use warning status, rather than the error wrapper. A standalone error, warning or blocking
-reason — anything that is not a field's validation or a row's own status — is never a bare line of danger- or
-warning-coloured text: colour alone does not mark it, and it needs the Alert's indicator and fill. A dialog that
-cannot proceed for a reason outside its fields shows that reason in an `ErrorAlert` (or a warning-status
-`TintedAlert`) at the top of its body, not as coloured text among the fields.
-
-An inline Alert holds only what failed and why: an optional `Alert.Title` and a short `Alert.Description` inside
-`Alert.Content`, beside `Alert.Indicator`. A short error that already says what failed needs no generic title
-repeating it. Keep the remedy sentence and recovery actions after the Alert, in the surrounding content's ordinary
-text style. Paragraphs, lists and diagnostic blocks also belong outside the Alert; its span description cannot
-contain them. Do not replace `Alert.Title` with a heading element or rebuild the content to fit those blocks.
+never a button inside its body. Its body is the dialog's own prose: the explanation, the remedy and any diagnostic
+block follow one another without an Alert inside the dialog.
 
 A state that must not happen is prevented rather than shown as a screen: disable an entry whose action cannot
 succeed, such as New session when there is no agent to pick. If that state arises while its dialog is open, close
 the dialog and show a plain error alert dialog explaining why, with only acknowledgement and no recovery action.
 This acknowledgement-only presentation retains structured error metadata and rich name references.
 
-Inline labels and technical literals use the shared `InlineChip`, backed by HeroUI Chip. Technical literals use
-its monospace, left-to-right and wrapping options. A technical literal — a path, a file name, a URL, a branch,
-a commit id, an ID, a command or a setting value — stands without quotation marks, as code where the text is rendered and bare in its plain-text form.
-A name, title or control label referenced within visible prose, headings, descriptions or tooltips uses a
-non-monospace `InlineChip` at `inherit` size, with `dir="auto"` and wrapping, instead of quotation marks. This includes
-fixed agent and product names when they are references within copy. Whole entity and control labels, structured
-entity/path rows, and foreign source, terminal and report layouts keep their established presentation.
-A focus card's model line — the account, then the model and reasoning effort, beside the agent mark — is such a whole
-metadata label: it is plain text without chips. Its model and effort are the same isolated string the card's
-accessible name ends with; the account is not repeated there, the name already carrying it with the agent. So is the agent's name
-heading the agent mark's tooltip: it names the mark rather than being referenced within prose.
+The error alert dialog owns the announcement of the failures it shows; nothing else announces them again. A failure
+shown on the screen announces itself, once, when it appears after the view has first painted (`role="alert"` on its
+title and description only, never on its details or actions); the same failure already there when the view opens is
+not announced. A failure that appears together with a focus move (a dialog opening, a menu handing focus to its Try
+again) holds its alert until the focus move has been spoken, as "Announcing a change" asks of any write near a focus
+move. A failure shown beside other content (in a dialog or a section) stays in place while its retry is out, its Try
+again pending; a retry that fails again is announced again even in the same words, and one that succeeds hands focus
+on as the failure goes, so focus never falls to the page. A failure that stands in place of a pane's or menu's
+subject that has a loading state of its own gives way to it when its retry starts, focus handed first to the pane's
+or menu's own control; one with no loading state to give way to (the report panel's whole-card failure) stays in
+place like the first kind.
+An initial startup explanation is ordinary page content. Follow "Announcing a change" for other live announcements,
+and keep retry and exit actions reachable after acknowledgement.
+
+#### Errors shown among other content
+
+An error shown on a screen together with other UI — a form dialog, a settings section, a pane, a popover, a list's
+header, a menu — is one compact Alert that says only what happened, with everything else one press away. Nothing about
+the error sits beside the Alert as loose text, and no part of it is a bare line of danger-, warning- or muted-coloured
+text, an empty-state panel, or a disabled menu item: colour and position alone do not mark an error, it needs the
+Alert's indicator and fill. A failed lookup a form makes on its own sits in an Alert directly under the field it is
+about; a reason a dialog cannot proceed that lies outside its fields sits in an Alert at the top of its body.
+
+A page, pane or list whose whole subject could not be loaded has nothing else to show, so its failure takes the empty
+state's shape (see "An empty state is a glyph, a heading, and what fills it") rather than an Alert: a danger glyph, a
+heading saying what could not be loaded, the line under it in the application's own words (why, and how to recover),
+and in its centred row the recovery action (Try again) as the primary button and **Details** as a secondary one, its
+popover holding only the raw text, as in an Alert. An Alert is for a failure shown among other
+content.
+
+The Alert holds, beside `Alert.Indicator`: an optional `Alert.Title` and an `Alert.Description` in the application's
+own words of at most two sentences — what happened, and the one main thing to do about it. At its end, in the place
+HeroUI's own Alert puts its action button, stand at most two buttons: **Details** when there is more to show, then the
+recovery action when there is one (Try again, or the action that fixes it) at the trailing edge, where the primary
+button of a trailing-aligned group goes. Details opens a popover holding the rest: first any further
+explanation in the application's own words (a reason per cause, each cause's own fix, further guidance), then what is
+not written for the reader — a message passed through from the system, Git or an agent, a diagnostic block, raw
+entries. Raw text is never shown outside Details, and the one-sentence description and main remedy are never hidden
+in it; an error with nothing beyond those two sentences has no Details button. A catalog message keeps the same split:
+its visible summary and remedy carry no raw parameter (no system text, no `{detail}`), and any further explanation is a
+`.details` entry of its own that Details shows first. Try again appears only where trying again can change the answer;
+a failure that is the subject's state (no common commit, not a repository, a file outside the scope) has none. The buttons take
+the Alert's status colour, as HeroUI's own Alert examples do: the recovery action is the solid button of that colour
+(HeroUI's `danger` variant in a danger Alert; the same solid treatment from `--warning` / `--warning-foreground` in a
+warning one, HeroUI having no warning button), and Details is the soft button of that colour (`danger-soft`, or its
+warning counterpart), so neither reads as a neutral control dropped onto a coloured box. A short error
+that already says what happened needs no generic title repeating it.
+
+The Alert is HeroUI's `Alert`: `ErrorAlert` for danger status, or a warning-status `TintedAlert` for a warning, with its
+status background fill and status-coloured shadow (see "One definition per semantic colour") as its only custom visual
+treatments; indicator, typography, spacing, radius and component structure stay stock HeroUI. A danger title uses `Alert.Title` with its original status colour; `Alert.Description`
+keeps its default colour. Do not apply `text-foreground` or another colour override to either part, override text
+sizes, or replace `Alert.Title` with a heading element. Neutral absence, loading and unsupported content keep their
+state presentations.
+
+A screen whose only content is the error — the startup failure and the crash screen — is the error's own surface, as
+the error alert dialog is: its heading, instructions and diagnostic block may stand around the Alert.
+
+#### A failure that belongs to one row
+
+A failure belonging to one item of a collection, one part of a compact layout (a section of a side pane, such as the
+Git pane's uncommitted changes or its branch list, with the rest of the pane still shown), or one spot in rendered
+content does not break that row, section or sentence into an error block. The item shows a minimal mark: a danger or warning status glyph with an accessible name, placed
+where the row's status or trailing content would sit, beside the section's heading for a part of a compact layout
+(inline with the text in a document). The reason in the application's own words, then any raw text, then the
+recovery action (Try again, at the popover's trailing edge) open from that glyph in a popover, or the reason alone in
+a tooltip when it is one short line with no raw text or action. No sentence of
+error text is written into the row. Where the row's other outcomes are each a glyph and a word in a status column
+(an import result's Created, Left out, Not attempted), the failed outcome is the same shape — its glyph and the word
+Failed — and that pair is the control that opens the reason. The glyph follows "A tooltip on a mark that is not a control" when it is not
+otherwise a control.
+
+### References in copy use `InlineChip`
+
+`InlineChip`, backed by HeroUI Chip, has one job: marking a reference mixed into running copy, where Markdown would
+write `` `xxx` `` and plain prose would use quotation marks. It is the only component for that; do not use HeroUI's
+`Typography.Code`, a raw `code` element, HeroUI `Chip` directly or a hand-built pill for a reference in copy. It is not
+a badge: a status or qualifier after a name is a `StatusBadge` (see "Confirmed visual choices"), and a name shown on
+its own is plain text.
+
+- **A reference within copy takes a chip.** A name, title, control label or technical literal referenced within
+  visible prose, headings, descriptions, Alerts, field errors, tooltips or toasts uses an `InlineChip` instead of
+  quotation marks. This includes fixed agent and product names when they are references within copy. A name or
+  title uses the non-monospace chip with `dir="auto"` and wrapping. A technical literal — a path, a file name, a URL,
+  a branch, a commit id, an ID, a command or a setting value — uses its monospace, left-to-right and wrapping options,
+  stands without quotation marks, and is bare in its plain-text form.
+- **A name shown on its own takes no chip.** A name or value displayed by itself rather than inside a sentence —
+  a row's title, a list entry, a heading that is just the name, a label naming its control, a value on a line of its
+  own, a token in a filter field — is plain text in the style of where it sits (a technical value keeps the
+  monospace font, without a chip). So is a run of names joined only by a connector such as `・` or `｜`, with no
+  words around them. When such a joined run is itself referenced within a sentence, it is one reference and takes
+  one chip around the whole run, never one chip per name.
+- Whole entity and control labels, structured entity/path rows, and foreign source, terminal and report layouts
+  keep their established presentation. A focus card's model line — the account, then the model and reasoning effort,
+  beside the agent mark — is such a whole metadata label: plain text without chips. Its model and effort are the
+  same isolated string the card's accessible name ends with; the account is not repeated there, the name already
+  carrying it with the agent. So is the agent's name heading the agent mark's tooltip: it names the mark rather than being referenced
+  within prose.
+
 Plain-text surfaces, including accessible names, native labels, announcements and system notifications, retain
 readable text without chip markup. Isolate references at the sentence boundary where needed, as specified under
 "Text direction"; collection keys, `textValue`, sorting, defaults and submitted values stay raw.
@@ -718,46 +836,55 @@ preserving their text, direction and indentation; long content remains scrollabl
 Keep structured error metadata separate from the plain error message, so notifications and unknown-error fallbacks
 retain usable text.
 
-Choose the chip size by its role, consistently across the UI:
+#### A chip's size follows the line it sits in
 
-| Role | Size | Typography and geometry |
+A chip always takes the font of the text it sits in — its size, weight, line height and family (a technical literal
+keeps its monospace `code` child at the same size) — and sits `inline` on that text's baseline. The four sizes differ
+only in padding, the tint drawn around the text:
+
+| Size | Padding (block, inline) | Drawn height |
 | --- | --- | --- |
-| A value within a sentence, heading, label, description, validation error, tooltip or toast; also a single technical value displayed on its own line in application copy | `inherit` | The surrounding font size and line height, on the text baseline. Typically 12px in field errors or secondary descriptions, 14px in body copy and labels, and 16px in dialog headings. No fixed chip height. |
-| Dense metadata: project filter terms | `xs` | 12px text, 16px line height and height, no vertical padding. |
-| Independent status, type or size metadata: agent availability, file-change status, staging state, file size, Git-directory markers and report-history indicators | `sm` | 12px text, 20px height, HeroUI's compact preset. This is the component default for independent metadata. |
-| Reserved presets, shown only in the component comparison; no current product use | `md`, `lg` | HeroUI's 24px and 28px heights respectively. Do not use them to enlarge values within copy. |
+| `xs` | 0, 4px | The text's content area, about 1.2 times its font size |
+| `sm` | 1px, 6px | Content area + 2px |
+| `md` | 2px, 8px | Content area + 4px |
+| `lg` | 3px, 10px | Content area + 6px |
 
-A path's length, monospace font or position on its own line does not select its size. Every technical literal
-within copy follows the same `inherit` rule as a name or control label. Technical literals keep their monospace
-code child while the chip's background uses the same font metrics as a name chip. Keep a sentence in ordinary
-inline flow rather than making its text runs and chips separate flex items that stretch to different heights.
-When a technical value completes a sentence, fill it through that sentence's localized placeholder; do not
-retain a separate paragraph or a colon-led block just because the value used to be shown as code.
-Long values wrap at slashes or anywhere they need to, within the available width; they do not select a smaller size.
-Sizes belong to the shared component rather than caller-level font, line-height or padding overrides. Width
-constraints for aligned metadata remain layout concerns.
+The drawn height must stay below the copy's line height, so that chips on wrapped lines never touch and no line is
+stretched: a size larger than the largest that fits is never used. In 12px text on 16px lines (field errors,
+secondary descriptions, tooltips) only `xs` fits; in 14px text on 20px lines (body copy, labels, Alert descriptions)
+up to `sm`; in 16px text on 24px lines (dialog headings) up to `md`; in 14px text on 24px lines (Alert titles) up to
+`lg`. `xs`
+is the default, safe in every copy style of the UI, and is what copy uses unless it has a reason for more. No size
+changes the chip's font.
+
+A chip that moves to the next line whole (`unbroken`, an `inline-block`) is as tall as its line box, so it touches the
+next line's chip unless it tightens its own line height to the content area, which the component does for it.
+
+A path's length, monospace font or position does not select its size. Technical literals keep their monospace code
+child while the chip's background uses the same font metrics as a name chip. Keep a sentence in ordinary inline flow
+rather than making its text runs and chips separate flex items that stretch to different heights. When a technical
+value completes a sentence, fill it through that sentence's localized placeholder; do not retain a separate paragraph
+or a colon-led block just because the value used to be shown as code. Long values wrap at slashes or anywhere they
+need to, within the available width; they do not select a smaller size. Sizes belong to the shared component rather
+than caller-level font, line-height or padding overrides.
 
 The `monospace` option preserves a semantic `code` child without introducing a second visual component. Paths and
-URLs can wrap after slashes, and longer uninterrupted literals can wrap anywhere. A confirmation word, file size,
-status and technical ID use the same chip component. A typed confirmation word inherits the label's font size,
-uses italic text, and keeps the ordinary UI font. A single technical value in application copy uses a chip
-even on a line of its own, including the folder a trust confirmation asks about. Reserve `CodeBlock` for
-multi-line code or raw diagnostics, never as a larger presentation of one path. Structured path displays
-are separate from copy: file and directory lists, settings rows whose value is a path, and the viewer's
-primary file-path row retain their shared path components, including their icons, clipping and full-path
-tooltips. Path input fields and source or Markdown content also retain their own layouts.
+URLs can wrap after slashes, and longer uninterrupted literals can wrap anywhere. A typed confirmation word referenced
+in its label inherits the label's font size, uses italic text, and keeps the ordinary UI font. Reserve `CodeBlock`
+for multi-line code or raw diagnostics, never as a larger presentation of one path. Structured path displays are
+separate from copy: file and directory lists, settings rows whose value is a path, and the viewer's primary
+file-path row retain their shared path components, including their icons, clipping and full-path tooltips. Path
+input fields and source or Markdown content also retain their own layouts.
 
-Inline chips retain HeroUI's colours, soft fill and shape; the secondary hue is the shared purple extension. `CodeBlock` uses
+Inline chips retain HeroUI's colours, soft fill and shape; the help hue is the project's purple extension. Their
+fill and text come from the tint tokens shared with `StatusBadge` (see "Confirmed visual choices"); HeroUI's own
+neutral `--default-soft` all but vanishes on a white surface (about 1.05:1), so the neutral chip does not use it. `CodeBlock` uses
 the shared Typography wrapper for multi-line diagnostics. Outside an Alert, both default to neutral and may choose a
-colour. `TintedAlert` supplies `CodeToneContext`: default stays neutral, accent maps to primary, and success,
-warning and danger use their matching colours. The nearest status context takes precedence over an explicit colour,
+colour. `TintedAlert` supplies `CodeToneContext`, passing each status straight through as the chip's colour: default stays neutral, and accent, success,
+warning and danger use their matching colours. A chip drawn off that fill — in the Alert's Details popover — leaves the tone and keeps its own colour. The nearest status context takes precedence over an explicit colour,
 including field errors and toast titles. Do not hand-colour individual literals within a status message. HeroUI's
 Alert parts remain the indicator, content, title and description primitives. Syntax-highlighted source and foreign
 renderer markup retain their own palettes.
-
-The dedicated error dialog owns the announcement of a runtime failure; durable error content must not announce the
-same failure again. An initial startup explanation is ordinary page content. Follow "Announcing a change" for other
-live announcements, and keep retry and exit actions reachable after acknowledgement.
 
 ### External links
 
@@ -768,9 +895,9 @@ open a new tab with `noopener noreferrer`; the desktop app uses its platform lin
 opener produces the dedicated actionable error alert rather than navigating the desktop window.
 
 Ordinary prose links use the shared text appearance: the surrounding font size and line height, link colour and an
-underline. A control label mentioned within copy uses the shared chip appearance at `inherit` size, without
-quotation marks. A chip that only names a separate control remains non-interactive. A chip that opens an external
-page is itself a link and includes the external icon. A footer may instead provide one external action using the
+underline. A control label mentioned within copy uses the shared chip appearance, without
+quotation marks. A chip that only names a separate control remains non-interactive; a chip is never itself a link.
+A footer may instead provide one external action using the
 shared button appearance, which applies HeroUI's secondary-button styles to the anchor; its reference in the body
 is a plain chip. Do not make both the reference and the separate control interactive. All appearances retain a visible keyboard focus
 ring, and a pending open keeps the label and icon visible while preventing repeated activation. Callers may not
@@ -820,8 +947,10 @@ only through this component.
 - The `compact` row, for a sidebar list in either normal or focus mode and for other nested lists, has no room for
   that line. Its message is plain text rather than a heading; where the list has one creation action, the whole row
   performs it. The main content's full panel carries the current action without a competing full panel in the sidebar.
-- A load failure is not an empty state; it keeps the error shape, with its own way out (see the "Errors" section of
-  `.claude/skills/knowledge-i18n-copy/SKILL.md`). What the subject *is* is a state of the subject, not a failed load,
+- A load failure that leaves the whole place with nothing to show takes this shape too, as its error presentation:
+  a danger glyph, a heading saying what could not be loaded, and Try again and Details in the row (see "Errors shown
+  among other content"); its copy follows the "Errors" section of `.claude/skills/knowledge-i18n-copy/SKILL.md`. It is
+  told from an absence by its danger glyph and its retry. What the subject *is* is a state of the subject, not a failed load,
   even when the panel warns about it: a project that is in no repository, a worktree that is gone, a repository Git
   itself refuses, are all empty states, since no retry would change the answer.
 
@@ -948,10 +1077,10 @@ the surface in both appearances.
 A hand-built card that its content already identifies has no outline of its own: it is set apart by the short two-layer panel
 shadow (`shadow-(--panel-shadow)`, as the focus-mode session cards are), with a transparent border holding the place a
 selected state's border takes. That edge is decorative and is not held to 3:1; a panel card's hairline (`panel-edge`)
-and a groove divider (`groove-b` and its other sides) are decorative in the same way. Its selected state still has to
-reach 3:1 (`border-accent-glyph`).
+and a groove divider (`groove-b` and its other sides) are decorative in the same way. Its selected state takes the
+accent icon colour (`--accent-soft-foreground`, see "One definition per semantic colour"), which reaches 3:1.
 
-An unarchived locked session communicates its state through a persistent yellow lock button with an Unlock
+An unarchived locked session communicates its state through a persistent warning-coloured lock button with an Unlock
 accessible name and tooltip. Hovering or keyboard-focusing the button changes the glyph to an open lock; unlocking
 hands keyboard focus to the row before the button disappears. Keyboard focus keeps its own visible ring.
 
@@ -1150,20 +1279,23 @@ pressed. Its "Resize" tooltip opens on pointer hover only and is not tied to the
 accessible name already says what it does; a focused grip shows itself and its ring instead.
 
 **A notice carries its severity in a glyph, never in its fill alone.** The file viewer's notices — what is said above
-content that is still shown — are one block in three tones (`Notice` in `packages/ui/src/viewer/viewerStates.tsx`):
-an explanation of how the content is drawn, a warning about the content itself, and a part of it the viewer could not
-show. Each is a HeroUI `Alert` of its own status, which draws the glyph that goes with it — the circled `i`, the
-warning triangle, the circled `!` — from `Alert.Indicator`. Notices above a reading surface and block notices embedded
-in a Markdown document use a background fill corresponding to their status and keep HeroUI's original Alert
-structure and all other styles, including title, description and indicator. The glyph carries the tone even where
-the fill does not contrast strongly with the surrounding surface. A notice that sits inside a paragraph
-cannot be that Alert: an Alert is a `div`, and a `div` inside a `p` is not valid. `InlineNotice` in
-`packages/ui/src/viewer/inlineNotice.tsx` is a `span`. The sentence inherits the document colour, which already meets
-the contrast above, and the same three glyphs tell the tones apart. When that notice appears after the first paint,
-it is announced by `StatusAnnouncer` rendered as a `span`, with the viewer's own first-write delay; the visible
-sentence is `aria-hidden` so it is not read twice. The error block for a subject that cannot be
-opened at all uses the shared danger Alert with HeroUI's original indicator, title and description styles,
-following "Standalone errors use the shared Alert".
+content that is still shown — are one block in three tones (`Notice` in `packages/ui/src/viewer/viewerStates.tsx`): an
+explanation of how the content is drawn, a warning about the content itself, and a part of it the viewer could not show.
+Each is a HeroUI `Alert` of its own status, which draws the glyph that goes with it — the circled `i`, the warning
+triangle, the circled `!` — from `Alert.Indicator`. Notices above a reading surface and block notices embedded in a
+Markdown document use a background fill corresponding to their status and keep HeroUI's original Alert structure and all
+other styles, including title, description and indicator. The glyph carries the tone even where the fill does not
+contrast strongly with the surrounding surface. A notice that sits inside a paragraph cannot be that Alert: an Alert is
+a `div`, and a `div` inside a `p` is not valid. `InlineNotice` in `packages/ui/src/viewer/inlineNotice.tsx` is a `span`.
+The sentence inherits the document colour, which already meets the contrast above, and the same three glyphs tell the
+tones apart. When that notice appears after the first paint, it is announced by `StatusAnnouncer` rendered as a `span`,
+with the viewer's own first-write delay; the visible sentence is `aria-hidden` so it is not read twice. A failed block
+notice, a rendering fallback with the content still shown, is announced the same way, as status and not as an alert,
+which suits what it is: the view that was asked for is replaced by one that works, and the viewer's regions are shared
+with its loading progress. A part inside a paragraph that failed (an image or an inline formula that could not be drawn)
+is not such a sentence but the minimal mark of "A failure that belongs to one row": its glyph in place of the part, with
+the reason in its popover or tooltip. The error block for a subject that cannot be opened at all uses the shared danger
+Alert with HeroUI's original indicator, title and description styles, following "Errors shown among other content".
 A viewer with nothing to draw takes neither: it fills the body with a centred glyph and sentence (`NothingToShow`).
 
 **One kept shortfall is left, and it is a single control**: the settings dialog's three-way appearance choice, which
@@ -1219,7 +1351,7 @@ Two cases take no isolate, and putting one there breaks something:
   strong character left for `dir="auto"` to read, which can lay the element out left to right.
 
 `packages/ui/src/browser/BranchSelect.tsx` keeps the branch name plain for `textValue` and its LTR primary label.
-Gone status is a separate badge; the clipped tooltip uses a technical inherit-size chip in its sentence.
+Gone status is a separate badge; the clipped tooltip uses a technical chip in its sentence.
 `packages/ui/src/browser/GitView.tsx` likewise uses a technical chip in the visible comparing notice, while its
 plain announcement isolates the branch name where it enters the sentence.
 

@@ -65,17 +65,18 @@ The record is looked for as the handoff package's conversation is (see "The hand
 - **Loading**: a spinner and a line saying the history is loading.
 - **Empty**: a full empty panel (see "The full panel" in `docs/product/empty-states.md`) saying there are no messages
   in the session — nothing was said in it, including a session that never had a conversation.
-- **Unavailable**: a full empty panel with a warning glyph saying the history is unavailable: the agent's record of the
-  session could not be found or read. Its line suggests reopening the session to see its terminal.
+- **Unavailable**: an empty-state failure in the history's place, headed that the history is unavailable, saying the
+  agent's record of the session could not be found or read and suggesting reopening the session to see its terminal.
+  It has neither Try again nor Details.
 - **Failed**: the request for the history itself failed — the connection to the daemon dropped, or the daemon
-  refused it. The failure enters the error-alert queue for acknowledgement, preserving the actual reason and any
-  diagnostic details (see "Error alerts" and "Names and diagnostic details" in `docs/product/error-alerts.md`).
-  Acknowledgement leaves the failed pane visible with that reason and **Try again**; it does not retry the read.
-  A failed history is also read again by itself when the connection to the daemon comes back. Reopen remains
-  available on the floating bar.
+  refused it. An empty-state failure in the history's place, headed that the history could not be loaded, gives the
+  actual reason, with any diagnostic details behind **Details** (see "Names and diagnostic details" in
+  `docs/product/error-alerts.md`), and **Try again**, which reads it again. A failed history is also read again by
+  itself when the connection to the daemon comes back. Reopen remains available on the floating bar.
 
-Assistive technology is told the loading, empty and unavailable states as they begin. The failed request is announced
-by its acknowledgement dialog; the retained pane does not announce the same failure again.
+Neither state opens an error alert (see "Failures shown on the screen" in `docs/product/error-alerts.md`). Assistive
+technology is told the loading, empty and unavailable states as they begin; a failed request is announced by its
+failure when it appears after the history was drawn.
 
 ## Keyboard focus
 

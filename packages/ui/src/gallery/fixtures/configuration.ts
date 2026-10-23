@@ -541,7 +541,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Import, refused before anything is created",
-    description: "The daemon's reason stands in the footer beside the buttons, over the review, which stays as it was.",
+    description: "The daemon's reason is the error alert dialog's, raised over the review, which stays as it was with nothing written into it.",
     state,
     configuration: reviewing({ imported: failure("icon_too_large", { limit_kib: "256" }, "the console avatar is larger than 256 KiB") }),
     steps: [
@@ -555,7 +555,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Import, result where the settings could not be applied",
-    description: "The settings failure has a stock danger alert title above the table, with its short reason in the muted alert description, beside a project that was left out; the error dialog the failures raise is dismissed to leave the result in view.",
+    description: "The settings failure is one danger Alert above the table holding its title and its short reason, with Details on its right for the raw text, beside a project that was left out.",
     state: autoPulling,
     configuration: { file: FILE, inspection: WITH_SETTING_OFF, imported: SETTINGS_FAILED_RESULT },
     steps: [
@@ -563,7 +563,6 @@ export const configurationScenarios: Scenario[] = [
       chooseFile,
       applySettings,
       importNow,
-      (ui) => ui.press(ui.t("error.acknowledge")),
     ],
   },
   {
@@ -591,13 +590,28 @@ export const configurationScenarios: Scenario[] = [
     title: "Import result with failures and fallbacks",
     state: state,
     configuration: reviewing(),
-    description: "Placement outcomes, failed projects and consoles, fallback accounts and applied settings share the result; the settings show seven lines, automatic pull on, archive cleanup off, automatic account selection on, ordering the sidebar by status off, starting usage windows automatically on and both automatic approvals of agents' requests on. The error alert the failures raise is dismissed to leave the result in view. Short height exposes scrolling; Phone folds rows.",
+    description: "Placement outcomes, failed projects and consoles, fallback accounts and applied settings share the result; the settings show seven lines, automatic pull on, archive cleanup off, automatic account selection on, ordering the sidebar by status off, starting usage windows automatically on and both automatic approvals of agents' requests on. A failed project or console reads like the other outcomes in its Result cell: a danger-coloured circled \"!\" followed by the word \"Failed\", as one button named after the project (or the console, when the whole console failed), such as \"Website failed\", and its Detail cell is empty. Short height exposes scrolling; Phone folds rows.",
     steps: [
       ...importFromSettings,
       chooseFile,
       applySettings,
       importNow,
-      (ui) => ui.press(ui.t("error.acknowledge")),
+    ],
+  },
+  {
+    id: "configuration-import-result-failure-reason",
+    group: GROUP,
+    category: "exceptional",
+    title: "Import result, the reason a failed row carries",
+    state: state,
+    configuration: reviewing(),
+    description: "The first failed row's danger-coloured mark and word \"Failed\" (the button named \"Website failed\") is pressed: its popover holds why that project could not be created, while the row keeps only the mark and the word.",
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+      applySettings,
+      importNow,
+      (ui) => ui.press(ui.t("configuration.import.result.failedFor", { subject: "Website" })),
     ],
   },
   {

@@ -487,10 +487,13 @@ it("says when a project image cannot be shown", async () => {
       throw new Error("missing");
     }) as Daemon["request"],
   });
-  for (let i = 0; i < 20 && !region().textContent?.includes("could not be shown"); i += 1) {
+  const mark = () => region().querySelector('[role="img"]');
+  for (let i = 0; i < 20 && !mark(); i += 1) {
     await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
   }
   expect(region().querySelector("img")).toBeNull();
   expect(region().textContent).toContain("chart");
-  expect(region().textContent).toContain("This image could not be shown.");
+  // A failed image is a named glyph in the paragraph, not a sentence of error text.
+  expect(mark()?.getAttribute("aria-label")).toBe("This image could not be shown.");
+  expect(region().textContent).not.toContain("could not be shown");
 });

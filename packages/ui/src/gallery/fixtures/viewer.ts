@@ -722,10 +722,10 @@ const comparisonWording = ({ Message, InlineChip }: LiveParts, t: Translate, fro
     source: createElement(Message<"git.compare.source">, {
       id: "git.compare.source",
       params: {
-        from: createElement(InlineChip, { monospace: true, wrap: true, size: "inherit", color: "primary" }, from),
-        fromCommit: createElement(InlineChip, { monospace: true, wrap: true, size: "inherit", color: "default" }, fromCommit),
-        to: createElement(InlineChip, { monospace: true, wrap: true, size: "inherit", color: "primary" }, to),
-        toCommit: createElement(InlineChip, { monospace: true, wrap: true, size: "inherit", color: "default" }, toCommit),
+        from: createElement(InlineChip, { monospace: true, wrap: true, color: "accent" }, from),
+        fromCommit: createElement(InlineChip, { monospace: true, wrap: true, color: "default" }, fromCommit),
+        to: createElement(InlineChip, { monospace: true, wrap: true, color: "accent" }, to),
+        toCommit: createElement(InlineChip, { monospace: true, wrap: true, color: "default" }, toCommit),
       },
     }),
     sourceText: t("git.compare.source", { from: isolate(from), fromCommit: isolate(fromCommit), to: isolate(to), toCommit: isolate(toCommit) }),
@@ -1046,7 +1046,6 @@ function failure(id: string, title: string, description: string, slot: "file" | 
         }
       },
     },
-    steps: [(ui) => ui.press(ui.t("error.acknowledge"))],
   };
 }
 
@@ -1076,7 +1075,7 @@ index 1111111..2222222 100644
  }
 `;
 
-function bodiesFailure(id: string, title: string, description: string, build: (t: Translate, refuse: (header: string, refusal: Refusal & { params: { path: string } }) => () => Promise<never>) => ViewerSubject, steps: Scenario["steps"] = []): Scenario {
+function bodiesFailure(id: string, title: string, description: string, build: (t: Translate, refuse: (header: string, refusal: Refusal & { params: { path: string } }) => () => Promise<never>) => ViewerSubject, steps?: Scenario["steps"]): Scenario {
   return {
     id, group: GROUP, category: "exceptional", title, description,
     viewer: {
@@ -1084,10 +1083,10 @@ function bodiesFailure(id: string, title: string, description: string, build: (t
         const { DaemonRequestError } = await import("../../daemon-client");
         const { viewerErrorText } = await import("../../viewer/viewerError");
         const t: Translate = (key, ...args) => format(language, key, ...args);
-        return [build(t, (header, refusal) => () => Promise.reject(new ChangeBodiesError("failed", viewerErrorText(t, new DaemonRequestError(refusal.message, refusal.code, refusal.params), header))))];
+        return [build(t, (header, refusal) => () => Promise.reject(new ChangeBodiesError("failed", viewerErrorText(t, language, new DaemonRequestError(refusal.message, refusal.code, refusal.params), header, { consoles: new Map(), projects: new Map(), sessions: new Map() }))))];
       },
     },
-    steps: [...steps, (ui) => ui.press(ui.t("error.acknowledge"))],
+    steps,
   };
 }
 
@@ -1122,7 +1121,7 @@ const bodiesFailureScenarios: Scenario[] = [
   {
     id: "viewer-image-error", group: GROUP, category: "exceptional",
     title: "Image that cannot be decoded",
-    description: "A required alert says the image could not be shown. After OK, the unsupported presentation with the file's size stays in its place.",
+    description: "The empty-state failure stands in place of the image: a danger glyph and a heading saying the image could not be shown, with the sentence that the file may be damaged, too large or unsupported as the line under it, then the remedy of repairing or replacing the file, and no Details, since there is no raw text; the file's size is a neutral badge in the header row.",
     viewer: { subjects: async () => [file("assets/corrupt.png", binary("assets/corrupt.png", { mediaType: "image/png", data: "AAAAAAAAAAAAAAAA" }))] },
   },
 ];
@@ -1138,7 +1137,7 @@ export const viewerScenarios: Scenario[] = [
   {
     id: "viewer-files-errors", group: GROUP, category: "exceptional",
     title: "Failed reads, disconnected files and renderer fallbacks",
-    description: "A required error alert opens over the failed read and keeps the daemon's full wording, path included. After OK, Previous / Next also shows a disconnected read, malformed SVG and a grammar that fails to load.",
+    description: "The failed read takes the empty-state shape in the pane: a danger glyph, the heading and the application's own sentence under it, with no Try again, since a read of a file that is gone would not change. Previous / Next also shows a disconnected read, malformed SVG and a grammar that fails to load.",
     viewer: { subjects: failedFiles },
   },
   {
@@ -1150,7 +1149,7 @@ export const viewerScenarios: Scenario[] = [
   {
     id: "viewer-document-errors", group: GROUP, category: "exceptional",
     title: "Document rendering failures and limits",
-    description: "A document with an invalid diagram, unfinished formulas, a missing image and a diagram past the render budget. Acknowledge the error alerts, then scroll to compare the notices and retained source; successful content provides context for each failure.",
+    description: "A document with an invalid diagram, unfinished formulas, a missing image and a diagram past the render budget. Scroll to compare the failures and retained source: a block that failed (the diagram, a formula on its own line) keeps a sentence above its source, while one inside a line of text (the unfinished inline formula, the missing image) is a danger-coloured circled \"!\" glyph in the sentence, whose tooltip holds the sentence on hover; successful content provides context for each failure.",
     files: { "docs/picture.png": { image: IMAGES.before_png } },
     viewer: { subjects: async () => [file("docs/notes.md", text("docs/notes.md", NOTES)), file("docs/other.md", text("docs/other.md", OTHER))] },
   },
@@ -1223,7 +1222,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Changes",
-    description: "Successful modified, added, deleted, renamed, type-changed, untracked and compared changes. Includes images, binary notices, large-patch fallbacks and empty diffs. Previous / Next stays within normal subjects; compare stage tags, long comparison subtitles and layout controls. File manager and Default application end the header row of the working-copy changes (staged, unstaged, untracked and conflicted) but not of the ones whose file is gone from the working copy (src/legacy.ts, src/moved-out.ts) nor of the committed ones, which carry a comparison under the title.",
+    description: "Successful modified, added, deleted, renamed, type-changed, untracked and compared changes. Includes images, binary notices, large-patch fallbacks and empty diffs. Previous / Next stays within normal subjects; compare the soft status badges beside the title (untracked is neutral), long comparison subtitles and layout controls. File manager and Default application end the header row of the working-copy changes (staged, unstaged, untracked and conflicted) but not of the ones whose file is gone from the working copy (src/legacy.ts, src/moved-out.ts) nor of the committed ones, which carry a comparison under the title.",
     viewer: { subjects: changes },
   },
 ];

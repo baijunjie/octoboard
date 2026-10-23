@@ -41,8 +41,8 @@ export function BranchOriginBadge({ origin, selectedSessionId }: { origin: Branc
     title: isolate(liveTitle ?? origin.responsible_title),
   });
   return (
-    <IndicatorTooltip tooltip={<Message id={message} params={{ title: <InlineChip dir="auto" wrap size="inherit">{liveTitle ?? origin.responsible_title}</InlineChip> }} />} label={label} className="inline-flex shrink-0">
-      <span aria-hidden="true" className={`inline-block size-2.5 rounded-full border-2 ${selected ? "border-accent-glyph bg-accent-glyph" : "border-app-muted"}`} />
+    <IndicatorTooltip tooltip={<Message id={message} params={{ title: <InlineChip dir="auto" wrap>{liveTitle ?? origin.responsible_title}</InlineChip> }} />} label={label} className="inline-flex shrink-0">
+      <span aria-hidden="true" className={`inline-block size-2.5 rounded-full border-2 ${selected ? "border-accent-soft-foreground bg-accent-soft-foreground" : "border-app-muted"}`} />
     </IndicatorTooltip>
   );
 }

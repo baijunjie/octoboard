@@ -50,8 +50,8 @@ Everything the window shows follows the chosen appearance, including:
   highlighted in the same scheme, with added and removed lines tinted and marked `+` and `-`, and a changed word within
   a line underlined rather than tinted, so that every colour still meets 4.5:1 on the tinted lines. A rendered
   Markdown document (see "A Markdown file as a document" in `docs/product/file-viewer.md`) sits on that background
-  too, whichever Markdown style is chosen, its links underlined as well as coloured, in a colour that meets 4.5:1 on
-  it in either appearance. A diagram
+  too, whichever Markdown style is chosen, its links underlined as well as coloured, in the link colour (see "The
+  link colour" below), which meets 4.5:1 on it in either appearance. A diagram
   in that document is drawn in the same ink and paper as the highlighted code.
 - **A console's default avatar**, whose fills have their own light and dark values (see "Avatar" in
   `docs/product/consoles.md`).
@@ -62,6 +62,13 @@ Everything the window shows follows the chosen appearance, including:
   match and ignores this.
 
 The one deliberate exception is a report page — see below.
+
+## The link colour
+
+Every link Octoboard draws is in one **link colour**: a link in the interface itself, a link in a rendered Markdown
+document — a file viewer's, or an agent's reply in a session's history — and a link in a session's or a shell
+terminal's output. It is the text shade of the accent colour, with its own value in each appearance, and it meets
+4.5:1 on each of those backgrounds in either appearance.
 
 How a launch avoids showing the window before the appearance has been applied is described under
 "Starting up" in `docs/product/application-lifecycle.md`.

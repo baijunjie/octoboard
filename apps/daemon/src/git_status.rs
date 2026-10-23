@@ -416,7 +416,7 @@ fn pull_project(state: &AppState, project: &Project, mut status: GitStatus) {
         return;
     }
     // Any `error` the cached status carries is left on it rather than cleared: it is the last
-    // check against the remote that failed, which is exactly what the warning triangle stands for
+    // check against the remote that failed, which is exactly what the badge's failure mark stands for
     // (see "The branch badge" in `docs/product/project-git-status.md`), and a local fast-forward
     // says nothing about whether that fetch would succeed now.
     fast_forward(state, &path, &mut status);

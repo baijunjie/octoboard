@@ -53,6 +53,13 @@ started over from its markup, with anything typed into its form and not submitte
 - A console session that has never pushed a page shows, under the panel's header, an empty panel filling the card,
   saying there are no pages yet (see "The full panel" in `docs/product/empty-states.md`). While the console session's
   pages are first being listed, the card shows its header alone.
+- The pages are listed when the console session's panel is shown, and again whenever the window reloads its state
+  from the daemon (a reconnect, or catching up after falling behind). **A listing that fails** is shown in the panel,
+  with the reason and **Try again**, which lists them again: with no pages to show, an empty-state failure under the
+  header fills the card; with pages already there, a compact amber alert sits above the page, which stays usable. Each
+  failure is announced to assistive technology, a repeated one again, and it opens no error alert (see "Failures shown
+  on the screen" in `docs/product/error-alerts.md`). The failure goes once a listing succeeds; when it goes while it holds
+  keyboard focus, focus moves to the panel's first enabled control.
 
 When the page holding keyboard focus is replaced — by following a new page or paging through history — focus moves
 to the report panel's first enabled header control, with a visible focus ring. If a modal dialog is open, focus

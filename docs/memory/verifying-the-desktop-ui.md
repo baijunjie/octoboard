@@ -147,6 +147,11 @@ change makes something the preview shows draw on daemon state it did not before,
 too and look at the preview itself (`pnpm --filter @octoboard/web dev`): left out, the feature renders empty
 there and nothing fails.
 
+A scenario that answers a request with a daemon error on purpose uses the code the real daemon sends for that request
+in that situation, taken from its handler and `apps/daemon/PROTOCOL.md`, never one that merely sounds right: the UI
+words each code its own way, so a `list_dir` refused with `permission_denied` rather than the `directory_unreadable`
+the daemon sends for an unreadable directory shows copy the app never shows.
+
 ## A final capture does not verify earlier transient states
 
 Applies when visually verifying gallery interactions. A capture taken after setup shows only the view it leaves on

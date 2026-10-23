@@ -212,7 +212,7 @@ export function AgentAccountsSection(): React.ReactElement {
               />
             )}
             notInstalledTip={(agent) => added !== null && isAgentUnavailable(availability, agent) && (
-              <Message id="settings.accounts.notInstalledTip" params={{ agent: <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[agent]}</InlineChip>, ...PATH_VAR_PARAMS }} />
+              <Message id="settings.accounts.notInstalledTip" params={{ agent: <InlineChip dir="auto" wrap>{AGENT_LABEL[agent]}</InlineChip>, ...PATH_VAR_PARAMS }} />
             )}
             className={`sticky top-[calc(-1*var(--section-padding))] z-3 h-[45px] w-full groove-b bg-overlay ${pinnedFocus.className}`}
           />
@@ -267,8 +267,8 @@ export function AgentAccountsSection(): React.ReactElement {
       )}
       {removing && (
         <ConfirmDialog
-          title={<Message id="settings.accounts.removeTitle" params={{ name: <InlineChip dir="auto" wrap size="inherit">{removing.name}</InlineChip> }} />}
-          message={<Message id="settings.accounts.removeMessage" params={{ agent: <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[removing.agent]}</InlineChip> }} />}
+          title={<Message id="settings.accounts.removeTitle" params={{ name: <InlineChip dir="auto" wrap>{removing.name}</InlineChip> }} />}
+          message={<Message id="settings.accounts.removeMessage" params={{ agent: <InlineChip dir="auto" wrap>{AGENT_LABEL[removing.agent]}</InlineChip> }} />}
           confirmLabel={t("common.remove")}
           destructive
           resetKey={removing.id}
@@ -306,7 +306,7 @@ function AgentAccountsPanel({ agent, owned, onAdd, onEdit, onRemove, onRenameDef
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const state = agentAvailability.get(agent);
   const notUsable = isAgentUnavailable(agentAvailability, agent) && (
-    <div><Message id="settings.accounts.notUsable" params={{ agent: <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[agent]}</InlineChip>, ...PATH_VAR_PARAMS }} /></div>
+    <div><Message id="settings.accounts.notUsable" params={{ agent: <InlineChip dir="auto" wrap>{AGENT_LABEL[agent]}</InlineChip>, ...PATH_VAR_PARAMS }} /></div>
   );
   const hasApproval = agent === "codex" || agent === "claude";
   // What an account's menu holds. The default account is not a record: it can be named, not edited or removed. A
@@ -515,7 +515,7 @@ function AccountRow({ agent, account, label, help, description, approval, sharin
         <div ref={actionsRef} className="flex shrink-0 flex-wrap items-center gap-2">{children}</div>
       </div>
       {sharing}
-      {quota && !(typeof quota === "object" && isNotLoggedIn(quota.unavailable)) && <div className="col-span-full"><AccountQuotaSummary quota={quota} /></div>}
+      {quota && !(typeof quota === "object" && isNotLoggedIn(quota.unavailable)) && <div className="col-span-full empty:hidden"><AccountQuotaSummary quota={quota} /></div>}
       <AccountLoginAnnouncer login={login} name={loginName} />
     </div>
   );

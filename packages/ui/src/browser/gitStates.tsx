@@ -1,13 +1,5 @@
 import { Spinner } from "@heroui/react";
-import React, { useRef } from "react";
-
-import { Button } from "../components/Button";
-import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
-import { ErrorAlert } from "../components/ErrorAlert";
-import { CodeToneContext } from "../components/codeTone";
-import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
-import type { ErrorPresentation } from "../errorPresentation";
-import { useT } from "../i18n/react";
+import React from "react";
 
 /** The Git mode's loading line: what is being read. Seen only; a `StatusAnnouncer` mounted beside
  * it says it. */
@@ -16,37 +8,6 @@ export function GitLoading({ label }: { label: string }): React.ReactElement {
     <div aria-hidden="true" className="flex flex-1 items-center justify-center gap-2 text-sm text-app-muted">
       <Spinner size="sm" aria-hidden="true" />
       {label}
-    </div>
-  );
-}
-
-/** Something the Git mode could not read: why, and a way to try again. `from` is the control
- * pressed, which goes away with the failure. */
-export function GitFailure({
-  title,
-  message,
-  onRetry,
-}: {
-  title: string;
-  message: ErrorPresentation;
-  onRetry: (from: Element | null) => void;
-}): React.ReactElement {
-  const t = useT();
-  const ref = useRef<HTMLDivElement>(null);
-  useErrorAcknowledgement(message, title);
-  return (
-    <div ref={ref} className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-sm">
-      <CodeToneContext value="danger">
-        <div className="flex w-full min-w-0 max-w-lg flex-col gap-3">
-          <ErrorAlert title={title}>
-            <DaemonErrorMessage error={message} part="summary" />
-          </ErrorAlert>
-          <DaemonErrorMessage error={message} part="details" />
-        </div>
-      </CodeToneContext>
-      <Button size="sm" variant="secondary" preventFocusOnPress onPress={() => onRetry(ref.current)}>
-        {t("error.tryAgain")}
-      </Button>
     </div>
   );
 }

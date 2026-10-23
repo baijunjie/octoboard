@@ -1,17 +1,14 @@
 import { Spinner } from "@heroui/react";
-import {
-  RotateCw,
-  TriangleAlert,
-} from "lucide-react";
+import { RotateCw } from "lucide-react";
 import React, { useMemo, useRef } from "react";
 import { Collection, ListLayout, Tree, TreeItem, TreeItemContent, Virtualizer, type Key } from "react-aria-components";
 
-import { CodeToneContext } from "../components/codeTone";
-import { failureParam } from "../components/DaemonErrorMessage";
+import { failureParam, FailureBody } from "../components/DaemonErrorMessage";
 import { FadeOverflow } from "../components/FadeOverflow";
+import { FailureMark } from "../components/FailureMark";
 import { useScrollFade } from "../components/scrollFade";
-import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
 import type { ErrorPresentation } from "../errorPresentation";
+import { retryCanHelp } from "../errorRecovery";
 import { errorText } from "../errorText";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
@@ -159,7 +156,7 @@ export function FileTree({
     const node = byKey.get(key);
     if (!node) return;
     if (node.type === "file") onOpenFile(node.path);
-    else if (node.type === "status" && node.status === "error") onRetry(node.dir);
+    else if (node.type === "status" && node.status === "error" && retryCanHelp(node.message)) onRetry(node.dir);
     else if (node.type === "directory") {
       const next = new Set<Key>(expanded);
       if (next.has(key)) next.delete(key);
@@ -248,35 +245,42 @@ function FileNodeRow({ node, children }: {
  * tries again) or cut short. */
 function StatusItem({ node }: { node: Extract<TreeNode, { type: "status" }> }): React.ReactElement {
   const t = useT();
-  useErrorAcknowledgement(node.status === "error" ? node.message : undefined);
-  const message = node.message === undefined ? "" : errorText(node.message);
-  const text =
-    node.status === "loading"
-      ? t("browser.tree.loading")
-      : node.status === "empty"
-        ? t("browser.tree.empty")
-        : node.status === "partial"
-          ? t("browser.tree.partial")
-          : t("browser.tree.error", { message: isolate(message) });
+  if (node.status === "error") {
+    // A failed listing is a mark, not a sentence: the glyph names the failure and its popover holds the
+    // reason. Where asking again can help the row is also a press that lists the folder again, and says
+    // so; where it cannot, the row is only the mark and its trailing space.
+    const label = t("browser.tree.errorLabel");
+    // A failure that is the state of the folder (outside the project) is no use asking again.
+    const retriable = retryCanHelp(node.message);
+    return (
+      <TreeItem data-list-motion={node.key} id={node.key} textValue={label} className={ROW_CLASS}>
+        <TreeItemContent>
+          <RowContent>
+            <FailureMark label={label}>
+              {node.message !== undefined && <FailureBody error={node.message} summary={<Message id="browser.tree.error" params={{ message: failureParam(node.message) }} />} />}
+            </FailureMark>
+            {retriable ? (
+              <>
+                <FadeOverflow as="span" className="min-w-0 flex-1 text-app-muted italic" titleWhenClipped={t("error.tryAgain")}>
+                  {t("error.tryAgain")}
+                </FadeOverflow>
+                <RotateCw aria-hidden="true" className="size-3.5 shrink-0 text-app-muted" />
+              </>
+            ) : <span className="min-w-0 flex-1" />}
+          </RowContent>
+        </TreeItemContent>
+      </TreeItem>
+    );
+  }
+  const text = node.status === "loading" ? t("browser.tree.loading") : node.status === "empty" ? t("browser.tree.empty") : t("browser.tree.partial");
   return (
-    // Named by the plain message, not by `text`: `textValue` is what react-aria collates for
-    // type-to-select, which an isolate mark in the middle of would only get in the way of.
-    <TreeItem data-list-motion={node.key} id={node.key} textValue={node.status === "error" ? message : text} className={ROW_CLASS}>
+    <TreeItem data-list-motion={node.key} id={node.key} textValue={text} className={ROW_CLASS}>
       <TreeItemContent>
         <RowContent>
-          {node.status === "loading" ? (
-            <Spinner size="sm" aria-hidden="true" className="size-4 shrink-0" />
-          ) : node.status === "error" ? (
-            <TriangleAlert aria-hidden="true" className="size-4 shrink-0 text-app-danger" />
-          ) : (
-            <span className="size-4 shrink-0" />
-          )}
-          <FadeOverflow as="span" className={`min-w-0 flex-1 ${node.status === "error" ? "text-app-danger" : "text-app-muted"} italic`} titleWhenClipped={text}>
-            {node.status === "error" && node.message !== undefined
-              ? <CodeToneContext.Provider value="danger"><Message id="browser.tree.error" params={{ message: failureParam(node.message) }} /></CodeToneContext.Provider>
-              : text}
+          {node.status === "loading" ? <Spinner size="sm" aria-hidden="true" className="size-4 shrink-0" /> : <span className="size-4 shrink-0" />}
+          <FadeOverflow as="span" className="min-w-0 flex-1 text-app-muted italic" titleWhenClipped={text}>
+            {text}
           </FadeOverflow>
-          {node.status === "error" && <RotateCw aria-hidden="true" className="size-3.5 shrink-0 text-app-muted" />}
         </RowContent>
       </TreeItemContent>
     </TreeItem>

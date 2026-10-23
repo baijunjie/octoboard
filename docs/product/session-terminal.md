@@ -161,9 +161,10 @@ Web addresses and file paths in a session's terminal are links. What makes each 
 described under "Web addresses" and "File paths" below; the rest holds for both:
 
 - **A link is underlined while the pointer is on it.**
-- **A link is drawn in the link colour**: a blue chosen for the light and for the dark theme, shown all the time
-  rather than only under the pointer, and over whatever colour the program wrote the text in, in ordinary output and
-  an agent's full-screen interface alike. It covers every row the link spans and exactly the text that is the link,
+- **A link is drawn in the link colour** (see "The link colour" in `docs/product/appearance.md`), the one every
+  link in Octoboard takes, following the current appearance. It is shown all the time rather than only under the
+  pointer, and over whatever colour the program wrote the text in, in ordinary output and an agent's full-screen
+  interface alike. It covers every row the link spans and exactly the text that is the link,
   so text that looks like an address or a path but is not a link stays uncoloured.
 - **A link opens with a primary-button click**, without requiring a modifier key.
 - **Selecting text does not open a link**: a click that leaves a terminal selection, including dragging within a

@@ -18,9 +18,9 @@ The accepted findings are reproduced below so this brief remains self-contained.
   absence, while the added-but-not-installed state is different. Use a neutral or purpose glyph in these two
   empty states; retain PATH explanations, disabled creation actions, genuine load failures and the approved
   warning glyph in `AgentTabList`.
-- **Integrated history handoff:** re-inventory `SessionHistoryView`'s unavailable-record `EmptyPanel` and
-  `history-unavailable`. Keep it distinct from `history-failed`, which retains structured reason, acknowledgement,
-  silent summary, retry and reconnect behavior. These callers arrived after the original audit baseline.
+- **Integrated history handoff:** re-inventory `SessionHistoryView`'s `history-unavailable` and `history-failed`
+  Alerts against "Where an error is shown"; both are on-screen failures with no error dialog, and `history-failed`
+  keeps its reason, details, retry and reconnect behavior. These callers arrived after the original audit baseline.
 
 ## Implementation contract
 
@@ -49,9 +49,9 @@ Reuse the existing shared components and mechanisms named in the linked finding 
 
 ## Integrated archived-history handoff
 
-Local main added history states at `501bd872d`, after the historical audit. Re-inventory `SessionHistoryView`'s
-unavailable-record EmptyPanel and `history-unavailable`: it currently uses a warning glyph and recovery description.
-Keep that state distinct from a rejected request (`history-failed`): request failures retain their structured
-reason, require acknowledgement, then keep a silent stock summary with external details and retry. Preserve retry
-and reconnect re-reading, and use `history-failed-acknowledgement` for the pending dialog. Refresh
-normal-absence severity and recovery-content decisions here without treating the earlier audit as certification.
+Local main added history states at `501bd872d`, after the historical audit. The chip, badge and error presentation
+change has since made both history failures on-screen Alerts with no error dialog: `history-unavailable` (the record
+could not be read, then the remedy) and `history-failed` (the rejected request with its reason, details and Try
+again, announced once). Re-inventory them against "Where an error is shown" in `docs/ui-accessibility.md`; preserve
+retry and reconnect re-reading, and refresh normal-absence severity decisions here without treating the earlier audit
+as certification.

@@ -54,7 +54,7 @@ function windowParts(t: Translate, source: StatusItemQuotaSource, window: QuotaW
   };
 }
 
-/** One account's lines: its header with the plan (and, for a current reading, how long ago it was read, at its right),
+/** One account's lines: its header with the plan (and, with windows to show, how long ago they were read, at its right),
  * then per window a row (the shell draws its bar), or a single note when there is nothing current to show.
  * The 5-hour window and the account-wide weekly one are one two-layer item, as in Settings. */
 function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent, account: Account | null): StatusItemSubmenuItem[] {
@@ -66,16 +66,16 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
   // account that is not logged in: a state to be told in a word, not a failure.
   if (quota.windows.length === 0) return [{ kind: "header", title }, { kind: "note", text: t(isNotLoggedIn(quota.unavailable) ? "statusItem.quota.notLoggedIn" : "quota.unavailable") }];
   const age = formatRelativeTime(source.language, quota.fetched_at, source.now);
-  // The out-of-date note says when the reading was taken, so the header does not.
+  // The header says when the windows were read, at its right, even when the latest read failed; a native menu has
+  // no popover for the reason, so the out-of-date note only says that the last read failed.
   const justNow = isJustNow(quota.fetched_at, source.now);
-  const header: StatusItemSubmenuItem = quota.unavailable ? { kind: "header", title } : {
+  const lines: StatusItemSubmenuItem[] = [{
     kind: "header",
     title,
     detail: justNow ? t("quota.updatedNow") : t("quota.updated", { age }),
     label: justNow ? t("statusItem.quota.updatedNow", { header: title }) : t("statusItem.quota.updated", { header: title, age }),
-  };
-  const lines: StatusItemSubmenuItem[] = [header];
-  if (quota.unavailable) lines.push({ kind: "note", text: t("quota.stale", { age }) });
+  }];
+  if (quota.unavailable) lines.push({ kind: "note", text: t("statusItem.quota.stale") });
   const layers = twoLayerWindows(quota.windows);
   for (const window of orderedQuotaWindows(quota.windows)) {
     if (layers?.weekly && window === layers.weekly) continue;

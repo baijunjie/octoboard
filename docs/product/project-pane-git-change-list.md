@@ -144,8 +144,8 @@ project keeps its own choice across reloads and restarts (see "What is remembere
   shows. Inside it is **one commit row per commit**, newest first, in the order `git log` gives them, and each commit's
   changes are one level in, under its row; grouped by folder, the folders are inside each commit (see "Flat or grouped
   by folder" below).
-- **A commit row** has an expand arrow, as a folder's row does, then the first seven characters of the commit's id in a
-  monospace chip, its subject — which fades out where it is too long, with its whole text as its tooltip, the count
+- **A commit row** has an expand arrow, as a folder's row does, then the first seven characters of the commit's id in
+  muted monospace text, its subject — which fades out where it is too long, with its whole text as its tooltip, the count
   staying in view — and how many changes it holds. A subject is cut to its first 200 characters. Assistive technology
   hears the row named by the same three, in that order — the id, the subject and the count — and is told whether it is
   unfolded. A commit row has no button of its own actions, and typing the first characters of its id moves to it.
@@ -202,7 +202,7 @@ The letters:
 | D | deleted |
 | R | renamed |
 | T | type changed — a file that became a symbolic link, say |
-| U | untracked — in a muted coral of its own, not Added's green |
+| U | untracked — neutral grey, not Added's green |
 | C | in conflict |
 
 A committed change is only ever A, M, D, R or T.
@@ -391,12 +391,17 @@ leaves (see "Moving between changes" in `docs/product/project-pane-git-change-vi
 - **A failure** of a part — the uncommitted changes could not be listed (a worktree found gone is not one: see
   "Uncommitted changes" above), the branch could not be compared (a branch
   that no longer exists or is broken, or two branches with no commit in common, say), or the commits could not be
-  listed — names the reason **in a line above the list**, announced to assistive technology, while the rest of the
-  list is shown. When nothing is listed, the first failure, in the list's order, takes the list's place instead, with
-  **Try again**, and any other is a line above it. Changes that kept moving while they were listed, after two more
-  tries, say so; Refresh tries again. Try again pressed from the keyboard hands keyboard focus to the header's
-  Refresh.
-- **The repository could not be read** takes the whole view's place, with Try again.
+  listed — is **a red mark on the heading of the section it could not fill**, named as what could not be listed or
+  compared, while the rest of the list is shown. Its popover holds the reason, what to do about it, any details and
+  **Try again** (see "Failures marked on a row" in `docs/product/error-alerts.md`). The uncommitted changes' mark is on
+  the first uncommitted section listed, or on an Unstaged heading with no rows under it when none is; the comparison's
+  or the commits' is on the Committed heading, kept with no rows under it when nothing committed is listed. A mark that
+  appears after the view was drawn is announced to assistive technology once; one there as the view opens is not.
+  When nothing is listed and exactly one part failed, that failure takes the list's place instead, as an empty-state
+  failure with **Try again**; with more than one, each is a mark on its heading. None of them opens an error alert.
+  Changes that kept moving while they were listed, after two more tries, say so; Refresh tries again. Try again on
+  the empty-state failure, pressed from the keyboard, hands keyboard focus to the header's Refresh.
+- **The repository could not be read** takes the whole view's place as an empty-state failure, with Try again.
 
 A list on screen stays while it is listed again, and so does a failure, with its Try again and keyboard focus: a
 background refresh never replaces either with the loading line. Only Try again, Refresh, choosing another branch and,

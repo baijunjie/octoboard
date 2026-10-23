@@ -37,7 +37,7 @@ export function SessionAgentTooltip({ session, accounts, defaultNames, launch }:
         <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-0.5">
           {rows.map(({ label, value, dir }) => (
             <React.Fragment key={label}>
-              <dt className="text-muted">{label}</dt>
+              <dt className="text-app-muted">{label}</dt>
               <dd dir={dir} className="min-w-0 [overflow-wrap:anywhere]">{value}</dd>
             </React.Fragment>
           ))}

@@ -20,15 +20,16 @@ const fileNode = (path: string, selected: boolean): TreeNode => ({
 
 function render(
   nodes: TreeNode[],
-  { expanded = new Set<string>(), clipboard, onOpenFile = () => {}, onExpandedChange = () => {} }: {
+  { expanded = new Set<string>(), clipboard, onOpenFile = () => {}, onExpandedChange = () => {}, onRetry = () => {} }: {
     expanded?: Set<string>;
+    onRetry?: (dir: string) => void;
     clipboard?: PlatformAdapter["clipboard"];
     onOpenFile?: (path: string) => void;
     onExpandedChange?: (keys: Set<string | number>) => void;
   } = {},
 ) {
   return mountRows(
-    <FileTree nodes={nodes} expanded={expanded} label="Files" onExpandedChange={onExpandedChange} onOpenFile={onOpenFile} onRetry={() => {}} treeRef={() => {}} />,
+    <FileTree nodes={nodes} expanded={expanded} label="Files" onExpandedChange={onExpandedChange} onOpenFile={onOpenFile} onRetry={onRetry} treeRef={() => {}} />,
     { clipboard },
   );
 }
@@ -202,4 +203,41 @@ it("folds a directory's rows in and out without presence, and animates rows a li
   expect(container.querySelector(`[data-list-motion="${rowKey("src/added.ts")}"]`)).toBeNull();
   expect(presences()).toHaveLength(0);
   expect(container.querySelector("[data-list-motion-ghost]")?.textContent ?? "").not.toContain("added.ts");
+});
+
+it("marks a folder that could not be listed with a named glyph and keeps the reason in its popover", () => {
+  const failed: TreeNode = { type: "status", key: "status:error:src", dir: "src", status: "error", message: "permission denied" };
+  const container = render([failed]);
+  const row = container.querySelector("[role=row]")!;
+  const mark = row.querySelector("button[aria-label]")!;
+  expect(mark.getAttribute("aria-label")).toBe("Could not list this folder");
+  // No sentence of error text in the row: the reason is not drawn until the mark is pressed.
+  expect(row.textContent).not.toContain("permission denied");
+  act(() => {
+    for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) mark.dispatchEvent(new MouseEvent(type, { bubbles: true, button: 0 }));
+  });
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain("permission denied");
+});
+
+it("opens a failed folder's reason from the mark without listing the folder again, and reaches the mark with ArrowRight", () => {
+  const failed: TreeNode = { type: "status", key: "status:error:src", dir: "src", status: "error", message: "permission denied" };
+  const onRetry = vi.fn();
+  const container = render([failed], { onRetry });
+  const row = container.querySelector<HTMLElement>("[role=row]")!;
+  const mark = row.querySelector<HTMLButtonElement>("button[aria-label]")!;
+  act(() => {
+    for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup"]) {
+      const event = new MouseEvent(type, { bubbles: true, button: 0 });
+      if (type.startsWith("pointer")) Object.defineProperty(event, "pointerType", { value: "mouse" });
+      mark.dispatchEvent(event);
+    }
+    mark.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0, detail: 1 }));
+  });
+  expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  expect(onRetry).not.toHaveBeenCalled();
+  // A tab stop inside the tree row as well as a stop of the row's arrow-key walk.
+  expect(mark.getAttribute("tabindex")).toBe("0");
+  act(() => row.focus());
+  press(row, "ArrowRight");
+  expect(document.activeElement).toBe(mark);
 });

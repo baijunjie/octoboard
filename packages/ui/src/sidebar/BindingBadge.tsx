@@ -45,7 +45,7 @@ export function BindingBadge({ owner, decorative }: { owner: Session; decorative
   if (decorative) return dot;
   const label = t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, owner)) });
   return (
-    <IndicatorTooltip tooltip={<Message id="sidebar.session.boundTo" params={{ name: <InlineChip size="inherit" dir="auto" wrap>{sessionDisplayTitle(t, owner)}</InlineChip> }} />} label={label} className="inline-flex">
+    <IndicatorTooltip tooltip={<Message id="sidebar.session.boundTo" params={{ name: <InlineChip dir="auto" wrap>{sessionDisplayTitle(t, owner)}</InlineChip> }} />} label={label} className="inline-flex">
       {dot}
     </IndicatorTooltip>
   );

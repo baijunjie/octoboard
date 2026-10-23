@@ -1,18 +1,17 @@
-import { CircleAlert, CircleCheck, CircleMinus, CircleSlash, CircleX, Info, type LucideIcon } from "lucide-react";
-import React, { useEffect, useId } from "react";
+import { CircleAlert, CircleCheck, CircleMinus, CircleSlash, Info, type LucideIcon } from "lucide-react";
+import React, { useId } from "react";
 
-import { DaemonRequestError } from "../daemon-client";
-import { ErrorGuidance } from "../components/ErrorGuidance";
-import { errorAlerts } from "../errorAlerts";
-import { useLatest } from "../components/useLatest";
 import { AGENT_LABEL } from "../agents";
+import { CodedFailureBody } from "../components/DaemonErrorMessage";
 import { InlineChip } from "../components/InlineChip";
 import { ErrorAlert } from "../components/ErrorAlert";
-import { CodeToneContext } from "../components/codeTone";
+import { FailureMark } from "../components/FailureMark";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
 import type { Event, ImportChoiceKind, ImportedProject, ImportFailure } from "../protocol";
-import { useFailureNode } from "./failureText";
+import { isolate } from "../i18n/isolate";
+import { useFailureNode, useFailureText } from "./failureText";
 import { outcomeOf } from "./importPlan";
 
 export type Imported = Extract<Event, { type: "configuration_imported" }>;
@@ -33,12 +32,11 @@ const COLUMNS: { key: PlainMessageKey; width: string }[] = [
 
 type Status = ImportedProject["status"];
 
-/** What each outcome is called, drawn and coloured. The colour only strengthens the word and the
- * shape, which differ between all four. */
-const STATUS: Record<Status, { label: PlainMessageKey; icon: LucideIcon; tone: string }> = {
-  created: { label: "configuration.import.result.created", icon: CircleCheck, tone: "text-success-glyph" },
+/** What each outcome that is not a failure is called, drawn and coloured. The colour only strengthens
+ * the word and the shape, which differ between the outcomes; a failure is a `FailureMark`. */
+const STATUS: Record<Exclude<Status, "failed">, { label: PlainMessageKey; icon: LucideIcon; tone: string }> = {
+  created: { label: "configuration.import.result.created", icon: CircleCheck, tone: "text-success-soft-foreground" },
   left_out: { label: "configuration.import.result.leftOut", icon: CircleMinus, tone: "text-app-muted" },
-  failed: { label: "configuration.import.result.failed", icon: CircleX, tone: "text-app-danger" },
   not_attempted: { label: "configuration.import.result.status.notAttempted", icon: CircleSlash, tone: "text-app-muted" },
 };
 
@@ -49,7 +47,6 @@ interface Line {
   project: string | undefined;
   status: Status;
   detail: React.ReactNode;
-  error?: ImportFailure | null;
 }
 
 /** One cell. The cell that is dropped when stacked (`empty`) is only ever the last column's, so no
@@ -93,16 +90,19 @@ function Cell({
 export function ImportResult({ result }: { result: Imported }): React.ReactElement {
   const t = useT();
   const failureNode = useFailureNode();
+  const failureText = useFailureText();
   const fallbacksId = useId();
   const outcome = outcomeOf(result.consoles);
   const settingLine = (label: string, on: boolean) => (
     <p>
       <Message
         id={on ? "configuration.import.result.settings.on" : "configuration.import.result.settings.off"}
-        params={{ setting: <InlineChip dir="auto" wrap size="inherit">{label}</InlineChip> }}
+        params={{ setting: <InlineChip dir="auto" wrap>{label}</InlineChip> }}
       />
     </p>
   );
+  // A failed line's popover: the reason in the application's own words, its remedy, the raw text last.
+  const failureBody = (failure: ImportFailure) => <CodedFailureBody failure={failure} text={failureText(failure)} />;
   // Every project in the order of the document, under its console; a console is a line of its
   // own only when something came of it that its projects do not already say: it failed, or it was
   // created with nothing in it.
@@ -114,8 +114,7 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
             console: console.name,
             project: undefined,
             status: "failed",
-            detail: console.error ? failureNode(console.error) : "",
-            error: console.error,
+            detail: console.error ? failureBody(console.error) : "",
           },
         ]
         : console.projects.length === 0
@@ -125,7 +124,6 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
       console: console.name,
       project: project.name,
       status: project.status,
-      error: project.error,
       detail:
         project.status === "created"
           ? project.via
@@ -133,7 +131,7 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
             : ""
           : project.status === "failed"
             ? project.error
-              ? failureNode(project.error)
+              ? failureBody(project.error)
               : ""
             : project.status === "not_attempted"
               ? t("configuration.import.result.detail.consoleFailed")
@@ -142,23 +140,6 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
     return [...own, ...projects];
   });
   const failures = outcome.consolesFailed + outcome.projectsFailed;
-  const failureContent = useLatest({ lines, failureNode, t, failures });
-  useEffect(() => {
-    const { lines, failureNode, t, failures } = failureContent.current;
-    if (!failures && !result.settings_error) return;
-    const failed = lines.filter((line) => line.status === "failed");
-    const diagnostics = failed.map((line) => line.error ? new DaemonRequestError(line.error.message, line.error.code, line.error.params) : t("configuration.import.result.failed"));
-    const settingsError = result.settings_error && new DaemonRequestError(result.settings_error.message, result.settings_error.code, result.settings_error.params);
-    errorAlerts.report({
-      failures: [...diagnostics, ...(settingsError ? [settingsError] : [])].map((error) => ({ error })),
-      message: JSON.stringify([result.consoles.filter((console) => console.status === "failed" || console.projects.some((project) => project.status === "failed")), result.settings_error]),
-      content: <div className="flex flex-col gap-3">
-        {failures > 0 && <p>{t("configuration.import.result.failedCount", { count: failures })}</p>}
-        {failed.length > 0 && <ul className="flex flex-col gap-2">{failed.map((line, index) => <li key={index}><p dir="auto" className="font-semibold">{[line.console, line.project].filter(Boolean).join(" / ")}</p>{line.detail}<ErrorGuidance error={diagnostics[index]} /></li>)}</ul>}
-        {result.settings_error && <div><div><Message id="configuration.import.result.settings.failed" params={{ reason: failureNode(result.settings_error, "summary") }} /></div>{failureNode(result.settings_error, "details")}<ErrorGuidance error={settingsError} /></div>}
-      </div>,
-    });
-  }, [result, failureContent]);
   // One sentence per thing that happened, so a count and what it counts stay together; a thing
   // that did not happen has no sentence, and "nothing failed" is said once instead of by two zeros.
   const summary = [
@@ -192,14 +173,14 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
       {typeof result.settings_applied?.auto_approve_resume_requests === "boolean" &&
         settingLine(t("settings.autoApproveResume.label"), result.settings_applied.auto_approve_resume_requests)}
       {result.settings_error && (
-        <CodeToneContext value="danger">
-          <div className="flex min-w-0 flex-col gap-3">
-            <ErrorAlert title={t("configuration.import.result.settings.failedTitle")}>
-              <Message id="configuration.import.result.settings.failed" params={{ reason: failureNode(result.settings_error, "summary") }} />
-            </ErrorAlert>
-            {failureNode(result.settings_error, "details")}
-          </div>
-        </CodeToneContext>
+        <ErrorAlert
+          announce
+          announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS}
+          title={t("configuration.import.result.settings.failedTitle")}
+          remedy={failureNode(result.settings_error, "remedy")}
+          details={failureNode(result.settings_error, "details")}>
+          <Message id="configuration.import.result.settings.failed" params={{ reason: failureNode(result.settings_error, "summary") }} />
+        </ErrorAlert>
       )}
       {lines.length > 0 && (
         <div className="@container">
@@ -232,7 +213,7 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
             </thead>
             <tbody role="rowgroup" className="block @xl:table-row-group">
               {lines.map((line, index) => {
-                const { label, icon: Icon, tone } = STATUS[line.status];
+                const settled = line.status === "failed" ? undefined : STATUS[line.status];
                 return (
                   <tr
                     key={index}
@@ -246,13 +227,23 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
                       {line.project ?? <span className="text-app-muted">{t("configuration.import.result.wholeConsole")}</span>}
                     </Cell>
                     <Cell label={t(COLUMNS[2].key)}>
-                      <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-                        <Icon aria-hidden="true" className={`size-4 shrink-0 ${tone}`} />
-                        {t(label)}
-                      </span>
+                      {settled === undefined ? (
+                        // A failed line is a glyph and the word like the others; the pair opens the reason in a popover.
+                        <FailureMark
+                          label={t("configuration.import.result.failedFor", { subject: isolate(line.project ?? line.console) })}
+                          text={t("configuration.import.result.failed")}
+                        >
+                          {line.detail === "" ? undefined : line.detail}
+                        </FailureMark>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                          <settled.icon aria-hidden="true" className={`size-4 shrink-0 ${settled.tone}`} />
+                          {t(settled.label)}
+                        </span>
+                      )}
                     </Cell>
-                    <Cell label={t(COLUMNS[3].key)} empty={line.detail === ""}>
-                      {line.detail}
+                    <Cell label={t(COLUMNS[3].key)} empty={line.status === "failed" || line.detail === ""}>
+                      {line.status !== "failed" && line.detail}
                     </Cell>
                   </tr>
                 );
@@ -264,29 +255,29 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
       {outcome.fallbacks.length > 0 && (
         <section aria-labelledby={fallbacksId} className="flex flex-col gap-2">
           <h3 id={fallbacksId} className="flex items-center gap-2 text-base font-semibold text-foreground">
-            <CircleAlert aria-hidden="true" className="size-4 shrink-0 text-warning-glyph" />
+            <CircleAlert aria-hidden="true" className="size-4 shrink-0 text-warning-soft-foreground" />
             {t("configuration.import.result.fallbacks")}
           </h3>
           <p className="flex items-start gap-2 text-sm">
-            <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning-glyph" />
+            <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning-soft-foreground" />
             <span className="min-w-0"><Message id="configuration.import.result.fallbacks.intro" /></span>
           </p>
           <ul className="flex flex-col gap-1">
             {outcome.fallbacks.map((fallback, index) => {
-              const agent = <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[fallback.agent]}</InlineChip>;
+              const agent = <InlineChip dir="auto" wrap>{AGENT_LABEL[fallback.agent]}</InlineChip>;
               return (
                 <li key={index} className="[overflow-wrap:anywhere]" dir="auto">
                   {fallback.project === undefined
                     ? <Message id="configuration.import.result.fallback.console" params={{
                       agent,
-                      name: <InlineChip dir="auto" wrap size="inherit">{fallback.name}</InlineChip>,
-                      console: <InlineChip dir="auto" wrap size="inherit">{fallback.console}</InlineChip>,
+                      name: <InlineChip dir="auto" wrap>{fallback.name}</InlineChip>,
+                      console: <InlineChip dir="auto" wrap>{fallback.console}</InlineChip>,
                     }} />
                     : <Message id="configuration.import.result.fallback.project" params={{
                       agent,
-                      name: <InlineChip dir="auto" wrap size="inherit">{fallback.name}</InlineChip>,
-                      project: <InlineChip dir="auto" wrap size="inherit">{fallback.project}</InlineChip>,
-                      console: <InlineChip dir="auto" wrap size="inherit">{fallback.console}</InlineChip>,
+                      name: <InlineChip dir="auto" wrap>{fallback.name}</InlineChip>,
+                      project: <InlineChip dir="auto" wrap>{fallback.project}</InlineChip>,
+                      console: <InlineChip dir="auto" wrap>{fallback.console}</InlineChip>,
                     }} />}
                 </li>
               );

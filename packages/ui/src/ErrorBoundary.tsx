@@ -59,7 +59,7 @@ function ErrorScreen({ error, onRetry }: { error: Error; onRetry: () => void }):
                 hides the rest behind. The ring goes on this wrapper, which draws it outside its own box, so
                 it needs no room of its own. `overflow-auto` beside the fade's own `overflow-y`: a long
                 frame scrolls sideways too, and only the vertical edge fades. */}
-            <div className={`max-w-[70ch] rounded-lg ${region.focused ? "ring-2 ring-app-focus" : ""}`}>
+            <div className={`max-w-[70ch] rounded-lg ${region.focused ? "ring-2 ring-focus" : ""}`}>
               <FadedScroller region={region} dir="ltr" className="max-h-[40vh] overflow-auto rounded-lg">
                 {/* A stack trace is program text: its indentation and its frames read left to right in
                     any interface language. */}

@@ -125,6 +125,8 @@ export interface Scenario {
   startup?: Startup;
   /** Shows the real code wrappers against the alert tones instead of the application. */
   codePalette?: boolean;
+  /** Shows the application's semantic colours as tokens, as real components and on each surface, instead of the application. */
+  semanticColours?: boolean;
   state?: Partial<State>;
   preferences?: Preferences;
   toasts?: ToastFixture[];
@@ -159,9 +161,9 @@ export interface Scenario {
    * terminal reaches its disconnected state without the backoff's wait. It drives the Terminal
    * panel's shell views' backoff as well as a session's terminal's. */
   terminalRetriesImmediate?: boolean;
-  /** What `list_dir` answers per path, `~` being asked as the home directory `/Users/dev`; a path not
-   * listed gets a generic listing of five directories. */
-  directories?: Record<string, DirEntry[]>;
+  /** What `list_dir` answers per path, `~` being asked as the home directory `/Users/dev`: a listing, or
+   * the daemon error that refuses it. A path not listed gets a generic listing of five directories. */
+  directories?: Record<string, DirEntry[] | FixtureError>;
   /** What `detect_directory_agent` and `probe_git_remote` answer per path or URL: an agent (or null
    * for none), a daemon error, or `"pending"` for a request that is never answered. One not listed
    * answers with no agent. */
@@ -187,6 +189,8 @@ export interface Scenario {
    * for a read that is never answered, or a daemon error refusing the request. A session not listed has
    * an empty history. */
   sessionHistory?: Record<string, HistoryMessage[] | "unavailable" | "pending" | FixtureError>;
+  /** Console sessions whose `list_pages` the daemon refuses, by id, with that error; every other one is listed. */
+  pageListErrors?: Record<string, FixtureError>;
   /** Sessions whose `resume_session` is never answered, so a Reopen stays in flight and the terminal
    * keeps its "Resuming session…" cover. Other sessions reopen at once. */
   sessionResumes?: Record<string, "pending">;

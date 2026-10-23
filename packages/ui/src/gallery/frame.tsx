@@ -144,10 +144,12 @@ if (daemon && scenario) installReportPageFixture(document, daemon, scenario.id);
 const { ViewerGallery } = scenario?.viewer ? await import("./viewerGallery") : { ViewerGallery: undefined };
 const viewerSubjects = scenario?.viewer ? await scenario.viewer.subjects(language) : undefined;
 const { CodeGallery } = scenario?.codePalette ? await import("./codeGallery") : { CodeGallery: undefined };
+const { SemanticColoursGallery } = scenario?.semanticColours ? await import("./semanticColoursGallery") : { SemanticColoursGallery: undefined };
 
 function screen(): React.ReactElement {
   if (!scenario) return <p className="p-4">Unknown scenario “{params.get("scenario")}”.</p>;
   if (CodeGallery) return <CodeGallery />;
+  if (SemanticColoursGallery) return <SemanticColoursGallery />;
   switch (scenario.startup?.kind) {
     case "noAddress":
       return <StartupScreen message={<NoAddressMessage />} />;

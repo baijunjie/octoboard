@@ -1,4 +1,3 @@
-import { daemonMessage } from "../../daemonMessage";
 import type { HistoryMessage } from "../../protocol";
 import type { Scenario } from "../scenario";
 import { consoleOf, minutesAgo, projectOf, sessionOf, snapshotState } from "./builders";
@@ -14,13 +13,9 @@ const state = snapshotState({
   sessions: [sessionOf("s-console", console_.id, undefined, "Hub", "idle"), archived],
 });
 
-const historyFailure = {
-  code: "unknown_session",
-  params: { session: archived.id },
-  message: daemonMessage("en", "unknown_session", { session: archived.id }, "", {
-    consoles: new Map([[console_.id, console_]]), projects: new Map([[project.id, project]]), sessions: new Map([[archived.id, archived]]),
-  }),
-};
+// A failure the application has no words for, so the pane shows its generic sentence and the raw
+// message behind Details.
+const historyFailure = { code: "internal_error", params: { detail: "failed to read the session record: input/output error" }, message: "failed to read the session record: input/output error" };
 
 /** What the session's record holds: the user's messages, those Octoboard wrote into the session (a
  * brief, a notice, a report) and the agent's final reply to each turn, as the daemon reads them.
@@ -204,7 +199,7 @@ export const sessionHistoryScenarios: Scenario[] = [
     category: "exceptional",
     id: "history-unavailable",
     title: "Archived session history unavailable",
-    description: "The agent's record of the session is missing or unreadable: a warning panel says so and points at reopening the session to see its terminal.",
+    description: "The agent's record of the session is missing or unreadable: the pane takes the empty-state shape with a danger glyph, the heading and the reason, and under it the remedy of reopening the session to see its terminal; there is no Try again, since reading it again would not help, and no Details, since there is no raw text.",
     sessionHistory: { [archived.id]: "unavailable" },
     steps: openHistory,
   },
@@ -213,16 +208,7 @@ export const sessionHistoryScenarios: Scenario[] = [
     category: "exceptional",
     id: "history-failed",
     title: "Archived session history request failed",
-    description: "After acknowledgement, the pane retains the daemon's actual failure reason in a stock danger alert. Try again requests history again; the floating bar still offers Reopen.",
-    sessionHistory: { [archived.id]: historyFailure },
-    steps: [...openHistory, (ui) => ui.press(ui.t("error.acknowledge"))],
-  },
-  {
-    ...base,
-    category: "exceptional",
-    id: "history-failed-acknowledgement",
-    title: "Archived history failure awaiting acknowledgement",
-    description: "The failed request first requires acknowledgement with its structured daemon reason. The durable pane remains behind the dialog, with retry and Reopen available after OK.",
+    description: "The pane takes the empty-state shape with a danger glyph, the heading and the application's generic sentence for an unexpected failure under it. Try again, the primary button, requests history again, and the secondary Details holds the daemon's raw message; the floating bar still offers Reopen.",
     sessionHistory: { [archived.id]: historyFailure },
     steps: openHistory,
   },

@@ -216,7 +216,7 @@ export function Rail({
         {waitingCount > 0 && (
           <ChromeButton label={t("rail.waiting", { count: waitingCount })} onPress={onNextWaiting} tooltipPlacement="end">
             <Badge.Anchor>
-              <Hand aria-hidden="true" className={`size-4 text-warning-glyph ${overflow ? COUNT_OVERFLOW_CUT_OUT : COUNT_CUT_OUT}`} />
+              <Hand aria-hidden="true" className={`size-4 text-warning-soft-foreground ${overflow ? COUNT_OVERFLOW_CUT_OUT : COUNT_CUT_OUT}`} />
               <Badge
                 aria-hidden="true"
                 color="warning"

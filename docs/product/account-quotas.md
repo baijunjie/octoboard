@@ -93,7 +93,7 @@ these windows are shown: extra usage, spend, credit balances and pace estimates 
 
 ## How an account's quota is shown
 
-In Settings and in the rail's panel, the account's plan sits beside its name as a small chip, absent when the agent
+In Settings and in the rail's panel, the account's plan sits beside its name as a small badge, absent when the agent
 does not name one; in Settings a badge saying whether the account is logged in follows it (see "The accounts the user
 owns" in `docs/product/agent-accounts.md`). Beneath the account each window has:
 
@@ -107,11 +107,12 @@ owns" in `docs/product/agent-accounts.md`). Beneath the account each window has:
   blue for Codex, and the text colour for Grok Build, each set off against the bar's track in both light and dark
   appearance.
 
-How long ago the reading was taken is shown in small muted text at the end of a line — the account's directory line
-in Settings, its name line in the rail's panel (which shows no directories), and its header in the menu bar icon's
-quota submenu: "Updated just now" under a minute, otherwise "Updated 3 minutes ago" (in hours or days once it is that
-old). It is shown only for a current reading with windows; when the latest reading failed, the out-of-date line (see
-"Quota states" below) says when the windows were last read instead.
+How long ago the windows shown were read is shown in small muted text at the end of a line — the account's directory
+line in Settings, its name line in the rail's panel (which shows no directories), and its header in the menu bar
+icon's quota submenu: "Updated just now" under a minute, otherwise "Updated 3 minutes ago" (in hours or days once it
+is that old). It is shown whenever the account has windows to show, including windows kept after a newer reading
+failed, which a warning mark after it says are out of date (see "Quota states" below; the submenu says so in a note
+under its header instead).
 
 **A window whose reset time has passed** is shown as **100% remaining**, its bar full, until a newer reading arrives,
 while its countdown reads "resets now". This holds wherever a quota is drawn or stated: Settings, the rail's panel, the
@@ -161,8 +162,8 @@ This is what Settings and the rail's panel show; the menu bar icon's menu differ
 | Its agent is not available, or not yet determined | Nothing about a quota, no plan either. |
 | Not read yet | "Reading quota…" in place of the windows. |
 | Read | The plan, the windows and how long ago they were read. |
-| Never read successfully, and the last reading failed | "Quota unavailable" and the reason (see "Why a quota is unavailable" below). |
-| Read before, but the latest reading failed | The last good plan and windows stay, with a line above them saying they are out of date and how long ago they were last read ("last read 12 minutes ago"), and the reason the newer reading failed. The next successful reading clears it. |
+| Never read successfully, and the last reading failed | No windows, and a red failure mark on the account's name line, named "Quota unavailable"; pressing it opens a popover with the reason (see "Why a quota is unavailable" below). |
+| Read before, but the latest reading failed | The last good plan and windows stay, and "Updated …" still says how long ago they were read, followed by an amber warning mark named as out of date and when they were last read ("Out of date: last read 12 minutes ago"); pressing it opens a popover with the reason the newer reading failed. The next successful reading clears it. |
 | Not logged in: its directory does not exist, or the agent says it is not signed in there | Any windows read before are dropped, and the agent's own message is not shown. In the rail's panel, a single line saying the account is not logged in yet and pointing to logging in to use it stands in place of the windows. In Settings nothing stands beneath the account; its **Not logged in** badge says so (see "The accounts the user owns" in `docs/product/agent-accounts.md`). |
 
 ## Why a quota is unavailable
@@ -386,7 +387,7 @@ the accounts' quotas without opening Settings.
   other way. Otherwise a list opens at its top.
 - **The selected agent's accounts**: its default account, under the name the user gave it or else "Default" (see "The
   default account" in `docs/product/agent-accounts.md`), then the accounts the user owns. Each shows
-  its name, its plan chip and its quota beneath, in the states of "Quota states" above, as "How an account's quota is
+  its name, its plan badge and its quota beneath, in the states of "Quota states" above, as "How an account's quota is
   shown" above describes. A name too long for its space fades as in "Names too long for their space" in
   `docs/product/labels-and-tooltips.md`. The panel shows no directories and offers nothing to edit.
 - The list of accounts is at most 384 px high, or 60% of the window's height where that is less, and the panel is as
@@ -430,6 +431,10 @@ The panel closes, floating or pinned:
 - when **keyboard focus moves out of it** — Tab past its last control, Shift+Tab before its first, or F6.
 
 A pinned panel also closes on **another press of the button**.
+
+An account's failure mark (see "Quota states" above) opens its popover from inside the panel, and that popover counts
+as part of the panel: a press inside it, and its own opening, do not close the panel, and Escape there closes the
+popover alone, the panel staying open.
 
 On closing, keyboard focus goes back to what held it when the panel opened — the button, after a keyboard pin —
 unless the close itself put focus somewhere else: a press on something that takes focus leaves it there, Tab and

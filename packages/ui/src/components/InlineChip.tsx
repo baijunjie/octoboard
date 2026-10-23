@@ -3,11 +3,11 @@ import React from "react";
 
 import { useCodeColor, type CodeColor } from "./codeTone";
 
-export type InlineChipSize = "xs" | "sm" | "md" | "lg" | "inherit";
+export type InlineChipSize = "xs" | "sm" | "md" | "lg";
 export type InlineChipProps = Omit<React.ComponentProps<typeof Chip<"span">>, "size" | "color" | "children"> & {
   children?: React.ReactNode;
   size?: InlineChipSize;
-  color?: CodeColor | "accent";
+  color?: CodeColor;
   monospace?: boolean;
   wrap?: boolean;
   /** Moves to the next line as one box rather than splitting where the line ends, so no empty
@@ -16,10 +16,12 @@ export type InlineChipProps = Omit<React.ComponentProps<typeof Chip<"span">>, "s
   startContent?: React.ReactNode;
 };
 
-/** One chip scale for prose, labels and metadata. `inherit` follows the surrounding text. */
+/** A reference mixed into running copy. It always takes the font of the text it sits in; the sizes differ only in
+ * padding, and `xs`, the default, is safe in every line (see `docs/ui-accessibility.md`'s "A chip's size follows the
+ * line it sits in" section). */
 export function InlineChip({
   children,
-  size = "sm",
+  size = "xs",
   color = "default",
   variant = "soft",
   monospace = false,
@@ -30,22 +32,22 @@ export function InlineChip({
   className = "",
   ...props
 }: InlineChipProps): React.ReactElement {
-  const resolvedColor = useCodeColor(color === "accent" ? "primary" : color);
-  const nativeColor = resolvedColor === "primary" ? "accent" : resolvedColor === "secondary" ? "default" : resolvedColor;
+  const resolvedColor = useCodeColor(color);
+  const nativeColor = resolvedColor === "help" ? "default" : resolvedColor;
   const text = wrap && typeof children === "string" ? children.split("/").map((part, i) => (
     <React.Fragment key={i}>{i > 0 && <>/<wbr /></>}{part}</React.Fragment>
   )) : children;
   return (
     <Chip<"span">
       {...props}
-      size={size === "xs" || size === "inherit" ? "sm" : size}
+      size="sm"
       color={nativeColor}
       variant={variant}
       dir={dir}
       data-inline-chip=""
       data-size={size}
       data-color={resolvedColor}
-      className={`inline-chip ${size === "xs" ? "inline-chip--xs" : size === "inherit" ? "inline-chip--inherit" : ""} ${wrap ? "inline-chip--wrap" : ""} ${unbroken ? "inline-chip--unbroken" : ""} ${monospace ? "select-text" : ""} ${resolvedColor === "secondary" ? "inline-chip--secondary" : ""} ${className}`}
+      className={`inline-chip ${wrap ? "inline-chip--wrap" : ""} ${unbroken ? "inline-chip--unbroken" : ""} ${monospace ? "select-text" : ""} ${className}`}
     >
       {startContent}
       <Chip.Label>

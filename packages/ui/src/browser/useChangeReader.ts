@@ -296,7 +296,7 @@ export function useChangeReader(project: string, onWorktreeGone?: () => void): C
           case "disconnected":
             throw new ChangeBodiesError("failed", t("viewer.expand.disconnected"));
           case "failed":
-            throw new ChangeBodiesError("failed", viewerErrorText(t, failure.message, item.path));
+            throw new ChangeBodiesError("failed", viewerErrorText(t, language, failure.message, item.path, state));
         }
       }
     };
@@ -402,8 +402,8 @@ export function useChangeReader(project: string, onWorktreeGone?: () => void): C
   // in conflict). Only a committed change has a source to word.
   const { section } = opened.item;
   const stage = section === "staged" || section === "unstaged" ? t(SECTION_LABELS[section]) : undefined;
-  const commitChip = (commit: string) => createElement(InlineChip, { monospace: true, wrap: true, size: "inherit", color: "default", children: shortCommit(commit) });
-  const branchChip = (branch: string) => createElement(InlineChip, { monospace: true, wrap: true, size: "inherit", color: "primary", children: displayWirePath(branch) });
+  const commitChip = (commit: string) => createElement(InlineChip, { monospace: true, wrap: true, color: "default", children: shortCommit(commit) });
+  const branchChip = (branch: string) => createElement(InlineChip, { monospace: true, wrap: true, color: "accent", children: displayWirePath(branch) });
   // A comparison's change says which branch it is of, at which commit, and the branch it forked
   // from, at the commit of the fork, or that it is of the whole history when it has no base; one
   // commit's change says which commit it is of, and the parent it is compared with. The plain-text

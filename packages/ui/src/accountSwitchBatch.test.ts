@@ -210,3 +210,9 @@ it("gives a failure with nothing raw to show no details, and an unexpected one i
   expect(errorAlerts.getSnapshot()[0].classification.kind).toBe("unexpected");
   expect(errorAlerts.getSnapshot()[0].details).toBeTruthy();
 });
+
+it("keeps the raw text of a failure the window has no sentence of its own for in the details", async () => {
+  const store = storeOf([session("a")]);
+  await batch(store, ["a"], "a-1", async () => { throw new DaemonRequestError("database is locked", "internal_error", { detail: "database is locked" }); });
+  expect(errorAlerts.getSnapshot()[0].details).toBeTruthy();
+});

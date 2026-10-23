@@ -121,6 +121,9 @@ it("sets the refused directory as danger-toned code under the field", async () =
   const code = document.body.querySelector('[role="alert"] code');
   expect(code?.textContent).toBe("/Users/dev/code/missing");
   expect(code?.getAttribute("data-color")).toBe("danger");
+  // The Alert describes the field it is under.
+  const alert = document.body.querySelector('[data-slot="alert-root"]')!.parentElement!;
+  expect(input("Directory").getAttribute("aria-describedby")?.split(" ")).toContain(alert.id);
 });
 
 it("keeps the form locked while the answer for the path as it stands is out", async () => {

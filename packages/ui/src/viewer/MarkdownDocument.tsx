@@ -142,7 +142,7 @@ function DocumentLink({
       // It shows where the link goes before it is followed.
       title={title}
       {...focus}
-      className="rounded-sm break-words text-(--document-link) underline underline-offset-2 outline-none data-focus-visible:ring-2 data-focus-visible:ring-app-focus"
+      className="rounded-sm break-words text-(--tint-accent-fg) underline underline-offset-2 outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus"
       onClick={(event) => {
         event.preventDefault();
         onActivate(event);
@@ -354,7 +354,7 @@ export const MarkdownDocument = memo(function MarkdownDocument({
         }
         if (address.kind === "external" && onOpenLink) {
           return (
-            <ExternalLink href={address.href} title={address.href} style={{ color: "var(--document-link)" }} onOpen={() => onOpenLink(address.href)}>
+            <ExternalLink href={address.href} title={address.href} style={{ color: "var(--tint-accent-fg)" }} onOpen={() => onOpenLink(address.href)}>
               {unnamed ? address.href : children}
             </ExternalLink>
           );

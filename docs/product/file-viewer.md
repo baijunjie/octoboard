@@ -83,8 +83,8 @@ one's do not, or when one subject has the subtitle row and the next has none.
   instead, with its source a choice away (see "A Markdown file as a document" below).
 - **Images** — PNG, JPEG, GIF, WebP, BMP, ICO and SVG; AVIF on macOS 13 and later — are shown scaled down to fit and
   never scaled up, on a checkerboard that shows their transparent areas. An image is only displayed: an SVG's scripts
-  never run and nothing it refers to is fetched. An image that cannot be decoded says so, with its size; an SVG that
-  cannot be decoded is shown as its text instead, under a failure notice saying so.
+  never run and nothing it refers to is fetched. An image that cannot be decoded is an error in its place (see "Notices and
+  stand-ins" below); an SVG that cannot be decoded is shown as its text instead, under a failure notice saying so.
 - **Any other binary file** says it cannot be displayed, with its size.
 - **While a file is being read**, and until its code is drawn, the viewer says it is loading. It never shows another
   file's content under this file's name, not even for a moment while moving between files. Assistive technology is
@@ -112,14 +112,13 @@ a tone never rests on colour alone:
   was asked for — a read that failed, a grammar that could not be loaded, code, a diff or a document that could not be
   drawn, an image that would not decode.
 
-A failure also opens the mandatory acknowledgement alert described in "Error alerts" in
-`docs/product/error-alerts.md`, whether it arrives with the content or after the viewer has opened. The durable notice
-and fallback stay in the viewer afterwards; they do not independently announce the same failure. This applies to
-failed file reads, rendering and decoding, including diagrams, formulas and project images in a Markdown document.
-Non-error notices that appear after the content is drawn are announced once when needed, including what a diff says
-about collapsed lines (see "Expanding the collapsed lines" in `docs/product/project-pane-git-change-viewer.md`). Inside
-a rendered document, a notice for an image or for a formula inside a paragraph sits in the paragraph rather than as the
-block above; it uses the same tones.
+A failure notice opens no error alert: the content the viewer still shows is what the user came for, and the notice
+is the failure's only presentation. A notice that appears after the content is drawn, a failure notice included, is
+announced once as a status, including what a diff says about collapsed lines (see "Expanding the collapsed lines" in
+`docs/product/project-pane-git-change-viewer.md`). Inside a rendered document, a notice for an image or for a formula
+inside a paragraph sits in the paragraph rather than as the block above; it uses the same tones, except that a failure
+there is only a red circled `!` mark in the text, named by the sentence it stands for and carrying that sentence as its
+tooltip on pointer hover (see "Failures marked on a row" in `docs/product/error-alerts.md`).
 
 **A stand-in** fills the body when there is nothing to draw at all: the empty state's own panel, centred in the body — a
 glyph saying what kind of nothing this is, a heading naming it, and, where there is more to say than the heading
@@ -137,17 +136,19 @@ what the viewer shows for
   one stand-in is hidden from assistive technology, which hears the state as one sentence from the viewer itself
   instead (see "A state another region already announces" in `docs/product/empty-states.md`).
 
-**An error** fills the body when the file or change cannot be opened at all: a red block, in the same red and with the
-same glyph as a failure notice so that neither is louder than the other, headed that it could not be opened, with the
-reason under it (see "Errors" in `docs/product/project-pane.md`). The error alert announces it and requires
-acknowledgement.
+**An error** fills the body when the file or change cannot be opened at all: an empty-state failure, centred in the
+body, with the same red circled `!` as a failure notice, headed that it could not be opened, with the reason under it
+and any details behind **Details** (see "Errors" in `docs/product/project-pane.md`). An image that was read but cannot
+be decoded, and has no text to fall back to, is the same kind of error, headed that the image cannot be displayed, with
+what to check about the file. Neither has Try again. A file still in conflict whose content cannot be read keeps its
+conflict notice, and the error is a compact red alert under it instead. Each opens no error alert, and is announced to
+assistive technology when it appears after the viewer was drawn (see "Failures shown on the screen" in
+`docs/product/error-alerts.md`).
 
 A reason the viewer gives for a read that failed — in an error or in a failure notice — does not repeat a path the
 header already shows: when the reason is about the file on screen, it speaks of "this file" instead. A reason about any
 other path, such as a parent folder or the path a rename came from, still names that path, and a reason the viewer
-does not recognise is shown as it arrived. For an error that fills the body, the error alert carries the full reason,
-path included, since it is read without the header beside it; a failure notice and its error alert carry the same
-shortened reason.
+does not recognise is shown as it arrived.
 
 ## A Markdown file as a document
 
@@ -283,8 +284,8 @@ document scrolls inside that region, fading the side it hides. An inline formula
 wider than the line, so that side can be scrolled from the keyboard. While it fits, it is not a tab stop.
 
 **When one cannot be drawn.** Until a diagram or a formula has been drawn, its source is what is shown, with no
-notice. One that cannot be drawn shows its source under a failure notice, and the rest of the document stays. A
-failure requires acknowledgement in an error alert (see "Notices and stand-ins" above). A diagram or a formula past
+notice. One that cannot be drawn shows its source under a failure notice — for a formula inside a paragraph, after a
+failure mark (see "Notices and stand-ins" above) — and the rest of the document stays. A diagram or a formula past
 either of its limits below, and a project image past the count, are shown as source — or, for the image, as its alt
 text — under a neutral notice. That notice is part of the first paint and is not announced on its own.
 
@@ -299,8 +300,8 @@ The budget is per document:
   count: the alt text and a neutral notice that the document is large, part of the first paint and not announced on
   its own. A reply larger than 4 MiB is not shown: the alt text and a neutral notice that the image is large, announced
   once, because it appears after the read. A read that fails — which is also what a file larger than 4 MiB does, since
-  the read does not deliver it — or a file that is not an image: the alt text and a failure notice, with an error alert
-  requiring acknowledgement.
+  the read does not deliver it — or a file that is not an image: the alt text and a failure mark beside it, whose
+  tooltip says the image could not be shown, announced once.
 
 **The document always wraps** and offers no wrap control (see "Wrapping long lines" below).
 

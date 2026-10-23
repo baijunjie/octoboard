@@ -58,7 +58,7 @@ function fakeTerminal(lines: string[]) {
 
 it("keeps a decoration for a link whose line moved, instead of placing it again", async (context) => {
   const { term, lines, markers, decorations, update } = fakeTerminal(["", "see http://a.dev/x", ""]);
-  const colors = new TerminalLinkColors(term, "dark");
+  const colors = new TerminalLinkColors(term);
   context.onTestFinished(() => colors.dispose());
   await update();
   expect(decorations).toHaveLength(1);
@@ -74,7 +74,7 @@ it("keeps a decoration for a link whose line moved, instead of placing it again"
 
 it("rebuilds decorations on buffer switches and removes them after repaint or disposal", async (context) => {
   const { term, lines, markers, decorations, update, bufferListeners } = fakeTerminal(["http://a.dev/x"]);
-  const colors = new TerminalLinkColors(term, "dark");
+  const colors = new TerminalLinkColors(term);
   context.onTestFinished(() => colors.dispose());
   await update();
   Object.assign(term.buffer.active, { type: "alternate" });

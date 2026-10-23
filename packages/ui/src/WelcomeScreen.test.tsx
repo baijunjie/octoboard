@@ -78,7 +78,7 @@ it("shows each tool's own detection status when an installed tool is available",
   ]);
   const rows = Array.from(mount(vi.fn(), { agentAvailability }).querySelectorAll("li"));
   expect(rows.map((row) => row.textContent)).toEqual([
-    "Claude CodeInstalled", "CodexNot detected", "Grok BuildInstalled",
+    "Claude Code, Installed", "Codex, Not detected", "Grok Build, Installed",
   ]);
   expect(rows.every((row) => row.querySelector("svg[aria-hidden=true]"))).toBe(true);
   expect(rows.map((row) => row.querySelector("[role=status]")?.textContent)).toEqual(rows.map((row) => row.textContent));

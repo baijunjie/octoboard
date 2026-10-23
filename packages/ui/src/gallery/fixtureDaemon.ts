@@ -794,6 +794,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           // scenario names the listing it gives by that path.
           const path = body.path === "~" ? HOME : body.path;
           const listed = scenario.directories?.[path];
+          if (listed && !Array.isArray(listed)) return fail(listed);
           return { type: "dir_listing", ...(listed ? { path, entries: listed } : genericListing(path)) };
         }
         case "detect_directory_agent":
@@ -810,6 +811,8 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           return { type: "agent_models", agent: body.agent, account: body.account ?? null, models, unavailable };
         }
         case "list_pages": {
+          const refused = scenario.pageListErrors?.[body.console_session];
+          if (refused) return fail(refused);
           // As the real client's reply reaches the reducer, so a console session with no fixture
           // pages ends up listed as empty rather than not listed yet.
           const pages = store.getState().pages.get(body.console_session) ?? [];
@@ -860,8 +863,10 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           const remote = body.remote_url?.trim().replace(/\/+$/, "");
           const repository = remote?.split(/[/:]/).at(-1)?.replace(/\.git$/, "");
           if (body.source === "git" && !repository) return fail({ code: "field_required", params: { field: "remote_url" }, message: "remote_url is required" });
+          const listedParent = scenario.directories?.[parent];
+          if (listedParent && !Array.isArray(listedParent)) return fail(listedParent);
           const directories = body.source === "parent"
-            ? (scenario.directories?.[parent] ?? genericListing(parent).entries).filter((entry) => entry.is_git_repo).map((entry) => normalizedPath(entry.path))
+            ? (listedParent ?? genericListing(parent).entries).filter((entry) => entry.is_git_repo).map((entry) => normalizedPath(entry.path))
             : [body.source === "git" ? normalizedPath(`${parent}/${repository}`) : parent];
           if (!directories.length) return fail({ code: "no_repositories_found", params: { path: parent }, message: `no repositories found in ${parent}` });
           const projects = new Map(current.projects);

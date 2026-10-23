@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { Button } from "../components/Button";
 import { AGENT_LABEL, defaultAccountName } from "../agents";
-import { codedMessageNode } from "../components/DaemonErrorMessage";
+import { CodedFailureBody } from "../components/DaemonErrorMessage";
 import { ExternalLink } from "../components/ExternalLink";
 import { InlineChip } from "../components/InlineChip";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/StatusAnnouncer";
@@ -114,14 +114,14 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
     onClose(false, cancelling);
   };
 
-  const who = <InlineChip dir="auto" wrap size="inherit">{name}</InlineChip>;
+  const who = <InlineChip dir="auto" wrap>{name}</InlineChip>;
   const failure: Failure | undefined = refusal ?? (login?.failure ?? undefined);
   const reason = failure && daemonMessage(language, failure.code, failure.params, failure.message, NO_RECORDS);
   const code = login?.status === "waiting" ? login.device_code : null;
   const progress = t(login?.status === "waiting" ? "settings.accounts.login.waiting" : "settings.accounts.login.starting");
   return (
     <Dialog
-      title={<Message id="settings.accounts.login.dialogTitle" params={{ name: who, agent: <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[agent]}</InlineChip> }} />}
+      title={<Message id="settings.accounts.login.dialogTitle" params={{ name: who, agent: <InlineChip dir="auto" wrap>{AGENT_LABEL[agent]}</InlineChip> }} />}
       onClose={close}
       footer={ended ? (
         <>
@@ -144,14 +144,14 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
               ? <Message id="settings.accounts.login.timedOut" params={{ name: who }} />
               : <Message id="settings.accounts.login.failed" params={{ name: who }} />}
           </p>
-          {failure && reason !== undefined && <><p>{codedMessageNode(failure, reason, "summary")}</p>{codedMessageNode(failure, reason, "details")}</>}
+          {failure && reason !== undefined && <CodedFailureBody failure={failure} text={reason} />}
         </div>
       ) : (
         <div className="flex items-center gap-2 text-sm">
           <Spinner size="sm" aria-hidden />
           <span aria-hidden>
             {code
-              ? <Message id="settings.accounts.login.waitingCode" params={{ code: <InlineChip monospace size="inherit">{code}</InlineChip> }} />
+              ? <Message id="settings.accounts.login.waitingCode" params={{ code: <InlineChip monospace>{code}</InlineChip> }} />
               : progress}
           </span>
           {/* It comes with a focus move — the dialog opening, or Log in again handing focus to Cancel login — so its first

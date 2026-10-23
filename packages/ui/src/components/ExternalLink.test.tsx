@@ -22,7 +22,7 @@ function mount(element: React.ReactNode, platform: PlatformAdapter = { kind: "br
   return container.querySelector("a")!;
 }
 
-it("keeps a real destination, visible external marker and accessible description in text and chip appearances", () => {
+it("keeps a real destination, visible external marker and accessible description", () => {
   const anchor = mount(<ExternalLink href={URL}>Guide</ExternalLink>);
   expect(anchor.getAttribute("href")).toBe(URL);
   expect(anchor.target).toBe("_blank");
@@ -30,9 +30,6 @@ it("keeps a real destination, visible external marker and accessible description
   expect(anchor.getAttribute("aria-description")).toBe("Opens in your browser");
   expect(anchor.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
   expect(anchor.textContent).toBe("Guide");
-  const chip = mount(<ExternalLink href={URL} appearance="chip">Report issue</ExternalLink>);
-  expect(chip.querySelector('[data-inline-chip][data-size="inherit"]')).not.toBeNull();
-  expect(chip.querySelector("[data-inline-chip] svg")).not.toBeNull();
 });
 
 it("routes native opening through the platform, with one pending activation and no navigation", async () => {
@@ -64,13 +61,14 @@ it("honours a caller's opening flow and its external pending state", async () =>
   expect(pending.getAttribute("aria-disabled")).toBe("true");
 });
 
-it("reports a failed opener with localized copy, the destination chip and the original cause", async () => {
+it("reports a failed opener with localized copy, the destination as plain text and the original cause", async () => {
   const cause = new Error("Browser launch failed");
   const anchor = mount(<ExternalLink href={URL}>Guide</ExternalLink>, { kind: "tauri", links: { open: vi.fn().mockRejectedValue(cause) } });
   await act(async () => anchor.click());
   const alert = document.querySelector('[role="alertdialog"]')!;
   expect(alert.textContent).toContain("Could not open the external link.");
-  expect(alert.querySelector("[data-inline-chip]")?.textContent).toBe(URL);
+  expect(alert.querySelector("p[dir=ltr]")?.textContent).toBe(URL);
+  expect(alert.querySelector("[data-inline-chip]")).toBeNull();
   expect(errorAlerts.getSnapshot()[0].error).toMatchObject({ recovery: "openExternal", cause });
 });
 

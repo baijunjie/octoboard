@@ -4,7 +4,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "../components/Button";
 import { InlineChip } from "../components/InlineChip";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
-import { Dialog, DialogError, useDialogAction, useFocusLeavingWhenDisabled } from "./Dialog";
+import { Dialog, useDialogAction, useFocusLeavingWhenDisabled } from "./Dialog";
 import { dialogAround } from "./dialogElement";
 import { useTrimmedField } from "./useTrimmedField";
 
@@ -75,7 +75,7 @@ export function ConfirmDialog({
 }: ConfirmDialogProps): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
-  const { error, busy, run } = useDialogAction(resetKey);
+  const { busy, run } = useDialogAction(resetKey);
   const [typed, setTyped] = useState("");
   const typedField = useTrimmedField(typed, setTyped);
   const word = typeToConfirm?.toLocaleUpperCase(language);
@@ -145,14 +145,13 @@ export function ConfirmDialog({
           autoFocus
         >
           <Label>
-            <Message id="dialog.typeToConfirm.label" params={{ word: <InlineChip size="inherit" dir="ltr" className="italic">{word}</InlineChip> }} />
+            <Message id="dialog.typeToConfirm.label" params={{ word: <InlineChip dir="ltr" className="italic">{word}</InlineChip> }} />
           </Label>
           {/* Capitals by styling rather than by rewriting the value: rewriting a controlled value
               mid-composition breaks an input method's composition. */}
           <Input dir="ltr" placeholder={t("dialog.typeToConfirm.example", { word })} className="uppercase" autoComplete="off" spellCheck={false} />
         </TextField>
       )}
-      <DialogError message={error} />
     </Dialog>
   );
 }

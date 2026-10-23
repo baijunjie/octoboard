@@ -6,7 +6,7 @@ import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useT } from "../i18n/react";
 import type { ChangeLayout } from "./changeLayout";
 import type { ChangeViewState } from "./changeView";
-import { changeGroups, filterChanges, sectionKey, visibleNodes, type ChangeItem } from "./changes";
+import { changeGroups, filterChanges, sectionKey, visibleNodes, type ChangeItem, type ChangeSection } from "./changes";
 import { HEADING_HEIGHT } from "./changeSectionHeading";
 import { ChangeTree } from "./ChangeTree";
 import { ROW_HEIGHT } from "./treeRow";
@@ -49,6 +49,7 @@ export function ChangeList({
   onOpen,
   listRef,
   changeView,
+  failures,
 }: {
   items: ChangeItem[];
   /** The key of the change the viewer showed last. */
@@ -57,6 +58,8 @@ export function ChangeList({
   onOpen: (item: ChangeItem) => void;
   listRef: React.Ref<HTMLDivElement>;
   changeView: ChangeViewState;
+  /** `ChangeTree`'s. */
+  failures?: ReadonlyMap<ChangeSection, React.ReactNode>;
 }): React.ReactElement {
   const t = useT();
   const shown = useMemo(() => filterChanges(items, changeView.filter), [items, changeView.filter]);
@@ -77,6 +80,7 @@ export function ChangeList({
           layout={changeView.layout}
           collapsed={changeView.collapsed}
           onCollapsedChange={changeView.onCollapsedChange}
+          failures={failures}
         />
       )}
     </>

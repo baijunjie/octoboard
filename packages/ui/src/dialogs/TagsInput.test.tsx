@@ -48,7 +48,7 @@ it("names a tag richly in its removal tooltip without repeating its accessible n
   const chip = tooltip.querySelector("[data-inline-chip]")!;
   expect(chip.textContent).toBe(tag);
   expect(chip.getAttribute("dir")).toBe("auto");
-  expect(chip.getAttribute("data-size")).toBe("inherit");
+  expect(chip.getAttribute("data-size")).toBe("xs");
   expect(chip.classList.contains("inline-chip--wrap")).toBe(true);
   expect(chip.querySelector("code")).toBeNull();
   expect(remove.getAttribute("aria-label")).toBe("Remove tag");

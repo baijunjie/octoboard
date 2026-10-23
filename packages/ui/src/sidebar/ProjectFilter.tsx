@@ -3,7 +3,6 @@ import { Check, Funnel, FunnelX, Tags } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { Button } from "../components/Button";
-import { InlineChip } from "../components/InlineChip";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
@@ -228,39 +227,38 @@ function TagPicker({
   );
 }
 
-/** How a chip takes its width: kept whole on the heading's line, where the line clips it, or
+/** How a token takes its width: kept whole on the heading's line, where the line clips it, or
  * shrunk to the tooltip's line, where a long one breaks inside itself. */
-const CHIP_FIT_CLASS = { whole: "shrink-0", wrapping: "min-w-0 max-w-full" };
+const TOKEN_FIT_CLASS = { whole: "shrink-0 whitespace-nowrap", wrapping: "min-w-0 max-w-full [overflow-wrap:anywhere]" };
 
-/** One condition of the filter: the keyword in the neutral look, a picked tag in the accent one. */
-function Chip({ kind, fit, children, motionKey }: {
-  kind: "keyword" | "tag";
-  fit: keyof typeof CHIP_FIT_CLASS;
+/** One condition of the filter, the keyword or a picked tag, as plain text in the style of the line it
+ * stands in: a token of a filter is a value shown on its own, not a reference within copy. */
+function Token({ fit, children, motionKey }: {
+  fit: keyof typeof TOKEN_FIT_CLASS;
   children: string;
   motionKey?: string;
 }): React.ReactElement {
-  return <InlineChip data-list-motion={motionKey} size="xs" color={kind === "keyword" ? "default" : "accent"} dir="auto" wrap={fit === "wrapping"} className={CHIP_FIT_CLASS[fit]}>{children}</InlineChip>;
+  return <span data-list-motion={motionKey} dir="auto" className={TOKEN_FIT_CLASS[fit]}>{children}</span>;
 }
 
-/** The whole filter as a tooltip: the same chips as the heading's line, wrapped onto as many lines
- * as the tooltip's width needs instead of clipped at one. Each chip is capped at the tooltip's
+/** The whole filter as a tooltip: the same tokens as the heading's line, wrapped onto as many lines
+ * as the tooltip's width needs instead of clipped at one. Each token is capped at the tooltip's
  * width, so a tag longer than a line breaks inside itself. */
 function ProjectFilterTooltip({ filter }: { filter: ProjectFilter }): React.ReactElement {
   const listRef = useListMotion<HTMLDivElement>();
   return (
     <div ref={listRef} className="relative flex flex-wrap gap-1.5">
-      {filter.keyword !== "" && <Chip kind="keyword" fit="wrapping" motionKey="keyword">{filter.keyword}</Chip>}
-      {filter.tags.map((tag) => <Chip key={tag} kind="tag" fit="wrapping" motionKey={`tag:${tag}`}>{tag}</Chip>)}
+      {filter.keyword !== "" && <Token fit="wrapping" motionKey="keyword">{filter.keyword}</Token>}
+      {filter.tags.map((tag) => <Token key={tag} fit="wrapping" motionKey={`tag:${tag}`}>{tag}</Token>)}
     </div>
   );
 }
 
 /** The filter in force, on the Projects heading's line between its label and its controls: the
- * keyword first, in the neutral look, then the picked tags in the soft accent colour that sets them
- * apart from it. Nothing here is interactive; the heading's Funnel X clears the filter. The
- * conditions are one label to the pointer: clipped at the line's end, they fade there and run as
- * one marquee while the pointer is over them, carrying the whole filter as a tooltip of chips.
- * Each kind is a named group, so a screen reader hears what the words are. */
+ * keyword first, then the picked tags, each as plain text. Nothing here is interactive; the heading's
+ * Funnel X clears the filter. The conditions are one label to the pointer: clipped at the line's end,
+ * they fade there and run as one marquee while the pointer is over them, carrying the whole filter as
+ * a tooltip. Each kind is a named group, so a screen reader hears what the words are. */
 export function ProjectFilterSummary({ filter }: { filter: ProjectFilter }): React.ReactElement {
   const t = useT();
   const listRef = useListMotion<HTMLElement>({ descendants: true });
@@ -268,13 +266,13 @@ export function ProjectFilterSummary({ filter }: { filter: ProjectFilter }): Rea
     <FadeOverflow ref={listRef} className="relative flex min-w-0 flex-1 items-center gap-1.5" titleWhenClipped={<ProjectFilterTooltip filter={filter} />}>
       {filter.keyword !== "" && (
         <span role="group" aria-label={t("sidebar.filter.keyword")} className="inline-flex shrink-0">
-          <Chip kind="keyword" fit="whole" motionKey="keyword">{filter.keyword}</Chip>
+          <Token fit="whole" motionKey="keyword">{filter.keyword}</Token>
         </span>
       )}
       {filter.tags.length > 0 && (
         <span role="group" aria-label={t("sidebar.filter.picked")} className="inline-flex shrink-0 gap-1.5">
           {filter.tags.map((tag) => (
-            <Chip key={tag} kind="tag" fit="whole" motionKey={`tag:${tag}`}>{tag}</Chip>
+            <Token key={tag} fit="whole" motionKey={`tag:${tag}`}>{tag}</Token>
           ))}
         </span>
       )}

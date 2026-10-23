@@ -80,3 +80,17 @@ it("renders the heading at the level asked for", () => {
   expect(container.querySelector("h3")?.textContent).toBe("Nothing here");
   expect(container.querySelector("h2")).toBeNull();
 });
+
+it("takes the danger tone for its glyph, and puts Details after the action in the centred row", () => {
+  const container = mount(<EmptyPanel tone="danger" icon={FolderOpen} message="Could not load" description="Gone." action={{ label: "Try again", onPress: () => {} }} details={<p>Why</p>} />);
+  expect(container.querySelector("svg")!.parentElement!.className).toContain("text-danger-soft-foreground");
+  expect([...container.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Try again", "Details"]);
+  expect(container.querySelector("button")!.className).not.toContain("danger");
+});
+
+it("speaks the heading and the line, and not the buttons, when it announces", () => {
+  const container = mount(<EmptyPanel tone="danger" icon={FolderOpen} message="Could not load" description="Gone." action={{ label: "Try again", onPress: () => {} }} announce />);
+  const alert = container.querySelector("[role=alert]")!;
+  expect(alert.textContent).toBe("Could not loadGone.");
+  expect(alert.querySelector("button")).toBeNull();
+});

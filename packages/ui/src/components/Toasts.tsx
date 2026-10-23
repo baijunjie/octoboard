@@ -188,7 +188,7 @@ function renderToast({ toast: queued }: { toast: QueuedToast<ToastContentValue> 
       <Toast.Content>
         {/* The title is the toast's own tone, so a literal in it takes that tone; the description stays neutral. */}
         {!!title && (
-          <CodeToneContext.Provider value={variant === "danger" ? "danger" : "primary"}>
+          <CodeToneContext.Provider value={variant === "danger" ? "danger" : "accent"}>
             <Toast.Title>{title}</Toast.Title>
           </CodeToneContext.Provider>
         )}

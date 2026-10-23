@@ -612,98 +612,68 @@ html {
   --separator: oklch(0.33 0.006 286);
 }
 
-/* Application-authored text, graphics and focus rings are measured on the window's own surfaces.
-   Keep their palette separate from HeroUI's component tokens so a component retains its default
-   treatment. The accent also fills the appearance choice and the rail's working badge. */
+/* The one palette the application keeps beside HeroUI's: the secondary text colour, the help purple, and
+   (below) the tints built from them. Every other colour is HeroUI's own token, read where it is drawn
+   (docs/ui-accessibility.md's "One definition per semantic colour"). `--app-muted` is HeroUI's `--muted`
+   in dark and a step darker in light, where `--muted` is 3.70:1 on a selected sidebar row and this is
+   4.62:1. `--help` is Tailwind's purple 500, the base of `--tint-help-*`. */
 :root {
-  --app-accent: oklch(0.56 0.195 253.83);
-  --app-danger: oklch(0.577 0.215 27);
   --app-muted: oklch(0.5 0.0138 285.94);
-  --app-focus: var(--app-accent);
-  --app-accent-soft: color-mix(in oklab, var(--app-accent) 15%, transparent);
-  --app-danger-soft: color-mix(in oklab, var(--app-danger) 15%, transparent);
+  --help: oklch(0.627 0.265 303.9);
 }
 
 .dark,
 [data-theme="dark"] {
-  --app-danger: oklch(0.68 0.19 24);
   --app-muted: var(--muted);
-  --app-focus: var(--accent-glyph);
-  --app-accent-soft: color-mix(in oklab, var(--app-accent) 12%, transparent);
-  --app-danger-soft: color-mix(in oklab, var(--app-danger) 15%, transparent);
 }
 
-/* @heroui/theme 2.4.26 flat Alert backgrounds use light 50 (neutral 100), and reversed dark 50
-   at half opacity. Intentional AA exception: the unchanged v3 light description text is about
-   4.397/4.229/4.456/4.117:1 on default/accent/success/danger. Warning passes. The exception applies
-   only to that description text, not titles, indicators, chips or controls on these custom fills.
-   See docs/ui-accessibility.md's "Confirmed visual choices" for the exact reference and scope. */
+/* An Alert draws two things itself (`TintedAlert`, `ErrorAlert`). Its background is HeroUI's soft fill for
+   its status; the neutral one is the shared neutral tint (`--tint-default-bg`), HeroUI's `--default-soft`
+   all but vanishing on a white surface. Its shadow is HeroUI's `--surface-shadow` in light, three layers
+   (`0 2px 4px`, `0 1px 2px`, `0 0 1px`, at 4%, 6% and 6%, from HeroUI 3.2.6's `variables.css`), which in
+   grey reads as a rim on a tinted fill; it keeps those offsets, blurs and strengths and takes its colour
+   from the Alert's status instead (the neutral Alert from the secondary text colour, as its fill is),
+   defined once here as `--alert-shadow-{status}`. Dark keeps HeroUI's own, no shadow. */
 :root {
-  --alert-fill-default: #f4f4f5;
-  --alert-fill-accent: #e6f1fe;
-  --alert-fill-success: #e8faf0;
-  --alert-fill-warning: #fefce8;
-  --alert-fill-danger: #fee7ef;
+  --alert-shadow-default: 0 2px 4px 0 color-mix(in oklab, var(--app-muted) 4%, transparent), 0 1px 2px 0 color-mix(in oklab, var(--app-muted) 6%, transparent), 0 0 1px 0 color-mix(in oklab, var(--app-muted) 6%, transparent);
+  --alert-shadow-accent: 0 2px 4px 0 color-mix(in oklab, var(--accent) 4%, transparent), 0 1px 2px 0 color-mix(in oklab, var(--accent) 6%, transparent), 0 0 1px 0 color-mix(in oklab, var(--accent) 6%, transparent);
+  --alert-shadow-success: 0 2px 4px 0 color-mix(in oklab, var(--success) 4%, transparent), 0 1px 2px 0 color-mix(in oklab, var(--success) 6%, transparent), 0 0 1px 0 color-mix(in oklab, var(--success) 6%, transparent);
+  --alert-shadow-warning: 0 2px 4px 0 color-mix(in oklab, var(--warning) 4%, transparent), 0 1px 2px 0 color-mix(in oklab, var(--warning) 6%, transparent), 0 0 1px 0 color-mix(in oklab, var(--warning) 6%, transparent);
+  --alert-shadow-danger: 0 2px 4px 0 color-mix(in oklab, var(--danger) 4%, transparent), 0 1px 2px 0 color-mix(in oklab, var(--danger) 6%, transparent), 0 0 1px 0 color-mix(in oklab, var(--danger) 6%, transparent);
 }
 
 .dark,
 [data-theme="dark"] {
-  --alert-fill-default: rgb(24 24 27 / 50%);
-  --alert-fill-accent: rgb(0 23 49 / 50%);
-  --alert-fill-success: rgb(5 40 20 / 50%);
-  --alert-fill-warning: rgb(49 33 7 / 50%);
-  --alert-fill-danger: rgb(49 4 19 / 50%);
+  --alert-shadow-default: 0 0 0 0 transparent inset;
+  --alert-shadow-accent: 0 0 0 0 transparent inset;
+  --alert-shadow-success: 0 0 0 0 transparent inset;
+  --alert-shadow-warning: 0 0 0 0 transparent inset;
+  --alert-shadow-danger: 0 0 0 0 transparent inset;
 }
 
 .alert-fill-default {
-  background-color: var(--alert-fill-default);
+  background-color: var(--tint-default-bg);
+  --surface-shadow: var(--alert-shadow-default);
 }
 
 .alert-fill-accent {
-  background-color: var(--alert-fill-accent);
+  background-color: var(--accent-soft);
+  --surface-shadow: var(--alert-shadow-accent);
 }
 
 .alert-fill-success {
-  background-color: var(--alert-fill-success);
+  background-color: var(--success-soft);
+  --surface-shadow: var(--alert-shadow-success);
 }
 
 .alert-fill-warning {
-  background-color: var(--alert-fill-warning);
+  background-color: var(--warning-soft);
+  --surface-shadow: var(--alert-shadow-warning);
 }
 
 .alert-fill-danger {
-  background-color: var(--alert-fill-danger);
-}
-
-/* A selected button of a toggle group takes a solid accent fill and a label colour of its own. The
-   only group left is the appearance setting in the settings dialog; the two-state view controls are
-   `.icon-toggle`s, which carry their state in the icon instead. HeroUI's soft accent tint
-   (15% of the accent) is a step from the unselected `--default` fill of 1.03:1 in light and 1.07:1
-   to 1.35:1 in dark, so the selected choice was told apart by its label's colour alone. Solid, it is
-   3.67:1 (light) and 4.58:1 (dark) from an unselected button's fill, 4.66:1 and 6.63:1 from a
-   dialog's surface and 4.47:1 and 6.17:1 from the panel. Light keeps HeroUI's own white label on the
-   app's accent (4.54:1, 6.04:1 on the darker hover); dark takes the glyph blue (`--accent-glyph`),
-   the accent that reads against a dark surface, under the dark foreground label (6.63:1, 7.60:1 on
-   the lighter hover). Unlayered, so it wins over `.toggle-button`'s own tokens in
-   `@layer components`.
-
-   Kept shortfall against "not by colour alone": the selected button differs from the others by
-   fill colour only, with no glyph or shape of its own. In the group which button is selected is
-   also carried by its position and, for assistive technology, by `aria-pressed`, and the fill
-   difference meets WCAG 1.4.11's 3:1 for a state. */
-.toggle-button-group .toggle-button {
-  --toggle-button-bg-selected: var(--app-accent);
-  --toggle-button-bg-selected-hover: color-mix(in oklab, var(--app-accent) 84%, black);
-  --toggle-button-bg-selected-pressed: color-mix(in oklab, var(--app-accent) 84%, black);
-  --toggle-button-fg-selected: var(--accent-foreground);
-}
-
-.dark .toggle-button-group .toggle-button,
-[data-theme="dark"] .toggle-button-group .toggle-button {
-  --toggle-button-bg-selected: var(--accent-glyph);
-  --toggle-button-bg-selected-hover: color-mix(in oklab, var(--accent-glyph) 84%, white);
-  --toggle-button-bg-selected-pressed: color-mix(in oklab, var(--accent-glyph) 84%, white);
-  --toggle-button-fg-selected: var(--eclipse);
+  background-color: var(--danger-soft);
+  --surface-shadow: var(--alert-shadow-danger);
 }
 
 /* A two-state view control (`IconToggle`) tells its states apart by the icon alone, so its selected
@@ -717,76 +687,56 @@ html {
   --toggle-button-fg-selected: var(--toggle-button-fg);
 }
 
-/* The colour of an untracked file's chip (`StatusChip.tsx`), after the IDEs' "unversioned files": a
-   muted coral, hue 38 against danger's 27 (light) and 24 (dark) and warning's 72 (light) and 76
-   (dark), and a little over half of danger's chroma, so it reads as neither a deletion nor a
-   conflict. The chip is HeroUI's
-   soft shape, a 15% fill of the colour under a label that is a darker (light) or paler (dark) step
-   of it. Label on the fill as drawn (15% fill composited in sRGB over the surface, then WCAG
-   contrast), on `--panel`, `--panel-sidebar`, a selected row on each, a hovered row on each (sidebar
-   first, then panel) and a dialog's `--overlay`: light 5.86 / 5.55 / 5.08 / 4.83 / 5.13 / 5.43 /
-   6.12, dark 10.24 / 9.44 / 8.30 / 7.65 / 8.27 / 9.10 / 11.09. */
+/* The one colour configuration of a tag: a `StatusBadge` and an `InlineChip` both draw their fill (`--tint-{colour}-bg`)
+   and text (`--tint-{colour}-fg`) from it, and the badge's hairline (`--tint-{colour}-edge`) is the badge's alone.
+   The neutral tint is `--app-muted` at 16% with the foreground at 80% as text; the four HeroUI colours take its soft
+   fill and its soft foreground pulled toward the foreground where it misses 4.5:1 on a surface a tag sits on (the
+   measured minima are in `StatusBadge`'s comment); the help one is the app's purple. */
 :root {
-  --untracked: oklch(0.55 0.12 38);
-  --untracked-foreground: oklch(0.46 0.1 38);
+  --tint-default-bg: color-mix(in oklab, var(--app-muted) 16%, transparent);
+  --tint-default-fg: color-mix(in oklab, var(--foreground) 80%, transparent);
+  --tint-default-edge: color-mix(in oklab, var(--app-muted) 28%, transparent);
+  --tint-accent-bg: var(--accent-soft);
+  --tint-accent-fg: color-mix(in oklab, var(--accent-soft-foreground) 85%, var(--foreground));
+  --tint-accent-edge: color-mix(in oklab, var(--accent) 35%, transparent);
+  --tint-success-bg: var(--success-soft);
+  --tint-success-fg: color-mix(in oklab, var(--success-soft-foreground) 80%, var(--foreground));
+  --tint-success-edge: color-mix(in oklab, var(--success) 35%, transparent);
+  --tint-warning-bg: var(--warning-soft);
+  --tint-warning-fg: color-mix(in oklab, var(--warning-soft-foreground) 85%, var(--foreground));
+  --tint-warning-edge: color-mix(in oklab, var(--warning) 35%, transparent);
+  --tint-danger-bg: var(--danger-soft);
+  --tint-danger-fg: color-mix(in oklab, var(--danger-soft-foreground) 85%, var(--foreground));
+  --tint-danger-edge: color-mix(in oklab, var(--danger) 35%, transparent);
+  --tint-help-bg: color-mix(in oklab, var(--help) 15%, transparent);
+  --tint-help-fg: color-mix(in oklab, var(--help) 40%, var(--foreground));
+  --tint-help-edge: color-mix(in oklab, var(--help) 35%, transparent);
 }
 
 .dark,
 [data-theme="dark"] {
-  --untracked: oklch(0.66 0.11 38);
-  --untracked-foreground: oklch(0.92 0.05 38);
+  --tint-success-fg: var(--success-soft-foreground);
+  --tint-warning-fg: var(--warning-soft-foreground);
+  --tint-danger-fg: color-mix(in oklab, var(--danger-soft-foreground) 75%, var(--foreground));
 }
 
-/* Unlayered, so it wins over HeroUI's `.chip--default.chip--soft`, which sits in `@layer components`,
-   whatever the specificity. */
-.chip.chip-untracked {
-  --chip-bg: color-mix(in oklab, var(--untracked) 15%, transparent);
-  --chip-fg: var(--untracked-foreground);
-}
-
-/* The colours of the status glyphs (`statusGlyphs.tsx`: a waiting session's hand, a working one's
-   dot; the rail's waiting count), which carry meaning and so need 3:1 on every surface they sit on:
-   the panel, the sidebar, a selected row, the chrome, and on the chrome's real material with its
-   hover and pressed tints (light #e2e4e5 and its darker variant #d0d2d3, dark #484a4b). HeroUI's
-   light `--warning` is a fill colour (1.65:1 on `--chrome`, 2.04:1 on white), so light takes a
-   deeper amber for the glyph: 4.87:1 on a selected sidebar row, its floor among the content
-   surfaces, 4.94:1 on the light material, 4.33:1 hovered and 3.78:1 pressed, and 4.15 / 3.65 / 3.19
-   on the darker variant; `--warning` itself stays the fill of the banner and the badges, under its
-   dark label. Dark keeps HeroUI's own (5.03:1 on the dark material, 4.00:1 hovered, 3.29:1
-   pressed). The accent glyph is `--app-accent` in light (3.62 on a selected sidebar row) and a lighter
-   blue in dark, where `--app-accent` is 2.56:1 on a selected sidebar row (this one 4.48 there, its
-   floor). The filled ring that marks the selected session's branches in a branch selector's popover
-   (`BranchOriginBadge.tsx`) takes it as well: 4.66:1 on `--overlay` and 3.91:1 on a hovered row
-   (`--default`) in light, 6.63 and 5.58 in dark. Idle's speech bubble and the hollow ring of a
-   session running in the background keep HeroUI's `--success`, below 3:1 (see `StatusIcon.tsx`'s
-   idle case). The import result's "created" glyph (`ImportResult.tsx`) is an icon on a dialog's
-   `--overlay` and so cannot do that: light takes a deeper green (4.54:1 on white, `--success` being 2.19:1), dark keeps `--success` (8.08:1 on
-   `--overlay`). Its failed glyph is `--app-danger` (4.83:1 light, 5.63:1 dark), and the skipped one
-   `--app-muted`. */
-:root {
-  --warning-glyph: oklch(0.5 0.15 55);
-  --accent-glyph: var(--app-accent);
-  --success-glyph: oklch(0.55 0.15 150);
-  --line-added: color-mix(in oklab, var(--success-glyph) 80%, var(--foreground));
-  --line-removed: color-mix(in oklab, var(--app-danger) 80%, var(--foreground));
-}
-
-.dark,
-[data-theme="dark"] {
-  --warning-glyph: var(--warning);
-  --accent-glyph: oklch(0.7 0.15 254);
-  --success-glyph: var(--success);
-  --line-added: color-mix(in oklab, var(--success-glyph) 80%, var(--foreground));
-  --line-removed: color-mix(in oklab, var(--app-danger) 80%, var(--foreground));
-}
-
-/* The `+N` and `-M` of a change row (`LineCounts` in `browser/changeRow.tsx`) are small text on
-   the row's resting, hovered and selected fills, so they need 4.5:1 there, which the glyph greens
-   and `--app-danger` alone miss (the green 3.72:1 and the red 3.96:1 on a selected light row).
-   Mixing 20% of the foreground into each clears it in both appearances: at least 5.02:1 in light
-   and 5.42:1 in dark, on the panel under the row's three fills. The `+` and `-` signs carry the
-   meaning beside the colour. The tokens are set in both blocks above because `color-mix` resolves
-   its `var()`s where it is declared. */
+/* Icons and glyphs that carry a meaning (a status glyph, a failure mark, a lock, a Git badge, the import
+   result's marks, the selected branch's ring and the selected card's border) are drawn in HeroUI's
+   `--{colour}-soft-foreground`, the colour it gives an Alert's and a Toast's indicator, through its own
+   `text-`, `border-` and `bg-{colour}-soft-foreground` utilities: this file defines nothing for them. They
+   need 3:1 on every surface they sit on. At the worst of the content surfaces (field, dialog, popover,
+   tooltip, the control fills with their hovers, the sidebar resting, hovered and selected, the panel with
+   its hover and selected fills, `--background`, `--chrome`) they are, in light, 4.36:1 accent, 3.93:1
+   success, 4.10:1 warning and 4.83:1 danger, all on a hovered control fill; in dark 4.38:1, 6.17:1, 7.17:1
+   and 3.85:1, on the dark tooltip's control fill. The title bar's status glyph and the rail's waiting hand
+   sit on the window material (light #e2e4e5, dark #484a4b), resting, hovered and pressed: accent 4.77 /
+   4.17 / 3.62 light and 3.61 resting in dark (a dot that is not a button), success 4.30 / 3.76 / 3.27
+   light and 5.08 / 4.06 / 3.34 dark, warning 4.48 / 3.92 / 3.40 light and 5.90 / 4.72 / 3.88 dark. A
+   destructive menu item's icon is `text-danger`, HeroUI's colour for that item's label. The focus ring
+   (`--focus`, which is `--accent`) and the accent fills are HeroUI's too, and are in light 3.68:1 on a
+   dialog, 3.53:1 on the panel, 3.01:1 on a selected panel row and 2.82:1 on a selected sidebar row,
+   2.90:1 on a control fill and 2.64:1 on a hovered one, in dark 4.81:1, 4.48:1, 3.58:1, 3.27:1, 3.32:1
+   and 2.94:1; the user accepted the shortfalls for one accent colour. */
 
 /* A console's default avatar (`ConsoleAvatar.tsx`): the network glyph in
    `--avatar-foreground` on one of these, picked from the name. Muted fills on hues spread around
@@ -821,22 +771,12 @@ html {
 }
 
 @theme inline {
-  --color-app-accent: var(--app-accent);
-  --color-app-danger: var(--app-danger);
   --color-app-muted: var(--app-muted);
-  --color-app-focus: var(--app-focus);
-  --color-app-accent-soft: var(--app-accent-soft);
-  --color-app-danger-soft: var(--app-danger-soft);
   --color-chrome-muted: var(--chrome-muted);
   --color-panel: var(--panel);
   --color-panel-sidebar: var(--panel-sidebar);
   --color-panel-hover: var(--panel-hover);
   --color-panel-selected: var(--panel-selected);
-  --color-warning-glyph: var(--warning-glyph);
-  --color-accent-glyph: var(--accent-glyph);
-  --color-success-glyph: var(--success-glyph);
-  --color-line-added: var(--line-added);
-  --color-line-removed: var(--line-removed);
   --color-avatar-foreground: var(--avatar-foreground);
 }
 
@@ -1252,60 +1192,104 @@ html.pane-resizing * {
 }
 
 /* Application literals only: Markdown, highlighted source and foreign code keep their renderer's
-   own palette. Colored literals add a stronger tint over their alert's matching soft fill. */
-.app-code[data-color="primary"] { --app-code-tone: var(--app-accent); }
-.app-code[data-color="secondary"] { --app-code-tone: var(--color-purple-500); }
-.app-code[data-color="success"] { --app-code-tone: var(--success); }
-.app-code[data-color="warning"] { --app-code-tone: var(--warning); }
-.app-code[data-color="danger"] { --app-code-tone: var(--app-danger); }
+   own palette. A coloured literal is drawn from the shared tints (`--tint-{colour}-bg` and `-fg`, the
+   chip's), which are translucent, so inside an alert of the same colour the literal's fill stacks on the
+   alert's soft fill and reads as a stronger tint of it. */
+.app-code[data-color="accent"] { --app-code-bg: var(--tint-accent-bg); --app-code-fg: var(--tint-accent-fg); }
+.app-code[data-color="help"] { --app-code-bg: var(--tint-help-bg); --app-code-fg: var(--tint-help-fg); }
+.app-code[data-color="success"] { --app-code-bg: var(--tint-success-bg); --app-code-fg: var(--tint-success-fg); }
+.app-code[data-color="warning"] { --app-code-bg: var(--tint-warning-bg); --app-code-fg: var(--tint-warning-fg); }
+.app-code[data-color="danger"] { --app-code-bg: var(--tint-danger-bg); --app-code-fg: var(--tint-danger-fg); }
 .app-code[data-color]:not([data-color="default"]) {
-  background-color: color-mix(in oklab, var(--app-code-tone) 14%, transparent);
-  color: color-mix(in oklab, var(--app-code-tone) 40%, var(--foreground));
+  background-color: var(--app-code-bg);
+  color: var(--app-code-fg);
 }
 /* An inline literal is as large as the text it stands in, a field's 12px error included; HeroUI's
    own code style fixes it at 14px. Unlayered, so it wins over HeroUI's components layer. */
 .app-code {
   font-size: inherit;
 }
-/* The remaining sizes use HeroUI's own chip metrics. */
-.inline-chip--xs {
-  line-height: 16px;
-}
-.inline-chip--inherit {
+/* A chip is text in its line: it takes the font of the text around it, whatever HeroUI's size preset says, and the
+   sizes differ only in the padding drawn around the text. The block padding paints without moving the line. The
+   inline padding sits on the label and is not cloned onto each wrapped fragment: a cloned end padding can paint
+   past the line it broke on. */
+.inline-chip {
+  --inline-chip-block: 0;
+  --inline-chip-inline: 4px;
   display: inline;
+  padding-block: var(--inline-chip-block);
+  padding-inline: 0;
+  /* Not the `font` shorthand, which would also reset the italic a caller may ask for. */
+  font-family: inherit;
   font-size: inherit;
+  font-weight: inherit;
   line-height: inherit;
   vertical-align: baseline;
 }
+.inline-chip[data-size="sm"] {
+  --inline-chip-block: 1px;
+  --inline-chip-inline: 6px;
+}
+.inline-chip[data-size="md"] {
+  --inline-chip-block: 2px;
+  --inline-chip-inline: 8px;
+}
+.inline-chip[data-size="lg"] {
+  --inline-chip-block: 3px;
+  --inline-chip-inline: 10px;
+}
+.inline-chip > .chip__label {
+  padding-inline: var(--inline-chip-inline);
+}
 .inline-chip--wrap {
-  display: inline;
   white-space: normal;
   overflow-wrap: anywhere;
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
 }
-/* Inner padding participates in line fitting; cloned outer padding can paint beyond a wrapped line. */
-.inline-chip--inherit.inline-chip--wrap {
-  padding-inline: 0;
-}
-.inline-chip--inherit.inline-chip--wrap > .chip__label {
-  padding-inline: 0.375rem;
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
-}
-.inline-chip.inline-chip--unbroken {
+/* An inline-block is as tall as its line box, so one that moves to the next line whole would touch the chip on the
+   line below; at 1.2 it is as tall as an inline chip. An unbroken chip stays inside the leading as long as its size
+   fits the line. */
+.inline-chip--unbroken {
   display: inline-block;
   max-width: 100%;
+  line-height: 1.2;
 }
 .inline-chip__code {
   font: inherit;
   font-family: var(--font-mono);
 }
-.inline-chip--secondary {
-  --chip-bg: color-mix(in oklab, var(--color-purple-500) 15%, transparent);
-  --chip-fg: color-mix(in oklab, var(--color-purple-500) 40%, var(--foreground));
-}
+/* A chip is drawn from the shared tints (`--tint-*` above, also the badge's): its fill and text are `--tint-{colour}-bg` and
+   `--tint-{colour}-fg` for the colour it carries, an alert's included, and it never takes the hairline. HeroUI's soft
+   default is half of `--default` over the surface, 1.09:1 on a light card and 1.08:1 on a dark one, which does not
+   read as a tag. Only the colours are set here: the shape is HeroUI's and the size follows the text (above). */
+.inline-chip.chip--soft[data-color="default"] { --chip-bg: var(--tint-default-bg); --chip-fg: var(--tint-default-fg); }
+.inline-chip.chip--soft[data-color="accent"] { --chip-bg: var(--tint-accent-bg); --chip-fg: var(--tint-accent-fg); }
+.inline-chip.chip--soft[data-color="help"] { --chip-bg: var(--tint-help-bg); --chip-fg: var(--tint-help-fg); }
+.inline-chip.chip--soft[data-color="success"] { --chip-bg: var(--tint-success-bg); --chip-fg: var(--tint-success-fg); }
+.inline-chip.chip--soft[data-color="warning"] { --chip-bg: var(--tint-warning-bg); --chip-fg: var(--tint-warning-fg); }
+.inline-chip.chip--soft[data-color="danger"] { --chip-bg: var(--tint-danger-bg); --chip-fg: var(--tint-danger-fg); }
 .app-code-block > .app-code {
   white-space: inherit;
   overflow-wrap: inherit;
+}
+
+/* A warning Alert's buttons: HeroUI has `danger` and `danger-soft` button variants and no warning
+   ones, so the same two treatments are made here from the warning tokens (see `AlertButton`).
+   Unlayered, so they win over `.button--secondary`'s tokens in `@layer components`. */
+.alert-button--warning {
+  --button-bg: var(--warning);
+  --button-bg-hover: var(--warning-hover);
+  --button-bg-pressed: var(--warning-hover);
+  --button-fg: var(--warning-foreground);
+}
+
+/* The label is `--tint-warning-fg`, not `--warning-soft-foreground`: `--warning-soft` drawn over the Alert's own
+   `--warning-soft` fill over the surfaces an Alert sits on (background, surface, overlay, panel, sidebar and
+   control fill) leaves the soft foreground at 3.94:1 on the control fill, 4.37:1 on the sidebar and 4.43:1 on
+   the background in light (hover down to 3.84:1), where the tint text is 4.77:1 at the lowest (4.65:1 on hover);
+   in dark both are at least 4.62:1 (the tint text equals the soft foreground there). */
+.alert-button--warning-soft {
+  --button-bg: var(--warning-soft);
+  --button-bg-hover: var(--warning-soft-hover);
+  --button-bg-pressed: var(--warning-soft-hover);
+  --button-fg: var(--tint-warning-fg);
 }

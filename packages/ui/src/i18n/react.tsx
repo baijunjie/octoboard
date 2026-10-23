@@ -43,7 +43,7 @@ export function Message<K extends MessageKey>({
 
 function richGlobalParam(name: string, language: Language): React.ReactNode {
   const value = globalParam(name, language);
-  return value === undefined ? undefined : <InlineChip dir="auto" wrap size="inherit">{value}</InlineChip>;
+  return value === undefined ? undefined : <InlineChip dir="auto" wrap>{value}</InlineChip>;
 }
 
 function fill(value: React.ReactNode, name: string, language: Language): React.ReactNode {

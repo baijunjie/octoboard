@@ -53,7 +53,8 @@ it("keeps the special explanation for an unmerged file", () => {
 it.each<Language>(["en", "zh-Hans"])("retains permission diagnostics and the product name treatment in %s", (language) => {
   setLanguage(language);
   const permission = render(new DaemonRequestError("fallback", "permission_denied", { path: "src/gone.ts", detail: "Access denied" }));
-  expect(permission.textContent).toContain("Access denied");
+  // The system's text is the failure's Details, not part of the summary line.
+  expect(permission.textContent).not.toContain("Access denied");
   expect(permission.textContent).not.toContain("src/gone.ts");
   expect(permission.querySelector("[dir=auto]")?.textContent).toBe(globalParam("appName"));
 });
@@ -72,7 +73,7 @@ it("retains paths that name another file or an unavailable parent folder", () =>
   expect(other.querySelector("code")?.textContent).toBe("src/other.ts");
   const parent = render(new DaemonRequestError("fallback", "source_unavailable", { path: "src", detail: "Permission denied" }));
   expect(parent.textContent).toContain("src");
-  expect(parent.textContent).toContain("Permission denied");
+  expect(parent.textContent).not.toContain("Permission denied");
 });
 
 it("leaves plain, unknown and incomplete failures intact", () => {
@@ -95,14 +96,31 @@ it("does not shorten shared errors outside the viewer", () => {
   expect(container.querySelector("code")?.textContent).toBe("src/gone.ts");
 });
 
+const NO_RECORDS = { consoles: new Map(), projects: new Map(), sessions: new Map() };
+
 it.each<Language>(["en", "zh-Hans"])("uses the same compact reasons in plain-text body failures in %s", (language) => {
   const t: Translate = (key, ...args) => format(language, key, args[0]);
-  expect(viewerErrorText(t, new DaemonRequestError("gone", "file_not_found", { path: "src/gone.ts" }), "src/gone.ts"))
+  const text = (error: ErrorPresentation) => viewerErrorText(t, language, error, "src/gone.ts", NO_RECORDS);
+  expect(text(new DaemonRequestError("gone", "file_not_found", { path: "src/gone.ts" })))
     .toBe(format(language, "viewer.error.fileNotFound"));
-  const denied = viewerErrorText(t, new DaemonRequestError("denied", "permission_denied", { path: "src/gone.ts", detail: "Access denied" }), "src/gone.ts");
-  expect(denied).toContain("Access denied");
-  expect(denied).not.toContain("src/gone.ts");
-  expect(viewerErrorText(t, new DaemonRequestError("other.ts was not found", "file_not_found", { path: "other.ts" }), "src/gone.ts"))
-    .toBe("other.ts was not found");
-  expect(viewerErrorText(t, "Read failed", "src/gone.ts")).toBe("Read failed");
+  const denied = text(new DaemonRequestError("denied", "permission_denied", { path: "src/gone.ts", detail: "Access denied" }));
+  // The system's own reason is raw text and stays out of the visible line.
+  expect(denied).toBe(format(language, "viewer.error.permissionDenied.summary"));
+  // Another file's failure is worded in the language, with its path.
+  expect(text(new DaemonRequestError("other.ts was not found", "file_not_found", { path: "other.ts" }))).toContain("other.ts");
+  expect(text("Read failed")).toBe("Read failed");
+});
+
+it.each<Language>(["en", "zh-Hans"])("words a failure of another path as its summary sentence, without the raw reason, in %s", (language) => {
+  const t: Translate = (key, ...args) => format(language, key, args[0]);
+  const text = (error: ErrorPresentation) => viewerErrorText(t, language, error, "src/gone.ts", NO_RECORDS);
+  const parent = text(new DaemonRequestError("raw", "source_unavailable", { path: "src", detail: "Permission denied" }));
+  expect(parent).toContain("src");
+  expect(parent).not.toContain("Permission denied");
+  expect(parent).not.toContain("{");
+  const other = text(new DaemonRequestError("raw", "permission_denied", { path: "other.ts", detail: "Access denied" }));
+  expect(other).toContain("other.ts");
+  expect(other).not.toContain("Access denied");
+  // With no reason to leave out, the full sentence stands.
+  expect(text(new DaemonRequestError("raw", "file_not_found", { path: "other.ts" }))).toContain("other.ts");
 });

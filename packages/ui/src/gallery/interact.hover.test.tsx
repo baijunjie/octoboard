@@ -310,13 +310,13 @@ function mountChanges(layout: "flat" | "tree"): void {
 }
 
 const changeRow = (name: string) => (label: string) => label.startsWith(name);
-const chipOf = (name: string): Element => document.querySelector(`[aria-label*="${name}"]`)!.querySelector("[data-slot=chip]")!;
+const letterOf = (name: string): Element => document.querySelector(`[aria-label*="${name}"]`)!.querySelector("[data-variant]")!;
 
 it.each(["flat", "tree"] as const)("hoverChangeStatus puts up the word of the status of the %s row's letter", async (layout) => {
   mountChanges(layout);
   await settledLive(createUi(document, "en").hoverChangeStatus(changeRow("gone.ts"), "deleted"));
   expect(openTooltip()?.textContent).toBe("Deleted");
-  release(chipOf("gone.ts"));
+  release(letterOf("gone.ts"));
 });
 
 it("hoverChangeStatus fails where the tooltip that opens is another status's", async () => {
@@ -324,7 +324,7 @@ it("hoverChangeStatus fails where the tooltip that opens is another status's", a
   const done = expect(createUi(document, "en").hoverChangeStatus(changeRow("kept.ts"), "deleted")).rejects.toThrow(/for deleted \(Deleted\): "Modified" is up/);
   await vi.advanceTimersByTimeAsync(3000);
   await done;
-  release(chipOf("kept.ts"));
+  release(letterOf("kept.ts"));
 });
 
 it("hoverChangeStatus fails for a row that is not there", async () => {
@@ -499,7 +499,7 @@ it.each(["flat", "tree"] as const)("pressChangeStatus dismisses the %s tooltip w
   const ui = createUi(document, "en");
   await settledLive(ui.hoverChangeStatus(changeRow("gone.ts"), "deleted"));
   const events: string[] = [];
-  const chip = chipOf("gone.ts");
+  const chip = letterOf("gone.ts");
   for (const event of ["pointerdown", "pointerup", "pointerleave", "click"]) chip.addEventListener(event, () => events.push(event));
   await settledLive(ui.pressChangeStatus(changeRow("gone.ts")));
   expect(events).toEqual(["pointerdown", "pointerup", "click"]);
@@ -544,10 +544,10 @@ function mountFilter(clipped: boolean): void {
   mountForTooltip(<ProjectFilterSummary filter={{ keyword: "site", tags: ["docs", "customer-facing"] }} />);
 }
 
-it("hoverFilterConditions puts up the chips of the clipped filter", async () => {
+it("hoverFilterConditions puts up the tokens of the clipped filter", async () => {
   mountFilter(true);
   await settledLive(createUi(document, "en").hoverFilterConditions());
-  expect(Array.from(openTooltip()!.querySelectorAll("[data-inline-chip]"), (chip) => chip.textContent)).toEqual(["site", "docs", "customer-facing"]);
+  expect(Array.from(openTooltip()!.querySelectorAll("[data-list-motion]"), (chip) => chip.textContent)).toEqual(["site", "docs", "customer-facing"]);
   release(document.querySelector("[role=group]")!.parentElement!);
 });
 

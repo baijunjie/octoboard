@@ -19,6 +19,6 @@ export function sessionLocationContent(
   }
   const owner = consoles.get(session.console_id);
   return owner
-    ? <Message id="session.location.consoleSession" params={{ console: <InlineChip size="inherit" dir="auto" wrap>{owner.name}</InlineChip> }} />
+    ? <Message id="session.location.consoleSession" params={{ console: <InlineChip dir="auto" wrap>{owner.name}</InlineChip> }} />
     : <>{t("session.location.ownConsoleSession")}</>;
 }

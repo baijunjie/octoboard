@@ -85,7 +85,7 @@ function SettingNote({
   current: boolean;
   turnsOn: SettingMessage;
 }): React.ReactElement {
-  const setting = <InlineChip dir="auto" wrap size="inherit">{label}</InlineChip>;
+  const setting = <InlineChip dir="auto" wrap>{label}</InlineChip>;
   const id: SettingMessage =
     wanted === current
       ? wanted ? "configuration.import.settings.alreadyOn" : "configuration.import.settings.alreadyOff"
@@ -97,9 +97,9 @@ function SettingNote({
 function FallbackNote({ fallback }: { fallback: AccountFallback }): React.ReactElement {
   return (
     <p className="flex items-start gap-2 text-sm">
-      <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning-glyph" />
+      <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning-soft-foreground" />
       <span className="min-w-0">
-        <Message id="configuration.import.fallback" params={{ agent: <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[fallback.agent]}</InlineChip>, name: <InlineChip dir="auto" wrap size="inherit">{fallback.name}</InlineChip> }} />
+        <Message id="configuration.import.fallback" params={{ agent: <InlineChip dir="auto" wrap>{AGENT_LABEL[fallback.agent]}</InlineChip>, name: <InlineChip dir="auto" wrap>{fallback.name}</InlineChip> }} />
       </span>
     </p>
   );
@@ -150,7 +150,7 @@ function ProjectRow({
                 ? "configuration.import.project.exportedPathUsed"
                 : "configuration.import.project.exportedPath"
             }
-            params={{ path: <InlineChip monospace wrap size="inherit">{project.path}</InlineChip> }}
+            params={{ path: <InlineChip monospace wrap>{project.path}</InlineChip> }}
           />
         </span>
         {/* A project found at its exported path and placed there is already said by the path's own line. */}
@@ -163,7 +163,7 @@ function ProjectRow({
       {row.choice === "directory" ? (
         <TextInput
           label={t("configuration.import.directory.label", { project: isolate(project.name) })}
-          labelContent={<Message id="configuration.import.directory.label" params={{ project: <InlineChip dir="auto" wrap size="inherit">{project.name}</InlineChip> }} />}
+          labelContent={<Message id="configuration.import.directory.label" params={{ project: <InlineChip dir="auto" wrap>{project.name}</InlineChip> }} />}
           value={row.directory}
           onChange={(directory) => onChange({ ...row, directory })}
           dir="ltr"
@@ -179,12 +179,12 @@ function ProjectRow({
         <p>
           <Message
             id="configuration.import.target.clone"
-            params={{ url: <InlineChip monospace wrap size="inherit">{project.remote_url ?? ""}</InlineChip>, path: <InlineChip monospace wrap size="inherit">{target ?? ""}</InlineChip> }}
+            params={{ url: <InlineChip monospace wrap>{project.remote_url ?? ""}</InlineChip>, path: <InlineChip monospace wrap>{target ?? ""}</InlineChip> }}
           />
         </p>
       ) : inPlace ? null : (
         <p>
-          <Message id="configuration.import.target.place" params={{ path: <InlineChip monospace wrap size="inherit">{target ?? ""}</InlineChip> }} />
+          <Message id="configuration.import.target.place" params={{ path: <InlineChip monospace wrap>{target ?? ""}</InlineChip> }} />
         </p>
       )}
       {project.account_fallbacks.map((fallback) => (
@@ -318,7 +318,7 @@ export function ImportReview({
     <>
       <StatusAnnouncer text={announcement} />
       <p className="text-sm">
-        <Message id="configuration.import.review.intro" params={{ file: <InlineChip monospace wrap size="inherit">{fileName}</InlineChip>, skip: <InlineChip dir="auto" wrap size="inherit">{t("configuration.import.choice.skip")}</InlineChip> }} />
+        <Message id="configuration.import.review.intro" params={{ file: <InlineChip monospace wrap>{fileName}</InlineChip>, skip: <InlineChip dir="auto" wrap>{t("configuration.import.choice.skip")}</InlineChip> }} />
       </p>
       <LabelledGroup label={t("configuration.import.all.label")}>
         <div className="flex flex-wrap gap-2">
@@ -358,7 +358,7 @@ export function ImportReview({
       ))}
       {cloning && (
         <p className="flex items-start gap-2 text-sm">
-          <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-glyph" />
+          <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-soft-foreground" />
           <span className="min-w-0">{t("configuration.import.review.cloneNote")}</span>
         </p>
       )}

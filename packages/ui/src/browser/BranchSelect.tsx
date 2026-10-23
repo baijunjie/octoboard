@@ -43,7 +43,7 @@ export function BranchSelect({
   const t = useT();
   const branchFade = useScrollFade({ className: "max-h-80 overflow-y-auto px-0" });
   const name = value === undefined ? undefined : displayWirePath(value);
-  const title = name === undefined ? undefined : gone ? <Message id="git.branch.gone" params={{ branch: <InlineChip monospace wrap size="inherit">{name}</InlineChip> }} /> : name;
+  const title = name === undefined ? undefined : gone ? <Message id="git.branch.gone" params={{ branch: <InlineChip monospace wrap>{name}</InlineChip> }} /> : name;
   return (
     // The subgrid restates the column gap: HeroUI's `.select` sets a gap of its own, which would
     // otherwise replace the parent grid's for this row's gutter. The secondary variant draws from

@@ -35,7 +35,7 @@ const FOUND_SESSION_MESSAGE = {
  * a session the store does not have, or one whose project or console it does not have, which the
  * caller words generally instead. The names are isolated.
  */
-export function useHeldElsewhere(): (sessionId: string | undefined) => DaemonRequestError | undefined {
+function useHeldElsewhere(): (sessionId: string | undefined) => DaemonRequestError | undefined {
   const t = useT();
   const sessions = useDaemonStore((s) => s.sessions);
   const projects = useDaemonStore((s) => s.projects);

@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 
 import { useLatest } from "../components/useLatest";
+import type { Appearance } from "../cssColour";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import type { Session } from "../protocol";
@@ -12,6 +13,19 @@ import { nextQuotaTick } from "./statusItemQuota";
 
 /** The longest a timer may wait: `setTimeout` runs a longer delay at once. */
 const MAX_TIMER_MS = 2 ** 31 - 1;
+
+const DARK_QUERY = "(prefers-color-scheme: dark)";
+
+function subscribeSystemAppearance(notify: () => void): () => void {
+  const query = window.matchMedia?.(DARK_QUERY);
+  query?.addEventListener("change", notify);
+  return () => query?.removeEventListener("change", notify);
+}
+
+/** The appearance the app sets, which the native menu follows: the app's `NSAppearance` is set from the
+ * user's theme (`tauriNativeWindow().setTheme`), which is also what the page's `prefers-color-scheme`
+ * reports, and with the theme following the OS it is the system's. */
+const systemAppearance = (): Appearance => (window.matchMedia?.(DARK_QUERY).matches ? "dark" : "light");
 
 interface UseStatusItemMenuOptions {
   /** Pass `hosts !== undefined`, as for `useWaitingNotifications`: nothing is sent before the first
@@ -36,12 +50,16 @@ interface UseStatusItemMenuOptions {
  * It follows the store through a subscription of its own rather than through props, so the menu is
  * rebuilt on each change of the consoles, projects, sessions, accounts, added agents, the sidebar's
  * ordering setting, availability or quotas without rendering anything.
+ *
+ * The pictures beside the lines are drawn in the appearance the app sets (`prefers-color-scheme`, which the native
+ * menu follows), so the menu is pushed again when the appearance changes.
  */
 export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, onSessionChosen }: UseStatusItemMenuOptions): void {
   const { statusItem } = usePlatform();
   const { store, request } = useDaemon();
   const t = useT();
   const language = useCurrentLanguage();
+  const appearance = useSyncExternalStore(subscribeSystemAppearance, systemAppearance);
   // Status flips are frequent and most change nothing the menu shows.
   const lastSentRef = useRef<string | undefined>(undefined);
   const pendingRef = useRef<Promise<void>>(Promise.resolve());
@@ -68,13 +86,14 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
       clearTimeout(tickTimer);
       const tick = nextQuotaTick(accountQuotas, now);
       if (tick !== undefined) tickTimer = setTimeout(push, Math.min(MAX_TIMER_MS, Math.max(0, tick - now)));
-      const serialized = JSON.stringify(draft);
+      // The appearance is part of what is sent, though not of the draft: the pictures are drawn in it.
+      const serialized = `${appearance}|${JSON.stringify(draft)}`;
       if (serialized === lastSentRef.current) return;
       lastSentRef.current = serialized;
       // Chained so two pushes cannot settle out of order and leave the older menu up. The pictures are
-      // drawn once per key, so a menu that differs only in its text costs nothing more.
+      // drawn once per key and appearance, so a menu that differs only in its text costs nothing more.
       pendingRef.current = pendingRef.current.then(() =>
-        withIcons(draft)
+        withIcons(draft, appearance)
           .then((menu) => statusItem.setMenu(menu))
           .catch(() => {}),
       );
@@ -99,7 +118,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
       clearTimeout(tickTimer);
       unsubscribe();
     };
-  }, [statusItem, ready, selectedSessionId, currentConsoleId, t, language, store]);
+  }, [statusItem, ready, selectedSessionId, currentConsoleId, t, language, appearance, store]);
 
   // Read at call time: the subscription is made once.
   const chooseRef = useLatest(onSessionChosen);

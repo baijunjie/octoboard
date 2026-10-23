@@ -22,8 +22,8 @@ export function TextInput({
   onChange,
   placeholder,
   description,
+  describedBy,
   errorMessage,
-  errorDetails,
   trailing,
   endAdornment,
   autoFocus,
@@ -38,8 +38,10 @@ export function TextInput({
   onChange: (value: string) => void;
   placeholder?: string;
   description?: React.ReactNode;
+  /** The id of something outside the field that describes it, such as the Alert under it holding the
+   * failure of a lookup the field makes; read after the field's own description and error. */
+  describedBy?: string;
   errorMessage?: React.ReactNode;
-  errorDetails?: React.ReactNode;
   trailing?: React.ReactNode;
   endAdornment?: React.ReactNode;
   autoFocus?: boolean;
@@ -63,6 +65,7 @@ export function TextInput({
     <TextField
       fullWidth
       aria-label={labelContent ? label : undefined}
+      aria-describedby={describedBy}
       variant="secondary"
       {...field}
       autoFocus={autoFocus}
@@ -100,7 +103,6 @@ export function TextInput({
           </span>
         </CodeToneContext.Provider>
       </FieldError>
-      {invalid && errorDetails}
     </TextField>
   );
 }

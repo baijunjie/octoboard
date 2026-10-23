@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import type { AccountQuota, Agent, AgentAvailability, Session, SessionBranchItem, Settings } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
@@ -19,7 +20,7 @@ const branch = (name: string): SessionBranchItem => ({
   kind: "branch", repository: "/r", branch: name, path: null, uncommitted: false, project: project.id, session: "s-1", state: "removable", detail: null,
 });
 
-function mount(session: Session, others: Session[] = [], branches: SessionBranchItem[] | "fail" = [], availability: Partial<Record<Agent, AgentAvailability["availability"]>> = {}, added: Agent[] | null = null, accountQuotas: AccountQuota[] = [], settings: Partial<Settings> = {}) {
+function mount(session: Session, others: Session[] = [], branches: SessionBranchItem[] | "fail" | "failTwice" = [], availability: Partial<Record<Agent, AgentAvailability["availability"]>> = {}, added: Agent[] | null = null, accountQuotas: AccountQuota[] = [], settings: Partial<Settings> = {}) {
   const sessions = new Map([session, ...others].map((s) => [s.id, s]));
   const initial: Partial<State> = {
     consoles: new Map([[parentConsole.id, parentConsole]]),
@@ -32,7 +33,10 @@ function mount(session: Session, others: Session[] = [], branches: SessionBranch
     accountQuotas,
     agentAvailability: new Map((Object.entries(availability) as [Agent, AgentAvailability["availability"]][]).map(([agent, state]) => [agent, { agent, availability: state } as AgentAvailability])),
   });
+  let inspections = 0;
   const request = vi.fn(async (body: { type: string }) => {
+    if (body.type === "inspect_session_branches" && branches === "failTwice" && ++inspections <= 2) throw new Error("git failed");
+    if (body.type === "inspect_session_branches" && branches === "failTwice") return { type: "session_branches_inspected", items: [] };
     if (body.type === "inspect_session_branches" && branches === "fail") throw new Error("git failed");
     if (body.type === "inspect_session_branches") return { type: "session_branches_inspected", items: branches };
     if (body.type === "hand_off_session") return { type: "session_opened", session: sessionOf("s-new", parentConsole.id, session.project_id ?? undefined, session.title, "working", { agent: "codex" }) };
@@ -53,6 +57,7 @@ function mount(session: Session, others: Session[] = [], branches: SessionBranch
 
 const buttons = () => Array.from(document.body.querySelectorAll("button"));
 const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+const elapse = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 
 it("says what moves for a project session, then hands off to another agent and selects the receiving session", async () => {
   const owned = sessionOf("s-bound", parentConsole.id, project.id, "Bound", "archived", { bound_to: "s-1" });
@@ -103,12 +108,56 @@ it("asks for no branches of a console session and says when nothing moves", asyn
 });
 
 it("says the branches could not be checked rather than that nothing moves", async () => {
-  mount(sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle"), [], "fail");
-  await settle();
-  const text = document.body.textContent ?? "";
-  expect(text).toContain("Could not check which branches it is responsible for.");
+  vi.useFakeTimers();
+  onTestFinished(() => void vi.useRealTimers());
+  const { request } = mount(sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle"), [], "fail");
+  await elapse(0);
+  const text = (document.body.textContent ?? "").replace(/[\u2066-\u2069]/g, "");
+  expect(text).toContain("Could not check which branches it is responsible for: Something unexpected went wrong.");
   expect(text).not.toContain("it is responsible for no branches");
+  // The failed check is an Alert under the list it feeds, not a line of the list.
+  expect(document.body.querySelector('[data-slot="alert-root"]')?.textContent?.replace(/[\u2066-\u2069]/g, "")).toContain("Could not check which branches it is responsible for: Something unexpected went wrong.");
+  // It arrived after the dialog opened, so its description, which has no title, announces itself once the
+  // dialog's opening focus move is past; Try again is inside it and asks again.
+  expect(document.body.querySelector('[role="alert"]')).toBeNull();
+  await elapse(AFTER_FOCUS_MOVE_DELAY_MS);
+  const announcement = document.body.querySelector('[role="alert"]')!;
+  expect(announcement.textContent).toContain("Something unexpected went wrong.");
+  const retry = [...document.body.querySelectorAll('[data-slot="alert-root"] button')].find((button) => button.textContent === "Try again") as HTMLButtonElement;
+  const asked = () => request.mock.calls.filter(([body]) => body.type === "inspect_session_branches").length;
+  expect(asked()).toBe(1);
+  act(() => retry.focus());
+  await act(async () => retry.click());
+  expect(asked()).toBe(2);
+  // The failure stays while the retry is out and the button is the same one, so focus is not dropped to the page.
+  expect(document.activeElement).toBe(retry);
+  await elapse(0);
+  expect(retry.isConnected).toBe(true);
+  expect(document.activeElement).toBe(retry);
+  expect(document.body.querySelector('[role="dialog"]')?.contains(document.activeElement)).toBe(true);
+  // The retry failed with the same words, which are announced again by a fresh alert.
+  expect(document.body.querySelector('[role="alert"]')).not.toBe(announcement);
+  expect(document.body.querySelector('[role="alert"]')?.textContent).toContain("Something unexpected went wrong.");
+  expect(document.body.querySelector("li")?.textContent ?? "").not.toContain("Could not check");
   expect(document.body.querySelector("h3")?.textContent).toBe("Moves to the new session");
+});
+
+it("keeps focus inside the dialog when a retry of the check succeeds and takes the Alert away", async () => {
+  mount(sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle"), [], "failTwice");
+  await settle();
+  const retryButton = () => [...document.body.querySelectorAll('[data-slot="alert-root"] button')].find((button) => button.textContent === "Try again") as HTMLButtonElement;
+  const dialog = document.body.querySelector('[role="dialog"]')!;
+  act(() => retryButton().focus());
+  await act(async () => retryButton().click());
+  await settle();
+  // The retry failed again: the Alert and its button stay, with focus on the button.
+  expect(document.activeElement).toBe(retryButton());
+  await act(async () => retryButton().click());
+  await settle();
+  // The retry succeeded: the Alert, and the button holding focus, are gone, and focus did not fall to the page.
+  expect(document.body.querySelector('[data-slot="alert-root"]')).toBeNull();
+  expect(document.activeElement).not.toBe(document.body);
+  expect(dialog.contains(document.activeElement)).toBe(true);
 });
 
 it("closes and reports a plain alert, with no action, when no other agent can be picked", async () => {

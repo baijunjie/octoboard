@@ -38,3 +38,13 @@ it("shows a value set from outside as it is, surrounding whitespace included", (
   expect(container.querySelector("input")!.value).toBe("My Folder ");
   act(() => root.unmount());
 });
+
+it("names what describes the field outside it, after the field's own description", () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  act(() => root.render(<><TextInput label="Name" value="" onChange={() => {}} description="A note" describedBy="outside" /><div id="outside">Lookup failed</div></>));
+  const described = container.querySelector("input")!.getAttribute("aria-describedby")!.split(" ");
+  expect(described.at(-1)).toBe("outside");
+  expect(described).toHaveLength(2);
+  act(() => root.unmount());
+});

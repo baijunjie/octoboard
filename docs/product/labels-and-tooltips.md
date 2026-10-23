@@ -277,7 +277,7 @@ heading and count, the model line on a focus mode card and on a full archive row
 label and a diff's collapsed-line label follow the same fade and marquee rules.
 
 Except for the report timestamp, clipped text then has its full text as its tooltip — for the project filter's strip,
-its conditions drawn as the same tags the strip shows (see "Filtering the project list" in `docs/product/sidebar.md`),
+its conditions as the strip shows them, wrapped (see "Filtering the project list" in `docs/product/sidebar.md`),
 and for the archive view's heading, the longer title that also names the project, console session or console the
 archive is for — shown while the pointer is on the label and not on keyboard focus; the label's whole text is in the
 document whether or not it is cut, so assistive technology is given it either way. The diff separator's tooltip

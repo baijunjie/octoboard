@@ -10,6 +10,7 @@ import { DaemonRequestError } from "../daemon-client";
 import { errorAlerts } from "../errorAlerts";
 import { ErrorAlerts } from "../dialogs/ErrorAlerts";
 import { trackMountRefocus } from "../dialogs/dialogTestSupport";
+import { detailsButton, openDetails } from "../components/detailsTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { windowAttention } from "../components/windowTestSupport";
 import { SettingsDialog } from "./SettingsDialog";
@@ -348,12 +349,9 @@ it.each([["Claude Code", [".claude.json", "plans/"]], ["Grok Build", ["trusted_f
     });
     const chips = [...document.querySelectorAll('[role="tooltip"] .inline-chip')].filter((chip) => chip.querySelector("code"));
     expect(chips.map((chip) => chip.textContent)).toEqual(names);
-    // Unbroken, so a line never ends on an empty start of it; tight, so the inline-block is no taller than an inline chip
-    // and stacked chips keep the line gap.
-    for (const chip of chips) {
-      expect(chip.classList).toContain("inline-chip--unbroken");
-      expect(chip.classList).toContain("leading-[1.2]!");
-    }
+    // Unbroken, so a line never ends on an empty start of it; the chip's own stylesheet tightens the inline-block
+    // so stacked chips keep the line gap.
+    for (const chip of chips) expect(chip.classList).toContain("inline-chip--unbroken");
   },
 );
 
@@ -400,6 +398,10 @@ describe("a switch that cannot be changed now", () => {
   });
 });
 
+/** The description under a warning's announced sentence: the one main thing to do, never behind Details. */
+const remedy = (container: HTMLElement) => [...container.querySelectorAll('[data-slot="alert-root"] [data-slot="alert-description"]')].at(-1)!;
+const disclosure = (container: HTMLElement) => detailsButton(container);
+
 describe("idle sessions around a change", () => {
   it.each([
     [1, "Changing sharing ends this account’s 1 idle session and resumes it afterwards."],
@@ -412,13 +414,13 @@ describe("idle sessions around a change", () => {
     expect(captionOf(container, sharing!)).toBe(`Turning this on links the account’s configuration and conversation history to the default account’s directory.${text}`);
   });
 
-  it("says the idle sessions are restarted by a retry too, next to the guidance of the unfinished warning", () => {
+  it("says the idle sessions are restarted by a retry too, at the top of the unfinished warning's Details", () => {
     settings.accounts[1]!.share_default_config = true;
     settings.accounts[1]!.share_default_config_incomplete = true;
     accountSharing.set("codex-work", { account: "codex-work", idle_sessions: 2 });
     const { container } = mount("Codex");
-    expect(container.textContent).toContain("Turn the switch on again to try once more.");
-    expect(container.textContent).toContain("Changing sharing ends this account’s 2 idle sessions and resumes them afterwards.");
+    expect(remedy(container).textContent).toBe("Turn the switch on again to try once more.");
+    expect(openDetails(container).textContent).toBe("Changing sharing ends this account’s 2 idle sessions and resumes them afterwards.");
   });
 
   it("says nothing of idle sessions when there are none, and puts working sessions first when both exist", () => {
@@ -508,7 +510,6 @@ describe("a change that runs", () => {
     expect(container.textContent).toContain("Now: skills");
     const chip = container.querySelector('[id$="-current"] .inline-chip')!;
     expect(chip.classList).toContain("inline-chip--unbroken");
-    expect(chip.classList).toContain("leading-[1.2]!");
     expect(container.textContent).not.toContain("Turning this on links");
     expect(captionOf(container, sharing!)).toBe("Turning sharing on 3 of 12 Now: skills");
   });
@@ -593,26 +594,31 @@ describe("a change that did not finish", () => {
   const alert = (container: HTMLElement) => container.querySelector('[data-slot="alert-root"]');
   /** What a screen reader is told when the warning appears: its title and reason, none of what follows them. */
   const announced = (container: HTMLElement) => alert(container)!.querySelector('[data-slot="alert-content"] > div')!;
-  const disclosure = (container: HTMLElement) => buttonNamed(container, "Details");
-  const pressDisclosure = (container: HTMLElement) => act(() => disclosure(container)!.click());
+  /** Closes the open Details popover the way a keyboard user does. */
+  const closeDetails = (dialog: HTMLElement) => act(() => void dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
 
-  it("shows one warning with what failed and why, the way to try again and Details inside it, and the switch where it was before", () => {
+  it("shows one compact warning with what failed and why and a Details button, and the switch where it was before", () => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure() });
     const { container } = mount("Codex");
     const warning = alert(container)!;
-    expect(warning.textContent).toContain("Could not finish turning sharing on.You do not have permission to change skills/. Check that the files and folders involved can be changed and are not locked.Turn the switch on again to try once more.Details");
+    // One cause: its own line and its fix are the two sentences.
+    expect(warning.textContent).toBe("Could not finish turning sharing on.You do not have permission to change skills/.Check that the files and folders involved can be changed and are not locked.Details");
     expect(warning.className).toContain("alert-fill-warning");
     expect(warning.querySelector('[data-slot="alert-description"]')!.querySelector("div,p,ul,li,pre,button")).toBeNull();
-    expect(announced(container).textContent).toBe("Could not finish turning sharing on.You do not have permission to change skills/. Check that the files and folders involved can be changed and are not locked.");
+    expect(announced(container).textContent).toBe("Could not finish turning sharing on.You do not have permission to change skills/.");
     expect(announced(container).contains(disclosure(container)!)).toBe(false);
     expect(warning.contains(disclosure(container)!)).toBe(true);
-    expect(warning.querySelector('[data-slot="alert-content"] > p')?.textContent).toBe("Turn the switch on again to try once more.");
     expect(warning.nextElementSibling).toBeNull();
+    // The cause's fix is the one remedy in the description; the switch is the retry, so there is no
+    // button for it, and the way to try again is in Details, with the raw entries.
+    expect(announced(container).textContent).not.toContain("Turn the switch on again");
+    expect(openDetails(container).textContent).toBe("Turn the switch on again to try once more.skills/ was left unchanged. permission denied");
     expect(buttonNamed(container, "Try again")).toBeUndefined();
     const [sharing] = sharingSwitches(container);
     expect(sharing!.checked).toBe(false);
-    expect(captionOf(container, sharing!)).toBe("Could not finish turning sharing on. You do not have permission to change skills/. Check that the files and folders involved can be changed and are not locked. Turn the switch on again to try once more.");
+    // The switch is described by the title, the description and the visible remedy.
+    expect(captionOf(container, sharing!)).toBe("Could not finish turning sharing on. You do not have permission to change skills/. Check that the files and folders involved can be changed and are not locked.");
     expect(container.textContent).not.toContain("Turning this on links");
   });
 
@@ -629,7 +635,7 @@ describe("a change that did not finish", () => {
     accountSharing.set("codex-work", { account: "codex-work", failure: failure({ share: false }) });
     const { container } = mount("Codex");
     expect(alert(container)!.textContent).toContain("Could not finish turning sharing off.");
-    expect(alert(container)!.textContent).toContain("Turn the switch off again to try once more.");
+    expect(openDetails(container).textContent).toContain("Turn the switch off again to try once more.");
     expect(sharingSwitches(container)[0]!.checked).toBe(true);
     await act(async () => sharingSwitches(container)[0]!.click());
     expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_account_sharing", account: "codex-work", share: false });
@@ -645,7 +651,10 @@ describe("a change that did not finish", () => {
       { item: "hooks/", left: "unchanged", detail: "e" },
     ] }) });
     const { container } = mount("Codex");
-    const lines = [...alert(container)!.querySelectorAll('[data-slot="alert-description"] span.flex > span')].map((line) => line.textContent);
+    // Several causes: that some could not be changed and the way to try again; each cause is in Details.
+    expect(announced(container).textContent).toBe("Could not finish turning sharing on.Some files or folders could not be changed.");
+    expect(remedy(container).textContent).toBe("Turn the switch on again to try once more.");
+    const lines = [...openDetails(container).querySelectorAll("span.flex.flex-col > span")].map((line) => line.textContent);
     expect(lines).toEqual([
       "You do not have permission to change skills/ and 2 more. Check that the files and folders involved can be changed and are not locked.",
       "settings.json is in use. Close other programs using the files involved, such as an agent in a terminal, an editor or a sync tool.",
@@ -653,73 +662,101 @@ describe("a change that did not finish", () => {
     ]);
   });
 
+  const retry = "Turn the switch on again to try once more.";
   it.each([
-    ["permission_denied", "You do not have permission to change skills/. Check that the files and folders involved can be changed and are not locked."],
-    ["busy", "skills/ is in use. Close other programs using the files involved, such as an agent in a terminal, an editor or a sync tool."],
-    ["no_space", "There is not enough disk space to change skills/. Free up disk space."],
-    ["conflict", "skills/ conflicts with what is already there. Move or rename the conflicting items."],
-    ["not_found", "skills/ could not be found."],
-    ["other", "Could not change skills/. See Details."],
-  ] as const)("says what to do about a %s cause on the line that names it", (cause, line) => {
+    ["permission_denied", "You do not have permission to change skills/.", "Check that the files and folders involved can be changed and are not locked."],
+    ["busy", "skills/ is in use.", "Close other programs using the files involved, such as an agent in a terminal, an editor or a sync tool."],
+    ["no_space", "There is not enough disk space to change skills/.", "Free up disk space."],
+    ["conflict", "skills/ conflicts with what is already there.", "Move or rename the conflicting items."],
+    ["not_found", "skills/ could not be found.", retry],
+    ["other", "Could not change skills/.", "See Details."],
+  ] as const)("says a single %s cause as the two visible sentences, its own line and its fix", (cause, line, fix) => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure({ cause, items: [{ item: "skills/", left: "unchanged", detail: "x", cause }] }) });
     const { container } = mount("Codex");
-    expect([...alert(container)!.querySelectorAll('[data-slot="alert-description"] span.flex > span')].map((l) => l.textContent)).toEqual([line]);
+    expect(announced(container).textContent).toBe(`Could not finish turning sharing on.${line}`);
+    expect(remedy(container).textContent).toBe(fix);
+    // The line is not repeated in Details, and the way to try again is there where the fix took its place.
+    const dialog = openDetails(container);
+    expect(dialog.querySelector("span.flex.flex-col")).toBeNull();
+    expect(dialog.textContent?.includes(retry)).toBe(fix !== retry);
   });
 
   it.each([
-    ["permission_denied", "You do not have permission to change the account’s directory. Check that the files and folders involved can be changed and are not locked."],
-    ["busy", "Something in the account’s directory is in use. Close other programs using the files involved, such as an agent in a terminal, an editor or a sync tool."],
-    ["no_space", "There is not enough disk space. Free up disk space."],
-    ["conflict", "The account’s directory conflicts with what sharing needs. Move or rename the conflicting items."],
-    ["not_found", "A directory needed for sharing could not be found."],
-    ["other", "See Details."],
-  ] as const)("says what to do about a %s cause when the change failed as a whole", (cause, text) => {
+    ["permission_denied", "You do not have permission to change the account’s directory.", "Check that the files and folders involved can be changed and are not locked."],
+    ["busy", "Something in the account’s directory is in use.", "Close other programs using the files involved, such as an agent in a terminal, an editor or a sync tool."],
+    ["no_space", "There is not enough disk space.", "Free up disk space."],
+    ["conflict", "The account’s directory conflicts with what sharing needs.", "Move or rename the conflicting items."],
+    ["not_found", "A directory needed for sharing could not be found.", retry],
+  ] as const)("says a %s cause of a change that failed as a whole as its own line and its fix", (cause, line, fix) => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure({ items: [], cause }) });
     const { container } = mount("Codex");
-    expect(alert(container)!.querySelector('[data-slot="alert-description"]')!.textContent).toBe(text);
+    expect(announced(container).textContent).toBe(`Could not finish turning sharing on.${line}`);
+    expect(remedy(container).textContent).toBe(fix);
   });
 
-  it("gives no reason, and does not describe one, for a whole failure with no cause line and no raw reason", () => {
+  it("names the switch's description after the title, the sentence and the visible remedy", () => {
+    unfinished();
+    accountSharing.set("codex-work", { account: "codex-work", failure: failure({ items: [], cause: "no_space" }) });
+    const { container } = mount("Codex");
+    const sharing = sharingSwitches(container)[0]!;
+    expect(captionOf(container, sharing)).toBe("Could not finish turning sharing on. There is not enough disk space. Free up disk space.");
+    expect(sharing.getAttribute("aria-describedby")).toContain(remedy(container).querySelector("span")!.id);
+  });
+
+  it("has only the raw reason in Details for a whole failure whose cause has no line of its own", () => {
+    unfinished();
+    accountSharing.set("codex-work", { account: "codex-work", failure: failure({ items: [], cause: "other" }) });
+    const { container } = mount("Codex");
+    const dialog = openDetails(container);
+    expect(dialog.querySelector("span.block")).toBeNull();
+    expect(dialog.textContent).toBe("could not link skills");
+  });
+
+  it("gives no Details for a whole failure with no cause line and no raw reason, only its sentence and the guidance in the alert", () => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure({ items: [], cause: "other", detail: undefined }) });
     const { container } = mount("Codex");
-    expect(alert(container)!.querySelector('[data-slot="alert-description"]')).toBeNull();
-    expect(sharingSwitches(container)[0]!.getAttribute("aria-describedby")).not.toContain("-reason");
+    expect(alert(container)!.querySelector('[data-slot="alert-description"]')?.textContent).toBe("Some files or folders could not be changed.");
+    expect(remedy(container).textContent).toBe("Turn the switch on again to try once more.");
+    expect(disclosure(container)).toBeUndefined();
   });
 
-  it("keeps the raw diagnostics and what each entry was left as behind a Details disclosure inside the alert", () => {
+  it("keeps the raw diagnostics and what each entry was left as in the Details popover, outside the announcement", () => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure() });
     const { container } = mount("Codex");
     const button = disclosure(container)!;
-    const body = container.querySelector(`[id="${button.getAttribute("aria-controls")}"]`)!;
     expect(button.getAttribute("aria-expanded")).toBe("false");
-    expect(body.hasAttribute("hidden")).toBe(true);
-    expect(alert(container)!.contains(body)).toBe(true);
-    expect(announced(container).contains(body)).toBe(false);
-    pressDisclosure(container);
+    expect(alert(container)!.textContent).not.toContain("left unchanged");
+    const body = openDetails(container);
     expect(button.getAttribute("aria-expanded")).toBe("true");
-    expect(body.hasAttribute("hidden")).toBe(false);
+    expect(alert(container)!.contains(body)).toBe(false);
+    expect(announced(container).contains(body)).toBe(false);
     expect(body.textContent).toContain("skills/ was left unchanged.");
     expect(body.querySelector("li")?.lastElementChild?.textContent).toBe("permission denied");
     expect(body.querySelector("pre")).toBeNull();
+    // Nothing of it is a second Details to open inside the popover.
+    expect(body.querySelector("button")).toBeNull();
     expect(announced(container).textContent).not.toContain("left unchanged");
-    pressDisclosure(container);
+    closeDetails(body);
     expect(button.getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("gives the reason in Details when the change could not start and names its cause", () => {
+  it("gives the cause, then the raw reason, in Details when the change could not start", () => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure({ items: [], cause: "not_found", detail: "the directory is not readable" }) });
     const { container } = mount("Codex");
     expect(announced(container).textContent).toBe("Could not finish turning sharing on.A directory needed for sharing could not be found.");
-    pressDisclosure(container);
-    expect(alert(container)!.querySelector("code")?.textContent).toBe("the directory is not readable");
+    expect(remedy(container).textContent).toBe("Turn the switch on again to try once more.");
+    const dialog = openDetails(container);
+    expect(dialog.querySelector("span.block")).toBeNull();
+    expect(dialog.querySelector("p")).toBeNull();
+    expect(dialog.querySelector("code")?.textContent).toBe("the directory is not readable");
   });
 
-  it("shows the same warning without reason or Details after a restart, described by its title and guidance", () => {
+  it("shows the same warning without a reason after a restart, with the guidance under the title and no Details", () => {
     unfinished();
     const { container } = mount("Codex");
     const warning = alert(container)!;
@@ -727,11 +764,11 @@ describe("a change that did not finish", () => {
     expect(warning.textContent).toBe("The last attempt to turn sharing on did not finish.Turn the switch on again to try once more.");
     expect(announced(container).textContent).toBe("The last attempt to turn sharing on did not finish.");
     expect(warning.querySelector('[role="alert"]')).toBeNull();
-    expect(disclosure(container)).toBeUndefined();
     expect(buttonNamed(container, "Try again")).toBeUndefined();
     const [sharing] = sharingSwitches(container);
     expect(sharing!.checked).toBe(false);
     expect(captionOf(container, sharing!)).toBe("The last attempt to turn sharing on did not finish. Turn the switch on again to try once more.");
+    expect(disclosure(container)).toBeUndefined();
   });
 
   it("does not take a failure for an unfinished change when the daemon does not say it is incomplete", () => {
@@ -746,7 +783,8 @@ describe("a change that did not finish", () => {
     accountSharing.set("codex-work", { account: "codex-work", failure: failure({ cause: "default_moved", items: [] }) });
     const { container } = mount("Codex");
     expect(announced(container).textContent).toBe("Could not finish turning sharing on.The default account’s directory has moved since sharing was turned on.");
-    expect(alert(container)!.textContent).toContain("Turn the switch off, then on again.");
+    expect(remedy(container).textContent).toBe("Turn the switch off, then on again.");
+    expect(openDetails(container).textContent).toBe("could not link skills");
     expect(sharingSwitches(container)[0]!.checked).toBe(true);
     await act(async () => sharingSwitches(container)[0]!.click());
     expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_account_sharing", account: "codex-work", share: false });
@@ -767,7 +805,7 @@ describe("a change that did not finish", () => {
     render();
     const live = alert(container)!.querySelector('[role="alert"]');
     expect(live).toBe(announced(container));
-    expect(live!.textContent).toBe("Could not finish turning sharing on.You do not have permission to change skills/. Check that the files and folders involved can be changed and are not locked.");
+    expect(live!.textContent).toBe("Could not finish turning sharing on.You do not have permission to change skills/.");
   });
 
   it("shows the recorded position while the change runs again, and no warning", () => {
@@ -896,7 +934,7 @@ it("puts the help tip after the plan on the default account's name line when it 
   const tip = container.querySelector("[data-list-motion] button")!;
   const nameLine = tip.parentElement!;
   expect(nameLine.lastElementChild).toBe(tip);
-  expect(nameLine.textContent).toBe("DefaultPlusLogged in");
+  expect(nameLine.textContent).toBe("Default, Plus, Logged in");
   // When the reading was taken shares the directory's line instead.
   expect(nameLine.nextElementSibling?.textContent).toMatch(/^\/home\/dev\/\.claude.*Updated /);
   expect(tip.previousElementSibling?.textContent).toBe("Logged in");
@@ -907,21 +945,31 @@ it("badges an account known to be logged in, one not logged in yet, and none who
   accountQuotas.push(quotaOf("claude", null));
   accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }));
   const { container } = mount();
-  const badges = [...container.querySelectorAll("[data-inline-chip]")].map((chip) => chip.textContent);
+  const badges = [...container.querySelectorAll("span[data-variant]")].map((chip) => chip.textContent);
   expect(badges).toContain("Logged in");
   expect(badges).toContain("Not logged in");
   expect(container.textContent).not.toContain("Not logged in yet");
   accountQuotas.length = 0;
   accountQuotas.push(quotaOf("claude", null, { unavailable: { code: "quota_timed_out", params: {}, message: "x" } }));
   const failed = mount();
-  expect([...failed.container.querySelectorAll("[data-inline-chip]")].map((chip) => chip.textContent)).not.toContain("Logged in");
+  expect([...failed.container.querySelectorAll("span[data-variant]")].map((chip) => chip.textContent)).not.toContain("Logged in");
+});
+
+it("marks a failed reading on the account's name line instead of writing the failure into the row", () => {
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_timed_out", params: { agent: "Claude Code" }, message: "x" } }));
+  const { container } = mount();
+  const mark = container.querySelector<HTMLElement>('[data-list-motion] button[aria-label="Quota unavailable"]')!;
+  expect(mark).not.toBeNull();
+  expect(mark.parentElement?.textContent).not.toContain("took too long");
+  expect(container.textContent).not.toContain("took too long");
 });
 
 it("logs in a signed-out account from the button after its badge", async () => {
   availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
   accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }));
   const { container } = mount();
-  const badge = [...container.querySelectorAll("[data-inline-chip]")].find((chip) => chip.textContent === "Not logged in")!;
+  const badge = [...container.querySelectorAll("span[data-variant]")].find((chip) => chip.textContent === "Not logged in")!;
   const login = badge.nextElementSibling as HTMLButtonElement;
   expect(login.textContent).toBe("Log in");
   expect(login.dataset.size).toBe("xs");

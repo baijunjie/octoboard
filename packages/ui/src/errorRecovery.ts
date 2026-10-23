@@ -6,7 +6,7 @@ export type ErrorRecovery =
   | "unlock" | "stopSessions" | "wait" | "trust" | "conversation" | "session"
   | "configuration" | "image" | "clipboard" | "file" | "git" | "gitHistory" | "branch"
   | "refresh" | "scope" | "limit" | "openExternal" | "issueLink"
-  | "contentSyntax" | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
+  | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
   | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "quotaUsedUpAgent" | "grokSandbox"
   | "fileBusy" | "codexConfig" | "sqliteHome" | "symlink" | "notRestored"
   | "accountNotShareable" | "accountSharing" | "accountBusy" | "accountChanging" | "sharingStop"
@@ -135,4 +135,15 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
     if (relocation) return { kind: "actionable", recovery: relocation };
   }
   return { kind: "unexpected" };
+}
+
+/** The failures whose answer is the state of what was asked about — branches with no shared history,
+ * not a repository, outside the project, too large, not a valid path — so asking again gives the same
+ * answer and no Try again is offered. */
+const STATE_IS_THE_ANSWER = new Set(["gitHistory", "repository", "scope", "limit"].flatMap((recovery) => GROUPS[recovery as ErrorRecovery] ?? []).concat("invalid_path"));
+
+/** Whether asking again can change the answer to `error`: false for a failure that is the state of the
+ * thing asked about (see `STATE_IS_THE_ANSWER`), where a Try again would only fail the same way. */
+export function retryCanHelp(error: unknown): boolean {
+  return !(error instanceof DaemonRequestError && STATE_IS_THE_ANSWER.has(error.code));
 }

@@ -135,9 +135,9 @@ it("keeps the recorded title for a selected session that is gone", () => {
 it("marks the selected session's branches in the accent colour and in words", () => {
   open("s-live");
   const mark = (name: string) => ringOf(name).firstElementChild!;
-  expect(mark("worked-by-session").className).toContain("border-accent-glyph");
+  expect(mark("worked-by-session").className).toContain("border-accent-soft-foreground");
   // The fill is what tells it from the plain ring without the colour.
-  expect(mark("worked-by-session").className).toContain("bg-accent-glyph");
+  expect(mark("worked-by-session").className).toContain("bg-accent-soft-foreground");
   expect(mark("worked-by-archived").className).toContain("border-app-muted");
   expect(mark("worked-by-archived").className).not.toContain("bg-");
 });

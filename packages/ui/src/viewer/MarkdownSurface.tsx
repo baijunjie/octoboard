@@ -18,11 +18,6 @@ import { LoadingOverlay, Notice } from "./viewerStates";
 // The Markdown renderer, with its library, loads the first time a document is shown.
 const MarkdownDocument = lazy(() => import("./MarkdownDocument").then((module) => ({ default: module.MarkdownDocument })));
 
-/** Link colours measured at 4.5:1 or more on the code background of each appearance (the accent
- * colours of the same GitHub high-contrast palettes the code is drawn in). Links are underlined too,
- * so colour is not what marks them. */
-export const LINK_COLOURS = { light: "#0349b4", dark: "#71b7ff" } as const;
-
 /**
  * A Markdown file, as the rendered document or as its source by the user's choice
  * (`markdownView`), which the header's toggle changes. The document is the default. A file past the
@@ -88,7 +83,7 @@ function DocumentSurface({
   const region = useFadeRegion({ label: t("viewer.contents", { name: isolate(name) }), always: true });
   const fade = useScrollFade({
     region,
-    style: { backgroundColor: colours.background, color: colours.foreground, "--document-link": LINK_COLOURS[theme] } as React.CSSProperties,
+    style: { backgroundColor: colours.background, color: colours.foreground },
     className: "relative min-h-0 flex-1 overflow-auto rounded-xl p-4 text-sm leading-6",
   });
   // Stable across the caller's renders. A new callback would mount every link and diagram again,
@@ -113,9 +108,9 @@ function DocumentSurface({
     [theme],
   );
   const onOpenLink = useCallback((url: string) => links?.open(url), [links]);
-  const fallback = (error: unknown) => (
+  const fallback = () => (
     <>
-      <Notice tone="failed" speak={t("viewer.markdown.failed")} error={error} />
+      <Notice tone="failed" speak={t("viewer.markdown.failed")} />
       <CodeSurface resetKey={resetKey} name={name} text={text} theme={theme} />
     </>
   );

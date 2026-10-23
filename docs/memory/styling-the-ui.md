@@ -45,6 +45,17 @@ components under jsdom) never evaluate the CSS, so a class whose utility was nev
 passes lint and tests, builds clean and reads fine in a diff. After adding or changing a utility class, grep the
 built `packages/ui/dist/assets/*.css` for it.
 
+## A `className` cannot override a utility a project component sets itself; give the component a prop
+
+`packages/ui` merges no classes (there is no `tailwind-merge`). A component of the project's own that appends the
+caller's `className` to its own utilities emits both, and where both set the same property the one Tailwind emits later
+in its stylesheet wins, whatever their order in the class string: `px-0` passed to `StatusBadge`
+(`packages/ui/src/components/StatusBadge.tsx`), whose own class is `px-2`, loses with nothing to show it. The habit
+comes from HeroUI, where a `className` does win, only because `packages/ui/src/style.css` imports HeroUI's sheets into
+the `components` layer, which Tailwind's `utilities` layer outranks. So to change a property such a component sets
+itself, add a prop to it that picks the value (as `StatusBadge`'s `single` drops the side padding), rather than passing
+a `className`.
+
 ## A `docked:` utility loses to an `sm:` or an `rtl:` twin on the same property
 
 `docked` is this project's one custom breakpoint and its token is in `px`, while Tailwind's built-in breakpoints are

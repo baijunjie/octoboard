@@ -1,17 +1,9 @@
 import { Alert } from "@heroui/react";
 import React from "react";
 
-import { CodeToneContext, type CodeColor } from "./codeTone";
+import { CodeToneContext } from "./codeTone";
 
 type AlertStatus = "default" | "accent" | "success" | "warning" | "danger";
-
-const COLORS: Record<AlertStatus, CodeColor> = {
-  default: "default",
-  accent: "primary",
-  success: "success",
-  warning: "warning",
-  danger: "danger",
-};
 
 const FILLS: Record<AlertStatus, string> = {
   default: "alert-fill-default",
@@ -29,7 +21,7 @@ export function TintedAlert({
   ...props
 }: React.HTMLAttributes<HTMLDivElement> & { status?: AlertStatus }): React.ReactElement {
   return (
-    <CodeToneContext.Provider value={COLORS[status]}>
+    <CodeToneContext.Provider value={status}>
       <Alert {...props} status={status} className={`${FILLS[status]} ${className}`}>
         {children}
       </Alert>

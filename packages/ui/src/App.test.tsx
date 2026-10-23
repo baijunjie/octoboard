@@ -5,7 +5,6 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { App } from "./App";
 import { mountForTooltip } from "./components/tooltipTestSupport";
 import { consoleOf, snapshotState } from "./gallery/fixtures/builders";
-import { isolate } from "./i18n/isolate";
 import { PlatformProvider } from "./platform/react";
 import { createStateStore, DaemonProvider, type Daemon } from "./store";
 import { ThemeProvider } from "./theme";
@@ -55,7 +54,7 @@ it.each(["sidebar", "terminal"] as const)("opens console session settings from t
   )!;
   expect(trigger).toBeDefined();
   await act(async () => trigger.click());
-  expect(document.body.querySelector('[role="dialog"] h2')?.textContent).toBe(`Open console session in ${isolate("Main")}`);
+  expect(document.body.querySelector('[role="dialog"] h2')?.textContent).toBe("Open console session in Main");
   expect(vi.mocked(daemon.request).mock.calls.some(([body]) => body.type === "open_session")).toBe(false);
   await act(async () => Array.from(document.body.querySelectorAll("button")).find((button) => button.textContent === "Open")!.click());
   expect(daemon.request).toHaveBeenCalledWith({

@@ -333,7 +333,7 @@ export interface Ui {
  * chooses it: a check, pull or push in flight, a failed check, a detached `HEAD`, else a branch). */
 function gitGlyphOf(status: GitStatus): string {
   if (status.activity !== "idle") return "refresh-cw";
-  if (status.error) return "triangle-alert";
+  if (status.error) return "circle-alert";
   return status.detached ? "git-commit-horizontal" : "git-branch";
 }
 
@@ -780,14 +780,14 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       await wait(600);
     },
     async hoverChangeStatus(row, status) {
-      await hover(() => find(row)?.querySelector<HTMLElement>("[data-slot=chip]"), `No change row matching ${String(row)} with a status letter to hover`);
+      await hover(() => find(row)?.querySelector<HTMLElement>("[data-variant]"), `No change row matching ${String(row)} with a status letter to hover`);
       const shown = doc.querySelector("[data-anchored-tooltip]")?.textContent;
       if (shown !== t(STATUS_LABELS[status])) {
         throw new Error(`The row matching ${String(row)} did not open the tooltip for ${status} (${t(STATUS_LABELS[status])}): ${shown ? `"${shown}"` : "none"} is up`);
       }
     },
     async pressChangeStatus(row) {
-      const chip = await waitFor(() => find(row)?.querySelector<HTMLElement>("[data-slot=chip]") ?? undefined, `No change row matching ${String(row)} with a status letter to press`);
+      const chip = await waitFor(() => find(row)?.querySelector<HTMLElement>("[data-variant]") ?? undefined, `No change row matching ${String(row)} with a status letter to press`);
       chip.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse", button: 0 }));
       chip.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "mouse", button: 0 }));
       chip.click();

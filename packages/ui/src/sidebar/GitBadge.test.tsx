@@ -100,7 +100,7 @@ const ALL_STATES: Array<[string, Partial<GitStatus>, string, string]> = [
   ["detached", { branch: "a1b2c3d", detached: true }, "git-commit-horizontal", `Detached at ${isolate("a1b2c3d")}`],
   ["ahead", { ahead: 1 }, "git-branch", `Branch ${BRANCH}, 1 commit ahead`],
   ["behind", { behind: 4 }, "git-branch", `Branch ${BRANCH}, 4 commits behind`],
-  ["failed", { ahead: 3, behind: 2, error: "fetch failed" }, "triangle-alert", `Branch ${BRANCH}, 3 commits ahead, 2 commits behind, Git error: ${isolate("fetch failed")}`],
+  ["failed", { ahead: 3, behind: 2, error: "fetch failed" }, "circle-alert", `Branch ${BRANCH}, 3 commits ahead, 2 commits behind, Git error: ${isolate("fetch failed")}`],
 ];
 
 /** Puts the pointer on `element`, runs the delay out and reads which tooltip is up; then takes it
@@ -116,7 +116,7 @@ function hoverAndRead(element: Element): string | undefined {
   if (tooltip) {
     const branch = tooltip.querySelector("[data-inline-chip]");
     expect(branch?.getAttribute("dir")).toBe("ltr");
-    expect(branch?.getAttribute("data-size")).toBe("inherit");
+    expect(branch?.getAttribute("data-size")).toBe("xs");
     expect(branch?.querySelector("code")).not.toBeNull();
     if (text?.includes("Git error:")) expect(tooltip.querySelector("pre code")?.textContent).toBe("fetch failed");
   }

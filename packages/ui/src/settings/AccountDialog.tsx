@@ -3,9 +3,8 @@ import React, { useState } from "react";
 import { Button } from "../components/Button";
 import { AGENT_DEFAULT_CONFIG_DIR, AGENT_LABEL, defaultAccountName, listedAgents } from "../agents";
 import { agentIconSetupOptions } from "../components/AgentIcon";
-import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { TILDE_PARAMS } from "../components/literalParams";
-import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "../dialogs/Dialog";
+import { Dialog, useDialogAction, useSubmitValidation } from "../dialogs/Dialog";
 import { DirectoryPicker } from "../dialogs/DirectoryPicker";
 import { OptionSelect } from "../dialogs/OptionSelect";
 import { TextInput } from "../dialogs/TextInput";
@@ -50,7 +49,7 @@ export function AccountDialog({
   const [name, setName] = useState(editing?.name ?? (renameDefault ? defaultNames?.[initialAgent] ?? "" : ""));
   const [configDir, setConfigDir] = useState(editing?.config_dir ?? "");
   const [pickingDirectory, setPickingDirectory] = useState(false);
-  const { error, setError, busy, run } = useDialogAction();
+  const { busy, run } = useDialogAction();
   const { shown, attempt } = useSubmitValidation();
 
   const collision = name.trim() === "" && renameDefault
@@ -60,19 +59,12 @@ export function AccountDialog({
     ? t("dialog.nameRequired")
     : collision && t(COLLISION_MESSAGE[collision.kind], { name: isolate(collision.name), agent: AGENT_LABEL[agent] });
   const dirError = isAbsoluteConfigDir(configDir) ? undefined : "notAbsolute";
-  // Whether another account uses the directory is judged by the daemon, which alone knows the home
-  // directory and the default account's resolved one; its refusal is worded under the field it is
-  // about, and stands until the directory or agent is changed.
-  const dirTaken = error !== undefined && typeof error !== "string" && error.code === "config_dir_taken" ? error : undefined;
-
-  // Typing and picking both change the directory, and either one lifts the daemon's refusal of it.
-  const changeConfigDir = (value: string) => {
-    setConfigDir(value);
-    setError(undefined);
-  };
 
   const submit = () => {
     if (!attempt(nameError, renameDefault ? undefined : dirError)) return;
+    // Whether another account uses the directory is judged by the daemon, which alone knows the home
+    // directory and the default account's resolved one. Its refusal comes after the submit, so it is
+    // the error alert dialog's, like every other failure of the action.
     void run(async () => {
       if (renameDefault) {
         await request({ type: "set_default_account_name", agent, name });
@@ -90,9 +82,9 @@ export function AccountDialog({
       <Dialog
         title={
           renameDefault
-            ? <Message id="settings.accounts.dialog.renameDefault" params={{ agent: <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[agent]}</InlineChip> }} />
+            ? <Message id="settings.accounts.dialog.renameDefault" params={{ agent: <InlineChip dir="auto" wrap>{AGENT_LABEL[agent]}</InlineChip> }} />
             : editing
-              ? <Message id="settings.accounts.dialog.edit" params={{ agent: <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[editing.agent]}</InlineChip> }} />
+              ? <Message id="settings.accounts.dialog.edit" params={{ agent: <InlineChip dir="auto" wrap>{AGENT_LABEL[editing.agent]}</InlineChip> }} />
               : t("settings.accounts.add")
         }
         onClose={onClose}
@@ -107,10 +99,7 @@ export function AccountDialog({
             // its agent is installed, so every added agent is selectable; one not added is not listed.
             options={agentIconSetupOptions(t, agentAvailability, listedAgents(addedAgents))}
             value={agent}
-            onChange={(value) => {
-              setAgent(value);
-              setError(undefined);
-            }}
+            onChange={setAgent}
           />
         )}
         <TextInput
@@ -120,34 +109,31 @@ export function AccountDialog({
           placeholder={renameDefault ? t("settings.accounts.defaultName") : t("settings.accounts.nameExample")}
           description={renameDefault ? t("settings.accounts.defaultNameHint") : undefined}
           errorMessage={shown(nameError) && (collision
-            ? <Message id={COLLISION_MESSAGE[collision.kind]} params={{ name: <InlineChip dir="auto" wrap size="inherit">{collision.name}</InlineChip>, agent: <InlineChip dir="auto" wrap size="inherit">{AGENT_LABEL[agent]}</InlineChip> }} />
+            ? <Message id={COLLISION_MESSAGE[collision.kind]} params={{ name: <InlineChip dir="auto" wrap>{collision.name}</InlineChip>, agent: <InlineChip dir="auto" wrap>{AGENT_LABEL[agent]}</InlineChip> }} />
             : nameError)}
           autoFocus
         />
         {!renameDefault && <TextInput
           label={t("settings.accounts.configDir")}
           value={configDir}
-          onChange={changeConfigDir}
+          onChange={setConfigDir}
           dir="ltr"
           placeholder={AGENT_DEFAULT_CONFIG_DIR[agent]}
           description={<Message id={agent === "grok" ? "settings.accounts.dirHintGrok" : "settings.accounts.dirHint"} />}
-          errorMessage={dirTaken
-            ? <DaemonErrorMessage error={dirTaken} showTitle={false} />
-            : shown(dirError) && <Message id="settings.accounts.dirNotAbsolute" params={TILDE_PARAMS} />}
+          errorMessage={shown(dirError) && <Message id="settings.accounts.dirNotAbsolute" params={TILDE_PARAMS} />}
           trailing={
             <Button type="button" variant="secondary" onPress={() => setPickingDirectory(true)}>
               {t("common.browse")}
             </Button>
           }
         />}
-        <DialogError message={dirTaken ? undefined : error} />
       </Dialog>
       {pickingDirectory && (
         <DirectoryPicker
           title={t("dialog.chooseDirectory")}
           initialPath={isAbsoluteConfigDir(configDir) ? configDir : "~"}
           onPick={(picked) => {
-            changeConfigDir(picked);
+            setConfigDir(picked);
             setPickingDirectory(false);
           }}
           onClose={() => setPickingDirectory(false)}

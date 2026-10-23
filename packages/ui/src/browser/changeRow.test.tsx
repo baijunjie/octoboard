@@ -45,7 +45,7 @@ function render(layout: "flat" | "tree", entries: ChangeEntry[] = cases.map((c) 
   settle();
   return { container, settle };
 }
-const chipOf = (row: HTMLElement) => row.querySelector<HTMLElement>("[data-slot=chip]")!;
+const letterOf = (row: HTMLElement) => row.querySelector<HTMLElement>("[data-variant=soft]")!;
 const press = (element: HTMLElement, key: string) =>
   act(() => {
     element.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
@@ -56,7 +56,7 @@ it.each(["flat", "tree"] as const)("%s: names every status a change can have fro
   const { container, settle } = render(layout);
   expect(openTooltip()).toBeNull();
   for (const { letter, word, name } of cases) {
-    const chip = chipOf(rowOf(container, name));
+    const chip = letterOf(rowOf(container, name));
     expect(chip.textContent).toBe(letter);
     enter(chip);
     expect(openTooltip()).toBeNull();
@@ -100,7 +100,7 @@ it.each(["flat", "tree"] as const)("%s: opens nothing from the file name or from
 it.each(["flat", "tree"] as const)("%s: leaves the row's name as it was, and the chip out of the accessibility tree", (layout) => {
   const { container, settle } = render(layout);
   const row = rowOf(container, "modified.ts");
-  const chip = chipOf(row);
+  const chip = letterOf(row);
   const name = row.getAttribute("aria-label");
   expect(name).toBe(`${isolate("modified.ts")}, modified${layout === "flat" ? `, ${isolate("d")}` : ""}`);
   expect(chip.getAttribute("aria-hidden")).toBe("true");
@@ -137,7 +137,7 @@ it.each(["flat", "tree"] as const)("%s: adds no stop to a focused row's arrow ke
 
 it.each(["flat", "tree"] as const)("%s: goes when the list is scrolled, and is not opened again until the pointer has left and come back", (layout) => {
   const { container, settle } = render(layout);
-  const chip = chipOf(rowOf(container, "modified.ts"));
+  const chip = letterOf(rowOf(container, "modified.ts"));
   enter(chip);
   settle();
   expect(openTooltip()).not.toBeNull();
@@ -171,9 +171,9 @@ const countsOf = (row: HTMLElement) => {
 
 it.each(["flat", "tree"] as const)("%s: shows a file's added and removed lines at the end of its row, each in its own tone", (layout) => {
   const { container } = render(layout, counted);
-  expect(countsOf(rowOf(container, "both.ts"))).toEqual({ text: "+1,234-2", tones: ["text-line-added", "text-line-removed"] });
-  expect(countsOf(rowOf(container, "added.ts"))).toEqual({ text: "+5", tones: ["text-line-added"] });
-  expect(countsOf(rowOf(container, "removed.ts"))).toEqual({ text: "-7", tones: ["text-line-removed"] });
+  expect(countsOf(rowOf(container, "both.ts"))).toEqual({ text: "+1,234-2", tones: ["text-(--tint-success-fg)", "text-(--tint-danger-fg)"] });
+  expect(countsOf(rowOf(container, "added.ts"))).toEqual({ text: "+5", tones: ["text-(--tint-success-fg)"] });
+  expect(countsOf(rowOf(container, "removed.ts"))).toEqual({ text: "-7", tones: ["text-(--tint-danger-fg)"] });
 });
 
 it.each(["flat", "tree"] as const)("%s: shows nothing for a file the daemon did not count or that changed no line", (layout) => {

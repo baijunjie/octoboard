@@ -4,14 +4,11 @@
 // are all here so the four stay one family.
 import { Alert, Spinner } from "@heroui/react";
 import { Equal, FileQuestion, FolderGit2, Link, Unplug } from "lucide-react";
-import React from "react";
+import React, { createContext, useContext } from "react";
 
-import { CodeToneContext } from "../components/codeTone";
-import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
-import { ErrorAlert } from "../components/ErrorAlert";
-import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
-import type { ErrorRecovery } from "../errorRecovery";
+import { FailureAlert } from "../components/FailureAlert";
+import { PaneFailure } from "../components/PaneFailure";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/StatusAnnouncer";
 import { TintedAlert } from "../components/TintedAlert";
 import type { ErrorPresentation } from "../errorPresentation";
@@ -24,6 +21,15 @@ import { ViewerErrorMessage } from "./ViewerErrorMessage";
 /** How long the viewer's status regions wait before their first text: the dialog takes focus as it
  * opens. Moving to another file in an open viewer has no such focus move and is announced at once. */
 export const FIRST_ANNOUNCEMENT_DELAY_MS = AFTER_FOCUS_MOVE_DELAY_MS;
+
+/** Whether the viewer has painted: a `Failure` that appears once it has is announced, and one it
+ * opened with is not (`ErrorAlert`'s `announce`). Provided by the viewer's content. */
+export const ViewerPaintedContext = createContext(false);
+
+/** Whether the viewer has not yet shown any content but the wait for it: a `Failure` that arrives
+ * then comes with the dialog's focus move and waits `FIRST_ANNOUNCEMENT_DELAY_MS` like the status
+ * regions; one after moving to another file is announced at once. Provided by the viewer's content. */
+export const ViewerFirstContentContext = createContext(false);
 
 /**
  * What kind of thing a notice is saying, which is what tells them apart on screen.
@@ -65,29 +71,24 @@ const TONES: Record<NoticeTone, "default" | "warning" | "danger"> = {
  * so it is spoken as well as shown: pass it as `speak`, which is the sentence and, unless
  * `children` says otherwise, the visible text too — one string, so the two cannot drift apart. Pass
  * `announced` instead where the surface already has a region speaking that sentence. Either way the
- * block itself is hidden from assistive technology, so nothing is read twice. Failures use the
- * dedicated acknowledgement dialog instead of a status announcement. A notice that is
- * there from the first paint passes neither.
+ * block itself is hidden from assistive technology, so nothing is read twice. A failed notice is
+ * spoken the same way, as a status and not an alert: it is a rendering fallback, with the content
+ * still shown. A notice that is there from the first paint passes neither.
  */
 export function Notice({
   tone = "explained",
   appearance = "strip",
   speak,
-  error,
-  recovery,
   announced,
   children = speak,
 }: {
   tone?: NoticeTone;
   appearance?: "strip" | "document";
   speak?: string;
-  error?: unknown;
-  recovery?: ErrorRecovery;
   announced?: boolean;
   children?: React.ReactNode;
 }): React.ReactElement {
   const status = TONES[tone];
-  useErrorAcknowledgement(tone === "failed" ? speak ?? (typeof children === "string" ? children : undefined) : undefined, undefined, error, recovery);
   const direction = textDirection(useCurrentLanguage());
   const inDocument = appearance === "document";
   const hidden = speak !== undefined || announced === true;
@@ -105,7 +106,7 @@ export function Notice({
           </Alert.Content>
         </TintedAlert>
       </div>
-      {speak !== undefined && tone !== "failed" && <StatusAnnouncer text={speak} firstWriteDelayMs={FIRST_ANNOUNCEMENT_DELAY_MS} />}
+      {speak !== undefined && <StatusAnnouncer text={speak} firstWriteDelayMs={FIRST_ANNOUNCEMENT_DELAY_MS} />}
     </>
   );
 }
@@ -209,19 +210,16 @@ export function Disconnected({ what }: { what: "file" | "change" }): React.React
 
 /**
  * Why the subject cannot be shown at all: the heaviest of the four, and the only one that replaces
- * the content with an error rather than standing in for it. The shared alert keeps it consistent
- * with failures in the other panes and dialogs.
+ * the content with an error rather than standing in for it. With nothing else beside it, it takes
+ * the empty-state shape in the danger tone; `among` is for one that sits among other content (a
+ * file in conflict shows its notice above), which stays a compact Alert.
  */
-export function Failure({ message, title, path }: { message: ErrorPresentation; title: string; path: string }): React.ReactElement {
-  useErrorAcknowledgement(message, title);
-  return (
-    <CodeToneContext.Provider value="danger">
-      <div className="flex min-w-0 shrink-0 flex-col gap-3">
-        <ErrorAlert title={title}><ViewerErrorMessage error={message} path={path} /></ErrorAlert>
-        <DaemonErrorMessage error={message} part="details" />
-      </div>
-    </CodeToneContext.Provider>
-  );
+export function Failure({ message, title, path, among = false }: { message: ErrorPresentation; title: string; path: string; among?: boolean }): React.ReactElement {
+  const painted = useContext(ViewerPaintedContext);
+  const first = useContext(ViewerFirstContentContext);
+  const delay = first ? FIRST_ANNOUNCEMENT_DELAY_MS : undefined;
+  if (among) return <FailureAlert title={title} announce={painted} announceDelayMs={delay} message={message} summary={<ViewerErrorMessage error={message} path={path} />} />;
+  return <PaneFailure title={title} message={message} summary={<ViewerErrorMessage error={message} path={path} />} announce={painted} announceDelayMs={delay} />;
 }
 
 /** Visual only. The viewer's loading is spoken from its own status region, so this overlay, inserted

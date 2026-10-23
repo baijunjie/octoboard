@@ -168,15 +168,19 @@ export interface SectionGroup {
   items: ChangeItem[];
 }
 
-/** The listed changes split into their sections, in order, leaving out empty ones. */
-export function sections(items: readonly ChangeItem[]): SectionGroup[] {
+/** The listed changes split into their sections, in order, leaving out empty ones, except those in
+ * `kept`: a section whose failure is marked on its heading keeps the heading with no rows. */
+export function sections(items: readonly ChangeItem[], kept: Iterable<ChangeSection> = []): SectionGroup[] {
   const groups = new Map<ChangeSection, SectionGroup>();
   for (const item of items) {
     const group = groups.get(item.section);
     if (group) group.items.push(item);
     else groups.set(item.section, { section: item.section, items: [item] });
   }
-  const rank = (group: SectionGroup) => group.items[0].rank;
+  const emptied: ChangeSection[] = [];
+  for (const section of kept) if (!groups.has(section)) emptied.push(section);
+  const rank = (group: SectionGroup) => group.items[0]?.rank ?? SECTION_ORDER.indexOf(group.section);
+  for (const section of emptied) groups.set(section, { section, items: [] });
   return [...groups.values()].sort((a, b) => rank(a) - rank(b));
 }
 
@@ -256,8 +260,8 @@ function layoutNodes(scope: ChangeSection | CommitScope, items: readonly ChangeI
 /** The sections of the list, each with its changes and its rows in the layout's form. A section's
  * changes that are listed by commit (the committed one) are rows under their commits, newest first,
  * each holding its changes in the layout's form. */
-export function changeGroups(items: readonly ChangeItem[], layout: ChangeLayout): (SectionGroup & { nodes: ChangeNode[] })[] {
-  return sections(items).map((group) => {
+export function changeGroups(items: readonly ChangeItem[], layout: ChangeLayout, kept: Iterable<ChangeSection> = []): (SectionGroup & { nodes: ChangeNode[] })[] {
+  return sections(items, kept).map((group) => {
     if (!group.items.some((item) => item.commit)) return { ...group, nodes: layoutNodes(group.section, group.items, layout) };
     // The changes are in list order, so a commit's are together.
     const commits = new Map<string, { commit: CommitRef; items: ChangeItem[] }>();

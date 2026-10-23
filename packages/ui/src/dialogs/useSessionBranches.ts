@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 
 import { DaemonRequestError } from "../daemon-client";
+import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
+import { useT } from "../i18n/react";
 import type { SessionBranchItem, SessionBranchTarget } from "../protocol";
 import { useDaemon, type Daemon } from "../store";
 
@@ -107,19 +109,24 @@ export function useProjectRemovalBranches(projectId: string, asking: boolean): I
 }
 
 /** The branches `sessionId` is responsible for, as the daemon finds them now, asked once while
- * `enabled`. Unlike `useSessionBranches` it says when the daemon could not tell (`failed`), since a
- * handoff's summary must not read a failure as "none". */
-export function useResponsibleBranches(sessionId: string, enabled: boolean): { items: SessionBranchItem[]; pending: boolean; failed: boolean } {
+ * `enabled`. Unlike `useSessionBranches` it says when the daemon could not tell (`error`, what went
+ * wrong), since a handoff's summary must not read a failure as "none", and `retry` asks again. The
+ * last failure stays in `error` while a retry is out (`pending`), so what shows it, and the control
+ * that retried, are not taken away under focus; `attempt` numbers the answer it comes from, so a
+ * failure that repeats can be told from the one before. */
+export function useResponsibleBranches(sessionId: string, enabled: boolean): { items: SessionBranchItem[]; pending: boolean; error: ErrorPresentation | undefined; attempt: number; retry: () => void } {
+  const t = useT();
   const { request } = useDaemon();
-  const [answer, setAnswer] = useState<{ items: SessionBranchItem[]; failed: boolean }>();
+  const [attempt, setAttempt] = useState(0);
+  const [answer, setAnswer] = useState<{ attempt: number; items: SessionBranchItem[]; error?: ErrorPresentation }>();
   useEffect(() => {
     if (!enabled) return;
     let active = true;
     void request({ type: "inspect_session_branches", sessions: [sessionId] }).then(
-      (result) => active && setAnswer(result.type === "session_branches_inspected" ? { items: result.items, failed: false } : { items: [], failed: true }),
-      () => active && setAnswer({ items: [], failed: true }),
+      (result) => active && setAnswer(result.type === "session_branches_inspected" ? { attempt, items: result.items } : { attempt, items: [], error: errorPresentation(new Error(t("error.unexpectedReply"))) }),
+      (err: unknown) => active && setAnswer({ attempt, items: [], error: errorPresentation(err) }),
     );
     return () => { active = false; };
-  }, [sessionId, enabled, request]);
-  return { items: answer?.items ?? [], pending: enabled && !answer, failed: !!answer?.failed };
+  }, [sessionId, enabled, request, attempt]);
+  return { items: answer?.items ?? [], pending: enabled && answer?.attempt !== attempt, error: answer?.error, attempt: answer?.attempt ?? 0, retry: () => setAttempt((n) => n + 1) };
 }

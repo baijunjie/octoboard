@@ -1,13 +1,15 @@
-import { reportError } from "../reportError";
 import { Description, Dropdown, Label, Separator } from "@heroui/react";
-import { EllipsisVertical, LoaderCircle, RefreshCw, TriangleAlert, type LucideIcon } from "lucide-react";
+import { EllipsisVertical, LoaderCircle, type LucideIcon } from "lucide-react";
 import { MenuContext, useSlottedContext } from "react-aria-components";
+import { setInteractionModality } from "react-aria";
 import React, { useEffect, useId, useRef, useState } from "react";
 
 import { IS_MAC } from "../useWindowShortcut";
+import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
 import { isolate } from "../i18n/isolate";
+import { FailureAlert } from "./FailureAlert";
 import { ReasonText, reasonText, type Reason } from "./ReasonText";
-import { StatusAnnouncer } from "./StatusAnnouncer";
+import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "./StatusAnnouncer";
 import { useT } from "../i18n/react";
 import { FadeOverflow } from "./FadeOverflow";
 import { TitledControl } from "./TitledControl";
@@ -115,7 +117,7 @@ function ItemIcon({
 }): React.ReactElement {
   if (React.isValidElement(icon)) return icon;
   const Icon = icon;
-  return <Icon aria-hidden="true" className={`size-4 shrink-0 ${destructive ? "text-app-danger" : "text-app-muted"}${className ? ` ${className}` : ""}`} />;
+  return <Icon aria-hidden="true" className={`size-4 shrink-0 ${destructive ? "text-danger" : "text-app-muted"}${className ? ` ${className}` : ""}`} />;
 }
 
 function isLeaf(entry: ActionMenuEntry): entry is ActionMenuItem {
@@ -135,7 +137,7 @@ const TABBABLE = 'a[href], button:not([disabled]), input:not([disabled]), select
  * keys marks the elements on its start edge `data-panel-edge="start"`: the key towards the menu
  * leaves from one of those, where anywhere else it moves within the content. The values come from
  * `SubmenuTrigger` through `MenuContext`: what to check again when react-aria is upgraded. */
-function PanelBody({ entry }: { entry: ActionMenuPanel }): React.ReactElement {
+function PanelBody({ children }: { children: (context: ActionMenuPanelContext) => React.ReactNode }): React.ReactElement {
   const context = useSlottedContext(MenuContext);
   const { ref, id, "aria-labelledby": labelledBy, autoFocus, onClose } = context ?? {};
   // The two key handlers are passed along but not part of `MenuProps`.
@@ -158,7 +160,7 @@ function PanelBody({ entry }: { entry: ActionMenuPanel }): React.ReactElement {
       onKeyDown={onKeyDown}
       onKeyUp={onKeyUp}
     >
-      {entry.panel({ close: onClose ?? (() => {}), labelledBy, autoFocus: Boolean(autoFocus) })}
+      {children({ close: onClose ?? (() => {}), labelledBy, autoFocus: Boolean(autoFocus) })}
     </div>
   );
 }
@@ -253,7 +255,7 @@ function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElem
           </Dropdown.Item>
           {/* The submenu's menu is named after its trigger item, so its dialog goes without. */}
           <Dropdown.Popover aria-labelledby="" className="max-w-72">
-            {"panel" in entry ? <PanelBody entry={entry} /> : entry.loadItems ? <LoadedMenuItems load={entry.loadItems} /> : <MenuItems entries={entry.items} />}
+            {"panel" in entry ? <PanelBody>{entry.panel}</PanelBody> : entry.loadItems ? <LoadedMenuItems load={entry.loadItems} /> : <MenuItems entries={entry.items} />}
           </Dropdown.Popover>
         </Dropdown.SubmenuTrigger>,
       );
@@ -268,30 +270,66 @@ function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElem
   );
 }
 
+/** A submenu whose items are loaded as it opens. A failed load is an Alert holding the application's
+ * sentence for the failure, the system's own text behind Details, and Try again, which announces itself since it arrives after the menu opened, so the status region
+ * speaks the loading only. It comes with the focus move to Try again (or with the menu's own opening
+ * when the load is quick), so its announcement waits that out. Focus that was inside the menu goes
+ * with the change: to Try again when the load fails, and to the menu again when the retry has
+ * started, rather than falling to the page. */
 function LoadedMenuItems({ load }: { load: () => Promise<ActionMenuEntry[]> }): React.ReactElement {
   const t = useT();
   const [entries, setEntries] = useState<ActionMenuEntry[]>();
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState<ErrorPresentation>();
   const sequence = useRef(0);
+  const root = useRef<HTMLDivElement>(null);
+  // Where focus is to be put once the next render has replaced what held it.
+  const focusNext = useRef<"retry" | "menu" | undefined>(undefined);
+  const inside = () => root.current?.contains(document.activeElement) ?? false;
   const refresh = () => {
     const asked = ++sequence.current;
+    if (inside()) focusNext.current = "menu";
     setEntries(undefined);
     setError(undefined);
     load().then(
       (items) => { if (asked === sequence.current) setEntries(items); },
-      (err: unknown) => { if (asked === sequence.current) { setError((err as Error).message); reportError(err as Error); } },
+      (err: unknown) => {
+        if (asked !== sequence.current) return;
+        if (inside()) focusNext.current = "retry";
+        setError(errorPresentation(err));
+      },
     );
   };
   useEffect(() => {
     refresh();
     return () => { sequence.current += 1; };
   }, []);
+  useEffect(() => {
+    const next = focusNext.current;
+    focusNext.current = undefined;
+    if (next === "retry") {
+      // The render took the focused control away, not a press, and the last input was often a
+      // pointer: the ring has to show where focus went.
+      setInteractionModality("keyboard");
+      // The recovery action stands last, at the trailing edge, after Details.
+      [...(root.current?.querySelectorAll<HTMLElement>(TABBABLE) ?? [])].at(-1)?.focus();
+    } else if (next === "menu") root.current?.querySelector<HTMLElement>("[role=menu]")?.focus();
+  }, [error]);
   return <>
-    <StatusAnnouncer text={entries ? undefined : error ? t("menu.loadFailed", { detail: isolate(error) }) : t("menu.loading")} />
-    <MenuItems entries={entries ?? (error ? [
-      { label: t("menu.loadFailed", { detail: isolate(error) }), icon: TriangleAlert, disabled: true, onClick: () => {} },
-      { label: t("error.tryAgain"), icon: RefreshCw, closeOnSelect: false, onClick: refresh },
-    ] : [{ label: t("menu.loading"), icon: LoaderCircle, iconClassName: "motion-safe:animate-spin", disabled: true, onClick: () => {} }])} />
+    <StatusAnnouncer text={entries || error !== undefined ? undefined : t("menu.loading")} />
+    {/* A menu holds only items, so the failure is a panel in the submenu's popover; it unmounts as the
+        retry starts and the menu takes its place. The wrapper is one element for both, so it tells
+        where focus was. */}
+    <div ref={root} className="contents">
+      {error !== undefined && !entries ? (
+        <PanelBody>
+          {() => (
+            <FailureAlert title={t("menu.loadFailed")} message={error} announce announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} onRetry={refresh} />
+          )}
+        </PanelBody>
+      ) : (
+        <MenuItems entries={entries ?? [{ label: t("menu.loading"), icon: LoaderCircle, iconClassName: "motion-safe:animate-spin", disabled: true, onClick: () => {} }]} />
+      )}
+    </div>
   </>;
 }
 

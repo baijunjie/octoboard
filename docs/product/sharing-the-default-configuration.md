@@ -250,17 +250,19 @@ when the change could not start at all, and the error's `detail` then says why. 
 of the change as a whole: the cause its entries share (`other` when they differ), or why it could not start when there
 are none.
 
-**How the window shows the entries.** Wherever a sharing failure is shown — at the account's switch, in an error alert,
-in a repair notice — its entries are said in plain language, one line per cause, each naming the entries it hit
-compactly: the first by name and the rest as a count ("no permission to change `skills/` and 1 more"), and going on, on
-the same line, with what to do about that cause. A conversation is named by a session that records it, under its current
+**How the window shows the entries.** In an error alert and in a repair notice, a sharing failure's entries are said
+in plain language, one line per cause, each naming the entries it hit compactly: the first by name and the rest as a
+count ("no permission to change `skills/` and 1 more"), and going on, on the same line, with what to do about that
+cause. A conversation is named by a session that records it, under its current
 name. The rest is behind a collapsed **Details** disclosure: each entry on one row with what it was left as, in the
 interface language, a conversation naming the sessions that record it, and what the system said of it after that as
 small inline code; what the system said in several lines is shown as a block under its row instead. With no entry
 listed, the reason the change as a whole failed, from its `cause`, stands in place of the lines when it is one of the
 named causes, followed in the same way by what to do about it; when it is not (`other`, none, or one this client does
 not know) but there is an original diagnostic, a line saying to see Details stands there alone. Details holds the
-original diagnostic. No raw diagnostic is shown outside Details.
+original diagnostic. No raw diagnostic is shown outside Details. At the account's switch the same lines, entries and
+diagnostic are all behind the alert's Details button, with no line pointing at it (see "Sharing the default
+configuration" in `docs/product/agent-accounts.md`).
 
 | Cause | What the window says to do |
 |---|---|
@@ -311,7 +313,7 @@ primary one, on which keyboard focus starts. Closing it — with the dialog's cl
 and sends nothing; when it stands over another dialog, Escape closes only the question, leaving that dialog open. **View
 in Settings** sends nothing either: it closes the question, and the dialog it was asked from when there is one (the
 session dialog, the handoff dialog, the switch confirmation), and opens Settings on its Agent accounts section, on the
-account's agent's tab, with the account's sharing switch scrolled into view and focused; the warning under the switch
+account's agent's tab, with the account's sharing switch scrolled into view and focused; the alert under the switch
 says what did not finish (see "Sharing the default configuration" in `docs/product/agent-accounts.md`). When the account
 is no longer found there, Settings opens on the section all the same. **Start anyway** closes the question at once and
 sends the request as it would have gone without it; its refusal or failure is shown where it would have been.

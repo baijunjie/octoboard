@@ -77,9 +77,11 @@ From top to bottom:
      and each session line has the mark of its agent (Claude Code, Codex, Grok), as the sidebar draws them. The menu
      cannot animate, so the working dot and the ring do not pulse.
      The marks the sidebar draws in the text colour (Codex, Grok) are template images here, which macOS tints to suit a
-     light or dark menu; the other pictures keep their own colours, chosen to read on both. The "N more…" line has
-     none. Each quota submenu's opening line (below) carries the mark of its agent in the same way; the title is what
-     is read, the mark adds nothing to it.
+     light or dark menu. A status glyph is in the colour the sidebar gives that status in the window's current
+     appearance, drawn again in the new colours for the first menu that shows it after the appearance changes; the
+     other agent marks keep their own colours, chosen to read on both. The "N more…" line has none. Each quota
+     submenu's opening line (below) carries the mark of its agent in the same way; the title is what is read, the
+     mark adds nothing to it.
    - Within a group, sessions come in the order the sidebar lists them: console by console in the order the consoles
      were created, its console sessions before its projects' sessions, both in the sidebar's own order (see "Order of
      projects and sessions" in `docs/product/order-of-projects-and-sessions.md`). Every console is included, not only
@@ -108,10 +110,10 @@ From top to bottom:
      colour, with its name — for the agent's default account the name the user gave it, else **Default** (see "The
      default account" in `docs/product/agent-accounts.md`) — and its plan after a dot where the agent names one
      ("Default · Max"), the default account first and then the accounts the user owns, each set off by a separator.
-     For a current reading with windows, how long ago it was read is right-aligned on the header line in the same small
-     secondary text ("Updated 3 minutes ago", "Updated just now" under a minute), and assistive technology reads the
-     line as one phrase ("Default · Max · updated 3 minutes ago"); it is left out while the out-of-date note below
-     shows, and for an account still being read or with no windows to show;
+     For an account with windows to show, how long ago they were read is right-aligned on the header line in the same
+     small secondary text ("Updated 3 minutes ago", "Updated just now" under a minute), also when they are kept after a
+     newer reading failed, and assistive technology reads the line as one phrase ("Default · Max · updated 3 minutes
+     ago"); it is left out for an account still being read or with no windows to show;
    - under the header, each window is one row, except as the next point says: its name on the left ("5-hour"), "N%
      remaining · resets in <countdown>" ("82% remaining · resets in 1h 57m", "resets now" once the time has passed, no countdown for a
      window with no reset time) right-aligned in the secondary text colour, and a bar of what remains directly
@@ -135,7 +137,8 @@ From top to bottom:
      reason. That includes an entry that has no windows and no failure to explain, which Settings and the rail show
      nothing for. An account that is not logged in (see "Quota states" in `docs/product/account-quotas.md`) shows the
      note **Not logged in** instead. One whose latest reading failed after a good one keeps its last windows under a
-     note "Out of date: last read 12 minutes ago", without the reason either.
+     note, led by a warning sign, saying they are out of date because the last read failed — without the reason
+     either, and without an age, which its header carries.
 
    Each submenu's opening line can show **remaining-quota bars** at its right, before the submenu arrow.
    It uses that agent's account configured for the **current console**, independently of the selected session that

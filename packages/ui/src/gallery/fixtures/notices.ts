@@ -385,7 +385,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Issue form could not be opened",
-    description: "The opener failure takes precedence over the original unexpected error. Its actionable recovery supplies the manual issue URL and has no recursive Report issue link. OK returns to the original failure.",
+    description: "The opener failure takes precedence over the original unexpected error. Its actionable recovery supplies the manual issue URL, alone on its line as plain monospace text without a chip, and has no recursive Report issue link. OK returns to the original failure.",
     state: snapshotState({ consoles: [console_], projects: [web, api], sessions }),
     externalLinks: { error: "The operating system could not open the default browser" },
     toasts: [{ kind: "error", code: "internal_error", params: { detail: "Unexpected session state while applying an update" }, message: "Unexpected session state while applying an update" }],
@@ -396,7 +396,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Branches and worktrees left after an archive",
-    description: "Under the header saying these were to be removed and are still there, the danger alert groups the leftovers by reason under short lead lines: a locked worktree, its path shortened with ~, its row ending \"uncommitted changes\", and under \"Removing this failed:\" a branch git failed to delete, whose multi-line git message is a code block under its name. Recovery guidance follows. The archive itself stands.",
+    description: "Under the header saying these were to be removed and are still there, the danger alert groups the leftovers by reason under short lead lines: a locked worktree, its path shortened with ~ as plain monospace text, its row ending with a soft warning \"uncommitted changes\" badge, and under \"Removing this failed:\" a branch git failed to delete, whose multi-line git message is a code block under its name. Recovery guidance follows. The archive itself stands.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [{
       kind: "error",
@@ -416,7 +416,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Only locked worktrees left after an archive",
-    description: "With a single group of leftovers the alert has no header over it: only the lead line of its group (the worktrees are locked), over a worktree with a branch chip and one on a plain detached HEAD, then the recovery guidance.",
+    description: "With a single group of leftovers the alert has no header over it: only the lead line of its group (the worktrees are locked), over a worktree with its branch (a branch icon and plain monospace name) and one on a plain detached HEAD, then the recovery guidance.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [{
       kind: "error",

@@ -1,27 +1,32 @@
 import { FileCheck, GitBranch, GitFork, TriangleAlert } from "lucide-react";
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 
 import { CopyButton } from "../components/CopyButton";
-import { DaemonErrorMessage, failureParam } from "../components/DaemonErrorMessage";
+import { Button } from "../components/Button";
+import { errorDetails, failureParam, FailureBody } from "../components/DaemonErrorMessage";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
-import { ErrorAlert } from "../components/ErrorAlert";
-import { CodeToneContext } from "../components/codeTone";
-import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
+import { FailureMark } from "../components/FailureMark";
+import { PaneFailure } from "../components/PaneFailure";
+import { useHasPainted } from "../components/useHasPainted";
 import { DaemonRequestError } from "../daemon-client";
 import { InlineChip } from "../components/InlineChip";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useFocusHandoff } from "../components/useFocusHandoff";
+import { useStableHandler } from "../components/useLatest";
 import { useListMotion } from "../components/useListMotion";
+import type { ErrorPresentation } from "../errorPresentation";
+import { retryCanHelp } from "../errorRecovery";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
-import { Message, useT } from "../i18n/react";
+import { joinPhrases } from "../i18n/joinPhrases";
+import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import { displayWirePath, wireRelativeOrAbsolute } from "../wirePath";
 import { BranchSelect } from "./BranchSelect";
 import { ChangeList } from "./ChangeList";
 import type { ChangeViewState } from "./changeView";
-import type { ChangeItem } from "./changes";
-import { branchGone, changesStatus, partsLoading, type ChangesNotice } from "./changesStatus";
-import { GitFailure, GitLoading } from "./gitStates";
+import { SECTION_ORDER, type ChangeItem, type ChangeSection } from "./changes";
+import { branchGone, changesStatus, partsLoading, type ChangesFailure, type ChangesNotice } from "./changesStatus";
+import { GitLoading } from "./gitStates";
 import { PaneNote } from "./paneNote";
 import type { BranchList } from "./useBranchList";
 import type { CommittedState, UncommittedState } from "./useGitReview";
@@ -70,9 +75,10 @@ export function GitView(props: { source: SourceState } & ChangesViewProps): Reac
   // as the source loads. The source's loading and the list's say the same words, so the handoff
   // between them leaves the text as it is and it is said once.
   const loading = source.state === "loading" ? t("git.loading") : source.state === "loaded" && source.source.git ? loadingText(t, props) : undefined;
+  const spoken = useSpokenFailures(props, source.state === "loaded" && Boolean(source.source.git));
   return (
     <>
-      <StatusAnnouncer text={loading} />
+      <StatusAnnouncer text={loading ?? spoken} />
       <GitContent {...props} />
     </>
   );
@@ -96,20 +102,13 @@ function GitContent(props: { source: SourceState } & ChangesViewProps): React.Re
   const { source, onRetry } = props;
   const diagnostic = source.state === "loaded" ? source.source.git_error ?? undefined : undefined;
   const failure = useMemo(() => diagnostic === undefined ? undefined : new DaemonRequestError(diagnostic, "git_unavailable", { detail: diagnostic }), [diagnostic]);
-  useErrorAcknowledgement(failure, UNAVAILABLE_TITLE);
+  const painted = useHasPainted();
   if (source.state === "loading") return <GitLoading label={t("git.loading")} />;
-  if (source.state === "error") return <GitFailure title={t("git.error.source")} message={source.message} onRetry={onRetry} />;
+  if (source.state === "error") return <PaneFailure title={t("git.error.source")} message={source.message} announce={painted} onRetry={onRetry} />;
   const git = source.source.git;
   if (!git) {
     return failure ? (
-      <div className="flex min-w-0 flex-1 items-center justify-center p-4">
-        <CodeToneContext value="danger">
-          <div className="flex w-full min-w-0 max-w-lg flex-col gap-3">
-            <ErrorAlert title={UNAVAILABLE_TITLE}><DaemonErrorMessage error={failure} part="summary" /></ErrorAlert>
-            <DaemonErrorMessage error={failure} part="details" />
-          </div>
-        </CodeToneContext>
-      </div>
+      <PaneFailure title={UNAVAILABLE_TITLE} message={failure} announce={painted} />
     ) : (
       <CenteredEmptyPanel icon={GitFork} message={<Message id="git.notARepository" />} />
     );
@@ -118,7 +117,7 @@ function GitContent(props: { source: SourceState } & ChangesViewProps): React.Re
 }
 
 const code = (text: string) => (
-  <InlineChip monospace wrap size="inherit">
+  <InlineChip monospace wrap>
     {text}
   </InlineChip>
 );
@@ -159,6 +158,81 @@ function Notice({ notice, projectRoots }: { notice: ChangesNotice; projectRoots:
   }
 }
 
+/** The failure of one part of the list while the rest still shows: a danger glyph named by what
+ * failed, whose popover holds the reason, its remedy, the raw text of the failure and Try again,
+ * which a failure that is the state of the repository (no common commit) has none of, a retry
+ * giving the same answer. `inHeader` is for the mark a section's heading carries, which the list's
+ * own walk does not reach (see `FailureMark`). */
+function PartFailureMark({ label, line, message, inHeader = false, onRetry }: { label: string; line: ChangesFailure["line"] | "git.branch.branchesError"; message: ErrorPresentation; inHeader?: boolean; onRetry: () => void }): React.ReactElement {
+  const t = useT();
+  return (
+    <FailureMark
+      label={label}
+      inHeader={inHeader}
+      actions={retryCanHelp(message) ? (close) => (
+        <Button size="sm" variant="secondary" preventFocusOnPress onPress={() => { close(); onRetry(); }}>
+          {t("error.tryAgain")}
+        </Button>
+      ) : undefined}
+    >
+      <FailureBody error={message} summary={<Message id={line} params={{ message: failureParam(message) }} />} />
+    </FailureMark>
+  );
+}
+
+/** Where each failed part of the list is shown. With nothing to list and a part failed, the failure
+ * takes the list's place (`panelFailures`: the one, or the two together, with Try again); otherwise
+ * each is a mark (`lineFailures`, on the heading of the section it could not fill). A branch list
+ * that failed to refresh stays and says why in a mark by the selector; one that never came says so
+ * in the list's place. */
+function failureParts({ branches, branch, uncommitted, committed, items }: Pick<ChangesViewProps, "branches" | "branch" | "uncommitted" | "committed" | "items">) {
+  const { failures } = changesStatus({ branches, uncommitted, committed });
+  const loading = partsLoading({ uncommitted, committed });
+  const panelFailures = items.length === 0 && !loading.uncommitted && !loading.committed ? failures : [];
+  const branchesError = branches.state === "error" ? branches.message : branches.state === "loaded" ? branches.error : undefined;
+  return {
+    panelFailures,
+    lineFailures: panelFailures.length > 0 ? [] : failures,
+    branchesError,
+    branchesMark: branchesError !== undefined && !(branch === undefined && branches.state === "error"),
+  };
+}
+
+/** The uncommitted changes and the branch's commits both failed and nothing is listed: one heading
+ * and one Try again, with each part's own sentence in Details, then its raw text, in place of the two
+ * marks. */
+function BothFailed({ failures, announce, onRetry }: { failures: ChangesFailure[]; announce: boolean; onRetry: (from: Element | null) => void }): React.ReactElement {
+  const t = useT();
+  return (
+    <PaneFailure
+      title={t("git.changes.failed")}
+      summary={t("git.changes.failed.summary")}
+      details={failures.map((failure) => (
+        <div key={failure.key} className="flex flex-col gap-2">
+          <p><Message id={failure.line} params={{ message: failureParam(failure.message) }} /></p>
+          {errorDetails(failure.message)}
+        </div>
+      ))}
+      announce={announce}
+      onRetry={failures.some((failure) => retryCanHelp(failure.message)) ? onRetry : undefined}
+    />
+  );
+}
+
+/** The marks that appear once the view is open, said once through the view's status region: a mark
+ * is no alert. What failed before the view first painted is part of what it opened with and stays
+ * unspoken. */
+function useSpokenFailures(props: ChangesViewProps, enabled: boolean): string | undefined {
+  const t = useT();
+  const language = useCurrentLanguage();
+  const { lineFailures, branchesMark } = failureParts(props);
+  const all = [...lineFailures.map((failure) => ({ key: failure.key, text: t(failure.title) })), ...(branchesMark ? [{ key: "branches", text: t("git.branch.branchesFailed") }] : [])];
+  const [openedWith] = useState(() => new Set(all.map((failure) => failure.key)));
+  if (!enabled) return undefined;
+  const spoken = all.filter((failure) => !openedWith.has(failure.key)).map((failure) => failure.text);
+  return spoken.length > 0 ? joinPhrases(language, spoken) : undefined;
+}
+
 function ChangesView({
   branches,
   branch,
@@ -191,26 +265,32 @@ function ChangesView({
   // panel below says so.
   const noBranches = branch === undefined && branches.state === "loaded" && listed.length === 0;
   const gone = branchGone(branch, branches, uncommitted.state === "listed" ? uncommitted.worktree : undefined);
-  // A list that failed to refresh stays, and says why; one that never came says so in its place.
-  const branchesError = branches.state === "error" ? branches.message : branches.state === "loaded" ? branches.error : undefined;
-
-  const { notices, failures, goneBranches, partial, commitsCut } = changesStatus({ branches, uncommitted, committed });
-  useErrorAcknowledgement(branchesError, t("git.branch.branchesFailed"));
-  useErrorAcknowledgement(failures.find((failure) => failure.key === "uncommitted")?.message, t("git.error.list"));
-  useErrorAcknowledgement(failures.find((failure) => failure.key === "committed")?.message, t("git.changes.compareFailed"));
-  useErrorAcknowledgement(failures.find((failure) => failure.key === "commits")?.message, t("git.changes.commitsFailed"));
+  const painted = useHasPainted();
+  const { notices, goneBranches, partial, commitsCut } = changesStatus({ branches, uncommitted, committed });
   const loading = partsLoading({ uncommitted, committed });
   const nothingYet = items.length === 0;
-  // With nothing to list, the first failure takes the list's place, with Try again; every other one
-  // is a line above it.
-  const panelFailure = nothingYet && !loading.uncommitted && !loading.committed ? failures[0] : undefined;
-  const lineFailures = failures.filter((failure) => failure !== panelFailure);
+  const { panelFailures, lineFailures, branchesError, branchesMark } = failureParts({ branches, branch, uncommitted, committed, items });
+  const retryAll = useStableHandler(() => onRetry(null));
+  // Where the uncommitted part's mark goes: the first worktree section that holds a change.
+  const uncommittedSection = SECTION_ORDER.find((section) => section !== "committed" && items.some((item) => item.section === section)) ?? "unstaged";
+  // Kept while what it is made of is, since the list rebuilds its sections whenever this changes.
+  // `lineFailures` is rebuilt on every render, so what the marks are made of is taken from it: at most
+  // one failure of the uncommitted part, and one of the committed part (the comparison's or the commits').
+  const uncommittedFailure = lineFailures.find((failure) => failure.key === "uncommitted");
+  const committedFailure = lineFailures.find((failure) => failure.key !== "uncommitted");
+  const failureMarks = useMemo(() => {
+    const mark = (failure: ChangesFailure) => <PartFailureMark key={failure.key} inHeader label={t(failure.title)} line={failure.line} message={failure.message} onRetry={retryAll} />;
+    return new Map<ChangeSection, React.ReactNode>([
+      ...(uncommittedFailure ? [[uncommittedSection, mark(uncommittedFailure)] as const] : []),
+      ...(committedFailure ? [["committed", mark(committedFailure)] as const] : []),
+    ]);
+  }, [uncommittedFailure?.message, committedFailure?.key, committedFailure?.message, uncommittedSection, t, retryAll]);
   const shownComparison = committed.state === "compare" && committed.comparison.state === "loaded";
 
   return (
     <>
       <div ref={selectorsRef} className="shrink-0 groove-b py-2 px-(--pane-inset)" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
-        <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3">
+        <div className={`grid min-w-0 ${branchesMark ? "grid-cols-[auto_minmax(0,1fr)_auto]" : "grid-cols-[auto_minmax(0,1fr)]"} items-center gap-x-3`}>
           <BranchSelect
             label={t("git.changes.branch")}
             branches={listed}
@@ -220,33 +300,26 @@ function ChangesView({
             selectedSessionId={selectedSessionId}
             onChange={onBranchChange}
           />
+          {branchesMark && branchesError !== undefined && (
+            <PartFailureMark label={t("git.branch.branchesFailed")} line="git.branch.branchesError" message={branchesError} onRetry={() => onRetry(null)} />
+          )}
         </div>
         {branch !== undefined && (
-          <div className="mt-2 flex flex-col gap-1 text-xs text-app-muted empty:hidden">
-            {notices.map((notice) => (
-              <p key={notice.id}>
-                <Notice notice={notice} projectRoots={projectRoots} />
-              </p>
-            ))}
-            {lineFailures.map((failure) => (
-              <div key={failure.key} className="min-w-0">
-                <p><Message id={failure.line} params={{ message: failureParam(failure.message) }} /></p>
-                <DaemonErrorMessage error={failure.message} part="details" />
-              </div>
-            ))}
-          </div>
+          <>
+            <div className="mt-2 flex flex-col gap-1 text-xs text-app-muted empty:hidden">
+              {notices.map((notice) => (
+                <p key={notice.id}>
+                  <Notice notice={notice} projectRoots={projectRoots} />
+                </p>
+              ))}
+            </div>
+          </>
         )}
       </div>
-      {branchesError !== undefined && !(branch === undefined && branches.state === "error") && (
-        <div className="min-w-0">
-          <PaneNote><Message id="git.branch.branchesError" params={{ message: failureParam(branchesError) }} /></PaneNote>
-          <div className="px-(--pane-inset)"><DaemonErrorMessage error={branchesError} part="details" /></div>
-        </div>
-      )}
       <div className="flex min-h-0 flex-1 flex-col" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
         {branch === undefined ? (
           branches.state === "error" ? (
-            <GitFailure title={t("git.branch.branchesFailed")} message={branches.message} onRetry={onRetry} />
+            <PaneFailure title={t("git.branch.branchesFailed")} message={branches.message} announce={painted} onRetry={onRetry} />
           ) : noBranches ? (
             <CenteredEmptyPanel icon={GitFork} message={t("git.branch.noBranches")} />
           ) : (
@@ -269,13 +342,15 @@ function ChangesView({
             )}
             {nothingYet && (loading.uncommitted || loading.committed) ? (
               <GitLoading label={t("git.loading")} />
-            ) : panelFailure ? (
-              <GitFailure title={t(panelFailure.title)} message={panelFailure.message} onRetry={onRetry} />
-            ) : nothingYet && !partial ? (
+            ) : panelFailures.length === 1 ? (
+              <PaneFailure title={t(panelFailures[0].title)} message={panelFailures[0].message} announce={painted} onRetry={onRetry} />
+            ) : panelFailures.length > 1 ? (
+              <BothFailed failures={panelFailures} announce={painted} onRetry={onRetry} />
+            ) : nothingYet && !partial && lineFailures.length === 0 ? (
               <CenteredEmptyPanel icon={FileCheck} message={t("git.changes.empty")} />
             ) : (
               <>
-                <ChangeList items={items} selected={selectedChange} label={t("git.changes.list.label")} onOpen={onOpen} listRef={listRef} changeView={changeView} />
+                <ChangeList failures={failureMarks} items={items} selected={selectedChange} label={t("git.changes.list.label")} onOpen={onOpen} listRef={listRef} changeView={changeView} />
                 {partial && <PaneNote divided>{t("git.partial")}</PaneNote>}
                 {commitsCut !== undefined && <PaneNote divided>{t("git.changes.commitsPartial", { count: commitsCut })}</PaneNote>}
               </>

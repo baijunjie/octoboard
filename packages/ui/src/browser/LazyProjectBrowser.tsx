@@ -1,10 +1,8 @@
 import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
 
-import { Button } from "../components/Button";
-import { ErrorAlert } from "../components/ErrorAlert";
-import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
-import { useT } from "../i18n/react";
+import { PaneFailure } from "../components/PaneFailure";
 import { PanelHeader } from "../components/PanelHeader";
+import { useT } from "../i18n/react";
 import type { ProjectBrowser as ProjectBrowserType } from "./ProjectBrowser";
 
 type Props = React.ComponentProps<typeof ProjectBrowserType> & {
@@ -73,27 +71,17 @@ class LoadBoundary extends React.Component<
 /** The fallback, a function component because only one can read the current language. */
 function LoadFailed({ title, onRetry }: { title: string; onRetry: (holdsFocus: boolean) => void }): React.ReactElement {
   const t = useT();
-  useErrorAcknowledgement(t("browser.loadFailed"));
-  const retry = useRef<HTMLButtonElement>(null);
+  const pane = useRef<HTMLDivElement>(null);
   // A render that failed with focus inside the browser took focus down with it.
   useEffect(() => {
-    if (document.activeElement === document.body) retry.current?.focus();
+    if (document.activeElement === document.body) pane.current?.querySelector<HTMLElement>("[data-region-landing]")?.focus();
   }, []);
   return (
     <>
       <PanelHeader title={title} />
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-sm">
-        <ErrorAlert className="w-full max-w-lg">{t("browser.loadFailed")}</ErrorAlert>
-        <Button
-          ref={retry}
-          data-region-landing=""
-          size="sm"
-          variant="secondary"
-          preventFocusOnPress
-          onPress={() => onRetry(document.activeElement === retry.current)}
-        >
-          {t("error.tryAgain")}
-        </Button>
+      {/* It replaces a pane that was drawn, so it is always something that appeared. */}
+      <div ref={pane} className="contents">
+        <PaneFailure title={t("browser.loadFailed")} announce landing onRetry={(from) => onRetry(from?.contains(document.activeElement) ?? false)} />
       </div>
     </>
   );

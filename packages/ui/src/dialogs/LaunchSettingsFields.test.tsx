@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { openDetails } from "../components/detailsTestSupport";
 import { DaemonRequestError } from "../daemon-client";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { EffortPicker, LaunchSettingsFields, ModelPicker, type LaunchModels } from "./LaunchSettingsFields";
@@ -74,15 +75,22 @@ it("keeps model diagnostics outside the field description while announcing the c
   const { toggle, exposedStatuses, wait, container } = mount({ code: "models_command_failed", params: { agent: "Codex", detail }, message: "fallback" });
   toggle();
   await wait(PAST_FIRST_WRITE);
-  const description = [...container.querySelectorAll('[data-slot="description"]')].find((node) => node.textContent === "Codex could not list its models.")!;
+  const description = [...container.querySelectorAll('[data-slot="alert-description"]')].find((node) => node.textContent === "Codex could not list its models.")!;
   expect(description.textContent).toBe("Codex could not list its models.");
   expect(description.querySelector("pre,div,p")).toBeNull();
-  expect(container.querySelector("pre")?.textContent).toBe(detail);
-  expect(description.contains(container.querySelector("pre"))).toBe(false);
-  const select = [...container.querySelectorAll("[aria-describedby]")].find((node) => node.getAttribute("aria-describedby")?.split(" ").includes(description.id))!;
-  expect(select.getAttribute("aria-describedby")?.split(" ")).toContain(description.id);
+  // The whole failure is one Alert: the diagnostics are behind its Details button, in a popover of their own.
+  const alert = description.closest('[data-slot="alert-root"]')!;
+  expect(container.querySelector("pre")).toBeNull();
+  // The model picker is described by the alert, and the alert is under it.
+  const alertId = alert.parentElement!.id;
+  const select = [...container.querySelectorAll("[aria-describedby]")].find((node) => node.getAttribute("aria-describedby")?.split(" ").includes(alertId))!;
+  expect(select.getAttribute("aria-describedby")?.split(" ")).toContain(alertId);
   expect(exposedStatuses()).toHaveLength(1);
   expect(exposedStatuses()[0]).toContain(detail);
+  // Opened last: an open popover hides what is behind it from the status regions above.
+  const dialog = openDetails(alert);
+  expect(dialog.querySelector("pre")?.textContent).toBe(detail);
+  expect(description.contains(dialog)).toBe(false);
 });
 
 
@@ -91,14 +99,14 @@ it("retains request-refusal metadata for rich model descriptions while keeping s
   const { toggle, exposedStatuses, wait, container } = mount(failure);
   toggle();
   await wait(PAST_FIRST_WRITE);
-  expect(container.querySelector("[data-slot=description] code")?.textContent).toBe("missing-account");
+  expect(container.querySelector("[data-slot=alert-description] code")?.textContent).toBe("missing-account");
   expect(exposedStatuses()).toEqual([failure.message]);
 });
 
 it("directs inherited model and effort badges without selecting or submitting their display values", () => {
   const inherited = { model: "model/中文-مراجعة", effort: "effort/مراجعة-中文" };
   const changed = vi.fn();
-  const launch: LaunchModels = { loading: false, models: [], modelText: undefined, modelDescription: undefined, modelDetails: undefined };
+  const launch: LaunchModels = { loading: false, models: [], modelText: undefined, modelDescription: undefined, modelAlert: undefined, modelAlertId: undefined };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });

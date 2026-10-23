@@ -9,14 +9,14 @@ import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { LineStats } from "../protocol";
-import { StatusChip } from "../viewer/StatusChip";
+import { ChangeStatusBadge } from "../viewer/ChangeStatusBadge";
 import { STATUS_LABELS, STATUS_MARKS, type StatusKey } from "../viewer/statusMarks";
 import { displayWirePath, wireBaseName } from "../wirePath";
 import type { ChangeItem } from "./changes";
 import { RowActions } from "./RowActions";
 
 // The lowercase words the row's accessible name is built from; the tooltip says the capitalised
-// `STATUS_LABELS` instead, which is what the viewer's header chip shows.
+// `STATUS_LABELS` instead, which is what the viewer's header badge shows.
 const STATUS_WORDS: Record<StatusKey, PlainMessageKey> = {
   added: "git.status.added",
   untracked: "git.status.untracked",
@@ -92,7 +92,7 @@ export function changeRowText(
  * itself names versions in commits. */
 export function ChangeRowBody({ item, name, detail, contextTargetRef }: { item: ChangeItem; name: string; detail: string; contextTargetRef: React.RefObject<HTMLElement | null> }): React.ReactElement {
   const prose = pathDetail(item);
-  const shownDetail = prose ? <Message id={prose.id} params={{ path: <InlineChip monospace size="inherit">{prose.path}</InlineChip> }} /> : detail;
+  const shownDetail = prose ? <Message id={prose.id} params={{ path: <InlineChip monospace>{prose.path}</InlineChip> }} /> : detail;
   const tooltip = detail !== "" ? (
     <>
       <span dir="auto" className="block">{name}</span>
@@ -102,7 +102,7 @@ export function ChangeRowBody({ item, name, detail, contextTargetRef }: { item: 
   return (
     <>
       <ChangeIcon item={item} />
-      <ChangeStatusChip status={item.status} />
+      <ChangeStatusLetter status={item.status} />
       <FadeOverflow as="span" className="flex min-w-0 flex-1 items-center gap-1.5" titleWhenClipped={tooltip}>
         <span dir="auto" className="shrink-0">{name}</span>
         {detail !== "" && <span dir="auto" className="shrink-0 text-xs text-app-muted">{shownDetail}</span>}
@@ -125,8 +125,8 @@ function LineCounts({ item }: { item: ChangeItem }): React.ReactElement | null {
   const number = new Intl.NumberFormat(language);
   return (
     <span aria-hidden="true" dir="ltr" className="flex shrink-0 gap-1.5 text-xs tabular-nums">
-      {stats.added > 0 && <span className="text-line-added">+{number.format(stats.added)}</span>}
-      {stats.removed > 0 && <span className="text-line-removed">-{number.format(stats.removed)}</span>}
+      {stats.added > 0 && <span className="text-(--tint-success-fg)">+{number.format(stats.added)}</span>}
+      {stats.removed > 0 && <span className="text-(--tint-danger-fg)">-{number.format(stats.removed)}</span>}
     </span>
   );
 }
@@ -143,28 +143,29 @@ function ChangeIcon({ item }: { item: ChangeItem }): React.ReactElement {
 }
 
 /** The row's status letter, which says in a tooltip what it stands for. The row's accessible name
- * already carries the status, so the chip stays out of the accessibility tree. It takes the
+ * already carries the status, so the letter stays out of the accessibility tree. It takes the
  * anchored shape, not `IndicatorTooltip`: a row of a react-aria collection walks every focusable
  * descendant with the arrow keys, and an indicator's trigger would be a new stop in that walk
- * that opens its tooltip on focus. The chip reports the hover itself and is what the tooltip is
+ * that opens its tooltip on focus. The letter reports the hover itself and is what the tooltip is
  * placed against, so nothing else in the row opens it. */
-function ChangeStatusChip({ status }: { status: StatusKey }): React.ReactElement {
+function ChangeStatusLetter({ status }: { status: StatusKey }): React.ReactElement {
   const t = useT();
-  const chip = useRef<HTMLSpanElement>(null);
+  const letter = useRef<HTMLSpanElement>(null);
   const [hovered, setHovered] = useState(false);
   return (
     <>
-      <StatusChip
-        ref={chip}
+      <ChangeStatusBadge
+        ref={letter}
         aria-hidden="true"
         status={status}
-        className="w-5 shrink-0 justify-center px-0 font-mono"
+        single
+        className="font-mono"
         onPointerEnter={() => setHovered(true)}
         onPointerLeave={() => setHovered(false)}
       >
         {STATUS_MARKS[status].letter}
-      </StatusChip>
-      <AnchoredTooltip tooltip={t(STATUS_LABELS[status])} anchor={chip} hovered={hovered} />
+      </ChangeStatusBadge>
+      <AnchoredTooltip tooltip={t(STATUS_LABELS[status])} anchor={letter} hovered={hovered} />
     </>
   );
 }

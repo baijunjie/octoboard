@@ -313,7 +313,7 @@ export function ShellTerminalPanel({
       })}
       {confirmClose !== undefined && terminals.some((terminal) => terminal.id === confirmClose) && (
         <ConfirmDialog
-          title={<Message id="shellTerminal.closeBusy.title" params={{ title: <InlineChip dir="auto" wrap size="inherit">{terminals.find((terminal) => terminal.id === confirmClose)!.title}</InlineChip> }} />}
+          title={<Message id="shellTerminal.closeBusy.title" params={{ title: <InlineChip dir="auto" wrap>{terminals.find((terminal) => terminal.id === confirmClose)!.title}</InlineChip> }} />}
           message={t("shellTerminal.closeBusy.message")}
           confirmLabel={t("shellTerminal.close")}
           destructive

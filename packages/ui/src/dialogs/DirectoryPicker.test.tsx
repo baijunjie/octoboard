@@ -6,6 +6,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { errorAlerts } from "../errorAlerts";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { ErrorAlerts } from "./ErrorAlerts";
 import { DirectoryPicker } from "./DirectoryPicker";
 
@@ -40,8 +41,11 @@ it("opens with focus in the path field", async () => {
   expect(document.activeElement?.getAttribute("aria-label")).toBe("Directory path");
 });
 
-it("reports the same immediate listing failure again after acknowledgement and retry", async () => {
-  const daemon = { store: createStateStore(), request: vi.fn().mockRejectedValue(new Error("Permission denied")) } as unknown as Daemon;
+it("shows a listing failure in an Alert with its reason and Try again, and opens no error alert dialog", async () => {
+  vi.useFakeTimers();
+  onTestFinished(() => void vi.useRealTimers());
+  const request = vi.fn().mockRejectedValueOnce(new Error("Permission denied")).mockResolvedValue({ type: "dir_listing", path: "/home", entries: [] });
+  const daemon = { store: createStateStore(), request } as unknown as Daemon;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -50,9 +54,76 @@ it("reports the same immediate listing failure again after acknowledgement and r
     while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
   });
   await act(async () => root.render(<DaemonProvider value={daemon}><DirectoryPicker title="Choose directory" onPick={() => {}} onClose={() => {}} /><ErrorAlerts daemon={daemon} /></DaemonProvider>));
-  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Permission denied");
-  act(() => errorAlerts.acknowledge());
-  await act(async () => document.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
-  expect(daemon.request).toHaveBeenCalledTimes(2);
-  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Permission denied");
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
+  const alert = document.querySelector('[data-slot="alert-root"]')!;
+  expect(alert.querySelector('[data-slot="alert-title"]')?.textContent).toBe("Could not list this directory");
+  expect(alert.textContent).toContain("Something unexpected went wrong.");
+  expect(alert.textContent).not.toContain("Permission denied");
+  // The first listing comes with the path field taking focus, so its announcement waits that out.
+  expect(document.querySelector('[role="alert"]')).toBeNull();
+  await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain("Something unexpected went wrong.");
+  const retry = [...alert.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
+  await act(async () => retry.click());
+  expect(request).toHaveBeenCalledTimes(2);
+  expect(document.querySelector('[data-slot="alert-root"]')).toBeNull();
+});
+
+it("announces a failure that repeats in the same words again, without moving focus off Try again", async () => {
+  vi.useFakeTimers();
+  onTestFinished(() => void vi.useRealTimers());
+  const request = vi.fn().mockRejectedValue(new Error("Permission denied"));
+  const daemon = { store: createStateStore(), request } as unknown as Daemon;
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  await act(async () => root.render(<DaemonProvider value={daemon}><DirectoryPicker title="Choose directory" onPick={() => {}} onClose={() => {}} /></DaemonProvider>));
+  await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+  const first = document.querySelector('[role="alert"]')!;
+  const retry = [...document.querySelectorAll('[data-slot="alert-root"] button')].find((button) => button.textContent === "Try again") as HTMLButtonElement;
+  act(() => retry.focus());
+  await act(async () => retry.click());
+  expect(request).toHaveBeenCalledTimes(2);
+  const second = document.querySelector('[role="alert"]')!;
+  expect(second).not.toBe(first);
+  expect(second.textContent).toContain("Something unexpected went wrong.");
+  expect(document.activeElement).toBe(retry);
+});
+
+it("keeps Try again where it is, pending and focused, while its listing is out", async () => {
+  vi.useFakeTimers();
+  onTestFinished(() => void vi.useRealTimers());
+  let finish!: (error: Error) => void;
+  const request = vi
+    .fn()
+    .mockRejectedValueOnce(new Error("Permission denied"))
+    .mockReturnValueOnce(new Promise((_, reject) => void (finish = reject)));
+  const daemon = { store: createStateStore(), request } as unknown as Daemon;
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  await act(async () => root.render(<DaemonProvider value={daemon}><DirectoryPicker title="Choose directory" onPick={() => {}} onClose={() => {}} /></DaemonProvider>));
+  await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+  const retry = [...document.querySelectorAll('[data-slot="alert-root"] button')].find((button) => button.textContent === "Try again") as HTMLButtonElement;
+  act(() => retry.focus());
+  await act(async () => retry.click());
+  expect(request).toHaveBeenCalledTimes(2);
+  expect(document.querySelector('[data-slot="alert-root"]')).not.toBeNull();
+  expect(retry.isConnected).toBe(true);
+  expect(retry.getAttribute("aria-disabled")).toBe("true");
+  expect(retry.hasAttribute("data-pending")).toBe(true);
+  expect(document.activeElement).toBe(retry);
+  await act(async () => retry.click());
+  expect(request).toHaveBeenCalledTimes(2);
+  await act(async () => finish(new Error("Permission denied")));
+  expect(retry.isConnected).toBe(true);
+  expect(retry.getAttribute("aria-disabled")).not.toBe("true");
+  expect(document.activeElement).toBe(retry);
 });

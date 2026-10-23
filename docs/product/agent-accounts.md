@@ -151,7 +151,8 @@ directory are shown as in "How paths are shown" in `docs/product/settings.md`.
 Every account of an available agent, the default account included, also shows its plan quota: the plan beside its
 name, and beneath the account's row, across its whole width, a line and bar per quota window, the 5-hour and Weekly
 windows sharing one meter — or, in its place,
-that the quota is still being read, is unavailable, or is out of date. Opening the section asks for a fresh reading,
+that the quota is still being read; a quota that is unavailable or out of date is marked on the account's name line or
+beside when it was read. Opening the section asks for a fresh reading,
 covering the accounts of every agent and not only of the tab in view; the readings already held are shown at once. What is read, when, and how each state looks are in `docs/product/account-quotas.md`.
 
 **Login state.** After the account's name and its plan, a badge says whether the account is logged in, in words and
@@ -196,13 +197,13 @@ stands under the switch is its description for assistive technology:
 | Sessions of the account working | Unavailable | That sharing cannot be changed while that many of the account's sessions are working, and to wait for them to finish. Which sessions count as working is in "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`. |
 | The account being signed in | Unavailable | That sharing cannot be changed while the account is being signed in. With sessions running too, both lines are shown. |
 | A change running | Unavailable | A progress bar (below). |
-| The last change incomplete | Its position before that change (on, after a moved default directory) | A warning (below). |
+| The last change incomplete | Its position before that change (on, after a moved default directory) | An amber alert (below). |
 
 Text typed into an idle session's terminal but not yet sent is not seen, and is lost when the change ends that session
 (see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`); the switch does not warn
 of it.
 
-The on and off captions are shown only when nothing else is: a progress bar or the warning takes their place. A
+The on and off captions are shown only when nothing else is: a progress bar or the alert takes their place. A
 reason the account is in use is shown as well as either of these. The switch is also unavailable while this window's
 own request for a change is still unanswered, and shows the recorded choice meanwhile.
 
@@ -217,31 +218,29 @@ change starts, together with the phase when that is not the entries, and each la
 except entering the entries phase, which keeps what was last said.
 
 **When the change ends** the result is shown at the switch at once. A change that completed leaves the caption of the
-new state. One that did not complete — whether it failed just now or the daemon was stopped during it — is shown the
-same way in both cases, by one warning box holding everything about it, in this order:
+new state. One that did not complete — whether it failed just now or the daemon was stopped during it — is shown under
+the switch as one compact amber alert (see "Failures shown on the screen" in `docs/product/error-alerts.md`):
 
-- a title saying that turning sharing on (or off) did not finish, and under it why, in plain language,
-  when that is known: one line per cause, naming the entries it hit compactly, the first by name and the rest as a
-  count ("You do not have permission to change `skills/` and 1 more."), a conversation by the name of a session
-  that records it, each line going on with what to do about its cause; or, when no entry is listed, the reason the
-  change as a whole failed with what to do about it, or only a line pointing at Details when the reason is not a
-  named one (see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`). After a
-  daemon restart nothing is known of the failure, so there is no reason. The title and these lines are the only part
-  of the warning announced to assistive technology, and only when the failure follows a change this view saw running,
-  not for one already there when the section opens;
+- a title saying that turning sharing on (or off) could not finish, or, after a daemon restart, when nothing is known
+  of the failure, that the last attempt to turn it on (or off) did not finish;
+- for a failure, one sentence saying that some files or folders could not be changed. The title and this sentence are
+  the only part of the alert announced to assistive technology, and only when the failure follows a change this view
+  saw running, not for one already there when the section opens;
 - then what to do: turn the switch on (or off) again to try once more, or, after a moved default directory, turn it
-  off, then on again; with idle sessions of the account, the line saying that changing sharing ends and resumes them
-  follows, since a retry does too;
-- then a collapsed **Details** disclosure, laid out as in "When a change is carried out" in
-  `docs/product/sharing-the-default-configuration.md`: each entry with what it was left as and the raw diagnostic;
-  or, with no entry listed, the one raw reason the change failed. It is present only when the failure has something
-  there, so never after a restart.
+  off, then on again. The alert has no retry button of its own;
+- a **Details** button, present only when there is something behind it, opening a popover that holds, in order: why,
+  in plain language, when that is known — one line per cause, naming the entries it hit compactly, the first by name
+  and the rest as a count ("You do not have permission to change `skills/` and 1 more."), a conversation by the name of
+  a session that records it, each line going on with what to do about its cause; or, when no entry is listed, the
+  reason the change as a whole failed with what to do about it, when it is a named one (see "When a change is carried
+  out" in `docs/product/sharing-the-default-configuration.md`); then, with idle sessions of the account, the line
+  saying that changing sharing ends and resumes them, since a retry does too; then each entry with what it was left
+  as and the raw diagnostic, or, with no entry listed, the one raw reason the change failed.
 
 The causes and what each covers are in "When a change is carried out" in
-`docs/product/sharing-the-default-configuration.md`. The warning stays while the account's last change is incomplete
+`docs/product/sharing-the-default-configuration.md`. The alert stays while the account's last change is incomplete
 and no change runs; the failure's details are dropped once the next change records its choice, so a retry refused
-or stopped before that keeps them. When the warning goes while
-keyboard focus is inside it, focus moves to the switch. A failure is shown only there, not in an error alert, the
+or stopped before that keeps them. When the alert goes while keyboard focus is inside it, focus moves to the switch. A failure is shown only there, not in an error alert, the
 window that asked for the change included. A refused request (an account in use, a change already running) is shown
 in an error alert, the switch keeping its position.
 
@@ -306,9 +305,9 @@ directory, which can be typed or picked with the directory browser (see "Browsin
 belongs to one agent's layout. The directory is checked for being absolute (or starting with `~/`) and for not being
 already used by another account of the same agent, the default account included (the full rules are in "Agent config
 directories" in `docs/product/consoles.md`); one that does not exist yet is accepted, and the form says that it
-need not exist yet. A directory already in use is reported, once saving is attempted, under the directory
-field, naming the account that uses it — the default account by the name it is shown under; the report goes away as
-soon as the directory is changed, typed or picked, or another agent is picked. For a Grok Build account the form adds
+need not exist yet. A directory already in use is refused by the daemon once saving is attempted, and the refusal is
+shown in an error alert naming the account that uses it — the default account by the name it is shown under — with
+the form left open and what was entered kept. For a Grok Build account the form adds
 that the directory has to be a Grok home that Grok has already been run against, which is checked when a session
 launches.
 

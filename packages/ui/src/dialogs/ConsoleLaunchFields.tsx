@@ -122,8 +122,8 @@ export function ConsoleLaunchFields({
  * it the cells stack under a heading for each kind, and each picker shows the name of its setting
  * above it. The headers are for the eye alone, hidden from assistive technology: each picker is
  * named by the two it sits under, its kind first, and described by the note on its kind, which sits
- * below the table. Both Model pickers are also described by the note on the model list (loading, or
- * why there is none), which they carry.
+ * below the table. Both Model pickers are also described by the note on the model list while it loads,
+ * which they carry; why there is none is one Alert below the table.
  */
 function LaunchMatrix({
   launch,
@@ -181,6 +181,7 @@ function LaunchMatrix({
           <EffortPicker launch={launch} model={projectSessions.model} effort={projectSessions.effort} onChange={(value) => onProjectChange("effort", value)} hideLabel labelledBy={`${projectKindId} ${effortRowId}`} describedBy={projectNoteId} />
         </div>
       </div>
+      {launch.modelAlert}
       <Description id={consoleNoteId}>{t("dialog.console.launchSettingsNote")}</Description>
       <Description id={projectNoteId}>{t("dialog.console.projectLaunchSettingsNote")}</Description>
     </div>

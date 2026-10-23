@@ -81,8 +81,8 @@ meant to be discarded there, or has to be sent on the way out.
 
 Do not switch a dialog to its next subject by re-keying it (`key={item.id}`): the remounted modal records the
 outgoing one's soon-detached element as its focus-restore target, so focus is lost again when it closes. Keep it
-mounted and reset the per-item state from `resetKey` instead (`useDialogAction(resetKey)` does that for the error and
-busy state).
+mounted and reset the per-item state from `resetKey` instead (`useDialogAction(resetKey)` does that for the busy
+state).
 
 A control that stays mounted costs the same when it turns disabled: react-aria's `isDisabled` puts the native
 `disabled` attribute on the element, which blurs the control the user has just pressed. So a button disabled for

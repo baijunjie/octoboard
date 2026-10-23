@@ -10,7 +10,7 @@ import type { GitStatus } from "./protocol";
 
 /** The tooltip's rich facts, retaining raw Git diagnostics outside the branch's inline copy. */
 export function gitBadgeContent(language: Language, t: Translate, status: GitStatus): React.ReactNode {
-  const branch = status.branch == null ? undefined : <InlineChip size="inherit" monospace wrap>{status.branch}</InlineChip>;
+  const branch = status.branch == null ? undefined : <InlineChip monospace wrap>{status.branch}</InlineChip>;
   const phrases: React.ReactNode[] = [];
   if (status.activity !== "idle") {
     const key = status.activity === "pushing" ? "sidebar.git.pushing" : status.activity === "pulling" ? "sidebar.git.pulling" : "sidebar.git.checking";

@@ -1,8 +1,7 @@
 import type { ErrorPresentation } from "../errorPresentation";
-import { errorText } from "../errorText";
-import { messageCode } from "../daemonMessage";
+import { daemonMessage, messageCode } from "../daemonMessage";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
-import { isolate } from "../i18n/isolate";
+import type { Language } from "../i18n/languages";
 import { displayWirePath } from "../wirePath";
 
 const SUMMARIES = new Map<string, PlainMessageKey>([
@@ -14,16 +13,18 @@ const SUMMARIES = new Map<string, PlainMessageKey>([
   ["source_changed", "viewer.error.sourceChanged"],
 ]);
 
-export function viewerErrorKey(error: ErrorPresentation, path: string): PlainMessageKey | "viewer.error.permissionDenied" | undefined {
+export function viewerErrorKey(error: ErrorPresentation, path: string): PlainMessageKey | undefined {
   if (typeof error === "string" || error.params.path !== displayWirePath(path)) return undefined;
-  if (error.code === "permission_denied" && error.params.detail) return "viewer.error.permissionDenied";
+  if (error.code === "permission_denied" && error.params.detail) return "viewer.error.permissionDenied.summary";
   return SUMMARIES.get(messageCode(error.code, error.params));
 }
 
-export function viewerErrorText(t: Translate, error: ErrorPresentation, path: string): string {
+/** The failure as one plain line. The system's own reason is raw text, kept out of this line (the
+ * failure shows it behind Details where it has them), so a daemon failure that is not the viewer's
+ * own file is worded as its summary sentence, never with the raw `{detail}` filled in. */
+export function viewerErrorText(t: Translate, language: Language, error: ErrorPresentation, path: string, records: Parameters<typeof daemonMessage>[4]): string {
   const key = viewerErrorKey(error, path);
-  if (key === "viewer.error.permissionDenied" && typeof error !== "string") {
-    return t(key, { detail: isolate(error.params.detail) });
-  }
-  return key && key !== "viewer.error.permissionDenied" ? t(key) : errorText(error);
+  if (key) return t(key);
+  if (typeof error === "string") return error;
+  return daemonMessage(language, error.code, error.params, error.message, records, true);
 }

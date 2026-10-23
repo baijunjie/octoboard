@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { Description, Input, Label, TextField } from "@heroui/react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -25,29 +28,29 @@ it("inherits the closest alert tone even when the caller requests a conflicting 
   const container = mount(
     <>
       <InlineChip monospace wrap size="xs">neutral</InlineChip>
-      <InlineChip monospace wrap size="xs" color="secondary">purple</InlineChip>
+      <InlineChip monospace wrap size="xs" color="help">purple</InlineChip>
       <TintedAlert status="danger">
         <InlineChip monospace wrap size="xs" color="success">outer</InlineChip>
         <TintedAlert status="warning"><InlineChip monospace wrap size="xs" color="danger">inner</InlineChip></TintedAlert>
-        <CodeBlock color="primary">outer block</CodeBlock>
+        <CodeBlock color="accent">outer block</CodeBlock>
       </TintedAlert>
       <InlineChip monospace wrap size="xs">after</InlineChip>
     </>,
   );
   expect(Array.from(container.querySelectorAll("code")).map((el) => el.dataset.color)).toEqual([
-    "default", "secondary", "danger", "warning", "danger", "default",
+    "default", "help", "danger", "warning", "danger", "default",
   ]);
   expect(container.querySelector('[role="alert"]')).toBeNull();
 });
 
-it("maps accent to primary and lets a neutral alert override explicit color", () => {
+it("takes an accent alert's colour and lets a neutral alert override explicit color", () => {
   const container = mount(
     <>
       <TintedAlert status="accent"><InlineChip monospace wrap size="xs">accent</InlineChip></TintedAlert>
       <TintedAlert><InlineChip monospace wrap size="xs" color="danger">neutral</InlineChip></TintedAlert>
     </>,
   );
-  expect(Array.from(container.querySelectorAll("code")).map((el) => el.dataset.color)).toEqual(["primary", "default"]);
+  expect(Array.from(container.querySelectorAll("code")).map((el) => el.dataset.color)).toEqual(["accent", "default"]);
 });
 
 it("isolates code typography without consuming the field's description slot", () => {
@@ -93,4 +96,46 @@ it("preserves diagnostic lines and supports wrapping or a full-width scrollable 
     expect(pre.querySelector("code")?.classList.contains("w-full")).toBe(true);
     expect(pre.querySelector("code")?.classList.contains("select-text")).toBe(true);
   }
+});
+
+it("defaults to xs and marks an unbroken chip", () => {
+  const container = mount(
+    <>
+      <InlineChip>plain</InlineChip>
+      <InlineChip size="sm">padded</InlineChip>
+      <InlineChip unbroken>whole</InlineChip>
+    </>,
+  );
+  const chips = Array.from(container.querySelectorAll<HTMLElement>("[data-inline-chip]"));
+  expect(chips.map((chip) => chip.dataset.size)).toEqual(["xs", "sm", "xs"]);
+  // style.css tightens the line height of an unbroken chip, so it stays clear of the line below.
+  expect(chips[2].classList).toContain("inline-chip--unbroken");
+  expect(chips[1].classList).not.toContain("inline-chip--unbroken");
+});
+
+it("draws each colour's fill and text from the shared tint, the badge's, and never its edge", () => {
+  // jsdom resolves no `var()`, so the rules are read from style.css.
+  const css = readFileSync(resolve(import.meta.dirname, "../style.css"), "utf8");
+  const tints = { default: "default", accent: "accent", help: "help", success: "success", warning: "warning", danger: "danger" };
+  for (const [color, tint] of Object.entries(tints)) {
+    expect(css).toContain(`.inline-chip.chip--soft[data-color="${color}"] { --chip-bg: var(--tint-${tint}-bg); --chip-fg: var(--tint-${tint}-fg); }`);
+  }
+  expect(css).not.toMatch(/\.inline-chip[^{]*\{[^}]*--tint-\w+-edge/);
+});
+
+it("styles every size as padding around the font of the surrounding text", () => {
+  // jsdom resolves neither inheritance nor `var()`, so the rules are read from style.css (by directory: under jsdom
+  // `import.meta.url` is not a file URL);
+  // scripts/gallery-chip-geometry.mjs measures the result in a browser.
+  const css = readFileSync(resolve(import.meta.dirname, "../style.css"), "utf8");
+  const rule = (selector: string) => css.match(new RegExp(`^${selector.replace(/[.[\]"]/g, "\\$&")} \\{([^}]*)\\}`, "m"))?.[1] ?? "";
+  const padding = (selector: string) => ["block", "inline"].map((axis) => rule(selector).match(new RegExp(`--inline-chip-${axis}: (\\S+);`))?.[1]);
+  for (const property of ["font-family", "font-size", "font-weight", "line-height"]) expect(rule(".inline-chip")).toContain(`${property}: inherit;`);
+  expect(rule(".inline-chip")).toContain("display: inline;");
+  expect(padding(".inline-chip")).toEqual(["0", "4px"]);
+  expect(padding('.inline-chip[data-size="sm"]')).toEqual(["1px", "6px"]);
+  expect(padding('.inline-chip[data-size="md"]')).toEqual(["2px", "8px"]);
+  expect(padding('.inline-chip[data-size="lg"]')).toEqual(["3px", "10px"]);
+  const container = mount(<>{(["xs", "sm", "md", "lg"] as const).map((size) => <InlineChip key={size} size={size}>{size}</InlineChip>)}</>);
+  expect(Array.from(container.querySelectorAll<HTMLElement>("[data-inline-chip]"), (chip) => chip.dataset.size)).toEqual(["xs", "sm", "md", "lg"]);
 });

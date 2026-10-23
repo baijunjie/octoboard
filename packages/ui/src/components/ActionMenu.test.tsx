@@ -2,8 +2,13 @@
 import { act, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { Trash2 } from "lucide-react";
+import { setInteractionModality } from "react-aria";
+import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
+import { errorAlerts } from "../errorAlerts";
+import { detailsButton } from "./detailsTestSupport";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "./StatusAnnouncer";
 import { ActionMenu, type ActionMenuEntry, type ActionMenuPanelContext } from "./ActionMenu";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -13,6 +18,14 @@ let unmount: (() => void) | undefined;
 afterEach(() => {
   unmount?.();
   unmount = undefined;
+});
+
+beforeEach(() => {
+  const modality = getInteractionModality();
+  onTestFinished(() => {
+    // The getter can return the initial null state, which the setter accepts at runtime.
+    act(() => setInteractionModality(modality as Parameters<typeof setInteractionModality>[0]));
+  });
 });
 
 async function openMenu(items: ActionMenuEntry[]): Promise<void> {
@@ -109,24 +122,44 @@ it("loads a submenu on open and retries its failed load without closing", async 
   const load = vi.fn().mockRejectedValueOnce(new Error("repository unavailable")).mockResolvedValueOnce([
     { label: "feature", icon: Trash2, onClick: () => {} },
   ]);
+  vi.useFakeTimers();
+  onTestFinished(() => void vi.useRealTimers());
   await openMenu([{ label: "Switch branch", icon: Trash2, items: [], loadItems: load }]);
   expect(load).not.toHaveBeenCalled();
+  // The last input was a pointer, so the ring is shown only if the hand-off sets the modality.
+  act(() => setInteractionModality("pointer"));
   await act(async () => {
     const item = document.querySelector<HTMLElement>("[role=menuitem]")!;
     item.focus();
     item.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
   });
   expect(load).toHaveBeenCalledTimes(1);
-  expect(document.body.textContent).toContain("repository unavailable");
-  await act(async () => {
-    const retry = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((item) => item.textContent === "Try again")!;
-    retry.focus();
-    retry.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-    retry.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true }));
-  });
+  // The failure is one Alert in the submenu's popover holding the application's sentence, the system's
+  // text behind Details, and Try again, not a disabled item; the raw text is not in the visible copy.
+  const alert = document.querySelector('[data-slot="alert-root"]')!;
+  expect(alert.querySelector('[data-slot="alert-title"]')?.textContent).toBe("Could not load the items");
+  expect(alert.querySelector('[data-slot="alert-description"]')?.textContent).not.toContain("repository unavailable");
+  expect(detailsButton(alert)).toBeDefined();
+  const retry = [...alert.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
+  expect(retry).toBeDefined();
+  expect([...document.querySelectorAll("[role=menuitem]")].some((item) => item.textContent?.includes("repository unavailable"))).toBe(false);
+  // Focus that was in the submenu moves to Try again instead of falling to the page, with its ring
+  // shown, and the failure is not an error alert dialog. The alert announces itself once that focus
+  // move is past, not at the moment it mounts.
+  expect(errorAlerts.getSnapshot()).toEqual([]);
+  expect(document.activeElement).toBe(retry);
+  expect(getInteractionModality()).toBe("keyboard");
+  expect(alert.querySelector("[role=alert]")).toBeNull();
+  await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+  expect(alert.querySelector("[role=alert]")?.textContent).toContain("Could not load the items");
+  await act(async () => retry.click());
   expect(load).toHaveBeenCalledTimes(2);
+  expect(document.querySelector('[data-slot="alert-root"]')).toBeNull();
   expect(document.querySelectorAll("[role=menu]")).toHaveLength(2);
   expect(document.body.textContent).toContain("feature");
+  // ... and from there into the menu that took its place.
+  expect(document.activeElement).not.toBe(document.body);
+  expect(document.activeElement?.closest("[role=menu]")).not.toBeNull();
 });
 
 /** Content that puts focus on its own first control as it mounts when asked to, as a list box does. */
