@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished } from "vitest";
 
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { format, globalParam } from "./catalog";
 import { currentLanguage, setLanguage } from "./language";
 import { Message } from "./react";
@@ -29,8 +29,8 @@ it.each(["en", "zh-Hans", "ar"] as const)("keeps fixed product references rich a
   ] as const) {
     act(() => root.render(<Message id={id} />));
     expect(container.textContent).toBe(format(language, id));
-    expect([...container.querySelectorAll("[data-inline-chip]")].map((chip) => chip.textContent).sort()).toEqual([...expected].sort());
-    for (const chip of container.querySelectorAll("[data-inline-chip]")) {
+    expect([...container.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent).sort()).toEqual([...expected].sort());
+    for (const chip of container.querySelectorAll("[data-inline-reference]")) {
       expect(chip.getAttribute("dir")).toBe("auto");
       expect(chip.getAttribute("data-size")).toBe("xs");
       expect(chip.querySelector("code")).toBeNull();
@@ -41,17 +41,17 @@ it.each(["en", "zh-Hans", "ar"] as const)("keeps fixed product references rich a
   for (const id of ["branchCleanup.consequence.force", "dialog.sessionBranches.force"] as const) {
     for (const count of [1, 3]) {
       act(() => root.render(<Message id={id} params={{ count }} />));
-      expect([...container.querySelectorAll("[data-inline-chip]")].map((chip) => chip.textContent)).toEqual(["Git"]);
+      expect([...container.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent)).toEqual(["Git"]);
       expect(container.textContent).toBe(format(language, id, { count }));
     }
   }
-  act(() => root.render(<Message id="startup.noAddress.shell" params={{ port: <InlineChip monospace wrap>?port=</InlineChip> }} />));
-  expect([...container.querySelectorAll("[data-inline-chip]")].map((chip) => chip.textContent)).toEqual(["Tauri", "?port="]);
+  act(() => root.render(<Message id="startup.noAddress.shell" params={{ port: <InlineReference monospace wrap>?port=</InlineReference> }} />));
+  expect([...container.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent)).toEqual(["Tauri", "?port="]);
   const name = "مراجعة/中文/Work";
-  act(() => root.render(<Message id="dialog.session.ownerFixed" params={{ name: <InlineChip dir="auto" wrap>{name}</InlineChip> }} />));
-  expect(container.querySelector("[data-inline-chip]")?.textContent).toBe(name);
+  act(() => root.render(<Message id="dialog.session.ownerFixed" params={{ name: <InlineReference dir="auto" wrap>{name}</InlineReference> }} />));
+  expect(container.querySelector("[data-inline-reference]")?.textContent).toBe(name);
   expect(container.textContent).toBe(format(language, "dialog.session.ownerFixed", { name }));
   // Whole labels can deliberately supply their existing presentation instead of a referenced product chip.
   act(() => root.render(<Message id="history.speaker.octoboard" params={{ appName: globalParam("appName") } as never} />));
-  expect(container.querySelector("[data-inline-chip]")).toBeNull();
+  expect(container.querySelector("[data-inline-reference]")).toBeNull();
 });

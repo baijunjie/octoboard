@@ -9,7 +9,7 @@ import { FailureMark } from "../components/FailureMark";
 import { PaneFailure } from "../components/PaneFailure";
 import { useHasPainted } from "../components/useHasPainted";
 import { DaemonRequestError } from "../daemon-client";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useStableHandler } from "../components/useLatest";
@@ -117,9 +117,9 @@ function GitContent(props: { source: SourceState } & ChangesViewProps): React.Re
 }
 
 const code = (text: string) => (
-  <InlineChip monospace wrap>
+  <InlineReference monospace wrap>
     {text}
-  </InlineChip>
+  </InlineReference>
 );
 
 /** A line above the list, said in the words of the message it is. */

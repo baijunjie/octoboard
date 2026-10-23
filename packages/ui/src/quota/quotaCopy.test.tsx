@@ -26,8 +26,8 @@ it.each(["en", "zh-Hans", "ar"] as const)("retains plain quota APIs and rich sto
     const bare = (text: string) => text.replace(/[\u2068\u2069]/g, "");
     expect(container.querySelector('[data-slot="alert-title"]')?.textContent).toBe(bare(plain.title));
     expect(container.querySelector('[data-slot="alert-description"]')?.textContent).toBe(bare(plain.description));
-    expect(container.querySelector("[data-inline-chip]")?.textContent).toBe(name);
-    expect(container.querySelector("[data-inline-chip]")?.getAttribute("dir")).toBe("auto");
+    expect(container.querySelector("[data-inline-reference]")?.textContent).toBe(name);
+    expect(container.querySelector("[data-inline-reference]")?.getAttribute("dir")).toBe("auto");
     expect(quotaUsedUpSentence(t, name, window, 0)).not.toMatch(/<[^>]+>/);
     act(() => root.render(<QuotaWindowName window={window} t={t} />));
     expect(container.textContent).toBe(bare(quotaWindowLabel(t, window)));

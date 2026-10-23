@@ -3,7 +3,7 @@ import { Alert, Description, Label, Radio, RadioGroup } from "@heroui/react";
 import React, { useId, useState } from "react";
 
 import { appConfig } from "../appConfig";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { TintedAlert } from "../components/TintedAlert";
 import { ConfirmOption } from "../dialogs/ConfirmOption";
 import { Dialog, useDialogAction } from "../dialogs/Dialog";
@@ -66,7 +66,7 @@ export function ExportConfigurationDialog({
       if (saved === undefined) return;
       toastNotice(
         saved.kind === "saved" ? t("configuration.export.saved", { name: isolate(saved.name) }) : t("configuration.export.downloaded"),
-        saved.kind === "saved" ? <Message id="configuration.export.saved" params={{ name: <InlineChip monospace wrap>{saved.name}</InlineChip> }} /> : undefined,
+        saved.kind === "saved" ? <Message id="configuration.export.saved" params={{ name: <InlineReference monospace wrap>{saved.name}</InlineReference> }} /> : undefined,
       );
       onClose();
     });
@@ -89,7 +89,7 @@ export function ExportConfigurationDialog({
               <Radio.Control>
                 <Radio.Indicator />
               </Radio.Control>
-              <Label><Message id="configuration.export.scope.console" params={{ name: <InlineChip dir="auto" wrap>{inHand.name}</InlineChip> }} /></Label>
+              <Label><Message id="configuration.export.scope.console" params={{ name: <InlineReference dir="auto" wrap>{inHand.name}</InlineReference> }} /></Label>
             </Radio.Content>
             <Description>{t("configuration.export.scope.console.description")}</Description>
           </Radio>

@@ -375,7 +375,7 @@ it.each([
   for (const description of descriptions) {
     expect(description.textContent).not.toMatch(/[\u2066-\u2069]/);
     expect(description.querySelector("pre")).toBeNull();
-    const reference = description.querySelector("[data-inline-chip]");
+    const reference = description.querySelector("[data-inline-reference]");
     if ("binary" in params) {
       expect(reference?.textContent).toBe(params.binary);
       expect(reference?.getAttribute("dir")).toBe("ltr");
@@ -391,7 +391,7 @@ it.each([
   await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
   const statuses = Array.from(document.body.querySelectorAll('[role="status"]')).filter((node) => !node.closest("[hidden], [inert], [aria-hidden='true']"));
   expect(statuses.map((node) => node.textContent)).toEqual([reason]);
-  expect(statuses[0].querySelector("[data-inline-chip], code, pre")).toBeNull();
+  expect(statuses[0].querySelector("[data-inline-reference], code, pre")).toBeNull();
   // The diagnostics are behind the Alert's Details button: in its popover once opened, which is closed again
   // before the rest, since an open popover hides what is behind it.
   const detail = "detail" in params ? params.detail : undefined;

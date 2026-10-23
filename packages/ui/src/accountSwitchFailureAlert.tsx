@@ -3,7 +3,7 @@ import { useId } from "react";
 import { DaemonErrorMessage, ShellTimeoutCommand } from "./components/DaemonErrorMessage";
 import { DiagnosticBlock } from "./components/DiagnosticBlock";
 import { RecoveryGuidance } from "./components/ErrorGuidance";
-import { InlineChip } from "./components/InlineChip";
+import { InlineReference } from "./components/InlineReference";
 import { DETAIL_BLOCK_CODES, RECOVERY_CODES } from "./daemonMessage";
 import { errorAlerts } from "./errorAlerts";
 import { DaemonRequestError } from "./daemon-client";
@@ -93,7 +93,7 @@ export function reportSwitchFailures(failures: SwitchFailure[], accountName: str
   errorAlerts.report({
     // Plain text, which tells two batches to different accounts apart.
     message: [t("dialog.switchAccount.failed", { count, account: accountName }), ...failures.map(({ session, error }) => `${session.id}: ${errorText(error)}`)].join("\n"),
-    title: <Message id="dialog.switchAccount.failed" params={{ count, account: <InlineChip dir="auto" wrap>{accountName}</InlineChip> }} />,
+    title: <Message id="dialog.switchAccount.failed" params={{ count, account: <InlineReference dir="auto" wrap>{accountName}</InlineReference> }} />,
     failures: failures.map(({ error }) => ({ error })),
     content: (
       <div className="flex min-w-0 flex-col gap-3 whitespace-normal">

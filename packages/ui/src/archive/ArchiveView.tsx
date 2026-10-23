@@ -6,7 +6,7 @@ import { Button } from "../components/Button";
 import { SessionAgentIcon } from "../components/SessionAgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { PaneTitle } from "../components/PaneTitle";
 import { ArchivedSessionMetadata, hasVisibleContext, SessionContextLabel } from "../components/SessionMetadata";
 import { TitledControl } from "../components/TitledControl";
@@ -179,7 +179,7 @@ export function ArchiveView({
       <header className="flex h-(--pane-header-height) shrink-0 items-center gap-1 groove-b px-2 ps-4">
         <PaneTitle
           heading={t(project ? "archive.heading.project" : boundTo ? "archive.heading.boundSessions" : "archive.heading.consoleSessions")}
-          headingTitle={<Message id={project ? "archive.title.project" : boundTo ? "archive.title.boundSessions" : "archive.title.consoleSessions"} params={{ name: <InlineChip dir="auto" wrap>{project ? project.name : boundTo ? sessionDisplayTitle(t, boundTo) : owner.name}</InlineChip> }} />}
+          headingTitle={<Message id={project ? "archive.title.project" : boundTo ? "archive.title.boundSessions" : "archive.title.consoleSessions"} params={{ name: <InlineReference dir="auto" wrap>{project ? project.name : boundTo ? sessionDisplayTitle(t, boundTo) : owner.name}</InlineReference> }} />}
           overline={t("archive.count", { count: archived.length })}
         />
         {archived.length > 0 && (
@@ -301,7 +301,7 @@ function ArchiveRow({
                 <RotateCcw aria-hidden="true" className="size-4" />
                 {t("sidebar.session.reopen")}
               </Button>
-              <TitledControl title={<Message id="archive.delete" params={{ title: <InlineChip dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineChip> }} />}>
+              <TitledControl title={<Message id="archive.delete" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference> }} />}>
                 <Button
                   isIconOnly
                   size="sm"

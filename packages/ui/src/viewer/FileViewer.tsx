@@ -4,7 +4,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "re
 import { Button } from "../components/Button";
 import { CopyButton } from "../components/CopyButton";
 import { FileTypeIcon } from "../components/FileTypeIcon";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { PaneFailure } from "../components/PaneFailure";
 import { StatusBadge } from "../components/StatusBadge";
 import { FadeOverflow } from "../components/FadeOverflow";
@@ -580,7 +580,7 @@ function ChangeView({
           <Notice tone="warned">
             <Message
               id={presentation.hidden === "old" ? "viewer.change.outsideOld" : "viewer.change.outsideNew"}
-              params={{ path: <InlineChip monospace wrap>{displayWirePath(presentation.repositoryPath)}</InlineChip> }}
+              params={{ path: <InlineReference monospace wrap>{displayWirePath(presentation.repositoryPath)}</InlineReference> }}
             />
           </Notice>
           {shown.state === "present" && shown.body ? (

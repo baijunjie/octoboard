@@ -178,7 +178,7 @@ The alert distinguishes failures with a known user remedy from unexpected failur
 and require acknowledgement.
 
 **An actionable failure** includes a specific next step alongside the original reason. References to controls such as
-Retry, Browse and Unlock appear as inline chips rather than quoted text. For example:
+Retry, Browse and Unlock appear as inline references rather than quoted text. For example:
 
 - A full disk asks the user to free space on the disk used by Octoboard and the project, then retry.
 - A locked session asks the user to choose Unlock in that session's action menu, then retry.
@@ -219,7 +219,7 @@ context, even when they have no stack trace. It asks the user to take a screensh
 steps that led to the failure.
 
 **Report issue** is a secondary action in the footer, before the acknowledgement button, with a trailing
-external-link icon. The guidance names it with a non-interactive inline chip; only the footer action is a link. It
+external-link icon. The guidance names it with a non-interactive inline reference; only the footer action is a link. It
 opens the explicit `issueUrl` configured in `config/app.json` when the user activates it. Repeated activation is
 blocked while opening is pending. It does not create an Issue or attach diagnostics or a screenshot automatically.
 The error stays open until acknowledged.

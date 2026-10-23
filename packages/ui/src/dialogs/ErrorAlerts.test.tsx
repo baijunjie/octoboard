@@ -101,7 +101,7 @@ it("offers screenshot and Issue guidance for unexpected failures, opening only a
   const report = [...alert.querySelectorAll("a")].find((link) => link.textContent === "Report issue")!;
   expect(report.getAttribute("href")).toBe(appConfig.issueUrl);
   expect(report.classList.contains("button--secondary")).toBe(true);
-  expect(alert.querySelector("p [data-inline-chip]")?.textContent).toBe("Report issue");
+  expect(alert.querySelector("p [data-inline-reference]")?.textContent).toBe("Report issue");
   expect(alert.querySelector("p a")).toBeNull();
   expect(report.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
   expect(alert.querySelectorAll('a[href="' + appConfig.issueUrl + '"]')).toHaveLength(1);
@@ -145,7 +145,7 @@ it.each([
 ] as const)("renders %s recovery control references as chips", (recovery, labels) => {
   mount();
   act(() => errorAlerts.report({ message: "Action failed", recovery }));
-  const chips = [...document.querySelectorAll('[role="alertdialog"] [data-inline-chip]')].map((chip) => chip.textContent);
+  const chips = [...document.querySelectorAll('[role="alertdialog"] [data-inline-reference]')].map((chip) => chip.textContent);
   expect(chips).toEqual(labels);
 });
 

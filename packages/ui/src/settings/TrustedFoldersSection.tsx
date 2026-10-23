@@ -3,7 +3,7 @@ import React, { useState } from "react";
 
 import { Button } from "../components/Button";
 import { EmptyPanel } from "../components/EmptyPanel";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { MarkedPath } from "../components/MarkedPath";
 import { useListMotion } from "../components/useListMotion";
 import { TitledControl } from "../components/TitledControl";
@@ -68,7 +68,7 @@ export function TrustedFoldersSection(): React.ReactElement {
       )}
       {removing && (
         <ConfirmDialog
-          title={<Message id="settings.trusted.removeTitle" params={{ path: <InlineChip monospace wrap>{abbreviateHome(removing, home)}</InlineChip> }} />}
+          title={<Message id="settings.trusted.removeTitle" params={{ path: <InlineReference monospace wrap>{abbreviateHome(removing, home)}</InlineReference> }} />}
           message={t("settings.trusted.removeMessage")}
           confirmLabel={t("common.remove")}
           destructive

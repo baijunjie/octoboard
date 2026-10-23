@@ -40,8 +40,8 @@ it.each(["en", "zh-Hans", "ar"] as const)("keeps rich location wording equal to 
     const container = mount(sessionLocationContent(t, session, consoles, projects));
     expect(container.textContent).toBe(bare(sessionLocation(t, session, consoles, projects)));
     // A project's name is the whole title, so it is no chip; a console's name runs inside a sentence, so it is one.
-    expect(container.querySelector("[data-inline-chip]") === null).toBe(projectId === project.id || projectId === "gone");
-    for (const chip of container.querySelectorAll("[data-inline-chip]")) {
+    expect(container.querySelector("[data-inline-reference]") === null).toBe(projectId === project.id || projectId === "gone");
+    for (const chip of container.querySelectorAll("[data-inline-reference]")) {
       expect(chip.getAttribute("dir")).toBe("auto");
       expect(chip.querySelector("code")).toBeNull();
     }
@@ -52,7 +52,7 @@ it.each(AGENT_OPTIONS)("retains account qualifiers and removed-account paths for
   for (const account of [undefined, { id: "stored", name: "العمل Work 中文", config_dir: "/home/stored" }]) {
     const session = sessionOf("s", "c", "p", "Task", "idle", { agent, account_id: account?.id ?? "gone", config_dir: "/Users/中文/old account" });
     const container = mount(<SessionAgentTooltip session={session} accounts={account ? [{ ...account, agent }] : []} defaultNames={undefined} />);
-    expect(container.querySelector("[data-inline-chip]")).toBeNull();
+    expect(container.querySelector("[data-inline-reference]")).toBeNull();
     expect(container.firstElementChild!.firstElementChild!.textContent).toBe(label);
     expect(container.textContent).toContain(account?.name ?? session.config_dir);
     expect(container.querySelector("code")?.textContent).toBe(account ? undefined : session.config_dir);
@@ -69,7 +69,7 @@ it.each(["en", "zh-Hans", "ar"] as const)("preserves every Git phase and diagnos
       const container = mount(gitBadgeContent(language, t, status));
       expect(container.textContent).toBe(bare(gitBadgeAriaLabel(language, t, status)));
       expect(container.querySelector("pre")?.textContent).toBe(status.error);
-      expect(Array.from(container.querySelectorAll("[data-inline-chip]")).filter((chip) => chip.querySelector("code"))).toHaveLength(branch ? 1 : 0);
+      expect(Array.from(container.querySelectorAll("[data-inline-reference]")).filter((chip) => chip.querySelector("code"))).toHaveLength(branch ? 1 : 0);
     }
   }
 });

@@ -1,7 +1,7 @@
 import React from "react";
 
 import { CodeBlock } from "./components/CodeBlock";
-import { InlineChip } from "./components/InlineChip";
+import { InlineReference } from "./components/InlineReference";
 import type { Translate } from "./i18n/catalog";
 import { joinNodes } from "./i18n/joinPhrases";
 import type { Language } from "./i18n/languages";
@@ -10,7 +10,7 @@ import type { GitStatus } from "./protocol";
 
 /** The tooltip's rich facts, retaining raw Git diagnostics outside the branch's inline copy. */
 export function gitBadgeContent(language: Language, t: Translate, status: GitStatus): React.ReactNode {
-  const branch = status.branch == null ? undefined : <InlineChip monospace wrap>{status.branch}</InlineChip>;
+  const branch = status.branch == null ? undefined : <InlineReference monospace wrap>{status.branch}</InlineReference>;
   const phrases: React.ReactNode[] = [];
   if (status.activity !== "idle") {
     const key = status.activity === "pushing" ? "sidebar.git.pushing" : status.activity === "pulling" ? "sidebar.git.pulling" : "sidebar.git.checking";

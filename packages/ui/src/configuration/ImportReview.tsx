@@ -4,7 +4,7 @@ import React, { useId, useState } from "react";
 
 import { Button } from "../components/Button";
 import { AGENT_LABEL } from "../agents";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { TILDE_PARAMS } from "../components/literalParams";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { DirectoryPicker } from "../dialogs/DirectoryPicker";
@@ -86,7 +86,7 @@ function SettingNote({
   current: boolean;
   turnsOn: SettingMessage;
 }): React.ReactElement {
-  const setting = <InlineChip dir="auto" wrap>{label}</InlineChip>;
+  const setting = <InlineReference dir="auto" wrap>{label}</InlineReference>;
   const id: SettingMessage =
     wanted === current
       ? wanted ? "configuration.import.settings.alreadyOn" : "configuration.import.settings.alreadyOff"
@@ -100,7 +100,7 @@ function FallbackNote({ fallback }: { fallback: AccountFallback }): React.ReactE
     <p className="flex items-start gap-2 text-sm">
       <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning-soft-foreground" />
       <span className="min-w-0">
-        <Message id="configuration.import.fallback" params={{ agent: <InlineChip dir="auto" wrap>{AGENT_LABEL[fallback.agent]}</InlineChip>, name: <InlineChip dir="auto" wrap>{fallback.name}</InlineChip> }} />
+        <Message id="configuration.import.fallback" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[fallback.agent]}</InlineReference>, name: <InlineReference dir="auto" wrap>{fallback.name}</InlineReference> }} />
       </span>
     </p>
   );
@@ -154,7 +154,7 @@ function ProjectRow({
                   ? "configuration.import.project.exportedPathUsed"
                   : "configuration.import.project.exportedPath"
               }
-              params={{ path: <InlineChip monospace wrap>{project.path}</InlineChip> }}
+              params={{ path: <InlineReference monospace wrap>{project.path}</InlineReference> }}
             />
           </span>
         )}
@@ -171,7 +171,7 @@ function ProjectRow({
       {row.choice === "directory" ? (
         <TextInput
           label={t("configuration.import.directory.label", { project: isolate(project.name) })}
-          labelContent={<Message id="configuration.import.directory.label" params={{ project: <InlineChip dir="auto" wrap>{project.name}</InlineChip> }} />}
+          labelContent={<Message id="configuration.import.directory.label" params={{ project: <InlineReference dir="auto" wrap>{project.name}</InlineReference> }} />}
           value={row.directory}
           onChange={(directory) => onChange({ ...row, directory })}
           dir="ltr"
@@ -187,12 +187,12 @@ function ProjectRow({
         <p>
           <Message
             id="configuration.import.target.clone"
-            params={{ url: <InlineChip monospace wrap>{project.remote_url ?? ""}</InlineChip>, path: <InlineChip monospace wrap>{target ?? ""}</InlineChip> }}
+            params={{ url: <InlineReference monospace wrap>{project.remote_url ?? ""}</InlineReference>, path: <InlineReference monospace wrap>{target ?? ""}</InlineReference> }}
           />
         </p>
       ) : inPlace ? null : (
         <p>
-          <Message id="configuration.import.target.place" params={{ path: <InlineChip monospace wrap>{target ?? ""}</InlineChip> }} />
+          <Message id="configuration.import.target.place" params={{ path: <InlineReference monospace wrap>{target ?? ""}</InlineReference> }} />
         </p>
       )}
       {project.account_fallbacks.map((fallback) => (
@@ -326,7 +326,7 @@ export function ImportReview({
     <>
       <StatusAnnouncer text={announcement} />
       <p className="text-sm">
-        <Message id="configuration.import.review.intro" params={{ file: <InlineChip monospace wrap>{fileName}</InlineChip>, skip: <InlineChip dir="auto" wrap>{t("configuration.import.choice.skip")}</InlineChip> }} />
+        <Message id="configuration.import.review.intro" params={{ file: <InlineReference monospace wrap>{fileName}</InlineReference>, skip: <InlineReference dir="auto" wrap>{t("configuration.import.choice.skip")}</InlineReference> }} />
       </p>
       <LabelledGroup label={t("configuration.import.all.label")}>
         <div className="flex flex-wrap gap-2">

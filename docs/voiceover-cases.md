@@ -652,7 +652,7 @@ not a literal HTML serialization. PLAIN-1 and PLAIN-2 are hand-built regions and
 - **Mechanism.** Text replaced in place in a `role="status"` div mounted with the dialog (E1), with no
   `StatusAnnouncer`, no delay and no nested alert; focus rested on Cancel login.
   `packages/ui/src/settings/AccountLoginDialog.tsx` in that build; the code chip rendered through
-  `packages/ui/src/components/InlineChip.tsx`. Superseded in the product by SA-C's mechanism; the result remains
+  `packages/ui/src/components/InlineReference.tsx`. Superseded in the product by SA-C's mechanism; the result remains
   evidence for this kind.
 - **ARIA wiring as rendered.** The region held a spinner (`aria-hidden`) and a text span. Natively a group with the
   application-status subrole, empty own name, live polite, atomic, relevant additions and text, with the text in

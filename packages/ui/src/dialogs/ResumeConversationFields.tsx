@@ -5,7 +5,7 @@ import { AGENT_LABEL } from "../agents";
 import { agentIconPickerOptions } from "../components/AgentIcon";
 import { DaemonErrorMessage, errorDetails, errorRemedy } from "../components/DaemonErrorMessage";
 import { ErrorAlert } from "../components/ErrorAlert";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { EXAMPLE_CONVERSATION_ID } from "../conversationId";
@@ -89,7 +89,7 @@ export function ResumeConversationFields({
   const handoff = useFocusHandoff(() => idFieldRef.current?.querySelector("input")?.focus());
   const idProblems = {
     required: t("dialog.session.resumeRequired"),
-    invalid: <Message id="dialog.session.resumeInvalid" params={{ example: <InlineChip monospace wrap>{EXAMPLE_CONVERSATION_ID}</InlineChip> }} />,
+    invalid: <Message id="dialog.session.resumeInvalid" params={{ example: <InlineReference monospace wrap>{EXAMPLE_CONVERSATION_ID}</InlineReference> }} />,
   };
   return (
     <>

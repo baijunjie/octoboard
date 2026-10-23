@@ -6,7 +6,7 @@ import { appConfig } from "../appConfig";
 import { CodeBlock } from "../components/CodeBlock";
 import { ExternalLink } from "../components/ExternalLink";
 import { RecoveryGuidance, recoveryAction } from "../components/ErrorGuidance";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { FadedScroller, useFadeRegion } from "../components/scrollFade";
 import { errorAlerts } from "../errorAlerts";
 import { diagnosticText } from "../errorText";
@@ -104,8 +104,8 @@ export function ErrorAlerts({ daemon }: { daemon?: Daemon }): React.ReactElement
       {error.classification.kind === "unexpected"
         ? <>
           <p>{manualIssue
-            ? <Message id="error.unexpected.manualAddressGuidance" params={{ address: <InlineChip monospace wrap>{issueUrl}</InlineChip> }} />
-            : <Message id="error.unexpected.reportGuidance" params={{ report: <InlineChip>{t("error.issue.report")}</InlineChip> }} />}</p>
+            ? <Message id="error.unexpected.manualAddressGuidance" params={{ address: <InlineReference monospace wrap>{issueUrl}</InlineReference> }} />
+            : <Message id="error.unexpected.reportGuidance" params={{ report: <InlineReference>{t("error.issue.report")}</InlineReference> }} />}</p>
           {error.details === undefined && diagnostics.length > 0 && <DiagnosticDetails text={[...new Set(diagnostics)].join("\n\n")} />}
         </>
         : !error.failures?.length && error.classification.recovery !== "none" && <p><RecoveryGuidance recovery={error.classification.recovery} /></p>}

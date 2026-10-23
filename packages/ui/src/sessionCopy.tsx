@@ -1,6 +1,6 @@
 import React from "react";
 
-import { InlineChip } from "./components/InlineChip";
+import { InlineReference } from "./components/InlineReference";
 import type { Translate } from "./i18n/catalog";
 import { Message } from "./i18n/react";
 import type { Console, Project, Session } from "./protocol";
@@ -19,6 +19,6 @@ export function sessionLocationContent(
   }
   const owner = consoles.get(session.console_id);
   return owner
-    ? <Message id="session.location.consoleSession" params={{ console: <InlineChip dir="auto" wrap>{owner.name}</InlineChip> }} />
+    ? <Message id="session.location.consoleSession" params={{ console: <InlineReference dir="auto" wrap>{owner.name}</InlineReference> }} />
     : <>{t("session.location.ownConsoleSession")}</>;
 }

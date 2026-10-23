@@ -3,7 +3,7 @@ import React, { useId } from "react";
 
 import { AGENT_LABEL } from "../agents";
 import { CodedFailureBody } from "../components/DaemonErrorMessage";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { FailureMark } from "../components/FailureMark";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
@@ -97,7 +97,7 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
     <p>
       <Message
         id={on ? "configuration.import.result.settings.on" : "configuration.import.result.settings.off"}
-        params={{ setting: <InlineChip dir="auto" wrap>{label}</InlineChip> }}
+        params={{ setting: <InlineReference dir="auto" wrap>{label}</InlineReference> }}
       />
     </p>
   );
@@ -264,20 +264,20 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
           </p>
           <ul className="flex flex-col gap-1">
             {outcome.fallbacks.map((fallback, index) => {
-              const agent = <InlineChip dir="auto" wrap>{AGENT_LABEL[fallback.agent]}</InlineChip>;
+              const agent = <InlineReference dir="auto" wrap>{AGENT_LABEL[fallback.agent]}</InlineReference>;
               return (
                 <li key={index} className="[overflow-wrap:anywhere]" dir="auto">
                   {fallback.project === undefined
                     ? <Message id="configuration.import.result.fallback.console" params={{
                       agent,
-                      name: <InlineChip dir="auto" wrap>{fallback.name}</InlineChip>,
-                      console: <InlineChip dir="auto" wrap>{fallback.console}</InlineChip>,
+                      name: <InlineReference dir="auto" wrap>{fallback.name}</InlineReference>,
+                      console: <InlineReference dir="auto" wrap>{fallback.console}</InlineReference>,
                     }} />
                     : <Message id="configuration.import.result.fallback.project" params={{
                       agent,
-                      name: <InlineChip dir="auto" wrap>{fallback.name}</InlineChip>,
-                      project: <InlineChip dir="auto" wrap>{fallback.project}</InlineChip>,
-                      console: <InlineChip dir="auto" wrap>{fallback.console}</InlineChip>,
+                      name: <InlineReference dir="auto" wrap>{fallback.name}</InlineReference>,
+                      project: <InlineReference dir="auto" wrap>{fallback.project}</InlineReference>,
+                      console: <InlineReference dir="auto" wrap>{fallback.console}</InlineReference>,
                     }} />}
                 </li>
               );

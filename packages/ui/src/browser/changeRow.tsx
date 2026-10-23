@@ -1,7 +1,7 @@
 import { FileSymlink, FolderGit2 } from "lucide-react";
 import React, { useRef, useState } from "react";
 
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { AnchoredTooltip } from "../components/AnchoredTooltip";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { FileTypeIcon } from "../components/FileTypeIcon";
@@ -92,7 +92,7 @@ export function changeRowText(
  * itself names versions in commits. */
 export function ChangeRowBody({ item, name, detail, contextTargetRef }: { item: ChangeItem; name: string; detail: string; contextTargetRef: React.RefObject<HTMLElement | null> }): React.ReactElement {
   const prose = pathDetail(item);
-  const shownDetail = prose ? <Message id={prose.id} params={{ path: <InlineChip monospace>{prose.path}</InlineChip> }} /> : detail;
+  const shownDetail = prose ? <Message id={prose.id} params={{ path: <InlineReference monospace>{prose.path}</InlineReference> }} /> : detail;
   const tooltip = detail !== "" ? (
     <>
       <span dir="auto" className="block">{name}</span>

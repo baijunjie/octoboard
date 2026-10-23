@@ -2,7 +2,7 @@ import { Input, Label, TextField } from "@heroui/react";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "../components/Button";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import { Dialog, useDialogAction, useFocusLeavingWhenDisabled } from "./Dialog";
 import { dialogAround } from "./dialogElement";
@@ -145,7 +145,7 @@ export function ConfirmDialog({
           autoFocus
         >
           <Label>
-            <Message id="dialog.typeToConfirm.label" params={{ word: <InlineChip dir="ltr" className="italic">{word}</InlineChip> }} />
+            <Message id="dialog.typeToConfirm.label" params={{ word: <InlineReference dir="ltr" className="italic">{word}</InlineReference> }} />
           </Label>
           {/* Capitals by styling rather than by rewriting the value: rewriting a controlled value
               mid-composition breaks an input method's composition. */}

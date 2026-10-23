@@ -11,7 +11,7 @@ import { detailsButton, openDetails } from "./detailsTestSupport";
 import { AlertButton } from "./AlertButton";
 import { ErrorAlert } from "./ErrorAlert";
 import { FailureAlert } from "./FailureAlert";
-import { InlineChip } from "./InlineChip";
+import { InlineReference } from "./InlineReference";
 import { TintedAlert } from "./TintedAlert";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -198,10 +198,10 @@ it("puts the raw message of an error with no catalog message behind Details and 
 
 it("leaves the Alert's tone behind in the Details popover, where a chip takes its own colour", () => {
   const { container } = mount(
-    <ErrorAlert status="warning" details={<InlineChip>skills/</InlineChip>}>
-      Slow: <InlineChip>plugins/</InlineChip>
+    <ErrorAlert status="warning" details={<InlineReference>skills/</InlineReference>}>
+      Slow: <InlineReference>plugins/</InlineReference>
     </ErrorAlert>,
   );
-  expect(container.querySelector("[data-inline-chip]")?.getAttribute("data-color")).toBe("warning");
-  expect(openDetails(container).querySelector("[data-inline-chip]")?.getAttribute("data-color")).toBe("default");
+  expect(container.querySelector("[data-inline-reference]")?.getAttribute("data-color")).toBe("warning");
+  expect(openDetails(container).querySelector("[data-inline-reference]")?.getAttribute("data-color")).toBe("default");
 });

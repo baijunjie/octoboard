@@ -136,7 +136,7 @@ it("a card shows its account before the model line, which its accessible name en
     <ProjectFocusView handlers={h} console={main} project={web} sessions={[observed]} owners={owners} />
   ));
   expect(text()).toContain(`${isolate("Default")} · ${isolate("Opus 5.5")} · ${isolate("high")}`);
-  expect(container.querySelector("[data-inline-chip]")).toBeNull();
+  expect(container.querySelector("[data-inline-reference]")).toBeNull();
   const label = sessionLabels(container).find((l) => l.includes("Observe the model"));
   expect(label?.endsWith(`${isolate("Opus 5.5")} · ${isolate("high")}`)).toBe(true);
   unmount();

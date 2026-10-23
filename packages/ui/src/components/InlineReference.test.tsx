@@ -8,7 +8,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished } from "vitest";
 
 import { CodeBlock } from "./CodeBlock";
-import { InlineChip } from "./InlineChip";
+import { InlineReference } from "./InlineReference";
 import { TintedAlert } from "./TintedAlert";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -27,14 +27,14 @@ function mount(children: React.ReactNode) {
 it("inherits the closest alert tone even when the caller requests a conflicting color", () => {
   const container = mount(
     <>
-      <InlineChip monospace wrap size="xs">neutral</InlineChip>
-      <InlineChip monospace wrap size="xs" color="help">purple</InlineChip>
+      <InlineReference monospace wrap size="xs">neutral</InlineReference>
+      <InlineReference monospace wrap size="xs" color="help">purple</InlineReference>
       <TintedAlert status="danger">
-        <InlineChip monospace wrap size="xs" color="success">outer</InlineChip>
-        <TintedAlert status="warning"><InlineChip monospace wrap size="xs" color="danger">inner</InlineChip></TintedAlert>
+        <InlineReference monospace wrap size="xs" color="success">outer</InlineReference>
+        <TintedAlert status="warning"><InlineReference monospace wrap size="xs" color="danger">inner</InlineReference></TintedAlert>
         <CodeBlock color="accent">outer block</CodeBlock>
       </TintedAlert>
-      <InlineChip monospace wrap size="xs">after</InlineChip>
+      <InlineReference monospace wrap size="xs">after</InlineReference>
     </>,
   );
   expect(Array.from(container.querySelectorAll("code")).map((el) => el.dataset.color)).toEqual([
@@ -46,8 +46,8 @@ it("inherits the closest alert tone even when the caller requests a conflicting 
 it("takes an accent alert's colour and lets a neutral alert override explicit color", () => {
   const container = mount(
     <>
-      <TintedAlert status="accent"><InlineChip monospace wrap size="xs">accent</InlineChip></TintedAlert>
-      <TintedAlert><InlineChip monospace wrap size="xs" color="danger">neutral</InlineChip></TintedAlert>
+      <TintedAlert status="accent"><InlineReference monospace wrap size="xs">accent</InlineReference></TintedAlert>
+      <TintedAlert><InlineReference monospace wrap size="xs" color="danger">neutral</InlineReference></TintedAlert>
     </>,
   );
   expect(Array.from(container.querySelectorAll("code")).map((el) => el.dataset.color)).toEqual(["accent", "default"]);
@@ -56,9 +56,9 @@ it("takes an accent alert's colour and lets a neutral alert override explicit co
 it("isolates code typography without consuming the field's description slot", () => {
   const container = mount(
     <TextField>
-      <Label>Directory <InlineChip monospace wrap size="xs">~/Projects</InlineChip></Label>
+      <Label>Directory <InlineReference monospace wrap size="xs">~/Projects</InlineReference></Label>
       <Input />
-      <Description>Read <InlineChip monospace wrap size="xs">AGENTS.md</InlineChip> first.</Description>
+      <Description>Read <InlineReference monospace wrap size="xs">AGENTS.md</InlineReference> first.</Description>
     </TextField>,
   );
   const description = container.querySelector('[data-slot="description"]')!;
@@ -73,7 +73,7 @@ it("isolates code typography without consuming the field's description slot", ()
 
 it("preserves URL text and repeated separators while allowing paths to wrap", () => {
   const literal = "https://example.test/projects//日本語/";
-  const container = mount(<InlineChip monospace wrap size="xs">{literal}</InlineChip>);
+  const container = mount(<InlineReference monospace wrap size="xs">{literal}</InlineReference>);
   const code = container.querySelector("code")!;
   expect(code.textContent).toBe(literal);
   expect(code.querySelector("wbr")).not.toBeNull();
@@ -101,16 +101,16 @@ it("preserves diagnostic lines and supports wrapping or a full-width scrollable 
 it("defaults to xs and marks an unbroken chip", () => {
   const container = mount(
     <>
-      <InlineChip>plain</InlineChip>
-      <InlineChip size="sm">padded</InlineChip>
-      <InlineChip unbroken>whole</InlineChip>
+      <InlineReference>plain</InlineReference>
+      <InlineReference size="sm">padded</InlineReference>
+      <InlineReference unbroken>whole</InlineReference>
     </>,
   );
-  const chips = Array.from(container.querySelectorAll<HTMLElement>("[data-inline-chip]"));
+  const chips = Array.from(container.querySelectorAll<HTMLElement>("[data-inline-reference]"));
   expect(chips.map((chip) => chip.dataset.size)).toEqual(["xs", "sm", "xs"]);
   // style.css tightens the line height of an unbroken chip, so it stays clear of the line below.
-  expect(chips[2].classList).toContain("inline-chip--unbroken");
-  expect(chips[1].classList).not.toContain("inline-chip--unbroken");
+  expect(chips[2].classList).toContain("inline-reference--unbroken");
+  expect(chips[1].classList).not.toContain("inline-reference--unbroken");
 });
 
 it("draws each colour's fill and text from the shared tint, the badge's, and never its edge", () => {
@@ -118,9 +118,9 @@ it("draws each colour's fill and text from the shared tint, the badge's, and nev
   const css = readFileSync(resolve(import.meta.dirname, "../style.css"), "utf8");
   const tints = { default: "default", accent: "accent", help: "help", success: "success", warning: "warning", danger: "danger" };
   for (const [color, tint] of Object.entries(tints)) {
-    expect(css).toContain(`.inline-chip.chip--soft[data-color="${color}"] { --chip-bg: var(--tint-${tint}-bg); --chip-fg: var(--tint-${tint}-fg); }`);
+    expect(css).toContain(`.inline-reference.chip--soft[data-color="${color}"] { --chip-bg: var(--tint-${tint}-bg); --chip-fg: var(--tint-${tint}-fg); }`);
   }
-  expect(css).not.toMatch(/\.inline-chip[^{]*\{[^}]*--tint-\w+-edge/);
+  expect(css).not.toMatch(/\.inline-reference[^{]*\{[^}]*--tint-\w+-edge/);
 });
 
 it("styles every size as padding around the font of the surrounding text", () => {
@@ -129,13 +129,13 @@ it("styles every size as padding around the font of the surrounding text", () =>
   // scripts/gallery-chip-geometry.mjs measures the result in a browser.
   const css = readFileSync(resolve(import.meta.dirname, "../style.css"), "utf8");
   const rule = (selector: string) => css.match(new RegExp(`^${selector.replace(/[.[\]"]/g, "\\$&")} \\{([^}]*)\\}`, "m"))?.[1] ?? "";
-  const padding = (selector: string) => ["block", "inline"].map((axis) => rule(selector).match(new RegExp(`--inline-chip-${axis}: (\\S+);`))?.[1]);
-  for (const property of ["font-family", "font-size", "font-weight", "line-height"]) expect(rule(".inline-chip")).toContain(`${property}: inherit;`);
-  expect(rule(".inline-chip")).toContain("display: inline;");
-  expect(padding(".inline-chip")).toEqual(["0", "4px"]);
-  expect(padding('.inline-chip[data-size="sm"]')).toEqual(["1px", "6px"]);
-  expect(padding('.inline-chip[data-size="md"]')).toEqual(["2px", "8px"]);
-  expect(padding('.inline-chip[data-size="lg"]')).toEqual(["3px", "10px"]);
-  const container = mount(<>{(["xs", "sm", "md", "lg"] as const).map((size) => <InlineChip key={size} size={size}>{size}</InlineChip>)}</>);
-  expect(Array.from(container.querySelectorAll<HTMLElement>("[data-inline-chip]"), (chip) => chip.dataset.size)).toEqual(["xs", "sm", "md", "lg"]);
+  const padding = (selector: string) => ["block", "inline"].map((axis) => rule(selector).match(new RegExp(`--inline-reference-${axis}: (\\S+);`))?.[1]);
+  for (const property of ["font-family", "font-size", "font-weight", "line-height"]) expect(rule(".inline-reference")).toContain(`${property}: inherit;`);
+  expect(rule(".inline-reference")).toContain("display: inline;");
+  expect(padding(".inline-reference")).toEqual(["0", "4px"]);
+  expect(padding('.inline-reference[data-size="sm"]')).toEqual(["1px", "6px"]);
+  expect(padding('.inline-reference[data-size="md"]')).toEqual(["2px", "8px"]);
+  expect(padding('.inline-reference[data-size="lg"]')).toEqual(["3px", "10px"]);
+  const container = mount(<>{(["xs", "sm", "md", "lg"] as const).map((size) => <InlineReference key={size} size={size}>{size}</InlineReference>)}</>);
+  expect(Array.from(container.querySelectorAll<HTMLElement>("[data-inline-reference]"), (chip) => chip.dataset.size)).toEqual(["xs", "sm", "md", "lg"]);
 });

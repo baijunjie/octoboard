@@ -5,7 +5,7 @@ import { reportError } from "../reportError";
 import React, { useEffect, useRef, useState } from "react";
 
 import { errorAlerts } from "../errorAlerts";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { Dialog, useDialogAction, useSubmitValidation } from "../dialogs/Dialog";
 import { dialogAround } from "../dialogs/dialogElement";
 import { isolate } from "../i18n/isolate";
@@ -112,7 +112,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
         errorAlerts.report({
           message: t("configuration.import.notJson", { name: isolate(opened.name) }),
           recovery: "configuration",
-          content: <Message id="configuration.import.notJson" params={{ name: <InlineChip monospace wrap>{opened.name}</InlineChip> }} />,
+          content: <Message id="configuration.import.notJson" params={{ name: <InlineReference monospace wrap>{opened.name}</InlineReference> }} />,
         });
         return;
       }

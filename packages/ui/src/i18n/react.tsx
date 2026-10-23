@@ -1,7 +1,7 @@
 import React, { useCallback, useSyncExternalStore } from "react";
 import { I18nProvider } from "react-aria-components";
 
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 
 import { format, globalParam, messageText, type MessageArgs, type MessageKey, splitPlaceholders, type Translate } from "./catalog";
 import { currentLanguage, subscribeLanguage } from "./language";
@@ -43,7 +43,7 @@ export function Message<K extends MessageKey>({
 
 function richGlobalParam(name: string, language: Language): React.ReactNode {
   const value = globalParam(name, language);
-  return value === undefined ? undefined : <InlineChip dir="auto" wrap>{value}</InlineChip>;
+  return value === undefined ? undefined : <InlineReference dir="auto" wrap>{value}</InlineReference>;
 }
 
 function fill(value: React.ReactNode, name: string, language: Language): React.ReactNode {

@@ -975,7 +975,7 @@ it.each([
   await settle();
   const reason = resumeAlert()!;
   expect(reason.textContent).toContain(message);
-  expect(Array.from(reason.querySelectorAll("[data-inline-chip]"), (chip) => [chip.textContent, chip.getAttribute("dir")])).toEqual(names.map((name) => [name, "auto"]));
+  expect(Array.from(reason.querySelectorAll("[data-inline-reference]"), (chip) => [chip.textContent, chip.getAttribute("dir")])).toEqual(names.map((name) => [name, "auto"]));
   expect(reason.textContent).not.toMatch(/[\u2066-\u2069]/);
   expect(openDisabled()).toBe(true);
   expect(nameInput()).toBeUndefined();

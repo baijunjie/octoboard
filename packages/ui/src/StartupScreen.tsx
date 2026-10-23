@@ -6,7 +6,7 @@ import { ContentPanel } from "./components/ContentPanel";
 import { ErrorAlert } from "./components/ErrorAlert";
 import { CodeToneContext } from "./components/codeTone";
 import { CodeBlock } from "./components/CodeBlock";
-import { InlineChip } from "./components/InlineChip";
+import { InlineReference } from "./components/InlineReference";
 import { BareTitleBar } from "./components/TitleBar";
 import { FadedScroller, useFadeRegion } from "./components/scrollFade";
 import { Message, useT } from "./i18n/react";
@@ -78,7 +78,7 @@ export function DaemonFailedMessage({ error }: { error: string }): React.ReactEl
 /** What the screen says when there is no daemon address to connect to, and how to give it one. */
 export function NoAddressMessage(): React.ReactElement {
   const t = useT();
-  const code = (text: string) => <InlineChip monospace wrap>{text}</InlineChip>;
+  const code = (text: string) => <InlineReference monospace wrap>{text}</InlineReference>;
   return (
     <CodeToneContext value="danger">
       <div className="flex min-w-0 flex-col gap-4">

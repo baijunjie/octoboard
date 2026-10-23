@@ -20,7 +20,7 @@ try {
       await open("code-colors", language, 1440);
       const samples = await page.locator("[data-prose-size]").evaluateAll((samples) => samples.map((sample) => ({
         size: Number(sample.dataset.proseSize),
-        chips: [...sample.querySelectorAll("[data-prose-comparison] [data-inline-chip]")].map((chip) => {
+        chips: [...sample.querySelectorAll("[data-prose-comparison] [data-inline-reference]")].map((chip) => {
           const style = getComputedStyle(chip), rect = chip.getClientRects()[0], code = chip.querySelector("code");
           return { kind: chip.dataset.chipKind, lineHeight: parseFloat(getComputedStyle(chip.closest("p")).lineHeight), height: rect.height, top: rect.top, size: parseFloat(style.fontSize), display: style.display, verticalAlign: style.verticalAlign, italic: style.fontStyle, codeSize: code && parseFloat(getComputedStyle(code).fontSize) };
         }),
@@ -47,7 +47,7 @@ try {
             size: row.dataset.chipSizeSample,
             fontSize: parseFloat(rowStyle.fontSize),
             lineHeight: parseFloat(rowStyle.lineHeight),
-            chips: [...row.querySelectorAll("[data-inline-chip]")].map((chip) => {
+            chips: [...row.querySelectorAll("[data-inline-reference]")].map((chip) => {
               const style = getComputedStyle(chip), label = getComputedStyle(chip.querySelector(".chip__label")), code = chip.querySelector("code");
               return {
                 text: chip.textContent, size: chip.dataset.size, display: style.display, verticalAlign: style.verticalAlign,
@@ -59,7 +59,7 @@ try {
             }),
           };
         }),
-        standalone: [...card.querySelectorAll(":scope > [data-inline-chip]")].map((chip) => ({ size: chip.dataset.size, font: parseFloat(getComputedStyle(chip).fontSize), display: getComputedStyle(chip).display, block: parseFloat(getComputedStyle(chip).paddingTop), inline: parseFloat(getComputedStyle(chip.querySelector(".chip__label")).paddingLeft) })),
+        standalone: [...card.querySelectorAll(":scope > [data-inline-reference]")].map((chip) => ({ size: chip.dataset.size, font: parseFloat(getComputedStyle(chip).fontSize), display: getComputedStyle(chip).display, block: parseFloat(getComputedStyle(chip).paddingTop), inline: parseFloat(getComputedStyle(chip.querySelector(".chip__label")).paddingLeft) })),
       })));
       assert.equal(sizes.length, 4);
       for (const card of sizes) {
@@ -87,19 +87,19 @@ try {
       await open("code-colors", language, 390);
       const sizeRowFailures = await page.locator("[data-chip-size-sample]").evaluateAll((rows) => rows.flatMap((row) => {
         const bounds = row.getBoundingClientRect();
-        return [...row.querySelectorAll("[data-inline-chip]")].flatMap((chip) => [...chip.getClientRects()]
+        return [...row.querySelectorAll("[data-inline-reference]")].flatMap((chip) => [...chip.getClientRects()]
           .filter((rect) => rect.left < bounds.left - 1 || rect.right > bounds.right + 1)
           .map(() => `${row.dataset.chipSizeSample} ${chip.textContent}`));
       }));
       assert.deepEqual(sizeRowFailures, [], "Narrow size-sample chips must wrap within their row");
       const narrow = await page.locator("[data-prose-size]").evaluateAll((samples) => samples.map((sample) => {
         const failures = [];
-        for (const chip of sample.querySelectorAll("[data-inline-chip]")) {
+        for (const chip of sample.querySelectorAll("[data-inline-reference]")) {
           const bounds = chip.closest("p").getBoundingClientRect();
           for (const rect of chip.getClientRects()) if (rect.left < bounds.left - 1 || rect.right > bounds.right + 1) failures.push(chip.textContent);
         }
         const rtl = sample.querySelector("[data-prose-rtl]");
-        return { failures, direction: getComputedStyle(rtl).direction, technicalDirections: [...rtl.querySelectorAll("[data-inline-chip]:has(code)")].map((chip) => getComputedStyle(chip).direction) };
+        return { failures, direction: getComputedStyle(rtl).direction, technicalDirections: [...rtl.querySelectorAll("[data-inline-reference]:has(code)")].map((chip) => getComputedStyle(chip).direction) };
       }));
       for (const sample of narrow) {
         assert.deepEqual(sample.failures, [], "Narrow chips must wrap within prose");
@@ -108,7 +108,7 @@ try {
       }
       await open("configuration-import-review", language, 1440);
       const pairs = await page.locator("li").evaluateAll((rows) => rows.flatMap((row) => {
-        const chips = [...row.children].filter((element) => element.tagName === "P").map((p) => p.querySelector("[data-inline-chip]:has(code)")).filter(Boolean);
+        const chips = [...row.children].filter((element) => element.tagName === "P").map((p) => p.querySelector("[data-inline-reference]:has(code)")).filter(Boolean);
         return chips.length < 2 ? [] : [chips.slice(0, 2).map((chip) => ({ text: chip.textContent, size: parseFloat(getComputedStyle(chip).fontSize), height: chip.getClientRects()[0].height, display: getComputedStyle(chip).display }))];
       }));
       assert.ok(pairs.length > 0, "Import review must show exported/target paths together");
@@ -120,14 +120,14 @@ try {
     for (const width of [1440, 390]) {
       await open("trust-prompt", language, width);
       const trust = await page.locator("[role=alertdialog], [role=dialog]").evaluate((dialog) => {
-        const chip = [...dialog.querySelectorAll("[data-inline-chip]:has(code)")].find((chip) => chip.textContent === "~/code/website");
+        const chip = [...dialog.querySelectorAll("[data-inline-reference]:has(code)")].find((chip) => chip.textContent === "~/code/website");
         const paragraph = chip?.closest("p");
         const bounds = paragraph?.getBoundingClientRect();
         return {
           blocks: dialog.querySelectorAll("pre, .app-code-block").length,
           path: chip && { size: parseFloat(getComputedStyle(chip).fontSize), display: getComputedStyle(chip).display },
           paragraph: paragraph?.textContent,
-          sessionInParagraph: !!paragraph && [...paragraph.querySelectorAll("[data-inline-chip]")].some((chip) => chip.textContent === "Fix the summary layout"),
+          sessionInParagraph: !!paragraph && [...paragraph.querySelectorAll("[data-inline-reference]")].some((chip) => chip.textContent === "Fix the summary layout"),
           contained: !!chip && !!bounds && [...chip.getClientRects()].every((rect) => rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1),
         };
       });

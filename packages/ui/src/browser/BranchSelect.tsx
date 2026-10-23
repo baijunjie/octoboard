@@ -5,7 +5,7 @@ import { ListLayout, Virtualizer } from "react-aria-components";
 
 import { FadeOverflow } from "../components/FadeOverflow";
 import { MotionListBox } from "../components/MotionListBox";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { StatusBadge } from "../components/StatusBadge";
 import { useScrollFade } from "../components/scrollFade";
 import { Message, useT } from "../i18n/react";
@@ -43,7 +43,7 @@ export function BranchSelect({
   const t = useT();
   const branchFade = useScrollFade({ className: "max-h-80 overflow-y-auto px-0" });
   const name = value === undefined ? undefined : displayWirePath(value);
-  const title = name === undefined ? undefined : gone ? <Message id="git.branch.gone" params={{ branch: <InlineChip monospace wrap>{name}</InlineChip> }} /> : name;
+  const title = name === undefined ? undefined : gone ? <Message id="git.branch.gone" params={{ branch: <InlineReference monospace wrap>{name}</InlineReference> }} /> : name;
   return (
     // The subgrid restates the column gap: HeroUI's `.select` sets a gap of its own, which would
     // otherwise replace the parent grid's for this row's gutter. The secondary variant draws from

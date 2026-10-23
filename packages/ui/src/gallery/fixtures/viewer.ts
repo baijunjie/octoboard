@@ -21,7 +21,7 @@ const GROUP = "File viewer";
 // frame reads the window's language from storage when `i18n/react` is first evaluated, which has to
 // follow the preparation of that storage, and this module is loaded before it.
 async function loadLiveParts() {
-  return { Message: (await import("../../i18n/react")).Message, InlineChip: (await import("../../components/InlineChip")).InlineChip };
+  return { Message: (await import("../../i18n/react")).Message, InlineReference: (await import("../../components/InlineReference")).InlineReference };
 }
 type LiveParts = Awaited<ReturnType<typeof loadLiveParts>>;
 
@@ -717,15 +717,15 @@ async function failedFiles(): Promise<ViewerSubject[]> {
 // The comparison wording of a committed change opened from the Changes view, in the window's language.
 // The branches and commits are set as code, as the app sets them, with the same wording as plain text
 // for the tooltip.
-const comparisonWording = ({ Message, InlineChip }: LiveParts, t: Translate, from: string, fromCommit: string, to: string, toCommit: string) => {
+const comparisonWording = ({ Message, InlineReference }: LiveParts, t: Translate, from: string, fromCommit: string, to: string, toCommit: string) => {
   return {
     source: createElement(Message<"git.compare.source">, {
       id: "git.compare.source",
       params: {
-        from: createElement(InlineChip, { monospace: true, wrap: true, color: "accent" }, from),
-        fromCommit: createElement(InlineChip, { monospace: true, wrap: true, color: "default" }, fromCommit),
-        to: createElement(InlineChip, { monospace: true, wrap: true, color: "accent" }, to),
-        toCommit: createElement(InlineChip, { monospace: true, wrap: true, color: "default" }, toCommit),
+        from: createElement(InlineReference, { monospace: true, wrap: true, color: "accent" }, from),
+        fromCommit: createElement(InlineReference, { monospace: true, wrap: true, color: "default" }, fromCommit),
+        to: createElement(InlineReference, { monospace: true, wrap: true, color: "accent" }, to),
+        toCommit: createElement(InlineReference, { monospace: true, wrap: true, color: "default" }, toCommit),
       },
     }),
     sourceText: t("git.compare.source", { from: isolate(from), fromCommit: isolate(fromCommit), to: isolate(to), toCommit: isolate(toCommit) }),

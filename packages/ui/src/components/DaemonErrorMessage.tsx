@@ -15,7 +15,7 @@ import { sessionTask } from "../sessionLabel";
 import { useErrorRecords } from "../store";
 import { BranchGroups } from "./BranchGroups";
 import { DiagnosticBlock } from "./DiagnosticBlock";
-import { InlineChip } from "./InlineChip";
+import { InlineReference } from "./InlineReference";
 
 export function DaemonErrorTitle(): React.ReactElement {
   const t = useT();
@@ -75,22 +75,22 @@ function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?:
   if (!isMessageKey(id)) return part === "details" || part === "remedy" ? null : <>{error.message}</>;
   const left = leftBranchItems(error.code, error.params);
   if (left) return <LeftBranches count={left.length} items={left} part={part} />;
-  const params = daemonParams<React.ReactNode>(language, error.code, error.params, { consoles, projects, sessions, shellTerminals, accounts }, (value, monospace) => <InlineChip dir={monospace ? "ltr" : "auto"} monospace={monospace} wrap>{value}</InlineChip>);
+  const params = daemonParams<React.ReactNode>(language, error.code, error.params, { consoles, projects, sessions, shellTerminals, accounts }, (value, monospace) => <InlineReference dir={monospace ? "ltr" : "auto"} monospace={monospace} wrap>{value}</InlineReference>);
   if (error.code === "conversation_held_in_project" || error.code === "conversation_held_in_console") {
     const holder = sessions.get(error.params.session);
     const task = holder && sessionTask(holder);
     if (holder && task) {
       // One chip around the joined title; each name is isolated so mixed directions cannot reorder
       // across the separator.
-      params.session = <InlineChip dir="auto" wrap><Message id="session.displayTitle" params={{ title: <bdi>{task}</bdi>, name: <bdi>{holder.title}</bdi> }} /></InlineChip>;
+      params.session = <InlineReference dir="auto" wrap><Message id="session.displayTitle" params={{ title: <bdi>{task}</bdi>, name: <bdi>{holder.title}</bdi> }} /></InlineReference>;
     }
   }
   if (error.code === "account_quota_exhausted" && error.params.window && !["5-hour", "Weekly", "Monthly", "Credits"].includes(error.params.window)) {
-    params.quota = <Message id="quota.windowPhrase.named" params={{ window: <InlineChip dir="auto" wrap>{error.params.window}</InlineChip> }} />;
+    params.quota = <Message id="quota.windowPhrase.named" params={{ window: <InlineReference dir="auto" wrap>{error.params.window}</InlineReference> }} />;
   }
   const running = error.code === "session_has_running_sessions" ? runningSessionIds(error.params) : undefined;
   if (running) {
-    params.sessions = joinNodes(language, running, (id, key) => <InlineChip key={key} dir={sessions.has(id) ? "auto" : "ltr"} monospace={!sessions.has(id)} wrap>{sessions.get(id)?.title ?? id}</InlineChip>);
+    params.sessions = joinNodes(language, running, (id, key) => <InlineReference key={key} dir={sessions.has(id) ? "auto" : "ltr"} monospace={!sessions.has(id)} wrap>{sessions.get(id)?.title ?? id}</InlineReference>);
   }
   const nested = error.code === "launch_failed" && error.params.reason_code && error.params.reason_code !== "launch_failed"
     ? new DaemonRequestError(String(params.reason ?? ""), error.params.reason_code, error.params)
@@ -176,7 +176,7 @@ export function SharingCauseLine({ group, withFix = true }: { group: { cause: Sh
   const title = useSessionTitles(group.items);
   const chips = group.items.map((item, at) => {
     const label = sharingItemLabel(item, title);
-    return <InlineChip key={at} dir={label.session ? "auto" : "ltr"} monospace={!label.session} wrap>{label.text}</InlineChip>;
+    return <InlineReference key={at} dir={label.session ? "auto" : "ltr"} monospace={!label.session} wrap>{label.text}</InlineReference>;
   });
   const phrase = chips.length === 1 ? chips[0] : <Message id="daemon.sharing.items" params={{ first: chips[0], count: chips.length - 1 }} />;
   return <SharingReason reason={<Message id={sharingCauseKey(group.cause)} params={{ items: phrase, count: chips.length } as never} />} fix={withFix ? sharingFixKey(group.cause) : undefined} />;
@@ -199,7 +199,7 @@ export function SharingCauseSummary({ items }: { items: SharingFailureItem[] }):
 function RawDiagnostic({ children, alone = false }: { children: string; alone?: boolean }): React.ReactElement {
   if (children.trim().includes("\n")) return <div className="mt-1"><DiagnosticBlock>{children}</DiagnosticBlock></div>;
   if (alone) return <code dir="ltr" className="block font-mono text-xs [overflow-wrap:anywhere]">{children}</code>;
-  return <>{" "}<InlineChip dir="ltr" monospace wrap>{children}</InlineChip></>;
+  return <>{" "}<InlineReference dir="ltr" monospace wrap>{children}</InlineReference></>;
 }
 
 /** The raw side of a sharing failure: each entry with what it was left as and what the system said of it, or, with
@@ -215,14 +215,14 @@ export function SharingDetails({ items, detail, folded = true }: { items: Sharin
     <ul className="ms-4 flex min-w-0 list-disc flex-col gap-1">
       {items.map((item, index) => {
         const state = t(sharingStateKey(item));
-        const name = <InlineChip dir="ltr" monospace wrap>{item.item}</InlineChip>;
+        const name = <InlineReference dir="ltr" monospace wrap>{item.item}</InlineReference>;
         return (
           <li key={index}>
             <span>{item.sessions.length === 0
               ? <Message id="daemon.sharing.item.summary" params={{ item: name, state }} />
               : <Message id="daemon.sharing.conversation.summary" params={{
                 item: name,
-                sessions: joinNodes(language, item.sessions, (id, key) => <InlineChip key={key} dir={title(id) !== undefined ? "auto" : "ltr"} monospace={title(id) === undefined} wrap>{title(id) ?? id}</InlineChip>),
+                sessions: joinNodes(language, item.sessions, (id, key) => <InlineReference key={key} dir={title(id) !== undefined ? "auto" : "ltr"} monospace={title(id) === undefined} wrap>{title(id) ?? id}</InlineReference>),
                 state,
               }} />}</span>
             {item.detail && <RawDiagnostic>{item.detail}</RawDiagnostic>}
@@ -337,7 +337,7 @@ export function ShellTimeoutCommand({ params: { shell, command, timeout } }: { p
     <p className="[overflow-wrap:anywhere]">
       <Message
         id="daemon.shell_environment_timeout.command"
-        params={{ command: <InlineChip monospace wrap>{`${shell} -l -i -c '${command}'`}</InlineChip>, timeout }}
+        params={{ command: <InlineReference monospace wrap>{`${shell} -l -i -c '${command}'`}</InlineReference>, timeout }}
       />
     </p>
   );
@@ -356,7 +356,7 @@ export function DaemonErrorMessage({ error, showTitle = true, part }: { error: E
   if (typeof error !== "string" && !hasShellTimeoutDetails(error) && hasCodeParams(error)) return <CodedDaemonMessage error={error} part={part} />;
   if (typeof error === "string" || !hasShellTimeoutDetails(error)) return part === "summary" || !part ? <>{errorText(error)}</> : null;
   if (part === "summary") return <>{t("daemon.shell_environment_timeout.cause")}</>;
-  const consequence = <Message id="daemon.shell_environment_timeout.consequence" params={{ appName: <InlineChip dir="auto" wrap>{globalParam("appName")}</InlineChip> } as never} />;
+  const consequence = <Message id="daemon.shell_environment_timeout.consequence" params={{ appName: <InlineReference dir="auto" wrap>{globalParam("appName")}</InlineReference> } as never} />;
   if (part === "remedy") return <span className="block">{t("daemon.shell_environment_timeout.recovery")}</span>;
   if (part === "details") return <><p>{consequence}</p><ShellTimeoutCommand params={error.params} /></>;
   return (

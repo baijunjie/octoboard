@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 
 import { AGENT_LABEL, listedAgents } from "../agents";
 import { ActionMenu, type ActionMenuEntry } from "../components/ActionMenu";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { movedAgent } from "../components/tabDrag";
 import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { errorPresentation } from "../errorPresentation";
@@ -128,7 +128,7 @@ export function RemoveAgentDialog({ agent, onRemoved, onCancel }: {
   const usage = useDaemonStoreEqual((s) => agentUsage(agent, s.consoles, s.projects, s.sessions, (session) => sessionDisplayTitle(t, session)));
   // Names are listed while they are few enough to read in a line, else only counted.
   const phrase = (names: string[], count: string): React.ReactNode => (names.length > 0 && names.length <= 5
-    ? <Message id="settings.accounts.removeAgentNamed" params={{ what: count, names: joinNodes(language, names, (name, key) => <InlineChip key={key} dir="auto" wrap>{name}</InlineChip>) }} />
+    ? <Message id="settings.accounts.removeAgentNamed" params={{ what: count, names: joinNodes(language, names, (name, key) => <InlineReference key={key} dir="auto" wrap>{name}</InlineReference>) }} />
     : count);
   const uses = [
     usage.consoles.length > 0 && phrase(usage.consoles, t("settings.accounts.removeAgentConsoles", { count: usage.consoles.length })),
@@ -137,13 +137,13 @@ export function RemoveAgentDialog({ agent, onRemoved, onCancel }: {
   ].filter((use): use is React.ReactNode => use !== false);
   return (
     <ConfirmDialog
-      title={<Message id="settings.accounts.removeAgentTitle" params={{ agent: <InlineChip dir="auto" wrap>{AGENT_LABEL[agent]}</InlineChip> }} />}
+      title={<Message id="settings.accounts.removeAgentTitle" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference> }} />}
       message={
         <>
-          <p><Message id="settings.accounts.removeAgentMessage" params={{ agent: <InlineChip dir="auto" wrap>{AGENT_LABEL[agent]}</InlineChip> }} /></p>
+          <p><Message id="settings.accounts.removeAgentMessage" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference> }} /></p>
           {uses.length > 0 && (
             <>
-              <p><Message id="settings.accounts.removeAgentInUse" params={{ agent: <InlineChip dir="auto" wrap>{AGENT_LABEL[agent]}</InlineChip> }} /></p>
+              <p><Message id="settings.accounts.removeAgentInUse" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference> }} /></p>
               <ul className="list-disc ps-5">
                 {uses.map((use, at) => <li key={at}>{use}</li>)}
               </ul>

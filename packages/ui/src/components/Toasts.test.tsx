@@ -215,7 +215,7 @@ it("shows a failed launch's shell timeout once: the title names the launch, the 
     const message = daemonMessage("en", "launch_failed.title", params, "fallback", daemon.store.getState());
     act(() => deliver({ kind: "notice", message, daemonError: error, daemonTitle: new DaemonRequestError(message, "launch_failed.title", params) }));
     expect(document.querySelector('[data-slot="toast-title"]')?.textContent).toBe("Could not start Draft the notes");
-    expect(document.querySelector('[data-slot="toast-title"] [data-inline-chip]')?.textContent).toBe("Draft the notes");
+    expect(document.querySelector('[data-slot="toast-title"] [data-inline-reference]')?.textContent).toBe("Draft the notes");
     const description = document.querySelector('[data-slot="toast-description"]');
     expect(description?.querySelector("h3")).toBeNull();
     expect(description?.querySelector("code")?.textContent).toBe("/bin/zsh -l -i -c 'env -0'");
@@ -269,7 +269,7 @@ it("preserves a failed launch's name and nested path, and renders rich notices f
     act(() => deliver({ kind: "notice", message, daemonError: noticeErrorPresentation("launch_failed", params, message), daemonTitle: new DaemonRequestError(message, "launch_failed.title", params) }));
     const title = document.querySelector('[data-slot="toast-title"]');
     const description = document.querySelector('[data-slot="toast-description"]');
-    expect(title?.querySelector("[data-inline-chip]")?.textContent).toBe("Draft");
+    expect(title?.querySelector("[data-inline-reference]")?.textContent).toBe("Draft");
     expect(title?.querySelector("code")).toBeNull();
     expect(description?.querySelector("code")?.textContent).toBe("/missing");
     expect(description?.textContent).toBe("/missing does not exist.");

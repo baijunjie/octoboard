@@ -3,7 +3,7 @@ import type { ReactElement } from "react";
 import { classifyError, type ErrorRecovery } from "../errorRecovery";
 import { globalParam, type Translate } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
-import { InlineChip } from "./InlineChip";
+import { InlineReference } from "./InlineReference";
 
 /** The button a recovery offers besides its words: it opens Settings on Agent accounts, with the Add agent
  * dialog in front when `addAgent` is set. None for a recovery with nothing to open. */
@@ -35,7 +35,7 @@ export function RecoveryGuidance({ recovery }: { recovery: ErrorRecovery }): Rea
   const t = useT();
   if (recovery === "none") return null;
   const id = `error.recovery.${recovery}` as const;
-  const params = recoveryParams(t, (value, monospace) => <InlineChip dir={monospace ? "ltr" : "auto"} monospace={monospace} wrap>{value}</InlineChip>);
+  const params = recoveryParams(t, (value, monospace) => <InlineReference dir={monospace ? "ltr" : "auto"} monospace={monospace} wrap>{value}</InlineReference>);
   return <Message id={id} params={params as never} />;
 }
 

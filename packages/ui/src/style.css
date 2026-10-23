@@ -687,7 +687,7 @@ html {
   --toggle-button-fg-selected: var(--toggle-button-fg);
 }
 
-/* The one colour configuration of a tag: a `StatusBadge` and an `InlineChip` both draw their fill (`--tint-{colour}-bg`)
+/* The one colour configuration of a tag: a `StatusBadge` and an `InlineReference` both draw their fill (`--tint-{colour}-bg`)
    and text (`--tint-{colour}-fg`) from it, and the badge's hairline (`--tint-{colour}-edge`) is the badge's alone.
    The neutral tint is `--app-muted` at 16% with the foreground at 80% as text; the four HeroUI colours take its soft
    fill and its soft foreground pulled toward the foreground where it misses 4.5:1 on a surface a tag sits on (the
@@ -1213,11 +1213,11 @@ html.pane-resizing * {
    sizes differ only in the padding drawn around the text. The block padding paints without moving the line. The
    inline padding sits on the label and is not cloned onto each wrapped fragment: a cloned end padding can paint
    past the line it broke on. */
-.inline-chip {
-  --inline-chip-block: 0;
-  --inline-chip-inline: 4px;
+.inline-reference {
+  --inline-reference-block: 0;
+  --inline-reference-inline: 4px;
   display: inline;
-  padding-block: var(--inline-chip-block);
+  padding-block: var(--inline-reference-block);
   padding-inline: 0;
   /* Not the `font` shorthand, which would also reset the italic a caller may ask for. */
   font-family: inherit;
@@ -1226,34 +1226,34 @@ html.pane-resizing * {
   line-height: inherit;
   vertical-align: baseline;
 }
-.inline-chip[data-size="sm"] {
-  --inline-chip-block: 1px;
-  --inline-chip-inline: 6px;
+.inline-reference[data-size="sm"] {
+  --inline-reference-block: 1px;
+  --inline-reference-inline: 6px;
 }
-.inline-chip[data-size="md"] {
-  --inline-chip-block: 2px;
-  --inline-chip-inline: 8px;
+.inline-reference[data-size="md"] {
+  --inline-reference-block: 2px;
+  --inline-reference-inline: 8px;
 }
-.inline-chip[data-size="lg"] {
-  --inline-chip-block: 3px;
-  --inline-chip-inline: 10px;
+.inline-reference[data-size="lg"] {
+  --inline-reference-block: 3px;
+  --inline-reference-inline: 10px;
 }
-.inline-chip > .chip__label {
-  padding-inline: var(--inline-chip-inline);
+.inline-reference > .chip__label {
+  padding-inline: var(--inline-reference-inline);
 }
-.inline-chip--wrap {
+.inline-reference--wrap {
   white-space: normal;
   overflow-wrap: anywhere;
 }
 /* An inline-block is as tall as its line box, so one that moves to the next line whole would touch the chip on the
-   line below; at 1.2 it is as tall as an inline chip. An unbroken chip stays inside the leading as long as its size
+   line below; at 1.2 it is as tall as an inline reference. An unbroken chip stays inside the leading as long as its size
    fits the line. */
-.inline-chip--unbroken {
+.inline-reference--unbroken {
   display: inline-block;
   max-width: 100%;
   line-height: 1.2;
 }
-.inline-chip__code {
+.inline-reference__code {
   font: inherit;
   font-family: var(--font-mono);
 }
@@ -1261,12 +1261,12 @@ html.pane-resizing * {
    `--tint-{colour}-fg` for the colour it carries, an alert's included, and it never takes the hairline. HeroUI's soft
    default is half of `--default` over the surface, 1.09:1 on a light card and 1.08:1 on a dark one, which does not
    read as a tag. Only the colours are set here: the shape is HeroUI's and the size follows the text (above). */
-.inline-chip.chip--soft[data-color="default"] { --chip-bg: var(--tint-default-bg); --chip-fg: var(--tint-default-fg); }
-.inline-chip.chip--soft[data-color="accent"] { --chip-bg: var(--tint-accent-bg); --chip-fg: var(--tint-accent-fg); }
-.inline-chip.chip--soft[data-color="help"] { --chip-bg: var(--tint-help-bg); --chip-fg: var(--tint-help-fg); }
-.inline-chip.chip--soft[data-color="success"] { --chip-bg: var(--tint-success-bg); --chip-fg: var(--tint-success-fg); }
-.inline-chip.chip--soft[data-color="warning"] { --chip-bg: var(--tint-warning-bg); --chip-fg: var(--tint-warning-fg); }
-.inline-chip.chip--soft[data-color="danger"] { --chip-bg: var(--tint-danger-bg); --chip-fg: var(--tint-danger-fg); }
+.inline-reference.chip--soft[data-color="default"] { --chip-bg: var(--tint-default-bg); --chip-fg: var(--tint-default-fg); }
+.inline-reference.chip--soft[data-color="accent"] { --chip-bg: var(--tint-accent-bg); --chip-fg: var(--tint-accent-fg); }
+.inline-reference.chip--soft[data-color="help"] { --chip-bg: var(--tint-help-bg); --chip-fg: var(--tint-help-fg); }
+.inline-reference.chip--soft[data-color="success"] { --chip-bg: var(--tint-success-bg); --chip-fg: var(--tint-success-fg); }
+.inline-reference.chip--soft[data-color="warning"] { --chip-bg: var(--tint-warning-bg); --chip-fg: var(--tint-warning-fg); }
+.inline-reference.chip--soft[data-color="danger"] { --chip-bg: var(--tint-danger-bg); --chip-fg: var(--tint-danger-fg); }
 .app-code-block > .app-code {
   white-space: inherit;
   overflow-wrap: inherit;

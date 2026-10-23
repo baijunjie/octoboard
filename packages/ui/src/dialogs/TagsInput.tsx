@@ -11,7 +11,7 @@ import { useFocusVisible } from "react-aria";
 
 import { MotionListBox } from "../components/MotionListBox";
 import { PickedTag } from "../components/PickedTag";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { AnchoredTooltip } from "../components/AnchoredTooltip";
 import { useListMotion } from "../components/useListMotion";
 import { Message, useT } from "../i18n/react";
@@ -119,7 +119,7 @@ export function TagsInput({
               <PickedTag
                 key={tag}
                 tag={tag}
-                removeTitle={<Message id="dialog.project.removeTag" params={{ tag: <InlineChip dir="auto" wrap>{tag}</InlineChip> }} />}
+                removeTitle={<Message id="dialog.project.removeTag" params={{ tag: <InlineReference dir="auto" wrap>{tag}</InlineReference> }} />}
               />
             ))}
           </TagGroup.List>

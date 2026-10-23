@@ -125,5 +125,5 @@ integration.
 
 - Do not introduce a broad lint/static-scanner framework. Use the full source inventory for manual closure and
   focused, meaningful regression tests at shared rich/plain parameter and Alert component contracts during fixes.
-- Change-check briefs for 04–06 explicitly name the rule that names referenced in visible copy use InlineChip;
+- Change-check briefs for 04–06 explicitly name the rule that names referenced in visible copy use InlineReference;
   no global skill/agent configuration change is needed.

@@ -1,6 +1,6 @@
 import React from "react";
 
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { IndicatorTooltip } from "../components/IndicatorTooltip";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
@@ -45,7 +45,7 @@ export function BindingBadge({ owner, decorative }: { owner: Session; decorative
   if (decorative) return dot;
   const label = t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, owner)) });
   return (
-    <IndicatorTooltip tooltip={<Message id="sidebar.session.boundTo" params={{ name: <InlineChip dir="auto" wrap>{sessionDisplayTitle(t, owner)}</InlineChip> }} />} label={label} className="inline-flex">
+    <IndicatorTooltip tooltip={<Message id="sidebar.session.boundTo" params={{ name: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, owner)}</InlineReference> }} />} label={label} className="inline-flex">
       {dot}
     </IndicatorTooltip>
   );

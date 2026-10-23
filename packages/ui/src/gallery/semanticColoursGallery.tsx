@@ -8,7 +8,7 @@ import { Button } from "../components/Button";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { ExternalLink } from "../components/ExternalLink";
 import { FailureMark } from "../components/FailureMark";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { StatusBadge, type StatusBadgeColor } from "../components/StatusBadge";
 import { TintedAlert } from "../components/TintedAlert";
 import { FadedScroller, useFadeRegion } from "../components/scrollFade";
@@ -92,7 +92,7 @@ function Mark({ color }: { color: StatusBadgeColor }): React.ReactElement | null
 function SampleAlert({ meaning }: { meaning: Meaning }): React.ReactElement {
   const { color } = meaning;
   if (color === "help") return <p className="text-xs text-app-muted">An Alert has no help status.</p>;
-  const description = <>Could not read <InlineChip monospace wrap>AGENTS.md</InlineChip> in this project.</>;
+  const description = <>Could not read <InlineReference monospace wrap>AGENTS.md</InlineReference> in this project.</>;
   if (color === "danger" || color === "warning") {
     return <ErrorAlert status={color} title={color === "danger" ? "Could not save" : "Settings are out of date"}>{description}</ErrorAlert>;
   }
@@ -122,7 +122,7 @@ function Specimen({ meaning, chip, alert, rowClassName = "" }: { meaning: Meanin
       </div>
       {chip && (
         <p className="text-sm">
-          Open <InlineChip color={color} monospace>AGENTS.md</InlineChip> in <InlineChip color={color}>Main</InlineChip> to continue.
+          Open <InlineReference color={color} monospace>AGENTS.md</InlineReference> in <InlineReference color={color}>Main</InlineReference> to continue.
         </p>
       )}
       {alert && <SampleAlert meaning={meaning} />}

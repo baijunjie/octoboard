@@ -347,11 +347,11 @@ it.each([["Claude Code", [".claude.json", "plans/"]], ["Grok Build", ["trusted_f
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
       tip.focus();
     });
-    const chips = [...document.querySelectorAll('[role="tooltip"] .inline-chip')].filter((chip) => chip.querySelector("code"));
+    const chips = [...document.querySelectorAll('[role="tooltip"] .inline-reference')].filter((chip) => chip.querySelector("code"));
     expect(chips.map((chip) => chip.textContent)).toEqual(names);
     // Unbroken, so a line never ends on an empty start of it; the chip's own stylesheet tightens the inline-block
     // so stacked chips keep the line gap.
-    for (const chip of chips) expect(chip.classList).toContain("inline-chip--unbroken");
+    for (const chip of chips) expect(chip.classList).toContain("inline-reference--unbroken");
   },
 );
 
@@ -508,8 +508,8 @@ describe("a change that runs", () => {
     expect(bar.getAttribute("aria-valuetext")).toBe("3 of 12");
     expect(bar.textContent).toContain("Turning sharing on");
     expect(container.textContent).toContain("Now: skills");
-    const chip = container.querySelector('[id$="-current"] .inline-chip')!;
-    expect(chip.classList).toContain("inline-chip--unbroken");
+    const chip = container.querySelector('[id$="-current"] .inline-reference')!;
+    expect(chip.classList).toContain("inline-reference--unbroken");
     expect(container.textContent).not.toContain("Turning this on links");
     expect(captionOf(container, sharing!)).toBe("Turning sharing on 3 of 12 Now: skills");
   });
@@ -1633,7 +1633,7 @@ it("names what still uses the agent when removing it, and says it keeps its sett
   expect(text).toContain("keep that setting");
   expect(text).not.toMatch(/[()]/);
   // The names stand as chips, with no brackets around them.
-  expect([...dialog.querySelectorAll("[data-inline-chip]")].map((chip) => chip.textContent?.replace(/[\u2066-\u2069]/g, ""))).toEqual(["Codex", "Codex", "Codex", "Main", "Site", "Fix build"]);
+  expect([...dialog.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent?.replace(/[\u2066-\u2069]/g, ""))).toEqual(["Codex", "Codex", "Codex", "Main", "Site", "Fix build"]);
 });
 
 describe("dragging a tab", () => {
@@ -1779,7 +1779,7 @@ describe("an account's actions menu", () => {
     expect(request).not.toHaveBeenCalled();
     expect(dialog().textContent).toContain("Waiting for you to authorize in your browser");
     expect(dialog().querySelector('a[href="https://claude.test/authorize"]')?.textContent).toContain("Open the page again");
-    expect([...dialog().querySelectorAll("[data-inline-chip]")].map((chip) => chip.textContent?.replace(/[\u2068\u2069]/g, ""))).toEqual(["Claude Code", "claude-work"]);
+    expect([...dialog().querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent?.replace(/[\u2068\u2069]/g, ""))).toEqual(["Claude Code", "claude-work"]);
     await act(async () => buttonNamed(dialog(), "Cancel login")!.click());
     expect(request).toHaveBeenLastCalledWith({ type: "cancel_account_login", agent: "claude", account: "claude-work" });
     expect(container.querySelector('[role="dialog"]')).toBeNull();

@@ -45,11 +45,11 @@ it("names a tag richly in its removal tooltip without repeating its accessible n
   await act(async () => {});
   const tooltip = document.querySelector('[role="tooltip"]')!;
   expect(tooltip.textContent).toBe(`Remove tag ${tag}`);
-  const chip = tooltip.querySelector("[data-inline-chip]")!;
+  const chip = tooltip.querySelector("[data-inline-reference]")!;
   expect(chip.textContent).toBe(tag);
   expect(chip.getAttribute("dir")).toBe("auto");
   expect(chip.getAttribute("data-size")).toBe("xs");
-  expect(chip.classList.contains("inline-chip--wrap")).toBe(true);
+  expect(chip.classList.contains("inline-reference--wrap")).toBe(true);
   expect(chip.querySelector("code")).toBeNull();
   expect(remove.getAttribute("aria-label")).toBe("Remove tag");
   expect(remove.getAttribute("aria-describedby")).toBeFalsy();

@@ -64,7 +64,7 @@ layout, selection and keyboard behaviour.
 A status mark such as "Not added", "Not installed" or "Logged in", and any other qualifier after a name (a session's
 account in its agent mark's tooltip where that names only the agent and its account, "Not in the list", a file's
 change status or size, "Read-only"), is a badge after the name, never parenthesised text in the name's own style and never an
-`InlineChip`. It is the shared `StatusBadge`, the only small badge component. It takes a semantic colour — `default`
+`InlineReference`. It is the shared `StatusBadge`, the only small badge component. It takes a semantic colour — `default`
 (neutral), `accent`, `success`, `warning`, `danger` or `help` (the project's purple, for help and hints) — and one of two variants:
 
 - **Borderless** (`variant="soft"`), the usual choice for a state: login state, a tool's installed state, a file's
@@ -72,7 +72,7 @@ change status or size, "Read-only"), is a badge after the name, never parenthesi
 - **Bordered** (`variant="bordered"`), for a qualifier that annotates the name before it: the account, "Not added",
   "Same as console" and the value it resolves to, the context size. It adds a hairline edge in its colour.
 
-Badge and inline chip serve different purposes but share one colour configuration: a single set of generic tint
+Badge and inline reference serve different purposes but share one colour configuration: a single set of generic tint
 tokens in `packages/ui/src/style.css`, per colour a fill, a text colour and an edge, which both components read, so a
 chip and a badge of the same colour never differ. A coloured fill is HeroUI's `--{colour}-soft`, its edge the solid
 `--{colour}` mixed down (HeroUI has no border token); the neutral fill is the secondary text colour at 16% over
@@ -533,7 +533,7 @@ text it replaced was.
   just dismissed comes straight back, and the next Escape closes the dialog around it instead.
 - It sits beside the label it explains, never inside it: a button nested in a `<label>` is nested interactive
   content, and its name would become part of the label's.
-- The explanation may carry inline chips (a file name such as `CLAUDE.md`); it reaches assistive technology the same
+- The explanation may carry inline references (a file name such as `CLAUDE.md`); it reaches assistive technology the same
   way as plain text.
 
 What it does not give: the explanation is not part of the surrounding row's accessible name, so a screen reader hears
@@ -801,16 +801,16 @@ error text is written into the row. Where the row's other outcomes are each a gl
 Failed — and that pair is the control that opens the reason. The glyph follows "A tooltip on a mark that is not a control" when it is not
 otherwise a control.
 
-### References in copy use `InlineChip`
+### References in copy use `InlineReference`
 
-`InlineChip`, backed by HeroUI Chip, has one job: marking a reference mixed into running copy, where Markdown would
+`InlineReference`, backed by HeroUI Chip, has one job: marking a reference mixed into running copy, where Markdown would
 write `` `xxx` `` and plain prose would use quotation marks. It is the only component for that; do not use HeroUI's
 `Typography.Code`, a raw `code` element, HeroUI `Chip` directly or a hand-built pill for a reference in copy. It is not
 a badge: a status or qualifier after a name is a `StatusBadge` (see "Confirmed visual choices"), and a name shown on
 its own is plain text.
 
 - **A reference within copy takes a chip.** A name, title, control label or technical literal referenced within
-  visible prose, headings, descriptions, Alerts, field errors, tooltips or toasts uses an `InlineChip` instead of
+  visible prose, headings, descriptions, Alerts, field errors, tooltips or toasts uses an `InlineReference` instead of
   quotation marks. This includes fixed agent and product names when they are references within copy. A name or
   title uses the non-monospace chip with `dir="auto"` and wrapping. A technical literal — a path, a file name, a URL,
   a branch, a commit id, an ID, a command or a setting value — uses its monospace, left-to-right and wrapping options,
@@ -876,7 +876,7 @@ separate from copy: file and directory lists, settings rows whose value is a pat
 file-path row retain their shared path components, including their icons, clipping and full-path tooltips. Path
 input fields and source or Markdown content also retain their own layouts.
 
-Inline chips retain HeroUI's colours, soft fill and shape; the help hue is the project's purple extension. Their
+Inline references retain HeroUI's colours, soft fill and shape; the help hue is the project's purple extension. Their
 fill and text come from the tint tokens shared with `StatusBadge` (see "Confirmed visual choices"); HeroUI's own
 neutral `--default-soft` all but vanishes on a white surface (about 1.05:1), so the neutral chip does not use it. `CodeBlock` uses
 the shared Typography wrapper for multi-line diagnostics. Outside an Alert, both default to neutral and may choose a

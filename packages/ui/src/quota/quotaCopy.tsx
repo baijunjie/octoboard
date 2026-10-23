@@ -1,6 +1,6 @@
 import React from "react";
 
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import type { Translate } from "../i18n/catalog";
 import { Message } from "../i18n/react";
 import type { QuotaWindow } from "../protocol";
@@ -9,7 +9,7 @@ import { quotaResetsIn, quotaUsedUpAlert, quotaWindowLabel } from "./quotaFormat
 /** A quota window referenced in copy, keeping model values apart from its translated label. */
 export function QuotaWindowName({ window, t }: { window: QuotaWindow; t: Translate }): React.ReactElement {
   return window.kind === "weekly_model" && window.label
-    ? <Message id="quota.window.weeklyModel" params={{ model: <InlineChip monospace wrap>{window.label}</InlineChip> }} />
+    ? <Message id="quota.window.weeklyModel" params={{ model: <InlineReference monospace wrap>{window.label}</InlineReference> }} />
     : <>{quotaWindowLabel(t, window)}</>;
 }
 
@@ -18,10 +18,10 @@ export function quotaUsedUpCopy(t: Translate, account: string, window: QuotaWind
   const plain = quotaUsedUpAlert(t, account, window, now);
   const resets = quotaResetsIn(t, window, now);
   const quota = window.kind === "weekly_model" && window.label
-    ? <Message id="quota.windowPhrase.weeklyModel" params={{ model: <InlineChip monospace wrap>{window.label}</InlineChip> }} />
+    ? <Message id="quota.windowPhrase.weeklyModel" params={{ model: <InlineReference monospace wrap>{window.label}</InlineReference> }} />
     : undefined;
   return {
-    title: <Message id="quota.accountUsedUp.title" params={{ account: <InlineChip dir="auto" wrap>{account}</InlineChip> }} />,
+    title: <Message id="quota.accountUsedUp.title" params={{ account: <InlineReference dir="auto" wrap>{account}</InlineReference> }} />,
     description: quota
       ? resets ? <Message id="quota.accountUsedUp.descriptionResets" params={{ quota, resets }} /> : <Message id="quota.accountUsedUp.description" params={{ quota }} />
       : plain.description,

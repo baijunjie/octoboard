@@ -8,7 +8,7 @@ import { ActivityMarker } from "../components/ActivityMarker";
 import { SessionAgentIcon } from "../components/SessionAgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { PaneTitle } from "../components/PaneTitle";
 import { RowControls, RowIconGroup, RowIconLine, RowIconSlot } from "../components/RowControls";
 import { hasVisibleContext, SessionContextLabel } from "../components/SessionMetadata";
@@ -410,8 +410,8 @@ const FocusProjectGroup = memo(function FocusProjectGroup({
             ref={openSessionHolder}
             label={t("sidebar.focus.newSessionIn", { name: isolate(project.name) })}
             quickLabel={t("sidebar.focus.newSessionInQuick", { name: isolate(project.name) })}
-            title={<Message id="sidebar.focus.newSessionIn" params={{ name: <InlineChip dir="auto" wrap>{project.name}</InlineChip> }} />}
-            quickTitle={<Message id="sidebar.focus.newSessionInQuick" params={{ name: <InlineChip dir="auto" wrap>{project.name}</InlineChip> }} />}
+            title={<Message id="sidebar.focus.newSessionIn" params={{ name: <InlineReference dir="auto" wrap>{project.name}</InlineReference> }} />}
+            quickTitle={<Message id="sidebar.focus.newSessionInQuick" params={{ name: <InlineReference dir="auto" wrap>{project.name}</InlineReference> }} />}
             target={newSessionHere}
             onOpen={handlers.onOpenDialog}
             onQuickCreate={handlers.onQuickCreateSession}

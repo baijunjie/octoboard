@@ -5,7 +5,7 @@ import { Button } from "../components/Button";
 import { AGENT_LABEL, defaultAccountName } from "../agents";
 import { CodedFailureBody } from "../components/DaemonErrorMessage";
 import { ExternalLink } from "../components/ExternalLink";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/StatusAnnouncer";
 import { DaemonRequestError } from "../daemon-client";
 import { daemonMessage } from "../daemonMessage";
@@ -114,14 +114,14 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
     onClose(false, cancelling);
   };
 
-  const who = <InlineChip dir="auto" wrap>{name}</InlineChip>;
+  const who = <InlineReference dir="auto" wrap>{name}</InlineReference>;
   const failure: Failure | undefined = refusal ?? (login?.failure ?? undefined);
   const reason = failure && daemonMessage(language, failure.code, failure.params, failure.message, NO_RECORDS);
   const code = login?.status === "waiting" ? login.device_code : null;
   const progress = t(login?.status === "waiting" ? "settings.accounts.login.waiting" : "settings.accounts.login.starting");
   return (
     <Dialog
-      title={<Message id="settings.accounts.login.dialogTitle" params={{ name: who, agent: <InlineChip dir="auto" wrap>{AGENT_LABEL[agent]}</InlineChip> }} />}
+      title={<Message id="settings.accounts.login.dialogTitle" params={{ name: who, agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference> }} />}
       onClose={close}
       footer={ended ? (
         <>
@@ -151,7 +151,7 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
           <Spinner size="sm" aria-hidden />
           <span aria-hidden>
             {code
-              ? <Message id="settings.accounts.login.waitingCode" params={{ code: <InlineChip monospace>{code}</InlineChip> }} />
+              ? <Message id="settings.accounts.login.waitingCode" params={{ code: <InlineReference monospace>{code}</InlineReference> }} />
               : progress}
           </span>
           {/* It comes with a focus move — the dialog opening, or Log in again handing focus to Cancel login — so its first

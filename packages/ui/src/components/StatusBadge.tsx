@@ -4,7 +4,7 @@ export type StatusBadgeColor = "default" | "accent" | "help" | "success" | "warn
 export type StatusBadgeVariant = "soft" | "bordered";
 
 /* Fill, text and edge are the shared tints of style.css (`--tint-{colour}-bg`, `-fg` and `-edge`), the same
-   colours an `InlineChip` is drawn from; the edge is the bordered variant's hairline and the chip never takes it.
+   colours an `InlineReference` is drawn from; the edge is the bordered variant's hairline and the chip never takes it.
    The classes are spelled out, since Tailwind finds them by their text. */
 const COLORS: Record<StatusBadgeColor, { soft: string; ring: string }> = {
   default: { soft: "bg-[var(--tint-default-bg)] text-[var(--tint-default-fg)]", ring: "ring-[var(--tint-default-edge)]" },
@@ -28,7 +28,7 @@ function colorClasses(color: StatusBadgeColor, variant: StatusBadgeVariant): str
  * what gives way when the room runs out.
  *
  * `color` is one of the shared tints of style.css (`--tint-{colour}-bg`, `-fg`, `-edge`: neutral, HeroUI's
- * four, and the app's purple `help`, for help and hints), the colours an `InlineChip` is drawn from too.
+ * four, and the app's purple `help`, for help and hints), the colours an `InlineReference` is drawn from too.
  * `variant` is `"soft"` (borderless, for a state) or `"bordered"` (a hairline edge, for a qualifier of the name; the
  * default).
  *

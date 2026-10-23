@@ -99,7 +99,7 @@ it("keeps the dialog on the file step, with the daemon's reason, for a document 
   await reviewing({ reply: refuse });
   const acknowledgement = document.body.querySelector('[role="alertdialog"]')!;
   expect(acknowledgement.textContent).toContain("This is not an Octoboard configuration file.");
-  const product = acknowledgement.querySelector("[data-inline-chip]")!;
+  const product = acknowledgement.querySelector("[data-inline-reference]")!;
   expect(product.textContent).toBe("Octoboard");
   expect(product.getAttribute("dir")).toBe("auto");
   expect(product.textContent).not.toMatch(/[\u2066-\u2069]/);
@@ -253,7 +253,7 @@ it("tells each project's result in a table row, with a mark and a popover for a 
   expect(reason.querySelectorAll("pre")).toHaveLength(1);
   const summary = Array.from(reason.querySelectorAll("span")).find((node) => node.textContent === "Git could not clone this repository.")!;
   expect(summary.contains(diagnostic)).toBe(false);
-  const product = summary.querySelector("[data-inline-chip]")!;
+  const product = summary.querySelector("[data-inline-reference]")!;
   expect(product.textContent).toBe("Git");
   expect(product.getAttribute("dir")).toBe("auto");
   expect(product.textContent).not.toMatch(/[\u2066-\u2069]/);

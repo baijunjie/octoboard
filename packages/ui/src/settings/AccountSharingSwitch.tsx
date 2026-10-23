@@ -4,7 +4,7 @@ import React, { useEffect, useId, useRef, useState } from "react";
 import { SharingCauseLine, SharingCauseSummary, SharingDetails, SharingFailureReason } from "../components/DaemonErrorMessage";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { HelpTip } from "../components/HelpTip";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { parseSharingItems, sharingCauseGroups, sharingFixKey, sharingReasonKey } from "../daemonMessage";
 import { errorPresentation } from "../errorPresentation";
@@ -110,13 +110,13 @@ export function AccountSharingSwitch({ account }: { account: Account }): React.R
             <p>
               {account.agent === "claude"
                 ? <Message id="settings.accounts.sharing.helpNeverClaude" params={{
-                  claudeJson: <InlineChip dir="ltr" monospace wrap unbroken>.claude.json</InlineChip>,
-                  plans: <InlineChip dir="ltr" monospace wrap unbroken>plans/</InlineChip>,
+                  claudeJson: <InlineReference dir="ltr" monospace wrap unbroken>.claude.json</InlineReference>,
+                  plans: <InlineReference dir="ltr" monospace wrap unbroken>plans/</InlineReference>,
                 }} />
                 : account.agent === "grok"
                   ? <Message id="settings.accounts.sharing.helpNeverGrok" params={{
-                    trustedFolders: <InlineChip dir="ltr" monospace wrap unbroken>trusted_folders.toml</InlineChip>,
-                    hooksPaths: <InlineChip dir="ltr" monospace wrap unbroken>hooks-paths</InlineChip>,
+                    trustedFolders: <InlineReference dir="ltr" monospace wrap unbroken>trusted_folders.toml</InlineReference>,
+                    hooksPaths: <InlineReference dir="ltr" monospace wrap unbroken>hooks-paths</InlineReference>,
                   }} />
                   : t("settings.accounts.sharing.helpNever")}
             </p>
@@ -176,7 +176,7 @@ function SharingProgress({ id, progress }: { id: string; progress: NonNullable<A
       </ProgressBar>
       {entries && (
         <p id={`${id}-current`} className="[overflow-wrap:anywhere]">
-          <Message id="settings.accounts.sharing.current" params={{ item: <InlineChip dir="ltr" monospace wrap unbroken>{progress.item}</InlineChip> }} />
+          <Message id="settings.accounts.sharing.current" params={{ item: <InlineReference dir="ltr" monospace wrap unbroken>{progress.item}</InlineReference> }} />
         </p>
       )}
     </div>

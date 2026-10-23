@@ -9,7 +9,7 @@ import { errorPresentation } from "../errorPresentation";
 import { ActionableError } from "../errorRecovery";
 import { isolate } from "../i18n/isolate";
 import type { MessageKey } from "../i18n/catalog";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { Message, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { sessionChoiceTitle, sessionDisplayTitle } from "../sessionLabel";
@@ -256,8 +256,8 @@ export function SessionDialog({
       {fixedOwner && (
         <div data-marquee-scope className="flex items-center gap-2 text-sm">
           <BindingBadge owner={fixedOwner} decorative />
-          <FadeOverflow dir="auto" className="min-w-0 flex-1" titleWhenClipped={<Message id="dialog.session.ownerFixed" params={{ name: <InlineChip dir="auto" wrap>{sessionDisplayTitle(t, fixedOwner)}</InlineChip> }} />}>
-            {<Message id="dialog.session.ownerFixed" params={{ name: <InlineChip dir="auto" wrap>{sessionDisplayTitle(t, fixedOwner)}</InlineChip> }} />}
+          <FadeOverflow dir="auto" className="min-w-0 flex-1" titleWhenClipped={<Message id="dialog.session.ownerFixed" params={{ name: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, fixedOwner)}</InlineReference> }} />}>
+            {<Message id="dialog.session.ownerFixed" params={{ name: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, fixedOwner)}</InlineReference> }} />}
           </FadeOverflow>
         </div>
       )}
@@ -283,8 +283,8 @@ export function SessionDialog({
   return (
     <Dialog
       title={project
-        ? <Message id="dialog.session.title" params={{ project: <InlineChip dir="auto" wrap>{project.name}</InlineChip> }} />
-        : <Message id="dialog.consoleSession.title" params={{ console: <InlineChip dir="auto" wrap>{parentConsole.name}</InlineChip> }} />}
+        ? <Message id="dialog.session.title" params={{ project: <InlineReference dir="auto" wrap>{project.name}</InlineReference> }} />
+        : <Message id="dialog.consoleSession.title" params={{ console: <InlineReference dir="auto" wrap>{parentConsole.name}</InlineReference> }} />}
       onClose={onClose}
       submitLabel={t(target ? SUBMIT_LABEL[target.kind] : "dialog.session.open")}
       busy={busy}

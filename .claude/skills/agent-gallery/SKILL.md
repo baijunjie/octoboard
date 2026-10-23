@@ -32,7 +32,7 @@ row each, and the items below the table say so where packages differ.
   of the quick check: the dark theme, `pnpm gallery:sweep --theme dark`, run when a change touches colours; chip
   geometry, self-built on Playwright, `node scripts/gallery-chip-geometry.mjs http://localhost:<port>` in
   `packages/ui` against a gallery served from this checkout (unlike the sweep it falls back to no other browser:
-  without Playwright's own Chromium, set `OCTOBOARD_CHROMIUM` to one), run when a change touches inline chips.
+  without Playwright's own Chromium, set `OCTOBOARD_CHROMIUM` to one), run when a change touches inline references.
 - Shared-layer examples: `packages/ui/src/components/`; `packages/ui/src/style.css` and `packages/ui/src/theme.tsx`;
   `packages/ui/src/i18n/`; `packages/ui/src/gallery/fixtures/` and `packages/ui/src/gallery/fixtureDaemon.ts` (mocks
   shared by many scenarios); `packages/ui/src/protocol.ts` and `packages/ui/src/daemon-client.ts` (the contract the

@@ -3,7 +3,7 @@ import React from "react";
 
 import { CodeBlock } from "../components/CodeBlock";
 import { FailureMark } from "../components/FailureMark";
-import { InlineChip, type InlineChipSize } from "../components/InlineChip";
+import { InlineReference, type InlineReferenceSize } from "../components/InlineReference";
 import { StatusBadge, type StatusBadgeColor, type StatusBadgeVariant } from "../components/StatusBadge";
 import { TintedAlert } from "../components/TintedAlert";
 import { CodeToneContext, type CodeColor } from "../components/codeTone";
@@ -17,34 +17,34 @@ const BADGE_VARIANTS: StatusBadgeVariant[] = ["soft", "bordered"];
 /** The copy styles a chip sits in (docs/ui-accessibility.md, "A chip's size follows the line it sits in"), each with
  * the sizes whose drawn height stays below its line height: the content area, about 1.2 times the font size, plus
  * twice the size's block padding. */
-const COPY_LINES: { font: number; line: number; use: string; sizes: InlineChipSize[] }[] = [
+const COPY_LINES: { font: number; line: number; use: string; sizes: InlineReferenceSize[] }[] = [
   { font: 12, line: 16, use: "Field errors, secondary descriptions, tooltips", sizes: ["xs"] },
   { font: 14, line: 20, use: "Body copy, labels, Alert descriptions", sizes: ["xs", "sm"] },
   { font: 16, line: 24, use: "Dialog headings", sizes: ["xs", "sm", "md"] },
   { font: 14, line: 24, use: "Alert titles", sizes: ["xs", "sm", "md", "lg"] },
 ];
-const LONG_PATHS = ["/Users/dev/Projects/octoboard/packages/ui/src/components/InlineChip.tsx", "/Users/dev/Projects/octoboard/packages/ui/src/components/StatusBadge.tsx"];
+const LONG_PATHS = ["/Users/dev/Projects/octoboard/packages/ui/src/components/InlineReference.tsx", "/Users/dev/Projects/octoboard/packages/ui/src/components/StatusBadge.tsx"];
 
-/** One settled comparison of the shared inline chips and code blocks, both outside and inside alert contexts. */
+/** One settled comparison of the shared inline references and code blocks, both outside and inside alert contexts. */
 export function CodeGallery(): React.ReactElement {
-  const region = useFadeRegion({ label: "Inline chips, status badges, failure marks and alert tones" });
+  const region = useFadeRegion({ label: "Inline references, status badges, failure marks and alert tones" });
   return (
     <main className={`flex h-full min-h-0 flex-col ${region.focused ? "ring-2 ring-focus ring-inset" : ""}`}>
       <FadedScroller region={region} className="min-h-0 flex-1 p-6">
         <div className="mx-auto flex max-w-5xl flex-col gap-6">
-          <h1 className="text-lg font-semibold">Inline chips, status badges, failure marks and alert tones</h1>
+          <h1 className="text-lg font-semibold">Inline references, status badges, failure marks and alert tones</h1>
           <section className="flex flex-col gap-3" aria-labelledby="chip-prose-title">
             <h2 id="chip-prose-title" className="font-semibold">Prose: the chip takes the text’s font, with equal height and baseline</h2>
             {[12, 14, 16].map((size) => (
               <div key={size} data-prose-size={size} className="min-w-0 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3" style={{ fontSize: size }}>
                 <p className="mb-3 font-medium">{size}px — {size === 12 ? "Field description / validation" : size === 14 ? "Body / label" : "Dialog heading"}</p>
                 <p data-prose-comparison="" className="leading-relaxed">
-                  Remove <InlineChip data-chip-kind="name">Main 控制台</InlineChip>, choose <InlineChip data-chip-kind="label">Skip 跳过</InlineChip>,
-                  open <InlineChip monospace data-chip-kind="file">AGENTS.md</InlineChip> in <InlineChip monospace data-chip-kind="path">~/Projects</InlineChip>,
-                  or type <InlineChip className="italic" data-chip-kind="confirmation">Delete 删除</InlineChip> to confirm.
+                  Remove <InlineReference data-chip-kind="name">Main 控制台</InlineReference>, choose <InlineReference data-chip-kind="label">Skip 跳过</InlineReference>,
+                  open <InlineReference monospace data-chip-kind="file">AGENTS.md</InlineReference> in <InlineReference monospace data-chip-kind="path">~/Projects</InlineReference>,
+                  or type <InlineReference className="italic" data-chip-kind="confirmation">Delete 删除</InlineReference> to confirm.
                 </p>
-                <p className="mt-3 leading-relaxed">Long path: <InlineChip monospace wrap>/Users/dev/Projects/octoboard/packages/ui/src/components/InlineChip.tsx</InlineChip> stays within the paragraph.</p>
-                <p dir="rtl" data-prose-rtl="" className="mt-3 leading-relaxed">افتح <InlineChip monospace>AGENTS.md</InlineChip> في <InlineChip monospace wrap>/Users/dev/Projects/octoboard</InlineChip> ثم اختر <InlineChip>Main</InlineChip>.</p>
+                <p className="mt-3 leading-relaxed">Long path: <InlineReference monospace wrap>/Users/dev/Projects/octoboard/packages/ui/src/components/InlineReference.tsx</InlineReference> stays within the paragraph.</p>
+                <p dir="rtl" data-prose-rtl="" className="mt-3 leading-relaxed">افتح <InlineReference monospace>AGENTS.md</InlineReference> في <InlineReference monospace wrap>/Users/dev/Projects/octoboard</InlineReference> ثم اختر <InlineReference>Main</InlineReference>.</p>
               </div>
             ))}
           </section>
@@ -57,7 +57,7 @@ export function CodeGallery(): React.ReactElement {
                   <p className="text-xs text-app-muted">{use}</p>
                   {sizes.map((size) => (
                     <p key={size} data-chip-size-sample={size} className="w-full min-w-0" style={{ fontSize: font, lineHeight: `${line}px` }}>
-                      {size}: <InlineChip size={size}>Ready</InlineChip> <InlineChip size={size} monospace>AGENTS.md</InlineChip> <InlineChip size={size} monospace wrap>{LONG_PATHS[0]}</InlineChip> and <InlineChip size={size} monospace wrap>{LONG_PATHS[1]}</InlineChip>
+                      {size}: <InlineReference size={size}>Ready</InlineReference> <InlineReference size={size} monospace>AGENTS.md</InlineReference> <InlineReference size={size} monospace wrap>{LONG_PATHS[0]}</InlineReference> and <InlineReference size={size} monospace wrap>{LONG_PATHS[1]}</InlineReference>
                     </p>
                   ))}
                 </div>
@@ -103,7 +103,7 @@ export function CodeGallery(): React.ReactElement {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {COLORS.map((color) => (
                 <div key={color} data-code-sample={color} className="min-w-0 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
-                  <p className="mb-2 text-sm">{color}: <InlineChip monospace wrap color={color}>VITE_DAEMON_PORT</InlineChip></p>
+                  <p className="mb-2 text-sm">{color}: <InlineReference monospace wrap color={color}>VITE_DAEMON_PORT</InlineReference></p>
                   <CodeBlock color={color}>{"env -0\nOCTOBOARD_DAEMON_PORT=5174"}</CodeBlock>
                 </div>
               ))}
@@ -119,7 +119,7 @@ export function CodeGallery(): React.ReactElement {
                     <Alert.Content>
                       <Alert.Title>{status}</Alert.Title>
                       <Alert.Description>
-                        {COLORS.map((color, index) => <React.Fragment key={color}>{index > 0 && "; "}{color}: <InlineChip monospace wrap color={color}>CLAUDE.md</InlineChip></React.Fragment>)}
+                        {COLORS.map((color, index) => <React.Fragment key={color}>{index > 0 && "; "}{color}: <InlineReference monospace wrap color={color}>CLAUDE.md</InlineReference></React.Fragment>)}
                       </Alert.Description>
                     </Alert.Content>
                   </TintedAlert>
@@ -135,19 +135,19 @@ export function CodeGallery(): React.ReactElement {
                 <Alert.Indicator aria-hidden="true" />
                 <Alert.Content>
                   <Alert.Title>Outer warning</Alert.Title>
-                  <Alert.Description>Outer warning: <InlineChip monospace wrap color="danger">AGENTS.md</InlineChip></Alert.Description>
+                  <Alert.Description>Outer warning: <InlineReference monospace wrap color="danger">AGENTS.md</InlineReference></Alert.Description>
                 </Alert.Content>
               </TintedAlert>
               <TintedAlert status="success" data-nested-sample="inner">
                 <Alert.Indicator aria-hidden="true" />
                 <Alert.Content>
                   <Alert.Title>Inner success</Alert.Title>
-                  <Alert.Description>Inner success: <InlineChip monospace wrap color="danger">.claude</InlineChip></Alert.Description>
+                  <Alert.Description>Inner success: <InlineReference monospace wrap color="danger">.claude</InlineReference></Alert.Description>
                 </Alert.Content>
               </TintedAlert>
-              <p>Outer warning again: <InlineChip monospace wrap color="accent">.codex</InlineChip></p>
+              <p>Outer warning again: <InlineReference monospace wrap color="accent">.codex</InlineReference></p>
             </CodeToneContext.Provider>
-            <p>After both alerts: <InlineChip monospace wrap color="help">~/Projects</InlineChip></p>
+            <p>After both alerts: <InlineReference monospace wrap color="help">~/Projects</InlineReference></p>
           </section>
         </div>
       </FadedScroller>

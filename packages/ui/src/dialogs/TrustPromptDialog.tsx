@@ -4,7 +4,7 @@ import { errorPresentation } from "../errorPresentation";
 import React, { useState } from "react";
 
 import { AGENT_LABEL } from "../agents";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { TintedAlert } from "../components/TintedAlert";
 import { DaemonRequestError } from "../daemon-client";
 import { Message, useT } from "../i18n/react";
@@ -14,7 +14,7 @@ import { useDaemon, useDaemonStore, type TrustPrompt } from "../store";
 import type { ConfirmDialogProps } from "./ConfirmDialog";
 
 function Path({ children }: { children: string }): React.ReactElement {
-  return <InlineChip monospace wrap>{children}</InlineChip>;
+  return <InlineReference monospace wrap>{children}</InlineReference>;
 }
 
 /** What trusting lets the asking agent do with the project's own configuration: true for that agent
@@ -24,9 +24,9 @@ function Caution({ agent }: { agent: Agent }): React.ReactElement {
     case "claude":
       return <Message id="dialog.trust.caution.claude" params={{ file: <Path>.claude/settings.json</Path> }} />;
     case "codex":
-      return <Message id="dialog.trust.caution.codex" params={{ agent: <InlineChip dir="auto" wrap>{AGENT_LABEL[agent]}</InlineChip> }} />;
+      return <Message id="dialog.trust.caution.codex" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference> }} />;
     case "grok":
-      return <Message id="dialog.trust.caution.grok" params={{ agent: <InlineChip dir="auto" wrap>{AGENT_LABEL[agent]}</InlineChip> }} />;
+      return <Message id="dialog.trust.caution.grok" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference> }} />;
   }
 }
 
@@ -45,12 +45,12 @@ function TrustPromptMessage({
   // Shown as Settings lists trusted folders, with the home directory as `~`, so the folder named
   // here reads the same as the row it adds there.
   const home = useDaemonStore((s) => s.homeDir);
-  const agent = <InlineChip dir="auto" wrap>{AGENT_LABEL[prompt.agent]}</InlineChip>;
+  const agent = <InlineReference dir="auto" wrap>{AGENT_LABEL[prompt.agent]}</InlineReference>;
   return (
     <>
       <p>
         {sessionTitle
-          ? <Message id="dialog.trust.questionForSession" params={{ agent, session: <InlineChip dir="auto" wrap>{sessionTitle}</InlineChip>, path: <Path>{abbreviateHome(prompt.path, home)}</Path> }} />
+          ? <Message id="dialog.trust.questionForSession" params={{ agent, session: <InlineReference dir="auto" wrap>{sessionTitle}</InlineReference>, path: <Path>{abbreviateHome(prompt.path, home)}</Path> }} />
           : <Message id="dialog.trust.question" params={{ agent, path: <Path>{abbreviateHome(prompt.path, home)}</Path> }} />}
       </p>
       <p><Message id="dialog.trust.behavior" params={{ agent }} /></p>
@@ -98,7 +98,7 @@ function TrustDirCheckbox({
             id="dialog.trust.parent"
             params={{
               directory: (
-                <InlineChip monospace wrap>{directory}</InlineChip>
+                <InlineReference monospace wrap>{directory}</InlineReference>
               ),
             }}
           />

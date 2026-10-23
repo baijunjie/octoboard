@@ -3,7 +3,7 @@ import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 
 import { OptionSelect } from "./OptionSelect";
 
@@ -32,7 +32,7 @@ it("keeps badge text in native choices without changing raw selected keys or ric
     const [value, setValue] = useState("listed");
     return <OptionSelect label="Model" value={value} onChange={(next) => { changed(next); setValue(next); }} options={[
       { value: "listed", label: "Listed" },
-      { value: key, label, badge, labelContent: <InlineChip dir="auto" wrap>{label}</InlineChip> },
+      { value: key, label, badge, labelContent: <InlineReference dir="auto" wrap>{label}</InlineReference> },
     ]} />;
   }
   const container = document.body.appendChild(document.createElement("div"));
@@ -50,6 +50,6 @@ it("keeps badge text in native choices without changing raw selected keys or ric
   expect(changed).toHaveBeenCalledExactlyOnceWith(key);
   expect(select.value).toBe(key);
   const trigger = container.querySelector("button")!;
-  expect(trigger.querySelector("[data-inline-chip]")?.textContent).toBe(label);
+  expect(trigger.querySelector("[data-inline-reference]")?.textContent).toBe(label);
   expect(trigger.textContent).toContain(`${label}, ${badge}`);
 });

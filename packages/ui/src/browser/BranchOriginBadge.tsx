@@ -1,6 +1,6 @@
 import React from "react";
 
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { IndicatorTooltip } from "../components/IndicatorTooltip";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
@@ -41,7 +41,7 @@ export function BranchOriginBadge({ origin, selectedSessionId }: { origin: Branc
     title: isolate(liveTitle ?? origin.responsible_title),
   });
   return (
-    <IndicatorTooltip tooltip={<Message id={message} params={{ title: <InlineChip dir="auto" wrap>{liveTitle ?? origin.responsible_title}</InlineChip> }} />} label={label} className="inline-flex shrink-0">
+    <IndicatorTooltip tooltip={<Message id={message} params={{ title: <InlineReference dir="auto" wrap>{liveTitle ?? origin.responsible_title}</InlineReference> }} />} label={label} className="inline-flex shrink-0">
       <span aria-hidden="true" className={`inline-block size-2.5 rounded-full border-2 ${selected ? "border-accent-soft-foreground bg-accent-soft-foreground" : "border-app-muted"}`} />
     </IndicatorTooltip>
   );

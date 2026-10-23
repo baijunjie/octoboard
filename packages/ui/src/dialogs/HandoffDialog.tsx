@@ -6,7 +6,7 @@ import { FailureAlert } from "../components/FailureAlert";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useHasPainted } from "../components/useHasPainted";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { Message, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessionLabel";
@@ -75,7 +75,7 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
 
   return (
     <Dialog
-      title={<Message id="dialog.handOff.title" params={{ title: <InlineChip dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineChip> }} />}
+      title={<Message id="dialog.handOff.title" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference> }} />}
       onClose={onClose}
       submitLabel={t("dialog.handOff.confirm")}
       busy={busy}
@@ -136,7 +136,7 @@ function HandoffMoves({ session, busy }: { session: Session; busy: boolean }): R
     inspected.pending ? <li key="checking">{t("dialog.handOff.movesChecking")}</li> : undefined,
     branches > 0 ? <li key="branches">{t("dialog.handOff.movesBranches", { count: branches })}</li> : undefined,
     ownedCount > 0 ? <li key="owned">{t("dialog.handOff.movesSessions", { count: ownedCount })}</li> : undefined,
-    ownerTitle !== undefined ? <li key="owner">{<Message id="dialog.handOff.movesOwner" params={{ owner: <InlineChip dir="auto" wrap>{ownerTitle}</InlineChip> }} />}</li> : undefined,
+    ownerTitle !== undefined ? <li key="owner">{<Message id="dialog.handOff.movesOwner" params={{ owner: <InlineReference dir="auto" wrap>{ownerTitle}</InlineReference> }} />}</li> : undefined,
   ].filter(Boolean);
   return (
     <div ref={rootRef} className="flex flex-col gap-1 text-sm" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>

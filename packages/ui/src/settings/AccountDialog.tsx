@@ -10,7 +10,7 @@ import { OptionSelect } from "../dialogs/OptionSelect";
 import { TextInput } from "../dialogs/TextInput";
 import type { MessageKey } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { Message, useT } from "../i18n/react";
 import type { Account, Agent } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
@@ -82,9 +82,9 @@ export function AccountDialog({
       <Dialog
         title={
           renameDefault
-            ? <Message id="settings.accounts.dialog.renameDefault" params={{ agent: <InlineChip dir="auto" wrap>{AGENT_LABEL[agent]}</InlineChip> }} />
+            ? <Message id="settings.accounts.dialog.renameDefault" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference> }} />
             : editing
-              ? <Message id="settings.accounts.dialog.edit" params={{ agent: <InlineChip dir="auto" wrap>{AGENT_LABEL[editing.agent]}</InlineChip> }} />
+              ? <Message id="settings.accounts.dialog.edit" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[editing.agent]}</InlineReference> }} />
               : t("settings.accounts.add")
         }
         onClose={onClose}
@@ -109,7 +109,7 @@ export function AccountDialog({
           placeholder={renameDefault ? t("settings.accounts.defaultName") : t("settings.accounts.nameExample")}
           description={renameDefault ? t("settings.accounts.defaultNameHint") : undefined}
           errorMessage={shown(nameError) && (collision
-            ? <Message id={COLLISION_MESSAGE[collision.kind]} params={{ name: <InlineChip dir="auto" wrap>{collision.name}</InlineChip>, agent: <InlineChip dir="auto" wrap>{AGENT_LABEL[agent]}</InlineChip> }} />
+            ? <Message id={COLLISION_MESSAGE[collision.kind]} params={{ name: <InlineReference dir="auto" wrap>{collision.name}</InlineReference>, agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference> }} />
             : nameError)}
           autoFocus
         />

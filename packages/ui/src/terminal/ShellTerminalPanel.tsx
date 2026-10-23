@@ -11,7 +11,7 @@ import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { handFocusOff } from "../components/handFocusOff";
 import { HandOffOnUnmount } from "../components/HandOffOnUnmount";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { PanelHeader } from "../components/PanelHeader";
 import { FOCUSABLE } from "../components/regionFocus";
 import { ROW_ICON_BUTTON_CLASS } from "../components/RowControls";
@@ -313,7 +313,7 @@ export function ShellTerminalPanel({
       })}
       {confirmClose !== undefined && terminals.some((terminal) => terminal.id === confirmClose) && (
         <ConfirmDialog
-          title={<Message id="shellTerminal.closeBusy.title" params={{ title: <InlineChip dir="auto" wrap>{terminals.find((terminal) => terminal.id === confirmClose)!.title}</InlineChip> }} />}
+          title={<Message id="shellTerminal.closeBusy.title" params={{ title: <InlineReference dir="auto" wrap>{terminals.find((terminal) => terminal.id === confirmClose)!.title}</InlineReference> }} />}
           message={t("shellTerminal.closeBusy.message")}
           confirmLabel={t("shellTerminal.close")}
           destructive

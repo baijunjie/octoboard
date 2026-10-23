@@ -22,7 +22,7 @@ type RecordNames = Pick<State, "consoles" | "projects" | "sessions"> & { homeDir
 
 /** The params a message shows as code, by message code: a technical literal (an ID, a path) that
  * reads better set apart from the sentence than quoted inside it. The plain text of such a message
- * carries the value bare; `DaemonErrorMessage` sets it as `InlineChip`. A code the browser panes show
+ * carries the value bare; `DaemonErrorMessage` sets it as `InlineReference`. A code the browser panes show
  * (`browseError.ts`) has its params reshaped first (`shownParams`), so a structured render of it
  * must be given those, never the daemon's raw ones. */
 export const CODE_PARAMS: Record<string, readonly string[]> = {

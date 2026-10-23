@@ -3,10 +3,10 @@ import React from "react";
 
 import { useCodeColor, type CodeColor } from "./codeTone";
 
-export type InlineChipSize = "xs" | "sm" | "md" | "lg";
-export type InlineChipProps = Omit<React.ComponentProps<typeof Chip<"span">>, "size" | "color" | "children"> & {
+export type InlineReferenceSize = "xs" | "sm" | "md" | "lg";
+export type InlineReferenceProps = Omit<React.ComponentProps<typeof Chip<"span">>, "size" | "color" | "children"> & {
   children?: React.ReactNode;
-  size?: InlineChipSize;
+  size?: InlineReferenceSize;
   color?: CodeColor;
   monospace?: boolean;
   wrap?: boolean;
@@ -19,7 +19,7 @@ export type InlineChipProps = Omit<React.ComponentProps<typeof Chip<"span">>, "s
 /** A reference mixed into running copy. It always takes the font of the text it sits in; the sizes differ only in
  * padding, and `xs`, the default, is safe in every line (see `docs/ui-accessibility.md`'s "A chip's size follows the
  * line it sits in" section). */
-export function InlineChip({
+export function InlineReference({
   children,
   size = "xs",
   color = "default",
@@ -31,7 +31,7 @@ export function InlineChip({
   dir = monospace ? "ltr" : undefined,
   className = "",
   ...props
-}: InlineChipProps): React.ReactElement {
+}: InlineReferenceProps): React.ReactElement {
   const resolvedColor = useCodeColor(color);
   const nativeColor = resolvedColor === "help" ? "default" : resolvedColor;
   const text = wrap && typeof children === "string" ? children.split("/").map((part, i) => (
@@ -44,14 +44,14 @@ export function InlineChip({
       color={nativeColor}
       variant={variant}
       dir={dir}
-      data-inline-chip=""
+      data-inline-reference=""
       data-size={size}
       data-color={resolvedColor}
-      className={`inline-chip ${wrap ? "inline-chip--wrap" : ""} ${unbroken ? "inline-chip--unbroken" : ""} ${monospace ? "select-text" : ""} ${className}`}
+      className={`inline-reference ${wrap ? "inline-reference--wrap" : ""} ${unbroken ? "inline-reference--unbroken" : ""} ${monospace ? "select-text" : ""} ${className}`}
     >
       {startContent}
       <Chip.Label>
-        {monospace ? <code dir={dir} data-color={resolvedColor} className="inline-chip__code select-text">{text}</code> : text}
+        {monospace ? <code dir={dir} data-color={resolvedColor} className="inline-reference__code select-text">{text}</code> : text}
       </Chip.Label>
     </Chip>
   );

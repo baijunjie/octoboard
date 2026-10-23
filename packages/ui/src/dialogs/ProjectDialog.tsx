@@ -16,7 +16,7 @@ import {
 import { agentIconPickerOptions, AgentIcon } from "../components/AgentIcon";
 import { FailureAlert } from "../components/FailureAlert";
 import { HelpTip } from "../components/HelpTip";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
 import { tagVocabulary } from "../projectFiltering";
@@ -331,11 +331,11 @@ export function ProjectDialog({
                 <Message
                   id="dialog.project.agentDetectMechanism"
                   params={{
-                    detect: <InlineChip dir="auto" wrap>{t("dialog.project.agentDetect")}</InlineChip>,
-                    claudeFile: <InlineChip monospace wrap>CLAUDE.md</InlineChip>,
-                    agentsFile: <InlineChip monospace wrap>AGENTS.md</InlineChip>,
-                    claudeDir: <InlineChip monospace wrap>.claude</InlineChip>,
-                    codexDir: <InlineChip monospace wrap>.codex</InlineChip>,
+                    detect: <InlineReference dir="auto" wrap>{t("dialog.project.agentDetect")}</InlineReference>,
+                    claudeFile: <InlineReference monospace wrap>CLAUDE.md</InlineReference>,
+                    agentsFile: <InlineReference monospace wrap>AGENTS.md</InlineReference>,
+                    claudeDir: <InlineReference monospace wrap>.claude</InlineReference>,
+                    codexDir: <InlineReference monospace wrap>.codex</InlineReference>,
                   }}
                 />
               </HelpTip>

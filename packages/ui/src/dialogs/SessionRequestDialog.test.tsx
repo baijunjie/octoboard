@@ -42,7 +42,7 @@ it.each([
   expect(dialogText()).toContain("Start a session?");
   expect(dialogText()).toContain(where);
   expect(dialogText()).toContain("The new session would report to you.");
-  expect([...document.querySelectorAll("[data-inline-chip]")].map((chip) => chip.textContent)).toEqual([asked.session, "Codex", asked.project, asked.console].filter(Boolean));
+  expect([...document.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent)).toEqual([asked.session, "Codex", asked.project, asked.console].filter(Boolean));
 });
 
 it("keeps known names as names even when they equal record IDs", () => {
@@ -54,7 +54,7 @@ it("keeps known names as names even when they equal record IDs", () => {
     sessionRequests: [request],
   }, ack);
   expect(dialogText()).toContain("The session s-1 asks to start a Codex session in the project p-1 of the console c-1");
-  expect(document.querySelectorAll("[data-inline-chip] code")).toHaveLength(0);
+  expect(document.querySelectorAll("[data-inline-reference] code")).toHaveLength(0);
 });
 
 // The branches an approval would hand over are named, each as code and joined as the language joins
@@ -65,7 +65,7 @@ it.each([
 ])("names the branches handed over: $branches", ({ branches, where }) => {
   mountPendingQuestionDialog({ sessionRequests: [{ ...request, branches }] }, ack);
   expect(dialogText()).toContain("The new session would report to you. " + where);
-  const codes = [...document.querySelectorAll("[data-inline-chip] code")].map((code) => code.textContent);
+  const codes = [...document.querySelectorAll("[data-inline-reference] code")].map((code) => code.textContent);
   expect(codes).toEqual([request.session, request.project, request.console, ...branches.map((branch) => branch.replace("%25", "%"))]);
 });
 
@@ -79,7 +79,7 @@ it("puts no space between the question and the branches in a language with none 
 it("says nothing of branches when none is handed over", () => {
   mountPendingQuestionDialog({ sessionRequests: [request] }, ack);
   expect(dialogText()).not.toContain("handed over");
-  expect([...document.querySelectorAll("[data-inline-chip] code")].map((code) => code.textContent)).toEqual([request.session, request.project, request.console]);
+  expect([...document.querySelectorAll("[data-inline-reference] code")].map((code) => code.textContent)).toEqual([request.session, request.project, request.console]);
 });
 
 // The requester may live in another project or console than the one it asks in, which the dialog is

@@ -152,7 +152,7 @@ it("keeps the last good windows, and marks them out of date on the name line wit
   press(mark);
   const summary = Array.from(dialog()!.querySelectorAll("span")).find((node) => node.textContent === "Claude Code could not report its quota.")!;
   expect(summary).toBeDefined();
-  const agent = summary.querySelector("[data-inline-chip]")!;
+  const agent = summary.querySelector("[data-inline-reference]")!;
   expect(agent.textContent).toBe("Claude Code");
   expect(agent.getAttribute("dir")).toBe("auto");
   expect(agent.textContent).not.toMatch(/[\u2066-\u2069]/);

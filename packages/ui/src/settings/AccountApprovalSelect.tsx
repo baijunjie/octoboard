@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 
 import { AGENT_LABEL } from "../agents";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { OptionSelect } from "../dialogs/OptionSelect";
 import { errorPresentation } from "../errorPresentation";
@@ -117,7 +117,7 @@ export function ClaudeApprovalModeSelect({ account, name, mode }: {
       confirmation={(value) => value === "bypass" ? {
         title: account === null
           ? t("settings.accounts.approval.bypassTitleDefault")
-          : <Message id="settings.accounts.approval.bypassTitle" params={{ name: <InlineChip dir="auto" wrap>{name}</InlineChip> }} />,
+          : <Message id="settings.accounts.approval.bypassTitle" params={{ name: <InlineReference dir="auto" wrap>{name}</InlineReference> }} />,
         message: <Message id="settings.accounts.approval.bypassMessage" />,
         confirmLabel: t("settings.accounts.approval.claudeBypass"),
       } : null}

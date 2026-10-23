@@ -68,7 +68,7 @@ it("reports a failed opener with localized copy, the destination as plain text a
   const alert = document.querySelector('[role="alertdialog"]')!;
   expect(alert.textContent).toContain("Could not open the external link.");
   expect(alert.querySelector("p[dir=ltr]")?.textContent).toBe(URL);
-  expect(alert.querySelector("[data-inline-chip]")).toBeNull();
+  expect(alert.querySelector("[data-inline-reference]")).toBeNull();
   expect(errorAlerts.getSnapshot()[0].error).toMatchObject({ recovery: "openExternal", cause });
 });
 

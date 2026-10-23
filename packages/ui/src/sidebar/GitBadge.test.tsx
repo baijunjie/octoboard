@@ -114,7 +114,7 @@ function hoverAndRead(element: Element): string | undefined {
   const tooltip = openTooltip();
   const text = tooltip?.textContent ?? undefined;
   if (tooltip) {
-    const branch = tooltip.querySelector("[data-inline-chip]");
+    const branch = tooltip.querySelector("[data-inline-reference]");
     expect(branch?.getAttribute("dir")).toBe("ltr");
     expect(branch?.getAttribute("data-size")).toBe("xs");
     expect(branch?.querySelector("code")).not.toBeNull();

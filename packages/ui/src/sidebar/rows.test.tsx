@@ -5,7 +5,7 @@ import { setInteractionModality } from "react-aria";
 import { expect, it } from "vitest";
 
 import { Plus } from "lucide-react";
-import { InlineChip } from "../components/InlineChip";
+import { InlineReference } from "../components/InlineReference";
 import { RowIconButton, TreeRow } from "./rows";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -36,7 +36,7 @@ it.each([
 it.each([undefined, "Quota is used up"])("preserves tooltip name suppression and the unavailable reason (%s)", (unavailable) => {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  act(() => root.render(<RowIconButton icon={Plus} label="New session in Project" title={<>New session in <InlineChip dir="auto" wrap>Project</InlineChip></>} unavailable={unavailable} onPress={() => {}} />));
+  act(() => root.render(<RowIconButton icon={Plus} label="New session in Project" title={<>New session in <InlineReference dir="auto" wrap>Project</InlineReference></>} unavailable={unavailable} onPress={() => {}} />));
   const button = container.querySelector("button")!;
   act(() => setInteractionModality("keyboard"));
   act(() => button.focus());
