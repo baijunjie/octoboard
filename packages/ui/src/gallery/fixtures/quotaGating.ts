@@ -143,10 +143,11 @@ const teamIncomplete: Settings = {
 const onTeam = { ...searchApi, codex_account_id: { kind: "account" as const, id: "a-team" } };
 
 /** When the daemon, which holds a newer reading than the window, refuses: the session window resets in 95 minutes.
- * Its wire name stays "5-hour"; the app words it "session" for Claude Code. */
+ * Its wire name stays "5-hour", with its kind and its five-hour length beside it; the app words it "session" for
+ * Claude Code. */
 const refusedWithReset = {
   code: "account_quota_exhausted",
-  params: { agent: "Claude Code", account: "Work", window: "5-hour", resets_at: String(minutesFromNow(95)) },
+  params: { agent: "Claude Code", account: "Work", window: "5-hour", window_kind: "session", window_minutes: "300", resets_at: String(minutesFromNow(95)) },
   message: "Work has used up its Claude Code quota (5-hour)",
 };
 

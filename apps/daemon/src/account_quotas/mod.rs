@@ -570,18 +570,29 @@ pub struct Exhausted {
     /// The window's name in English, the same for every agent: `5-hour`, `Weekly`, `Monthly` or
     /// `Credits`, or the window's own label when it carries one.
     pub window: String,
+    /// The window's kind, from which a client words it as the agent's own interface does.
+    pub kind: QuotaWindowKind,
+    /// The window's length, if known; what names a credit pool.
+    pub window_minutes: Option<u32>,
+    /// Whether the same reading also has a model's own weekly window, which makes an account-wide
+    /// weekly window "Weekly · all models" in Claude Code's interface.
+    pub has_model_weekly: bool,
     /// When it resets, in milliseconds since the epoch; `None` when the agent does not say.
     pub resets_at: Option<i64>,
 }
 
 impl Exhausted {
     /// The window's name for a sentence about `agent`'s account, as that agent's own interface
-    /// calls it: Claude Code's `session`, Codex's `5h`; any other name as `window` has it.
+    /// calls it: Claude Code's `session` and `Weekly · all models` (beside a model's own weekly
+    /// window), Codex's `5h`; any other name as `window` has it.
     pub fn named_for(&self, agent: Agent) -> &str {
-        match (self.window.as_str(), agent) {
-            (SESSION_WINDOW, Agent::Claude) => "session",
-            (SESSION_WINDOW, _) => "5h",
-            (name, _) => name,
+        match (self.kind, agent) {
+            (QuotaWindowKind::Session, Agent::Claude) => "session",
+            (QuotaWindowKind::Session, _) => "5h",
+            (QuotaWindowKind::Weekly, Agent::Claude) if self.has_model_weekly => {
+                "Weekly · all models"
+            }
+            _ => &self.window,
         }
     }
 }
@@ -602,10 +613,11 @@ fn exhausted_in(
     now: i64,
 ) -> Option<Exhausted> {
     let key = Key::of(agent, account, config_dir);
-    entries
-        .get(&key)?
-        .quota
-        .windows
+    let windows = &entries.get(&key)?.quota.windows;
+    let has_model_weekly = windows
+        .iter()
+        .any(|window| window.kind == QuotaWindowKind::WeeklyModel);
+    windows
         .iter()
         .filter(|window| {
             window.kind != QuotaWindowKind::WeeklyModel
@@ -622,6 +634,9 @@ fn exhausted_in(
         })
         .map(|window| Exhausted {
             window: window_name(window),
+            kind: window.kind,
+            window_minutes: window.window_minutes,
+            has_model_weekly,
             resets_at: window.resets_at,
         })
 }
@@ -2075,6 +2090,9 @@ mod tests {
             blocked,
             Some(Exhausted {
                 window: "5-hour".to_string(),
+                kind: QuotaWindowKind::Session,
+                window_minutes: None,
+                has_model_weekly: false,
                 resets_at: Some(NOW + 1)
             })
         );
@@ -2121,6 +2139,9 @@ mod tests {
             blocked,
             Some(Exhausted {
                 window: "Weekly".to_string(),
+                kind: QuotaWindowKind::Weekly,
+                window_minutes: None,
+                has_model_weekly: false,
                 resets_at: Some(NOW + 20)
             })
         );
@@ -2139,6 +2160,9 @@ mod tests {
                 exhausted_of(windows),
                 Some(Exhausted {
                     window: "5-hour".to_string(),
+                    kind: QuotaWindowKind::Session,
+                    window_minutes: None,
+                    has_model_weekly: false,
                     resets_at: None
                 })
             );
@@ -2330,5 +2354,18 @@ mod tests {
             exhausted(QuotaWindowKind::Weekly).named_for(Agent::Claude),
             "Weekly"
         );
+    }
+
+    #[test]
+    fn a_weekly_window_beside_a_models_own_is_for_all_models_in_claude_codes_words() {
+        let blocked = exhausted_of(vec![
+            window(QuotaWindowKind::Weekly, 100.0, Some(NOW + 1)),
+            window(QuotaWindowKind::WeeklyModel, 10.0, Some(NOW + 1)),
+        ])
+        .expect("a used-up window");
+        assert!(blocked.has_model_weekly);
+        assert_eq!(blocked.kind, QuotaWindowKind::Weekly);
+        assert_eq!(blocked.named_for(Agent::Claude), "Weekly · all models");
+        assert_eq!(blocked.named_for(Agent::Codex), "Weekly");
     }
 }

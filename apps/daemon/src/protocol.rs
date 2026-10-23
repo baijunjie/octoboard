@@ -2845,6 +2845,18 @@ pub enum QuotaWindowKind {
     CreditPeriod,
 }
 
+impl QuotaWindowKind {
+    /// How the kind is named on the wire, as it serializes.
+    pub fn wire_name(self) -> &'static str {
+        match self {
+            QuotaWindowKind::Session => "session",
+            QuotaWindowKind::Weekly => "weekly",
+            QuotaWindowKind::WeeklyModel => "weekly_model",
+            QuotaWindowKind::CreditPeriod => "credit_period",
+        }
+    }
+}
+
 /// One window of an account's plan quota.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct QuotaWindow {

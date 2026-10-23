@@ -132,7 +132,7 @@ it.each([
 });
 
 it("words an exhausted account's quota, with the time left when the reset is known and the window in the UI's language", () => {
-  const params = { agent: "Codex", account: "Work", window: "5-hour" };
+  const params = { agent: "Codex", account: "Work", window: "5-hour", window_kind: "session" };
   expect(daemonMessage("en", "account_quota_exhausted", params, "x", records)).toBe(
     `${isolate("Work")} (${isolate("Codex")}) cannot run a session because it has used up its 5h quota.`,
   );
@@ -142,16 +142,36 @@ it("words an exhausted account's quota, with the time left when the reset is kno
 });
 
 it("words the session window as the agent's own interface names it", () => {
-  const params = { agent: "Claude Code", account: "Work", window: "5-hour" };
+  const params = { agent: "Claude Code", account: "Work", window: "5-hour", window_kind: "session" };
   expect(daemonMessage("en", "account_quota_exhausted", params, "x", records)).toContain("has used up its session quota.");
   expect(daemonMessage("zh-Hans", "account_quota_exhausted", params, "x", records)).toContain("会话额度已用完");
 });
 
-it("words an exhausted credit pool as credits and any other window as a quota of its own name", () => {
-  const params = { agent: "Codex", account: "Work" };
+it("words Claude Code's weekly window for all models only beside a model's own weekly window", () => {
+  const params = { agent: "Claude Code", account: "Work", window: "Weekly", window_kind: "weekly" };
+  expect(daemonMessage("en", "account_quota_exhausted", params, "x", records)).toContain("has used up its weekly quota.");
+  expect(daemonMessage("en", "account_quota_exhausted", { ...params, model_weekly: "true" }, "x", records)).toContain("has used up its weekly quota for all models.");
+  expect(daemonMessage("zh-Hans", "account_quota_exhausted", { ...params, model_weekly: "true" }, "x", records)).toContain("所有模型的每周额度已用完");
+  expect(daemonMessage("en", "account_quota_exhausted", { ...params, agent: "Codex", model_weekly: "true" }, "x", records)).toContain("has used up its weekly quota.");
+});
+
+it("words a credit pool by its period, and a refusal without the structured window by its English name", () => {
+  const params = { agent: "Grok Build", account: "Work", window: "Weekly", window_kind: "credit_period" };
+  expect(daemonMessage("en", "account_quota_exhausted", { ...params, window_minutes: "10080" }, "x", records)).toContain("has used up its weekly quota.");
+  expect(daemonMessage("en", "account_quota_exhausted", { ...params, window: "Monthly", window_minutes: "43200" }, "x", records)).toContain("has used up its monthly quota.");
   expect(daemonMessage("en", "account_quota_exhausted", { ...params, window: "Credits" }, "x", records)).toContain("has used up its credits.");
-  expect(daemonMessage("zh-Hans", "account_quota_exhausted", { ...params, window: "Credits" }, "x", records)).toContain("：额度已用完。");
+  expect(daemonMessage("en", "account_quota_exhausted", { agent: "Codex", account: "Work", window: "5-hour" }, "x", records)).toContain(`its ${isolate("5-hour")} quota.`);
+});
+
+it("words an exhausted credit pool as credits and a window without a structured kind as a quota of its own name", () => {
+  const params = { agent: "Codex", account: "Work" };
+  const credits = { ...params, window: "Credits", window_kind: "credit_period" };
+  expect(daemonMessage("en", "account_quota_exhausted", credits, "x", records)).toContain("has used up its credits.");
+  expect(daemonMessage("zh-Hans", "account_quota_exhausted", credits, "x", records)).toContain("：额度已用完。");
   expect(daemonMessage("en", "account_quota_exhausted", { ...params, window: "Opus weekly" }, "x", records)).toContain(`its ${isolate("Opus weekly")} quota.`);
+  for (const unknown of [{ window_kind: "weekly_model" }, { agent: "Other" }]) {
+    expect(daemonMessage("en", "account_quota_exhausted", { ...params, window: "Weekly", window_kind: "weekly", ...unknown }, "x", records)).toContain(`its ${isolate("Weekly")} quota.`);
+  }
 });
 
 it("shows the default account of an exhausted quota by its name in the UI's language", () => {

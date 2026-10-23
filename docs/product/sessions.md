@@ -246,18 +246,22 @@ account a session uses" below), is used up by the reading the daemon holds at th
 `docs/product/account-quotas.md`) is refused with `account_quota_exhausted`, and nothing is recorded; the user's own
 request is refused too. The refusal carries `agent`, `account` (the account's name), `window` (the used-up window's
 name in English, the same for every agent: `5-hour`, `Weekly`, `Monthly` or `Credits`, or a window's own label when it
-carries one) and, when the agent gives a reset time, `resets_at` in milliseconds since the epoch. In the window it is
-shown in an error alert, in the UI's language, saying the account cannot run a session because it has used up that
-quota — `5-hour` worded as the agent's own interface names it, Claude Code's "session quota" and Codex's "5h quota",
-and `Weekly` as "weekly quota" for every agent (see "Quota windows" in `docs/product/account-quotas.md`) — and, when
-known, how long until it resets, counted from when the alert is shown; the next step is to choose another account
+carries one), `window_kind` (session, weekly or credit period), `window_minutes` (its length, when known),
+`model_weekly` (when the same reading also has a model's own weekly window) and, when the agent gives a reset time, `resets_at` in
+milliseconds since the epoch. In the window it is shown in an error alert, in the UI's language, saying the account
+cannot run a session because it has used up that quota, the window named as everywhere else in the UI (see "Quota
+windows" in `docs/product/account-quotas.md`): Claude Code's "session quota", Codex's "5h quota", Claude Code's
+account-wide weekly window as "weekly quota for all models" when the reading also has a model's own weekly window, and
+so on; a refusal that does not say what the window is names it as a quota of its `window` name. The alert also says,
+when known, how long until it resets, counted from when the alert is shown; the next step is to choose another account
 that still has quota, or to try again once the quota resets. An agent's tool call is refused with a reason in English
 naming the account, the agent and the window (the five-hour window as "session" for Claude Code and "5h" for Codex,
-any other by its `window` name), about how long until it resets when known, and saying to choose another account or
-wait for the reset. A session request is refused
-that way before the user is asked, and again on approval should the account be used up by then (see
-`docs/product/session-requests.md`). Only a session being opened is checked: a session already on the account keeps
-running, and resuming, reopening or restarting it is never refused for this.
+Claude Code's account-wide weekly window as "Weekly · all models" when the reading also has a model's own weekly
+window, any other by its `window` name), about how long until it resets when known, and saying to choose another
+account or wait for the reset. A session request is refused that way before the user is asked, and again on approval
+should the account be used up by then (see `docs/product/session-requests.md`). Only a session being opened is
+checked: a session already on the account keeps running, and resuming, reopening or restarting it is never refused for
+this.
 
 With every agent determined unavailable, a console session's `new_session` tool is refused as well, with a reason it
 can report that says the same (see "The console session's tools" in `docs/product/hub-orchestration.md`). Nothing is

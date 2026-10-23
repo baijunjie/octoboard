@@ -236,16 +236,27 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
   /** Refuses a session on, or a switch to, an account whose last reading in the store has a session, weekly or
    * credit-period window used up (100% or more) that has not reset, as the daemon does with the reading it holds:
    * a model's weekly window never counts, an account not read yet is never refused, and of several used-up
-   * windows the one that resets last (one with no reset time after all) is named, in English. */
+   * windows the one that resets last (one with no reset time after all) is named, in English, with its kind, length
+   * and whether the reading also has a model's weekly window, from which the app words it. */
   const refuseIfQuotaExhausted = (agent: Agent, account: Account | undefined) => {
     const current = store.getState();
-    const blocking = exhaustedQuotaWindow(accountQuotaOf(current.accountQuotas, agent, account?.id ?? null), Date.now());
+    const reading = accountQuotaOf(current.accountQuotas, agent, account?.id ?? null);
+    const blocking = exhaustedQuotaWindow(reading, Date.now());
     if (!blocking) return;
     const windowName = quotaWindowName(blocking);
+    const modelWeekly = typeof reading === "object" && reading.windows.some((window) => window.kind === "weekly_model");
     const name = account?.name ?? current.settings.default_account_names?.[agent] ?? DEFAULT_ACCOUNT_NAME;
     return fail({
       code: "account_quota_exhausted",
-      params: { agent: AGENT_LABEL[agent], account: name, window: windowName, ...(blocking.resets_at != null && { resets_at: String(blocking.resets_at) }) },
+      params: {
+        agent: AGENT_LABEL[agent],
+        account: name,
+        window: windowName,
+        window_kind: blocking.kind,
+        ...(blocking.window_minutes != null && { window_minutes: String(blocking.window_minutes) }),
+        ...(modelWeekly && { model_weekly: "true" }),
+        ...(blocking.resets_at != null && { resets_at: String(blocking.resets_at) }),
+      },
       message: `${name} has used up its ${AGENT_LABEL[agent]} quota (${windowName})`,
     });
   };

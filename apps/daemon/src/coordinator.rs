@@ -4858,11 +4858,19 @@ fn refuse_if_account_quota_exhausted(
     };
     let account = state.store.account_display_name(agent, account_id)?;
     let resets = exhausted.resets_at.map(|at| at.to_string());
+    let minutes = exhausted.window_minutes.map(|minutes| minutes.to_string());
     let mut params = vec![
         ("agent", agent.label()),
         ("account", account.as_str()),
         ("window", exhausted.window.as_str()),
+        ("window_kind", exhausted.kind.wire_name()),
     ];
+    if let Some(minutes) = minutes.as_deref() {
+        params.push(("window_minutes", minutes));
+    }
+    if exhausted.has_model_weekly {
+        params.push(("model_weekly", "true"));
+    }
     if let Some(resets) = resets.as_deref() {
         params.push(("resets_at", resets));
     }
@@ -6771,6 +6779,9 @@ mod tests {
         assert_eq!(params["agent"], Agent::Claude.label());
         assert_eq!(params["account"], "Claude work");
         assert_eq!(params["window"], "Weekly");
+        assert_eq!(params["window_kind"], "weekly");
+        assert!(!params.contains_key("window_minutes"));
+        assert!(!params.contains_key("model_weekly"));
         assert_eq!(params["resets_at"], reset.to_string());
 
         // The default account, whose reading does not say when it resets.

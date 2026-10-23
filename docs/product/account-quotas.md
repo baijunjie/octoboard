@@ -89,10 +89,9 @@ Inside a sentence — a used-up account's reason, an alert — a window is named
 **Weekly · all models**), "Fable weekly quota", "monthly quota", and a credit pool named **Credits** as "credits".
 Every place that names a window follows this: the meters in Settings and the rail's quota panel, the account pickers'
 and the Switch account submenu's descriptions of an account, the selected session's quota indicator, the menu bar
-icon and its quota submenus, and the used-up alerts. The UI's other languages name the windows by the same rule, in
-their own words. The one exception is the daemon's refusal of a used-up account (see "Opening a session" in
-`docs/product/sessions.md`), which names the window without the account's other windows: there Claude Code's
-account-wide weekly window is always "weekly quota".
+icon and its quota submenus, the used-up alerts, and the daemon's refusal of a used-up account (see "Opening a
+session" in `docs/product/sessions.md`). The UI's other languages name the windows by the same rule, in their own
+words.
 
 In Settings, the rail's quota panel and the native menu's account details, windows appear in this order: the
 five-hour window, then the account-wide weekly window, then a credit pool, then **model-specific weekly** limits.

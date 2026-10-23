@@ -1,13 +1,13 @@
-import { AGENT_LABEL } from "./agents";
+import { AGENT_OPTIONS } from "./agents";
 import { EXAMPLE_CONVERSATION_ID } from "./conversationId";
 import { format, isMessageKey, messageText, globalParam } from "./i18n/catalog";
 import { joinPhrases } from "./i18n/joinPhrases";
 import { isolate } from "./i18n/isolate";
 import { abbreviateHome } from "./pathDisplay";
 import { sessionDisplayTitle } from "./sessionLabel";
-import { countdown } from "./quota/quotaFormat";
+import { countdown, quotaWindowPhrase, type QuotaNaming } from "./quota/quotaFormat";
 import type { Language } from "./i18n/languages";
-import { DEFAULT_ACCOUNT_NAME, type MessageParams, type SessionBranchState, type SharingEntryCause } from "./protocol";
+import { DEFAULT_ACCOUNT_NAME, type MessageParams, type QuotaWindow, type SessionBranchState, type SharingEntryCause } from "./protocol";
 import type { State } from "./store";
 
 /** The params that are record ids, and what each is shown as: the record's current name. */
@@ -404,21 +404,24 @@ export function withUiParams(code: string, params: MessageParams): MessageParams
   return { ...UI_PARAMS[messageCode(code, params)], ...params };
 }
 
-type QuotaWindowKey = "quota.windowPhrase.session" | "quota.windowPhrase.fiveHour" | "quota.windowPhrase.weekly" | "quota.windowPhrase.monthly" | "quota.windowPhrase.credits";
+/** The kinds a refusal can name: a model's own weekly window never refuses. */
+const REFUSED_WINDOW_KINDS: readonly QuotaWindow["kind"][] = ["session", "weekly", "credit_period"];
 
-/** The English window names `account_quota_exhausted` carries, and the messages that word them. The session
- * window, `5-hour`, is worded per agent, as that agent's own interface names it. */
-const QUOTA_WINDOW_KEYS: Record<string, QuotaWindowKey> = {
-  Weekly: "quota.windowPhrase.weekly",
-  Monthly: "quota.windowPhrase.monthly",
-  Credits: "quota.windowPhrase.credits",
-};
+/** The window an `account_quota_exhausted` refusal names, with what names it (`QuotaNaming`): its `window_kind`,
+ * `window_minutes` and `model_weekly` params, and the `agent` label. Undefined for a refusal without them. */
+function refusedQuotaWindow(params: MessageParams): { naming: QuotaNaming; window: QuotaWindow } | undefined {
+  const kind = REFUSED_WINDOW_KINDS.find((candidate) => candidate === params.window_kind);
+  const agent = AGENT_OPTIONS.find((option) => option.label === params.agent)?.value;
+  if (!kind || !agent) return undefined;
+  const minutes = /^\d+$/.test(params.window_minutes ?? "") ? Number(params.window_minutes) : null;
+  const window: QuotaWindow = { kind, label: null, used_percent: 100, resets_at: null, window_minutes: minutes };
+  const modelWeekly: QuotaWindow = { kind: "weekly_model", label: null, used_percent: 0, resets_at: null, window_minutes: null };
+  return { naming: { agent, windows: params.model_weekly === "true" ? [window, modelWeekly] : [window] }, window };
+}
 
-/** The message that words the standard window `window` that `agent` (its label, as the daemon names it) has
- * used up, or undefined for a window's own label. */
-export function quotaWindowKey(agent: string | undefined, window: string): QuotaWindowKey | undefined {
-  if (window === "5-hour") return agent === AGENT_LABEL.claude ? "quota.windowPhrase.session" : "quota.windowPhrase.fiveHour";
-  return Object.hasOwn(QUOTA_WINDOW_KEYS, window) ? QUOTA_WINDOW_KEYS[window] : undefined;
+/** Whether the refusal's window can be worded from its structured params; if not, from its English name. */
+export function hasRefusedQuotaWindow(params: MessageParams): boolean {
+  return refusedQuotaWindow(params) !== undefined;
 }
 
 /** The codes whose account name param may be the default account's, which the daemon names by its fixed
@@ -481,11 +484,13 @@ export function daemonParams<V = never>(
   if (/^\d+$/.test(all.count ?? "")) shown.count = Number(all.count);
   if (code === "account_in_use" && /^\d+$/.test(all.sessions ?? "")) shown.count = Number(all.sessions);
   if (code === "field_too_long" && /^\d+$/.test(all.limit ?? "")) shown.limit = Number(all.limit);
-  // The daemon names the window in English; the standard names are worded in the UI's language, any other
-  // (a window's own label) as a quota of that name.
+  // The window is worded in the UI's language from its structured params; a refusal without them, as a quota of
+  // its English `window` name.
   if (code === "account_quota_exhausted") {
-    const key = quotaWindowKey(all.agent, all.window);
-    shown.quota = key ? format(language, key, {}) : format(language, "quota.windowPhrase.named", { window: shown.window });
+    const refused = refusedQuotaWindow(all);
+    shown.quota = refused
+      ? quotaWindowPhrase((key, ...args) => format(language, key, args[0]), refused.naming, refused.window)
+      : format(language, "quota.windowPhrase.named", { window: shown.window });
   }
   // The time left until the account's quota resets, counted from when the message is worded.
   if (messageCode(code, all) === "account_quota_exhausted.resets") {

@@ -442,10 +442,11 @@ const submitConsoleSwitch = [
   (ui: Ui) => ui.confirm(),
 ];
 
-/** The daemon's refusal of a switch to Work, whose weekly quota is used up and has no reset time. */
+/** The daemon's refusal of a switch to Work, whose weekly quota is used up and has no reset time; the reading also
+ * has a model's own weekly window, which makes the account-wide one "for all models" in Claude Code's words. */
 const quotaRefusal = {
   code: "account_quota_exhausted",
-  params: { agent: "Claude Code", account: accountsState.settings!.accounts[0].name, window: "Weekly" },
+  params: { agent: "Claude Code", account: accountsState.settings!.accounts[0].name, window: "Weekly", window_kind: "weekly", window_minutes: "10080", model_weekly: "true" },
   message: `${accountsState.settings!.accounts[0].name} has used up its Claude Code quota (Weekly)`,
 };
 
@@ -626,7 +627,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Console account switch refused, the quota is used up",
-    description: "The daemon holds a newer reading than the window and refuses two sessions' switch to the Work account. Both rows say the account's weekly quota is used up, with no reset time, and the advice to choose another account or try again once the quota resets comes once under them. The footer holds OK alone. The account's name appears as a chip in the title and in each row, in the app's language.",
+    description: "The daemon holds a newer reading than the window and refuses two sessions' switch to the Work account. Both rows say the account's weekly quota for all models is used up, with no reset time, and the advice to choose another account or try again once the quota resets comes once under them. The footer holds OK alone. The account's name appears as a chip in the title and in each row, in the app's language.",
     state: switchAccountState,
     sessionAccountSwitches: { "s-switch-bound": quotaRefusal, "s-switch-work": quotaRefusal },
     steps: submitConsoleSwitch,
