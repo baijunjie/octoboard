@@ -15,3 +15,9 @@ license = "MIT"
 repository = "https://github.com/baijunjie/octoboard"
 edition = "2021"
 rust-version = "1.99"
+
+# Debug information is what makes a debug build's target directory and link time large, and the
+# crates under `[workspace]` are the only code a developer steps through, so the dependencies are
+# built without it. Panic backtraces of the workspace crates keep their line numbers.
+[profile.dev.package."*"]
+debug = false

@@ -21,7 +21,7 @@ This crate is a member of the repository's root Cargo workspace alongside the de
 `Cargo.lock` and `target/`). `cargo build` and `cargo test` from the repository root cover both crates; add
 `-p octoboardd` to narrow either to this one. The Tauri crate resolves its `octoboardd` sidecar at compile time, so on
 a fresh checkout a workspace-wide build or test fails until `pnpm --filter @octoboard/desktop build:daemon` has run
-once.
+once; `pnpm test:rust` from the root runs both crates' tests without it.
 
 ## External interfaces
 

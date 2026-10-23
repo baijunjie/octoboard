@@ -372,6 +372,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Line wrapping](memory/line-wrapping.md) — the widths committed text is wrapped at, why format checks do not enforce
   prose width (and so why an edit re-wraps the whole paragraph it touched), and why a width is counted
   in characters rather than bytes.
+- [Measuring build and test speed](memory/measuring-build-and-test-speed.md) — judging a speed change by CPU time and
+  output size, measured back to back with the load recorded, never by wall-clock time on a shared machine.
 - [Probing agent CLIs](memory/probing-agent-clis.md) — how to establish what the three agent CLIs actually do, and how
   to probe a live Octoboard session that launches them: which session markers to strip and why enumerating them beats
   matching a prefix, why neither `--help`, the binary's own strings, nor a config file's silent acceptance of a

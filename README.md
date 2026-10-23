@@ -65,6 +65,7 @@ pnpm format       # Apply ESLint layout fixes and format both Rust crates.
 pnpm lint         # Check JavaScript, TypeScript, TSX and Vue; warnings fail the check.
 pnpm format:check # Check ESLint rules and Rust formatting without changing files.
 pnpm typecheck
+pnpm test:rust    # Run the Rust tests of both crates in one invocation, with no daemon build needed.
 ```
 
 ESLint checks source code and scripts across the workspace. ESLint Stylistic uses two-space indentation,

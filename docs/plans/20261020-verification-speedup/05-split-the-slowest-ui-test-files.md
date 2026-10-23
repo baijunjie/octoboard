@@ -2,8 +2,9 @@
 
 > Goal: no single UI test file dominates the run, and the cause of the slow tests is known.
 > Completion criteria: the cost per test of the slowest files is explained from profiling; those files are split so
-> the longest file is a small share of the run (measured against milestone 01); the UI suite passes at the worker
-> cap from milestone 02 with no timeouts across three runs under normal load.
+> the longest file is a small share of the run, measured before and after the split back to back under the
+> machine's normal load (load average recorded); the UI suite passes with no timeouts across three runs under normal
+> load.
 
 ## Implementation plan
 

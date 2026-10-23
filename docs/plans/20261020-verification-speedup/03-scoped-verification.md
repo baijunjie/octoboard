@@ -5,7 +5,9 @@
 > Completion criteria: one command verifies a branch against its target branch; a UI-only branch runs no Rust step, a
 > docs-only branch runs only lint and format checks, and a branch touching shared configuration runs everything; a
 > second run on the same tree with the same lockfile and toolchain reports the earlier pass instead of re-running;
-> the full suite still runs on request; the workflow text agents follow points to the command.
+> the full suite still runs on request; verifications running in several worktrees at once never run more than one or
+> two heavy steps at the same time machine-wide, the rest waiting and saying so; the workflow text agents follow
+> points to the command.
 
 ## Technical design
 
@@ -27,16 +29,25 @@
 - [ ] Verify-once stamp: the commit's tree, the lockfile and the toolchain identify a pass; a matching stamp skips the
       run. Each branch also keeps the tree of its last pass, as the diff base for scoping.
 - [ ] A flag to force the full suite.
+- [ ] A machine-wide cap on concurrent verification across worktrees, enforced inside the verification command (for
+      example a host-wide lock or semaphore): at most one or two heavy steps (UI tests, Rust tests and builds, the
+      gallery sweep) run at once across all worktrees; the others queue and say they are waiting. Reason: on
+      2026-10-23 several worktrees running vitest and Playwright at once drove the load average to about 54 on 10
+      cores and slowed every process (starting a `claude -p` took 5-17 s); a cap on each run's own workers does not
+      prevent that.
 
 ## Implementation plan
 
 - [ ] Write the command and its scope rules.
 - [ ] Point the verification steps agents follow (pre-merge verification, delivery static checks, the change-check
-      loop's re-runs, the gallery writer's baseline) at the command, per the overview's "Open" item on where that text
-      lives.
+      loop's re-runs, the gallery writer's baseline) at the command, per the overview's key design decision on where
+      that text lives.
 
 ## Notes for the developer
 
+- **Where the rule is written**: the plan predates the current skills, so first re-read the current installed skill
+  text (for example `git-worktree`, `agent-change-check`, `agent-gallery`) to decide whether any instruction still
+  needs changing at all, then write the rule where the overview's key decision says.
 - **Reusable capabilities**: the flow scripts under `.githooks/` and the target branch and fork point each worktree
   branch records.
 - **Development notes**: keep the gallery sweep to the touched scenarios, as the gallery skill already does.

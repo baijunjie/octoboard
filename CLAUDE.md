@@ -144,9 +144,9 @@ own change do not count).
   of its own — you maintain it yourself, from what the change turned up and from what a writer subagent hands back as
   belonging to it. Skip it when this round's changes touch nothing it states.
 - The full set for "Formatting and checks": `pnpm format:check` (ESLint and rustfmt), `pnpm typecheck`,
-  `pnpm -r test`, `pnpm --filter @octoboard/web check:locales`, and `cargo test` from the root (build the daemon
-  sidecar first with `pnpm --filter @octoboard/desktop build:daemon` when it is missing). `pnpm build` is not in it;
-  run it too when a change touches build configuration or build scripts.
+  `pnpm -r test`, `pnpm --filter @octoboard/web check:locales`, and `pnpm test:rust` (both Rust crates' tests in one
+  `cargo test --workspace`, which needs no built daemon sidecar). `pnpm build` is not in it; run it too when a change
+  touches build configuration or build scripts.
 - Each package's own checks for "Formatting and checks" (`<files>` is the package's changed files that still
   exist; skip ESLint when there are none):
   - `packages/ui`: `pnpm --filter @octoboard/ui typecheck`, `pnpm --filter @octoboard/ui test`, and

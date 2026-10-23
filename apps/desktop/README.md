@@ -20,8 +20,13 @@ checked with `cargo`. `src-tauri/` is a member of the root Cargo workspace along
 `cargo test` from the root cover both; `-p octoboard` narrows to this crate).
 
 - `pnpm build:daemon` (`scripts/build-daemon.mjs`) — builds `apps/daemon/` in release mode and copies the binary into
-  `src-tauri/binaries/`. Run it once before `pnpm tauri dev` or any `cargo build` / `cargo test` that includes `src-tauri/`
-  (including a workspace-wide one from the root), and again when `apps/daemon/` changes.
+  `src-tauri/binaries/`. Run it once before `pnpm tauri dev` or any `cargo build` that includes `src-tauri/` (including a
+  workspace-wide one from the root), and again when `apps/daemon/` changes. Without it the build fails at compile time,
+  saying the `binaries/octoboardd-<target triple>` resource does not exist.
+- `pnpm test:rust` (from the repository root, `scripts/test-rust.mjs`) — runs `cargo test --workspace`, the tests of
+  both crates in one invocation, so their shared dependencies build once. It sets `TAURI_CONFIG` to empty
+  `bundle.externalBin`, which the tests can do because they never start the sidecar, so it needs no daemon build; a
+  plain `cargo test` that includes `src-tauri/` still needs one. Switching between the two rebuilds this crate.
 - `pnpm tauri dev` — starts the `packages/ui` dev server (port 5174) and opens the window on it.
 - `pnpm build:tauri` — builds the daemon sidecar, then `packages/ui`, whose `dist/` the application bundles.
 - `pnpm build:app` — builds the app without signing, to check a change (below).

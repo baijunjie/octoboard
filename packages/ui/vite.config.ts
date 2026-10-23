@@ -96,7 +96,17 @@ export default defineConfig(({ command }) => {
     // the rules that rely on it alone, where the lowered form gets them wrong.
     css: { lightningcss: { exclude: Features.DirSelector } },
     clearScreen: false,
-    test: { setupFiles: ["./src/test/setup.ts"] },
+    test: {
+      setupFiles: ["./src/test/setup.ts"],
+      // Under the load of several parallel runs, a jsdom test that needs about a second idle can take
+      // more than the default five. The worker count stays at vitest's default and `fsModuleCache` stays
+      // off: both were measured under that load, and the persistent cache used more CPU and wall time,
+      // while a cap of four workers used the same CPU and took about 1.5 times as long. Isolation stays
+      // at the default too, as the tests rely on module state living for one file only (lazily imported
+      // surfaces, HeroUI's toast queue).
+      testTimeout: 30_000,
+      hookTimeout: 30_000,
+    },
     server: {
       port: 5174,
       strictPort: true,

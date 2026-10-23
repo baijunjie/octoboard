@@ -18,7 +18,7 @@ The repository root is two workspace roots at once:
   Tauri crate (`apps/desktop/src-tauri/`) as its two members. `cargo build` and `cargo test` from the root cover
   both, into the one `target/` directory here. The Tauri crate resolves its `octoboardd` sidecar at compile time, so
   on a fresh checkout `pnpm --filter @octoboard/desktop build:daemon` has to have run once before either command
-  succeeds.
+  succeeds; `pnpm test:rust` (`scripts/test-rust.mjs`) runs both crates' tests without it.
 
 Per-package commands are in that package's doc.
 

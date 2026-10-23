@@ -1,9 +1,10 @@
 # 04 Shared Rust compilation
 
 > Goal: a new worktree's first Rust build reuses what other worktrees have already compiled.
-> Completion criteria: a trial in a fresh worktree shows the cold daemon test build's time against milestone 01's
-> cold baseline, with the cache hit rate; the approach is adopted with setup documented only if it measures a clear
-> gain, and dropped otherwise with the numbers recorded here.
+> Completion criteria: a trial in a fresh worktree shows the cold daemon test build's time with and without the cache,
+> measured back to back under the machine's normal load (load average recorded), as a ratio, with the cache hit
+> rate; the approach is adopted with setup documented only if it measures a clear gain, and dropped otherwise with the
+> numbers recorded here.
 
 ## Technical design
 
