@@ -240,8 +240,6 @@ it("shows an unset launch setting as its placeholder, and names what the account
   await click(buttonText("Advanced"));
   expect(pickerNamed("Model").textContent).toContain(PLACEHOLDER);
   expect(pickerNamed("Reasoning effort").textContent).toContain(PLACEHOLDER);
-  // The note renders outside a HeroUI field, which its `Description` has to cope with.
-  expect(document.body.textContent).toContain("Used by sessions");
 });
 
 it("offers no account picker for an agent with no account of its own", async () => {

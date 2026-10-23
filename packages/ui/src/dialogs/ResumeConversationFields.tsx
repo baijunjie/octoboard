@@ -140,7 +140,7 @@ export function ResumeConversationFields({
           <>
             {recordName}
             <HeldAgentAccount agent={target.agent} accountName={target.accountName} />
-            <LaunchSettingsFields {...launch} note={t("dialog.session.launchSettingsNote")} isDisabled={blocked} />
+            <LaunchSettingsFields {...launch} note={t("dialog.session.launchInheritanceNote")} isDisabled={blocked} />
           </>
         )}
       </div>

@@ -226,7 +226,7 @@ export function ConsoleDialog({
             value={sessionPrompt}
             onChange={setSessionPrompt}
             placeholder={t("dialog.console.sessionInstructionsPlaceholder")}
-            description={t("dialog.console.sessionInstructionsNote")}
+            description={t("dialog.console.sessionInstructionsPrecedenceNote")}
           />
         </ConsoleLaunchFields>
       </Dialog>

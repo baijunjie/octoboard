@@ -121,8 +121,8 @@ export function ConsoleLaunchFields({
  * of session, a row for each setting, so a row is as tall as the taller of its two pickers. Below
  * it the cells stack under a heading for each kind, and each picker shows the name of its setting
  * above it. The headers are for the eye alone, hidden from assistive technology: each picker is
- * named by the two it sits under, its kind first, and described by the note on its kind, which sits
- * below the table. Both Model pickers are also described by the note on the model list while it loads,
+ * named by the two it sits under, its kind first. The project pickers are also described by their
+ * override note below the table. Both Model pickers are described by the model list note while it loads,
  * which they carry; why there is none is one Alert below the table.
  */
 function LaunchMatrix({
@@ -140,12 +140,11 @@ function LaunchMatrix({
 }): React.ReactElement {
   const t = useT();
   const id = useId();
-  const [consoleKindId, projectKindId, modelRowId, effortRowId, consoleNoteId, projectNoteId] = [
+  const [consoleKindId, projectKindId, modelRowId, effortRowId, projectNoteId] = [
     "console-kind",
     "project-kind",
     "model-row",
     "effort-row",
-    "console-note",
     "project-note",
   ].map((name) => `${id}-${name}`);
   const model = t("dialog.agentSettings.model");
@@ -165,11 +164,11 @@ function LaunchMatrix({
         <div id={consoleKindId} aria-hidden="true" className={`${kindHeading} md:col-start-2 md:row-start-1`}>{t("dialog.console.launchConsole")}</div>
         <div className={`${cell} md:col-start-2 md:row-start-2`}>
           <span aria-hidden="true" className={settingName}>{model}</span>
-          <ModelPicker launch={launch} model={consoleSessions.model} onChange={(value) => onConsoleChange("model", value)} hideLabel labelledBy={`${consoleKindId} ${modelRowId}`} describedBy={consoleNoteId} />
+          <ModelPicker launch={launch} model={consoleSessions.model} onChange={(value) => onConsoleChange("model", value)} hideLabel labelledBy={`${consoleKindId} ${modelRowId}`} />
         </div>
         <div className={`${cell} md:col-start-2 md:row-start-3`}>
           <span aria-hidden="true" className={settingName}>{effort}</span>
-          <EffortPicker launch={launch} model={consoleSessions.model} effort={consoleSessions.effort} onChange={(value) => onConsoleChange("effort", value)} hideLabel labelledBy={`${consoleKindId} ${effortRowId}`} describedBy={consoleNoteId} />
+          <EffortPicker launch={launch} model={consoleSessions.model} effort={consoleSessions.effort} onChange={(value) => onConsoleChange("effort", value)} hideLabel labelledBy={`${consoleKindId} ${effortRowId}`} />
         </div>
         <div id={projectKindId} aria-hidden="true" className={`mt-1 md:mt-0 ${kindHeading} md:col-start-3 md:row-start-1`}>{t("dialog.console.launchProject")}</div>
         <div className={`${cell} md:col-start-3 md:row-start-2`}>
@@ -182,8 +181,7 @@ function LaunchMatrix({
         </div>
       </div>
       {launch.modelAlert}
-      <Description id={consoleNoteId}>{t("dialog.console.launchSettingsNote")}</Description>
-      <Description id={projectNoteId}>{t("dialog.console.projectLaunchSettingsNote")}</Description>
+      <Description id={projectNoteId}>{t("dialog.console.projectLaunchOverridesNote")}</Description>
     </div>
   );
 }

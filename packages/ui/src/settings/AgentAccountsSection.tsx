@@ -455,7 +455,7 @@ function ApprovalHeading({ agent }: { agent: Agent }): React.ReactElement {
     <div className="flex items-center gap-1 text-sm text-app-muted">
       {t("settings.accounts.approval.heading")}
       <HelpTip label={t("settings.accounts.approval.heading")}>
-        <Message id={agent === "codex" ? "settings.accounts.approval.codexDescription" : "settings.accounts.approval.claudeDescription"} />
+        <Message id={agent === "codex" ? "settings.accounts.approval.codexReviewDescription" : "settings.accounts.approval.claudeReviewDescription"} />
       </HelpTip>
     </div>
   );

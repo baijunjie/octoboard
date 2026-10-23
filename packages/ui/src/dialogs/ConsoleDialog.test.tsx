@@ -161,7 +161,7 @@ it("shows an unset picker as its placeholder", async () => {
   expect(pickerNamed("Model").textContent).toContain(PLACEHOLDER);
   expect(pickerNamed("Reasoning effort").textContent).toContain(PLACEHOLDER);
   // The note renders outside a HeroUI field, which its `Description` has to cope with.
-  expect(document.body.textContent).toContain("Console sessions opened or resumed from now on use this model");
+  expect(document.body.textContent).toContain("For project sessions, settings on the project or session take precedence.");
 });
 
 const stored = consoleOf("c-1", "Main", {
@@ -808,16 +808,16 @@ it("names each Advanced picker by its sessions and its setting, and describes it
   // Named only by the headers: an own aria-label beside them would be read as part of the name.
   for (const [group, name] of pickers) expect(groupPicker(group, name).getAttribute("aria-label")).toBeNull();
   const describedBy = (group: string, name: string) =>
-    (groupPicker(group, name).getAttribute("aria-describedby") ?? "").split(" ").map((id) => document.getElementById(id)?.textContent ?? "");
-  expect(describedBy("Console sessions", "Reasoning effort")).toEqual([expect.stringContaining("Console sessions opened or resumed from now on")]);
-  expect(describedBy("Project sessions", "Reasoning effort")).toEqual([expect.stringContaining("Project sessions opened or resumed from now on")]);
+    (groupPicker(group, name).getAttribute("aria-describedby") ?? "").split(" ").filter(Boolean).map((id) => document.getElementById(id)?.textContent ?? "");
+  expect(describedBy("Console sessions", "Reasoning effort")).toEqual([]);
+  expect(describedBy("Project sessions", "Reasoning effort")).toEqual(["For project sessions, settings on the project or session take precedence."]);
   // The model list's state is one Alert under the table, which describes both Model pickers besides the note on their sessions.
   const notes = Array.from(document.body.querySelectorAll('[data-slot="alert-description"]')).filter((el) => el.textContent?.includes("took too long to list its models"));
   expect(notes).toHaveLength(1);
   const alertId = notes[0].closest('[data-slot="alert-root"]')!.parentElement!.id;
   expect(groupPicker("Console sessions", "Model").getAttribute("aria-describedby")).toContain(alertId);
   expect(groupPicker("Project sessions", "Model").getAttribute("aria-describedby")).toContain(alertId);
-  expect(describedBy("Console sessions", "Model")).toHaveLength(2);
+  expect(describedBy("Console sessions", "Model")).toHaveLength(1);
   // The headers that name the pickers are hidden from assistive technology, so they are not read a
   // second time beside the names, and no visible text of the table is outside them.
   for (const [group, name] of pickers) {
@@ -837,7 +837,7 @@ it("keeps the default agent, accounts and session instructions notes visible, an
   const text = document.body.textContent ?? "";
   expect(text).toContain("A project with its own default agent uses that instead.");
   expect(text).toContain("Every session of an agent in this console uses its account here");
-  expect(text).toContain("take precedence over them where the two conflict. Applies to new console sessions.");
+  expect(text).toContain("take precedence over them where the two conflict.");
   expect(text).not.toContain("Each agent has its own models");
   expect(buttons().some((b) => b.getAttribute("aria-label")?.startsWith("About"))).toBe(false);
 });

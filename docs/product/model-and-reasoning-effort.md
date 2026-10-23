@@ -39,8 +39,10 @@ collapsed when the dialog opens. The handoff dialog holds one too, which works a
 session that takes over (see "Handing off from the window" in `docs/product/handing-off-sessions.md`).
 
 In the project dialog and the session dialog it holds a **Model** picker and a **Reasoning effort** picker for the
-agent the dialog's agent field currently settles on, and a note saying whose sessions they apply to. The session
-dialog's **Resume conversation** tab never lets the agent be picked: it shows the section only once the conversation
+agent the dialog's agent field currently settles on. In the session dialog, a note explains that unchanged values follow
+the project settings, or the console settings for a console session; the handoff dialog carries the same inheritance
+note for its receiving session. The session dialog's **Resume conversation** tab never lets the agent be picked: it
+shows the section only once the conversation
 is found in an agent's own records, for the agent and account that hold it (see "Resuming a conversation by its session ID" in
 `docs/product/sessions.md`). In the session
 dialog, untouched fields show the values the session would inherit — for a project session each from its project, else
@@ -58,9 +60,9 @@ it, until every one of them is cleared. Until the user picks a tab, the one show
 group's Console sessions field holds; a picked tab stays shown until that tab goes away, which forgets the pick. From
 a window 768 px wide up, each tab holds a table: a column for each kind of session, headed **Console sessions** and **Project
 sessions**, and a **Model** row and a **Reasoning effort** row, named in a leading column, with a picker in each cell.
-Below the whole table, two notes say whose sessions each kind applies to — for project sessions, those opened or resumed
-from now on, unless their project or the session sets its own. In a narrower window the cells stack: each kind under its
-own heading, then its Model and Reasoning effort pickers, each with the setting's name above it. Either way, Tab moves
+Below the whole table, a note explains that a project session's project or session settings take precedence. In a narrower
+window the cells stack: each kind under its own heading, then its Model and Reasoning effort pickers, each with the
+setting's name above it. Either way, Tab moves
 through one kind's pickers before the other's: Console sessions' Model and Reasoning effort, then Project sessions'.
 Edits on one tab are kept while another is shown, and each value is saved only when changed. Below the frame and outside
 it, since it applies whichever tab is shown, is the console session instructions field (see "Console session

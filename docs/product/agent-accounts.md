@@ -253,8 +253,8 @@ user first (see "Starting a session on an account whose last change is incomplet
 Claude Code and Codex show a permission-approval heading above the selectors. In a wide layout it shares a row with
 **Add account**; the heading and selectors start at the second of two equal columns, aligned with the quota layout,
 with the account actions at the row's end. In a narrow layout the heading repeats above each account's selector.
-Its help tip explains how the agent handles permission requests, that the choice applies when a session next starts
-or resumes, and, for Codex, that automatic review may use additional tokens. Grok Build has no approval heading or help tip.
+Its help tip explains how the agent handles permission requests and, for Codex, that automatic review may use
+additional tokens. Grok Build has no approval heading or help tip.
 
 Every Codex account row, including the default account, has an inline approval-mode selector:
 

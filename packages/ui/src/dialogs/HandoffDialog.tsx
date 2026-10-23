@@ -96,7 +96,7 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
       />
       <LaunchSettingsFields
         {...launch}
-        note={t(project ? "dialog.handOff.launchSettingsNote" : "dialog.handOff.consoleLaunchSettingsNote")}
+        note={t(project ? "dialog.handOff.launchInheritanceNote" : "dialog.handOff.consoleLaunchInheritanceNote")}
         isDisabled={blocked}
       />
       {/* Inside this dialog's tree, though it shows in its own layer: a focus scope that is not

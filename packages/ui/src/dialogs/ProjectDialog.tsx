@@ -371,7 +371,6 @@ export function ProjectDialog({
             effort={fields[effortField]}
             onModelChange={(value) => setFields({ ...fields, [modelField]: value })}
             onEffortChange={(value) => setFields({ ...fields, [effortField]: value })}
-            note={t("dialog.project.launchSettingsNote")}
             inherit={owner ? consoleProjectLaunch(owner, agent) : undefined}
             isDisabled={locked}
           />

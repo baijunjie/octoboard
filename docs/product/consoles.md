@@ -110,7 +110,7 @@ collapsed Advanced section, below and outside the frame around its agent tabs of
 "The Advanced section" in `docs/product/model-and-reasoning-effort.md`); Enter in it starts a new line rather than
 saving the dialog. It shows only the user's own text, never the built-in instructions. Empty, its placeholder says there
 are no additional instructions, and a note below it says the text comes after the built-in instructions and takes
-precedence over them where the two conflict, and that it applies to new console sessions.
+precedence over them where the two conflict.
 
 The text is saved with surrounding whitespace trimmed, and a blank one means none; emptying the field of a console that
 had some removes them. There is no length limit, but Codex reads only part of a very long one (see "The console

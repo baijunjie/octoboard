@@ -274,7 +274,7 @@ export function SessionDialog({
       )}
       <LaunchSettingsFields
         {...launch}
-        note={t(project ? "dialog.session.launchSettingsNote" : "dialog.consoleSession.launchSettingsNote")}
+        note={t(project ? "dialog.session.launchInheritanceNote" : "dialog.consoleSession.launchInheritanceNote")}
         isDisabled={blocked}
       />
     </>

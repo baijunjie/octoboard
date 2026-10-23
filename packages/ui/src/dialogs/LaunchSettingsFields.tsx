@@ -228,9 +228,9 @@ export function AdvancedSection({
 }
 
 /** The Advanced section of a dialog about one agent's sessions: the model and reasoning effort that
- * `agent`'s sessions are launched with, each empty while unset. `note` says whose sessions they
- * are. `account` is the account id the agent's sessions run under (`null` for its default
- * account), as the list of models belongs to the account. That list is asked of the daemon while
+ * `agent`'s sessions are launched with, each empty while unset. `note` explains how the settings are
+ * inherited where needed. `account` is the account id the agent's sessions run under (`null` for its
+ * default account), as the list of models belongs to the account. That list is asked of the daemon while
  * the section is open, and again when `agent` or `account` changes, so nothing is asked of a
  * dialog whose Advanced section is never opened (see `useLaunchModels`). `isDisabled` locks the two
  * pickers, not `children`; the trigger stays operable, as folding the section away changes nothing
@@ -254,7 +254,7 @@ export function LaunchSettingsFields({
   effort: string | null;
   onModelChange: (value: string | null) => void;
   onEffortChange: (value: string | null) => void;
-  note: string;
+  note?: string;
   inherit?: LaunchPair;
   isDisabled?: boolean;
   children?: React.ReactNode;
@@ -263,7 +263,7 @@ export function LaunchSettingsFields({
   const launch = useLaunchModels(agent, account, expanded);
   return (
     <AdvancedSection expanded={expanded} onExpandedChange={setExpanded} status={launch.modelText}>
-      <Description>{note}</Description>
+      {note && <Description>{note}</Description>}
       <LaunchPickers
         launch={launch}
         model={model}
