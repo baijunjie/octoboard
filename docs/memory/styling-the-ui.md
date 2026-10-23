@@ -7,7 +7,10 @@ Do not override its colours, placeholder colours, opacity, borders or shape mere
 the priority is settled in the "Conformance level and exceptions" section of `docs/ui-accessibility.md`. Layout and
 sizing adaptations (filling a column, truncating) may stay when needed without redrawing the component. So when asked
 to strip custom styling, separate those adaptations from appearance overrides rather than removing them wholesale:
-dropping a sizing override with the look ones broke the layout.
+dropping a sizing override with the look ones broke the layout. Equally, what a composite the project builds on top
+of a HeroUI component adds around it to mark out its own region — such as a frame around a picker's scrolling list —
+is the composite's own design, not a redrawn HeroUI default, so work that restores HeroUI's look leaves it in place;
+only styling that changes how a HeroUI part itself looks counts as an override.
 
 What the component imposes visually lives in a stylesheet of its own,
 `packages/ui/node_modules/@heroui/styles/dist/components/<name>.css`, which `packages/ui/src/style.css` imports
@@ -118,7 +121,9 @@ is a `calc` of a token (`px-[calc(var(--row-content-inset)-1px)] py-[7px]`, not 
 In `packages/ui`, a line that divides a pane's parts or rows is a groove utility from `packages/ui/src/style.css`
 (`groove-b` and its siblings), never `border-b border-separator`, a bare `border-*` or a `divide-*`. `--separator` is
 left to HeroUI's own components and to the few lines the "The window chrome and the content panel" section of
-`docs/product/window-layout.md` lists as not grooves. A card takes no decorative outline border, and its shadow
+`docs/product/window-layout.md` lists as not grooves, and to a frame a composite puts around a region of its own (the
+list in `packages/ui/src/dialogs/DirectoryPicker.tsx`, the panel in `packages/ui/src/dialogs/ConsoleLaunchFields.tsx`):
+neither a divider nor a card outline, it keeps `border border-separator`. A card takes no decorative outline border, and its shadow
 depends on whether it floats:
 
 - A card lying in the layout takes the short two-layer `shadow-(--panel-shadow)`, as the "Hand-built rows and cards"

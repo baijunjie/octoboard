@@ -56,7 +56,9 @@ export function DirectoryPicker({
   const [entries, setEntries] = useState<DirEntry[]>();
   const [resolvedPath, setResolvedPath] = useState<string>();
   const listRef = useRef<HTMLDivElement>(null);
-  // The list scrolls on its own inside the dialog, which `Dialog`'s body fade does not reach.
+  // The list scrolls on its own inside the dialog, which `Dialog`'s body fade does not reach. The
+  // rows' focus ring and its offset fit within the `ListBox`'s own `p-1`, so the scroller does not
+  // clip it.
   const fade = useScrollFade({ ref: listRef, className: "max-h-72 overflow-y-auto" });
 
   const load = async (targetPath: string, fallBackToAncestor = false) => {
@@ -124,41 +126,48 @@ export function DirectoryPicker({
         </Button>
       </div>
       {entries && (
-        <ListBox
-          {...fade}
-          aria-label={t("directoryPicker.subdirectories")}
-          // `selectionMode` stays `none`: an entry is only ever entered, never picked. Activating
-          // one (click, Enter) calls `onAction`. The padding keeps the scroll container from
-          // clipping the items' focus ring.
-          onAction={(key) => void load(key === PARENT_KEY ? parentOf(resolvedPath ?? "/") : String(key))}
-        >
-          {resolvedPath && resolvedPath !== "/" && (
-            <ListBox.Item data-marquee-scope id={PARENT_KEY} textValue={t("directoryPicker.parent")} aria-label={t("directoryPicker.parent")}>
-              <CornerLeftUp aria-hidden="true" className="size-4 shrink-0 text-app-muted rtl:-scale-x-100" />
-              <FadeOverflow className="min-w-0 flex-1 text-app-muted" titleWhenClipped={t("directoryPicker.parent")}>{t("directoryPicker.parent")}</FadeOverflow>
-            </ListBox.Item>
-          )}
-          {entries.map((entry) => (
-            <ListBox.Item data-marquee-scope key={entry.path} id={entry.path} textValue={entry.name}>
-              <Folder aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
-              <FadeOverflow dir="auto" className="min-w-0 flex-1 text-foreground" titleWhenClipped={entry.name}>
-                {entry.name}
-              </FadeOverflow>
-              {entry.is_git_repo && (
-                <InlineChip size="sm" variant="soft" className="ms-auto">
-                  git
-                </InlineChip>
-              )}
-            </ListBox.Item>
-          ))}
-          {entries.length === 0 && (
+        // The frame is this picker's own: it composes HeroUI's `ListBox` into a higher-level
+        // browser and marks out the scrolling region within the dialog, an addition on top of
+        // HeroUI rather than a redrawn default, so work that restores HeroUI's own look leaves it
+        // alone. It sits outside the scroller so the scroll fade dims the rows, never the frame, and
+        // is a flex column so the list shrinks with a short dialog body and its last rows stay
+        // reachable rather than being cut off.
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-separator">
+          <ListBox
+            {...fade}
+            aria-label={t("directoryPicker.subdirectories")}
+            // `selectionMode` stays `none`: an entry is only ever entered, never picked. Activating
+            // one (click, Enter) calls `onAction`.
+            onAction={(key) => void load(key === PARENT_KEY ? parentOf(resolvedPath ?? "/") : String(key))}
+          >
+            {resolvedPath && resolvedPath !== "/" && (
+              <ListBox.Item data-marquee-scope id={PARENT_KEY} textValue={t("directoryPicker.parent")} aria-label={t("directoryPicker.parent")}>
+                <CornerLeftUp aria-hidden="true" className="size-4 shrink-0 text-app-muted rtl:-scale-x-100" />
+                <FadeOverflow className="min-w-0 flex-1 text-app-muted" titleWhenClipped={t("directoryPicker.parent")}>{t("directoryPicker.parent")}</FadeOverflow>
+              </ListBox.Item>
+            )}
+            {entries.map((entry) => (
+              <ListBox.Item data-marquee-scope key={entry.path} id={entry.path} textValue={entry.name}>
+                <Folder aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
+                <FadeOverflow dir="auto" className="min-w-0 flex-1 text-foreground" titleWhenClipped={entry.name}>
+                  {entry.name}
+                </FadeOverflow>
+                {entry.is_git_repo && (
+                  <InlineChip size="sm" variant="soft" className="ms-auto">
+                    git
+                  </InlineChip>
+                )}
+              </ListBox.Item>
+            ))}
+            {entries.length === 0 && (
             // Inside the list, as an option that cannot be acted on: arrow keys skip it, and the
             // list is never left without an option, which a listbox needs.
-            <ListBox.Item data-marquee-scope id={EMPTY_KEY} isDisabled textValue={t("directoryPicker.empty")}>
-              <FadeOverflow className="min-w-0 flex-1" titleWhenClipped={t("directoryPicker.empty")}>{t("directoryPicker.empty")}</FadeOverflow>
-            </ListBox.Item>
-          )}
-        </ListBox>
+              <ListBox.Item data-marquee-scope id={EMPTY_KEY} isDisabled textValue={t("directoryPicker.empty")}>
+                <FadeOverflow className="min-w-0 flex-1" titleWhenClipped={t("directoryPicker.empty")}>{t("directoryPicker.empty")}</FadeOverflow>
+              </ListBox.Item>
+            )}
+          </ListBox>
+        </div>
       )}
     </Dialog>
   );

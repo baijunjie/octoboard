@@ -49,6 +49,11 @@ the "Folding a section" section of `docs/product/project-pane-git-change-list.md
 
 - Padding that gives a control inside the scroller room — the room its focus ring needs — goes on the scroller itself,
   inside the clip, never on an element around it.
+- A frame — a border, rounded outline or background marking out the scrolling region — goes on an element around the
+  scroller, never on the scroller: the mask fades it out along with the content at whichever edge has more to scroll.
+  Where that element sits in a flex column (as inside `Dialog`'s body), give it `flex min-h-0 flex-col`, so the
+  scroller inside still shrinks with it; a wrapper with only `overflow-hidden` shrinks alone in a short window and
+  cuts the scroller off, leaving its last rows out of reach.
 - Where the scroller is focusable (`useFadeRegion`, whose own conditions are the "A scroller nothing else on screen
   scrolls takes focus itself" section of `docs/ui-accessibility.md`), its ring is drawn on the element around it — the
   project's custom `ring-2 ring-app-focus`, from the `focused` that hook hands back — because a ring on the scroller
