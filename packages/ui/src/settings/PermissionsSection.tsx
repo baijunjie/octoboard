@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { CircleCheck } from "lucide-react";
 
 import { Button } from "../components/Button";
 import { ErrorAlert } from "../components/ErrorAlert";
@@ -125,7 +126,10 @@ export function PermissionsSection(): React.ReactElement {
               }
             >
               {granted ? (
-                <StatusBadge color="success" variant="soft" separated={false}>{t("settings.permissions.grantedBadge")}</StatusBadge>
+                <StatusBadge size="lg" color="success" variant="soft" separated={false} className="inline-flex items-center gap-1">
+                  <CircleCheck size={16} aria-hidden="true" />
+                  {t("settings.permissions.grantedBadge")}
+                </StatusBadge>
               ) : (refused[kind] ? (
                 <Button size="sm" variant="secondary" preventFocusOnPress onPress={() => void openSystemSettings(kind)}>
                   {t("settings.permissions.openSettings")}

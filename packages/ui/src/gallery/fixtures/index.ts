@@ -66,7 +66,7 @@ export const SCENARIOS: Scenario[] = [
     group: "Component colors",
     category: "normal",
     title: "Inline references, status badges, failure marks and alert tones",
-    description: "Names, labels, files, paths and italic confirmation words take their text's font at 12px, 14px and 16px, with long-path wrapping and right-to-left isolation. The sizes differ only in padding, and each copy style shows the steps that fit its line: 12px text on 16px lines xs; 14px on 20px xs and sm; 16px on 24px xs, sm and md; 14px Alert titles on 24px lines up to lg; status badges cross five colours with the soft and bordered variants; failure marks show the danger and warning glyphs (press one for its reason). Six colors outside alerts, every color inside each alert tone, code blocks and nested tone priority follow; scroll to compare the complete palette.",
+    description: "Names, labels, files, paths and italic confirmation words take their text's font at 12px, 14px and 16px, with long-path wrapping and right-to-left isolation. The inline reference sizes differ only in padding, and each copy style shows the steps that fit its line: 12px text on 16px lines xs; 14px on 20px xs and sm; 16px on 24px xs, sm and md; 14px Alert titles on 24px lines up to lg. Status badges cross five colours with the soft and bordered variants; compare their sm (default), md and lg sizes with check icons and single-character squares. Failure marks show the danger and warning glyphs (press one for its reason). Six colors outside alerts, every color inside each alert tone, code blocks and nested tone priority follow; scroll to compare the complete palette.",
     codePalette: true,
   },
   {

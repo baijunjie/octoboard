@@ -248,7 +248,7 @@ state:
 
 | State | What the row shows |
 |---|---|
-| Granted | A **Granted** badge in the success colour at the row's end, in place of a control; the row's description says nothing more about the state. |
+| Granted | A large **Granted** badge in the success colour, with a circled check before its label, at the row's end in place of a control; the row's description says nothing more about the state. |
 | Not granted | That it is not granted, with a **Grant…** button. Pressing it raises the system's permission prompt; this is the only thing in Octoboard that ever raises one. |
 | A request made in this window came back without the grant | That it is not granted and where to switch it on, with an **Open System Settings** button in place of Grant…, which opens that permission's own pane in System Settings. |
 

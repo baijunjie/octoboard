@@ -1,10 +1,11 @@
 import { Alert } from "@heroui/react";
+import { CircleCheck } from "lucide-react";
 import React from "react";
 
 import { CodeBlock } from "../components/CodeBlock";
 import { FailureMark } from "../components/FailureMark";
 import { InlineReference, type InlineReferenceSize } from "../components/InlineReference";
-import { StatusBadge, type StatusBadgeColor, type StatusBadgeVariant } from "../components/StatusBadge";
+import { StatusBadge, type StatusBadgeColor, type StatusBadgeSize, type StatusBadgeVariant } from "../components/StatusBadge";
 import { TintedAlert } from "../components/TintedAlert";
 import { CodeToneContext, type CodeColor } from "../components/codeTone";
 import { FadedScroller, useFadeRegion } from "../components/scrollFade";
@@ -13,6 +14,7 @@ const COLORS: CodeColor[] = ["default", "accent", "help", "success", "warning", 
 const STATUSES = ["default", "accent", "success", "warning", "danger"] as const;
 const BADGE_COLORS: StatusBadgeColor[] = [...STATUSES];
 const BADGE_VARIANTS: StatusBadgeVariant[] = ["soft", "bordered"];
+const BADGE_SIZES: StatusBadgeSize[] = ["sm", "md", "lg"];
 
 /** The copy styles a chip sits in (docs/ui-accessibility.md, "A chip's size follows the line it sits in"), each with
  * the sizes whose drawn height stays below its line height: the content area, about 1.2 times the font size, plus
@@ -65,7 +67,7 @@ export function CodeGallery(): React.ReactElement {
             </div>
           </section>
           <section className="flex flex-col gap-3" aria-labelledby="status-badges-title">
-            <h2 id="status-badges-title" className="font-semibold">Status badges: colour and variant</h2>
+            <h2 id="status-badges-title" className="font-semibold">Status badges: colour, variant and size</h2>
             <div className="grid gap-3 sm:grid-cols-2">
               {BADGE_VARIANTS.map((variant) => (
                 <div key={variant} data-badge-variant-sample={variant} className="flex min-w-0 flex-col gap-2 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
@@ -77,6 +79,20 @@ export function CodeGallery(): React.ReactElement {
                       <StatusBadge color={color} variant={variant} separated={false}>{color === "success" ? "Logged in" : color === "warning" ? "Not logged in" : color === "danger" ? "Deleted" : color === "accent" ? "Renamed" : "Pro"}</StatusBadge>
                     </p>
                   ))}
+                </div>
+              ))}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {BADGE_SIZES.map((size) => (
+                <div key={size} data-badge-size-sample={size} className="flex min-w-0 flex-col items-start gap-3 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
+                  <h3 className="text-sm font-medium">{size}: {size === "sm" ? "20px, default" : size === "md" ? "24px" : "28px"}</h3>
+                  {BADGE_VARIANTS.map((variant) => (
+                    <StatusBadge key={variant} size={size} color="success" variant={variant} separated={false} className="inline-flex items-center gap-1">
+                      <CircleCheck size={size === "lg" ? 16 : 12} aria-hidden="true" />
+                      Granted
+                    </StatusBadge>
+                  ))}
+                  <StatusBadge size={size} single separated={false}>M</StatusBadge>
                 </div>
               ))}
             </div>

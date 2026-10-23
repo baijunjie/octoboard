@@ -10,6 +10,8 @@ it("keeps the neutral bordered badge as the default, with the comma for assistiv
   expect(markup).toContain('<span class="sr-only">, </span>');
   expect(markup).toContain('data-color="default"');
   expect(markup).toContain('data-variant="bordered"');
+  expect(markup).toContain('data-slot="chip"');
+  expect(markup).toContain('data-size="sm"');
   expect(markup).toContain("bg-[var(--tint-default-bg)] text-[var(--default-foreground)]");
   expect(markup).toContain("ring-1 ring-inset");
   expect(markup).toContain("ring-[var(--tint-default-edge)]");
@@ -51,6 +53,16 @@ it("leaves out the comma without a name, wraps by overflow, and passes the rest 
 it("seats a single character in a fixed width with no side padding, so it is centred in either direction", () => {
   const markup = html(<StatusBadge single separated={false}>M</StatusBadge>);
   expect(markup).toContain("inline-block w-5 px-0 text-center");
-  expect(markup).not.toContain("px-2");
+  expect(markup).not.toContain('data-slot="chip-label"');
   expect(html(<StatusBadge separated={false}>M</StatusBadge>)).toContain("px-2");
+});
+
+it("offers all three Chip sizes without adding label padding to compact text", () => {
+  for (const size of ["sm", "md", "lg"] as const) {
+    const markup = html(<StatusBadge size={size} separated={false}>15.7万</StatusBadge>);
+    expect(markup).toContain(`chip--${size}`);
+    expect(markup).toContain(`data-size="${size}"`);
+    expect(markup).not.toContain('data-slot="chip-label"');
+    expect(markup).toContain("15.7万");
+  }
 });

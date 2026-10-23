@@ -72,6 +72,11 @@ change status or size, "Read-only"), is a badge after the name, never parenthesi
 - **Bordered** (`variant="bordered"`), for a qualifier that annotates the name before it: the account, "Not added",
   "Same as console" and the value it resolves to, the context size. It adds a hairline edge in its colour.
 
+`StatusBadge` uses HeroUI's `Chip` with `sm`, `md` and `lg` sizes (20px, 24px and 28px tall). The default is `sm`,
+with 12px text and 8px of padding on each side, so metadata such as the session context size stays compact. Use
+`lg` for the granted-permission state in Settings, with a 16px circle-check icon before its label. A single-character
+badge is square at each size; a wrapping badge can grow taller to fit its content.
+
 Badge and inline reference serve different purposes but share one colour configuration: a single set of generic tint
 tokens in `packages/ui/src/style.css`, per colour a fill, a text colour (neutral reads HeroUI's `--default-foreground`
 instead of a token) and an edge, which both components read, so a chip and a badge of the same colour never differ. A

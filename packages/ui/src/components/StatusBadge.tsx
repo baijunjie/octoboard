@@ -1,7 +1,15 @@
+import { Chip } from "@heroui/react";
 import React from "react";
 
 export type StatusBadgeColor = "default" | "accent" | "help" | "success" | "warning" | "danger";
 export type StatusBadgeVariant = "soft" | "bordered";
+export type StatusBadgeSize = "sm" | "md" | "lg";
+
+const SIZES: Record<StatusBadgeSize, { spacing: string; single: string }> = {
+  sm: { spacing: "px-2 py-0.5 text-xs leading-4", single: "w-5" },
+  md: { spacing: "px-2 py-0.5 text-xs leading-5", single: "w-6" },
+  lg: { spacing: "px-3 py-1 text-sm leading-5", single: "w-7" },
+};
 
 /* Fill, text and edge are the shared tints of style.css (`--tint-{colour}-bg`, `-fg` and `-edge`), the same
    colours an `InlineReference` is drawn from; the edge is the bordered variant's hairline and the chip never takes it.
@@ -25,7 +33,8 @@ function colorClasses(color: StatusBadgeColor, variant: StatusBadgeVariant): str
 
 /** A small pill after a name, carrying a state or qualifier of it: a status ("Not added", "Logged
  * in"), the account a session runs under, an agent, the value an unset field inherits, the size of a
- * context. Rounded and never shrinking (unless `overflow` says otherwise), so the name beside it is
+ * context. Built on HeroUI's Chip, with `sm` (20px, the default), `md` (24px) and `lg` (28px) sizes.
+ * Rounded and never shrinking (unless `overflow` says otherwise), so the name beside it is
  * what gives way when the room runs out.
  *
  * `color` is one of the shared tints of style.css (`--tint-{colour}-bg`, `-fg`, `-edge`: neutral, HeroUI's four and
@@ -55,11 +64,12 @@ function colorClasses(color: StatusBadgeColor, variant: StatusBadgeVariant): str
  * reading direction. `overflow` lets the badge shrink for text that may be long: `"wrap"` breaks it
  * inside a long word (a path in a tooltip, which cannot run past its width). `dir` is the direction of
  * that text where it is not the UI's. The other props, a `ref` among them, go to the badge's span. */
-export function StatusBadge({ children, className = "", color = "default", variant = "bordered", separated = true, single = false, overflow, dir, ...rest }: Omit<React.ComponentProps<"span">, "color"> & {
+export function StatusBadge({ children, className = "", color = "default", variant = "bordered", size = "sm", separated = true, single = false, overflow, dir, ...rest }: Omit<React.ComponentProps<"span">, "color"> & {
   children?: React.ReactNode;
   className?: string;
   color?: StatusBadgeColor;
   variant?: StatusBadgeVariant;
+  size?: StatusBadgeSize;
   separated?: boolean;
   single?: boolean;
   overflow?: "wrap";
@@ -68,7 +78,21 @@ export function StatusBadge({ children, className = "", color = "default", varia
   return (
     <>
       {separated && <span className="sr-only">, </span>}
-      <span {...rest} dir={dir} data-color={color} data-variant={variant} className={`${overflow === "wrap" ? "min-w-0 rounded-lg [overflow-wrap:anywhere]" : "shrink-0 whitespace-nowrap rounded-full"} ${colorClasses(color, variant)} ${single ? "inline-block w-5 px-0 text-center" : "px-2"} py-0.5 text-xs leading-4 ${className}`}>{children}</span>
+      <Chip<"span">
+        {...rest}
+        size={size}
+        color={color === "help" ? "default" : color}
+        variant="soft"
+        dir={dir}
+        data-color={color}
+        data-variant={variant}
+        data-size={size}
+        className={`inline w-auto font-[weight:inherit] ${overflow === "wrap" ? "min-w-0 shrink rounded-lg whitespace-normal [overflow-wrap:anywhere]" : "shrink-0 whitespace-nowrap rounded-full"} ${colorClasses(color, variant)} ${SIZES[size].spacing} ${single ? `inline-block ${SIZES[size].single} px-0 text-center` : ""} ${className}`}
+      >
+        {/* Keep content directly in the badge: Chip's automatic text label adds padding that a
+            single-character badge and the compact metadata badges cannot take. */}
+        <>{children}</>
+      </Chip>
     </>
   );
 }
