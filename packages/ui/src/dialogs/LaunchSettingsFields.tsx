@@ -7,7 +7,7 @@ import { FailureAlert } from "../components/FailureAlert";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { daemonMessage } from "../daemonMessage";
 import { DaemonRequestError } from "../daemon-client";
-import { errorText } from "../errorText";
+import { failureSummaryText } from "../errorText";
 import type { Translate } from "../i18n/catalog";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Agent, AgentModel } from "../protocol";
@@ -26,8 +26,8 @@ function modelName(t: Translate, model: AgentModel): string {
  * the daemon while `enabled` (see `useAgentModels`). While the answer is out the pickers are locked,
  * showing what is stored; when the daemon has no list the model picker offers the stored value alone
  * and `modelAlert` says why, an Alert for the caller to put directly under the model field (the list
- * is a lookup the form makes on its own). `modelText` is the same note as plain text, for the status
- * region that speaks it. */
+ * is a lookup the form makes on its own). `modelText` is what the status region speaks: the loading note,
+ * or the Alert's sentence alone as plain text. */
 export function useLaunchModels(agent: Agent, account: string | null, enabled: boolean) {
   const t = useT();
   const language = useCurrentLanguage();
@@ -39,9 +39,12 @@ export function useLaunchModels(agent: Agent, account: string | null, enabled: b
   const unavailableText = useDaemonStore((s) =>
     unavailable ? daemonMessage(language, unavailable.code, unavailable.params, unavailable.message, s) : undefined,
   );
-  const modelText = loading ? t("dialog.agentSettings.modelsLoading") : (unavailableText ?? (error !== undefined ? errorText(error) : undefined));
   // Why there are no models, with what it names set as code where the message has such params.
   const reason = unavailable ? new DaemonRequestError(unavailableText ?? unavailable.message, unavailable.code, unavailable.params) : error;
+  // The region says the sentence the Alert's description says; the raw message, the remedy and the
+  // details belong behind the Alert.
+  const reasonText = useDaemonStore((s) => (reason === undefined ? undefined : failureSummaryText(t, language, reason, s)));
+  const modelText = loading ? t("dialog.agentSettings.modelsLoading") : reasonText;
   const modelDescription = loading ? modelText : undefined;
   const modelAlertId = useId();
   const modelAlert = !loading && reason !== undefined ? (

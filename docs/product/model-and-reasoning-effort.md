@@ -140,7 +140,9 @@ effort picker has no list to offer but stays operable, so a stored level can sti
 model-list request is shown the same way, with its actual reason, including named records or technical values
 supplied with it: a short explanation and any raw diagnostic output separately, as "Names and diagnostic details" in
 `docs/product/error-alerts.md` describes. The alert opens no error alert (see "Failures shown on the screen" in
-`docs/product/error-alerts.md`). Neither a missing list nor one still being fetched stops the dialog from being
+`docs/product/error-alerts.md`). For assistive technology, the Advanced section announces the alert's first sentence
+alone, as the alert states it (the generic sentence for a failure Octoboard has no words for) — never what to do about
+it, and never the raw diagnostic output. Neither a missing list nor one still being fetched stops the dialog from being
 saved.
 
 ## The model and effort a session is shown running with

@@ -19,7 +19,7 @@ const RECORD_NAMES: Record<string, (state: RecordNames, id: string) => string | 
   account: (state, id) => (state.accounts ?? state.settings?.accounts)?.find((account) => account.id === id)?.name,
 };
 
-type RecordNames = Pick<State, "consoles" | "projects" | "sessions"> & { homeDir?: State["homeDir"]; shellTerminals?: State["shellTerminals"]; accounts?: State["settings"]["accounts"]; settings?: State["settings"] };
+export type RecordNames = Pick<State, "consoles" | "projects" | "sessions"> & { homeDir?: State["homeDir"]; shellTerminals?: State["shellTerminals"]; accounts?: State["settings"]["accounts"]; settings?: State["settings"] };
 
 /** The params a message shows as code, by message code: a technical literal (an ID, a path) that
  * reads better set apart from the sentence than quoted inside it. The plain text of such a message

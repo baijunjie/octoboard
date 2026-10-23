@@ -5,6 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { openDetails } from "../components/detailsTestSupport";
 import { DaemonRequestError } from "../daemon-client";
+import { isolate } from "../i18n/isolate";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { EffortPicker, LaunchSettingsFields, ModelPicker, type LaunchModels } from "./LaunchSettingsFields";
 
@@ -52,7 +53,10 @@ it("says the model list's failure again each time the section is opened, once, a
   toggle();
   expect(exposedStatuses()).toEqual([""]);
   await wait(PAST_FIRST_WRITE);
-  expect(exposedStatuses()).toEqual(["Fixture has no models"]);
+  // A thrown error is a failure the application has no words for: the region says the Alert's generic
+  // sentence, and the error's own message stays behind the Alert's Details.
+  expect(exposedStatuses()).toEqual(["Something unexpected went wrong."]);
+  expect(document.body.textContent).not.toContain("Fixture has no models");
 
   toggle();
   expect(exposedStatuses().filter(Boolean)).toEqual([]);
@@ -65,12 +69,12 @@ it("says the model list's failure again each time the section is opened, once, a
   observer.observe(region, { childList: true, characterData: true, subtree: true });
   onTestFinished(() => observer.disconnect());
   await wait(PAST_FIRST_WRITE * 2);
-  expect(exposedStatuses()).toEqual(["Fixture has no models"]);
-  expect(writes).toEqual(["Fixture has no models"]);
+  expect(exposedStatuses()).toEqual(["Something unexpected went wrong."]);
+  expect(writes).toEqual(["Something unexpected went wrong."]);
   expect(request).toHaveBeenCalledTimes(2);
 });
 
-it("keeps model diagnostics outside the field description while announcing the complete plain reason once", async () => {
+it("keeps model diagnostics outside the field description while announcing only the summary sentence once", async () => {
   const detail = "error: models unavailable\n    /tmp/مراجعة";
   const { toggle, exposedStatuses, wait, container } = mount({ code: "models_command_failed", params: { agent: "Codex", detail }, message: "fallback" });
   toggle();
@@ -85,8 +89,8 @@ it("keeps model diagnostics outside the field description while announcing the c
   const alertId = alert.parentElement!.id;
   const select = [...container.querySelectorAll("[aria-describedby]")].find((node) => node.getAttribute("aria-describedby")?.split(" ").includes(alertId))!;
   expect(select.getAttribute("aria-describedby")?.split(" ")).toContain(alertId);
-  expect(exposedStatuses()).toHaveLength(1);
-  expect(exposedStatuses()[0]).toContain(detail);
+  expect(exposedStatuses()).toEqual([`${isolate("Codex")} could not list its models.`]);
+  expect(exposedStatuses()[0]).not.toContain("error: models unavailable");
   // Opened last: an open popover hides what is behind it from the status regions above.
   const dialog = openDetails(alert);
   expect(dialog.querySelector("pre")?.textContent).toBe(detail);
@@ -100,7 +104,7 @@ it("retains request-refusal metadata for rich model descriptions while keeping s
   toggle();
   await wait(PAST_FIRST_WRITE);
   expect(container.querySelector("[data-slot=alert-description] code")?.textContent).toBe("missing-account");
-  expect(exposedStatuses()).toEqual([failure.message]);
+  expect(exposedStatuses()).toEqual([`Unknown account ${isolate("missing-account")}.`]);
 });
 
 it("directs inherited model and effort badges without selecting or submitting their display values", () => {

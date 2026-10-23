@@ -360,11 +360,18 @@ it("locks the pickers and says so while the list is out, with the stored value i
   expect(pickerNamed("Reasoning effort").textContent).toContain("high");
 });
 
+/** The status regions assistive technology is given, read once their first write delay has passed, so what
+ * they say is part of what is checked. */
+async function exposedStatusesAfterFirstWrite(): Promise<Element[]> {
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
+  return Array.from(document.body.querySelectorAll('[role="status"]')).filter((node) => !node.closest("[hidden], [inert], [aria-hidden='true']"));
+}
+
 it.each([
-  ["models_binary_not_found", { binary: "claude" }, "claude was not found, so the models cannot be listed.", `${isolate("claude")} was not found, so the models cannot be listed. Check that it is installed and on your shell's ${isolate("PATH")}.`],
-  ["models_shell_environment_failed", { detail: "no shell" }, "The shell environment could not be read, so the models cannot be listed.", `The shell environment could not be read, so the models cannot be listed: ${isolate("no shell")}`],
+  ["models_binary_not_found", { binary: "claude" }, "claude was not found, so the models cannot be listed.", `${isolate("claude")} was not found, so the models cannot be listed.`],
+  ["models_shell_environment_failed", { detail: "no shell" }, "The shell environment could not be read, so the models cannot be listed.", "The shell environment could not be read, so the models cannot be listed."],
   ["models_timed_out", { agent: "Claude Code" }, "Claude Code took too long to list its models.", `${isolate("Claude Code")} took too long to list its models.`],
-  ["models_command_failed", { agent: "Claude Code", detail: "exit 1" }, "Claude Code could not list its models.", `${isolate("Claude Code")} could not list its models: ${isolate("exit 1")}`],
+  ["models_command_failed", { agent: "Claude Code", detail: "exit 1" }, "Claude Code could not list its models.", `${isolate("Claude Code")} could not list its models.`],
   ["models_unreadable_output", { agent: "Claude Code" }, "Claude Code printed no models that could be read.", `${isolate("Claude Code")} printed no models that could be read.`],
 ])("says why there is no list for %s, and leaves the form usable", async (code, params, summary, reason) => {
   const request = render(stored, [], async (body) => listing(body, [], { code, params, message: "daemon words" }));
@@ -388,8 +395,8 @@ it.each([
     if (reference) expect(reference.getAttribute("data-size")).toBe("xs");
   }
   expect(document.body.querySelector('[data-slot="alert-root"] pre')).toBeNull();
-  await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
-  const statuses = Array.from(document.body.querySelectorAll('[role="status"]')).filter((node) => !node.closest("[hidden], [inert], [aria-hidden='true']"));
+  const statuses = await exposedStatusesAfterFirstWrite();
+  // What the region says is the Alert's sentence alone: neither the remedy nor the detail.
   expect(statuses.map((node) => node.textContent)).toEqual([reason]);
   expect(statuses[0].querySelector("[data-inline-reference], code, pre")).toBeNull();
   // The diagnostics are behind the Alert's Details button: in its popover once opened, which is closed again
@@ -415,7 +422,8 @@ it.each([
 it("shows the generic sentence for a reason the catalogue does not know, with the daemon's own words behind Details", async () => {
   render(undefined, [], async (body) => listing(body, [], { code: "models_something_new", params: {}, message: "daemon words" }));
   await openAdvanced();
-  expect(document.body.textContent).toContain("Something unexpected went wrong.");
+  const statuses = await exposedStatusesAfterFirstWrite();
+  expect(statuses.map((node) => node.textContent)).toEqual(["Something unexpected went wrong."]);
   expect(document.body.textContent).not.toContain("daemon words");
   expect(openDetails(document.body.querySelector('[data-slot="alert-root"]')!).textContent).toBe("daemon words");
 });
