@@ -24,6 +24,7 @@
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 use serde_json::{json, Value};
@@ -35,9 +36,11 @@ use crate::protocol::{
 use crate::rfc3339::parse_rfc3339_millis;
 use crate::subprocess::{run_exchange, Bounds, ExchangeFailure, Reach};
 
-/// How long a probe may take. The CLIs answer in one to three seconds; this leaves room for a
-/// slow start or a refreshed login while keeping a hung CLI from holding a slot for long.
-pub(super) const PROBE_TIMEOUT: Duration = Duration::from_secs(15);
+/// How long a probe may take. The CLIs answer in one to three seconds on an idle machine, but a
+/// Claude Code start has been measured at 17 seconds under heavy load (several test suites running
+/// at once); this leaves room for that and a refreshed login while keeping a hung CLI from holding
+/// a slot for long.
+pub(super) const PROBE_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// The most a probe may print. Claude Code's reply to `initialize` lists every command and runs
 /// to hundreds of kilobytes.
@@ -173,12 +176,14 @@ fn is_second_response(value: &Value) -> bool {
     value.get("id").and_then(Value::as_i64) == Some(2) && value.get("method").is_none()
 }
 
-/// Runs the probe for `agent` and reads its reply. Blocking.
+/// Runs the probe for `agent` and reads its reply. Blocking; setting `cancel` stops it, which
+/// reports as a failure.
 pub(super) fn probe(
     agent: Agent,
     shell_env: &HashMap<String, String>,
     config_dir: Option<&Path>,
     timeout: Duration,
+    cancel: &AtomicBool,
 ) -> Result<Reading, QuotaUnavailable> {
     let conversation = conversation(agent);
     // The account's directory must not change sharing under the CLI while it runs.
@@ -200,7 +205,7 @@ pub(super) fn probe(
     let is_reply = conversation.is_reply;
     // Claude Code's sign-in state is in a reply other than the one that is read.
     let signed_out = Cell::new(false);
-    let reply = run_exchange(&mut command, &conversation.input, &bounds, |line| {
+    let reply = run_exchange(&mut command, &conversation.input, &bounds, cancel, |line| {
         let Ok(value) = serde_json::from_str::<Value>(line) else {
             return false;
         };
@@ -280,7 +285,7 @@ fn claude_signed_out(reply: &Value) -> bool {
             == Some("none")
 }
 
-fn failed(agent: Agent, detail: &str) -> QuotaUnavailable {
+pub(super) fn failed(agent: Agent, detail: &str) -> QuotaUnavailable {
     QuotaUnavailable::new(
         code::COMMAND_FAILED,
         format!("reading {}'s quota failed: {detail}", agent.label()),
@@ -593,8 +598,14 @@ mod tests {
     fn claude_reports_its_session_weekly_and_model_windows_from_limits() {
         let dir = ScratchDir::new("quota-claude");
         let env = answering_agent(&dir, Agent::Claude, CLAUDE_REPLY);
-        let reading = probe(Agent::Claude, &env, None, crate::test_support::PATIENCE)
-            .expect("a readable reply");
+        let reading = probe(
+            Agent::Claude,
+            &env,
+            None,
+            crate::test_support::PATIENCE,
+            &AtomicBool::new(false),
+        )
+        .expect("a readable reply");
         assert_eq!(reading.plan.as_deref(), Some("max"));
         let kinds: Vec<_> = reading
             .windows
@@ -702,11 +713,23 @@ mod tests {
         let env = fake_claude(initialize(
             r#"{"tokenSource":"none","apiProvider":"firstParty"}"#,
         ));
-        let signed_out = probe(Agent::Claude, &env, None, crate::test_support::PATIENCE);
+        let signed_out = probe(
+            Agent::Claude,
+            &env,
+            None,
+            crate::test_support::PATIENCE,
+            &AtomicBool::new(false),
+        );
         assert_eq!(unavailable_code(signed_out), code::NOT_SIGNED_IN);
 
         let env = fake_claude(initialize(r#"{"apiKeySource":"ANTHROPIC_API_KEY"}"#));
-        let api_key = probe(Agent::Claude, &env, None, crate::test_support::PATIENCE);
+        let api_key = probe(
+            Agent::Claude,
+            &env,
+            None,
+            crate::test_support::PATIENCE,
+            &AtomicBool::new(false),
+        );
         assert_eq!(unavailable_code(api_key), code::NO_WINDOWS);
     }
 
@@ -728,7 +751,13 @@ mod tests {
 
         let dir = ScratchDir::new("quota-grok-signed-out");
         let env = answering_agent(&dir, Agent::Grok, &format!("{grok}\n"));
-        let result = probe(Agent::Grok, &env, None, crate::test_support::PATIENCE);
+        let result = probe(
+            Agent::Grok,
+            &env,
+            None,
+            crate::test_support::PATIENCE,
+            &AtomicBool::new(false),
+        );
         assert_eq!(unavailable_code(result), code::NOT_SIGNED_IN);
     }
 
@@ -736,8 +765,14 @@ mod tests {
     fn codex_reports_its_primary_and_secondary_windows_and_plan() {
         let dir = ScratchDir::new("quota-codex");
         let env = answering_agent(&dir, Agent::Codex, CODEX_REPLY);
-        let reading = probe(Agent::Codex, &env, None, crate::test_support::PATIENCE)
-            .expect("a readable reply");
+        let reading = probe(
+            Agent::Codex,
+            &env,
+            None,
+            crate::test_support::PATIENCE,
+            &AtomicBool::new(false),
+        )
+        .expect("a readable reply");
         assert_eq!(reading.plan.as_deref(), Some("plus"));
         assert_eq!(
             reading.windows,
@@ -813,8 +848,14 @@ mod tests {
     fn grok_reports_its_credit_pool_over_the_current_period_and_tier() {
         let dir = ScratchDir::new("quota-grok");
         let env = answering_agent(&dir, Agent::Grok, GROK_REPLY);
-        let reading = probe(Agent::Grok, &env, None, crate::test_support::PATIENCE)
-            .expect("a readable reply");
+        let reading = probe(
+            Agent::Grok,
+            &env,
+            None,
+            crate::test_support::PATIENCE,
+            &AtomicBool::new(false),
+        )
+        .expect("a readable reply");
         assert_eq!(reading.plan.as_deref(), Some("SuperGrok"));
         assert_eq!(
             reading.windows,
@@ -860,6 +901,7 @@ mod tests {
                 &env,
                 Some(&account_dir),
                 crate::test_support::PATIENCE,
+                &AtomicBool::new(false),
             )
             .expect("a readable reply");
             assert_eq!(
@@ -868,7 +910,14 @@ mod tests {
                 "{agent:?}"
             );
             // The default account is left to the shell, which here exports nothing.
-            probe(agent, &env, None, crate::test_support::PATIENCE).expect("a readable reply");
+            probe(
+                agent,
+                &env,
+                None,
+                crate::test_support::PATIENCE,
+                &AtomicBool::new(false),
+            )
+            .expect("a readable reply");
             assert_eq!(
                 std::fs::read_to_string(dir.join("dir")).unwrap().trim(),
                 "",
@@ -891,7 +940,13 @@ mod tests {
             let dir = ScratchDir::new("quota-unreadable");
             let env = answering_agent(&dir, agent, &format!("{reply}\n"));
             assert_eq!(
-                unavailable_code(probe(agent, &env, None, crate::test_support::PATIENCE)),
+                unavailable_code(probe(
+                    agent,
+                    &env,
+                    None,
+                    crate::test_support::PATIENCE,
+                    &AtomicBool::new(false)
+                )),
                 code::UNREADABLE_REPLY,
                 "{agent:?}"
             );
@@ -913,7 +968,7 @@ mod tests {
                         dir.display()
                     ),
                 );
-                let result = probe(agent, &env, None, SHORT);
+                let result = probe(agent, &env, None, SHORT, &AtomicBool::new(false));
                 dir.join("started")
                     .exists()
                     .then(|| unavailable_code(result))
@@ -927,8 +982,14 @@ mod tests {
         for agent in Agent::ALL {
             let dir = ScratchDir::new("quota-exit");
             let env = fake(&dir, agent, "echo 'not logged in' >&2; exit 1");
-            let unavailable =
-                probe(agent, &env, None, crate::test_support::PATIENCE).expect_err("no reply");
+            let unavailable = probe(
+                agent,
+                &env,
+                None,
+                crate::test_support::PATIENCE,
+                &AtomicBool::new(false),
+            )
+            .expect_err("no reply");
             assert_eq!(unavailable.code, code::COMMAND_FAILED, "{agent:?}");
             assert!(
                 unavailable.params["detail"].ends_with("not logged in"),
@@ -950,8 +1011,14 @@ mod tests {
             Agent::Codex,
             "echo 'Error loading configuration: CODEX_HOME points to \"/h/.codex\", but that path does not exist' >&2; exit 1",
         );
-        let unavailable =
-            probe(Agent::Codex, &env, None, crate::test_support::PATIENCE).expect_err("refused");
+        let unavailable = probe(
+            Agent::Codex,
+            &env,
+            None,
+            crate::test_support::PATIENCE,
+            &AtomicBool::new(false),
+        )
+        .expect_err("refused");
         assert_eq!(unavailable.code, code::CONFIG_DIR_MISSING);
         assert_eq!(unavailable.params["dir"], "/h/.codex");
     }
@@ -961,7 +1028,13 @@ mod tests {
         let dir = ScratchDir::new("quota-missing");
         let env = HashMap::from([("PATH".to_string(), dir.to_string_lossy().into_owned())]);
         assert_eq!(
-            unavailable_code(probe(Agent::Codex, &env, None, SHORT)),
+            unavailable_code(probe(
+                Agent::Codex,
+                &env,
+                None,
+                SHORT,
+                &AtomicBool::new(false)
+            )),
             code::BINARY_NOT_FOUND
         );
     }

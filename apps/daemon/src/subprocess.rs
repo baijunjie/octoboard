@@ -1,6 +1,6 @@
 //! Running a subprocess to completion within bounds, or detaching an external application.
-//! Bounded runs have a deadline, an output ceiling, and a cancel; an exchange of lines with a
-//! program that answers on stdout while its stdin stays open has the first two. Every stop kills
+//! Bounded runs and an exchange of lines with a program that answers on stdout while its stdin
+//! stays open both have a deadline, an output ceiling, and a cancel. Every stop kills
 //! more than the direct child, as far as the run's [`Reach`] says: the whole process group, so
 //! anything it forked (`ssh`, an askpass helper) goes with it, or, for an agent CLI, its whole
 //! session. Capturing the login shell's environment, which can leave a background process of its
@@ -318,8 +318,9 @@ fn settle_stderr(rx: &mpsc::Receiver<BoundedChunk>, stderr: &mut Vec<u8>) {
     }
 }
 
-/// How often [`run_bounded`] looks at the deadline, the cancel flag and the child between pipe
-/// reads. Short, because its callers answer a person who is waiting on a file to open.
+/// How often [`run_bounded`] and [`run_exchange`] look at the deadline, the cancel flag and the
+/// child between pipe reads. Short, because neither a person waiting on the result nor a cancel
+/// should wait on the poll.
 const BOUNDED_POLL: Duration = Duration::from_millis(5);
 
 /// Runs an already-configured `command` to completion under `bounds`, polling the child rather
@@ -441,6 +442,8 @@ pub enum ExchangeFailure {
         status: Option<ExitStatus>,
         stderr: Vec<u8>,
     },
+    /// The cancel flag was set.
+    Cancelled,
     Failed(anyhow::Error),
 }
 
@@ -462,6 +465,7 @@ impl std::fmt::Display for ExchangeFailure {
                     None => Ok(()),
                 }
             }
+            Self::Cancelled => formatter.write_str("was cancelled"),
             Self::Failed(err) => write!(formatter, "{err:#}"),
         }
     }
@@ -476,11 +480,13 @@ impl std::fmt::Display for ExchangeFailure {
 /// Every end, a reply too, kills what `bounds.reach` names, since the program is by then running
 /// on nothing the caller wants. The same bounds apply as to [`run_bounded`]: `bounds.timeout`
 /// from the start, `bounds.stdout_limit` over everything printed (one byte more fails the run),
-/// and `bounds.stderr_limit` bytes of stderr kept, for the failure that reports it.
+/// and `bounds.stderr_limit` bytes of stderr kept, for the failure that reports it. Setting
+/// `cancel` ends the run within one [`BOUNDED_POLL`].
 pub fn run_exchange(
     command: &mut Command,
     input: &[String],
     bounds: &Bounds,
+    cancel: &std::sync::atomic::AtomicBool,
     mut is_reply: impl FnMut(&str) -> bool,
 ) -> std::result::Result<String, ExchangeFailure> {
     let Spawned {
@@ -504,8 +510,11 @@ pub fn run_exchange(
 
     let mut pending: Vec<u8> = Vec::new();
     let outcome = loop {
+        if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+            break Err(ExchangeFailure::Cancelled);
+        }
         let left = deadline.saturating_duration_since(Instant::now());
-        match stdout_rx.recv_timeout(left) {
+        match stdout_rx.recv_timeout(left.min(BOUNDED_POLL)) {
             Ok(BoundedChunk::Data(bytes)) => {
                 pending.extend_from_slice(&bytes);
                 if let Some(reply) = take_reply(&mut pending, &mut is_reply) {
@@ -519,7 +528,9 @@ pub fn run_exchange(
                 ))
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {
-                break Err(ExchangeFailure::TimedOut(bounds.timeout))
+                if Instant::now() >= deadline {
+                    break Err(ExchangeFailure::TimedOut(bounds.timeout));
+                }
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => {
                 // The last line may come without its newline.
@@ -569,6 +580,8 @@ mod tests {
         assert_gone_by, assert_stops_running, helper_in_its_own_group, read_pid_file,
         until_the_shell_ran, KillOnDrop, ScratchFile, PATIENCE,
     };
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
 
     /// Runs `script` under `/bin/sh` through [`run_bounded`], the script recording its pid in a
     /// file first, and returns the outcome with that pid once the script has written it — or
@@ -694,6 +707,16 @@ mod tests {
         input: &[&str],
         bounds: Bounds,
     ) -> Option<(std::result::Result<String, ExchangeFailure>, i32)> {
+        exchange_cancelled_by(script, input, bounds, &AtomicBool::new(false))
+    }
+
+    /// [`exchange_of`] with a `cancel` flag for the run.
+    fn exchange_cancelled_by(
+        script: &str,
+        input: &[&str],
+        bounds: Bounds,
+        cancel: &AtomicBool,
+    ) -> Option<(std::result::Result<String, ExchangeFailure>, i32)> {
         let pid_file = ScratchFile::new("env-shell-exchange", "pid");
         let mut command = Command::new("/bin/sh");
         command.args([
@@ -701,7 +724,7 @@ mod tests {
             &format!("echo $$ > '{}'; {script}", pid_file.display()),
         ]);
         let input: Vec<String> = input.iter().map(|line| line.to_string()).collect();
-        let outcome = run_exchange(&mut command, &input, &bounds, |line| {
+        let outcome = run_exchange(&mut command, &input, &bounds, cancel, |line| {
             line.starts_with("reply")
         });
         Some((outcome, read_pid_file(&pid_file)?))
@@ -745,6 +768,36 @@ mod tests {
         });
         let failure = outcome.expect_err("no reply");
         assert!(matches!(failure, ExchangeFailure::TimedOut(_)), "{failure}");
+        assert_gone_by(pid, Instant::now() + PATIENCE);
+    }
+
+    #[test]
+    fn an_exchange_that_is_cancelled_ends_at_once_and_leaves_nothing_behind() {
+        let (outcome, pid) = until_the_shell_ran(|| {
+            let cancel = Arc::new(AtomicBool::new(false));
+            let setter = cancel.clone();
+            // A child that never replies, so only the flag can end the run before its timeout.
+            let started = Instant::now();
+            let canceller = thread::spawn(move || {
+                thread::sleep(Duration::from_millis(300));
+                setter.store(true, Ordering::Relaxed);
+            });
+            let ran = exchange_cancelled_by(
+                "echo noise; exec /bin/sleep 300",
+                &[],
+                exchange_bounds(PATIENCE),
+                &cancel,
+            );
+            canceller.join().unwrap();
+            assert!(
+                started.elapsed() < PATIENCE / 2,
+                "the cancel was not noticed"
+            );
+            ran
+        });
+        let failure = outcome.expect_err("no reply");
+        assert!(matches!(failure, ExchangeFailure::Cancelled), "{failure}");
+        assert_eq!(failure.to_string(), "was cancelled");
         assert_gone_by(pid, Instant::now() + PATIENCE);
     }
 
@@ -830,9 +883,13 @@ mod tests {
         }
         match end {
             SessionEnd::Replies => {
-                let reply = run_exchange(&mut command, &["x".to_string()], &bounds, |line| {
-                    line.starts_with("reply")
-                });
+                let reply = run_exchange(
+                    &mut command,
+                    &["x".to_string()],
+                    &bounds,
+                    &AtomicBool::new(false),
+                    |line| line.starts_with("reply"),
+                );
                 assert_eq!(reply.expect("a reply"), "reply x");
             }
             _ => {

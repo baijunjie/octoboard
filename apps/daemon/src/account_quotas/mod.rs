@@ -57,7 +57,7 @@ use crate::protocol::{
 use crate::state::AppState;
 use kick::{kick, KICK_TIMEOUT};
 pub(crate) use probe::CODEX_APP_SERVER_ARGS;
-use probe::{config_dir_missing, probe, PROBE_TIMEOUT};
+use probe::{config_dir_missing, failed, probe, PROBE_TIMEOUT};
 
 /// How old an account's last attempt must be before it is read again.
 const POLL_INTERVAL: Duration = Duration::from_secs(5 * 60);
@@ -189,8 +189,8 @@ pub struct AccountQuotas {
     inner: Arc<Mutex<Inner>>,
     /// Bounds the CLI runs, probes and kicks, at once, whichever refresh started them.
     slots: Arc<Semaphore>,
-    /// Set once the daemon is shutting down: a kick running then is stopped, and no kick is
-    /// claimed or started after it.
+    /// Set once the daemon is shutting down: a probe or kick running then is stopped, and no kick
+    /// is claimed, nor any probe or kick started, after it.
     stopping: Arc<AtomicBool>,
 }
 
@@ -525,9 +525,10 @@ impl AccountQuotas {
         }
     }
 
-    /// Stops the kicks running and keeps each from going on to the reading after it. A kick would
-    /// otherwise outlive a shutdown by up to [`KICK_TIMEOUT`], its CLI with it.
-    pub fn stop_kicks(&self) {
+    /// Stops the probes and kicks running and keeps each kick from going on to the reading after
+    /// it. A probe or kick would otherwise outlive a shutdown by up to [`PROBE_TIMEOUT`] or
+    /// [`KICK_TIMEOUT`], its CLI with it.
+    pub fn stop_cli_runs(&self) {
         self.stopping.store(true, Ordering::Relaxed);
     }
 
@@ -904,7 +905,12 @@ async fn read_account(state: &Arc<AppState>, shell: &ShellSource, claim: Claim) 
     let _slot = state.account_quotas.slots.acquire().await;
     let key = claim.key.clone();
     let shell = shell.clone();
-    let outcome = tokio::task::spawn_blocking(move || read(&key, &*shell)).await;
+    let stopping = state.account_quotas.stopping.clone();
+    let outcome = tokio::task::spawn_blocking(move || read(&key, &*shell, &stopping)).await;
+    // A reading that the shutdown cut short says nothing about the account, so it is not recorded.
+    if state.account_quotas.stopping.load(Ordering::Relaxed) {
+        return None;
+    }
     let quota = outcome.unwrap_or_else(|err| {
         unavailable_quota(
             &claim.key,
@@ -959,11 +965,16 @@ async fn kick_and_read(state: &Arc<AppState>, shell: &ShellSource, claim: Claim)
 }
 
 /// Reads one account's quota in the shell environment `shell` gives. Blocking: it runs a
-/// subprocess.
+/// subprocess, which setting `cancel` stops.
 fn read(
     key: &Key,
     shell: &(dyn Fn() -> anyhow::Result<HashMap<String, String>> + Send + Sync),
+    cancel: &AtomicBool,
 ) -> AccountQuota {
+    // Nothing is captured or started once the daemon is shutting down; the caller drops the result.
+    if cancel.load(Ordering::Relaxed) {
+        return unavailable_quota(key, failed(key.agent, "was cancelled before it started"));
+    }
     if let Some(dir) = missing_config_dir(key) {
         return unavailable_quota(key, config_dir_missing(key.agent, dir));
     }
@@ -973,6 +984,7 @@ fn read(
             &shell_env,
             key.config_dir.as_deref().map(Path::new),
             PROBE_TIMEOUT,
+            cancel,
         ),
         Err(err) => {
             let detail = format!("{err:#}");
@@ -1534,7 +1546,7 @@ mod tests {
             config_dir: Some(file.to_string_lossy().into_owned()),
         };
         let shell = move || Ok(env.clone());
-        let quota = read(&key, &shell);
+        let quota = read(&key, &shell, &AtomicBool::new(false));
         assert_ne!(quota.unavailable.unwrap().code, code::CONFIG_DIR_MISSING);
         assert!(bin.join("runs").exists());
     }
@@ -1679,6 +1691,7 @@ mod tests {
                      while [ -e '{d}/kick-sleeps' ]; do sleep 0.02; done\n\
                      cp '{d}/after.reply' '{d}/reply';;\n\
                      *) echo run >> '{d}/runs'\n\
+                     while [ -e '{d}/probe-sleeps' ]; do sleep 0.02; done\n\
                      while read line; do case \"$line\" in *rateLimits*) cat '{d}/reply';; \
                      esac; done;;\n\
                      esac"
@@ -1880,13 +1893,44 @@ mod tests {
     async fn a_shutdown_stops_a_running_kick_and_the_reading_after_it() {
         let fixture = KickFixture::new("quota-kick-shutdown", true);
         let running = kick_in_progress(&fixture).await;
-        fixture.state.account_quotas.stop_kicks();
+        fixture.state.account_quotas.stop_cli_runs();
         // The fake CLI is still told to sleep: only the cancel can end the kick.
         tokio::time::timeout(crate::test_support::PATIENCE, running)
             .await
             .expect("the kick was not stopped")
             .unwrap();
         assert_eq!(fixture.count("runs"), 0);
+    }
+
+    /// The daemon shutting down stops the CLI of a probe at once and records no reading for it.
+    #[tokio::test]
+    async fn a_shutdown_stops_a_running_probe_and_records_nothing() {
+        let fixture = KickFixture::new("quota-probe-shutdown", false);
+        // The fake CLI never answers while this exists: only the cancel can end the probe.
+        std::fs::write(fixture.bin.join("probe-sleeps"), "").unwrap();
+        let claim = fixture
+            .state
+            .account_quotas
+            .claim_due(
+                vec![key(Agent::Codex, None)],
+                Instant::now() + POLL_INTERVAL,
+            )
+            .pop()
+            .expect("a claim");
+        let (state, shell) = (fixture.state.clone(), fixture.shell.clone());
+        let running = tokio::spawn(async move { read_account(&state, &shell, claim).await });
+        let deadline = Instant::now() + crate::test_support::PATIENCE;
+        while fixture.count("runs") == 0 {
+            assert!(Instant::now() < deadline, "the probe did not start");
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        fixture.state.account_quotas.stop_cli_runs();
+        let next = tokio::time::timeout(crate::test_support::PATIENCE, running)
+            .await
+            .expect("the probe was not stopped")
+            .unwrap();
+        assert!(next.is_none());
+        assert!(fixture.state.account_quotas.lock().entries.is_empty());
     }
 
     /// A kick claimed or started once the daemon is shutting down is refused, so its CLI is never
@@ -1901,7 +1945,7 @@ mod tests {
         };
         let quotas = &fixture.state.account_quotas;
         quotas.recorded(&fixture.state, key.clone(), unstarted);
-        quotas.stop_kicks();
+        quotas.stop_cli_runs();
         assert!(quotas.claim_kick(&fixture.state, &key).is_none());
         let shell_asked = AtomicBool::new(false);
         let shell = || {
@@ -1928,7 +1972,7 @@ mod tests {
         assert!(err.to_string().contains("does not exist"), "{err}");
         assert_eq!(fixture.count("kicks"), 0);
         assert!(matches!(
-            read(&key, &*fixture.shell).unavailable,
+            read(&key, &*fixture.shell, &AtomicBool::new(false)).unavailable,
             Some(unavailable) if unavailable.code == code::CONFIG_DIR_MISSING
         ));
     }

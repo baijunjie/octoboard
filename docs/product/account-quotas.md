@@ -184,7 +184,7 @@ The reason is one of these, in the UI's language:
 
 - the agent's binary was not found on the shell's `PATH`;
 - the shell environment the CLI runs in could not be read;
-- the CLI gave no reply within 15 seconds;
+- the CLI gave no reply within 60 seconds;
 - the CLI could not be run, stopped without replying, wrote too much output, or refused the request — with its exit
   status and the last line it wrote to its error output, or the error it gave;
 - the CLI replied, but not with a quota that could be read;
@@ -305,11 +305,12 @@ A kick leaves out as much of the user's setup as the CLI allows without changing
 
 ## What reading a quota leaves behind
 
-Each reading starts one process of the agent, which is ended once it has replied or timed out; no conversation is
-started (a kick does make a request; see "What a kick leaves behind" above). Where the CLI allows it without changing
-which sign-in is used, the reading leaves out the user's MCP servers, plugins and hooks: Claude Code's MCP servers are
-not started, and Codex's plugins, apps and hooks are turned off for the reading. Claude Code still loads the user's
-settings, since they can decide which credentials are used, and Grok Build offers no way to leave anything out.
+Each reading starts one process of the agent, which is ended once it has replied, timed out or the daemon shut down;
+none is started once shutdown has begun, and no conversation is started (a kick does make a request; see "What a kick
+leaves behind" above). Where the CLI allows it without changing which sign-in is used, the reading leaves out the
+user's MCP servers, plugins and hooks: Claude Code's MCP servers are not started, and Codex's plugins, apps and hooks
+are turned off for the reading. Claude Code still loads the user's settings, since they can decide which credentials
+are used, and Grok Build offers no way to leave anything out.
 
 Some writes into the account's directory cannot be avoided:
 

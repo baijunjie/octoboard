@@ -337,11 +337,11 @@ async fn run_daemon(parent_pid: Option<u32>) -> Result<()> {
     Ok(())
 }
 
-/// Every login, agent process, shell and quota kick is the daemon's child, so none of them may
-/// outlive it. Each session is left interrupted, which is the status a click resumes from; each
-/// shell terminal ends with its record.
+/// Every login, agent process, shell, quota probe and quota kick is the daemon's child, so none of
+/// them may outlive it. Each session is left interrupted, which is the status a click resumes from;
+/// each shell terminal ends with its record.
 async fn stop_all_processes(state: &Arc<AppState>) {
-    state.account_quotas.stop_kicks();
+    state.account_quotas.stop_cli_runs();
     state.account_logins.stop_all().await;
     tokio::join!(state.stop_all_sessions(), shell_terminal::close_all(state));
 }

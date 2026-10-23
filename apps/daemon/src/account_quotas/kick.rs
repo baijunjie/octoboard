@@ -17,8 +17,8 @@ use crate::adapter;
 use crate::protocol::Agent;
 use crate::subprocess::{run_bounded, BoundedFailure, Bounds, Reach};
 
-/// How long a kick may take. It is a model round trip, so slower than a probe, which only asks the
-/// CLI for what it holds.
+/// How long a kick may take: the CLI's start, which can be slow on a loaded machine, and a model
+/// round trip.
 pub(super) const KICK_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// What a kick says.

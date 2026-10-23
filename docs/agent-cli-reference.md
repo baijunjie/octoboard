@@ -1559,7 +1559,8 @@ default account. The CLI handles its own login, Keychain access and token refres
 
 Codex and Grok Build want **stdin kept open until the reply is on stdout**: they exit silently when it closes first.
 Claude Code answers with stdin open as well, so all three are asked the same way. Each answers in about one to three
-seconds. A request that gets no reply within fifteen seconds is given up on and the CLI's whole session killed.
+seconds, though a Claude Code start (2.1.308 and 2.1.309) took up to 17 seconds on a 10-core machine at a load average
+of about 54. A request that gets no reply within 60 seconds is given up on and the CLI's whole session killed.
 
 **Claude Code** (do not pass `--bare`: it skips the Keychain, so the login is not found):
 

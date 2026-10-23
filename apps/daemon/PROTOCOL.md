@@ -957,7 +957,7 @@ QuotaWindow  { kind, label, used_percent, resets_at, window_minutes }
 |---|---|---|
 | `quota_binary_not_found` | `binary` | The agent's binary does not resolve on the login shell's `PATH` |
 | `quota_shell_environment_failed` | `detail` | The login-shell snapshot the command runs in could not be taken |
-| `quota_timed_out` | `agent` | The command gave no reply within 15 seconds |
+| `quota_timed_out` | `agent` | The command gave no reply within 60 seconds |
 | `quota_command_failed` | `agent`, `detail` | The command could not be run, ended without replying, printed more than 8 MiB, or answered the request with an error; `detail` is the exit status and the last line of the first 4 KiB it wrote to stderr, or the error's message, followed by `: ` and its `data` when that is a different string |
 | `quota_unreadable_reply` | `agent` | The command replied, but not in a shape that holds a quota window |
 | `quota_no_windows` | `agent` | The command replied and the account has no quota windows to report (an account without a subscription, say) |
