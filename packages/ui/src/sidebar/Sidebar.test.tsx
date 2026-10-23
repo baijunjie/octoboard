@@ -48,6 +48,14 @@ type SidebarTestProps = Partial<ComponentProps<typeof Sidebar>> & { sessions?: S
 
 const sessionMap = (list: Session[]) => new Map(list.map((session) => [session.id, session]));
 
+function isExpanded(container: HTMLElement, projectId: string): boolean {
+  return container.querySelector(`[data-flip="${projectId}"] [aria-expanded="true"]`) !== null;
+}
+
+function toggleProject(container: HTMLElement, projectId: string): void {
+  act(() => container.querySelector<HTMLElement>(`[data-flip="${projectId}"] [aria-expanded]`)!.click());
+}
+
 /** Mounts the sidebar over a stand-in daemon, `beside` next to it; `render` mounts it again with
  * other props. */
 function mountSidebar(initial: SidebarTestProps, beside?: React.ReactNode) {
@@ -437,8 +445,7 @@ it("expands only projects with unarchived sessions and keeps interrupted project
     ],
   });
   const press = (label: string) => act(() => container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!.click());
-  const expanded = (id: string) => container.querySelector(`[data-flip="${id}"] [aria-expanded="true"]`) !== null;
-  expect([web, stopped, archived, empty].map((project) => expanded(project.id))).toEqual([true, true, false, false]);
+  expect([web, stopped, archived, empty].map((project) => isExpanded(container, project.id))).toEqual([true, true, false, false]);
   press("Collapse all projects");
   press("Expand projects with unarchived sessions");
   const groups = Array.from(container.querySelectorAll<HTMLElement>("[data-flip]")).filter((row) =>
@@ -482,27 +489,56 @@ it("shows existing rows immediately when switching consoles and animates additio
 });
 
 
-it("seeds projects arriving later once and preserves manual folds across session updates and console switches", () => {
-  const empty = projectOf("p-empty", main.id, "Empty");
+it("keeps a manual fold across session updates that leave the project's activity unchanged, and across console switches", () => {
   const other = consoleOf("c-2", "Other");
   const added = projectOf("p-added", other.id, "Added");
   const { container, render } = mountSidebar({ projects: [], sessions: [] });
-  const projects = [web, empty, added];
+  const projects = [web, added];
   const held = [sessionOf("s-added", other.id, added.id, "Added task", "interrupted"), ...sessions];
-  const expanded = (id: string) => container.querySelector(`[data-flip="${id}"] [aria-expanded="true"]`) !== null;
-  const toggle = (id: string) => act(() => container.querySelector<HTMLElement>(`[data-flip="${id}"] [aria-expanded]`)!.click());
   render({ projects, sessions: held });
-  expect(expanded(web.id)).toBe(true);
-  expect(expanded(empty.id)).toBe(false);
-  toggle(web.id);
-  toggle(empty.id);
-  const updated = [...held, sessionOf("s-empty", main.id, empty.id, "New task", "idle")];
-  render({ projects, sessions: updated });
-  expect(expanded(web.id)).toBe(false);
-  expect(expanded(empty.id)).toBe(true);
-  render({ projects, sessions: updated, shownConsole: other });
-  expect(expanded(added.id)).toBe(true);
-  render({ projects, sessions: [], shownConsole: main });
-  expect(expanded(web.id)).toBe(false);
-  expect(expanded(empty.id)).toBe(true);
+  expect(isExpanded(container, web.id)).toBe(true);
+  toggleProject(container, web.id);
+  const second = sessionOf("web-second", main.id, web.id, "Second task", "idle");
+  render({ projects, sessions: [...held, second] });
+  expect(isExpanded(container, web.id)).toBe(false);
+  render({ projects, sessions: [...held, { ...second, status: "archived" }] });
+  expect(isExpanded(container, web.id)).toBe(false);
+  render({ projects, sessions: held, shownConsole: other });
+  expect(isExpanded(container, added.id)).toBe(true);
+  render({ projects, sessions: held, shownConsole: main });
+  expect(isExpanded(container, web.id)).toBe(false);
+});
+
+it("expands a collapsed project on its first unarchived session and collapses it when the last one goes", () => {
+  const empty = projectOf("p-empty", main.id, "Empty");
+  const { container, render } = mountSidebar({ projects: [], sessions: [] });
+  const projects = [web, empty];
+  render({ projects, sessions });
+  expect(isExpanded(container, empty.id)).toBe(false);
+  const task = sessionOf("s-empty", main.id, empty.id, "New task", "idle");
+  render({ projects, sessions: [...sessions, task] });
+  expect(isExpanded(container, empty.id)).toBe(true);
+  render({ projects, sessions: [...sessions, { ...task, status: "archived" }] });
+  expect(isExpanded(container, empty.id)).toBe(false);
+  render({ projects, sessions: [...sessions, task] });
+  expect(isExpanded(container, empty.id)).toBe(true);
+  render({ projects, sessions });
+  expect(isExpanded(container, empty.id)).toBe(false);
+});
+
+it("follows a project's sessions while a console session's focus mode replaces the list", () => {
+  const { container, render } = mountSidebar({ projects: [], sessions: [] });
+  const projects = [web];
+  render({ projects, sessions });
+  toggleProject(container, web.id);
+  expect(isExpanded(container, web.id)).toBe(false);
+  // Inside focus mode, its last session is archived and a new one is opened: the project went
+  // inactive and back, so it comes back expanded although it was collapsed by hand.
+  const archived = sessions.map((session) => (session.project_id === web.id ? { ...session, status: "archived" as const } : session));
+  const bound = sessionOf("web-new", main.id, web.id, "New task", "idle", { bound_to: hub1.id });
+  render({ projects, sessions, focus: { consoleSession: hub1 } });
+  render({ projects, sessions: archived, focus: { consoleSession: hub1 } });
+  render({ projects, sessions: [...archived, bound], focus: { consoleSession: hub1 } });
+  render({ projects, sessions: [...archived, bound], focus: undefined });
+  expect(isExpanded(container, web.id)).toBe(true);
 });

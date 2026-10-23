@@ -171,19 +171,26 @@ export function Sidebar({
     onArchiveSession,
     onOpenSettings,
   } satisfies Record<keyof SidebarHandlers, unknown>;
-  const initiallyCollapsed = useDaemonStore(useShallow((s) => {
+  const inactive = useDaemonStore(useShallow((s) => {
     const { byProject } = indexSessions(s.sessions);
     return projects.map((project) => !sessionsOf(byProject, project.id).some((session) => session.status !== "archived"));
   }));
-  // Seed each project once, including projects arriving after the initial snapshot. Session updates
-  // must not undo a manual fold or change a project's state after it has first appeared.
+  // A project starts collapsed when it has no unarchived session, including one arriving after the
+  // initial snapshot. After that its state moves only when that changes: gaining an unarchived
+  // session expands it, losing its last one collapses it. Any other session update leaves a manual
+  // fold as it was.
   const [folds, setFolds] = useState<Map<string, boolean>>(new Map());
-  if (projects.some((project) => !folds.has(project.id))) {
-    const next = new Map(folds);
+  const [seenInactive, setSeenInactive] = useState<Map<string, boolean>>(new Map());
+  if (projects.some((project, index) => seenInactive.get(project.id) !== inactive[index])) {
+    const nextInactive = new Map(seenInactive);
+    const nextFolds = new Map(folds);
     projects.forEach((project, index) => {
-      if (!next.has(project.id)) next.set(project.id, initiallyCollapsed[index]!);
+      if (nextInactive.get(project.id) === inactive[index]) return;
+      nextInactive.set(project.id, inactive[index]!);
+      nextFolds.set(project.id, inactive[index]!);
     });
-    setFolds(next);
+    setSeenInactive(nextInactive);
+    setFolds(nextFolds);
   }
   const collapsed = new Set(projects.filter((project) => folds.get(project.id)).map((project) => project.id));
   // Per console. Set when the Projects heading's fold button should keep offering Expand until

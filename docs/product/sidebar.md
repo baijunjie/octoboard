@@ -135,8 +135,8 @@ the filter button followed by this button.
   Projects hidden by a filter keep their state in either direction. What it changes is the same state a project row
   changes (see "Project rows" in `docs/product/sidebar-project-rows.md`). A press records the opposite action, subject
   to the all-expanded or all-collapsed reconciliation below.
-- A project's initial expanded or collapsed state follows "Project rows" in `docs/product/sidebar-project-rows.md` and
-  is kept per window without being stored. The button's choice is kept the same way, separately for each console:
+- A project's initial expanded or collapsed state, and when it expands or collapses on its own as its sessions change,
+  follow "Project rows" in `docs/product/sidebar-project-rows.md`; the state is kept per window without being stored. The button's choice is kept the same way, separately for each console:
   switching to another console shows that console's own, and switching back, or entering and leaving focus mode, keeps
   it. It is not stored, so reloading the window starts each console's button over. On first show, if any project of the
   console is expanded the button offers Collapse all projects; if every project of the console is collapsed it offers to

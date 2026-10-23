@@ -5,10 +5,15 @@ sessions section and the project list" in `docs/product/sidebar.md`).
 
 A project row shows the project's name and a chevron after the name. Clicking the row, or Enter or Space on it,
 collapses or expands it. A project starts collapsed unless it has at least one unarchived session, including an
-interrupted session; a project with only archived sessions starts collapsed. This default is applied once when the
-project first appears in the window, including projects added later. After that, session changes do not change its
-expanded or collapsed state. The state is kept per window across console switches and entering or leaving focus
-mode, and is not stored: reloading the window applies the default again. The
+interrupted session; a project with only archived sessions starts collapsed. This default is applied when the project
+first appears in the window, including projects added later. After that, the project expands or collapses on its own
+only when whether it has an unarchived session changes: gaining one while it had none — a session opened in it or
+reopened from the archive — expands it, and losing its last one — archived or deleted — collapses it. Any other session
+change leaves its state, including one set by hand, as it is. This holds in whichever console is shown, and while a
+focus mode replaces the list — a console session's focus mode has no fold control of its own — so a session opened
+there in a project that had none leaves the project expanded on returning to the list. The state is kept per window
+across console switches and entering or leaving focus mode, and is not stored: reloading the window applies the
+default again. The
 chevron always shows while the project is collapsed, and only while the row is hovered or focused while it is
 expanded, and while hidden it takes no room, so a long name runs as far as it would in a session row and ends sooner
 when the chevron appears. The hover chevron fades and opens out as it
