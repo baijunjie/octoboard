@@ -218,7 +218,35 @@ described under "Web addresses" and "File paths" below; the rest holds for both:
     address punctuation may be taken along. Only the terminal's own width counts: output the program laid out
     narrower than the terminal follows this rule too, however long its lines are.
   - **A blank next row, or one whose first non-blank character cannot belong to an address**, ends the link. A
-    piece followed by a table border or other non-address text on its own row does not join onto a later row.
+    piece followed by other non-address text on its own row, a border among it, does not join onto a later row —
+    except inside a table, below.
+  - **Inside a table drawn with box-drawing borders** — rows whose text starts and ends with a vertical border (`│`,
+    `┃` or `║`), as Claude Code draws a Markdown table, and as the sides of a box are drawn — each cell is taken on its
+    own, as if it were a row of its own. On consecutive rows whose vertical borders stand at the same columns, a cell's
+    piece joins the cell below it in the same column by the rules above, the blank after the cell's left border
+    standing for an indent. A rule (`├──┼──┤`, or the table's top or bottom border), or a row whose vertical borders
+    stand at other columns, ends the link, and no row outside the table joins a cell's piece.
+
+    - **In a table of two or more columns that rules its records apart**, as Claude Code does, the rows between two
+      rules, both meeting the table's outer borders, are one record. Claude Code fills a cell before it wraps its text,
+      so within a record the cell's last column — before the blank that pads it from its right border — stands for
+      the terminal's last one: a piece that reaches it takes the next row's address characters along, as at the
+      terminal's last column — except a row that starts with `http://` or `https://`, which starts an address of its
+      own, as a cell lists its addresses one to a row. A table that rules off only its header makes its whole body one
+      record, so there a filled address still takes along a word on the next row, though that word belongs to the
+      next record. A record spanning more rows than 2048 characters fill at the terminal's full width is treated as
+      below, whichever of its rows is looked at.
+    - **In a box (a single column), or a table that does not rule its records apart**, a cell is as wide as its
+      longest text, which then reaches the cell's edge without being broken there, and the next row may be another
+      record. There the edge is no evidence: a piece joins the next row only by the rules for a row that stops short
+      of the last column. So `Docs: http://localhost:3000/api` stays apart from a `Press q to quit` below it, and an
+      address stays apart from the next row's `https://…`.
+
+    Either way, an address joined over several rows of a cell is one link that opens the whole address, in every column
+    alike. It covers only the address's text in each cell, never a border, a cell's padding or another column's text;
+    under the pointer, only the piece the pointer is on is underlined. A table row the terminal wrapped onto several
+    rows, as after it narrowed, is still recognised as one table row, with its cells where the program drew them. The
+    2048-character limit counts each cell's row at the terminal's full width, once for every row its table row spans.
 
   An address that runs onto the next row only because the terminal is too narrow for it is recognised whole. A line
   the terminal wrapped is taken as a whole by the rules above, whether the row after it continues the address
@@ -263,6 +291,15 @@ the session may open. Until then — for a moment after it appears — and whene
     not; otherwise each piece that passes is a link on its own.
   - A joined path may also start at the beginning of any row the program carried the line onto, so a word ending the
     row above (`looks right:`) is not taken into a path that starts on the row below.
+  - Inside a table drawn with box-drawing borders, each cell is taken on its own, as for a web address (see "Web
+    addresses" above). In a record of a table that rules its records apart, a cell's piece is joined with the cell
+    below it in the same column when the piece reaches the cell's last column, before its padding, ends in a
+    character a path may contain, and the cell below starts with one; the 40-cell rule and the lines around play no
+    part. In a box, or a table that does not rule its records apart, no path is joined across a cell's rows. A record
+    spanning more rows than 20 or the rows 2048 characters fill at the terminal's full width, whichever is more, plus
+    the rows 1024 characters fill, is treated as unruled. A joined path covers only its text in each cell, and its
+    pieces are offered as links one by one, so only the piece under the pointer is underlined, though each opens the
+    whole path.
 - **Where a path may lead**: inside the session's project — its directory and, when the project is in a git
   repository, its place in each worktree of that repository — or inside a temporary directory: `/tmp`,
   `/private/tmp` and the daemon's own temporary directory, which covers agents' scratch space. A temporary directory

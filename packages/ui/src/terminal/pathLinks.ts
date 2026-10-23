@@ -125,8 +125,9 @@ export interface PathMatch {
   line?: number;
   /** The cells it fills, one segment per row. */
   segments: LinkSegment[];
-  /** The same cells as xterm's link range: 1-based, the end inclusive. */
-  range: IBufferRange;
+  /** The ranges to offer it over as xterm's link ranges, 1-based, the end inclusive (see
+   * `matchCells`). */
+  ranges: IBufferRange[];
   /** It runs over a break the program made in the line, so its pieces are candidates as well. */
   joined?: boolean;
 }
@@ -179,13 +180,13 @@ function joinedCandidates(text: string, joins: number[]): PathCandidate[] {
 }
 
 /** The matches of `candidates`, which are in the text of a line. */
-function matchesIn({ at, joins }: LineText, candidates: PathCandidate[]): PathMatch[] {
+function matchesIn({ at, joins, apart }: LineText, candidates: PathCandidate[]): PathMatch[] {
   return candidates.map(({ start, end, path, line }) => {
     const joined = crossesJoin(joins, start, end);
     return {
       path,
       ...(line !== undefined && { line }),
-      ...matchCells(at, start, end),
+      ...matchCells(at, start, end, apart),
       ...(joined && { joined }),
     };
   });
@@ -213,9 +214,12 @@ export function pathMatchesIn(
   return matches;
 }
 
-/** Whether cell `a` is no later than cell `b`. */
-function before(a: { x: number; y: number }, b: { x: number; y: number }): boolean {
-  return a.y < b.y || (a.y === b.y && a.x <= b.x);
+/** Whether every cell of `piece` is one of `whole`'s. A match's range would not do: in a table, the
+ * cells of other columns lie between a joined match's ends. */
+function covers(whole: LinkSegment[], piece: LinkSegment[]): boolean {
+  return piece.every(({ y, col, width }) =>
+    whole.some((segment) => segment.y === y && segment.col <= col && col + width <= segment.col + segment.width),
+  );
 }
 
 /** The matches `found` says are paths. A joined match wins over the pieces it is made of, which
@@ -223,11 +227,7 @@ function before(a: { x: number; y: number }, b: { x: number; y: number }): boole
 export function foundPathMatches(matches: PathMatch[], found: (path: string) => boolean): PathMatch[] {
   const hits = matches.filter((match) => found(match.path));
   const joined = hits.filter((match) => match.joined);
-  return hits.filter(
-    (match) =>
-      match.joined ||
-      !joined.some(({ range }) => before(range.start, match.range.start) && before(match.range.end, range.end)),
-  );
+  return hits.filter((match) => match.joined || !joined.some(({ segments }) => covers(segments, match.segments)));
 }
 
 /**
@@ -380,10 +380,12 @@ function pathLinkProvider(
       const matches = pathMatchesIn(rowAt, y, y).filter((match) => match.segments.some((segment) => segment.y === y));
       cache.want(matches.map((match) => match.path));
       const links: ILink[] = foundPathMatches(matches, (path) => !!cache.kind(path))
-        .map((match) => {
+        .flatMap((match) => {
           const target: PathLinkTarget = { path: match.path, line: match.line, ...cache.answerFor(match.path) };
           const activate = terminalLinkHandler((_, event) => open(target, isPrimaryModifier(event)), hasSelection);
-          return { range: match.range, text: match.path, activate };
+          return match.ranges
+            .filter((range) => range.start.y <= y && y <= range.end.y)
+            .map((range) => ({ range, text: match.path, activate }));
         });
       callback(links.length > 0 ? links : undefined);
     },

@@ -232,6 +232,231 @@ it("segments an address the program broke short of the last column, on every row
 });
 
 
+// A table as Claude Code draws one, 110 columns wide: each cell padded with a blank on both sides,
+// and text too long for its cell wrapped inside it, filling the cell before it breaks.
+function cellRow(text: string, cols = 110): TerminalRow {
+  const cells = [...text].flatMap((char) => (char.charCodeAt(0) > 0x2fff ? [char, ""] : [char]));
+  return { cells: [...cells, ...Array(cols - cells.length).fill(" ")], wrapped: false };
+}
+const TABLE = [
+  "┌──────┬──────────────────────────────────────────────┬──────────────────────────────────────────────┐",
+  "│ 主色 │ http://localhost:5480/gallery.html?scenario= │ http://localhost:5480/gallery.html?scenario= │",
+  "│ (45% │ focus-context-tooltip-limit&theme=light&lang │ focus-context-tooltip-limit&theme=dark&lang= │",
+  "│ )    │ =zh-Hans                                     │ zh-Hans                                      │",
+  "├──────┼──────────────────────────────────────────────┼──────────────────────────────────────────────┤",
+  "│ 辅色 │ http://localhost:5480/gallery.html?s=a&la    │ see                                          │",
+  "│      │ ng=en                                        │ http://localhost:5480/gallery.html?scenario= │",
+  "│      │                                              │ x&theme=dark                                 │",
+  "└──────┴──────────────────────────────────────────────┴──────────────────────────────────────────────┘",
+].map((text) => cellRow(text));
+const LIGHT = "http://localhost:5480/gallery.html?scenario=focus-context-tooltip-limit&theme=light&lang=zh-Hans";
+const DARK = "http://localhost:5480/gallery.html?scenario=focus-context-tooltip-limit&theme=dark&lang=zh-Hans";
+const piece = (y: number, col: number, width: number) => ({ start: { x: col + 1, y }, end: { x: col + width, y } });
+
+it("joins an address wrapped inside a table cell, in each column, offering each piece on its own row", () => {
+  expect(brokenAt(TABLE, 2)).toEqual([
+    { url: LIGHT, range: piece(2, 9, 44) },
+    { url: DARK, range: piece(2, 56, 44) },
+  ]);
+  expect(brokenAt(TABLE, 3)).toEqual([
+    { url: LIGHT, range: piece(3, 9, 44) },
+    { url: DARK, range: piece(3, 56, 44) },
+  ]);
+  expect(brokenAt(TABLE, 4)).toEqual([
+    { url: LIGHT, range: piece(4, 9, 8) },
+    { url: DARK, range: piece(4, 56, 7) },
+  ]);
+});
+
+it("colours an address in table cells on its pieces alone, without the borders or the padding", () => {
+  expect(segmentsOf(TABLE, 1, 4)).toEqual([
+    { y: 2, col: 9, width: 44 },
+    { y: 2, col: 56, width: 44 },
+    { y: 3, col: 9, width: 44 },
+    { y: 3, col: 56, width: 44 },
+    { y: 4, col: 9, width: 8 },
+    { y: 4, col: 56, width: 7 },
+  ]);
+});
+
+it("joins an address broken inside a word over two rows of a cell, beside a cell that starts it on its second row", () => {
+  expect(brokenAt(TABLE, 7).map((link) => link.url)).toEqual([
+    "http://localhost:5480/gallery.html?s=a&lang=en",
+    "http://localhost:5480/gallery.html?scenario=x&theme=dark",
+  ]);
+  expect(brokenAt(TABLE, 8)).toEqual([{ url: "http://localhost:5480/gallery.html?scenario=x&theme=dark", range: piece(8, 56, 12) }]);
+});
+
+it("leaves a cell's address alone where a row border follows it", () => {
+  const rows = [TABLE[1], TABLE[4], cellRow("│ more │ focus-context                                │ x                                            │")];
+  expect(brokenAt(rows, 1)).toEqual([]);
+  expect(brokenAt(rows, 3)).toEqual([]);
+});
+
+it("leaves a cell's address alone where it stops short of the cell's end and a word follows", () => {
+  const rows = [
+    cellRow("│ a    │ http://localhost:5480/gallery.html           │ b                                            │"),
+    cellRow("│      │ today                                        │                                              │"),
+  ];
+  expect(brokenAt(rows, 1)).toEqual([]);
+  expect(brokenAt(rows, 2)).toEqual([]);
+});
+
+it("joins an address in a table row the terminal soft-wrapped after it narrowed", () => {
+  // The rule and the first record at 60 columns: xterm wrapped the 102-cell rows onto two.
+  const narrow = TABLE.slice(0, 5).flatMap((wide) => [
+    { cells: wide.cells.slice(0, 60), wrapped: false },
+    { cells: wide.cells.slice(60, 120), wrapped: true },
+  ]);
+  // The record's last row: the left piece on its first half, the right one split over both.
+  expect(brokenAt(narrow, 7)).toEqual([
+    { url: LIGHT, range: piece(7, 9, 8) },
+    { url: DARK, range: piece(7, 56, 4) },
+  ]);
+  expect(brokenAt(narrow, 8)).toEqual([{ url: DARK, range: piece(8, 0, 3) }]);
+  expect(brokenAt(narrow, 4)).toEqual([{ url: DARK, range: piece(4, 0, 40) }]);
+});
+
+/** `rows` as a terminal `cols` wide shows them once xterm has soft-wrapped each: a wide character
+ * that does not fit a row's last column moves to the next row and leaves that column padded. */
+function narrowed(rows: TerminalRow[], cols: number): TerminalRow[] {
+  return rows.flatMap(({ cells }) => {
+    const out: TerminalRow[] = [];
+    let current: string[] = [];
+    for (let i = 0; i < cells.length; ) {
+      const width = cells[i + 1] === "" ? 2 : 1;
+      if (current.length + width > cols) {
+        const padded = current.length < cols;
+        out.push({ cells: [...current, ...Array(cols - current.length).fill("")], wrapped: out.length > 0, ...(padded && { padded }) });
+        current = [];
+      }
+      current.push(...cells.slice(i, i + width));
+      i += width;
+    }
+    out.push({ cells: [...current, ...Array(cols - current.length).fill(" ")], wrapped: out.length > 0 });
+    return out;
+  });
+}
+/** The text on screen in a link's segments. */
+const textOf = (rows: TerminalRow[], segments: { y: number; col: number; width: number }[]) =>
+  segments.map(({ y, col, width }) => rows[y - 1].cells.slice(col, col + width).join("")).join("");
+
+it("joins an address in a table row soft-wrapped where a wide character left a padded column", () => {
+  const rule = (left: string, mid: string, right: string) => `${left}${"─".repeat(8)}${mid}${"─".repeat(26)}${right}`;
+  const wide = [
+    rule("┌", "┬", "┐"),
+    "│ 一二三 │ http://a.dev/aaaaaaaaaaa │",
+    "│        │ bbbbbbbbbbbb             │",
+    rule("└", "┴", "┘"),
+  ].map((text) => cellRow(text, 40));
+  // At 5 columns, `二` would straddle the last column of the second row of `│ 一二三 …`.
+  const rows = narrowed(wide, 5);
+  expect(rows.some((row) => row.padded)).toBe(true);
+  const segments = segmentsOf(rows);
+  expect(textOf(rows, segments)).toBe("http://a.dev/aaaaaaaaaaabbbbbbbbbbbb");
+  const y = segments[0].y;
+  expect(brokenAt(rows, y).map((link) => link.url)).toEqual(["http://a.dev/aaaaaaaaaaabbbbbbbbbbbb"]);
+});
+
+// A record of a ruled table, a box, and a table whose records are not ruled apart, each with an
+// address that fills its cell above a row that starts with a word.
+const FILLED = "http://localhost:3000/api?id=12345";
+/** `texts` as a ruled table, its first `header` rows ruled off from the rest. */
+const ruled = (texts: string[], header = 0) => {
+  const widths = texts[0].split("│").slice(1, -1).map((cell) => cell.length);
+  const rule = (left: string, mid: string, right: string) => left + widths.map((width) => "─".repeat(width)).join(mid) + right;
+  const ruledOff = header > 0 ? [...texts.slice(0, header), rule("├", "┼", "┤"), ...texts.slice(header)] : texts;
+  return [rule("┌", "┬", "┐"), ...ruledOff, rule("└", "┴", "┘")].map((text) => cellRow(text, 80));
+};
+
+it("joins a word onto an address that fills its cell in a record of a ruled table", () => {
+  const rows = ruled([`│ id │ ${FILLED} │`, `│    │ 678${" ".repeat(FILLED.length - 3)} │`]);
+  expect(brokenAt(rows, 3).map((link) => link.url)).toEqual([`${FILLED}678`]);
+});
+
+it.each([
+  ["a box", ["┌" + "─".repeat(33) + "┐", "│ Docs: http://localhost:3000/api │", "│ Press q to quit                 │", "└" + "─".repeat(33) + "┘"]],
+  ["a table that does not rule its records apart", [`│ id │ ${FILLED} │`, `│    │ 678${" ".repeat(FILLED.length - 3)} │`]],
+  ["a table whose next record starts its own address", [
+    "│ Name │ URL                          │",
+    "│ web  │ http://localhost:3000/web/ap │",
+    "│ docs │ https://x.dev                │",
+  ]],
+])("leaves an address that fills its cell alone in %s", (_name, texts) => {
+  const rows = texts.map((text) => cellRow(text, 80));
+  for (let y = 1; y <= rows.length; y++) expect(brokenAt(rows, y)).toEqual([]);
+});
+
+// A table that rules off its header alone, so its body is one record however many it lists.
+const ADDRESS = "http://localhost:3000/web/ap";
+const listed = (next: string) =>
+  ruled([`│ Name │ ${"URL".padEnd(ADDRESS.length)} │`, `│ web  │ ${ADDRESS} │`, `│ docs │ ${next.padEnd(ADDRESS.length)} │`], 1);
+
+it("joins no address in a cell onto a row that starts an address of its own, though it fills the cell", () => {
+  const rows = listed("https://x.dev");
+  for (let y = 1; y <= rows.length; y++) expect(brokenAt(rows, y)).toEqual([]);
+  expect(textOf(rows, segmentsOf(rows))).toBe(`${ADDRESS}https://x.dev`);
+  expect(segmentsOf(rows).map(({ y }) => y)).toEqual([4, 5]);
+});
+
+it("joins a word onto an address that fills its cell where a table rules off its header alone", () => {
+  // A limit, not a wish: the body is taken as one record, so the next record's word is taken along.
+  expect(brokenAt(listed("pending"), 5).map((link) => link.url)).toEqual([`${ADDRESS}pending`]);
+});
+
+it("takes a record taller than the rows read around it by the rules for a row that stops short, from any of its rows", () => {
+  // 80 columns read 26 rows on each side, so a record of 30 is no record: the piece ending in `-`
+  // joins the word below it, and the next filled word does not.
+  const width = 40;
+  const first = `http://a.dev/${"a".repeat(width - 14)}-`;
+  const record = Array.from({ length: 30 }, (_, i) => `│ a │ ${i === 0 ? first : String.fromCharCode(98 + (i % 20)).repeat(width)} │`);
+  const rows = ruled(record);
+  const url = `${first}${"c".repeat(width)}`;
+  for (let y = 2; y <= 31; y++) expect(brokenAt(rows, y).map((link) => link.url)).toEqual(y <= 3 ? [url] : []);
+});
+
+it("joins an address in a box where its piece ends in a mark", () => {
+  const rows = ["│ see http://a.dev/sel- │", "│ account&x=1           │"].map((text) => cellRow(text, 40));
+  expect(brokenAt(rows, 2).map((link) => link.url)).toEqual(["http://a.dev/sel-account&x=1"]);
+});
+
+it.each([
+  ["a list item", "- item"],
+  ["a numbered item", "1. item"],
+])("leaves an address in a cell alone where %s follows it", (_name, item) => {
+  const rows = ruled([`│ a │ ${"http://a.dev/?l=zh-Hans".padEnd(30)} │`, `│   │ ${item.padEnd(30)} │`]);
+  expect(brokenAt(rows, 2)).toEqual([]);
+  expect(brokenAt(rows, 3)).toEqual([]);
+});
+
+it.each([
+  ["its borders stand at other columns", `│      │ ${"x".padEnd(FILLED.length)}│`],
+  ["a cell holds a border of its own", `│      │ ab │ ${"x".padEnd(FILLED.length - 5)} │`],
+])("ends a cell's address at a row where %s", (_name, next) => {
+  const rows = [`│ id   │ ${FILLED} │`, next].map((text) => cellRow(text, 80));
+  expect(brokenAt(rows, 1)).toEqual([]);
+  expect(brokenAt(rows, 2)).toEqual([]);
+});
+
+it("joins no row outside a table onto a cell's address", () => {
+  const rows = [cellRow("│ x │ http://a.dev/sel- │", 40), cellRow("  account&x=1", 40)];
+  expect(brokenAt(rows, 1)).toEqual([]);
+  expect(brokenAt(rows, 2)).toEqual([]);
+});
+
+it("stops an address in a cell at the cap, counting each row at the terminal's width", () => {
+  // 80 columns: 25 rows hold 2000 characters, the 26th takes the chain past 2048.
+  const width = 40;
+  const record = Array.from({ length: 26 }, (_, i) => `│ a │ ${i === 0 ? `http://a.dev/${"a".repeat(width - 13)}` : "b".repeat(width)} │`);
+  const rows = ruled(record);
+  const [link] = brokenAt(rows, 2);
+  expect(link.url).toBe(`http://a.dev/${"a".repeat(width - 13)}${"b".repeat(width * 24)}`);
+  expect(link.range).toEqual(piece(2, 6, width));
+  expect(brokenAt(rows, 26)[0].url).toBe(link.url);
+  expect(brokenAt(rows, 27)).toEqual([]);
+});
+
+
 it("colours OSC 8 labels by their cells and accepts only web targets, with a safe fallback", () => {
   const cells = [
     ["看", 2, 1], ["", 0, 1], [" ", 1, 1], ["x", 1, 1],

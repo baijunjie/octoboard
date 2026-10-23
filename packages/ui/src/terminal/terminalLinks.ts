@@ -115,8 +115,11 @@ const LIST_MARKER = /^(?:[^A-Za-z0-9]+|(?:[0-9]+|[A-Za-z]|[ivx]+|[IVX]+)\.)$/;
  * Whether `row` carries on an address that ends on the line `above`, and the column it does from.
  *
  * A line whose last row reaches the terminal's last column always does: a break at the width cannot
- * be told from a word that merely follows, so the word is taken along. A line that stops short
- * does only when the address is its last text and the next row is not a separate word or list
+ * be told from a word that merely follows, so the word is taken along. In a table cell the cell's
+ * edge counts as that column only where `layout.cols` says it does (see `LineLayout`), and even
+ * there a row that starts an address of its own does not carry on the one above: a cell lists its
+ * addresses one to a row, and one that fills the cell is no sign of a break. A line that stops
+ * short does only when the address is its last text and the next row is not a separate word or list
  * marker. A program often breaks at its own text width, short of the terminal's last column, and so
  * does a row xterm wrapped after a resize; a mark such as `-` or `&` shows the rows are one address
  * (`…auto-select-` / `account&…`). A finished address and a word of letters or digits
@@ -134,9 +137,10 @@ function continuesAddress(above: LineRow[], row: TerminalRow, layout: LineLayout
   while (start > 0 && URL_CHAR_CELL.test(cells[start - 1])) start--;
   // The address is the line's last text: it holds a scheme, or is a piece an earlier row began.
   if (start === limit || (start !== indentOf(cells) && cells.slice(start, limit).join("").search(URL_START) < 0)) return undefined;
-  if (textEnd(above[above.length - 1].row.cells) >= layout.cols) return from;
   const continuation = row.cells.slice(from, end).join("");
-  if (continuation.search(URL_START) === 0 || LIST_MARKER.test(continuation)) return undefined;
+  const opensAddress = continuation.search(URL_START) === 0;
+  if (textEnd(above[above.length - 1].row.cells) >= layout.cols) return opensAddress && layout.cell ? undefined : from;
+  if (opensAddress || LIST_MARKER.test(continuation)) return undefined;
   return WORD_CHAR.test(cells[limit - 1]) && WORD_RUN.test(continuation) ? undefined : from;
 }
 
@@ -156,27 +160,26 @@ function isUrl(text: string): boolean {
   }
 }
 
-/** An address in a logical line: its cells, one segment per row it crosses, and whether the program
- * broke it across rows. An address is ASCII, so each of its characters is one cell. */
+/** An address in a logical line: its cells, one segment per row it crosses, the ranges to offer it
+ * over (see `matchCells`), and whether the program broke it across rows. An address is ASCII, so
+ * each of its characters is one cell. */
 interface UrlMatch {
   url: string;
   segments: LinkSegment[];
-  range: IBufferRange;
+  ranges: IBufferRange[];
   broken: boolean;
 }
 
 function urlMatchesIn(line: LineRow[]): UrlMatch[] {
-  const { text, at, joins } = lineText(line);
+  const { text, at, joins, apart } = lineText(line);
   const found: UrlMatch[] = [];
   for (const match of text.matchAll(URL_GLOBAL)) {
     if (!isUrl(match[0])) continue;
     const start = match.index;
     const end = start + match[0].length;
-    const { segments, range } = matchCells(at, start, end);
     found.push({
       url: match[0],
-      segments,
-      range,
+      ...matchCells(at, start, end, apart),
       broken: crossesJoin(joins, start, end),
     });
   }
@@ -189,13 +192,15 @@ function urlMatchesIn(line: LineRow[]): UrlMatch[] {
  * own text: it ends the row and, usually, indents the next one, so xterm sees two unrelated rows.
  * Which row carries on which is `continuesAddress`, over logical lines, so that a row xterm
  * wrapped after a resize, or when the output was replayed into a terminal of another width, joins
- * like any other.
+ * like any other. An address wrapped inside a table cell is found once for each of its pieces, each
+ * with the piece's cells as its range and the whole address as its target.
  */
 export function brokenUrlsAt(rowAt: (y: number) => TerminalRow | undefined, y: number): BrokenUrl[] {
   const found: BrokenUrl[] = [];
   for (const line of logicalLinesIn(cachedRows(rowAt), y, y, URL_CHAIN)) {
-    for (const { url, range, broken } of urlMatchesIn(line)) {
-      if (broken && range.start.y <= y && y <= range.end.y) found.push({ url, range });
+    for (const { url, ranges, broken } of urlMatchesIn(line)) {
+      if (!broken) continue;
+      for (const range of ranges) if (range.start.y <= y && y <= range.end.y) found.push({ url, range });
     }
   }
   return found.sort((a, b) => b.range.start.y - a.range.start.y || a.range.start.x - b.range.start.x);

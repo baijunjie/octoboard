@@ -66,7 +66,7 @@ it("places a path soft-wrapped onto the next row, in cells", () => {
   const [match] = pathMatchesIn((y) => rows[y - 1], 1, 2);
   expect(match.path).toBe("/tmp/aaaa/bbbbbbb/c.png");
   expect(match.segments).toEqual([{ y: 1, col: 4, width: 16 }, { y: 2, col: 0, width: 7 }]);
-  expect(match.range).toEqual({ start: { x: 5, y: 1 }, end: { x: 7, y: 2 } });
+  expect(match.ranges).toEqual([{ start: { x: 5, y: 1 }, end: { x: 7, y: 2 } }]);
 });
 
 it("counts a double-width character as two cells", () => {
@@ -92,7 +92,7 @@ it("finds a path the program broke onto the next row, as the whole path and as i
   const joined = matches.find((match) => match.joined);
   expect(joined?.path).toBe(BROKEN_PATH);
   expect(joined?.segments).toEqual([{ y: 2, col: 2, width: 28 }, { y: 3, col: 2, width: 10 }]);
-  expect(joined?.range).toEqual({ start: { x: 3, y: 2 }, end: { x: 12, y: 3 } });
+  expect(joined?.ranges).toEqual([{ start: { x: 3, y: 2 }, end: { x: 12, y: 3 } }]);
   expect(matches.filter((match) => !match.joined).map((match) => match.path)).toEqual(["/tmp/scratch/icon/set.iconse", "t/icon.png"]);
 });
 
@@ -219,6 +219,49 @@ it("links the pieces of a broken path when the joined path is not one, and the w
   expect(foundPathMatches(pieces, (path) => path !== BROKEN_PATH).map((match) => match.path)).toEqual(["/tmp/scratch/icon/set.iconse", "t/icon.png"]);
 });
 
+// One record of a ruled table whose left cell wraps a path inside it, beside a cell holding a path
+// on each row.
+const RULE = "─".repeat(30);
+const PATH_RECORD = [
+  "│ /tmp/scratch/icon/set.iconse │ /tmp/a/b.png                 │",
+  "│ t/icon.png                   │ /tmp/c/d.png                 │",
+];
+const PATH_TABLE = [`┌${RULE}┬${RULE}┐`, ...PATH_RECORD, `└${RULE}┴${RULE}┘`].map((text) => sized(70, text));
+
+it("joins a path wrapped inside a table cell, without the borders or the padding", () => {
+  const joined = matchesAt(PATH_TABLE, 2, 3).filter((match) => match.joined);
+  expect(joined.map((match) => match.path)).toEqual([BROKEN_PATH]);
+  expect(joined[0].segments).toEqual([{ y: 2, col: 2, width: 28 }, { y: 3, col: 2, width: 10 }]);
+  expect(joined[0].ranges).toEqual([
+    { start: { x: 3, y: 2 }, end: { x: 30, y: 2 } },
+    { start: { x: 3, y: 3 }, end: { x: 12, y: 3 } },
+  ]);
+});
+
+it("keeps a path in another column that lies between the ends of a joined one", () => {
+  const found = (path: string) => path === BROKEN_PATH || path === "/tmp/a/b.png";
+  expect(foundPathMatches(matchesAt(PATH_TABLE, 2, 3), found).map((match) => match.path)).toEqual(["/tmp/a/b.png", BROKEN_PATH]);
+});
+
+it("joins no path whose piece stops short of its cell's edge in a ruled record", () => {
+  const rows = [
+    `┌${RULE}┬${RULE}┐`,
+    "│ /tmp/scratch/icon/set.icon   │ x                            │",
+    "│ t/icon.png                   │ y                            │",
+    `└${RULE}┴${RULE}┘`,
+  ].map((text) => sized(70, text));
+  expect(matchesAt(rows, 1, 4).some((match) => match.joined)).toBe(false);
+});
+
+it.each([
+  ["a table that does not rule its records apart", PATH_RECORD],
+  ["a box", ["│ /tmp/scratch/icon/set.iconse │", "│ t/icon.png                   │"]],
+])("joins no path that fills its cell in %s", (_name, texts) => {
+  const rows = texts.map((text) => sized(70, text));
+  expect(matchesAt(rows, 1, 2).some((match) => match.joined)).toBe(false);
+});
+
+
 function cache(answer: (paths: string[]) => PathAnswer[], now = () => 0) {
   const probe = vi.fn(async (asked: string[]) => answer(asked));
   const onChange = vi.fn();
@@ -332,11 +375,10 @@ it("sends at most 64 paths a request and two requests at a time", async () => {
   answers[2]();
 });
 
-it("offers a path only on the rows it fills, though its line is under the pointer on others", async () => {
-  // One soft-wrapped line: the path is on the first row, and the pointer is on the second.
-  const rows = [sized(20, "see /tmp/a.png and m"), sized(20, "ore text", true)];
+/** The path link provider over `rows`, once the daemon, which finds every path, has answered for `wanted`. */
+async function pathProvider(rows: TerminalRow[], wanted: string[]) {
   const term = {
-    cols: 20,
+    cols: rows[0].cells.length,
     registerLinkProvider: vi.fn(),
     buffer: { active: {
       getNullCell: () => ({}),
@@ -353,13 +395,24 @@ it("offers a path only on the rows it fills, though its line is under the pointe
     () => {},
   );
   const provider = term.registerLinkProvider.mock.calls[0][0] as ILinkProvider;
-  const linksAt = (y: number) => {
+  links.want(wanted);
+  await vi.waitFor(() => expect(wanted.every((path) => links.kind(path) === "file")).toBe(true));
+  return (y: number) => {
     const found = vi.fn();
     provider.provideLinks(y, found);
-    return found.mock.calls[0][0]?.map((link: { text: string }) => link.text);
+    return found.mock.calls[0][0]?.map(({ text, range }: { text: string; range: unknown }) => ({ text, range }));
   };
-  links.want(["/tmp/a.png"]);
-  await vi.waitFor(() => expect(links.kind("/tmp/a.png")).toBe("file"));
-  expect(linksAt(1)).toEqual(["/tmp/a.png"]);
+}
+
+it("offers a path only on the rows it fills, though its line is under the pointer on others", async () => {
+  // One soft-wrapped line: the path is on the first row, and the pointer is on the second.
+  const rows = [sized(20, "see /tmp/a.png and m"), sized(20, "ore text", true)];
+  const linksAt = await pathProvider(rows, ["/tmp/a.png"]);
+  expect(linksAt(1)?.map(({ text }: { text: string }) => text)).toEqual(["/tmp/a.png"]);
   expect(linksAt(2)).toBeUndefined();
+});
+
+it("offers a path wrapped inside a table cell on each of its pieces, as the whole path", async () => {
+  const linksAt = await pathProvider(PATH_TABLE, [BROKEN_PATH]);
+  expect(linksAt(3)).toEqual([{ text: BROKEN_PATH, range: { start: { x: 3, y: 3 }, end: { x: 12, y: 3 } } }]);
 });
