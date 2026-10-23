@@ -25,9 +25,9 @@ The top of the sidebar names the console being shown, followed by a **+** button
 action menu. The **+** opens the session dialog before launching anything (see "Opening a session" in
 `docs/product/sessions.md`), or, with the primary modifier held, opens a console session at once without it (see
 "Opening a session with defaults" in `docs/product/sessions.md`). The menu offers **Add project**, **Console settings**,
-**Archived console sessions** and, after a separator, **Delete console** (see "Associating a project" in
+**View archive** and, after a separator, **Delete console** (see "Associating a project" in
 `docs/product/projects.md`, and "Editing a console" and "Deleting a console" in `docs/product/consoles.md`; deleting
-asks for a typed confirmation first). **Archived console sessions** is a submenu of the console's archive preview
+asks for a typed confirmation first). **View archive** is a submenu of the console's archive preview
 (see "The archive view" in `docs/product/archive-view.md` for what it lists and how each item looks); choosing one
 selects it (see "Selecting a session" below). After them, **View all** opens the archive view of all of them whenever
 the console has an archived console session (see "The archive view" in `docs/product/archive-view.md`). A console with
@@ -207,8 +207,8 @@ with its history in place of its terminal (see `docs/product/session-history.md`
 (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md` and "Interrupted, archived and dormant
 sessions" in `docs/product/session-terminal.md`). Selecting a session also
 gives the window's right pane to its own owner: a console session's report panel, a project session's project's Files
-panel (see "What the right pane shows" in `docs/product/window-layout.md`). Whatever it is selected from — a sidebar row, a "View
-archive" or "Archived console sessions" submenu, focus mode and its switch strip, the archive view, the rail's waiting
+panel (see "What the right pane shows" in `docs/product/window-layout.md`). Whatever it is selected from — a sidebar row, a project or console "View
+archive" submenu, focus mode and its switch strip, the archive view, the rail's waiting
 count, or the menu bar icon's menu (see "Choosing a session" in `docs/product/menu-bar-icon.md`) — **the sidebar
 follows it**: it switches to the session's console, showing the session selected rather than the one remembered for
 that console (see "What switching console shows" in `docs/product/console-switcher.md`), and leaves focus mode when the

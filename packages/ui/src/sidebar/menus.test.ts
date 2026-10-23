@@ -335,7 +335,7 @@ describe("a console's menu", () => {
     const hub = sessionOf("hub", "c", undefined, "Old hub", "archived", { role: "console" });
     const menu = consoleMenu(t, consoleOf("c", "Main"), handlers, [hub]);
     const labels = menu.map((entry) => (entry === "separator" ? entry : entry.label));
-    expect(labels).toEqual(["Add project", "Console settings", "Archived console sessions", "separator", "Delete console"]);
+    expect(labels).toEqual(["Add project", "Console settings", "View archive", "separator", "Delete console"]);
     const archive = menu[2] as { items: { label: string; onClick: () => void }[] };
     expect(archive.items.map((item) => item.label)).toEqual(["Old hub", "View all"]);
     archive.items[1].onClick();

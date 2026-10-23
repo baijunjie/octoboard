@@ -616,7 +616,7 @@ export const zhHans: Translation<"other"> = {
   "sidebar.consoleSessions.new": "新建控制台会话",
   "sidebar.consoleSessions.newQuick": "使用默认设置新建控制台会话",
   "sidebar.consoleSessions.empty": "还没有控制台会话",
-  "sidebar.archive.consoleSessions": "已归档的控制台会话",
+  "sidebar.archive.consoleSessions": "查看归档",
   "sidebar.archive.empty": "没有已归档的会话",
   "sidebar.archive.viewAll": "查看全部",
   "sidebar.project.ariaLabelPinned": "{name}，已置顶",

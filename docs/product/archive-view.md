@@ -2,8 +2,8 @@
 
 A project's, a console session's or a console's full archive opens in the archive view, over the terminal.
 
-**View all** — in a project's "View archive" submenu, in a focus mode's archived list, or in a console's
-"Archived console sessions" submenu — opens the archive view: **every** archived session of that project,
+**View all** — in a project's or console's "View archive" submenu, or in a focus mode's archived list — opens the archive
+view: **every** archived session of that project,
 every archived session under that console session (bound to it, or bound to an archived lead session that is bound to
 it), or every archived console session of that console. A lead session's own archived sessions are in that console
 session's archive only while the lead session is archived too; while the lead session is still live they are in its

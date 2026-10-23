@@ -248,7 +248,7 @@ export const archiveScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Console menu, archived console sessions",
-    description: "The console's menu (the same one opens from its avatar in the rail) lists Add project, Console settings, Archived console sessions and Delete console below a separator, with no Export configuration. The submenu lists all eight archived console sessions (it shows ten at most), newest first, with their last active task titles and a context-size badge at the end of the first, then View all.",
+    description: "The console's menu (the same one opens from its avatar in the rail) lists Add project, Console settings, View archive and Delete console below a separator, with no Export configuration. The submenu lists all eight archived console sessions (it shows ten at most), newest first, with their last active task titles and a context-size badge at the end of the first, then View all.",
     state: archiveState,
     steps: [
       (ui) => ui.press(ui.t("sidebar.console.actions", { name: console_.name })),
@@ -260,7 +260,7 @@ export const archiveScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Console menu, no archived console sessions",
-    description: "The Archived console sessions submenu holds only a disabled empty entry, with no View all.",
+    description: "The View archive submenu holds only a disabled empty entry, with no View all.",
     state: emptyConsoleArchiveState,
     steps: [
       (ui) => ui.press(ui.t("sidebar.console.actions", { name: console_.name })),

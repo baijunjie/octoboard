@@ -676,7 +676,7 @@ export const en = {
   "sidebar.consoleSessions.new": "New console session",
   "sidebar.consoleSessions.newQuick": "New console session with defaults",
   "sidebar.consoleSessions.empty": "No console sessions yet",
-  "sidebar.archive.consoleSessions": "Archived console sessions",
+  "sidebar.archive.consoleSessions": "View archive",
   "sidebar.archive.empty": "No archived sessions",
   "sidebar.archive.viewAll": "View all",
   "sidebar.project.ariaLabelPinned": "{name}, pinned",

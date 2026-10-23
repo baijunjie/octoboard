@@ -184,8 +184,8 @@ A project's archived sessions, and a console's archived console sessions, stay u
 deleted, or until Octoboard deletes them once their agent's conversation is proven gone (see "Deleting archived
 sessions whose conversation is gone" in `docs/product/deleting-sessions.md`). They are listed most recently archived first, and reached:
 
-- from the project's "View archive" submenu, or for console sessions the console's "Archived console
-  sessions" submenu, as the archive preview described in "The archive view" in `docs/product/archive-view.md`;
+- from the project's or console's "View archive" submenu, as the archive preview described in "The archive view" in
+  `docs/product/archive-view.md`;
 - from either focus mode, as that same preview, within that focus mode's scope;
 - from the archive view, with all of them.
 

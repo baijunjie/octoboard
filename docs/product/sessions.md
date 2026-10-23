@@ -30,7 +30,7 @@ renameable, like a project session's; its default is under **Name** in "Opening 
 The user archives a console session from its own row's menu, as any session is archived; the console session can also
 archive itself once every session under it is archived (see "A session archiving itself" in
 `docs/product/hub-orchestration.md`). Archiving it moves it among the console's archived console sessions; these are not
-reached from any one row, but from the console's own menu, which offers **Archived console sessions** — a submenu of the
+reached from any one row, but from the console's own menu, which offers **View archive** — a submenu of the
 console's newest archived console sessions, each of which can be selected, and the way to the archive view of all of
 them (see "The console header" in `docs/product/sidebar.md`). The console header's **New console session** button opens
 the session dialog described in "Opening a session" below — whereas resuming or reopening a console session keeps its
