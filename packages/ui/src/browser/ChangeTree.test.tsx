@@ -225,3 +225,16 @@ it("keeps a section's heading when the list resizes scrolled past the section's 
   act(() => window.dispatchEvent(new Event("resize")));
   expect(labels(container)).toContain("Committed16");
 });
+
+it("returns focus to a change row's Actions button when its keyboard-opened menu closes", async () => {
+  const container = render(new Set());
+  const target = row(container, items[1].key);
+  const actions = target.querySelector<HTMLButtonElement>("button[aria-haspopup]")!;
+  press(target, "ArrowRight");
+  expect(document.activeElement).toBe(actions);
+  press(actions, "Enter");
+  const item = document.querySelector<HTMLElement>("[role=menuitem]")!;
+  press(item, "Escape");
+  await vi.waitFor(() => expect(document.activeElement).toBe(actions));
+  expect(document.querySelector("[role=menu]")).toBeNull();
+});

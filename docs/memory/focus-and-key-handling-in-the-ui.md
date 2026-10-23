@@ -165,7 +165,7 @@ press inside the surface, so such a press does not even dismiss what it covers. 
 ordering reads as a contradiction that sends a diagnosis the wrong way: the surface paints undimmed on top of the
 backdrop and still takes no pointer event at all.
 
-## Rows taken out of a react-aria collection take focus with them, and the library re-aims it two renders later
+## Rows taken out of a react-aria collection, or a row's menu closing, and the library re-aims focus two renders later
 
 Applies to `packages/ui`, to every list built on a react-aria collection (`GridList`, `Tree`, `ListBox`) whose rows can
 go away while keyboard focus is inside the list: a section folded away, a filter narrowed, a daemon event dropping a
@@ -180,6 +180,15 @@ from a `requestAnimationFrame` nested in a `requestAnimationFrame`, guarded on f
 that a Tab or a press in between stands, the way `packages/ui/src/browser/focusRow.ts` does it. The library's pull
 runs only while the collection itself holds focus, so a control outside the list, such as a filter field above it,
 needs none of this.
+
+The same pull follows a popup opened from a control inside a row — a row's `⋯` menu — closing, and it comes later
+than the close looks: a HeroUI popover keeps its content mounted, with focus still on the menu item, through its exit
+animation after `onOpenChange(false)`; only when the content unmounts does focus fall to `<body>`, and the collection
+then puts it on the row. So a focus return timed from the close (a `setTimeout(0)` after `onOpenChange(false)`) runs
+while focus is still in the popover and is overridden. Time it from the popover's content unmounting —
+`ActionMenu`'s `onClosed` — and wait out the collection from there, with the same guards, as `focusRowControl` in
+`focusRow.ts` does. jsdom runs no exit animation, so a component test passes against the close-timed version too;
+settle such a focus return in a browser on the gallery page, driven from the keyboard.
 
 ## The platform's shortcut modifier comes from `isPrimaryModifier`, never a check of your own
 

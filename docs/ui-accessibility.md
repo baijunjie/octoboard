@@ -115,12 +115,11 @@ The project filter's popover keeps HeroUI's own fills: it holds a search field, 
 ## Keyboard
 
 Every interactive control is reachable from the keyboard and operable with Enter / Space, except for the collection-row
-behavior under "Buttons" below and a choice inside a dialog's form. A control that holds a choice there (a checkbox,
-a radio, a switch, a closed select, a tab) takes Space,
-and the arrow keys where it has them, while Enter submits the dialog from it, as Enter does from a text field. The
-platform does this for the native ones (a checkbox, a radio, a switch), and the dialog does it for a closed select, a
-tab and a radio that is not a native input, so that having picked an agent the user presses Enter to go ahead rather
-than to open the picker again. A button that acts (Cancel, a disclosure) keeps Enter, and so does an open popover's
+behavior under "Buttons" below and a choice inside a dialog's form. A control that holds a choice there (a checkbox, a
+radio, a switch, a closed select, a tab) takes Space, and the arrow keys where it has them, while Enter submits the
+dialog from it, as Enter does from a text field. The platform does this for the native ones (a checkbox, a radio, a
+switch), and the dialog does it for a closed select, a tab and a radio that is not a native input, so that having
+picked an agent the user presses Enter to go ahead rather than to open the picker again. A button that acts (Cancel, a disclosure) keeps Enter, and so does an open popover's
 list. So a dialog whose confirm button carries weight does not also rely on Enter to settle a choice one of these
 controls holds.
 
@@ -200,11 +199,12 @@ cannot be, with the reason in a comment there. A hand-built `role="button"` elem
 Enter / Space handling.
 
 Files and Git tree chevrons use the shared compact Button with `slot="chevron"`, keeping the collection's
-expansion, focus and Tab exclusion. Their whole rows act on Enter and expand or fold with Left / Right (reversed
-under RTL), or a pointer press. Space remains the selection key and does nothing with selection disabled:
-React Aria 3.52.1's `useSelectableItem` reserves Enter for `onAction`, including the tree's expansion action.
-Keep that supported collection behavior rather than translating Space locally. The custom Git section-heading
-band retains its documented primitive exception and acts on both Enter and Space.
+expansion, focus and Tab exclusion. A whole row runs its action on Enter and expands or folds with Left / Right
+(reversed under RTL); a pointer press on the chevron expands or folds it too. React Aria 3.52.1's
+`useSelectableItem` maps Enter to the row's action (`onAction`, which includes the tree's expansion) and Space to
+selection; selection is disabled in these trees, so Space on a row does nothing. Keep that supported collection
+behavior rather than translating Space locally. The custom Git section-heading band retains its documented primitive
+exception and acts on both Enter and Space.
 
 A button that is unavailable for a reason the user needs to learn (the quick-create "+" while every account of its agent
 is used up) is not natively disabled, which would take it out of the Tab order and keep its tooltip from ever opening:

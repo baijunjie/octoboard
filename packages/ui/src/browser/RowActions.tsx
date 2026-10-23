@@ -7,6 +7,7 @@ import { useCopyPath } from "../components/useCopyPath";
 import { useHostPathActions } from "../components/useHostPathActions";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
+import { focusRowControl } from "./focusRow";
 
 /** The live directory behind the displayed rows: the worktree a branch is checked out in, or the
  * project's directory when it is checked out nowhere. Historical rows act on today's files. */
@@ -38,11 +39,19 @@ export function RowActions({ path, name, directory = false, reserve = false, con
       },
     );
   }
+  // The tree takes focus to the row as a menu closes, while a menu opened from the keyboard is to
+  // give it back to its Actions button.
+  const returnFocusToTrigger = (trigger: HTMLElement | null) => {
+    const row = trigger?.closest<HTMLElement>("[role=row][data-key]");
+    const key = row?.dataset.key;
+    if (trigger && row && key) focusRowControl(row.closest<HTMLElement>("[role=treegrid]"), key, trigger);
+  };
   return (
     <RowControls reserve={reserve} className="ms-auto">
       <ActionMenu
         label={t(directory ? "browser.directory.actions" : "browser.row.actions", { name: isolate(name) })}
         contextTargetRef={contextTargetRef}
+        onClosed={returnFocusToTrigger}
         items={items}
       />
     </RowControls>

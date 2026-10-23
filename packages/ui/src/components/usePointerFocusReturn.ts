@@ -20,6 +20,8 @@ export function usePointerFocusReturn(): {
    * `previous` stands in for the focus when it is known to be elsewhere than where it now sits. */
   notePress: (previous?: HTMLElement) => void;
   opened: (isOpen: boolean) => { previous: HTMLElement | null } | undefined;
+  /** Whether the popup `opened` last settled as open was opened by a pointer, until it closes. */
+  isPointerOpened: () => boolean;
 } {
   // Held only until the press ends; if the press opened the popup it moves to `restoreRef`, so a
   // press that never opens it (dragged off the trigger) leaves nothing behind.
@@ -59,5 +61,5 @@ export function usePointerFocusReturn(): {
     return restore ?? undefined;
   };
 
-  return { onPointerDownCapture, notePress, opened };
+  return { onPointerDownCapture, notePress, opened, isPointerOpened: () => restoreRef.current !== null };
 }

@@ -337,7 +337,11 @@ function LoadedMenuItems({ load }: { load: () => Promise<ActionMenuEntry[]> }): 
 
 /** The entries of a menu given as a function, read when the menu opens (the popover mounts its content
  * then), so that what they judge against the clock is the time they are looked at. */
-function ResolvedMenuItems({ source }: { source: ActionMenuEntry[] | (() => ActionMenuEntry[]) }): React.ReactElement {
+function ResolvedMenuItems({ source, onGone }: { source: ActionMenuEntry[] | (() => ActionMenuEntry[]); onGone: () => void }): React.ReactElement {
+  // The popover unmounts its content only once its exit animation has run, which is when the menu
+  // has really left the page.
+  const goneRef = useLatest(onGone);
+  useEffect(() => () => goneRef.current(), [goneRef]);
   return <MenuItems entries={typeof source === "function" ? source() : source} />;
 }
 
@@ -350,6 +354,7 @@ export function ActionMenu({
   contextTargetRef,
   contextOnly = false,
   onContextOpen,
+  onClosed,
 }: {
   label: string;
   /** The entries, or a function that makes them when the menu opens. */
@@ -368,6 +373,11 @@ export function ActionMenu({
   contextOnly?: boolean;
   /** Refreshes actions before opening; runs before the target's own context menu handler. */
   onContextOpen?: () => void;
+  /** Called once the menu has closed and its popover has left the page (after its exit animation),
+   * so focus has gone wherever the closing put it. It is given the trigger when the menu was opened
+   * from the keyboard, that is while the trigger held focus, and no pointer press came before the
+   * popover was gone; `null` otherwise. Not called when this menu unmounts first. */
+  onClosed?: (keyboardTrigger: HTMLElement | null) => void;
 }): React.ReactElement {
   const t = useT();
   const contextOpenRef = useLatest(onContextOpen);
@@ -377,6 +387,35 @@ export function ActionMenu({
   // Set only for a pointer-opened menu: react-aria returns focus to the trigger when a menu closes,
   // which is right for the keyboard but would pull it off the terminal for the mouse.
   const pointerFocus = usePointerFocusReturn();
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const isOpenRef = useRef(false);
+  const onClosedRef = useLatest(onClosed);
+  // For `onClosed`: the trigger, while the menu (open, or closing) was opened from it with the keyboard,
+  // and the listener that drops it at a pointer press.
+  const keyboardOpenRef = useRef<{ trigger: HTMLElement; listeners: AbortController } | null>(null);
+  const settleKeyboardOpen = () => {
+    keyboardOpenRef.current?.listeners.abort();
+    keyboardOpenRef.current = null;
+  };
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      settleKeyboardOpen();
+    };
+  }, []);
+  const onPopoverGone = () => {
+    // React StrictMode remounts the content of a menu that is still open; that is no close.
+    if (isOpenRef.current) return;
+    const trigger = keyboardOpenRef.current?.trigger ?? null;
+    settleKeyboardOpen();
+    // After the rest of the commit that took the popover away, which unmounts this menu too when its
+    // row went away.
+    queueMicrotask(() => {
+      if (mountedRef.current) onClosedRef.current?.(trigger);
+    });
+  };
 
   // Counted into `openMenus`. A row can unmount with its menu open (the session it belongs to is
   // deleted), which reports no close, so the unmount settles the count too.
@@ -390,10 +429,25 @@ export function ActionMenu({
 
   const onOpenChange = (open: boolean) => {
     setIsOpen(open);
+    isOpenRef.current = open;
     countOpen(open);
-    if (open) menuFocusToRestore = null;
     const restore = pointerFocus.opened(open);
-    if (open) return;
+    if (open) {
+      menuFocusToRestore = null;
+      settleKeyboardOpen();
+      // Opened from the keyboard, the menu opens from its focused trigger. react-aria focuses the
+      // trigger for a pointer press too, so it is the pointer's own record that tells them apart. The
+      // popover is portalled, so the wrapper holds nothing but the trigger.
+      const active = document.activeElement;
+      if (!pointerFocus.isPointerOpened() && active instanceof HTMLElement && wrapperRef.current?.contains(active)) {
+        const listeners = new AbortController();
+        // A pointer press (on the page, dismissing the menu, or on an item) hands the menu over to
+        // the pointer, whose focus is where it pressed.
+        document.addEventListener("pointerdown", settleKeyboardOpen, { capture: true, signal: listeners.signal });
+        keyboardOpenRef.current = { trigger: active, listeners };
+      }
+      return;
+    }
     setPointerAt(null);
     const previous = restore?.previous;
     // Offered at once to a menu opened in the same gesture (a right-click on another row closes this
@@ -487,6 +541,7 @@ export function ActionMenu({
     // inline it sits on the baseline of a line box taller than itself, a pixel above the centre of
     // its row.
     <div
+      ref={wrapperRef}
       className={`flex sidebar-fills ${className}`}
       onClick={(e) => e.stopPropagation()}
       onPointerDownCapture={pointerFocus.onPointerDownCapture}
@@ -514,7 +569,7 @@ export function ActionMenu({
             departure from the ARIA rule that a dialog has a name: it only wraps the named menu, so a
             name would just repeat it. The empty value wins over react-aria's and refers to nothing. */}
         <Dropdown.Popover aria-labelledby="" className="min-w-48 max-w-72" getTargetRect={pointerAt ? () => new DOMRect(pointerAt.x, pointerAt.y, 0, 0) : undefined}>
-          <ResolvedMenuItems source={items} />
+          <ResolvedMenuItems source={items} onGone={onPopoverGone} />
         </Dropdown.Popover>
       </Dropdown>
     </div>

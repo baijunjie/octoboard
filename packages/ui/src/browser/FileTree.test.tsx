@@ -282,3 +282,92 @@ it("opens a failed folder's reason from the mark without listing the folder agai
   press(row, "ArrowRight");
   expect(document.activeElement).toBe(mark);
 });
+
+/** Opens the Actions menu of `row` from the keyboard (Right to its button, then Enter) and returns
+ * the button and the menu's first item, which holds focus. */
+function openActionsFromKeyboard(row: HTMLElement) {
+  const actions = row.querySelector<HTMLButtonElement>("button[aria-haspopup]")!;
+  act(() => row.focus());
+  press(row, "ArrowRight");
+  expect(document.activeElement).toBe(actions);
+  press(actions, "Enter");
+  const item = document.querySelector<HTMLElement>("[role=menuitem]")!;
+  expect(document.activeElement).toBe(item);
+  return { actions, item };
+}
+
+/** Lets the menu's popover go and the focus moves after it run: the return to the Actions button two
+ * animation frames on, and react-aria's own moves, which wait for renders in between. */
+async function settle() {
+  for (let i = 0; i < 5; i++) await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+}
+
+it.each(["Escape", "Enter"])("returns focus to a row's Actions button when its keyboard-opened menu closes on %s", async (key) => {
+  const writeText = vi.fn(async () => {});
+  const container = render([fileNode("a.ts", false)], { clipboard: { writeText } });
+  const { actions, item } = openActionsFromKeyboard(container.querySelector<HTMLElement>("[role=row]")!);
+  press(item, key);
+  await vi.waitFor(() => expect(document.activeElement).toBe(actions));
+  expect(document.querySelector("[role=menu]")).toBeNull();
+  expect(writeText).toHaveBeenCalledTimes(key === "Enter" ? 1 : 0);
+});
+
+it("does not pull focus to a removed row's Actions button as a keyboard-opened menu closes", async () => {
+  let removeFirst = () => {};
+  function Files() {
+    const [nodes, setNodes] = useState([fileNode("a.ts", false), fileNode("b.ts", false)]);
+    removeFirst = () => setNodes([fileNode("b.ts", false)]);
+    return <FileTree nodes={nodes} expanded={new Set()} label="Files" onExpandedChange={() => {}} onOpenFile={() => {}} onRetry={() => {}} treeRef={() => {}} />;
+  }
+  const container = mountRows(<Files />, { clipboard: { writeText: async () => {} } });
+  const { item } = openActionsFromKeyboard(container.querySelector<HTMLElement>(`[role=row][data-key="${rowKey("a.ts")}"]`)!);
+  act(() => removeFirst());
+  press(item, "Escape");
+  await settle();
+  expect(document.querySelector("[role=menu]")).toBeNull();
+  // The menu went with its row and focus with the menu; the list, which did not hold focus, leaves it.
+  expect(document.activeElement).toBe(document.body);
+});
+
+it("leaves focus where it was put once a keyboard-opened menu closed", async () => {
+  const container = render([fileNode("a.ts", false)], { clipboard: { writeText: async () => {} } });
+  const outside = document.body.appendChild(document.createElement("button"));
+  onTestFinished(() => outside.remove());
+  const { item } = openActionsFromKeyboard(container.querySelector<HTMLElement>("[role=row]")!);
+  press(item, "Escape");
+  act(() => outside.focus());
+  await settle();
+  expect(document.activeElement).toBe(outside);
+});
+
+it("leaves focus on the row when a pointer press on it dismisses a keyboard-opened menu", async () => {
+  const container = render([fileNode("a.ts", false)], { clipboard: { writeText: async () => {} } });
+  const row = container.querySelector<HTMLElement>("[role=row]")!;
+  openActionsFromKeyboard(row);
+  const cell = row.querySelector<HTMLElement>("[role=gridcell]")!;
+  act(() => {
+    cell.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 1, pointerType: "mouse" }));
+    cell.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0, pointerId: 1, pointerType: "mouse" }));
+    cell.click();
+  });
+  await settle();
+  expect(document.querySelector("[role=menu]")).toBeNull();
+  expect(document.activeElement).toBe(row);
+});
+
+it("gives focus back to the row when a menu opened with the pointer from a focused row closes", async () => {
+  const container = render([fileNode("a.ts", false)], { clipboard: { writeText: async () => {} } });
+  const row = container.querySelector<HTMLElement>("[role=row]")!;
+  const actions = row.querySelector<HTMLButtonElement>("button[aria-haspopup]")!;
+  act(() => row.focus());
+  act(() => {
+    actions.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    actions.click();
+  });
+  const item = document.querySelector<HTMLElement>("[role=menuitem]")!;
+  act(() => item.focus());
+  press(item, "Escape");
+  await settle();
+  expect(document.querySelector("[role=menu]")).toBeNull();
+  expect(document.activeElement).toBe(row);
+});
