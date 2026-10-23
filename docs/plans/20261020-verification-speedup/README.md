@@ -26,7 +26,7 @@ The test suites and gallery scenarios have also grown without a review for redun
    each milestone that changes performance measures its own before and after instead.
 2. Apply the cheap configuration changes (caches, timeouts, build profile, the desktop test sidecar).
 3. Run only the checks a change can affect, through one script, and verify each tree only once.
-4. Share Rust compilation across worktrees.
+4. (Dropped.) Share Rust compilation across worktrees: a compilation cache measured no clear gain.
 5. Split the slowest UI test files and find out why their tests are slow.
 6. Assess the tests and gallery scenarios for redundancy and clean them up.
 
@@ -39,8 +39,8 @@ The test suites and gallery scenarios have also grown without a review for redun
   tests to CI would need branch pushes and macOS runner minutes.
 - **One command applies the scope rule of `CLAUDE.md`**, not each agent's judgement, so no one misses a coupling by
   hand; it adds no rules of its own, and the full suite stays available on request.
-- **No shared `CARGO_TARGET_DIR`** across worktrees: concurrent agents would queue on cargo's build lock. Sharing
-  goes through a compilation cache instead.
+- **No shared `CARGO_TARGET_DIR`** across worktrees: concurrent agents would queue on cargo's build lock. A
+  shared compilation cache (sccache) was tried and dropped: it measured no clear gain.
 - **The desktop crate's tests must not need a release build of the daemon**, while a real run of the app without a
   built sidecar must still fail loudly, as today. The route is a config override, used only for tests, that drops
   `externalBin`, so desktop tests need no daemon build.
@@ -55,6 +55,6 @@ The test suites and gallery scenarios have also grown without a review for redun
 1. 01 Measure the baseline (dropped)
 2. 02 Cheap configuration changes (closed)
 3. 03 Scoped verification (closed)
-4. [04 Shared Rust compilation](04-shared-rust-compilation.md)
+4. 04 Shared Rust compilation (closed)
 5. [05 Split the slowest UI test files](05-split-the-slowest-ui-test-files.md)
 6. [06 Prune redundant tests and gallery scenarios](06-prune-redundant-tests-and-gallery-scenarios.md)
