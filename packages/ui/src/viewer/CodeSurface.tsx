@@ -52,7 +52,7 @@ export function PlainText({
     style: { backgroundColor: colours.background, color: colours.foreground },
     // `overflow-auto` rather than the fade's own `overflow-y` alone: unwrapped lines scroll
     // sideways too, and the fade is the vertical one either way.
-    className: `min-h-0 flex-1 overflow-auto rounded-xl p-3 font-mono text-xs leading-5 ${wrap ? "break-words whitespace-pre-wrap" : "whitespace-pre"}`,
+    className: `min-h-0 flex-1 overflow-auto p-3 font-mono text-xs leading-5 ${wrap ? "break-words whitespace-pre-wrap" : "whitespace-pre"}`,
   });
   const pre = fade.ref;
   const scrolledTo = useRef<string>(undefined);
@@ -115,7 +115,7 @@ function CodeFrame({
   const fade = useScrollFade({
     region: frame.region,
     style: { backgroundColor: CODE_THEMES[theme].background },
-    className: "relative min-h-0 flex-1 overflow-auto rounded-xl",
+    className: "relative min-h-0 flex-1 overflow-auto",
   });
   const [drawnFor, setDrawnFor] = useState<string>();
   const onDrawn = useCallback(() => setDrawnFor(resetKey), [resetKey]);

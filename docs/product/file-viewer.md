@@ -12,6 +12,9 @@ one change, at a time. It is opened from three places:
 
 Nothing can be edited or saved in it.
 
+A full-width groove below the file-path and details row separates the header from the content. The content fills
+the remaining lower area to the dialog's edges, with reading padding inside the code, document or image view.
+
 ## The header
 
 The header has three parts, one under the other:

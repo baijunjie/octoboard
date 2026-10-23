@@ -39,6 +39,8 @@ function readingCss(theme: "light" | "dark"): string {
   return `:host { --diffs-bg: ${CODE_THEMES[theme].background}; }`;
 }
 
+const FLUSH_TOP_CSS = "[data-code], [data-diff-type=\"split\"] { padding-top: 0 !important; }";
+
 /**
  * Diff colours that keep every token at 4.5:1 and mark a change by more than colour. The library
  * marks a changed word with a tint over the changed line's tint, and in the light appearance the
@@ -65,6 +67,7 @@ function diffCss(theme: "light" | "dark"): string {
          [data-line-type="change-deletion"][data-column-number] { background-color: #ffd7d5 !important; }`
       : "";
   return `${readingCss(theme)}
+    ${FLUSH_TOP_CSS}
     ${lineTints}
     /* In the code column (\`[data-content]\`), whose parent \`[data-code]\` is the scroll container when
        lines are not wrapped. Sticky, like the gutter the label and chevrons sit in, so it stays at the visible
@@ -284,7 +287,7 @@ export const HighlightedFile = memo(function HighlightedFile({
   const selection = useMemo(() => (line === undefined ? undefined : { start: line, end: line }), [line]);
   const onPostRender = useDrawnCallback(onDrawn);
   const options = useMemo(
-    () => ({ ...BASE_OPTIONS, themeType: theme, overflow: overflowOption(wrap), disableLineNumbers: !lineNumbers, unsafeCSS: readingCss(theme), onPostRender }) as const,
+    () => ({ ...BASE_OPTIONS, themeType: theme, overflow: overflowOption(wrap), disableLineNumbers: !lineNumbers, unsafeCSS: readingCss(theme) + (lineNumbers ? FLUSH_TOP_CSS : ""), onPostRender }) as const,
     [theme, wrap, lineNumbers, onPostRender],
   );
   return (

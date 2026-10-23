@@ -1,20 +1,11 @@
-import { Surface } from "@heroui/react";
 import React from "react";
 
-/**
- * The HeroUI tertiary surface bounds each reading frame from the dialog. Its narrow band also
- * encloses the image checkerboard without changing the image's colours.
- *
- * It also draws the ring of the focused frame it holds, from the state the frame passes as
- * `focused`: the frame's own fade is a mask that clips by its border box, so a ring on the frame
- * itself, which sits outside that box, is cut off. The ring is the project's usual one (2px
- * `--focus`) and is painted outside this band rather than inside it, so the room it needs is the gap
- * the dialog's body leaves around the band, not the band's own padding.
- */
+/** The focus ring sits above the scrolling child's fade mask and inside the frame, so it remains
+ * visible where the reading area meets the dialog's clipped edges. */
 export function FrameSurface({ children, focused }: { children: React.ReactNode; focused?: boolean }): React.ReactElement {
   return (
-    <Surface variant="tertiary" className={`flex min-h-0 flex-1 flex-col rounded-2xl p-1 ${focused ? "ring-2 ring-focus" : ""}`}>
+    <div className={`relative isolate flex min-h-0 min-w-0 flex-1 flex-col ${focused ? "after:pointer-events-none after:absolute after:inset-0 after:z-10 after:ring-2 after:ring-focus after:ring-inset" : ""}`}>
       {children}
-    </Surface>
+    </div>
   );
 }

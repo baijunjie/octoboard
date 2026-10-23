@@ -243,7 +243,7 @@ export function FileViewer({
           // Rendered only while there is a source, so a subject without one loses no height. The muted
           // colour is set here rather than inherited: the dialog's header carries none of its own, and
           // this line is the subject's metadata, not a second title.
-          <div data-viewer-subtitle="" className="col-span-full flex min-w-0 items-center ps-[calc(var(--pane-inset)+0.25rem)] text-xs text-app-muted">
+          <div data-viewer-subtitle="" className="col-span-full flex min-w-0 items-center text-xs text-app-muted">
             <FadeOverflow
               as="span"
               className="min-w-0"
@@ -258,7 +258,7 @@ export function FileViewer({
       footer={null}
       resetKey={subject.key}
     >
-      <div ref={headerRef} data-viewer-description="" className="flow-root min-h-8 min-w-0 shrink-0 px-(--pane-inset) text-xs leading-8">
+      <div ref={headerRef} data-viewer-description="" className="flow-root min-h-8 min-w-0 shrink-0 groove-b px-6 text-xs leading-8">
         {/* Copy path, then fixed places for the Markdown view choice, the layout choice and the
             wrap choice, then File manager and Default application, so Tab order matches the screen
             whichever mounts first.
@@ -290,11 +290,13 @@ export function FileViewer({
         )}
         {renamedFrom !== undefined && <RenamedFrom path={renamedFrom} />}
       </div>
-      <ControlsSlot value={controls}>
-        <MarkdownLocationProvider value={{ path: subject.path, ...location }}>
-          <ViewerContentView subject={subject} name={name} layout={layout} onLayoutChange={diffLayout.set} line={line} />
-        </MarkdownLocationProvider>
-      </ControlsSlot>
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
+        <ControlsSlot value={controls}>
+          <MarkdownLocationProvider value={{ path: subject.path, ...location }}>
+            <ViewerContentView subject={subject} name={name} layout={layout} onLayoutChange={diffLayout.set} line={line} />
+          </MarkdownLocationProvider>
+        </ControlsSlot>
+      </div>
     </Dialog>
   );
 }
@@ -544,7 +546,7 @@ function ImageView({
   }
   return (
     <FrameSurface>
-      <div className="viewer-checkerboard flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-xl p-2">
+      <div className="viewer-checkerboard flex min-h-0 flex-1 items-center justify-center overflow-hidden p-2">
         {/* The `error` event is the signal: an image's size is no test (an SVG with only a `viewBox`
             has none of its own) and `decode()` has wrongly rejected valid SVGs in older WebKit. */}
         <img src={body.url} alt={name} onError={() => setFailed(true)} className="max-h-full max-w-full object-contain" />

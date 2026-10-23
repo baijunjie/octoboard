@@ -84,7 +84,7 @@ function DocumentSurface({
   const fade = useScrollFade({
     region,
     style: { backgroundColor: colours.background, color: colours.foreground },
-    className: "relative min-h-0 flex-1 overflow-auto rounded-xl p-4 text-sm leading-6",
+    className: "relative min-h-0 flex-1 overflow-auto p-4 text-sm leading-6",
   });
   // Stable across the caller's renders. A new callback would mount every link and diagram again,
   // and take the focus of a link with it, whenever the frame gains or loses its focus ring.

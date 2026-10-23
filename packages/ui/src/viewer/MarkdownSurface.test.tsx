@@ -121,7 +121,6 @@ it("opens a Markdown file as a document, with the choice in the header's control
   expect(region().querySelector("table th")?.textContent).toBe("Name");
   expect(region().getAttribute("aria-label")).toBe(`Contents of ${isolate("README.md")}`);
   expect(region().tabIndex).toBe(0);
-  expect(region().parentElement?.classList.contains("surface--tertiary")).toBe(true);
   expect(choice("Show source").closest("[data-viewer-description]")).not.toBeNull();
   expect(choice("Show source").getAttribute("aria-pressed")).toBe("false");
   // The document needs no wrap choice: its code is always wrapped.

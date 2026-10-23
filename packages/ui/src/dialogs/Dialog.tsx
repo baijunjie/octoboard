@@ -270,9 +270,9 @@ export function Dialog({
             cut off. The ring is the project's usual one (2px `--focus`), from the scroller's own state. */}
       <Frame.Body
         id={bodyId}
-        className={`flex flex-col overflow-y-visible rounded-lg ${region.focused ? "ring-2 ring-focus" : ""}`}
+        className={size === "viewer" ? `relative m-0 flex flex-col overflow-hidden p-0 ${region.focused ? "after:pointer-events-none after:absolute after:inset-0 after:z-10 after:ring-2 after:ring-focus after:ring-inset" : ""}` : `flex flex-col overflow-y-visible rounded-lg ${region.focused ? "ring-2 ring-focus" : ""}`}
       >
-        <FadedScroller region={region} className="flex min-h-0 flex-1 flex-col gap-4 p-1">
+        <FadedScroller region={region} className={size === "viewer" ? "flex min-h-0 flex-1 flex-col" : "flex min-h-0 flex-1 flex-col gap-4 p-1"}>
           {children}
         </FadedScroller>
       </Frame.Body>
@@ -299,7 +299,7 @@ export function Dialog({
       {/* HeroUI places the close button over the header's end without reserving room for it, so
           the heading is padded clear of it; a long title (a session's name, say) has to wrap
           anywhere, since a name with no place to break would run out of the dialog. */}
-      <Frame.Header className={headerLeading ? "grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-1 pe-6" : subtitle ? "gap-1 pe-6" : "pe-6"}>
+      <Frame.Header className={`${size === "viewer" ? "mx-6 mt-6 " : ""}${headerLeading ? "grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-1 pe-6" : subtitle ? "gap-1 pe-6" : "pe-6"}`}>
         {headerLeading}
         <Frame.Heading className="min-w-0 [overflow-wrap:anywhere]">{title as BodyChildren}</Frame.Heading>
         {subtitle}
@@ -326,7 +326,7 @@ export function Dialog({
           aria-describedby={alert ? bodyId : undefined}
           className={
             size === "viewer"
-              ? "control-fills h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[calc(100vw-32px)] max-w-none docked:h-[calc(100dvh-80px-var(--bottom-chrome-height))] docked:w-[min(1440px,calc(100vw-80px))]"
+              ? "control-fills overflow-hidden p-0 h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[calc(100vw-32px)] max-w-none docked:h-[calc(100dvh-80px-var(--bottom-chrome-height))] docked:w-[min(1440px,calc(100vw-80px))]"
               : size === "wide"
                 ? "control-fills max-w-3xl"
                 : "control-fills"
