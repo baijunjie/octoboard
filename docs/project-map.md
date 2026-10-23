@@ -27,6 +27,9 @@ Per-package commands are in that package's doc.
 
 - [`eslint.config.mjs`](../eslint.config.mjs) — the repository-wide JavaScript, TypeScript, TSX and Vue lint and
   formatting rules, combining ESLint, Stylistic, TypeScript, Vue and React Hooks checks.
+- [`patches/`](../patches/) — the pnpm dependency patches that `patchedDependencies` in `pnpm-workspace.yaml` registers,
+  applied on `pnpm install`; the patch for `@asamuzakjp/dom-selector` (the selector engine of the jsdom behind the
+  `packages/ui` tests) is the only one, and the reason and removal condition are in the comment above that entry.
 - [`rustfmt.toml`](../rustfmt.toml) — the formatting configuration shared by both Cargo workspace crates.
 - [`.github/workflows/quality.yml`](../.github/workflows/quality.yml) — the CI checks for ESLint and Rust formatting.
 - [`config/app.json`](../config/app.json) — the single source for product identity, repository and issue-report destinations,

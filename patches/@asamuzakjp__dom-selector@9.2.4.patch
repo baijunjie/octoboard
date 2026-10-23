@@ -1,0 +1,25 @@
+diff --git a/src/js/utility.js b/src/js/utility.js
+index 160f2884703bffffb604fe7afb7fbda0ff733d55..09ddc75e743d24778410ba2950362198dbd2c846 100644
+--- a/src/js/utility.js
++++ b/src/js/utility.js
+@@ -318,6 +318,10 @@ export const getSlottedTextContent = node => {
+   return node.textContent.trim();
+ };
+ 
++// Every bidiFactory() call returns a new instance, which parses its Unicode data again on first
++// use; sharing one parses it once per process rather than once per element checked.
++let bidi;
++
+ /**
+  * Get directionality of a node.
+  * @see https://html.spec.whatwg.org/multipage/dom.html#the-dir-attribute
+@@ -336,7 +340,8 @@ export const getDirectionality = (node, dirCache = new WeakMap()) => {
+     return dirCache.get(node);
+   }
+   const { dir: dirAttr, localName, parentNode } = node;
+-  const { getEmbeddingLevels } = bidiFactory();
++  bidi ??= bidiFactory();
++  const { getEmbeddingLevels } = bidi;
+   let result = 'ltr';
+   if (dirAttr === 'ltr' || dirAttr === 'rtl') {
+     result = dirAttr;

@@ -6,3 +6,11 @@ packages:
 # verify its platform binary.
 onlyBuiltDependencies:
   - esbuild
+
+# jsdom's `getComputedStyle` matches its default stylesheet's `[dir]:dir(ltr)` rule, and its selector engine
+# (`@asamuzakjp/dom-selector`) builds a new bidi-js instance for every `dir="auto"` element it checks, which
+# parses the whole Unicode bidi table again: 13-19 % of the CPU of the UI's dialog tests. The patch shares one
+# instance.
+# TODO: drop the patch once jsdom depends on a dom-selector release that shares one bidi-js instance.
+patchedDependencies:
+  '@asamuzakjp/dom-selector@9.2.4': patches/@asamuzakjp__dom-selector@9.2.4.patch

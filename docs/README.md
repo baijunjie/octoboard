@@ -374,8 +374,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   in characters rather than bytes.
 - [Measuring build and test speed](memory/measuring-build-and-test-speed.md) — judging a speed change by CPU time and
   output size, measured back to back at a similar load and counting every process that does the work, never by
-  wall-clock time on a shared machine; and why a shared Rust compilation cache (sccache) across worktrees was measured
-  and dropped.
+  wall-clock time on a shared machine, against a control worktree at the base commit; why a shared Rust compilation
+  cache (sccache) across worktrees was measured and dropped; and how to profile a slow UI test file and when splitting
+  one is worth it (only a file that dominates the run, since splitting does not cut CPU).
 - [Probing agent CLIs](memory/probing-agent-clis.md) — how to establish what the three agent CLIs actually do, and how
   to probe a live Octoboard session that launches them: which session markers to strip and why enumerating them beats
   matching a prefix, why neither `--help`, the binary's own strings, nor a config file's silent acceptance of a

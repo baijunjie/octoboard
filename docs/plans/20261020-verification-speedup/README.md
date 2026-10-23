@@ -56,5 +56,5 @@ The test suites and gallery scenarios have also grown without a review for redun
 2. 02 Cheap configuration changes (closed)
 3. 03 Scoped verification (closed)
 4. 04 Shared Rust compilation (closed)
-5. [05 Split the slowest UI test files](05-split-the-slowest-ui-test-files.md)
+5. 05 Split the slowest UI test files (closed)
 6. [06 Prune redundant tests and gallery scenarios](06-prune-redundant-tests-and-gallery-scenarios.md)

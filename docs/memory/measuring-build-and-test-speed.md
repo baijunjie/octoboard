@@ -8,6 +8,9 @@ time on such a machine follows the other sessions' load rather than the change: 
 load average has moved between about 15 and 170.
 
 - Run the before and the after back to back, at least two pairs, and record the load average with every run.
+- Run the before side in a temporary detached worktree at the change's base commit, with its own
+  `pnpm install --offline`, not on the local `main`, which other sessions keep moving. To isolate a dependency patch,
+  apply and remove it in that worktree, reinstalling between runs. Remove the worktree afterwards.
 - Compare CPU time (user plus system) and, for a build, the size of what it produces; treat a difference no larger than
   the spread between repeat runs of the same side as no gain.
 - CPU time rises with load too, if less than wall-clock time: the same cold build cost about 24 % more CPU at a load
@@ -34,3 +37,20 @@ another worktree's `target/` is a separate approach this measurement does not co
 - Run the sccache server in the foreground under its own `time` on macOS
   (`SCCACHE_START_SERVER=1 SCCACHE_NO_DAEMON=1 /usr/bin/time -l sccache &`, then `sccache --stop-server` after the
   build). Never set `SCCACHE_NO_DAEMON=1` on the build command itself: cargo then waits forever on a server it forked.
+
+## Profile a slow UI test file before splitting it, and split only a file that dominates the run
+
+Applies to speeding up the `packages/ui` test run (`vitest` under jsdom). Splitting a file moves its cost rather than
+cutting it: each new file pays for its own jsdom environment and module imports. Splitting the four slowest files left
+the run's CPU unchanged (about 436-462 s after, 436-438 s before) and its wall time within the noise; what changed was
+the longest file, from about 14 % of the summed file time to at most 4 %.
+
+- Profile the file on its own first, from `packages/ui`:
+  `npx vitest run <file> --execArgv=--cpu-prof --execArgv=--cpu-prof-dir=<dir>` writes one profile per file, and
+  `--reporter=json --outputFile=<path> --includeTaskLocation` gives each test's duration. A hotspot found there (a
+  dependency, a shared test helper) is fixed where it lives and helps every file; a file slow only because it holds
+  many tests is the one to split. Time a test spends idle in a required wait costs no CPU, and a parallel run absorbs
+  it.
+- Choose files by their share of the summed file time in a whole-suite run, not by seconds: under the suite's own
+  parallel load a file takes about 2-3 times as long as it does alone.
+- Split only a file that dominates by that share, and leave small files whole.
