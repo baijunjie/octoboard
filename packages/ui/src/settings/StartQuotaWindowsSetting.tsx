@@ -1,5 +1,6 @@
 import React from "react";
 
+import { HelpTip } from "../components/HelpTip";
 import { errorPresentation } from "../errorPresentation";
 import { useT } from "../i18n/react";
 import { useDaemon, useDaemonStore } from "../store";
@@ -18,6 +19,12 @@ export function StartQuotaWindowsSetting(): React.ReactElement {
     void request({ type: "update_settings", auto_start_quota_windows: value }).catch((err) => toastError(errorPresentation(err as Error)));
 
   return (
-    <SwitchSettingRow label={t("settings.startQuotaWindows.label")} description={description} isSelected={enabled} onChange={setEnabled} />
+    <SwitchSettingRow
+      label={t("settings.startQuotaWindows.label")}
+      help={<HelpTip label={t("settings.startQuotaWindows.help")}>{t("settings.startQuotaWindows.helpText")}</HelpTip>}
+      description={description}
+      isSelected={enabled}
+      onChange={setEnabled}
+    />
   );
 }

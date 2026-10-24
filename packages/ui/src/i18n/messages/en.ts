@@ -1687,9 +1687,12 @@ export const en = {
     "A new session uses the account whose weekly quota resets soonest, so quota that is about to reset is used before it is lost.",
   "settings.startQuotaWindows.label": "Start usage windows automatically",
   "settings.startQuotaWindows.description.off":
-    "Once this is on, when a usage window has reset but has not started counting, one small request is sent on that account with the agent's cheapest model to start it, so its countdown shows and its next reset is not pushed later. The request uses a little of the account's quota.",
+    "Once this is on, a usage window starts counting once it resets. This uses a little of the account's quota.",
   "settings.startQuotaWindows.description.on":
-    "When a usage window has reset but has not started counting, one small request is sent on that account with the agent's cheapest model to start it, so its countdown shows and its next reset is not pushed later. The request uses a little of the account's quota.",
+    "A usage window starts counting once it resets. This uses a little of the account's quota.",
+  "settings.startQuotaWindows.help": "About starting usage windows automatically",
+  "settings.startQuotaWindows.helpText":
+    "A usage window that has reset does not start counting until the account's next request; until then it shows no countdown, and the longer it waits, the later its next reset comes. With this on, one small request is sent on that account with the agent's cheapest model to start it.",
   "settings.background.label": "Keep running in the background when the window is closed",
   "settings.background.description.off":
     "Once this is on, closing the window keeps sessions and their agents running and notifications arriving. The menu bar icon brings the window back.",

@@ -154,10 +154,13 @@ An explanation can be split: the part of either kind above goes into the help ti
 tip sits at the end of the line it explains, beside the label rather than inside it, so the name announced for that
 label or field does not include it. A section heading carries no help tip.
 
-Help tips are used in five places:
+Help tips are used in six places:
 
 - Settings' **Automatically pull repositories** row, at the end of the row's name: that the remote is checked every few
   minutes whichever way the switch is set (see "Git" in `docs/product/settings.md`);
+- Settings' **Start usage windows automatically** row in the Agent accounts section, at the end of the row's name: why a
+  usage window that has reset waits for the account's next request before it starts counting, and how the switch starts
+  it (see "Start usage windows automatically" in `docs/product/settings.md`);
 - the project dialog's **Default agent** field while associating a parent directory, beside the field's label: what
   "Detect from files" looks for in each repository and what happens to one it cannot decide on (see "The project's
   default agent" in `docs/product/projects.md`);

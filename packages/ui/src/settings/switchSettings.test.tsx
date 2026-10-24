@@ -37,7 +37,7 @@ const switches = [
   { Setting: AutoApproveSessionRequestsSetting, key: "auto_approve_session_requests", onText: "without asking you first" },
   { Setting: AutoSelectAccountSetting, key: "auto_select_account", onText: "whose weekly quota resets soonest" },
   { Setting: SidebarOrderSetting, key: "sidebar_order_by_status", onText: "move as their status changes" },
-  { Setting: StartQuotaWindowsSetting, key: "auto_start_quota_windows", onText: "has not started counting" },
+  { Setting: StartQuotaWindowsSetting, key: "auto_start_quota_windows", onText: "starts counting once it resets" },
 ];
 
 function mount(Setting: () => React.ReactElement) {

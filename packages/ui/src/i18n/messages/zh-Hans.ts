@@ -1532,9 +1532,12 @@ export const zhHans: Translation<"other"> = {
     "新建会话使用周额度最快重置的账户，以免即将重置的额度被浪费。",
   "settings.startQuotaWindows.label": "自动启动用量窗口",
   "settings.startQuotaWindows.description.off":
-    "开启后，当某个用量窗口已重置但尚未开始计时，会在该账户上用智能体最便宜的模型发送一次很小的请求来启动它，这样就会显示倒计时，下一次重置也不会被推迟。该请求会消耗账户的少量额度。",
+    "开启后，用量窗口一重置就会开始计时。这会消耗账户的少量额度。",
   "settings.startQuotaWindows.description.on":
-    "当某个用量窗口已重置但尚未开始计时，会在该账户上用智能体最便宜的模型发送一次很小的请求来启动它，这样就会显示倒计时，下一次重置也不会被推迟。该请求会消耗账户的少量额度。",
+    "用量窗口一重置就会开始计时。这会消耗账户的少量额度。",
+  "settings.startQuotaWindows.help": "关于自动启动用量窗口",
+  "settings.startQuotaWindows.helpText":
+    "用量窗口重置后，要等到账户的下一次请求才会开始计时；在此之前不显示倒计时，等得越久，下一次重置也越晚。开启后，会在该账户上用智能体最便宜的模型发送一次很小的请求来启动它。",
   "settings.background.label": "关闭窗口后在后台继续运行",
   "settings.background.description.off":
     "开启后，关闭窗口时会话及其智能体会继续运行，通知也会照常送达。点按菜单栏图标即可重新打开窗口。",

@@ -5,7 +5,8 @@ settings fill the right under the section's heading, one row per setting: on the
 it saying what it does — a trusted folder's row has its path alone — and on the right its control. Under a right-to-left
 language the sides swap (see "Right-to-left layout" in `docs/product/window-layout.md`). A section that explains itself
 as a whole does so in a paragraph under its heading, and no section heading has a "?" help tip; help tips are on one
-row in "Git", and in Agent accounts on each agent's default account, on each owned account's sharing switch and on the
+row in "Git", and in Agent accounts on the **Start usage windows automatically** row (see "Start usage windows
+automatically" below), on each agent's default account, on each owned account's sharing switch and on the
 permission-approval headings (see "The default account", "Sharing the default configuration" and "Approval modes" in
 `docs/product/agent-accounts.md`, and "Explanations in help tips" in `docs/product/labels-and-tooltips.md`). The
 sections, in order, are **General**, **Git**, **Agent accounts**, **Trusted folders**, **Permissions**, **Agent
@@ -215,9 +216,12 @@ session already open.
 
 A switch, **off to begin with** — installations from before the switch existed included: whether Octoboard starts a
 usage window that has reset but not begun counting by sending one small request on its account. While the switch is
-off the row's description says what turning it on will do, and while it is on it says what is happening now: such a
-window is started with one small request on that account with the agent's cheapest model, so its countdown shows and
-its next reset is not pushed later, and the request uses a little of the account's quota. The daemon stores it as
+off the row's description says that once it is on, a usage window starts counting once it resets, and while it is on
+that a usage window starts counting once it resets; either way it adds that this uses a little of the
+account's quota. A "?" help tip at the end of the row's name ("About starting usage windows automatically") holds the
+why and how: a usage window that has reset does not start counting until the account's next request, so until then it
+shows no countdown and the longer it waits the later its next reset comes; with the switch on, one small request is sent
+on that account with the agent's cheapest model to start it. The daemon stores it as
 `auto_start_quota_windows` and keeps it, so every window shows the same. A console session can neither read nor change
 it, since it spends the user's quota (see "Who reads and changes what" in `docs/product/agent-settings-tools.md`); a
 full configuration export carries it (see "The application settings a full export carries" in
