@@ -57,7 +57,7 @@ export const DESKTOP_CONTRACT = [
 export const MENU_KEYS_FILE = "packages/ui/src/i18n/messages/en.ts";
 
 // The modules of `scripts/verify/` that the gallery sweep also uses.
-export const SWEEP_SHARED = ["scripts/verify/lock.mjs", "scripts/verify/stamp.mjs", "scripts/verify/tree.mjs"];
+export const SWEEP_SHARED = ["scripts/verify/changes.mjs", "scripts/verify/lock.mjs", "scripts/verify/stamp.mjs", "scripts/verify/tree.mjs"];
 
 export const WIRE_PROTOCOL = ["apps/daemon/PROTOCOL.md", "apps/daemon/src/protocol.rs", "packages/ui/src/protocol.ts"];
 

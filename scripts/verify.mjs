@@ -21,6 +21,7 @@
 // is not run here: `agent-gallery` decides it from the scenarios touched.
 import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
+import { changedFiles, resolveBase } from "./verify/changes.mjs";
 import { acquireSlot } from "./verify/lock.mjs";
 import { MENU_KEYS_FILE, planScope } from "./verify/scope.mjs";
 import { contentKey, readStamp, recordPass, stampDirectory, stepKey } from "./verify/stamp.mjs";
@@ -56,16 +57,6 @@ const toolchain = [
   `rustc ${run("rustc", ["--version"]) ?? "none"}`,
 ];
 
-function resolveBase() {
-  const branch = git("symbolic-ref", "--quiet", "--short", "HEAD");
-  const base = baseArg ?? (branch ? git("config", "--get", `branch.${branch}.forkPoint`) : null);
-  if (!base) return { reason: "no recorded fork point (pass --base <ref>)" };
-  const commit = git("rev-parse", "--verify", "--quiet", `${base}^{commit}`);
-  if (!commit) return { reason: `base ${base} is not readable` };
-  if (git("merge-base", "--is-ancestor", commit, "HEAD") === null) return { reason: `base ${base} is not an ancestor of HEAD` };
-  return { commit };
-}
-
 // The UI's message catalog holds the `menu.*` keys the desktop shell's menu reads, a relation
 // across packages; only a change to one of those lines counts as touching it.
 function changesMenuKeys(base, tree) {
@@ -81,9 +72,11 @@ function plan(base) {
   if (flag("--full")) {
     scope = { mode: "full", reason: "--full", packages: [], advice: [] };
   } else if (!base.commit) {
-    scope = { mode: "full", reason: base.reason, packages: [], advice: [] };
+    // Only this command takes --base, so the hint is added here.
+    const reason = base.noForkPoint ? `${base.reason} (pass --base <ref>)` : base.reason;
+    scope = { mode: "full", reason, packages: [], advice: [] };
   } else {
-    files = (git("diff-tree", "-r", "-z", "--name-only", "--no-renames", base.commit, tree) ?? "").split("\0").filter(Boolean);
+    files = changedFiles(git, base.commit, tree) ?? [];
     const fullFiles = files.includes(MENU_KEYS_FILE) && changesMenuKeys(base.commit, tree) ? [MENU_KEYS_FILE] : [];
     scope = planScope(files, { fullFiles });
   }
@@ -141,7 +134,7 @@ async function runStep(step, key, tree) {
   console.log(`verify: passed ${step.label} in ${Math.round((Date.now() - started) / 1000)}s`);
 }
 
-const base = resolveBase();
+const base = resolveBase(git, baseArg);
 let current = plan(base);
 const describe = (scope) => `verify: scope ${scope.mode} (${scope.reason})`;
 console.log(describe(current.scope));

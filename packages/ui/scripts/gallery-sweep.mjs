@@ -13,6 +13,8 @@
 // chromium`, run from this package (the workspace root resolves another `playwright` or none), fetches
 // the one this version expects, and `--chromium` names any other already on the machine.
 //
+// Without `--lang` the languages follow what the branch changed (`gallery-languages.mjs`).
+//
 // Two things keep a sweep from costing more than it must, both shared with `pnpm verify`
 // (`scripts/verify/`). The page loads take a heavy-step slot of the machine-wide lock, so that sweeps
 // in several worktrees queue instead of together loading the machine. And a page that came out clean
@@ -30,8 +32,13 @@ import { parseArgs } from "node:util";
 import { acquireSlot } from "../../../scripts/verify/lock.mjs";
 import { contentKey, readStamp, recordPasses, stampDirectory, stepKey } from "../../../scripts/verify/stamp.mjs";
 import { idsAt, workingTree } from "../../../scripts/verify/tree.mjs";
+import { languagesFromChanges } from "./gallery-languages.mjs";
 
 const packageDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+/** Every language the app has a catalog for. `--lang all` sweeps all of them, and so does a change that can
+ * reach what differs between languages, a change that cannot be judged, and `--url` without `--lang`. */
+const LANGUAGES_WITH_CATALOGS = ["en", "zh-Hans"];
 
 const USAGE = `Usage: pnpm gallery:sweep [options] [scenario ...]
 
@@ -40,8 +47,13 @@ With no scenario given, every scenario is swept.
 
   scenario              An id, or a pattern with * as a wildcard ("git-*"). Repeatable.
   --group <title>       Only the scenarios of the group whose title contains this text (case-insensitive).
-  --lang <list>         Comma-separated languages, each one the app offers (default: en,zh-Hans, the two
-                        with catalogs).
+  --lang <list>         Comma-separated languages, each one the app offers, or "all" for every language
+                        with a catalog (${LANGUAGES_WITH_CATALOGS.join(", ")}). Without it the languages follow what the branch
+                        changed since its fork point: English alone, unless a changed path can reach what
+                        differs between languages (the i18n code, the gallery machinery, the build or
+                        configuration) or the change cannot be judged (no fork point, as on the target
+                        branch itself; nothing differing from it; git cannot say), when every language is
+                        swept; with --url, every language. The line before the sweep says which and why.
   --theme <name>        light (default), dark or both. A scenario's steps do not depend on the theme, so
                         light settles a step that no longer runs; dark is for a change to colours.
   --jobs <n>            Pages loaded at once (default: ${defaultJobs()}).
@@ -70,7 +82,6 @@ function defaultJobs() {
   return Math.max(1, Math.min(6, Math.round(os.availableParallelism() * 0.6)));
 }
 
-const LANGUAGES_WITH_CATALOGS = ["en", "zh-Hans"];
 /** How long one page may take to run its steps before the sweep gives up on it. */
 const READY_TIMEOUT_MS = 60_000;
 /** What a page is given after it says it is ready, for whatever a step did not wait for (a lazily loaded
@@ -121,8 +132,9 @@ function parse() {
     console.log(USAGE);
     process.exit(0);
   }
-  const languages = [...new Set((values.lang ?? LANGUAGES_WITH_CATALOGS.join(",")).split(",").map((s) => s.trim()).filter(Boolean))];
-  if (languages.length === 0) throw new SetupError("--lang names no language");
+  // Undefined without --lang: `main` chooses them from the branch's changes.
+  const languages = values.lang === undefined ? undefined : values.lang.trim() === "all" ? LANGUAGES_WITH_CATALOGS : [...new Set(values.lang.split(",").map((s) => s.trim()).filter(Boolean))];
+  if (languages?.length === 0) throw new SetupError("--lang names no language");
   const theme = values.theme ?? "light";
   if (!["light", "dark", "both"].includes(theme)) throw new SetupError(`--theme is light, dark or both, not "${theme}"`);
   const jobs = values.jobs === undefined ? defaultJobs() : Number(values.jobs);
@@ -584,19 +596,28 @@ async function main() {
     const gallery = await readGallery(browser, origin).catch((error) => {
       throw new SetupError(`Could not load the gallery from ${origin}: ${firstLine(error)}`);
     });
-    checkLanguages(options.languages, gallery.languages);
+    if (options.languages) checkLanguages(options.languages, gallery.languages);
     const scenarios = select(gallery.scenarios, options);
     if (options.list) {
       for (const s of scenarios) console.log(s.id);
       return 0;
     }
-    const jobs = options.themes.flatMap((theme) => options.languages.flatMap((language) => scenarios.map((scenario) => ({ scenario, language, theme }))));
+    let languages = options.languages;
+    if (!languages) {
+      const chosen = options.url
+        ? { languages: LANGUAGES_WITH_CATALOGS, reason: "the gallery at --url is another checkout's, so this branch's changes do not describe it" }
+        : languagesFromChanges(git(packageDir, "rev-parse", "--show-toplevel") ?? null, LANGUAGES_WITH_CATALOGS);
+      languages = chosen.languages;
+      checkLanguages(languages, gallery.languages);
+      console.error(`Languages: ${languages.join(", ")} (${chosen.reason})`);
+    }
+    const jobs = options.themes.flatMap((theme) => languages.flatMap((language) => scenarios.map((scenario) => ({ scenario, language, theme }))));
     const records = content && openRecords(content, browser.version());
     const skipped = options.fresh || !records ? [] : jobs.filter((job) => records.isRecorded(job));
     const pending = jobs.filter((job) => !skipped.includes(job));
     const concurrency = Math.min(options.jobs, pending.length);
     console.error(
-      `Sweeping ${plural(scenarios.length, "scenario")} x ${options.languages.join(", ")} x ${options.themes.join(", ")} = ${plural(jobs.length, "load")}` +
+      `Sweeping ${plural(scenarios.length, "scenario")} x ${languages.join(", ")} x ${options.themes.join(", ")} = ${plural(jobs.length, "load")}` +
         (skipped.length > 0 ? `, skipping ${skipped.length} that came out clean on this content (--fresh loads them again)` : "") +
         (pending.length > 0 ? `; loading ${pending.length}, ${concurrency} at a time` : ""),
     );

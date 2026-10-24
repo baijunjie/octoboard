@@ -159,8 +159,21 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
 `pnpm gallery:sweep [ids or patterns]` loads the selected scenarios (all by default) in a headless browser and fails on
 any gallery failure; `pnpm gallery:sweep --help` lists the flags (`--group`, `--lang`, `--theme`, `--fresh`, `--list`,
 `--url`, ...).
+
 Playwright installs no browser: run `pnpm exec playwright install chromium` from `packages/ui` once, or point
 `--chromium <path>` / `OCTOBOARD_CHROMIUM` (or `--playwright <dir>` / `OCTOBOARD_PLAYWRIGHT`) at an existing one.
+
+Without `--lang` the sweep chooses its languages from what the branch changed since its recorded fork point (the same
+changes `pnpm verify` judges): English alone, unless a changed path can reach what differs between languages, when every
+language with a catalog (`en`, `zh-Hans`) is swept. The paths that count are listed in `LANGUAGE_SENSITIVE` in
+`scripts/gallery-languages.mjs`: `src/i18n/` (where `joinPhrases.ts` is the one place that branches on the language
+explicitly), the gallery machinery (`src/gallery/`, `scripts/`, and the repository root's `scripts/verify/`), and the
+build, configuration and dependency files. Every language is also swept when the change cannot be judged: the branch has
+no recorded fork point (the target branch itself, a detached HEAD), the fork point cannot be read or is not an ancestor of
+`HEAD`, nothing differs from it, or git cannot list the difference; with `--url`, whose gallery is another checkout's,
+every language is swept for want of changes that describe it. The sweep prints the languages it chose and why before
+it starts. `--lang <list>` names them, and `--lang all` sweeps every language with a catalog whatever changed. Add an entry
+to `LANGUAGE_SENSITIVE` when code that branches on the language is written outside `src/i18n/`.
 
 The page loads wait for a free heavy-step slot, the machine-wide lock `pnpm verify` also takes (`OCTOBOARD_VERIFY_SLOTS`
 sets how many), and say who holds it while they wait, so sweeps in several worktrees queue rather than overload the
@@ -190,6 +203,7 @@ Imports run one way between the feature directories: `src/panels/` imports `src/
 | `src/website-preview/` | The preview's bootstrap and fixtures: `main.tsx` mounts the real `App` over `createPreviewDaemon` (`daemon.ts`), with sample repositories (`repositories/`), `createPreviewScenario` (`scenarios.ts`) for its three scenes, with the sample agent availability and quota readings, and a scroll bridge to the embedding page; the iframe and scene buttons belong to [`apps/web/`](../../apps/web/README.md) |
 | `gallery.html`, `gallery-frame.html`, `src/gallery/` | The dev-only UI state gallery (see "The UI state gallery"): `shell.tsx` and `frame.tsx` (the shell page and the page one scenario renders in), `scenario.ts` (the scenario type), `interact.ts` (step helpers), `fixtureDaemon.ts` with `fixtureGit.ts` and `fixtureConfiguration.ts` (the fixture daemon), `fixtures/` (the scenarios, `builders.ts`, `groups.ts`, sample projects and repositories, change factories), and the untracked, per-checkout `preview/` (extra scenarios appended to `SCENARIOS`) |
 | `scripts/gallery-sweep.mjs` | `pnpm gallery:sweep` (takes a heavy-step slot and skips pages recorded as clean; see "Sweeping the gallery") |
+| `scripts/gallery-languages.mjs` | The sweep's choice of languages from the branch's changes, and `LANGUAGE_SENSITIVE`, the paths that call for every language (see "Sweeping the gallery") |
 | `scripts/gallery-chip-geometry.mjs` | A standalone Playwright check of chip geometry over gallery scenarios, run by hand against a served gallery |
 | `scripts/wkbench/` | `pnpm bench:wkwebview`: the WKWebView latency benchmark (see [its README](scripts/wkbench/README.md)) |
 | `src/main.tsx` | Startup: picks the platform, locates the daemon, creates the connection, pushes the theme, reveals the native window, registers global runtime-error handlers, and mounts the app or `StartupScreen` with the error-alert host |

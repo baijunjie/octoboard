@@ -98,6 +98,28 @@ test("a page that came out clean is skipped on the same content, until --fresh a
   expect(otherLanguage.output).toContain("1 clean, 0 failed");
 });
 
+test("without --lang the languages follow the branch's changes, and --lang all sweeps every language", async () => {
+  const automatic = await run("normal", []);
+  expect(automatic).toMatchObject({ code: 0 });
+  // Which of the two depends on the state of the checkout the test runs in, so only the line is certain.
+  expect(automatic.output).toMatch(/Languages: (en|en, zh-Hans) \(.+\)\nSweeping 1 scenario x \1 x light = [12] loads?/);
+  const all = await run("normal", ["--lang", "all"]);
+  expect(all).toMatchObject({ code: 0 });
+  expect(all.output).toContain("1 scenario x en, zh-Hans x light = 2 loads");
+  expect(all.output).not.toContain("Languages:");
+  const elsewhere = await run("normal", ["--url", "http://localhost:1"]);
+  expect(elsewhere.output).toContain("Languages: en, zh-Hans (the gallery at --url is another checkout's");
+  expect(elsewhere.output).toContain("1 scenario x en, zh-Hans x light = 2 loads");
+  const named = await run("normal", ["--lang", "zh-Hans"]);
+  expect(named.output).toContain("1 scenario x zh-Hans x light = 1 load");
+}, 40_000);
+
+test("a language the app does not offer stops the sweep", async () => {
+  const result = await run("normal", ["--lang", "fr"]);
+  expect(result.code).toBe(2);
+  expect(result.output).toContain("--lang names no such language: fr");
+});
+
 test("a failed page is not recorded", async () => {
   const state = newState();
   expect(await run("scenario-failure", ["--lang", "en"], state)).toMatchObject({ code: 1 });

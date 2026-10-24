@@ -48,10 +48,11 @@ Per-package commands are in that package's doc.
 - [`scripts/`](../scripts/) — the repository-level scripts behind root `package.json` commands: `env.mjs` (the env
   reader above), `test-rust.mjs` (`pnpm test:rust`) and `verify.mjs` with `verify/` (`pnpm verify`, the pre-delivery
   checks). `pnpm verify` picks the checks a branch's changes call for (`verify/scope.mjs` implements the scope rule,
-  `verify/steps.mjs` lists the commands), skips steps already passed on the same content and toolchain
-  (`verify/stamp.mjs`, keyed by the working tree's content from `verify/tree.mjs`), and caps concurrent heavy steps
-  across worktrees (`verify/lock.mjs`); its tests are `verify/*.test.mjs`. The UI package's gallery sweep reuses the
-  lock, the stamps directory and `tree.mjs`. The scope rule's source is the "Formatting and checks" step of the root
+  `verify/steps.mjs` lists the commands), takes the branch's base and changed paths from `verify/changes.mjs`, skips
+  steps already passed on the same content and toolchain (`verify/stamp.mjs`, keyed by the working tree's content from
+  `verify/tree.mjs`), and caps concurrent heavy steps across worktrees (`verify/lock.mjs`); its tests are
+  `verify/*.test.mjs`. The UI package's gallery sweep reuses the lock, the stamps directory, `tree.mjs` and `changes.mjs`
+  (to choose its languages). The scope rule's source is the "Formatting and checks" step of the root
   `CLAUDE.md`.
 
 ## Brand artwork
