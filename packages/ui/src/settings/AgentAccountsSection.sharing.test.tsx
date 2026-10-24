@@ -4,6 +4,7 @@ import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import type { AccountSharing } from "../protocol";
 import { DaemonRequestError } from "../daemon-client";
+import { press } from "../components/tooltipTestSupport";
 import { detailsButton, openDetails } from "../components/detailsTestSupport";
 import { accountSharing, request, settings, toastError } from "./agentAccountsSectionTestState";
 import { buttonNamed, mount, mountDetails, openDetailsOf, sharingSwitches } from "./agentAccountsSectionTestSupport";
@@ -22,11 +23,8 @@ const captionOf = (container: HTMLElement, sharing: HTMLElement) =>
 /** The text of the sharing help tip, opened by keyboard focus. */
 function helpTipText(container: HTMLElement): string | undefined {
   const tip = container.querySelector<HTMLButtonElement>('button[aria-label="About sharing the default configuration"]')!;
-  act(() => {
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
-    tip.focus();
-  });
-  return document.querySelector('[role="tooltip"]')?.textContent ?? undefined;
+  press(tip);
+  return document.querySelector('[role="dialog"][aria-label="About sharing the default configuration"]')?.textContent ?? undefined;
 }
 
 it("offers the sharing switch on each owned account and none on the default account", async () => {
@@ -58,11 +56,8 @@ it.each([["Claude Code", [".claude.json", "plans/"]], ["Grok Build", ["trusted_f
   async (tab, names) => {
     const { container } = await mountDetails(tab);
     const tip = container.querySelector<HTMLButtonElement>('button[aria-label="About sharing the default configuration"]')!;
-    act(() => {
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
-      tip.focus();
-    });
-    const chips = [...document.querySelectorAll('[role="tooltip"] .inline-reference')].filter((chip) => chip.querySelector("code"));
+    press(tip);
+    const chips = [...document.querySelectorAll('[role="dialog"] .inline-reference')].filter((chip) => chip.querySelector("code"));
     expect(chips.map((chip) => chip.textContent)).toEqual(names);
     // Unbroken, so a line never ends on an empty start of it; the chip's own stylesheet tightens the inline-block
     // so stacked chips keep the line gap.

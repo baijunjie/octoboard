@@ -4,7 +4,7 @@ import { useT } from "../i18n/react";
 import { useDaemon } from "../store";
 import { RENDER_BUDGETS } from "./budgets";
 import { bodyFromFileContent } from "./content";
-import { InlineNotice } from "./inlineNotice";
+import { SpotNotice } from "./notices";
 import { resolveProjectAddress } from "./projectAddress";
 
 type Read = { path: string; url?: string; failed?: boolean; tooLarge?: boolean };
@@ -69,7 +69,7 @@ export function DocumentImage({
     return (
       <>
         {description}
-        <InlineNotice>{t("viewer.markdown.imageLarge")}</InlineNotice>
+        <SpotNotice>{t("viewer.markdown.imageLarge")}</SpotNotice>
       </>
     );
   }
@@ -78,9 +78,9 @@ export function DocumentImage({
   return (
     <>
       {description}
-      <InlineNotice tone={current.tooLarge ? "explained" : "failed"} speak={sentence}>
+      <SpotNotice tone={current.tooLarge ? "explained" : "failed"} speak>
         {sentence}
-      </InlineNotice>
+      </SpotNotice>
     </>
   );
 }

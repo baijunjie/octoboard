@@ -10,7 +10,7 @@ import { isolate } from "../../i18n/isolate";
 import type { Language } from "../../i18n/languages";
 import type { FileContent } from "../../protocol";
 import { RENDER_BUDGETS } from "../../viewer/budgets";
-import { bodyFromFileContent, ChangeBodiesError, type ViewerBody, type ViewerChangeSide, type ViewerSubject } from "../../viewer/content";
+import { bodyFromFileContent, type ChangeBodies, ChangeBodiesError, type ViewerBody, type ViewerChangeSide, type ViewerSubject } from "../../viewer/content";
 import { formatFileSize } from "../../viewer/format";
 import type { Scenario } from "../scenario";
 import { IMAGES } from "./viewerImages";
@@ -812,7 +812,7 @@ async function allChanges(language: Language): Promise<ViewerSubject[]> {
       host: hostOf("docs/merge.md"),
       content: {
         state: "conflict",
-        conflict: "Both sides modified this file. The file on disk is shown below with its conflict markers.",
+        conflict: t("git.conflict.bothModified"),
         body: text("docs/merge.md", "<<<<<<< ours\n# Release notes\n=======\n# Changes\n>>>>>>> theirs\n"),
       },
     },
@@ -822,7 +822,7 @@ async function allChanges(language: Language): Promise<ViewerSubject[]> {
       host: hostOf("src/merge.ts"),
       content: {
         state: "conflict",
-        conflict: "Both sides modified this file. The file on disk is shown below with its conflict markers.",
+        conflict: t("git.conflict.bothModified"),
         body: text("src/merge.ts", "<<<<<<< ours\nconst a = 1;\n=======\nconst a = 2;\n>>>>>>> theirs\n"),
       },
     },
@@ -870,6 +870,9 @@ async function allChanges(language: Language): Promise<ViewerSubject[]> {
       ...designComparison(parts, t),
       content: { state: "change", change: { old: { state: "absent" }, new: present(DESIGN_PATH, text("design-notes.md", GUIDE)) } },
     },
+    // Before cannot be drawn and falls back to its text, which is too long to highlight; After is drawn.
+    // Each side's marks stand beside its own heading.
+    change(t, "assets/sides.svg", present("assets/sides.svg", text("assets/sides.svg", OVERSIZED_BROKEN_SVG)), present("assets/sides.svg", text("assets/sides.svg", SVG))),
     change(t, "bin/tool.wasm", present("bin/tool.wasm", binary("bin/tool.wasm", { mediaType: null, data: "AGFzbQEAAAA=" })), present("bin/tool.wasm", binary("bin/tool.wasm", { mediaType: null, data: "AGFzbQEAAAABBAFgAAA=" }))),
     change(t, "data/rows.ts", present("data/rows.ts"), present("data/rows.ts"), longPatch()),
     change(t, "data/table.ts", present("data/table.ts"), present("data/table.ts"), largePatch()),
@@ -897,9 +900,21 @@ async function allChanges(language: Language): Promise<ViewerSubject[]> {
     // Two versions that are the same file: git's diff of them is empty, and with no way to read the
     // whole file the viewer can only say nothing differs.
     change(t, "src/unchanged.ts", present("src/unchanged.ts", oldSession), present("src/unchanged.ts", oldSession), "", "staged"),
+    // Two sides holding the same text, whose whole content the viewer reads itself: the file is shown
+    // with a note about it after the path. Under a rename it says so; where the read cannot be had,
+    // the stand-in stays and the note says why.
+    readable(change(t, "src/identical.ts", present("src/identical.ts", oldSession), present("src/identical.ts", oldSession), "", "staged"), async () => ({ old: OLD_SESSION, new: OLD_SESSION })),
+    readable(change(t, "src/kept-renamed.ts", present("src/previous-name.ts", oldSession), present("src/kept-renamed.ts", oldSession), "", "staged"), async () => ({ old: OLD_SESSION, new: OLD_SESSION })),
+    readable(change(t, "src/unreadable.ts", present("src/unreadable.ts", oldSession), present("src/unreadable.ts", oldSession), "", "staged"), () => Promise.reject(new ChangeBodiesError("unavailable"))),
     // A change that arrived without a patch, which has no diff to draw.
     change(t, "src/session.ts", present("src/session.ts", oldSession), present("src/session.ts", newSession), undefined, "staged"),
   ];
+}
+
+/** `subject`, a change, with a way to read the whole text of its two sides. */
+function readable(subject: ViewerSubject, loadBodies: () => Promise<ChangeBodies>): ViewerSubject {
+  if (subject.content.state !== "change") return subject;
+  return { ...subject, content: { state: "change", change: { ...subject.content.change, loadBodies } } };
 }
 
 /** A diagram whose source is past the per-diagram length. An over-long diagram does not take a
@@ -912,7 +927,7 @@ function diagramPastBudget(): string {
 // One note that holds the document states that can be on screen together. The other file is only
 // there so a relative link has a subject to open, with lines above the heading the link names:
 // opening it on that heading is not the same as opening it at the top.
-const FAILED_CHANGE_KEYS = new Set(["Conflicted:docs/merge.md", "Conflicted:src/merge.ts", "unstaged:src/garbled.ts", "Unstaged:src/offline.ts"]);
+const FAILED_CHANGE_KEYS = new Set(["Conflicted:docs/merge.md", "Conflicted:src/merge.ts", "unstaged:src/garbled.ts", "Unstaged:src/offline.ts", "staged:src/unreadable.ts", "unstaged:assets/sides.svg"]);
 async function changes(language: Language): Promise<ViewerSubject[]> {
   return (await allChanges(language)).filter(({ key }) => !FAILED_CHANGE_KEYS.has(key));
 }
@@ -975,15 +990,30 @@ A linked figure that is missing: [![The linked figure](missing-linked.png)](./ot
 
 See [the other note](./other.md#kept) and [the heading below](#kept-aside).
 
-## Another diagram
+## Kept aside
+
+What the link in this note scrolls to.
+`;
+
+// A document that spends the formulas it may draw, then asks for two more (one in a line of text, one
+// of its own), and has a diagram too long to draw. What is past a budget is left as its source with a
+// note at its spot. Built from the budget itself, so a change to it moves the document with it.
+const spentFormulas = () => Array.from({ length: RENDER_BUDGETS.documentFormulas }, (_, i) => `$x_{${i}}$`).join(" ");
+const LIMITS = () => `# Past the budgets
+
+The formulas below are drawn, up to the most a document may draw. ${spentFormulas()} The next one, $y^2$, is left as its source, with a note where it stands.
+
+A formula on its own line comes after them too:
+
+$$
+z^2
+$$
+
+A diagram whose source is too long is left as its source:
 
 \`\`\`mermaid
 ${diagramPastBudget()}
 \`\`\`
-
-## Kept aside
-
-What the link in this note scrolls to.
 `;
 
 const INLINE_FAILURE = `# Trip notes
@@ -1041,9 +1071,9 @@ What the link in this note scrolls to.
 `;
 type Refusal = { message: string; code: string; params?: Record<string, string> };
 
-function failure(id: string, title: string, description: string, slot: "file" | "conflict" | "change", path: string, refusal: Refusal | ((t: Translate, language: Language) => string)): Scenario {
+function failure(id: string, title: string, description: string, slot: "file" | "conflict" | "change", path: string, refusal: Refusal | ((t: Translate, language: Language) => string), steps?: Scenario["steps"]): Scenario {
   return {
-    id, group: GROUP, category: "exceptional", title, description,
+    id, group: GROUP, category: "exceptional", title, description, steps,
     viewer: {
       subjects: async (language) => {
         const { DaemonRequestError } = await import("../../daemon-client");
@@ -1054,7 +1084,7 @@ function failure(id: string, title: string, description: string, slot: "file" | 
           case "file":
             return [{ key: `live:${path}`, path, host: hostOf(path), content: { state: "error", message } }];
           case "conflict":
-            return [{ key: `Conflicted:${path}`, path, host: hostOf(path), content: { state: "conflict", conflict: "Both sides modified this file. The file on disk is shown below with its conflict markers.", message } }];
+            return [{ key: `Conflicted:${path}`, path, host: hostOf(path), content: { state: "conflict", conflict: t("git.conflict.bothModified"), message } }];
           case "change":
             return [{ key: `unstaged:${path}`, path, host: hostOf(path), stage: t("git.group.unstaged"), status: "modified", content: { state: "change", change: { old: present(path), new: present(path), unavailable: message } } }];
         }
@@ -1073,7 +1103,7 @@ const failureScenarios: Scenario[] = [
   failure("viewer-file-error-too-large", "Failed read: file too large", "The explanation gives the file's size and the most that can be opened here, without repeating the path the header names.", "file", "data/export.csv", (t, language) => t("browser.error.fileTooLarge", { size: formatFileSize(language, 5_242_880), max: formatFileSize(language, 4_194_304) })),
   failure("viewer-file-error-too-large-no-size", "Failed read: file too large, size unknown", "Without the file's size, the explanation gives only the most that can be opened here.", "file", "data/stream.log", (t, language) => t("browser.error.fileTooLargeNoSize", { max: formatFileSize(language, 4_194_304) })),
   failure("viewer-file-error-source-unavailable", "Failed read: worktree folder unavailable", "The folder the read is scoped to is gone, so its absolute path and the system's reason stay in the explanation.", "file", "src/session.ts", { message: "The folder /Users/dev/Projects/search-api-review cannot be read: No such file or directory (os error 2)", code: "source_unavailable", params: { path: "/Users/dev/Projects/search-api-review", detail: "No such file or directory (os error 2)" } }),
-  failure("viewer-conflict-error-not-found", "Conflict whose file on disk is gone", "The conflict notice stays above the failure, and the failure says this file does not exist any more without repeating the path.", "conflict", "docs/merge.md", { message: "docs/merge.md does not exist any more.", code: "file_not_found" }),
+  failure("viewer-conflict-error-not-found", "Conflict whose file on disk is gone", "The pane holds the empty-state failure \"Could not open this file\" with the explanation that this file does not exist any more, without repeating the path. The header has no marks: the title's conflict chip is what says the path is in conflict.", "conflict", "docs/merge.md", { message: "docs/merge.md does not exist any more.", code: "file_not_found" }),
   failure("viewer-change-error-unmerged", "Change read: conflicting index entry", "The change's explanation says the file is in conflict without repeating its path.", "change", "src/merge.ts", { message: "src/merge.ts is not a regular file.", code: "unsupported_file_type", params: { file_type: "unmerged" } }),
   failure("viewer-change-error-changing", "Change read: still changing", "A failure the app words itself, with no code behind it, is shown as it is.", "change", "src/session.ts", (t) => t("git.error.changeChanging")),
 ];
@@ -1109,7 +1139,7 @@ const counted = (path: string): ViewerChangeSide => ({ state: "present", path, k
 const bodiesFailureScenarios: Scenario[] = [
   bodiesFailure(
     "viewer-change-expand-error", "Unmodified lines that could not be read",
-    "A request for unmodified lines has failed: the notice keeps the system's reason and refers to the file without repeating its path, and the separator it came from offers to try again.",
+    "A request for unmodified lines has failed: a danger mark after the path keeps the system's reason (in its popover) and refers to the file without repeating its path, and the separator it came from offers to try again.",
     (t, refuse) => ({
       key: "unstaged:src/pipeline.ts", path: "src/pipeline.ts", host: hostOf("src/pipeline.ts"), stage: t("git.group.unstaged"),
       content: { state: "change", change: { old: counted("src/pipeline.ts"), new: counted("src/pipeline.ts"), patch: EXPAND_FAILURE_PATCH, loadBodies: refuse("src/pipeline.ts", { message: "Octoboard is not allowed to read src/pipeline.ts: Permission denied (os error 13)", code: "permission_denied", params: { path: "src/pipeline.ts", detail: "Permission denied (os error 13)" } }) } },
@@ -1118,7 +1148,7 @@ const bodiesFailureScenarios: Scenario[] = [
   ),
   bodiesFailure(
     "viewer-change-identical-error", "Unchanged file whose content could not be read",
-    "The notice over the unchanged presentation says this file does not exist any more without repeating its path.",
+    "A danger mark after the path says (in its popover) this file does not exist any more without repeating its path; the unchanged stand-in fills the pane.",
     (t, refuse) => ({
       key: "staged:src/unchanged.ts", path: "src/unchanged.ts", host: hostOf("src/unchanged.ts"), stage: t("git.group.staged"),
       content: { state: "change", change: { old: present("src/unchanged.ts"), new: present("src/unchanged.ts"), patch: "", loadBodies: refuse("src/unchanged.ts", { message: "src/unchanged.ts does not exist any more.", code: "file_not_found", params: { path: "src/unchanged.ts" } }) } },
@@ -1126,7 +1156,7 @@ const bodiesFailureScenarios: Scenario[] = [
   ),
   bodiesFailure(
     "viewer-change-renamed-unchanged-error", "Unchanged rename whose original could not be read",
-    "The failure names the original path, which is not the one in the header, so it stays in the notice.",
+    "The danger mark after the path names the original path in its popover, which is not the one in the header, so it stays in the sentence.",
     (t, refuse) => ({
       key: "staged:src/kept.ts", path: "src/kept.ts", host: hostOf("src/kept.ts"), stage: t("git.group.staged"),
       content: { state: "change", change: { old: present("src/previous.ts"), new: present("src/kept.ts"), patch: "", loadBodies: refuse("src/kept.ts", { message: "src/previous.ts does not exist any more.", code: "file_not_found", params: { path: "src/previous.ts" } }) } },
@@ -1140,6 +1170,18 @@ const bodiesFailureScenarios: Scenario[] = [
   },
 ];
 
+// A malformed SVG as long as a file the viewer shows without highlighting, so that the one change
+// carries a mark of each tone: the part outside the project, the image that cannot be drawn and the
+// text it falls back to being too long to highlight.
+const OVERSIZED_BROKEN_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">\n${generated(RENDER_BUDGETS.highlightLines + 100, (i) => `<!-- metadata ${i} -->`)}<rect width="10" height="10"`;
+async function marksOfEveryToneSubjects(language: Language): Promise<ViewerSubject[]> {
+  const t: Translate = (key, ...args) => format(language, key, ...args);
+  const path = "assets/oversized.svg";
+  return [
+    change(t, path, { state: "out_of_scope", repositoryPath: "packages/shared/assets/oversized.svg" }, present(path, text(path, OVERSIZED_BROKEN_SVG))),
+  ];
+}
+
 async function styleSampleSubjects(): Promise<ViewerSubject[]> {
   return [file("docs/handbook.md", text("docs/handbook.md", STYLE_SAMPLE))];
 }
@@ -1151,19 +1193,20 @@ export const viewerScenarios: Scenario[] = [
   {
     id: "viewer-files-errors", group: GROUP, category: "exceptional",
     title: "Failed reads, disconnected files and renderer fallbacks",
-    description: "The failed read takes the empty-state shape in the pane: a danger glyph, the heading and the application's own sentence under it, with no Try again, since a read of a file that is gone would not change. Previous / Next also shows a disconnected read, malformed SVG and a grammar that fails to load.",
+    description: "The failed read takes the empty-state shape in the pane: a danger glyph, the heading and the application's own sentence under it, with no Try again, since a read of a file that is gone would not change. Previous / Next also shows a disconnected read, malformed SVG and a grammar that fails to load, the last two each a danger mark after the path over the text shown as plain text.",
     viewer: { subjects: failedFiles },
   },
   {
     id: "viewer-changes-errors", group: GROUP, category: "exceptional",
     title: "Merge conflicts, malformed patches and disconnected changes",
-    description: "Starts on a merge conflict; Previous / Next stays within conflicts and deliberately failing change subjects.",
+    description: "Starts on a merge conflict: the file on disk with its markers, and the title's Conflicted chip held hovered, its tooltip saying how the conflict arose (no mark in the header); Previous / Next stays within conflicts and deliberately failing change subjects: a patch that cannot be drawn (a danger mark, the patch shown as text), a compared SVG whose Before side cannot be drawn and is too long to highlight (a danger mark and a note beside the Before heading, none in the header; After is drawn), and an unchanged file whose content is not to be had (a note, with the stand-in under it).",
     viewer: { subjects: failedChanges },
+    steps: [(ui) => ui.hoverTitleStatus("conflicted")],
   },
   {
     id: "viewer-document-errors", group: GROUP, category: "exceptional",
-    title: "Document rendering failures and limits",
-    description: "A document with an invalid diagram, unfinished formulas, a missing image, a missing image that is also a link and a diagram past the render budget. Scroll to compare the failures and retained source: a block that failed (the diagram, a formula on its own line) keeps a sentence above its source, while one inside a line of text (the unfinished inline formula, the missing images) is a danger-coloured circled \"!\" glyph in the sentence (right after the link where the image is a link), a button (a tab stop) that opens the sentence in a popover when tapped, activated from the keyboard or rested on with the mouse, and does nothing for a mouse click; successful content provides context for each failure.",
+    title: "Document rendering failures",
+    description: "A document with an invalid diagram, unfinished formulas, a missing image and a missing image that is also a link. Scroll to compare the failures and retained source: each is a danger-coloured circled \"!\" mark at its spot, a button (a tab stop) that opens the sentence in a popover when tapped, activated from the keyboard or rested on with the mouse, and does nothing for a mouse click. A block that failed (the diagram, a formula on its own line) has its mark before the source it keeps; one inside a line of text (the unfinished inline formula, the missing images) has it in the sentence, right after the link where the image is a link. Successful content provides context for each failure.",
     files: { "docs/picture.png": { image: IMAGES.before_png } },
     viewer: { subjects: async () => [file("docs/notes.md", text("docs/notes.md", NOTES)), file("docs/other.md", text("docs/other.md", OTHER))] },
   },
@@ -1174,6 +1217,13 @@ export const viewerScenarios: Scenario[] = [
     viewer: { subjects: async () => [file("docs/trip.md", text("docs/trip.md", INLINE_FAILURE))] },
     steps: [(ui) => ui.touchPressStatusMark(ui.t("viewer.markdown.imageFailed"))],
   },
+  {
+    id: "viewer-change-marks", group: GROUP, category: "exceptional",
+    title: "One file with a mark of each tone",
+    description: "Three marks stand after the path in the header, in this order and with even gaps: the image that could not be drawn (danger, circled \"!\"), the other side being outside the project (warning triangle) and the text being shown without highlighting (note, circled \"i\"). The danger mark is held open in its popover, which words the failure.",
+    viewer: { subjects: marksOfEveryToneSubjects },
+    steps: [(ui) => ui.hoverStatusMark(ui.t("viewer.image.asText"))],
+  },
   ...failureScenarios,
   ...bodiesFailureScenarios,
   {
@@ -1181,7 +1231,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Files",
-    description: "Successful code, Markdown, images, inert repository markup, unsupported binary formats, large-file fallbacks and loading views. Dedicated internationalization subjects cover Arabic document direction and mixed-script source. Previous / Next stays within normal subjects. Compare long paths, source/document and wrap controls, and scroll fades using the width and language controls. File manager and Default application are the last two buttons of every file's header row, after the copy, view and wrap buttons.",
+    description: "Successful code, Markdown, images, inert repository markup, unsupported binary formats, large-file fallbacks (a note mark after the path) and loading views. Dedicated internationalization subjects cover Arabic document direction and mixed-script source. Previous / Next stays within normal subjects. Compare long paths, source/document and wrap controls, and scroll fades using the width and language controls. File manager and Default application are the last two buttons of every file's header row, after the copy, view and wrap buttons.",
     viewer: { subjects: files },
   },
   {
@@ -1200,6 +1250,14 @@ export const viewerScenarios: Scenario[] = [
     description: "Rendered diagrams and formulas, a project image, mixed text directions and links between documents. Outbound web links carry an external-link icon, while local document links remain internal. The named diagram is Request flow; the second uses the translated Diagram label. Follow the other-note link to its Kept heading or the local link to Kept aside.",
     files: { "docs/picture.png": { image: IMAGES.before_png } },
     viewer: { subjects: documentSubjects },
+  },
+  {
+    id: "viewer-document-limits",
+    group: GROUP,
+    category: "normal",
+    title: "Rendered document past its budgets",
+    description: "The first formulas are drawn; the one after the budget is left as its source with a note mark (circled \"i\") inside the sentence, a button that opens its sentence in a popover when a resting mouse, a tap or the keyboard asks. The display formula and the over-long diagram keep their source with the same mark before it.",
+    viewer: { subjects: async () => [file("docs/limits.md", text("docs/limits.md", LIMITS()))] },
   },
   {
     id: "viewer-document-github",
@@ -1243,7 +1301,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Changes",
-    description: "Successful modified, added, deleted, renamed, type-changed, untracked and compared changes. Includes images, binary notices, large-patch fallbacks and empty diffs. Previous / Next stays within normal subjects; compare the soft status badges beside the title (untracked is neutral), long comparison subtitles and layout controls. File manager and Default application end the header row of the working-copy changes (staged, unstaged, untracked and conflicted) but not of the ones whose file is gone from the working copy (src/legacy.ts, src/moved-out.ts) nor of the committed ones, which carry a comparison under the title.",
+    description: "Successful modified, added, deleted, renamed, type-changed, untracked and compared changes. Includes images, binary notices, empty diffs, and the notes and warnings that stand as marks after the path: a patch too large to draw, a missing newline at the end of a file, a side outside the project (warning), and an unchanged file or rename shown in full. Previous / Next stays within normal subjects; compare the soft status badges beside the title (untracked is neutral), long comparison subtitles and layout controls. File manager and Default application end the header row of the working-copy changes (staged, unstaged, untracked and conflicted) but not of the ones whose file is gone from the working copy (src/legacy.ts, src/moved-out.ts) nor of the committed ones, which carry a comparison under the title.",
     viewer: { subjects: changes },
   },
 ];

@@ -95,9 +95,9 @@ words is announced again. The places with an empty-state failure:
   listed yet, and the change list when nothing is listed and the one part of it that failed left it empty (see
   `docs/product/project-pane-git-mode.md` and "What the list says instead" in
   `docs/product/project-pane-git-change-list.md`);
-- the file viewer: a file or change that cannot be opened, and an image that cannot be decoded (see "Notices and
-  stand-ins" in `docs/product/file-viewer.md`). The viewer's failure notices over content it still shows open no error
-  alert either;
+- the file viewer: a file or change that cannot be opened, a file still in conflict whose content cannot be read,
+  and an image that cannot be decoded (see "Notices and stand-ins" in `docs/product/file-viewer.md`). The viewer's
+  failure notices about content it still shows are marks, and open no error alert either;
 - an archived session's history that could not be loaded (see "Loading, empty, unavailable and
   failed" in `docs/product/session-history.md`);
 - the report panel's pages that could not be listed while it has no page to show (see "Paging through the history" in
@@ -107,8 +107,6 @@ The places with a compact alert:
 
 - the report panel's pages that could not be listed while it shows a page, in amber (see "Paging through the history"
   in `docs/product/report-panel.md`);
-- the file viewer: a file still in conflict whose content cannot be read, under its conflict notice (see "Notices and
-  stand-ins" in `docs/product/file-viewer.md`);
 - an account's sharing change that did not finish, at its switch, in amber (see "Sharing the default configuration" in
   `docs/product/agent-accounts.md`);
 - the directory browser's listing (see "Browsing directories" in `docs/product/projects.md`);
@@ -145,7 +143,8 @@ The popover opens by the input the device has:
 - **Resting the mouse on the mark** for 250 ms opens it **without moving keyboard focus**, so the terminal or a text
   field keeps receiving keystrokes; a pointer that only crosses the mark opens nothing, and touch and pen never open
   it this way. It stays while the mouse is on the mark or inside the popover, and goes 150 ms after the mouse has left
-  both; the popover's buttons and text are reached by moving the mouse into it. A press outside closes it, and so does
+  both; the popover's buttons and text are reached by moving the mouse into it, and its text can be selected by
+  dragging with the mouse and copied, in a popover over a dialog too. A press outside closes it, and so does
   **Escape**, which then goes no further (it reaches neither a terminal nor a drawer or floating pane under it) —
   except while keyboard focus is in a terminal (the agent's or a shell's) or in a text field holding text, or while an
   input method is composing, where the key stays with them and the popover stays open.
@@ -169,10 +168,13 @@ The places:
   `docs/product/project-git-status.md`);
 - an account whose quota could not be read, in Settings and the rail's quota panel (see "Quota states" in
   `docs/product/account-quotas.md`);
-- a project image or a formula inside a paragraph of a Markdown document that could not be shown, where the mark takes
-  the text's size and is a tab stop in the document like a link, and one inside a link is drawn right after the link
-  rather than in it, so pressing it does not follow the link (see "A Markdown file as a document" in
-  `docs/product/file-viewer.md`);
+- the file viewer's notices about content it still shows — failures, warnings, and notes, which are the same mark
+  with a neutral circled `i` — whose amber warning says what has to be known before reading the content (a side of a
+  change outside the project) rather than that it is out of date: after the file's path in the header for the whole
+  file or change, beside a side's heading in an image change, and at the spot in a Markdown document — a diagram or a block formula at the start of its source, and a
+  project image or a formula inside a paragraph in the text, where the mark takes the text's size and is a tab stop in
+  the document like a link, and one inside a link is drawn right after the link rather than in it, so pressing it does
+  not follow the link (see "Notices and stand-ins" in `docs/product/file-viewer.md`);
 - in the Git mode, a part of the change list that could not be read, on its section's heading, and a list of branches
   that could not be read again, beside the branch selector (see "What the list says instead" in
   `docs/product/project-pane-git-change-list.md` and "The branch selector" in `docs/product/project-pane-git-mode.md`).

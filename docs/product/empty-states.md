@@ -70,7 +70,7 @@ accounts for. A state with something to do about it is therefore never one of th
 
 ## The same state said in one sentence
 
-Where a state does not stand in for content — the content is shown all the same, under a notice saying what the state
+Where a state does not stand in for content — the content is shown all the same, with a notice saying what the state
 is, or the panel is hidden and a region around it speaks for it — the state is said as **one whole sentence** instead
 of a title with a line under it. That sentence is worded on its own rather than being the title and the line run
 together. The states this holds for are named where they appear (see "What it shows" and "When the open change

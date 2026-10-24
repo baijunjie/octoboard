@@ -44,8 +44,8 @@
   - *An explicit parameter* is reliable, and its default can follow the trigger's shape, which the wrapper already
     knows statically: the control shape (a react-aria control child, today's `TitledControl`) defaults to no touch
     popover, so a tap runs the control's action; the mark shape (a non-control indicator, today's
-    `IndicatorTooltip`) defaults to the touch popover. A parameter overrides the default: `HelpTip`'s "?" is a
-    control whose only action is to show its text, so it turns the popover on. The anchored shape (today's
+    `IndicatorTooltip`) defaults to the touch popover. A control whose only action is to show its text (the
+    "?" help tip) is a popover hint rather than a control with a touch popover. The anchored shape (today's
     `AnchoredTooltip`, driven by its caller's hover inside a row) has no trigger to tap — a tap on the row is the
     row's action — so it never opens a touch popover.
   - **Recommended: the explicit parameter with the shape-based default.** The three existing names stay as the
@@ -58,9 +58,10 @@
   the pointer leaves both, so its buttons can be reached. A mouse click opens nothing (user decision: where the pointer
   can hover, the hover is what opens it); a tap, a pen, the keyboard or assistive technology opens it with focus moved
   into it. The rail quota panel follows the same rules and is the same component.
-- **A note mark (informational tone) uses the tooltip wrapper** (proposal), since its content is one sentence with
-  nothing to press. Each tone keeps its own glyph shape — circled `i`, triangle, circled `!` — so tones differ by shape,
-  not only colour.
+- **A mark of every tone is the same popover mark** (user decision): a note (informational tone) is the same button
+  and popover as an error or a warning mark, so marks side by side look, take the pointer and open alike. Each tone
+  keeps its own glyph shape — circled `i`, triangle, circled `!` — so tones differ by shape, not only colour. The "?"
+  help tip is the same kind of popover (user decision), so its explanation can be selected with the mouse.
 - **A whole-file notice goes after the file path in the viewer header** (user decision); one mark per notice, ordered
   failed, then warned, then notes (user decision). A notice
   that appears after the viewer has painted is still spoken through the existing status announcement, and the mark
@@ -79,7 +80,7 @@
 
 1. 01 Tooltip wrapper that works on touch (closed)
 2. 02 Error and warning status marks (closed)
-3. [03 File viewer notices become status marks](03-viewer-status-marks.md)
+3. 03 File viewer notices become status marks (closed)
 4. [04 Every Alert has a title and holds its own details](04-alert-titles.md)
 5. [05 Final confirmation](05-final-confirmation.md)
 

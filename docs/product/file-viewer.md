@@ -33,7 +33,9 @@ The header has three parts, one under the other:
   choice for a Markdown file (see "A Markdown file as a document" below), then the diff's unified-or-split choice,
   then the wrap choice (see "Wrapping long lines" below), then **File manager** and **Default application**. The size
   shows as a tag of its own, drawn as the title's neutral stage tag is; a rename's origin reads as a sentence naming
-  the path.
+  the path. Right after the file's path stand the marks of the **notices about the whole file or change** on screen,
+  one mark per notice (see "Notices and stand-ins" below); they belong to the path's own item, and the path's fade
+  cuts only the path, never them. They come after the controls in the keyboard's order.
 
 At most two of the three view choices are ever offered at once, since the document-or-source choice belongs to a whole
 Markdown file's body and the unified-or-split choice to a two-sided diff, and a Markdown diff keeps its source view
@@ -79,15 +81,15 @@ one's do not, or when one subject has the subtitle row and the next has none.
 
 - **Text** is shown as code, highlighted for its language as told from the file's name, in colours that follow the
   window's appearance (see "What follows the choice" in `docs/product/appearance.md`). A file of more than 10,000 lines
-  or 1,000,000 characters is shown as plain text, under a notice saying it is shown without highlighting because it is
+  or 1,000,000 characters is shown as plain text, with a notice saying it is shown without highlighting because it is
   large; within highlighted code, a line longer than 1,000 characters is left unhighlighted. Where the grammar a file
-  needs cannot be loaded, or the code cannot be drawn at all, the file is shown as plain text under a failure notice
+  needs cannot be loaded, or the code cannot be drawn at all, the file is shown as plain text with a failure notice
   saying which of the two it was (see "Notices and stand-ins" below). A **Markdown** file opens as a rendered document
   instead, with its source a choice away (see "A Markdown file as a document" below).
 - **Images** — PNG, JPEG, GIF, WebP, BMP, ICO and SVG; AVIF on macOS 13 and later — are shown scaled down to fit and
   never scaled up, on a checkerboard that shows their transparent areas. An image is only displayed: an SVG's scripts
   never run and nothing it refers to is fetched. An image that cannot be decoded is an error in its place (see "Notices and
-  stand-ins" below); an SVG that cannot be decoded is shown as its text instead, under a failure notice saying so.
+  stand-ins" below); an SVG that cannot be decoded is shown as its text instead, with a failure notice saying so.
 - **Any other binary file** says it cannot be displayed, with its size.
 - **While a file is being read**, and until its code is drawn, the viewer says it is loading. It never shows another
   file's content under this file's name, not even for a moment while moving between files. Assistive technology is
@@ -100,29 +102,50 @@ one's do not, or when one subject has the subtitle row and the next has none.
 What the viewer says about the subject on screen — a file or a change — takes one of three shapes, chosen by how
 much of the subject it still has to show.
 
-**A notice** sits above content the viewer is still showing. Above the reading surface it is a filled block across
-the body's width; where a subject carries more than one, they stack above the content. Inside a
-rendered Markdown document, a diagram's or block formula's notice is a filled alert whose outer edge aligns with the
-document's content edge. Each notice is in one of three tones, and each tone draws its own fill and its own glyph, so
-a tone never rests on colour alone:
+**A notice** says something about content the viewer is still showing. It is a **status mark** — a small glyph, one
+per notice, never a block of text over the content. Each notice is in one of three tones, and each tone has its own
+glyph shape as well as its own colour, so a tone never rests on colour alone:
 
-- **neutral**, with a circled `i`, states how the content below is drawn and why, for what this file or change is — a
+- **a note**, a neutral circled `i`, states how the content is drawn and why, for what this file or change is — a
   size budget, a change read at an older version, lines that stay collapsed because the whole file is not to be had, a
   change with no differences whose content is shown whole in place of a diff;
-- **a warning**, amber, with a warning triangle, says something about the content that has to be known before reading
-  it — a file still in conflict, a side of a change that lies outside the project;
-- **a failure**, red, with a circled `!`, reports that something went wrong, so the view on screen is not the one that
-  was asked for — a read that failed, a grammar that could not be loaded, code, a diff or a document that could not be
+- **a warning**, an amber warning triangle, says something about the content that has to be known before reading it —
+  a side of a change that lies outside the project;
+- **a failure**, a red circled `!`, reports that something went wrong, so the view on screen is not the one that was
+  asked for — a read that failed, a grammar that could not be loaded, code, a diff or a document that could not be
   drawn, an image that would not decode.
 
+A mark is named by the notice's sentence, and that sentence is what it opens. Every mark, whatever its tone, is a
+button and a tab stop that opens the sentence in a popover, with no tooltip, under the rules of a failure mark (see
+"Failures marked on a row" in `docs/product/error-alerts.md`): a mouse resting on it opens it without moving keyboard
+focus, and it stays open while the pointer moves into it, so its text can be selected and copied with the mouse; a
+mouse click opens nothing; and a tap, Enter or Space, or assistive technology opens it with keyboard focus inside.
+
+Where a mark stands follows from what its notice is about:
+
+- **The whole file or change on screen**: right after the file's path in the header (see "The header" above), the
+  marks ordered failures first, then warnings, then notes. These are syntax highlighting turned off because the file is
+  large, or because its grammar could not be loaded or its code could not be drawn; a Markdown document that could not
+  be drawn; an image shown as its text; a side of a change outside the project; a change with no differences, or a rename with no change
+  to its content, and why its content could not be read in full; a patch shown as plain text because it is large or
+  could not be drawn; a missing newline at the end; and what an expansion of a diff's collapsed lines says or why it
+  failed (see `docs/product/project-pane-git-change-viewer.md`).
+- **One side of an image change shown side by side** (Before and After): what is said about that side's own content —
+  the image shown as its text, and that text's own highlighting notices — stands beside the side's heading instead, in
+  the same order. A side with marks starts its content level with a side without. An image shown alone keeps these
+  marks after the path.
+- **One spot in a rendered Markdown document**, where the mark stays at that spot. For a diagram or a block formula
+  shown as its source, the mark stands at the start of that source, level with its first line. For an image, or a
+  formula inside a paragraph, the mark sits in the paragraph at the text's size; inside a link it is drawn right after
+  the link rather than in it, so pressing it does not follow the link. A mark there is a tab stop in the document, as
+  a link is (see "Selecting and copying" below).
+
 A failure notice opens no error alert: the content the viewer still shows is what the user came for, and the notice
-is the failure's only presentation. A notice that appears after the content is drawn, a failure notice included, is
-announced once as a status, including what a diff says about collapsed lines (see "Expanding the collapsed lines" in
-`docs/product/project-pane-git-change-viewer.md`). Inside a rendered document, a notice for an image or for a formula
-inside a paragraph sits in the paragraph rather than as the block above; it uses the same tones, except that a failure
-there is only a red circled `!` mark in the text, named by the sentence it stands for and opening a popover that holds
-that sentence (see "Failures marked on a row" in `docs/product/error-alerts.md`). Inside a link the mark is drawn right
-after the link rather than in it.
+is the failure's only presentation. A notice already there when the content is first drawn is not announced. One that
+appears after the content is drawn, a failure notice included, is announced once as a status, including what a diff
+says about collapsed lines (see "Expanding the collapsed lines" in `docs/product/project-pane-git-change-viewer.md`).
+That announcement is withdrawn about 5 seconds after it is made, so assistive technology reading the viewer line by
+line meets the sentence once, on its mark.
 
 **A stand-in** fills the body when there is nothing to draw at all: the empty state's own panel, centred in the body — a
 glyph saying what kind of nothing this is, a heading naming it, and, where there is more to say than the heading
@@ -132,8 +155,8 @@ what the viewer shows for
 - nothing it can show at all: a body it cannot display, with its size — or, for a change between two such bodies, the
   size before and after — and a change with no diff at all, which take the same glyph;
 - a change with no differences to show — its two sides holding the same content, or a rename with no change to its
-  content — but only where that content could not be read; where it was read, the change shows the file whole under a
-  neutral notice instead (see "What it shows" in `docs/product/project-pane-git-change-viewer.md`);
+  content — but only where that content could not be read; where it was read, the change shows the file whole with a
+  note instead (see "What it shows" in `docs/product/project-pane-git-change-viewer.md`);
 - a side that is not a file: a symbolic link, or a repository of its own;
 - a subject nothing has been read of yet while the connection to the daemon is lost, which is deliberately this same
   neutral stand-in rather than an error, the read resuming on its own (see "When the open file changes" below). This
@@ -144,10 +167,11 @@ what the viewer shows for
 body, with the same red circled `!` as a failure notice, headed that it could not be opened, with the reason under it
 and any details behind **Details** (see "Errors" in `docs/product/project-pane.md`). An image that was read but cannot
 be decoded, and has no text to fall back to, is the same kind of error, headed that the image cannot be displayed, with
-what to check about the file. Neither has Try again. A file still in conflict whose content cannot be read keeps its
-conflict notice, and the error is a compact red alert under it instead. Each opens no error alert, and is announced to
-assistive technology when it appears after the viewer was drawn (see "Failures shown on the screen" in
-`docs/product/error-alerts.md`).
+what to check about the file. Neither has Try again. A file still in conflict whose content cannot be read shows the
+first of these errors and nothing more — no mark after the path — its conflict being said by the title's Conflicted
+tag (see "Opening a change" in `docs/product/project-pane-git-change-viewer.md`). Each opens no error alert, and is
+announced to assistive technology, once and as an alert, when it appears after the viewer was drawn (see "Failures
+shown on the screen" in `docs/product/error-alerts.md`).
 
 A reason the viewer gives for a read that failed — in an error or in a failure notice — does not repeat a path the
 header already shows: when the reason is about the file on screen, it speaks of "this file" instead. A reason about any
@@ -288,21 +312,21 @@ document scrolls inside that region, fading the side it hides. An inline formula
 wider than the line, so that side can be scrolled from the keyboard. While it fits, it is not a tab stop.
 
 **When one cannot be drawn.** Until a diagram or a formula has been drawn, its source is what is shown, with no
-notice. One that cannot be drawn shows its source under a failure notice — for a formula inside a paragraph, after a
-failure mark (see "Notices and stand-ins" above) — and the rest of the document stays. A diagram or a formula past
-either of its limits below, and a project image past the count, are shown as source — or, for the image, as its alt
-text — under a neutral notice. That notice is part of the first paint and is not announced on its own.
+notice. One that cannot be drawn shows its source with a failure notice at that spot (see "Notices and stand-ins"
+above), and the rest of the document stays. A diagram or a formula past either of its limits below, and a project image
+past the count, are shown as source — or, for the image, as its alt text — with a note at that spot. That note is part
+of the first paint and is not announced on its own.
 
 The budget is per document:
 
 - At most 12 diagrams, each at most 8,000 characters. A diagram over that length does not consume one of the 12. Past
-  either limit the source is shown under the neutral notice that the document is large.
+  either limit the source is shown with the note that the document is large.
 - At most 80 formulas, each at most 2,000 characters. A formula over that length does not consume one of the 80. Past
   either limit, the same notice and the source.
 - At most 30 project images, each at most 4 MiB, the most a file read delivers (see "Errors" in
   `docs/product/project-pane.md`). An address that is not a project file does not consume one of the 30. Over the
-  count: the alt text and a neutral notice that the document is large, part of the first paint and not announced on
-  its own. A reply larger than 4 MiB is not shown: the alt text and a neutral notice that the image is large, announced
+  count: the alt text and a note that the document is large, part of the first paint and not announced on
+  its own. A reply larger than 4 MiB is not shown: the alt text and a note that the image is large, announced
   once, because it appears after the read. A read that fails — which is also what a file larger than 4 MiB does, since
   the read does not deliver it — or a file that is not an image: the alt text and a failure mark beside it, whose
   popover says the image could not be shown, announced once.
@@ -314,7 +338,7 @@ shows — an untracked file, one added with no patch, or a change with no lines 
 "What it shows" in `docs/product/project-pane-git-change-viewer.md`). A diff and the file behind a path in conflict keep
 the source view alone and show no document-or-source control; the conflict's markers are what it is looked at for. So
 does a Markdown file past the budget for highlighting (see "What it shows" above): it is shown as plain source, with
-no control either. Where the document cannot be drawn at all, the source is shown under a failure notice saying so.
+no control either. Where the document cannot be drawn at all, the source is shown with a failure notice saying so.
 
 ## Wrapping long lines
 
@@ -349,8 +373,8 @@ text is two code regions, and the key selects the one with keyboard focus.
 
 A **rendered Markdown document** (see "A Markdown file as a document" above) is a region of the same kind, named for
 the file as the code region is: Tab or a click puts keyboard focus on it so it can be scrolled from the keyboard, and
-Tab from there goes on, in the document's order, through each link, each diagram, each block formula and each failure
-mark in the text, before leaving it. An inline formula is a stop only while it is wider than the line (see "A Markdown file as a document"
+Tab from there goes on, in the document's order, through each link, each diagram, each block formula and each notice's
+mark in it, before leaving it. An inline formula is a stop only while it is wider than the line (see "A Markdown file as a document"
 above). ⌘A with keyboard focus on the document selects the document and not the viewer's title, path and size.
 Copying a selection that is the whole document puts the file's **Markdown source** on the clipboard, the source inside
 its fenced blocks included, which a selection of the drawn document cannot reach; a selection of part of the document

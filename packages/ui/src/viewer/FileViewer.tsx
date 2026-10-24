@@ -15,6 +15,7 @@ import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../components/RowControls";
 import { type HostPath, useHostPathActions } from "../components/useHostPathActions";
 import { useHasPainted } from "../components/useHasPainted";
 import { useLatest } from "../components/useLatest";
+import { IndicatorTooltip } from "../components/IndicatorTooltip";
 import { Dialog, useRefocusIfLost } from "../dialogs/Dialog";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
@@ -48,16 +49,15 @@ import {
   Disconnected,
   DISCONNECTED,
   Failure,
-  FIRST_ANNOUNCEMENT_DELAY_MS,
   Loading,
   NotFile,
-  Notice,
   Unchanged,
   Unreadable,
   Unsupported,
   ViewerFirstContentContext,
   ViewerPaintedContext,
 } from "./viewerStates";
+import { FileNotice, FIRST_ANNOUNCEMENT_DELAY_MS, NoticeSlotBoxes, NoticeSlotsProvider } from "./notices";
 import { useWrapClaims, WrapToggleHost } from "./wordWrap";
 
 /** Moving to the subject before or after this one, from the header's buttons and from Left and Right;
@@ -194,6 +194,9 @@ export function FileViewer({
   // in the dialog's header, directly under the heading (`Dialog`'s `subtitle`), for a compared
   // change and nothing for any other subject. Its height follows its text, and since the header
   // is not the scroller it is not clipped by it.
+  // The notices about the whole file or change are marks right after the path, in one slot per tone so
+  // that they stand failed, then warned, then notes, whichever surface raises them (`FileNotice`); they
+  // stay outside the path's own fade, which cuts only the path.
   // The header also gives up what it held before, each row one line that is never wrapped, so that
   // moving between files could not move the code below; the code now moves when the rows needed
   // differ from one file to the next, and between a compared change and a worktree one.
@@ -205,7 +208,11 @@ export function FileViewer({
   const renamedFrom = content.state === "change" ? renamedFromPath(content.change) : undefined;
   const statusLabel = status ? t(STATUS_LABELS[status]) : undefined;
   const tags = [statusLabel, subject.stage].filter((tag): tag is string => tag !== undefined);
-  const titleName = tags.length > 0 ? `${name}${t("viewer.titleSeparator")}${tags.join(t("viewer.tagSeparator"))}` : name;
+  // What kind of conflict a conflicted path is in: the status badge's tooltip, and part of the heading's
+  // name, since the drawn badge is hidden from assistive technology.
+  const conflictKind = content.state === "conflict" ? content.conflict : undefined;
+  const tagged = tags.length > 0 ? `${name}${t("viewer.titleSeparator")}${tags.join(t("viewer.tagSeparator"))}` : name;
+  const titleName = conflictKind !== undefined ? t("viewer.titleWithDetail", { title: tagged, detail: conflictKind }) : tagged;
   return (
     <Dialog
       size="viewer"
@@ -226,7 +233,7 @@ export function FileViewer({
                 tags sit closer to each other than the group does to the name. */}
             {tags.length > 0 && (
               <span className="flex shrink-0 items-center gap-1">
-                {status && <ChangeStatusBadge status={status}>{statusLabel}</ChangeStatusBadge>}
+                {status && <TitleStatusBadge status={status} label={statusLabel!} tooltip={conflictKind} />}
                 {subject.stage !== undefined && (
                   <StatusBadge separated={false}>
                     {subject.stage}
@@ -258,10 +265,12 @@ export function FileViewer({
       footer={null}
       resetKey={subject.key}
     >
-      <div ref={headerRef} data-viewer-description="" className="flow-root min-h-8 min-w-0 shrink-0 groove-b px-6 text-xs leading-8">
-        {/* Copy path, then fixed places for the Markdown view choice, the layout choice and the
+      <NoticeSlotsProvider>
+        <div ref={headerRef} data-viewer-description="" className="flow-root min-h-8 min-w-0 shrink-0 groove-b px-6 text-xs leading-8">
+          {/* Copy path, then fixed places for the Markdown view choice, the layout choice and the
             wrap choice, then File manager and Default application, so Tab order matches the screen
-            whichever mounts first.
+            whichever mounts first. The marks after the path come after those controls in the tab
+            order, for the same reason the controls come before the path in the source.
             Copy path is here, not beside the path it copies, because the group sits at the row's end
             and a button at the row's start would be tabbed to after the three at its end, against the
             reading direction. The slots have no box of their own while empty, so they take none of
@@ -271,32 +280,34 @@ export function FileViewer({
             met before the path it copies. That cost was weighed and accepted: the details are
             independent, separately labelled facts, and Copy path and the other controls are labelled
             on their own. */}
-        <RowIconGroup className="float-end h-8">
-          <CopyPathButton path={subject.path} />
-          <div ref={setMarkdownViewSlot} className="contents" />
-          <div ref={setLayoutSlot} className="contents" />
-          {wrapClaimed && <WrapToggleHost />}
-          {subject.host && <HostPathButtons host={subject.host} />}
-        </RowIconGroup>
-        <DetailItem>
-          <PlainMarkedPath path={displayWirePath(subject.path)} icon={<FileTypeIcon path={subject.path} className="size-3.5 shrink-0 text-app-muted" />} />
-        </DetailItem>
-        {content.state === "file" && (
+          <RowIconGroup className="float-end h-8">
+            <CopyPathButton path={subject.path} />
+            <div ref={setMarkdownViewSlot} className="contents" />
+            <div ref={setLayoutSlot} className="contents" />
+            {wrapClaimed && <WrapToggleHost />}
+            {subject.host && <HostPathButtons host={subject.host} />}
+          </RowIconGroup>
           <DetailItem>
-            <StatusBadge separated={false}>
-              {formatFileSize(language, content.body.size)}
-            </StatusBadge>
+            <PlainMarkedPath path={displayWirePath(subject.path)} icon={<FileTypeIcon path={subject.path} className="size-3.5 shrink-0 text-app-muted" />} />
+            <NoticeSlotBoxes />
           </DetailItem>
-        )}
-        {renamedFrom !== undefined && <RenamedFrom path={renamedFrom} />}
-      </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-3">
-        <ControlsSlot value={controls}>
-          <MarkdownLocationProvider value={{ path: subject.path, ...location }}>
-            <ViewerContentView subject={subject} name={name} layout={layout} onLayoutChange={diffLayout.set} line={line} />
-          </MarkdownLocationProvider>
-        </ControlsSlot>
-      </div>
+          {content.state === "file" && (
+            <DetailItem>
+              <StatusBadge separated={false}>
+                {formatFileSize(language, content.body.size)}
+              </StatusBadge>
+            </DetailItem>
+          )}
+          {renamedFrom !== undefined && <RenamedFrom path={renamedFrom} />}
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <ControlsSlot value={controls}>
+            <MarkdownLocationProvider value={{ path: subject.path, ...location }}>
+              <ViewerContentView subject={subject} name={name} layout={layout} onLayoutChange={diffLayout.set} line={line} />
+            </MarkdownLocationProvider>
+          </ControlsSlot>
+        </div>
+      </NoticeSlotsProvider>
     </Dialog>
   );
 }
@@ -460,18 +471,10 @@ function ViewerContentBody({
     case "file":
       return <BodyView resetKey={key} name={name} body={content.body} theme={theme} asDocument line={line} />;
     case "conflict":
-      return (
-        <>
-          <Notice tone="warned">{content.conflict}</Notice>
-          {content.body ? (
-            <BodyView resetKey={key} name={name} body={content.body} theme={theme} />
-          ) : content.message !== undefined ? (
-            <Failure among title={t("viewer.error")} message={content.message} path={subject.path} />
-          ) : (
-            <Loading />
-          )}
-        </>
-      );
+      // The conflict and its kind are the title's status badge; a conflicted file that could not be read
+      // is that failure alone.
+      if (content.body) return <BodyView resetKey={key} name={name} body={content.body} theme={theme} />;
+      return content.message !== undefined ? <Failure title={t("viewer.error")} message={content.message} path={subject.path} /> : <Loading />;
     case "change":
       return (
         <ChangeView
@@ -485,6 +488,20 @@ function ViewerContentBody({
         />
       );
   }
+}
+
+/** The title's status badge, with a tooltip where there is more to say than its word (a conflict's kind):
+ * the indicator kind, which a tap on a touch screen opens as well, since a tap on the badge does nothing
+ * else. It is a `span` inside the heading, which is no place for a `div`, and takes no name: the drawn
+ * title is hidden from assistive technology, which reads the same sentence after the heading's name. */
+function TitleStatusBadge({ status, label, tooltip }: { status: StatusKey; label: string; tooltip?: string }): React.ReactElement {
+  const badge = <ChangeStatusBadge status={status}>{label}</ChangeStatusBadge>;
+  if (tooltip === undefined) return badge;
+  return (
+    <IndicatorTooltip tooltip={tooltip} phrasing className="inline-flex">
+      {badge}
+    </IndicatorTooltip>
+  );
 }
 
 /** One file body, whichever kind it is. A Markdown file's text is offered as a document when
@@ -536,8 +553,8 @@ function ImageView({
     return body.text !== undefined ? (
       <>
         {/* The image fails only once it has been fetched and decoded, long after the dialog was
-            drawn, so the fall back to its text, like the alert below, is spoken as well as shown. */}
-        <Notice tone="failed" speak={t("viewer.image.asText")} />
+            drawn, so the fall back to its text, like the mark it brings, is spoken as well as shown. */}
+        <FileNotice tone="failed" sentence={t("viewer.image.asText")} speak />
         <CodeSurface resetKey={body.url} name={name} text={body.text} theme={theme} />
       </>
     ) : (
@@ -577,14 +594,15 @@ function ChangeView({
   switch (presentation.kind) {
     case "restricted": {
       const shown = presentation.shown;
+      const outside = presentation.hidden === "old" ? "viewer.change.outsideOld" : "viewer.change.outsideNew";
       return (
         <>
-          <Notice tone="warned">
+          <FileNotice tone="warned" sentence={t(outside, { path: isolate(displayWirePath(presentation.repositoryPath)) })}>
             <Message
-              id={presentation.hidden === "old" ? "viewer.change.outsideOld" : "viewer.change.outsideNew"}
+              id={outside}
               params={{ path: <InlineReference monospace wrap>{displayWirePath(presentation.repositoryPath)}</InlineReference> }}
             />
-          </Notice>
+          </FileNotice>
           {shown.state === "present" && shown.body ? (
             // The side is shown alone because the other one cannot be reached, not as a side of a
             // comparison, so a Markdown one is offered as a document like any whole file.
@@ -695,7 +713,7 @@ function UnchangedView({
     };
   }, [resetKey, loadBodies]);
   if (!loadBodies) return <Unchanged kind={kind} />;
-  // The body is shown all the same from here on, so the state is a notice over it rather than a
+  // The body is shown all the same from here on, so the state is a mark about it rather than a
   // stand-in panel: it is said in one sentence, not as a heading with a line under it.
   const said = t(kind === "identical" ? "viewer.change.identical.sentence" : "viewer.change.renamedUnchanged.sentence");
   // Keyed on the subject alone, so a re-read of the same one keeps what is on screen until it answers.
@@ -710,22 +728,18 @@ function UnchangedView({
     <>
       {/* Mounted for as long as the change is, so the read's own progress and its outcome are both
           spoken: every one of them arrives after the dialog was drawn. */}
-      <StatusAnnouncer text={done === undefined ? t("viewer.loading") : (reason?.text ?? said)} firstWriteDelayMs={FIRST_ANNOUNCEMENT_DELAY_MS} />
+      <StatusAnnouncer text={done === undefined ? t("viewer.loading") : (reason?.text ?? said)} firstWriteDelayMs={FIRST_ANNOUNCEMENT_DELAY_MS} clearAfterRead />
       {done === undefined ? (
         <Loading />
       ) : done.text !== undefined ? (
         <>
-          <Notice announced>{said}</Notice>
+          <FileNotice sentence={said} />
           {/* Nothing reads a text body's size; the daemon sends none for a change's side either. */}
           <BodyView resetKey={resetKey} name={name} body={{ kind: "text", text: done.text, size: done.text.length }} theme={theme} asDocument />
         </>
       ) : (
         <>
-          {reason && (
-            <Notice tone={reason.tone} announced>
-              {reason.text}
-            </Notice>
-          )}
+          {reason && <FileNotice tone={reason.tone} sentence={reason.text} />}
           <Unchanged kind={kind} />
         </>
       )}
@@ -748,14 +762,21 @@ function ImageSide({
   theme: "light" | "dark";
 }): React.ReactElement {
   return (
-    <section aria-label={label} className="flex min-h-0 min-w-0 flex-col gap-1">
-      <h3 className="text-xs font-medium text-app-muted">{label}</h3>
-      {side.state === "present" && side.body ? (
-        <BodyView resetKey={resetKey} name={name} body={side.body} theme={theme} />
-      ) : (
-        side.state !== "out_of_scope" && <SideNote side={side} />
-      )}
-    </section>
+    <NoticeSlotsProvider>
+      <section aria-label={label} className="flex min-h-0 min-w-0 flex-col gap-1">
+        {/* The notices of this side's content stand beside its heading, not in the file's header. The row
+            keeps the heading's line height, so a side with marks starts its content where the other side does. */}
+        <div className="flex h-4 min-w-0 items-center gap-1.5">
+          <h3 className="text-xs font-medium text-app-muted">{label}</h3>
+          <NoticeSlotBoxes />
+        </div>
+        {side.state === "present" && side.body ? (
+          <BodyView resetKey={resetKey} name={name} body={side.body} theme={theme} />
+        ) : (
+          side.state !== "out_of_scope" && <SideNote side={side} />
+        )}
+      </section>
+    </NoticeSlotsProvider>
   );
 }
 

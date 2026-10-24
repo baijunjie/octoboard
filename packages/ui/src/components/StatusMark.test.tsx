@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
+import { FocusScope } from "react-aria";
 import { expect, it, vi } from "vitest";
 
 import { StatusMark } from "./StatusMark";
@@ -70,7 +71,7 @@ it("draws the circled exclamation for danger and the triangle for a warning", ()
 it("takes the size and baseline of the text only when it is inline", () => {
   const glyph = (mark: React.ReactElement) => mountForTooltip(mark).querySelector("svg")!.getAttribute("class") ?? "";
   expect(glyph(<StatusMark inline label="Failed" />)).toContain("size-3.5");
-  expect(glyph(<StatusMark inline tone="note" label="Large" />)).toContain("size-3.5 translate-y-0.5");
+  expect(glyph(<StatusMark inline tone="note" label="Large" />)).not.toContain("translate-y-0.5");
   expect(glyph(<StatusMark label="Failed" />)).toContain("size-4");
   expect(glyph(<StatusMark inline label="Failed">Path not found.</StatusMark>)).toContain("size-3.5");
 });
@@ -348,16 +349,44 @@ it("leaves focus alone when a hover-opened header mark closes", async () => {
   expect(document.activeElement).toBe(outside);
 });
 
-it("is the tooltip wrapper for a note: a hover tooltip, no popover, no button", () => {
+it("opens a note the way it opens a danger or warning mark, as a popover on the same button", () => {
   withFakeTimers();
   const container = mountForTooltip(<StatusMark tone="note" label="Large file">Shown without highlighting.</StatusMark>);
-  expect(container.querySelector("button")).toBeNull();
-  const trigger = container.querySelector('[role="img"]')!;
-  expect(trigger.getAttribute("aria-label")).toBe("Large file");
-  enter(trigger);
-  act(() => void vi.runOnlyPendingTimers());
-  expect(openTooltip()?.textContent).toBe("Shown without highlighting.");
+  const button = container.querySelector("button[data-status-mark]")!;
+  expect(button.getAttribute("aria-label")).toBe("Large file");
+  enter(button);
+  hoverDelay();
+  expect(dialog()?.textContent).toBe("Shown without highlighting.");
+  expect(openTooltip()).toBeNull();
+});
+
+it("draws an inline note as a button inside a paragraph, which is valid there", () => {
+  const container = mountForTooltip(<p>Before <StatusMark inline tone="note" label="Large file">Shown without highlighting.</StatusMark></p>);
+  expect(container.querySelector("p button[data-status-mark]")?.getAttribute("aria-label")).toBe("Large file");
+});
+
+it("keeps focus inside a hover-opened panel that a press focused, within a focus-containing dialog, and hands it back to the earlier holder", async () => {
+  withFakeTimers();
+  const container = mountForTooltip(
+    <FocusScope contain restoreFocus>
+      <button data-holder>Holder</button>
+      <StatusMark label="Failed">Path not found.</StatusMark>
+    </FocusScope>,
+  );
+  const holder = container.querySelector<HTMLButtonElement>("[data-holder]")!;
+  act(() => holder.focus());
+  enter(container.querySelector("[data-status-mark]")!);
+  hoverDelay();
+  const panel = dialog() as HTMLElement;
+  expect(panel).not.toBeNull();
+  // A mouse press on the panel's text focuses the panel itself.
+  act(() => panel.focus());
+  await act(async () => void vi.advanceTimersByTime(100));
+  expect(panel.contains(document.activeElement)).toBe(true);
+  act(() => void panel.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  await act(async () => void vi.advanceTimersByTime(100));
   expect(dialog()).toBeNull();
+  expect(document.activeElement).toBe(holder);
 });
 
 it("does not reopen under a pointer still resting on the mark after Escape, until it has left and come back", () => {

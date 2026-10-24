@@ -7,10 +7,11 @@ explanations are kept out of the visible text.
 
 Every tooltip in the window is the application's own, drawn in its own styling and under one set of rules, whatever
 carries it — a control, an indicator or a label too long for its space. The floating surfaces that hold more than a
-label — a failure mark's popover, the rail's account quota panel (see "Failures marked on a row" in
-`docs/product/error-alerts.md` and "The account quota panel on the rail" in `docs/product/account-quotas.md`) — are
-drawn the same way, on the same surface, with the same shadow and corners (a failure mark's popover has the
-tooltip's padding and text size too; the quota panel keeps its own width, padding and text sizes, being a panel):
+label — the popover of a status mark (a failure, a warning or a note, see "Failures marked on a row" in
+`docs/product/error-alerts.md`) or of the "?" help tip (see "The help tip" below), and the rail's account quota panel
+(see "The account quota panel on the rail" in `docs/product/account-quotas.md`) — are drawn the same way, on the same
+surface, with the same shadow and corners (a mark's and a help tip's popover have the tooltip's padding and text size
+too; the quota panel keeps its own width, padding and text sizes, being a panel):
 
 - It opens once the pointer has rested on what carries it for 500 ms. Within half a second of
   another tooltip closing it opens at once instead, so moving from one to the next does not wait again at each one,
@@ -31,12 +32,11 @@ tooltip's padding and text size too; the quota panel keeps its own width, paddin
   again (see "Tooltips on indicators" below).
 - **A touch has no hover, so on a touch screen the same text opens in a popover.** Which of the two shows follows the
   input of the interaction, not the device: a mouse hover and keyboard focus open the tooltip, and a finger's or a
-  pen's press opens the popover, on a phone, on a tablet with a trackpad and on a touch-screen laptop alike; on the
-  "?" help tip so does a screen reader's activation. A mouse press opens nothing extra, and neither does a keyboard
-  press, since keyboard focus has the tooltip open already. The popover is drawn like the tooltip (the same surface,
+  pen's press opens the popover, on a phone, on a tablet with a trackpad and on a touch-screen laptop alike. A mouse
+  press opens nothing extra, and neither does a keyboard press, since keyboard focus has the tooltip open already. The popover is drawn like the tooltip (the same surface,
   padding, text size and width) and takes focus while open; a tap outside it or Escape closes it — that tap does
   nothing else — and focus goes back to what held it. It opens on a mark that only carries a tooltip (which marks, see
-  "Tooltips on indicators" below) and on the "?" help tip. It does not open on a control that has an action of its
+  "Tooltips on indicators" below). It does not open on a control that has an action of its
   own, where a tap runs the action (an icon-only button, a menu trigger, a switch), nor on a mark inside a row, a
   button or an option, where the tap belongs to what holds the mark, nor on clipped text or a change row's status
   letter. Where a tap opens none, a touch screen has no route to the text.
@@ -105,13 +105,6 @@ application buttons below. These are:
   and for replacing it once one is picked, and the delete button over its corner, named for removing the image;
 - the console dialog's Manage accounts button, beside the title of its Agent default accounts section (see "Agent
   config directories" in `docs/product/consoles.md`);
-- the "?" help tip, a small muted icon button that takes an explanation out of the visible text (see "Explanations in
-  help tips" below): its tooltip is the explanation — plain text, or text with literals such as file names set apart
-  as chips — and the name announced for it says what it explains ("About automatic pulling"), so the explanation is
-  the control's description while the tooltip is open. A mouse only ever gets the tooltip, a mouse press opening
-  nothing, and Enter or Space leaves the tooltip open; a finger's or a pen's press or a screen reader's activation
-  opens the explanation in the popover a touch gets (see "How a tooltip behaves" above), and closing it gives focus
-  back to the "?";
 - the close button of every dismissable dialog, of Settings and of each toast ("Close").
 
 The rail's **Account quota** button is an exception: it has **no tooltip**, on hover or on keyboard focus. Resting
@@ -130,10 +123,21 @@ resting the mouse on it floats the sidebar in instead (see "Previewing a console
 user with the docked sidebar hidden never reads the avatar's tooltip**; what is going on is then read from the sessions
 the card lists, each with its own status glyph and that glyph's tooltip (see "Tooltips on indicators" below).
 
+### The help tip
+
+The **"?" help tip** is a small muted icon button that takes an explanation out of the visible text (see "Explanations
+in help tips" below). It is a tab stop, but it has **no tooltip**: the explanation — plain text, or text with literals
+such as file names set apart as chips — opens in a popover, by the same rules as a status mark's (see "Failures marked
+on a row" in `docs/product/error-alerts.md`). A mouse resting on it opens the popover without moving keyboard focus,
+and it stays open while the pointer moves into it, so its text can be selected and copied with the mouse; a mouse
+click opens nothing. Keyboard focus alone shows nothing: Enter or Space, a finger's or a pen's tap and a screen
+reader's activation open it with keyboard focus inside, and closing it gives focus back to the "?". The name announced
+for the "?" says what it explains ("About automatic pulling"), and names its popover too.
+
 ## Explanations in help tips
 
 Explanatory text stays visible by default. Only two kinds move into a "?" help tip (for how the help tip behaves see
-"Tooltips on icon-only controls" above):
+"The help tip" above):
 
 1. A principle-level explanation: how something works underneath, technical, and not something the user needs to care
    about while operating it.
@@ -251,9 +255,9 @@ pressing a change row's status letter opens the change. So such a mark is no dea
 On a touch screen a tap on a mark opens its tooltip's content in a popover (see "How a tooltip behaves" above) where
 the tap has nothing else to do: the status glyph on the top bar's breadcrumb, the status glyph and agent icon of each
 session a confirmation lists, the branch badge in a project's focus mode header and the context-size chip beside the
-Session history's heading (see "The context-size chip" in `docs/product/session-context.md`). On a device with a
-touch screen such a mark answers a press, and a hover, across at least 24 by 24 pixels, even where it is drawn
-smaller. A mark inside a row, a button or an option opens none, as the tap there selects, folds, switches or chooses:
+Session history's heading (see "The context-size chip" in `docs/product/session-context.md`) and the Conflicted tag
+in the file viewer's title. On a device with a touch screen such a mark answers a press, and a hover, across at least 24 by 24 pixels,
+even where it is drawn smaller. A mark inside a row, a button or an option opens none, as the tap there selects, folds, switches or chooses:
 the status glyph, agent icon, context-size chip and binding badge on a sidebar row, a focus mode card or archived row
 and an archive view row, the branch badge on a project's sidebar row, the activity marker, and the
 responsible-session badge in the Git mode's branch lists. A touch has no route to what such a mark's tooltip says;
@@ -290,6 +294,8 @@ These are:
   session working on the branch, says so differently when that session no longer exists and when it is the selected
   one, and is on the ring itself rather than on the row around it (see "The responsible-session badge" in
   `docs/product/branch-responsible-session.md`);
+- the Conflicted tag in the file viewer's title, whose tooltip names the kind of conflict; assistive technology
+  hears it as part of the title (see "Opening a change" in `docs/product/project-pane-git-change-viewer.md`);
 - a change's status letter on its row in the Git mode's change list, flat or grouped by folder, whose tooltip names
   the status in the same word the file viewer's header carries as the tag of an opened change, and is on the letter
   itself rather than on the row around it, the name and the detail beside it keeping their own tooltips (see "Rows

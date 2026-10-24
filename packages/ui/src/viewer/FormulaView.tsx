@@ -2,8 +2,7 @@ import React, { useEffect, useState } from "react";
 
 import { useFadeRegion, useScrollFade } from "../components/scrollFade";
 import { useT } from "../i18n/react";
-import { InlineNotice } from "./inlineNotice";
-import { Notice } from "./viewerStates";
+import { BlockFallback, SpotNotice } from "./notices";
 
 const SOURCE = "font-mono text-[0.9em] break-words whitespace-pre-wrap";
 
@@ -86,7 +85,7 @@ function FormulaSource({ source, inline }: { source: string; inline: boolean }):
     );
   }
   return (
-    <pre dir="ltr" className={`p-3 ${SOURCE}`}>
+    <pre dir="ltr" className={`p-3 leading-5 ${SOURCE}`}>
       <code>{source}</code>
     </pre>
   );
@@ -107,18 +106,17 @@ function FormulaFallback({
   if (inline) {
     return (
       <>
-        <InlineNotice tone={failed ? "failed" : "explained"} speak={failed ? notice : undefined}>
+        <SpotNotice tone={failed ? "failed" : "explained"} speak={failed}>
           {notice}
-        </InlineNotice>
+        </SpotNotice>
         {body}
       </>
     );
   }
   return (
-    <div className="my-3">
-      {failed ? <Notice appearance="document" tone="failed" speak={notice} /> : <Notice appearance="document">{notice}</Notice>}
+    <BlockFallback className="my-3" tone={failed ? "failed" : "explained"} speak={failed} sentence={notice}>
       {body}
-    </div>
+    </BlockFallback>
   );
 }
 

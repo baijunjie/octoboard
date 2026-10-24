@@ -2,26 +2,31 @@ import { CircleHelp } from "lucide-react";
 import React from "react";
 
 import { Button } from "./Button";
-import { TitledControl } from "./TitledControl";
+import { Hint } from "./Hint";
 
 /** A small muted "?" that carries an explanation, to take a line of explanatory text out of a row. It is an
- * icon-only control, so it is a tab stop (see "Tooltips on icon-only controls" in
- * `docs/product/labels-and-tooltips.md`), and it is a `TitledControl` whose text is the explanation:
+ * icon-only control, so it is a tab stop (see "The help tip" in `docs/product/labels-and-tooltips.md`), and it
+ * opens the explanation in a popover (`Hint` of kind `popover`), as a status mark does, so the explanation can
+ * be selected and copied with the mouse:
  *
- * - Resting a mouse on it, or focusing it from the keyboard, shows the explanation in a tooltip, which
- *   assistive technology is given as the control's description while it is open.
- * - A touch or pen press opens the same explanation in a popover drawn like the tooltip (`touchPopover`), which
- *   a touch screen needs as it has no hover. An outside tap or Escape closes it, and focus goes back to the "?".
- *   A mouse press opens nothing: the tooltip is what a mouse has.
+ * - A mouse resting on it opens the popover without moving focus, and it stays open while the pointer
+ *   moves into it; a mouse click opens nothing.
+ * - A touch or pen tap, the keyboard (Enter, Space) and assistive technology open it with focus inside.
  *
- * `label` is the control's accessible name and has to say what it explains. The explanation is text, or rich
- * content such as a `<Message>` with literals in chips; the tooltip and the popover show the same content. */
+ * `label` is the control's accessible name and has to say what it explains; it also names the popover. The
+ * explanation is text, or rich content such as a `<Message>` with literals in chips. */
 export function HelpTip({ label, children }: { label: string; children: React.ReactNode }): React.ReactElement {
   return (
-    <TitledControl title={children} touchPopover>
-      <Button isIconOnly size="xs" variant="ghost" aria-label={label} className="shrink-0 -my-0.5 rounded-full text-app-muted">
-        <CircleHelp className="size-3.5" aria-hidden />
-      </Button>
-    </TitledControl>
+    <Hint
+      kind="popover"
+      label={label}
+      trigger={({ onMouseHoverChange: _, expanded: __, popupId: ___, ...wiring }) => (
+        <Button {...wiring} isIconOnly size="xs" variant="ghost" aria-label={label} className="shrink-0 -my-0.5 rounded-full text-app-muted">
+          <CircleHelp className="size-3.5" aria-hidden />
+        </Button>
+      )}
+    >
+      {() => children}
+    </Hint>
   );
 }

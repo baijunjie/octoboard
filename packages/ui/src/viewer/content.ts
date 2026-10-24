@@ -91,8 +91,9 @@ export type ViewerContent =
   | { state: "disconnected"; what: "file" | "change" }
   | { state: "file"; body: ViewerBody }
   | { state: "change"; change: ViewerChange }
-  /** A path in conflict, which is no two-sided change: `conflict` says how, in the caller's
-   * wording, beside the file on disk with its conflict markers, or why that cannot be shown. */
+  /** A path in conflict, which is no two-sided change: the file on disk with its conflict markers, or
+   * why it cannot be read. `conflict` is the kind of conflict in the caller's wording, which the title
+   * says on its status chip. */
   | { state: "conflict"; conflict: string; body?: ViewerBody; message?: ErrorPresentation };
 
 /**

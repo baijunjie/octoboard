@@ -5,6 +5,7 @@ import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../errorAlerts";
 import { MermaidBlock } from "./MermaidBlock";
+import { markNames } from "./viewerTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -50,7 +51,7 @@ it("draws a diagram as an image with a text alternative, and does not follow a l
 it("shows an over-budget diagram as source without drawing it", async () => {
   await mount("graph TD\nA-->B", true);
   expect(render).not.toHaveBeenCalled();
-  expect(document.body.textContent).toContain("Shown as source because the document is large.");
+  expect(markNames()).toEqual(["Shown as source because the document is large."]);
   expect(document.body.textContent).toContain("graph TD");
 });
 
@@ -63,7 +64,7 @@ it.each([
   render.mockRejectedValue(error);
   await mount("graph TD\nA-->");
   expect(document.querySelector("[role=img]")).toBeNull();
-  expect(document.body.textContent).toContain("This diagram could not be drawn, so its source is shown.");
+  expect(markNames()).toEqual(["This diagram could not be drawn, so its source is shown."]);
   expect(document.body.textContent).toContain("graph TD");
   expect(errorAlerts.getSnapshot()).toEqual([]);
 });

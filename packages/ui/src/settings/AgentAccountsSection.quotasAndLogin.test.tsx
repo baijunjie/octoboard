@@ -3,6 +3,7 @@ import { act } from "react";
 import { expect, it, vi } from "vitest";
 
 import type { Account, AccountQuota, AgentAvailability } from "../protocol";
+import { press } from "../components/tooltipTestSupport";
 import { trackMountRefocus } from "../dialogs/dialogTestSupport";
 import { accountLogins, accountQuotas, availability, request, toastError } from "./agentAccountsSectionTestState";
 import { buttonNamed, mount, openDetailsOf, rowLogin, rowOf } from "./agentAccountsSectionTestSupport";
@@ -62,11 +63,8 @@ it("explains the default account in a help tip after its path in the details hea
   expect(dialog.querySelector("h2, [role=heading]")!.textContent).toBe("Default");
   expect(dialog.textContent).toContain("Plus");
   expect(dialog.textContent).toContain("Logged in");
-  act(() => {
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
-    tip.focus();
-  });
-  expect(document.querySelector('[role="tooltip"]')?.textContent).toBe("The agent's own default configuration directory. New sessions use it when no account is chosen, and other accounts can share its configuration.");
+  press(tip);
+  expect(document.querySelector('[role="dialog"][aria-label="About the default account"]')?.textContent).toBe("The agent's own default configuration directory. New sessions use it when no account is chosen, and other accounts can share its configuration.");
 });
 
 it("shows the login state of each account: logged in once read, not logged in as the reading says, nothing while unknown", () => {

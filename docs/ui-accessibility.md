@@ -330,13 +330,16 @@ terminal or an editor before the surface decides where focus goes.
 
 - **The hover form** is `role="dialog"` with `aria-modal="false"`. The window's check for an open modal matches every
   dialog without it, and would hold F6, window shortcuts, Back / Forward and floating panes while the panel is merely
-  open. It is not a dialog that focuses itself on mount.
+  open. It is not a dialog that focuses itself on mount. It is focusable without being a tab stop (`tabIndex={-1}`),
+  so a mouse press on its text leaves focus in it: otherwise focus would fall to the page, and a focus-containing
+  dialog it floats over (react-aria's `FocusScope contain`) would take focus back a frame later, ending the drag that
+  selects the text.
 - **The press form** is a modal popover: focus is inside, an outside press or Escape closes it, focus goes back to what
   held it, and the window's shortcuts and F6 wait as for a menu. A press of this kind on a hover-opened surface turns it
   into the press form, remounted so that it behaves as if press-opened from scratch (focus returns to the trigger).
 - **Escape.** While hover-opened the surface marks itself `data-escape-topmost`, so the drawer and floating-pane Escape
   handling stands aside while it exists, and its Escape and outside press are watched on the document, since
-  react-aria's non-modal popover does neither. It holds no focus, so the key belongs to where focus is: Escape is left
+  react-aria's non-modal popover does neither. Opened by hover it holds no focus, so the key belongs to where focus is: Escape is left
   alone when focus is in a terminal (the agent's, whose program takes Escape as an interrupt, or a shell's) or a text
   field holding text, and while an input method is composing. A press-opened surface took focus, so it takes Escape
   (react-aria's own).
@@ -559,12 +562,13 @@ menu trigger — carries both a tooltip and an accessible name. The name is what
 has to tell the control apart from its neighbours even where the tooltip's text cannot, so the two are not always the
 same text. Which control's tooltip repeats its name and which one's is the shorter of the two is settled per control in
 the "Tooltips on icon-only controls" section of `docs/product/labels-and-tooltips.md`; `ActionMenu` gives its trigger a
-name of that shape by default. The one exception is a button whose hover opens a floating panel that shows what
-its tooltip would say (the rail's account quota button, above): it carries only its accessible name.
+name of that shape by default. The exception is a button whose hover opens a floating panel that shows what
+its tooltip would say — the rail's account quota button (above), a status mark, the help tip's "?": it carries only
+its accessible name.
 
 A tap does not open that tooltip, and on such a control it must not: a tap on an icon-only button or a menu trigger runs
-its action. `TitledControl`'s `touchPopover` is therefore off by default; see "A tooltip is the application's own" below
-for what it does where it is on.
+its action, so `TitledControl` has no touch popover. A control whose only action is to show its text is a popover hint
+instead (the help tip's "?").
 
 A copy button (`CopyButton`) takes its accessible name from its tooltip, which changes to "Copied" once the text is on
 the clipboard. A control that keeps focus is not reliably re-read when its name changes, so the button also announces
@@ -622,10 +626,7 @@ the caller's hover). What shows follows the input of the interaction, not the
 device, so a touch-screen laptop or a tablet with a trackpad gets what the input it used answers:
 
 - a mouse hover and keyboard focus open the tooltip, as always; a mouse press opens nothing extra;
-- a touch or pen press opens the same content in a **touch popover**, where the shape allows it; on the control shape
-  so does an assistive technology's activation (a virtual press). A keyboard press (Enter or Space) opens none:
-  keyboard focus already shows the tooltip, and with `touchPopover` on a press does not close it (`shouldCloseOnPress`
-  off, as `keepOpenOnPress` does), so the text stays on screen. The popover is drawn like the tooltip, from the one
+- a touch or pen press opens the same content in a **touch popover**, where the shape allows it. The popover is drawn like the tooltip, from the one
   definition: it carries HeroUI's own `tooltip` class (surface, padding, text size, width cap, word breaking, and the
   dialog fills of `style.css`) and the same `control-fills`, rather than a copy of them. It is modal, as a popover is:
   an outside tap or Escape closes it, and focus, which it takes, goes back to what held it. Being modal it hides its
@@ -639,8 +640,8 @@ button" is unreliable: a react-aria control hides its press handling in its own 
 `role="button"` element, and a row's action lives on an ancestor. So the default follows the shape's trigger, which the
 wrapper knows statically:
 
-- the control shape's `touchPopover` is **off**, since a tap on a control is its action; it is on for `HelpTip`'s "?",
-  whose only action is to show its text;
+- the control shape has none, since a tap on a control is its action; a control whose only action is to show its text
+  is a popover hint instead;
 - the mark shape's `touchPopover` is **on**, since a tap on a mark does nothing else; it is turned off, with the reason
   in a comment, for a mark inside something that handles the same tap (a tree row, a button, an option), or the popover
   would open over what the press does;
@@ -666,18 +667,13 @@ tooltip on a bare glyph: it is the one control whose only job is what it says, s
 text it replaced was.
 
 - It is a tab stop with an accessible name of its own ("About the default account"), not the explanation itself, so
-  the name stays short and the explanation reaches assistive technology as a description while its tooltip is open.
-- It is `TitledControl` around the "?" with `touchPopover` on, so it follows "A tooltip is the application's own":
-  mouse hover and keyboard focus open the tooltip; a touch or pen press or an assistive technology's activation opens
-  the same text in a popover drawn like the tooltip, named like the "?", closed by an outside tap or Escape, with focus
-  returned to the "?". That popover is what reaches the explanation on touch, where no tooltip opens. A mouse press
-  opens nothing more, and neither does Enter or Space: the tooltip focus opened stays open through the press, so there
-  is no popover to close and hold the tooltip back for. After a keyboard press the first Escape closes the tooltip, as
-  for any focused control. After an assistive technology's activation, Escape closes the popover and focus returns to
-  the "?" by keyboard, which shows the tooltip again, so one more Escape is spent on the tooltip, and where the "?" sits
-  in a dialog the dialog's own close follows it (`useEscapeWhileTooltipOpen`), as for any focused control with a
-  tooltip. That is the one route where the tooltip reappears behind a dismissed popover, and no hold-back is built
-  for it.
+  the name stays short; the same name names the popover the explanation is shown in.
+- The explanation is in a popover, `Hint` of kind `popover`, as a status mark's content is, not in a tooltip: it can
+  run to several lines, and a mouse has to be able to select and copy it, which a tooltip, closing the instant the
+  pointer leaves its trigger, never allows. The popover follows the input matrix of "A floating panel that does not
+  take the window": a mouse resting on the "?" opens it without moving focus, and it stays open while the pointer moves
+  into it; a mouse click opens nothing; a touch or pen tap, Enter or Space and an assistive technology's activation
+  open it with focus inside, closed by an outside press or Escape with focus returned to the "?".
 - It sits beside the label it explains, never inside it: a button nested in a `<label>` is nested interactive
   content, and its name would become part of the label's.
 - The explanation may carry inline references (a file name such as `CLAUDE.md`); it reaches assistive technology the same
@@ -783,7 +779,7 @@ wrapper that is nothing to assistive technology. An indicator whose meaning alre
 the trigger unnamed instead, adding nothing to the name of the row or trail around it.
 
 What is left over is a shortfall kept on purpose, marked at its code: a sighted user who works from the keyboard
-reaches no tooltip, so a name that lives only there is a name they do not get. (An error or warning mark is not one
+reaches no tooltip, so a name that lives only there is a name they do not get. (A status mark, a note included, is not one
 of these: it is a popover on a button, which the keyboard reaches; see "A failure that belongs to one row".)
 
 On touch, a mark opens its tooltip's content in a popover when tapped (the mark shape's `touchPopover`, on by default;
@@ -972,7 +968,7 @@ layout: the status column of a table (an import result), beside the section's he
 inline with the text in a document.
 No sentence of error text is written into the row.
 
-**An error or a warning mark is always a popover, and never also a tooltip.** What it carries can hold a button (Try
+**A mark is always a popover, and never also a tooltip.** What an error or a warning carries can hold a button (Try
 again) and raw text to select, which a tooltip cannot, and one mark wiring both surfaces would put two floating things
 on one glyph; a mark whose content is one short line is the same popover with that line as its content, named by it,
 drawn on the **tooltip's surface** like every floating surface of the application. A mark with a body, a button or
@@ -982,8 +978,8 @@ screen, so it stays the glyph and the word as plain text, with no button and no 
 The popover holds the reason in the application's own words, then the main remedy, any further explanation, then the
 raw text, then the recovery action (Try again, at the popover's trailing edge). The glyph is a button named for what
 failed, with no tooltip (the popover says everything one would). A note (an informational mark, circled `i`) is the
-other tone and uses the tooltip wrapper instead (`IndicatorTooltip`, with its touch popover; see "A tooltip on a mark
-that is not a control"); it has no action, so it needs no popover of its own. Glyphs per tone: circled `!` for danger,
+same button and the same popover with nothing to press in it: marks of every tone side by side look alike, take the
+pointer alike, are each a tab stop and open the same way, so they differ only in glyph and colour. Glyphs per tone: circled `!` for danger,
 a triangle for a warning, circled `i` for a note.
 
 The popover is `Hint` of kind `popover` ("A floating panel that does not take the window" has the input matrix): a
@@ -1019,8 +1015,7 @@ button is phrasing content, so valid inside a paragraph. It is a tab stop like a
 reason, which the tooltip it replaced never gave them; the document's links and text are untouched, the mark is one
 more stop, named by the sentence. Inside a link (a linked image that failed) the mark is drawn right after the anchor,
 not in it, so no button nests in a link and a press on the mark is not a press on the link. Its target is exempt
-from "Pointer target size" as inline text is. Only the danger and warning tones have this form: the note's trigger is
-the tooltip wrapper's `div`, so a note inside a paragraph is not built yet.
+from "Pointer target size" as inline text is. A note in running text is the same button.
 
 ### References in copy use `InlineReference`
 
@@ -1179,7 +1174,7 @@ only through this component.
 Where a region elsewhere already speaks the state, the panel takes `silent` and is hidden from screen readers so it is
 not read twice. What that region says is then the only way to hear it, so it says the whole state as one sentence, from
 a message of its own — a `.sentence` beside the heading and its line, never the two joined in code, which runs together
-differently from language to language. The same message serves a state shown as a notice over content that is
+differently from language to language. The same message serves a state shown as a notice about content that is
 displayed anyway, rather than as a panel standing in for it. `silent` cannot be combined with an action: a focusable
 element inside an `aria-hidden` subtree keeps its tab stop and loses its name.
 
@@ -1235,6 +1230,12 @@ element, an error from `role="alert"`.
   never said. Put the subject in the text when several states can change independently: `role="status"` is atomic, so
   a bare "Granted." names nothing. Reading the rows statically meets each state twice, once in place and once in the
   status; that is accepted.
+- The file viewer's notices are announced only when they arrive after the viewer has painted, once, from a
+  `StatusAnnouncer` with the viewer's first-announcement delay; one present from the first paint is not said, and a
+  surface that already speaks the same state (an unchanged change, an expanded diff's notes) says it in place of the
+  notice. Each such region passes `clearAfterRead`, which empties it `READ_TIME_MS` after the write: the mark is named by
+  the same sentence, and reading the page line by line meets it only on the mark. A conflicted file's failed read is an
+  error and is announced by its `Failure` as an alert, like any read failure.
 - A status region for content that a disclosure folds away is mounted outside the folded body, and only while the
   disclosure is open. The body stays mounted while folded, so a region inside it would be past its first write delay
   when the disclosure opens again, and the text kept from before would be written in the very render that shows the
@@ -1519,24 +1520,20 @@ hovered or focused, below 3:1, with the focus ring carrying keyboard focus, and 
 pressed. Its "Resize" tooltip opens on pointer hover only and is not tied to the separator, whose own
 accessible name already says what it does; a focused grip shows itself and its ring instead.
 
-**A notice carries its severity in a glyph, never in its fill alone.** The file viewer's notices — what is said above
-content that is still shown — are one block in three tones (`Notice` in `packages/ui/src/viewer/viewerStates.tsx`): an
-explanation of how the content is drawn, a warning about the content itself, and a part of it the viewer could not show.
-Each is a HeroUI `Alert` of its own status, which draws the glyph that goes with it — the circled `i`, the warning
-triangle, the circled `!` — from `Alert.Indicator`. Notices above a reading surface and block notices embedded in a
-Markdown document use a background fill corresponding to their status and keep HeroUI's original Alert structure and all
-other styles, including title, description and indicator. The glyph carries the tone even where the fill does not
-contrast strongly with the surrounding surface. A notice that sits inside a paragraph cannot be that Alert: an Alert is
-a `div`, and a `div` inside a `p` is not valid. `InlineNotice` in `packages/ui/src/viewer/inlineNotice.tsx` is a `span`.
-The sentence inherits the document colour, which already meets the contrast above, and the same three glyphs tell the
-tones apart. When that notice appears after the first paint, it is announced by `StatusAnnouncer` rendered as a `span`,
-with the viewer's own first-write delay; the visible sentence is `aria-hidden` so it is not read twice. A failed block
-notice, a rendering fallback with the content still shown, is announced the same way, as status and not as an alert,
-which suits what it is: the view that was asked for is replaced by one that works, and the viewer's regions are shared
-with its loading progress. A part inside a paragraph that failed (an image or an inline formula that could not be drawn)
-is not such a sentence but the minimal mark of "A failure that belongs to one row": its glyph in place of the part, with
-the reason in its popover or tooltip. The error block for a subject that cannot be opened at all uses the shared danger
-Alert with HeroUI's original indicator, title and description styles, following "Errors shown among other content".
+**A notice carries its severity in a glyph, never in its fill alone.** The file viewer's notices — what is said about
+content that is still shown — are status marks (`StatusMark`) in three tones (`packages/ui/src/viewer/notices.tsx`): an
+explanation of how the content is drawn (a note, the circled `i`), a warning about the content itself (the triangle),
+and a part of it the viewer could not show (danger, the circled `!`). The glyphs differ in shape, so the tone does not
+rest on colour. The viewer is a compact layout and holds no Alert: a notice about the whole file or change is one mark
+after the file path in the viewer's header, ordered failed, warned, then notes; in a compared image change a side's
+own notice stands beside that side's heading instead; a notice about one spot of a Markdown document stays at that
+spot, inside a paragraph (a button is valid there) or before a block's fallback source, lined
+up with its first line. Each mark is named by its sentence and opens it, as "A failure that belongs to one row" says.
+A subject that cannot be opened at all fills the body with the danger empty-state (`Failure` in
+`packages/ui/src/viewer/viewerStates.tsx`) and no mark, a conflicted file whose read failed included. A conflict is
+said by the title's status chip, not by a mark: what kind of conflict it is is the chip's tooltip, which a tap opens
+too, and part of the heading's name, built from the catalog with the rest of it, since the drawn chip is hidden
+from assistive technology.
 A viewer with nothing to draw takes neither: it fills the body with a centred glyph and sentence (`NothingToShow`).
 
 **One kept shortfall is left, and it is a single control**: the settings dialog's three-way appearance choice, which

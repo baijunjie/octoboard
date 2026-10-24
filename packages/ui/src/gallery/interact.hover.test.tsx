@@ -417,6 +417,25 @@ it("hoverStatusMark opens the popover of the mark it names without moving focus"
   release(mark);
 });
 
+it("hoverStatusMark opens a help tip's popover as it does a mark's", async () => {
+  mountForTooltip(<HelpTip label="About Billing">Billing is charged monthly.</HelpTip>);
+  const tip = document.querySelector<HTMLElement>('[aria-label="About Billing"]')!;
+  await settledLive(createUi(document, "en").hoverStatusMark("About Billing"));
+  const popover = document.querySelector('[role="dialog"]');
+  expect(popover?.textContent).toBe("Billing is charged monthly.");
+  expect(popover?.getAttribute("aria-modal")).toBe("false");
+  expect(document.activeElement).not.toBe(tip);
+  release(tip);
+});
+
+it("hoverStatusMark opens the popover of a bare mark, whose one line is its name", async () => {
+  mountForTooltip(<StatusMark tone="note" label="Shown as source because it is large." />);
+  const mark = document.querySelector<HTMLElement>('[aria-label="Shown as source because it is large."]')!;
+  await settledLive(createUi(document, "en").hoverStatusMark("Shown as source because it is large."));
+  expect(document.querySelector("[data-status-mark-popover]")?.textContent).toBe("Shown as source because it is large.");
+  release(mark);
+});
+
 it("hoverStatusMark fails for a mark that is not there", async () => {
   mountStatusMark();
   const done = expect(createUi(document, "en").hoverStatusMark("Nothing")).rejects.toThrow(/Nothing to hover/);

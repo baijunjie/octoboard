@@ -640,7 +640,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, usage-window help popover open on touch",
-    description: "The \"?\" after the \"Start usage windows automatically\" label has been touched with a finger, so the explanation stays open in a popover above it, drawn like the tooltip and covering part of the row above: why a window that has reset shows no countdown until a request starts it, and what the switch sends. The row's own description stays one short sentence beneath the label.",
+    description: "The \"?\" after the \"Start usage windows automatically\" label has been touched with a finger, so the explanation stays open in a popover above it, covering part of the row above: why a window that has reset shows no countdown until a request starts it, and what the switch sends. The row's own description stays one short sentence beneath the label.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -653,18 +653,9 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, default account help tip open",
-    description: "Keyboard focus is on the \"?\" at the end of the config directory line in the default account's settings dialog, so its tooltip is open, saying this is the agent's own default configuration directory, which new sessions use when no account is chosen and other accounts can share. The table behind the dialog carries no such \"?\".",
+    description: "The mouse rests on the \"?\" at the end of the config directory line in the default account's settings dialog, so its popover is open, saying this is the agent's own default configuration directory, which new sessions use when no account is chosen and other accounts can share; no focus has moved, the popover stays while the pointer is on the \"?\" or the popover, and its text can be selected. The table behind the dialog carries no such \"?\".",
     state: quotaState,
-    steps: [...accountDetails(defaultAccount), (ui) => ui.focusControl(ui.t("settings.accounts.defaultHelp"))],
-  },
-  {
-    id: "settings-accounts-default-help-popover",
-    group: GROUP,
-    category: "normal",
-    title: "Settings: accounts, default account help popover open on touch",
-    description: "The \"?\" at the end of the config directory line in the default account's settings dialog has been touched with a finger, so the explanation stays open in a popover, drawn like the tooltip and with no tooltip on top of it; unlike the tooltip, it stays until Escape or an outside tap.",
-    state: quotaState,
-    steps: [...accountDetails(defaultAccount), (ui) => ui.touchPress(ui.t("settings.accounts.defaultHelp"))],
+    steps: [...accountDetails(defaultAccount), (ui) => ui.hoverStatusMark(ui.t("settings.accounts.defaultHelp"))],
   },
   {
     id: "settings-accounts-many",
@@ -697,7 +688,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: `Settings: accounts, ${AGENT_LABEL[agent]} permission approval explanation`,
-    description: "The help button beside the Permission approval label above the table is touched with a finger. Its popover, drawn like the tooltip, keeps the agent-specific explanation next to the selector it describes, without a tooltip on top.",
+    description: "The help button beside the Permission approval label above the table is touched with a finger. Its popover keeps the agent-specific explanation next to the selector it describes.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),

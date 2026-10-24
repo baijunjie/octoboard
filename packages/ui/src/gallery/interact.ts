@@ -252,13 +252,13 @@ export interface Ui {
    * press. The pointer's events are those of a mouse, so the panel is the hovered one and no press
    * pins it. */
   hoverPanel: (host: Matcher, panel: Matcher) => Promise<void>;
-  /** Moves the mouse pointer onto the status mark (a `StatusMark`'s button) named `matcher` and leaves it
-   * there, for the popover that opens after the pointer has rested on it, with no focus moved. It returns
+  /** Moves the mouse pointer onto the status mark (a `StatusMark`'s button, of any tone) or help tip's "?" named
+   * `matcher`, any button that opens a popover hint, and leaves it there, for the popover that opens after the pointer has rested on it, with no focus moved. It returns
    * once that mark's own popover is up and fails if none opens, or if what opens is the press form (`aria-modal` not
    * `"false"`): a press, which `press` makes, is the other way to open it. Inside a floating panel, hover
    * the panel first, as the pointer then goes from one to the other without leaving. */
   hoverStatusMark: (matcher: Matcher) => Promise<void>;
-  /** Taps the status mark named `matcher` with a finger, as a touch screen sends it, and returns once that mark's
+  /** Taps the status mark or help tip named `matcher` with a finger, as a touch screen sends it, and returns once that mark's
    * popover is up in its press form (modal, focus inside). A mouse click opens nothing on a mark, so this is how a
    * person who cannot hover opens it (the keyboard's Enter is the other: `focusControl`, then `key`); `press` is a
    * virtual press and opens it too, but is no input a person has. Fails if none opens, or if what opens is the
@@ -288,6 +288,13 @@ export interface Ui {
    * A name that spells the row out in English fails in the other languages, so the row is named
    * with `changeRow`, which builds it in the window's own. */
   hoverChangeStatus: (row: Matcher, status: StatusKey) => Promise<void>;
+  /** Moves the pointer onto the status chip of the open file viewer's title, the one that reads `status`'s
+   * word, and leaves it there, for the tooltip it carries where there is more to say than the word (a
+   * conflict's kind, which is the subject's own wording, so the step takes no text to compare). The chip is
+   * `aria-hidden` inside the trigger of its indicator tooltip, so it is found by its word among the
+   * title's chips and the pointer reaches the trigger from it. It fails if no chip reads the word, or if
+   * no tooltip opens. */
+  hoverTitleStatus: (status: StatusKey) => Promise<void>;
   /** Presses the hovered status letter without moving the pointer or sending pointerleave. Fails
    * if its anchored tooltip survives the press that opens the change viewer. */
   pressChangeStatus: (row: Matcher) => Promise<void>;
@@ -534,8 +541,11 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     element.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0, detail: 1 }));
   };
 
-  /** The popover a touch press opens in place of a tooltip, drawn like it (`TouchPopover`), once it is up. */
-  const touchPopover = (): HTMLElement | undefined => doc.querySelector<HTMLElement>(".tooltip[role=dialog]") ?? undefined;
+  /** The popover a touch press opens in place of a tooltip, drawn like it, once it is up: the touch popover
+   * of an indicator or a control (`TouchPopover`, the surface itself the dialog) or the press form of a popover
+   * hint (a dialog in the surface), never the hover form, which is non-modal. */
+  const touchPopover = (): HTMLElement | undefined =>
+    doc.querySelector<HTMLElement>(".tooltip[role=dialog], .tooltip > [role=dialog]:not([aria-modal=false])") ?? undefined;
 
   /** Touches what `look` finds, waiting for it to appear, then for the popover, and waits for it to finish fading in. */
   const touchAndWait = async (look: () => HTMLElement | undefined, missing: string, unopened: string): Promise<void> => {
@@ -544,15 +554,18 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     await wait(TOOLTIP_SHOW_MS);
   };
 
-  /** The popover of the status mark `mark`, once it is open: react-aria labels a trigger's popover by the
-   * trigger's id, so another mark's popover, or a stale one, is not taken for it. The mark says it is open while it is. */
+  /** The popover of the popover hint's trigger `mark` (a status mark, a help tip), once it is open: the popover is
+   * labelled by the trigger's id or its dialog is named as the trigger is, so another trigger's popover, or a stale one, is not
+   * taken for it. The trigger says it is open while it is. */
   const markPopover = (mark: HTMLElement, missing: string): Promise<HTMLElement> =>
-    waitFor(
-      () => mark.getAttribute("aria-expanded") === "true"
-        ? Array.from(doc.querySelectorAll<HTMLElement>("[data-status-mark-popover]")).find((candidate) => candidate.getAttribute("aria-labelledby") === mark.id)
-        : undefined,
-      missing,
-    );
+    waitFor(() => {
+      if (mark.getAttribute("aria-expanded") !== "true") return undefined;
+      const label = mark.getAttribute("aria-label");
+      return Array.from(doc.querySelectorAll<HTMLElement>(".tooltip")).find((candidate) => {
+        const dialog = candidate.querySelector("[role=dialog]");
+        return dialog !== null && (candidate.getAttribute("aria-labelledby") === mark.id || (label !== null && dialog.getAttribute("aria-label") === label));
+      });
+    }, missing);
 
   /** The row of the confirmation dialog's callout list for the session titled `title`: the title is
    * its last element child, after the status glyph, the agent icon and the screen-reader-only name. */
@@ -892,6 +905,14 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       if (shown !== t(STATUS_LABELS[status])) {
         throw new Error(`The row matching ${String(row)} did not open the tooltip for ${status} (${t(STATUS_LABELS[status])}): ${shown ? `"${shown}"` : "none"} is up`);
       }
+    },
+    async hoverTitleStatus(status) {
+      const word = t(STATUS_LABELS[status]);
+      await hover(
+        () => Array.from(doc.querySelectorAll<HTMLElement>("[role=dialog] [data-variant]")).find((chip) => chip.textContent === word),
+        `The open viewer's title has no status chip reading ${word}`,
+      );
+      if (!doc.querySelector("[role=tooltip]")?.textContent?.trim()) throw new Error(`The title's ${word} chip opened no tooltip`);
     },
     async pressChangeStatus(row) {
       const chip = await waitFor(() => find(row)?.querySelector<HTMLElement>("[data-variant]") ?? undefined, `No change row matching ${String(row)} with a status letter to press`);

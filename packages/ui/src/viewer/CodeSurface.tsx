@@ -15,7 +15,8 @@ import { FrameSurface } from "./FrameSurface";
 import { hasHunks, linesAfterLastHunk, withoutNoNewlineMarkers } from "./patch";
 import { focusFirstSeparatorControl, scrollTextToLine, scrollToLine } from "./rendererDom";
 import { isSelectAll, selectCode } from "./selectAll";
-import { LoadingOverlay, Notice, Unreadable, type NoticeTone } from "./viewerStates";
+import { FileNotice, type NoticeTone } from "./notices";
+import { LoadingOverlay, Unreadable } from "./viewerStates";
 import { WrapToggle, wordWrap } from "./wordWrap";
 
 /** What is said beside the diff when its collapsed lines cannot be expanded, by why (`failed` takes
@@ -165,7 +166,7 @@ export function CodeSurface({
     return (
       <>
         <WrapToggle />
-        <Notice>{t("viewer.plain.large")}</Notice>
+        <FileNotice sentence={t("viewer.plain.large")} />
         <PlainText text={text} label={label} theme={theme} line={line} scrollKey={resetKey} />
       </>
     );
@@ -173,14 +174,14 @@ export function CodeSurface({
   const fallback = () => (
     <>
       <WrapToggle />
-      <Notice tone="failed" speak={t("viewer.plain.unrenderable")} />
+      <FileNotice tone="failed" sentence={t("viewer.plain.unrenderable")} speak />
       <PlainText text={text} label={label} theme={theme} line={line} scrollKey={resetKey} />
     </>
   );
   return (
     <>
       <RendererBoundary resetKey={resetKey} fallback={fallback}>
-        {plainFor === resetKey && <Notice tone="failed" speak={t("viewer.plain.failed")} />}
+        {plainFor === resetKey && <FileNotice tone="failed" sentence={t("viewer.plain.failed")} speak />}
         <WrapToggle />
         <CodeFrame label={label} resetKey={resetKey} theme={theme}>
           {(onDrawn) => (
@@ -261,12 +262,10 @@ export function DiffSurface({
   const onExpansion = useCallback((next: ExpansionStatus) => setReported({ key: resetKey, read: loadBodies, status: next }), [resetKey, loadBodies]);
   const note = status && EXPANSION_NOTES[status.kind];
   const expansionNote = status?.kind === "failed" ? t("viewer.expand.failed", { reason: isolate(status.message) }) : note ? t(note) : undefined;
-  const asText = (reason: string, tone: NoticeTone, speak?: string) => (
+  const asText = (reason: string, tone: NoticeTone, speak = false) => (
     <>
       <WrapToggle />
-      <Notice tone={tone} speak={speak}>
-        {reason}
-      </Notice>
+      <FileNotice tone={tone} sentence={reason} speak={speak} />
       <PlainText text={patch} label={label} theme={theme} />
     </>
   );
@@ -274,16 +273,12 @@ export function DiffSurface({
   if (diffPlan(patch) === "patch") return asText(t("viewer.change.patchLarge"), "explained");
   const ending = marked.old && marked.new ? "viewer.change.noNewlineBoth" : marked.old ? "viewer.change.noNewlineOld" : marked.new ? "viewer.change.noNewlineNew" : undefined;
   return (
-    <RendererBoundary resetKey={resetKey} fallback={() => asText(t("viewer.change.patchFailed"), "failed", t("viewer.change.patchFailed"))}>
+    <RendererBoundary resetKey={resetKey} fallback={() => asText(t("viewer.change.patchFailed"), "failed", true)}>
       {onLayoutChange && <LayoutToggle layout={layout} onLayoutChange={onLayoutChange} />}
       <WrapToggle />
-      {ending && <Notice>{t(ending)}</Notice>}
-      {expansionNote !== undefined && (
-        <Notice tone={status?.kind === "failed" ? "failed" : "explained"} announced>
-          {expansionNote}
-        </Notice>
-      )}
-      <StatusAnnouncer text={status?.kind === "loading" ? t("viewer.expand.loading") : status?.kind === "failed" ? undefined : expansionNote} />
+      {ending && <FileNotice sentence={t(ending)} />}
+      {expansionNote !== undefined && <FileNotice tone={status?.kind === "failed" ? "failed" : "explained"} sentence={expansionNote} />}
+      <StatusAnnouncer text={status?.kind === "loading" ? t("viewer.expand.loading") : status?.kind === "failed" ? undefined : expansionNote} clearAfterRead />
       <CodeFrame label={label} resetKey={resetKey} theme={theme}>
         {(onDrawn) => (
           <RenderedDiff

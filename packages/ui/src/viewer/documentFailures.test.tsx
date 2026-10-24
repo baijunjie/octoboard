@@ -10,11 +10,11 @@ import { press, tap } from "../components/tooltipTestSupport";
 import { DocumentImage } from "./DocumentImage";
 import { FormulaView } from "./FormulaView";
 import { MarkdownDocument } from "./MarkdownDocument";
-import { ViewerHost } from "./viewerTestSupport";
+import { markNames, ViewerHost } from "./viewerTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const failureShown = () => document.body.textContent?.includes("could not be drawn") === true || document.querySelector('[role="img"]') !== null;
+const failureShown = () => document.querySelector("[data-status-mark]") !== null || document.querySelector('[role="img"]') !== null;
 
 async function mount(content: React.ReactNode): Promise<void> {
   const container = document.body.appendChild(document.createElement("div"));
@@ -30,8 +30,9 @@ async function mount(content: React.ReactNode): Promise<void> {
     // Imports and effects settle several microtask hops after the first paint.
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-  // The renderer and its stylesheet load on first use, which takes more than a few ticks.
-  for (let i = 0; i < 100 && !failureShown(); i += 1) await act(async () => new Promise((resolve) => setTimeout(resolve, 5)));
+  // The renderer and its stylesheet load on first use, which takes more than a few ticks, and seconds on a
+  // loaded machine.
+  for (let i = 0; i < 1000 && !failureShown(); i += 1) await act(async () => new Promise((resolve) => setTimeout(resolve, 5)));
 }
 
 /** A failure of what the document shows is on the screen only, so no error alert dialog is queued. */
@@ -41,8 +42,8 @@ it.each([false, true])("says a KaTeX parse error where the formula stands, with 
   await mount(<p id="paragraph"><FormulaView source="\\frac{" inline={inline} display={!inline} overBudget={false} /></p>);
   const paragraph = document.getElementById("paragraph")!;
   const sentence = "This formula could not be drawn, so its source is shown.";
-  if (inline) expect(paragraph.querySelector("button")?.getAttribute("aria-label")).toBe(sentence);
-  else expect(document.body.textContent).toContain(sentence);
+  expect(markNames(paragraph)).toEqual([sentence]);
+  expect(paragraph.querySelector("button")?.getAttribute("aria-label")).toBe(sentence);
   expect(document.body.textContent).toContain("\\frac{");
   expect(queued()).toEqual([]);
 });
@@ -50,8 +51,18 @@ it.each([false, true])("says a KaTeX parse error where the formula stands, with 
 it("says an arbitrary formula renderer exception the same way", async () => {
   vi.spyOn(katex, "renderToString").mockImplementationOnce(() => { throw new TypeError("Renderer invariant failed"); });
   await mount(<FormulaView source="x" inline={false} display overBudget={false} />);
-  expect(document.body.textContent).toContain("This formula could not be drawn, so its source is shown.");
+  expect(markNames()).toEqual(["This formula could not be drawn, so its source is shown."]);
   expect(queued()).toEqual([]);
+});
+
+it.each([false, true])("notes an over-budget formula with a mark beside its source that opens a tooltip, inline %s", async (inline) => {
+  await mount(<div id="host">{inline ? <p id="paragraph"><FormulaView source="x" inline display={false} overBudget /></p> : <FormulaView source="x" inline={false} display overBudget />}</div>);
+  const sentence = "Shown as source because the document is large.";
+  expect(markNames()).toEqual([sentence]);
+  const mark = document.querySelector("[data-status-mark]")!;
+  // A note is a button like every mark, which is phrasing content, valid in a paragraph.
+  expect(mark.tagName).toBe("BUTTON");
+  expect(document.querySelector("[role=status]")?.textContent ?? "").toBe("");
 });
 
 it.each(["file_not_found", "permission_denied", "unexpected_error"])("marks a project image whose read fails with %s, with no error alert dialog", async (code) => {

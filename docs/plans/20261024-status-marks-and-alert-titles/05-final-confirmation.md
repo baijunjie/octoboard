@@ -12,3 +12,14 @@
   mouse opens the popover without moving focus and VoiceOver can reach it; Enter on a mark opens it with focus inside;
   Escape with focus in a live agent terminal and in a shell terminal goes to the terminal while a hover-opened popover
   is up; on a touch device a tap opens the press form and a mouse click on a hybrid device opens nothing.
+- [ ] File viewer marks on a real touch device and in Safari / WebKit: a tap on a mark after the file path, beside a
+  compared image side's heading and inside a Markdown paragraph (a note, a warning, a failure) opens its popover; a
+  tap on the title's Conflicted chip opens its conflict kind; the block marks beside a diagram's and a display
+  formula's fallback source line up with its first line.
+- [ ] Text in a hover-opened popover (a status mark, the "?" help tip, the rail quota panel) can be drag-selected and
+  copied with the mouse in the desktop app's WebKit view, inside the file viewer and Settings as well as outside a
+  dialog; a mouse press on the popover's text draws no focus outline on it.
+- [ ] VoiceOver in the file viewer: a notice present at first paint is not spoken; one arriving after paint (an SVG
+  that falls back to its text) is spoken once, and its status region is empty again about 5 s later, so reading line
+  by line meets the sentence only on its mark; a conflicted file's heading is read with its conflict kind
+  ("merge.md: Conflicted. Both modified."); a conflicted file whose read failed is announced once, as an alert.

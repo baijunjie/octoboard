@@ -132,8 +132,8 @@ it.
 ## The default account
 
 Each agent's accounts table starts with the agent's **default account**; its account settings dialog shows the directory
-it currently resolves to. A "?" follows that directory there and says in its tooltip, or in a popover opened by a touch
-or pen press or a screen reader's activation, that this is the agent's own default configuration directory, which new
+it currently resolves to. A "?" follows that directory there and says in its popover (see "The help tip" in
+`docs/product/labels-and-tooltips.md`) that this is the agent's own default configuration directory, which new
 sessions use when no account is chosen and whose configuration other accounts can share. Its directory cannot be edited,
 and the default account cannot be removed, but it can be turned off like any other account (see "Turning an account off"
 below). It has no sharing switch: its directory is the one other accounts share. Its actions menu holds **Settings**,

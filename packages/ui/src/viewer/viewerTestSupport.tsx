@@ -41,3 +41,9 @@ export function ViewerHost({
     </PlatformProvider>
   );
 }
+
+/** The accessible names of the status marks under `root`, in document order: a popover mark is a
+ * button, a note is the named trigger of a tooltip, and both carry `data-status-mark`. */
+export function markNames(root: ParentNode = document): string[] {
+  return [...root.querySelectorAll("[data-status-mark]")].map((mark) => mark.getAttribute("aria-label") ?? "");
+}

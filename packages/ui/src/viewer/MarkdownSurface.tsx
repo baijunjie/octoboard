@@ -13,7 +13,8 @@ import { FrameSurface } from "./FrameSurface";
 import { markdownView, MarkdownViewToggle, type MarkdownView } from "./markdownView";
 import { useMarkdownLocation } from "./markdownLocation";
 import { copyDocument, isSelectAll, selectDocument } from "./selectAll";
-import { LoadingOverlay, Notice } from "./viewerStates";
+import { FileNotice } from "./notices";
+import { LoadingOverlay } from "./viewerStates";
 
 // The Markdown renderer, with its library, loads the first time a document is shown.
 const MarkdownDocument = lazy(() => import("./MarkdownDocument").then((module) => ({ default: module.MarkdownDocument })));
@@ -110,7 +111,7 @@ function DocumentSurface({
   const onOpenLink = useCallback((url: string) => links?.open(url), [links]);
   const fallback = () => (
     <>
-      <Notice tone="failed" speak={t("viewer.markdown.failed")} />
+      <FileNotice tone="failed" sentence={t("viewer.markdown.failed")} speak />
       <CodeSurface resetKey={resetKey} name={name} text={text} theme={theme} />
     </>
   );

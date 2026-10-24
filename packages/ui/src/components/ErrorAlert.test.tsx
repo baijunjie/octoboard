@@ -6,7 +6,7 @@ import { expect, it, onTestFinished } from "vitest";
 
 import { errorAlerts } from "../errorAlerts";
 import { DaemonRequestError } from "../daemon-client";
-import { Failure } from "../viewer/viewerStates";
+import { ViewerErrorMessage } from "../viewer/ViewerErrorMessage";
 import { detailsButton, openDetails } from "./detailsTestSupport";
 import { AlertButton } from "./AlertButton";
 import { ErrorAlert } from "./ErrorAlert";
@@ -89,7 +89,7 @@ it("does not announce a failure that was there as its view opened", () => {
 
 it("keeps the structured diagnostics of a failure behind the Alert's Details, and opens no error alert dialog for it", () => {
   const error = new DaemonRequestError("Environment unavailable", "shell_environment_timeout", { shell: "/bin/zsh", command: "env -0", timeout: "10s" });
-  const { container } = mount(<Failure among title="Could not read the file" message={error} path="README.md" />);
+  const { container } = mount(<FailureAlert title="Could not read the file" announce={false} message={error} summary={<ViewerErrorMessage error={error} path="README.md" />} />);
   const alert = container.querySelector('[data-slot="alert-root"]');
   expect(alert?.querySelector('[data-slot="alert-title"]')?.textContent).toBe("Could not read the file");
   expect(alert?.querySelector('[data-slot="alert-description"]')?.querySelector("p,div,pre,ul")).toBeNull();

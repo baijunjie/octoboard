@@ -277,7 +277,10 @@ export function PopoverHint({
         className={`${TOOLTIP_SURFACE} ${contentClassName ?? ""}`}
       >
         {form === "hover" ? (
-          <div ref={panel} id={popupId} role="dialog" {...naming} aria-modal="false" className={bodyClassName} {...hover.panelProps}>
+          // Focusable but no tab stop: a mouse press on the panel's text has to leave focus in the panel, or a
+          // focus-containing dialog it floats over (react-aria's `FocusScope contain`) takes focus back a frame
+          // later and the drag-selection collapses.
+          <div ref={panel} id={popupId} role="dialog" tabIndex={-1} {...naming} aria-modal="false" className={`outline-none ${bodyClassName ?? ""}`} {...hover.panelProps}>
             {children({ close, form, popupId })}
           </div>
         ) : (

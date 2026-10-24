@@ -14,7 +14,10 @@ or unstaged change has its stage — Staged or Unstaged — as a second, neutral
 change says, what kind it is and whether it is staged, are kept apart, the first coloured and the second not. Both tags
 come after the name, and read with it as "server.ts: Modified, Unstaged". An untracked file is always new, so its only
 tag is Untracked, in the neutral grey the list's U has, which is no kind of change and shares no colour with Added or
-Deleted; a path in conflict has only a Conflicted tag, coloured as its C is. Neither has a stage tag, its status tag
+Deleted; a path in conflict has only a Conflicted tag, coloured as its C is. The Conflicted tag's tooltip names the
+kind of conflict (see "What it shows" below) — "Both modified." — opened by a resting mouse and, on a
+touch screen, by a tap; assistive technology hears the same sentence as part of the title, after the tag —
+"merge.md: Conflicted. Both modified.". Neither has a stage tag, its status tag
 already saying where it is from; a committed change has none either. The tags read as one group,
 spaced closer to each other than the group is to the name, and each of them, the neutral stage tag included, is visibly
 a tag against the viewer's background in either appearance. The tags never shrink; the name fades out when there is no
@@ -58,18 +61,19 @@ the commit's first parent — the empty tree for a commit with none — and its 
   or removed, say — says it has no diff to show; one whose two sides hold the same content, under one name or two,
   shows the file whole instead, as the bullets below say. Whether its long lines wrap is the viewer's own choice, which
   a diff shares with every file (see "Wrapping long lines" in `docs/product/file-viewer.md`). A patch of more than
-  1,000,000 characters or 10,000 lines is shown as the plain patch, under a notice saying it is shown that way because
-  the change is large; a patch the diff could not be drawn from is shown the same way, under a failure notice saying
+  1,000,000 characters or 10,000 lines is shown as the plain patch, with a notice saying it is shown that way because
+  the change is large; a patch the diff could not be drawn from is shown the same way, with a failure notice saying
   so (see "Notices and stand-ins" in `docs/product/file-viewer.md`). A patch that is not valid UTF-8 — of a file in
   another encoding — is shown with replacement characters.
-- **A missing newline at the end** of either version is said in a notice above the diff — the old version, the new
+- **A missing newline at the end** of either version is said in a notice — the old version, the new
   one, or neither has one — rather than as a line of it. A symbolic link's change never says so, a link's target
   having no newline at its end anyway. A plain patch keeps Git's own marker lines.
 - **An image change** — of a binary image format the file viewer displays (see "What it shows" in
   `docs/product/file-viewer.md`); an SVG, being text, is a text change — shows the two images, Before and After, side
   by side where the viewer is wide enough (Before on the left, mirrored under a right-to-left language, see
   "Right-to-left layout" in `docs/product/window-layout.md`) and one above the other otherwise. A side with no file
-  says so.
+  says so. Each side is headed Before or After, and what is said about one side's own content stands beside its
+  heading rather than in the viewer's header (see "Notices and stand-ins" in `docs/product/file-viewer.md`).
 - **Any other binary change**, or an image changed to or from text, says it cannot be shown as a diff, with the size
   before and after.
 - **An untracked file** is shown as new content: the file itself, as the file viewer shows a file; its Untracked tag
@@ -105,9 +109,11 @@ the commit's first parent — the empty tree for a commit with none — and its 
   way: it says it has no diff to show, as any change with no lines does.
 - **No differences**, when the two sides of a change that is not a rename now hold the same content: the change was
   staged, committed or undone since it was listed. Its content is shown as below as well.
-- **A path in conflict** is not a two-sided change: a warning names the kind of conflict — both modified, both added,
-  both deleted, added by us, added by them, deleted by us, deleted by them — above the file as it is on disk, with its
-  conflict markers where both sides modified or added it. A path both sides deleted has no file to show and says it
+- **A path in conflict** is not a two-sided change: it shows the file as it is on disk, with its conflict markers
+  where both sides modified or added it, and the kind of conflict — both modified, both added, both deleted, added by
+  us, added by them, deleted by us, deleted by them — is said by the title's Conflicted tag (see "Opening a change"
+  above), with no notice of its own. A file in conflict whose content cannot be read shows the viewer's error alone
+  (see "Notices and stand-ins" in `docs/product/file-viewer.md`). A path both sides deleted has no file to show and says it
   does not exist.
 
 **A change with no lines to draw shows the file itself.** For the two cases above — the same content under one name or
@@ -115,14 +121,14 @@ two — there is nothing to compare, so the whole content is read instead, the r
 "Expanding the collapsed lines" below), once as the change opens; while it is in flight the viewer shows its usual
 loading, announced as a file's read is (see "What it shows" in `docs/product/file-viewer.md`). It is then shown whole
 as a file rather than as a diff — so a Markdown file is offered as a document with its source a choice away, exactly as
-an untracked file is — under a neutral notice saying which of the two cases the change is, in one sentence. Where the
+an untracked file is — with a note saying which of the two cases the change is, in one sentence. Where the
 content cannot be had after all, the change falls back to the centred stand-in and shows none of the file, saying there
 the same state the notice would have: as a heading, with the line under it where it has one, rather than as that one
 sentence (see "The same state said in one sentence" in `docs/product/empty-states.md`). With a reason to give — the read
-itself failed, a lost connection to the daemon among the reasons — a failure notice above it says the file's content
+itself failed, a lost connection to the daemon among the reasons — a failure notice says the file's content
 could not be read and gives that reason; where the content simply cannot be had — a side the daemon will not deliver
 whole, by the same rule as a diff's collapsed lines, or the change having moved on since it was read, or the two sides
-turning out to differ from what the change says they are — a neutral notice above it says which of those it was. Only a
+turning out to differ from what the change says they are — a note says which of those it was. Only a
 change with nothing to read the content from leaves the stand-in alone: one whose two sides are not both files whose
 content can be read, a rename between two symbolic links among them. Every one of these notices and the stand-in are as
 "Notices and stand-ins" in `docs/product/file-viewer.md` describes them.
@@ -174,11 +180,11 @@ Then:
 
 - **A failed read** — but for one that finds the change's worktree gone, which closes the viewer (see "When the open
   change changes" below) — leaves the diff as it is: the separator says the lines could not be loaded and to try again, a
-  failure notice above the diff gives the reason — that the connection to the daemon was lost, among them — and the
+  failure notice gives the reason — that the connection to the daemon was lost, among them — and the
   next expansion reads again. A read of the change itself that follows — on a listing with news of it, or once the
   connection to the daemon is back — clears the failure without another expansion.
 - **A change that has moved on** since its patch was read, its file or its index having changed underneath, keeps every
-  line the patch shows, with a notice above the diff saying its unmodified lines cannot be shown, and gives the
+  line the patch shows, with a notice saying its unmodified lines cannot be shown, and gives the
   expansion up as below; it is offered again only once the change is read again (see "When the open change changes"
   below). A committed change, read from two fixed commits, cannot move on this way.
 - **Moving on to another change** while the lines are being read gives that read up, saying nothing.
@@ -192,7 +198,7 @@ rest is found only on the first expansion, and the diff is then drawn again in t
 beyond its last hunk goes on that press: a side the daemon will not deliver whole — one larger than the 4 MiB a read
 opens, a file type it does not read, a side read from the worktree at a path with a clean filter in effect (see
 below), a change it cannot make sense of — a side past the viewer's own budget of 10,000 lines or 1,000,000
-characters, and the change having moved on. Each of the three puts a notice above the diff, and each is announced:
+characters, and the change having moved on. Each of the three adds a notice, and each is announced:
 that the whole file is not delivered for this change, that the file is too large to be shown in full here, or, as the
 bullet above says, that the change has moved on since it was read.
 

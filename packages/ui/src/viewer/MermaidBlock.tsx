@@ -3,7 +3,7 @@ import React, { useEffect, useId, useState } from "react";
 import { useFadeRegion, useScrollFade } from "../components/scrollFade";
 import { diagramReading, renderDiagram } from "./diagramConfig";
 import { useT } from "../i18n/react";
-import { Notice } from "./viewerStates";
+import { BlockFallback } from "./notices";
 
 const SOURCE = "p-3 font-mono text-xs leading-5 break-words whitespace-pre-wrap";
 
@@ -53,18 +53,16 @@ export function MermaidBlock({
   );
   if (overBudget) {
     return (
-      <div className="my-4">
-        <Notice appearance="document">{t("viewer.markdown.large")}</Notice>
+      <BlockFallback className="my-4" sentence={t("viewer.markdown.large")}>
         {plain}
-      </div>
+      </BlockFallback>
     );
   }
   if (current?.failed) {
     return (
-      <div className="my-4">
-        <Notice appearance="document" tone="failed" speak={t("viewer.markdown.diagramFailed")} />
+      <BlockFallback className="my-4" tone="failed" speak sentence={t("viewer.markdown.diagramFailed")}>
         {plain}
-      </div>
+      </BlockFallback>
     );
   }
   if (!current?.svg) return <div className="my-4">{plain}</div>;

@@ -3,7 +3,7 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
+import { AFTER_FOCUS_MOVE_DELAY_MS, READ_TIME_MS } from "../components/StatusAnnouncer";
 import { errorAlerts } from "../errorAlerts";
 import { DaemonRequestError } from "../daemon-client";
 import { isolate } from "../i18n/isolate";
@@ -14,7 +14,8 @@ import { ChangeBodiesError, type ViewerChangeSide, type ViewerContent, type View
 import { diffLayout } from "./diffLayout";
 import { FileViewer, type ViewerNavigation } from "./FileViewer";
 import { detailsButton } from "../components/detailsTestSupport";
-import { ViewerHost } from "./viewerTestSupport";
+import { enter, leave, openTooltip, press } from "../components/tooltipTestSupport";
+import { markNames, ViewerHost } from "./viewerTestSupport";
 import { viewerErrorText } from "./viewerError";
 import { wordWrap } from "./wordWrap";
 
@@ -125,6 +126,11 @@ it.each(["error", "conflict", "change"] as const)("does not repeat the header pa
   show({ key: state, path, content });
   const dialog = document.querySelector("[role=dialog]")!;
   expect(dialog.textContent).toContain("This file does not exist any more.");
+  if (state === "conflict") {
+    // The failure alone: the conflict's notice speaks of markers shown below, and there are none.
+    expect(markNames(dialog)).toEqual([]);
+    expect(dialog.querySelector('[data-slot="alert-root"]')).toBeNull();
+  }
   expect(dialog.textContent?.match(/src\/gone\.ts/g)).toHaveLength(1);
   // A screen state: shown on the screen and nowhere else.
   expect(errorAlerts.getSnapshot()).toEqual([]);
@@ -173,7 +179,7 @@ it("shows only the side inside the project, naming where the other one is", () =
       },
     },
   });
-  expect(dialog()?.textContent).toContain("The previous version is outside this project, at lib/moved.ts.");
+  expect(markNames(dialog()!)).toEqual([`The previous version is outside this project, at ${isolate("lib/moved.ts")}. Only the version in this project is shown.`]);
   expect(dialog()?.textContent).toContain("This file cannot be displayed");
   expect(dialog()?.textContent).not.toContain("No file on this side.");
 });
@@ -218,7 +224,7 @@ it("shows an SVG through an image, and as text when it cannot be decoded, never 
 
   act(() => image[0].dispatchEvent(new Event("error")));
   await settled();
-  expect(dialog()?.textContent).toContain("This image cannot be displayed, so its text is shown instead.");
+  expect(markNames(dialog()!)).toEqual(["This image cannot be displayed, so its text is shown instead."]);
   expect(document.querySelector("img")).toBeNull();
   expect(document.querySelector("[data-renderer]")?.textContent).toBe(svg);
   expect(repositoryMarkup()).toBe(0);
@@ -349,7 +355,7 @@ it("shows the content of a change with no lines to draw", async () => {
   const patch = "diff --git a/f b/g\nsimilarity index 100%\nrename from f\nrename to g\n";
   show({ key: "r", path: "g", content: { state: "change", change: { old: side("f"), new: side("g"), patch, loadBodies } } });
   await settled();
-  expect(dialog()?.textContent).toContain("Renamed without changes to its content.");
+  expect(markNames(dialog()!)).toEqual(["Renamed without changes to its content."]);
   expect(dialog()?.textContent).toContain("kept");
 });
 
@@ -369,7 +375,7 @@ it("falls back to saying nothing changed when that content cannot be read", asyn
   const loadBodies = () => Promise.reject(new ChangeBodiesError("failed", "git failed"));
   show({ key: "e", path: "f", content: { state: "change", change: { old: side("f"), new: side("f"), patch: "", loadBodies } } });
   await settled();
-  expect(dialog()?.textContent).toContain(`Could not read this file's content. ${isolate("git failed")}`);
+  expect(markNames(dialog()!)).toEqual([`Could not read this file's content. ${isolate("git failed")}`]);
   expect(dialog()?.textContent).toContain("No differences");
 });
 
@@ -380,7 +386,7 @@ it.each([false, true])("does not repeat the path when unchanged content fails to
   const loadBodies = () => Promise.reject(new ChangeBodiesError("failed", message));
   show({ key: "missing-content", path, content: { state: "change", change: { old: side(renamed ? "src/old.ts" : path), new: side(path), patch: "", loadBodies } } });
   await settled();
-  expect(dialog()?.textContent).toContain(`Could not read this file's content. ${isolate(message)}`);
+  expect(markNames(dialog()!)).toEqual([`Could not read this file's content. ${isolate(message)}`]);
   expect(dialog()?.textContent?.match(/src\/gone\.ts/g)).toHaveLength(1);
 });
 
@@ -392,7 +398,7 @@ it("does not repeat the path in an expansion failure", async () => {
   show({ key: "missing-lines", path, content: { state: "change", change: { old: side, new: side, patch: "@@ -1 +1 @@\n-a\n+b\n", loadBodies } } });
   await settled();
   await act(async () => dialog()!.querySelector<HTMLButtonElement>("[data-report=read-failed]")!.click());
-  expect(dialog()?.textContent).toContain(`Could not read the unmodified lines. ${isolate(message)}`);
+  expect(markNames(dialog()!)).toEqual([`Could not read the unmodified lines. ${isolate(message)}`]);
   expect(dialog()?.textContent?.match(/src\/gone\.ts/g)).toHaveLength(1);
 });
 
@@ -486,18 +492,18 @@ it("offers expansion only to a change that can be expanded, and says why one did
   expect(expandable()).toBe("true");
   const report = (which: string) => act(() => void dialog()!.querySelector<HTMLButtonElement>(`[data-report=${which}]`)!.click());
   report("changed");
-  expect(dialog()?.textContent).toContain("This change has moved on since it was read, so its unmodified lines cannot be shown.");
+  expect(markNames(dialog()!)).toEqual(["This change has moved on since it was read, so its unmodified lines cannot be shown."]);
   report("failed");
-  expect(dialog()?.textContent).toContain(`Could not read the unmodified lines. ${isolate("No luck.")}`);
+  expect(markNames(dialog()!)).toEqual([`Could not read the unmodified lines. ${isolate("No luck.")}`]);
   expect(dialog()?.querySelector("[data-renderer]")?.textContent).toBe(patch);
   show(change("another", true));
-  expect(dialog()?.textContent).not.toContain("unmodified lines");
+  expect(markNames(dialog()!)).toEqual([]);
   // The same change read again hands a new way to expand under the same key and patch, and the
   // failure of the earlier read is not said of it.
   report("failed");
-  expect(dialog()?.textContent).toContain("Could not read the unmodified lines.");
+  expect(markNames(dialog()!)).toHaveLength(1);
   show(change("another", true, async () => ({ old: "a\n", new: "b\n" })));
-  expect(dialog()?.textContent).not.toContain("unmodified lines");
+  expect(markNames(dialog()!)).toEqual([]);
 });
 
 it("shows the raw patch when the diff cannot be rendered", async () => {
@@ -510,14 +516,14 @@ it("shows the raw patch when the diff cannot be rendered", async () => {
       content: { state: "change", change: { old: side, new: side, patch: "@@ -1,3 +1,3 @@ unrenderable\n a\n+b\n" } },
     });
     await settled();
-    expect(dialog()?.textContent).toContain("Shown as a plain patch because the diff could not be rendered.");
+    expect(markNames(dialog()!)).toEqual(["Shown as a plain patch because the diff could not be rendered."]);
     expect(dialog()?.querySelector("pre")?.textContent).toContain("unrenderable");
   } finally {
     error.mockRestore();
   }
 });
 
-it("says a rendering failure once, as a status, with its visible copy hidden and no error alert dialog", async () => {
+it("says a rendering failure once, as a status, with a mark that holds the same sentence and no error alert dialog", async () => {
   const side: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "file" };
   const error = vi.spyOn(console, "error").mockImplementation(() => {});
   try {
@@ -528,13 +534,97 @@ it("says a rendering failure once, as a status, with its visible copy hidden and
     });
     await settled();
     const sentence = "Shown as a plain patch because the diff could not be rendered.";
-    const block = Array.from(dialog()!.querySelectorAll("[aria-hidden=true]")).find((e) => e.textContent === sentence);
-    expect(block).toBeTruthy();
-    expect(dialog()!.querySelectorAll("[role=status]").length).toBeGreaterThan(0);
+    expect(markNames(dialog()!)).toEqual([sentence]);
+    expect(dialog()!.querySelector('[data-slot="alert-root"]')).toBeNull();
     expect(errorAlerts.getSnapshot()).toEqual([]);
   } finally {
     error.mockRestore();
   }
+});
+
+const statuses = () => [...dialog()!.querySelectorAll("[role=status]")].map((status) => status.textContent);
+
+it("announces a conflict's read failure once, as an alert on its pane, with the delay of any read failure", () => {
+  vi.useFakeTimers();
+  const conflict = (content: Partial<Extract<ViewerContent, { state: "conflict" }>>): ViewerSubject => ({
+    key: "k",
+    path: "src/gone.ts",
+    content: { state: "conflict", conflict: "Merge conflict", ...content },
+  });
+  const error = new DaemonRequestError("gone", "file_not_found", { path: "src/gone.ts" });
+  show(conflict({}));
+  show(conflict({ message: error }));
+  expect(document.querySelectorAll("[role=alert]")).toHaveLength(0);
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+  // The pane has the failure's placeholder and the header no mark; the pane speaks it.
+  expect(dialog()!.querySelector('[data-slot="empty-state"] h2')?.textContent).toBe("Could not open this file");
+  expect(markNames(dialog()!)).toEqual([]);
+  expect(statuses()).not.toContain("Could not open this file");
+  expect(document.querySelectorAll("[role=alert]")).toHaveLength(1);
+});
+
+it("speaks a notice that appears after the first paint once, and empties its region once it has been read", async () => {
+  vi.useFakeTimers();
+  const svg = "<svg xmlns='http://www.w3.org/2000/svg'/>";
+  const image: ViewerSubject = { key: "s", path: "logo.svg", content: { state: "file", body: { kind: "image", mediaType: "image/svg+xml", url: "data:image/svg+xml,x", size: 3, text: svg } } };
+  show(image);
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+  act(() => void document.querySelector("img")!.dispatchEvent(new Event("error")));
+  expect(markNames(dialog()!)).toEqual(["This image cannot be displayed, so its text is shown instead."]);
+  const sentence = "This image cannot be displayed, so its text is shown instead.";
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+  expect(statuses().filter((text) => text === sentence)).toHaveLength(1);
+  act(() => void vi.advanceTimersByTime(READ_TIME_MS));
+  expect(statuses()).not.toContain(sentence);
+});
+
+it("empties the unchanged note's region once it has been read", async () => {
+  vi.useFakeTimers();
+  const side = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file" });
+  const loadBodies = async () => ({ old: "kept\n", new: "kept\n" });
+  const patch = "diff --git a/f b/g\nsimilarity index 100%\nrename from f\nrename to g\n";
+  show({ key: "r", path: "g", content: { state: "change", change: { old: side("f"), new: side("g"), patch, loadBodies } } });
+  await act(async () => void (await vi.advanceTimersByTimeAsync(AFTER_FOCUS_MOVE_DELAY_MS)));
+  const sentence = "Renamed without changes to its content.";
+  expect(statuses()).toContain(sentence);
+  act(() => void vi.advanceTimersByTime(READ_TIME_MS));
+  expect(statuses()).not.toContain(sentence);
+});
+
+it("puts each side's image notice beside that side's heading, and a single image's after the path", async () => {
+  const svg = "<svg xmlns='http://www.w3.org/2000/svg'/>";
+  const side = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file", body: { kind: "image", mediaType: "image/svg+xml", url: `data:image/svg+xml,${path}`, size: 3, text: svg } });
+  show({ key: "i", path: "logo.svg", content: { state: "change", change: { old: side("a"), new: side("b"), patch: "Binary files differ" } } });
+  act(() => void document.querySelectorAll("img")[0].dispatchEvent(new Event("error")));
+  await settled();
+  const sections = dialog()!.querySelectorAll("section");
+  expect(markNames(sections[0])).toEqual(["This image cannot be displayed, so its text is shown instead."]);
+  expect(markNames(sections[1])).toEqual([]);
+  expect(markNames(dialog()!.querySelector("[data-viewer-description]")!)).toEqual([]);
+});
+
+it("stands the marks after the path, outside the path's own fade", async () => {
+  const side = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file" });
+  const loadBodies = () => Promise.reject(new ChangeBodiesError("failed", "git failed"));
+  show({ key: "order", path: "f", content: { state: "change", change: { old: side("f"), new: side("f"), patch: "", loadBodies } } });
+  await settled();
+  const detail = dialog()!.querySelector("[data-viewer-description]")!;
+  const mark = detail.querySelector("[data-status-mark]")!;
+  const pathText = [...detail.querySelectorAll("[dir=ltr]")].find((element) => element.textContent === "f")!;
+  expect(mark.tagName).toBe("BUTTON");
+  expect(pathText.contains(mark)).toBe(false);
+  expect(pathText.compareDocumentPosition(mark) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+it("orders the marks failed, then warned, then notes, whichever came first", async () => {
+  const side: ViewerChangeSide = { state: "present", path: "f", kind: "file" };
+  const loadBodies = async () => ({ old: "a\n", new: "b\n" });
+  const patch = "@@ -1 +1 @@\n-a\n\\ No newline at end of file\n+b\n";
+  show({ key: "marks", path: "f", content: { state: "change", change: { old: side, new: side, patch, loadBodies } } });
+  await settled();
+  expect(markNames(dialog()!)).toEqual(["The old version has no newline at its end."]);
+  act(() => void dialog()!.querySelector<HTMLButtonElement>("[data-report=failed]")!.click());
+  expect(markNames(dialog()!)).toEqual([`Could not read the unmodified lines. ${isolate("No luck.")}`, "The old version has no newline at its end."]);
 });
 
 it("says a lost connection in neutral text, not as a failure", () => {
@@ -651,12 +741,28 @@ it("shows no stage tag for an untracked, conflicted or compared change, and the 
   show({ ...modified(), stage: undefined, status: "untracked" });
   expect(titleName()).toBe("c.ts: Untracked");
   show({ key: "c", path: "src/m.ts", content: { state: "conflict", conflict: "Both sides modified this file.", body } });
-  expect(titleName()).toBe("m.ts: Conflicted");
+  expect(titleName()).toBe("m.ts: Conflicted. Both sides modified this file.");
   expect(row().textContent).not.toMatch(/staged/i);
   show({ ...modified(), stage: undefined, source: "main at 1234567 to feature at fedcba0" });
   expect(titleName()).toBe("c.ts: Modified");
   expect(row().textContent).not.toContain("main at");
   expect(subtitle()!.textContent).toBe("main at 1234567 to feature at fedcba0");
+});
+
+it("says a conflict's kind on the status badge's tooltip and after the heading's name, with no mark of its own", () => {
+  vi.useFakeTimers();
+  const body = { kind: "text", text: "x\n", size: 2 } as const;
+  show({ key: "c", path: "src/m.ts", content: { state: "conflict", conflict: "Both sides modified this file.", body } });
+  expect(markNames(dialog()!)).toEqual([]);
+  expect(titleName()).toBe("m.ts: Conflicted. Both sides modified this file.");
+  const badge = dialog()!.querySelector('h2 [data-slot="chip"]')!;
+  enter(badge);
+  act(() => void vi.runOnlyPendingTimers());
+  expect(openTooltip()?.textContent).toBe("Both sides modified this file.");
+  leave(badge);
+  // A finger has no hover: a tap opens the same sentence.
+  press(badge);
+  expect(document.querySelectorAll("[role=dialog]")[1]?.textContent).toBe("Both sides modified this file.");
 });
 
 // An untracked file has no old side, which reads as added; the list says untracked, and so does the
