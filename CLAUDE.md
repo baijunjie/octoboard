@@ -95,15 +95,29 @@ At delivery:
 
 1. **Gallery**: bring the gallery up to date and run the quick check via the `agent-gallery` skill; whether to do it
    and what scope to run is up to its judgement.
-2. **Change check**: review this round's changes via the `agent-change-check` skill; only move on once the review
+2. **UI preview**: as soon as the previous step is done, preview for the user via the `agent-gallery` skill, without
+   waiting for the later steps; whether to preview and whether to wait for confirmation is up to its judgement. UI the
+   user said they wanted to see first is shown at this step too, not reported before the self-check. Where it has to
+   wait for confirmation, or for the user's answer on whether temporary scenarios stay, move on only once the answer is
+   in: the user may still change the UI or keep scenarios, and running the later steps first would be wasted.
+3. **Change check**: review this round's changes via the `agent-change-check` skill; only move on once the review
    passes, or the user has settled the remaining findings and the changes they decided on have been made.
-3. **Documentation update**: when this round's changes call for updating the docs that later readers rely on,
+4. **Documentation update**: when this round's changes call for updating the docs that later readers rely on,
    update them via the `agent-docs` skill.
-4. **UI preview**: preview for the user via the `agent-gallery` skill; whether to preview and whether to wait for
-   confirmation is up to its judgement.
 5. **Formatting and checks**: first run the project's agreed formatting commands to rewrite the code, then run the
    checks by the scope of the change and confirm they all pass; if they do not, fix, then re-determine the scope from
-   the changes as they now stand and run again. Scope:
+   the changes as they now stand and run again (a fix that changes behavior, logic or UI goes through "You changed
+   behavior, logic or UI again" below).
+   Where this delivery goes through the project's merge flow and that flow aligns the branch with the latest target
+   branch, only format and commit this round's changes here, and run the checks once, after it aligns and before the
+   merge or push: by then the target branch's new code is in, so there is no need to check once before aligning and
+   again after. Whatever the merge flow's own verification after aligning covers is not run separately; checks it does
+   not cover are run right after, before the user is asked to confirm the merge or push.
+   Where behavior, logic or UI is changed within the merge flow to pass the checks or resolve conflicts, stop before
+   the merge or push, go through "You changed behavior, logic or UI again" below, then return to the merge flow.
+   Without a merge flow, or with one that does not align, run them here; checks deferred to the merge flow that did
+   not get run there (the flow was aborted, or delivery no longer goes through it) are run here before delivery —
+   formatting and committing alone do not count as having run the checks. Scope:
 
    - **The full set** is the check commands the project states in its instruction file or docs (whichever of format
      checks, type checking, lint, build, and tests it states). If it states none, take the local check commands of those
@@ -111,8 +125,9 @@ At delivery:
      such as publishing or deploying), and tell the user to write the full set into the instruction file; if there are
      none at all, tell the user there are no checks to run this time.
    - **Changes only to files that the build, type checking, and tests never read** (usually docs, instruction files, and
-     skill and subagent definitions; those that a build or test validates do not count): run only the format checks and
-     lint that cover those files; if there are none, run nothing and tell the user.
+     skill and subagent definitions; files of this kind that a build or test validates, and the configuration files of
+     format checks and lint, do not count): run only the format checks and lint that cover those files; if there are
+     none, run nothing and tell the user.
    - **Apart from files of that kind, changes only within one package or module**, for which the project states its own
      check commands in its instruction file or docs, and which no other package depends on: run that package's checks,
      and run the checks for the files outside the package as in the previous bullet.
@@ -120,23 +135,29 @@ At delivery:
      a package that other packages depend on, the configuration of formatting, type checking, build, tests, and lint,
      dependency versions), changes spanning several packages, or a case that cannot be judged.
 
-   The changes that set the scope are all of the branch's changes relative to the point where it diverged from the
-   target branch (relative to before the change, for changes made directly on the target branch); where a rebase or
-   merge brought in new code, they also include the brought-in range (the difference between the two divergence points
-   before and after the rebase or merge) and the places changed while resolving conflicts, not only the original change.
+   The changes that set the scope are only the branch's own: all of its changes relative to the point where it diverged
+   from the target branch (relative to before the change, for changes made directly on the target branch). Code a
+   rebase or merge brings in from the target branch does not count as a change, and code on the target branch is
+   treated as already checked; count from the new divergence point afterwards, with the places changed while resolving
+   conflicts included. The grouping in the bullets above (whether a file is read by the build or tests, whether a
+   package is depended on by other packages, which check configurations apply), however, is judged on the code after
+   the rebase or merge. Where new code brought in would call for a re-run, none is needed when the branch's changes are
+   all of the "files that the build, type checking, and tests never read" kind, those files are the same as when the
+   format checks and lint covering them passed in this session, and the code brought in since has not touched the
+   configuration of those format checks and lint, the commands written down for them, or the tool versions: the check
+   results cannot change then.
 
-Formatting and checks run only in the "Formatting and checks" step, before the final commit and delivery
-(push, PR or merge); the earlier steps do not run them separately (the related tests a step runs to confirm its
-own change do not count).
+Formatting and checks run only as the "Formatting and checks" step sets out, before delivery (push, PR or merge);
+the earlier steps do not run them separately (the related tests a step runs to confirm its own change do not count).
 
 - **You changed behavior, logic or UI again** (in response to the change check, to preview feedback, to pass the
   checks, or while resolving conflicts): walk this new change through again from the first relevant step; purely
   mechanical fixes such as formatting or type annotations do not go through again.
 - **The same content is not re-run**: if the content has not changed since the self-check (such as only
-  squashing), a later push, PR or merge does not redo it; if a rebase or merge brought in someone else's new code,
-  re-run formatting and checks, with the scope counting the brought-in code in with the changes.
-- **Clean-up**: after formatting and checks pass, and before the branch is merged or a PR is opened, clean up via
-  the `agent-gallery` skill; do the same before this round's changes are abandoned or the working copy is deleted.
+  squashing), a later push, PR or merge does not redo it; if a rebase or merge brought in new code from the target
+  branch after the checks, re-run the checks (the scope above sets what to run and the cases that need no re-run).
+- **Clean-up**: before delivery (push, PR or merge), clean up via the `agent-gallery` skill; do the same before this
+  round's changes are abandoned or the working copy is deleted.
 
 ### This project
 
