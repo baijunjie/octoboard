@@ -12,6 +12,14 @@ said as much — a compatibility detail of that kind wants its logic confirmed, 
 what only the real thing can answer: the shell's own dialogs, a volume that is really unmounted, how long something
 really takes, whether a window really paints.
 
+Hunting a UI defect across the whole app (text landing on half pixels, a style that may be missing anywhere) is no
+reason to render everything: find the candidates by reading the code first, then render or measure only those, one
+scenario each, a few pages at a time. Rendering every gallery scenario in two languages with six browser pages at once
+has eaten several GB of memory and left orphaned processes behind, and the user asked why it was not done by code
+analysis. A brief that hands such work to a subagent names which scenarios, how many and the maximum number of pages
+open at once — "walk the gallery's scenarios" is read as all of them — and requires every browser and server it
+started to be stopped before it reports.
+
 Changing a shared component's markup, layout or timing widens what the change touches to every surface already
 using it, so those surfaces are inside this narrow scope rather than outside it: making `MarkedPath`'s root a `span`
 for one new caller collapsed the path boxes in the Settings rows, and neither the type checker, the unit tests nor a
