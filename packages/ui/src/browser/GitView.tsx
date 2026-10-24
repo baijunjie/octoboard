@@ -7,6 +7,7 @@ import { errorDetails, failureParam, FailureBody } from "../components/DaemonErr
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { StatusMark } from "../components/StatusMark";
 import { PaneFailure } from "../components/PaneFailure";
+import { ROW_ICON_BUTTON_CLASS } from "../components/RowControls";
 import { useHasPainted } from "../components/useHasPainted";
 import { DaemonRequestError } from "../daemon-client";
 import { InlineReference } from "../components/InlineReference";
@@ -132,14 +133,13 @@ function Notice({ notice, projectRoots }: { notice: ChangesNotice; projectRoots:
       return (
         <>
           <Message id="git.changes.worktree" params={{ name: code(notice.name) }} />
-          {/* Negative vertical margins keep the extra-small button's margin box at the line's 16px height. */}
           <CopyButton
             text={wireRelativeOrAbsolute(notice.root, projectRoots)}
             beforeCopyText={t("git.changes.copyWorktreePath")}
             failedText={t("git.changes.copyWorktreePathFailed")}
             size="xs"
             variant="ghost"
-            className="ms-1 -my-1 align-top"
+            className={`${ROW_ICON_BUTTON_CLASS} ms-1 align-top`}
           />
         </>
       );
@@ -290,7 +290,7 @@ function ChangesView({
   return (
     <>
       <div ref={selectorsRef} className="shrink-0 groove-b py-2 px-(--pane-inset)" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
-        <div className={`grid min-w-0 ${branchesMark ? "grid-cols-[auto_minmax(0,1fr)_auto]" : "grid-cols-[auto_minmax(0,1fr)]"} items-center gap-x-3`}>
+        <div className={`grid min-w-0 ${branchesMark ? "grid-cols-[auto_minmax(0,1fr)_auto]" : "grid-cols-[auto_minmax(0,1fr)]"} items-center gap-x-2`}>
           <BranchSelect
             label={t("git.changes.branch")}
             branches={listed}
@@ -306,7 +306,7 @@ function ChangesView({
         </div>
         {branch !== undefined && (
           <>
-            <div className="mt-2 flex flex-col gap-1 text-xs text-app-muted empty:hidden">
+            <div className="mt-2 flex flex-col text-xs leading-6 text-app-muted empty:hidden">
               {notices.map((notice) => (
                 <p key={notice.id}>
                   <Notice notice={notice} projectRoots={projectRoots} />

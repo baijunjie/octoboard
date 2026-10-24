@@ -54,7 +54,7 @@ export function BranchSelect({
       isDisabled={isDisabled}
       value={value ?? null}
       onChange={(key) => key !== null && onChange(String(key))}
-      className="col-span-2 grid grid-cols-subgrid items-center gap-x-3"
+      className="col-span-2 grid grid-cols-subgrid items-center gap-x-2"
     >
       <Label className="text-sm">{label}</Label>
       <Select.Trigger className="group min-w-0">
