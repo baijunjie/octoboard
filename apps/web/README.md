@@ -39,8 +39,8 @@ Run these commands from the repository root:
   Graph locale values, canonical and Markdown path helpers, and JSON-LD construction.
 - [`apps/web/seo/page-outline.ts`](seo/page-outline.ts) lists the homepage features, steps, questions, and
   platforms, the hero agents (a name plus an icon file in [`apps/web/public/agents/`](public/agents/)), the
-  workflow project roles and eight `workflowNodes`, the `collaborationScenarios`, and the privacy sections. The Vue app and the Markdown renderer
-  both walk it.
+  workflow project roles and eight `workflowNodes`, and the privacy sections. The Vue app and the Markdown
+  renderer both walk it.
 - [`apps/web/seo/agent-documents.ts`](seo/agent-documents.ts) renders, from the locale catalogs and that
   outline, one Markdown file per homepage and privacy page, plus `llms.txt`, `llms-full.txt`, and
   `sitemap.md`. It reads catalogs with `node:fs` and is imported from `apps/web/nuxt.config.ts` and the Node
@@ -56,25 +56,24 @@ Run these commands from the repository root:
   the site-seo table, the Markdown alternate link, `rel="describedby"` to `llms.txt`, and the JSON-LD
   script on the home and privacy pages.
 - [`apps/web/app/components/`](app/components/) owns navigation, language selection, the footer and the illustrative
-  workflow; `LanguageSelect.vue` is shared by the header's desktop and mobile controls.
+  homepage features and workflow; `LanguageSelect.vue` is shared by the header's desktop and mobile controls.
 - [`apps/web/app/components/SectionHeading.vue`](app/components/SectionHeading.vue) supplies the homepage's shared
   numbered section heading.
+- [`apps/web/app/components/ContinuityFeatures.vue`](app/components/ContinuityFeatures.vue) renders the account
+  switching, agent handoff and usage feature rows from `homeFeatures` in
+  [`apps/web/seo/page-outline.ts`](seo/page-outline.ts), with localized copy and illustrative visuals.
 - [`apps/web/app/components/HeroMascot.vue`](app/components/HeroMascot.vue) owns the layered SVG animation of the
   existing mascot artwork; [`apps/web/app/composables/useVisibleMotion.ts`](app/composables/useVisibleMotion.ts)
   supplies element visibility, document visibility and reduced-motion gating for it and the workflow.
 - [`apps/web/app/components/ProductPreview.vue`](app/components/ProductPreview.vue) hosts the separately built
   React preview in an iframe, with scene selection, loading/error handling, responsive presentation, and a link to
-  the standalone preview. It receives scroll handoffs from that iframe. The React entry and fixtures belong to
+  the standalone preview. It receives scroll handoffs and keyboard/pointer interaction messages from that iframe.
+  The React entry, fixtures and sending bridges belong to
   [`packages/ui/`](../../packages/ui/README.md).
 - [`apps/web/app/components/WorkflowDemo.vue`](app/components/WorkflowDemo.vue) renders the illustrative
   eight-node constellation from [`apps/web/seo/page-outline.ts`](seo/page-outline.ts), with the coordinator at its
-  center, project selection, task/report details, status and signal legends, and measured animated connectors. It
-  also supplies the initial server-rendered connector geometry.
-- [`apps/web/app/components/WorkflowStatus.vue`](app/components/WorkflowStatus.vue) supplies localized working and
-  idle indicators matching the application's status glyphs: a working ping, the same ping drawn as a hollow ring in
-  idle's green for a session running in the background, and Lucide's `MessageCircleMore` for idle. The original SVG
-  paths come from `lucide-react` 1.52.0, with attribution in the component and license text in
-  [`apps/web/public/licenses/lucide-icons.txt`](public/licenses/lucide-icons.txt).
+  center, project selection, task/report details, and measured animated connectors. It also supplies the initial
+  server-rendered connector geometry.
 - [`apps/web/app/components/SiteIcon.vue`](app/components/SiteIcon.vue) supplies shared decorative icons from the local
   SVG assets in [`apps/web/app/assets/icons/`](app/assets/icons/): platform and GitHub brand icons come from Font Awesome Free
   6.7.2, and other UI icons come from Phosphor. The brand SVGs retain their embedded attribution; both libraries'

@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import {
-  collaborationScenarios,
   developedPlatform,
   heroAgents,
-  homeFeatures,
   homeQuestions,
   homeSteps,
   plannedPlatforms,
@@ -16,10 +14,10 @@ const paused = ref(false);
 const releasesUrl = `${config.public.repositoryUrl}/releases`;
 useSectionReveal(page);
 useSeoMeta({
-  title: () => t("seoTitle"),
-  description: () => t("seoDescription"),
-  ogTitle: () => t("seoTitle"),
-  ogDescription: () => t("seoDescription"),
+  title: () => t("workspaceSeoTitle"),
+  description: () => t("workspaceSeoDescription"),
+  ogTitle: () => t("workspaceSeoTitle"),
+  ogDescription: () => t("workspaceSeoDescription"),
 });
 </script>
 
@@ -39,11 +37,11 @@ useSeoMeta({
             <span class="red-square" aria-hidden="true" />{{ t("brandSlogan") }}
           </p>
           <h1>
-            <span>{{ t("heroTitle") }}</span
-            ><span>{{ t("heroTitleSecond") }}</span
-            ><span class="metal-type">{{ t("heroTitleAccent") }}</span>
+            <span>{{ t("workspaceTitle") }}</span
+            ><span>{{ t("workspaceTitleSecond") }}</span
+            ><span class="metal-type">{{ t("workspaceTitleAccent") }}</span>
           </h1>
-          <p class="hero-description">{{ t("heroDescription") }}</p>
+          <p class="hero-description">{{ t("workspaceDescription") }}</p>
           <div class="hero-actions">
             <a :href="releasesUrl" class="button"
             ><SiteIcon name="download-simple" />{{ t("heroCta") }}</a
@@ -80,7 +78,7 @@ useSeoMeta({
       </div>
       <div class="hero-bottom wrap">
         <div class="agent-rail">
-          <span class="eyebrow">{{ t("heroAgentLabel") }}</span>
+          <span class="eyebrow">{{ t("workspaceAgentLabel") }}</span>
           <div>
             <span v-for="agent in heroAgents" :key="agent.icon"
             ><img
@@ -95,43 +93,19 @@ useSeoMeta({
         <div class="hero-end">
           <span class="hero-status">{{ t("heroStatus") }}</span
           ><a href="#benefits" class="explore-link"
-          >{{ t("heroScroll") }}<span class="down-arrow" aria-hidden="true"
+          >{{ t("workspaceScroll") }}<span class="down-arrow" aria-hidden="true"
           /></a>
         </div>
       </div>
     </section>
 
-    <section id="benefits" class="pain-section wrap section-space" data-reveal>
+    <section id="benefits" class="continuity-section wrap section-space" data-reveal>
       <SectionHeading
         number="01"
-        :label="t('painEyebrow')"
-        :title="t('painTitle')"
-        :description="t('painDescription')"
+        :label="t('continuityEyebrow')"
+        :title="t('continuityTitle')"
       />
-      <div class="pain-equation">
-        <article class="pain-pillar">
-          <div class="pillar-symbol" aria-hidden="true">
-            <span /><span /><span /><span /><span /><span />
-          </div>
-          <h3>{{ t("painManagementTitle") }}</h3>
-          <p>{{ t("painManagementDescription") }}</p>
-        </article>
-        <span class="equation-plus" aria-hidden="true">+</span>
-        <article class="pain-pillar">
-          <div class="quality-symbol" aria-hidden="true">
-            <svg viewBox="0 0 42 38" width="42" height="38">
-              <circle cx="21" cy="19.5" r="15.5" />
-              <circle cx="21" cy="16.5" r="15.5" />
-              <path d="M10.2 17.2 17.6 25.1 32 9.6" />
-            </svg>
-          </div>
-          <h3>{{ t("painQualityTitle") }}</h3>
-          <p>{{ t("painQualityDescription") }}</p>
-        </article>
-      </div>
-      <p class="pain-resolution">
-        <span class="red-square" aria-hidden="true" />{{ t("painResolution") }}
-      </p>
+      <ContinuityFeatures />
     </section>
 
     <section
@@ -156,9 +130,9 @@ useSeoMeta({
     >
       <SectionHeading
         number="03"
-        :label="t('howEyebrow')"
-        :title="t('howTitle')"
-        :description="t('howDescription')"
+        :label="t('coordinationEyebrow')"
+        :title="t('coordinationTitle')"
+        :description="t('coordinationDescription')"
       />
       <WorkflowDemo :paused="paused" />
       <div class="workflow-steps">
@@ -170,110 +144,54 @@ useSeoMeta({
       </div>
     </section>
 
-    <section id="principles" class="principles-section section-space" data-reveal>
-      <div class="wrap">
-        <SectionHeading
-          number="04"
-          :label="t('principlesEyebrow')"
-          :title="t('principlesTitle')"
-        />
-        <div class="principle-grid">
-          <article v-for="(feature, index) in homeFeatures" :key="feature.key">
-            <div class="principle-top">
-              <SiteIcon :name="feature.icon" /><span aria-hidden="true"
-              >0{{ index + 1 }}</span
-              >
-            </div>
-            <h3>{{ t(`feature${feature.key}Title`) }}</h3>
-            <p>{{ t(`feature${feature.key}Description`) }}</p>
-          </article>
-        </div>
-        <div id="agent-strengths" class="brand-collaboration">
-          <h3 class="brand-collaboration-title">
-            <span class="red-square" aria-hidden="true" />
-            {{ t("collaborationStrengthsTitle") }}
-          </h3>
-          <ul class="brand-strengths">
-            <li v-for="scenario in collaborationScenarios" :key="scenario.brand">
-              <div class="brand-strengths-identity">
-                <img
-                  :src="`${config.app.baseURL}agents/${scenario.icon}.svg`"
-                  alt=""
-                  width="22"
-                  height="22"
-                />
-                <h4>{{ t(`featureThree${scenario.brand}Title`) }}</h4>
-              </div>
-              <p class="brand-strengths-focus">
-                {{ t(scenario.strengths) }}
-              </p>
-              <p>{{ t(scenario.applications) }}</p>
-            </li>
-          </ul>
-        </div>
-      </div>
-    </section>
-
     <section class="trust-section wrap section-space" data-reveal>
       <SectionHeading
-        number="05"
+        number="04"
         :label="t('localEyebrow')"
         :title="t('localTitle')"
         :description="t('localDescription')"
       />
-      <div class="trust-grid">
-        <article class="open-source-panel">
-          <span class="license-word" aria-hidden="true">MIT</span>
-          <div>
-            <h3 class="preserve-lines">{{ t("proofTitle") }}</h3>
-            <p>{{ t("proofDescription") }}</p>
-            <p>{{ t("proofCaption") }}</p>
-            <div class="trust-links">
-              <a
-                :href="config.public.repositoryUrl"
-                class="github-link"
-                :aria-label="t('proofRepository')"
-                :title="t('proofRepository')"
-              ><SiteIcon name="github-logo" /></a
-              ><a
-                :href="`${config.public.repositoryUrl}/blob/main/LICENSE`"
-                class="text-link"
-              >{{ t("proofLicense")
-              }}<span class="link-arrow" aria-hidden="true"
-              /></a>
-            </div>
+      <article class="open-source-panel">
+        <span class="license-word" aria-hidden="true">MIT</span>
+        <div>
+          <h3 class="preserve-lines">{{ t("proofTitle") }}</h3>
+          <p>{{ t("proofDescription") }}</p>
+          <p>{{ t("proofFreeCaption") }}</p>
+          <div class="trust-links">
+            <a
+              :href="config.public.repositoryUrl"
+              class="github-link"
+              :aria-label="t('proofRepository')"
+              :title="t('proofRepository')"
+            ><SiteIcon name="github-logo" /></a
+            ><a
+              :href="`${config.public.repositoryUrl}/blob/main/LICENSE`"
+              class="text-link"
+            >{{ t("proofLicense")
+            }}<span class="link-arrow" aria-hidden="true"
+            /></a>
+            <NuxtLink :to="localePath('/privacy/')" class="text-link"
+            >{{ t("localLink") }}<span class="link-arrow" aria-hidden="true"
+            /></NuxtLink>
           </div>
-        </article>
-        <article class="remote-panel">
-          <span class="planned-badge">{{ t("remoteBadge") }}</span>
-          <h3>{{ t("remoteTitle") }}</h3>
-          <p>{{ t("remoteDescription") }}</p>
-          <NuxtLink :to="localePath('/privacy/')" class="text-link"
-          >{{ t("localLink") }}<span class="link-arrow" aria-hidden="true"
-          /></NuxtLink>
-        </article>
+        </div>
+      </article>
+      <div class="platform-intro">
+        <h3>{{ t("platformsTitle") }}</h3>
+        <p>{{ t("platformsDescription") }}</p>
       </div>
-    </section>
-
-    <section class="platform-section wrap section-space" data-reveal>
-      <SectionHeading
-        number="06"
-        :label="t('heroStatus')"
-        :title="t('platformsTitle')"
-        :description="t('platformsDescription')"
-      />
       <ul class="platform-list">
         <li class="platform-current">
           <SiteIcon :name="developedPlatform.icon" />
           <div>
-            <h3>{{ developedPlatform.name }}</h3>
+            <h4>{{ developedPlatform.name }}</h4>
             <p>{{ t("platformsMacStatus") }}</p>
           </div>
         </li>
         <li v-for="platform in plannedPlatforms" :key="platform.name">
           <SiteIcon :name="platform.icon" />
           <div>
-            <h3>{{ platform.name }}</h3>
+            <h4>{{ platform.name }}</h4>
             <p>{{ t(platform.status) }}</p>
           </div>
         </li>
@@ -281,12 +199,12 @@ useSeoMeta({
     </section>
 
     <section id="questions" class="faq-section wrap section-space" data-reveal>
-      <SectionHeading number="07" :label="t('navFaq')" :title="t('faqTitle')" />
+      <SectionHeading number="05" :label="t('faqEyebrow')" :title="t('faqTitle')" />
       <div class="faq-list">
         <details
           v-for="(question, index) in homeQuestions"
           :key="question"
-          :open="question === 'One'"
+          :open="index === 0"
         >
           <summary>
             <span class="question-number" aria-hidden="true"
@@ -323,11 +241,6 @@ useSeoMeta({
           </div>
         </div>
         <p class="cta-brand-meaning">{{ t("brandSloganMeaning") }}</p>
-        <p class="eyebrow">
-          <span class="red-square" aria-hidden="true" />{{ t("ctaEyebrow") }}
-        </p>
-        <h2 class="preserve-lines">{{ t("ctaTitle") }}</h2>
-        <p class="cta-description">{{ t("ctaDescription") }}</p>
         <a :href="releasesUrl" class="button"
         ><SiteIcon name="download-simple" />{{ t("heroCta") }}</a
         >

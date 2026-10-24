@@ -306,11 +306,11 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   running", the status and agent pictures, the per-agent quota submenus, Open, Quit), choosing a session from it, and
   its Quit.
 
-- [Website](product/website.md) — the localized homepage and its two product goals, privacy and error pages, keyboard
-  navigation, motion, interactive workflow illustration, sample application preview, release download links,
-  platform roadmap (the Linux entry standing for the planned server form, which the homepage and the platform
-  question now describe), privacy disclosures, planned remote host support and how the server form
-  differs from it, search indexing, and the agent-readable Markdown copies.
+- [Website](product/website.md) — the localized homepage's account switching, agent handoff and usage features,
+  cross-project workflow illustration, sample application preview, privacy and error pages, keyboard navigation,
+  motion, release-page links, platform roadmap (including the planned Linux server), privacy disclosures,
+  planned remote host support and how the server form differs from it, search indexing, and the agent-readable
+  Markdown copies.
 
 ## Reference
 

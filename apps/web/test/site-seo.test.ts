@@ -159,10 +159,36 @@ test("agent documents follow the pages and do not publish a download that does n
   const home = files["index.md"];
   const llms = files["llms.txt"];
   assert.match(home, /Canonical: https:\/\/octoboard\.dev\//);
-  assert.match(home, /Early prototype, still in development/);
-  assert.match(home, /Permission to build, modify, and share\./);
-  assert.match(home, /Awaiting instructions/);
-  assert.match(home, /What is Octoboard useful for\?/);
+  assert.match(home, /macOS on Apple Silicon · Early prototype/);
+  assert.match(home, /Octoboard is free and open source under the MIT License\./);
+  assert.equal(home.includes("Awaiting instructions"), false);
+  assert.match(home, /Switch accounts\. Keep the conversation\./);
+  assert.match(home, /Do I need to set up my projects and CLI configuration again\?/);
+  assert.equal(home.includes("What is Octoboard useful for?"), false);
+  for (const locale of locales) {
+    const body = files[markdownFile(locale.code === "en" ? "/" : `/${locale.code}/`)];
+    const catalog = messages[locale.code];
+    const headings = [
+      "continuityTitle",
+      "accountFeatureTitle",
+      "handoffFeatureTitle",
+      "usageFeatureTitle",
+      "previewTitle",
+      "coordinationTitle",
+      "localTitle",
+      "platformsTitle",
+      "faqTitle",
+    ].map((key) => catalog[key].replaceAll("\n", " "));
+    let previous = -1;
+    for (const title of headings) {
+      const position = body.indexOf(title);
+      assert.ok(position > previous, `${locale.code}: missing or reordered ${title}`);
+      previous = position;
+    }
+    for (const key of ["accountFeatureDescription", "handoffFeatureDescription", "usageFeatureDescription"]) {
+      assert.equal(body.split(catalog[key]).length - 1, 1, `${locale.code}: ${key} must appear once`);
+    }
+  }
   assert.equal(home.includes("Replay workflow"), false);
   assert.match(files["privacy.md"], /GitHub privacy statement/);
   assert.match(files["ja.md"], /Canonical: https:\/\/octoboard\.dev\/ja\//);

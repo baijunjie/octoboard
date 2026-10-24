@@ -2,45 +2,18 @@
 // Adding a visible section means adding it here; the pages iterate these lists.
 
 export const homeFeatures = [
-  { key: "One", icon: "tree-structure" },
-  { key: "Two", icon: "terminal-window" },
-  { key: "Three", icon: "plugs-connected" },
-  { key: "Four", icon: "chat-circle-dots" },
+  { key: "account" },
+  { key: "handoff" },
+  { key: "usage" },
 ] as const;
 
 export const homeSteps = ["One", "Two", "Three"] as const;
 
-export const collaborationScenarios = [
-  {
-    brand: "Claude",
-    icon: "claude",
-    strengths: "featureThreeClaudeStrengths",
-    applications: "featureThreeClaudeApplications",
-  },
-  {
-    brand: "Gpt",
-    icon: "codex",
-    strengths: "featureThreeGptStrengths",
-    applications: "featureThreeGptApplications",
-  },
-  {
-    brand: "Grok",
-    icon: "grok",
-    strengths: "featureThreeGrokDescription",
-    applications: "featureThreeGrokUsage",
-  },
-] as const;
-
 export const homeQuestions = [
-  "One",
-  "Two",
-  "Three",
-  "Four",
-  "Five",
-  "Six",
-  "Seven",
-  "Eight",
-  "Nine",
+  "Setup",
+  "Data",
+  "Parallel",
+  "Portability",
 ] as const;
 
 export const developedPlatform = {

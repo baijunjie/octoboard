@@ -45,16 +45,12 @@ function sessionOrder(byStatus: boolean): (a: Session, b: Session) => number {
 }
 
 /** The rank of a project with no unarchived session, which ends the list. */
-export const INACTIVE_PROJECT_RANK = 4;
+export const INACTIVE_PROJECT_RANK = STATUS_RANK.archived;
 
-/** A project's rank by its most urgent unarchived session: a raised hand, work, a running
- * session, then an interrupted session. Projects with no unarchived session end the list. */
+/** A project's most urgent unarchived session sets its position, using the same status priority
+ * as the sessions within it. Projects with no unarchived session end the list. */
 export function projectRank(sessions: Session[]): number {
-  if (sessions.some((s) => s.status === "waiting_user")) return 0;
-  if (sessions.some(countsAsWorking)) return 1;
-  if (sessions.some((s) => s.status === "idle" || s.status === "starting")) return 2;
-  if (sessions.some((s) => s.status === "interrupted")) return 3;
-  return INACTIVE_PROJECT_RANK;
+  return sessions.reduce((rank, session) => Math.min(rank, rankOf(session)), INACTIVE_PROJECT_RANK);
 }
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });

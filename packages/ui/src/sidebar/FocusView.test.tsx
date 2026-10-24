@@ -435,12 +435,13 @@ it("a console session's focus mode nests a lead session's own sessions under it"
   const cards = Array.from(container.querySelectorAll<HTMLElement>("div[role=button]")).filter((card) =>
     card.className.includes("flex-col"),
   );
+  // Both projects have an idle session, so their names break the status tie.
   expect(cards.map((card) => [card.getAttribute("aria-label")?.split(" session,")[0], card.parentElement!.className.includes("ms-[17px]")])).toEqual([
     [isolate("Hub"), false],
+    [isolate("Add idempotency keys"), false],
     [isolate("Rework the gallery"), false],
     [isolate("Chase the flaky test"), true],
     [isolate("Fix the layout"), false],
-    [isolate("Add idempotency keys"), false],
   ]);
   expect(text()).toContain("Sessions (4)");
   unmount();

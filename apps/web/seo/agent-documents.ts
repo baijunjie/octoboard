@@ -1,7 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
-  collaborationScenarios,
   developedPlatform,
   githubPrivacyUrl,
   heroAgents,
@@ -107,11 +106,6 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
   const messages = catalog(copy, locale.code);
   const params = valuesFor(copy);
   const text = (key: string) => message(messages, key, params);
-  const statusLegend = [
-    text("demoStatusWorking"),
-    text("demoStatusIdle"),
-    text("demoStatusBackground"),
-  ].join(" · ");
   const canonical = languageHomeUrl(copy.siteUrl, locale.code);
   const privacy = markdownUrl(
     copy.siteUrl,
@@ -120,83 +114,59 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
   return document([
     heading(
       1,
-      `${text("heroTitle")} ${text("heroTitleSecond")} ${text("heroTitleAccent")}`,
+      `${text("workspaceTitle")} ${text("workspaceTitleSecond")} ${text("workspaceTitleAccent")}`,
     ),
     `Canonical: ${canonical}`,
     text("brandSlogan"),
     text("brandSloganMeaning"),
-    text("heroDescription"),
+    text("workspaceDescription"),
     text("heroStatus"),
     text("heroNote"),
     link(text("heroCta"), releasesUrl(copy.repositoryUrl)),
     link(text("heroSecondary"), copy.repositoryUrl),
-    text("heroAgentLabel"),
+    text("workspaceAgentLabel"),
     heroAgents.map((agent) => agent.name).join(", "),
-    heading(2, text("painTitle")),
-    text("painDescription"),
-    heading(3, text("painManagementTitle")),
-    text("painManagementDescription"),
-    heading(3, text("painQualityTitle")),
-    text("painQualityDescription"),
-    text("painResolution"),
+    heading(2, text("continuityTitle")),
+    ...homeFeatures.flatMap((feature) => [
+      heading(3, text(`${feature.key}FeatureTitle`)),
+      text(`${feature.key}FeatureDescription`),
+    ]),
     heading(2, text("previewTitle")),
     text("previewDescription"),
     text("previewCaption"),
     [
       text("previewScenarioOverview"),
-      text("previewScenarioReport"),
+      text("previewScenarioFocus"),
       text("previewScenarioChanges"),
     ].join(" · "),
-    heading(2, text("howTitle")),
-    text("howDescription"),
+    heading(2, text("coordinationTitle")),
+    text("coordinationDescription"),
     heading(3, text("demoLabel")),
     text("demoIllustration"),
     text("demoWorkspace"),
     `**${text("demoYou")}:** ${text("demoRequest")}`,
     `**${text("demoCoordinator")}:** ${text("demoCoordinatorText")}`,
-    statusLegend,
     ...workflowNodes.flatMap(({ project, path }) => [
       heading(4, `${text(`demo${project.key}`)} — ${project.agent}`),
       `\`${path}\``,
-      statusLegend,
       text("demoContext"),
       text("demoRules"),
       text(`demo${project.key}Task`),
       `**${text("demoReportLabel")}:** ${text(`demo${project.key}Report`)}`,
     ]),
-    heading(3, text("demoReportsTitle")),
-    text("demoReportsDescription"),
-    heading(3, text("demoDeliveryTitle")),
-    text("demoDeliveryDescription"),
-    text("demoDirect"),
     ...homeSteps.flatMap((step) => [
       heading(3, text(`step${step}Title`)),
       text(`step${step}Description`),
     ]),
-    heading(2, text("principlesTitle")),
-    ...homeFeatures.flatMap((feature) => [
-      heading(3, text(`feature${feature.key}Title`)),
-      text(`feature${feature.key}Description`),
-    ]),
-    heading(3, text("collaborationStrengthsTitle")),
-    collaborationScenarios
-      .map(
-        (scenario) =>
-          `- **${text(`featureThree${scenario.brand}Title`)}** — ${text(scenario.strengths)} ${text(scenario.applications)}`,
-      )
-      .join("\n"),
     heading(2, text("localTitle")),
     text("localDescription"),
     link(text("localLink"), privacy),
     heading(3, text("proofTitle")),
     text("proofDescription"),
-    text("proofCaption"),
+    text("proofFreeCaption"),
     link(text("proofRepository"), copy.repositoryUrl),
     link(text("proofLicense"), licenseUrl(copy.repositoryUrl)),
-    heading(3, text("remoteTitle")),
-    text("remoteBadge"),
-    text("remoteDescription"),
-    heading(2, text("platformsTitle")),
+    heading(3, text("platformsTitle")),
     text("platformsDescription"),
     [
       `- ${developedPlatform.name}: ${text("platformsMacStatus")}`,
@@ -209,8 +179,6 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
       heading(3, text(`faq${question}Question`)),
       text(`faq${question}Answer`),
     ]),
-    heading(2, text("ctaTitle")),
-    text("ctaDescription"),
     text("ctaNote"),
     link(text("heroCta"), releasesUrl(copy.repositoryUrl)),
   ]);
@@ -252,8 +220,9 @@ function llmsTxt(copy: AgentCopy): string {
   const params = valuesFor(copy);
   const text = (key: string) => flatten(message(english, key, params));
   const notes = [
+    text("proofFreeCaption"),
     text("localDescription"),
-    text("remoteDescription"),
+    ...homeFeatures.map((feature) => text(`${feature.key}FeatureDescription`)),
     ...homeQuestions.map(
       (question) =>
         `${text(`faq${question}Question`)} ${text(`faq${question}Answer`)}`,
@@ -263,9 +232,9 @@ function llmsTxt(copy: AgentCopy): string {
   ];
   const pageLink = (code: string, page: "" | "privacy/") => {
     const messages = catalog(copy, code);
-    const titleKey = page === "" ? "seoTitle" : "privacySeoTitle";
+    const titleKey = page === "" ? "workspaceSeoTitle" : "privacySeoTitle";
     const descriptionKey =
-      page === "" ? "seoDescription" : "privacySeoDescription";
+      page === "" ? "workspaceSeoDescription" : "privacySeoDescription";
     const title = flatten(message(messages, titleKey, params));
     const description = truncate(
       message(messages, descriptionKey, params),
@@ -287,7 +256,7 @@ function llmsTxt(copy: AgentCopy): string {
   });
   return document([
     heading(1, copy.appName),
-    `> ${text("seoDescription")}`,
+    `> ${text("workspaceSeoDescription")}`,
     `Canonical Origin: ${copy.siteUrl}`,
     ["**Notes:**", ...notes].join("\n\n"),
     ["## Available Languages on Website", "", ...languages].join("\n"),
@@ -310,7 +279,7 @@ function llmsFull(
   }>,
 ): string {
   const description = flatten(
-    message(catalog(copy, "en"), "seoDescription", valuesFor(copy)),
+    message(catalog(copy, "en"), "workspaceSeoDescription", valuesFor(copy)),
   );
   const header = document([
     heading(1, copy.appName),
@@ -401,14 +370,14 @@ export function renderAgentFiles(copy: AgentCopy): Record<string, string> {
       const title = flatten(
         message(
           catalog(copy, locale.code),
-          page === "" ? "seoTitle" : "privacySeoTitle",
+          page === "" ? "workspaceSeoTitle" : "privacySeoTitle",
           params,
         ),
       );
       const description = flatten(
         message(
           catalog(copy, locale.code),
-          page === "" ? "seoDescription" : "privacySeoDescription",
+          page === "" ? "workspaceSeoDescription" : "privacySeoDescription",
           params,
         ),
       );

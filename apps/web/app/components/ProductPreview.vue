@@ -4,7 +4,7 @@ const { locale } = useI18n();
 const config = useRuntimeConfig();
 const scenarios = [
   { id: "overview", label: "previewScenarioOverview" },
-  { id: "report", label: "previewScenarioReport" },
+  { id: "focus", label: "previewScenarioFocus" },
   { id: "changes", label: "previewScenarioChanges" },
 ] as const;
 const selected = ref("overview");
@@ -15,6 +15,8 @@ const visible = ref(false);
 const ready = ref(false);
 const failed = ref(false);
 const frameFocused = ref(false);
+// Pointer focus survives leaving the preview; only keyboard use keeps focused content unfaded.
+const keyboardInteraction = ref(false);
 const compact = computed(() => width.value <= 800);
 const scale = computed(() =>
   compact.value ? 1 : Math.min(1, width.value / 1440),
@@ -50,6 +52,14 @@ function syncFrameFocus() {
   focusTimer = setTimeout(() => {
     frameFocused.value = document.activeElement === frame.value;
   }, 0);
+}
+function noteKeyboard(event: KeyboardEvent) {
+  if (["Alt", "Control", "Meta", "Shift"].includes(event.key)) return;
+  keyboardInteraction.value = true;
+  syncFrameFocus();
+}
+function notePointer() {
+  keyboardInteraction.value = false;
 }
 // Release velocity arrives in px/ms. Each millisecond keeps 0.998 of it, iOS's normal deceleration.
 const flingFriction = 0.998;
@@ -90,6 +100,14 @@ function startFling(initial: number) {
 }
 function receive(event: MessageEvent) {
   if (event.source !== frame.value?.contentWindow) return;
+  if (
+    event.data?.type === "octoboard-preview-interaction" &&
+    (event.data.modality === "keyboard" || event.data.modality === "pointer")
+  ) {
+    keyboardInteraction.value = event.data.modality === "keyboard";
+    syncFrameFocus();
+    return;
+  }
   if (
     event.data?.type === "octoboard-preview-scroll" &&
     typeof event.data.deltaY === "number" &&
@@ -139,6 +157,8 @@ onMounted(() => {
   window.addEventListener("blur", syncFrameFocus);
   window.addEventListener("focus", syncFrameFocus);
   document.addEventListener("focusin", syncFrameFocus);
+  document.addEventListener("keydown", noteKeyboard, true);
+  document.addEventListener("pointerdown", notePointer, true);
 });
 onBeforeUnmount(() => {
   stopWaiting();
@@ -152,6 +172,8 @@ onBeforeUnmount(() => {
   window.removeEventListener("blur", syncFrameFocus);
   window.removeEventListener("focus", syncFrameFocus);
   document.removeEventListener("focusin", syncFrameFocus);
+  document.removeEventListener("keydown", noteKeyboard, true);
+  document.removeEventListener("pointerdown", notePointer, true);
 });
 </script>
 
@@ -184,7 +206,7 @@ onBeforeUnmount(() => {
       :class="{
         'is-ready': ready,
         'is-compact': compact,
-        'is-focused': frameFocused,
+        'is-keyboard-focused': frameFocused && keyboardInteraction,
       }"
       :style="{
         '--preview-scale': scale,
@@ -192,7 +214,7 @@ onBeforeUnmount(() => {
       }"
     >
       <div v-if="!ready" class="preview-loading" role="status">
-        {{ t(failed ? "errorDescription" : "previewLoading") }}
+        {{ t(failed ? "previewError" : "previewLoading") }}
       </div>
       <div class="preview-crop" :inert="!ready" :aria-hidden="!ready">
         <iframe
@@ -280,8 +302,7 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 .preview-window:hover,
-.preview-window.is-focused,
-.preview-window:focus-within {
+.preview-window.is-keyboard-focused {
   mask-image: none;
 }
 .is-ready .preview-crop {

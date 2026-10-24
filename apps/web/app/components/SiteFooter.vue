@@ -21,7 +21,7 @@ const localePath = useLocalePath();
       <p>{{ t("footerTagline") }}</p>
     </div>
     <div class="footer-bottom">
-      <nav class="footer-links" :aria-label="t('navMenu')">
+      <nav class="footer-links" :aria-label="t('footerNav')">
         <a
           :href="config.public.repositoryUrl"
           class="github-link"

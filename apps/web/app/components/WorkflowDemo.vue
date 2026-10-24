@@ -200,36 +200,6 @@ onBeforeUnmount(() => observer?.disconnect());
         </div>
       </article>
     </div>
-    <div class="workflow-summary">
-      <span class="workflow-index" aria-hidden="true">03</span>
-      <div>
-        <h3>{{ t("demoReportsTitle") }}</h3>
-        <p>{{ t("demoReportsDescription") }}</p>
-      </div>
-      <SiteIcon name="plugs-connected" />
-      <div class="summary-delivery">
-        <h3>{{ t("demoDeliveryTitle") }}</h3>
-        <p>{{ t("demoDeliveryDescription") }}</p>
-      </div>
-    </div>
-    <div class="workflow-legend">
-      <span
-      ><i class="dispatch-swatch" aria-hidden="true" />{{
-        t("demoDispatch")
-      }}</span
-      >
-      <span
-      ><i class="report-swatch" aria-hidden="true" />{{
-        t("demoReportLabel")
-      }}</span
-      >
-      <WorkflowStatus status="idle" :animating="false" />
-      <WorkflowStatus status="background" :animating="running && !paused" />
-      <WorkflowStatus status="working" :animating="running && !paused" />
-    </div>
-    <p class="workflow-footer">
-      <SiteIcon name="chat-circle-dots" />{{ t("demoDirect") }}
-    </p>
   </div>
 </template>
 
@@ -476,7 +446,7 @@ onBeforeUnmount(() => observer?.disconnect());
 .project-details {
   margin: 10px 28px 0;
   padding: 24px 0;
-  border-block: 1px solid #ffffff20;
+  border-top: 1px solid #ffffff20;
 }
 .project-detail {
   display: grid;
@@ -528,87 +498,6 @@ onBeforeUnmount(() => observer?.disconnect());
 .detail-report {
   border-inline-start: 1px solid #ff4b3e40;
   padding-inline-start: 24px;
-}
-.workflow-summary {
-  display: flex;
-  align-items: flex-start;
-  gap: 24px;
-  padding: 30px 28px;
-}
-.workflow-summary > div {
-  flex: 1;
-  min-width: 0;
-}
-.workflow-summary h3 {
-  color: #e1e1e5;
-  font-size: 15px;
-  line-height: 1.6;
-  font-weight: 500;
-}
-.workflow-summary p {
-  color: #a8a8ae;
-  font-size: 12px;
-  line-height: 1.8;
-  margin-top: 8px;
-}
-.workflow-summary > .site-icon {
-  color: #aaaab0;
-  margin-top: 5px;
-  flex-shrink: 0;
-}
-.workflow-footer {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  color: #babac0;
-  font-size: 12px;
-  line-height: 1.7;
-  padding: 18px 28px;
-  background: #ffffff04;
-  border-top: 1px solid #ffffff0c;
-}
-.workflow-footer .site-icon {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-}
-.workflow-legend {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 16px 24px;
-  padding: 0 28px 24px;
-  color: #b9b9bf;
-  font-size: 12px;
-  line-height: 1.6;
-}
-.workflow-legend > span {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.workflow-legend i {
-  display: inline-block;
-  width: 24px;
-  height: 1px;
-  background: #e1e1e8;
-  position: relative;
-}
-.workflow-legend i::after {
-  content: "";
-  position: absolute;
-  right: 0;
-  top: -2px;
-  width: 5px;
-  height: 5px;
-  border-top: 1px solid currentColor;
-  border-right: 1px solid currentColor;
-  transform: rotate(45deg);
-}
-.workflow-legend .report-swatch {
-  background: #ff867b;
-  color: #ff867b;
-  transform: rotate(180deg);
 }
 @keyframes network-signal {
   to {
@@ -700,18 +589,6 @@ onBeforeUnmount(() => observer?.disconnect());
   }
   .detail-report {
     padding-inline-start: 16px;
-  }
-  .workflow-summary {
-    display: grid;
-    grid-template-columns: 44px 1fr;
-    gap: 22px 20px;
-    padding: 28px 20px;
-  }
-  .workflow-summary > .site-icon {
-    margin-inline: auto;
-  }
-  .workflow-footer {
-    padding: 18px 20px;
   }
 }
 @media (max-width: 380px) {

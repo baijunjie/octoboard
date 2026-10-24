@@ -49,7 +49,7 @@ useSeoMeta({
   ogImageWidth: 1200,
   ogImageHeight: 630,
   ogImageAlt: () =>
-    `${config.public.appName} — ${t("brandSlogan")} — ${t("brandSloganMeaning")} — ${[t("heroTitle"), t("heroTitleSecond"), t("heroTitleAccent")].join(" ")}`,
+    `${config.public.appName} — ${t("brandSlogan")} — ${t("brandSloganMeaning")} — ${[t("workspaceTitle"), t("workspaceTitleSecond"), t("workspaceTitleAccent")].join(" ")}`,
   ogType: "website",
   ogSiteName: config.public.appName,
   twitterCard: "summary_large_image",

@@ -1,5 +1,6 @@
 import { installPreviewStorage } from "./storage";
 import { installPreviewKeyboardGuard } from "./keyboard";
+import { installPreviewInteractionBridge, withReportInteractionBridge } from "./interactionBridge";
 import { installPreviewScrollBridge, withReportScrollBridge } from "./scrollBridge";
 import { isLanguage, type Language } from "../i18n/languages";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
@@ -10,14 +11,18 @@ import { copyFor, createPreviewScenario, type PreviewScene } from "./scenarios";
 installPreviewStorage();
 const removeScrollBridge = installPreviewScrollBridge();
 const removeKeyboardGuard = installPreviewKeyboardGuard();
+const removeInteractionBridge = installPreviewInteractionBridge();
 window.addEventListener("pagehide", (event) => {
   if (!event.persisted) {
     removeScrollBridge();
     removeKeyboardGuard();
+    removeInteractionBridge();
   }
 });
 const embedded = window.parent !== window;
-const reportDocument = embedded ? withReportScrollBridge : (source: string) => source;
+const reportDocument = embedded
+  ? (source: string) => withReportInteractionBridge(withReportScrollBridge(source))
+  : (source: string) => source;
 const params = new URLSearchParams(window.location.search);
 const requestedLanguage = params.get("lang");
 const language: Language = isLanguage(requestedLanguage)
@@ -25,7 +30,7 @@ const language: Language = isLanguage(requestedLanguage)
   : "en";
 const requestedScene = params.get("scene");
 const scene: PreviewScene =
-  requestedScene === "report" || requestedScene === "changes"
+  requestedScene === "focus" || requestedScene === "changes"
     ? requestedScene
     : "overview";
 const theme = params.get("theme") === "light" ? "light" : "dark";

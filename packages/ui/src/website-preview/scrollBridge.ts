@@ -1,7 +1,8 @@
+import { isReportBridgeSource, withReportBridge } from "./reportBridge";
+
 /** The website accepts this only from its own preview iframe's contentWindow. */
 export const PREVIEW_SCROLL_MESSAGE = "octoboard-preview-scroll";
 const REPORT_SCROLL_MESSAGE = "octoboard-preview-report-scroll";
-const REPORT_MARKER = "data-website-preview-report";
 const INJECTED_MARKER = "data-website-preview-scroll-bridge";
 
 /** Kept self-contained because the same function is serialized into our sample report's opaque
@@ -210,16 +211,8 @@ export function installBoundaryScrollRelay(
  * srcdoc. The report's normal sanitizer deliberately removes author scripts, so
  * putting a script in the fixture HTML would never run. This leaves product rendering unchanged. */
 export function withReportScrollBridge(srcdoc: string): string {
-  if (
-    !srcdoc.includes(REPORT_MARKER) ||
-    !srcdoc.includes("window.OCTOBOARD_PAGE") ||
-    srcdoc.includes(INJECTED_MARKER)
-  )
-    return srcdoc;
-  const nonce = /<script nonce="([a-f0-9]+)">/.exec(srcdoc)?.[1];
-  if (!nonce) return srcdoc;
   const source = `(${installBoundaryScrollRelay.toString()})(window, function(deltaY, velocity, stop) { parent.postMessage({ type: "${REPORT_SCROLL_MESSAGE}", deltaY: deltaY, velocity: velocity, stop: stop }, "*"); });`;
-  return `${srcdoc}<script nonce="${nonce}" ${INJECTED_MARKER}>${source}</script>`;
+  return withReportBridge(srcdoc, INJECTED_MARKER, source);
 }
 
 /** Website-only boundary handoff. An independently opened preview keeps ordinary application
@@ -253,16 +246,8 @@ export function installPreviewScrollBridge(win: Window = window): () => void {
         ? data.velocity
         : undefined;
     if (data.deltaY === 0 && !velocity && !stop) return;
-    const ownReport = [
-      ...doc.querySelectorAll<HTMLIFrameElement>(
-        ".website-preview-app iframe[srcdoc]",
-      ),
-    ].some(
-      (frame) =>
-        frame.srcdoc.includes(INJECTED_MARKER) &&
-        event.source === frame.contentWindow,
-    );
-    if (ownReport) send(data.deltaY, velocity, stop || undefined);
+    if (isReportBridgeSource(doc, event.source, INJECTED_MARKER))
+      send(data.deltaY, velocity, stop || undefined);
   };
   win.addEventListener("message", onMessage);
   return () => {

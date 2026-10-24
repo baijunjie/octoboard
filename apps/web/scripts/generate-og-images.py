@@ -65,7 +65,7 @@ MEANING_SIZES = (22, 18)
 SLOGAN_MEANING_GAP = 12
 TEXT_BLOCK_LIFT = 12
 DOMAIN_CLEARANCE = 24
-HERO_LINES = ("heroTitle", "heroTitleSecond", "heroTitleAccent")
+HERO_LINES = ("workspaceTitle", "workspaceTitleSecond", "workspaceTitleAccent")
 
 # Faces are a design choice. A new script needs a face that contains it;
 # the glyph check fails until this table has one.

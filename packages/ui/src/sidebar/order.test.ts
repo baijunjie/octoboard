@@ -109,9 +109,10 @@ describe("a session running in the background", () => {
     expect(ordered.map((s) => s.id)).toEqual(["pinned-work", "waiting", "idle", "new-bg", "bg", "working", "interrupted"]);
   });
 
-  it("makes a project rank and a console show work", () => {
-    expect(projectRank([background])).toBe(projectRank([session("w", "working", 1)]));
-    expect(projectRank([background, session("i", "idle", 2)])).toBeLessThan(projectRank([session("i", "idle", 2)]));
+  it("ranks a project between idle and foreground work while its console still shows work", () => {
+    expect(projectRank([background])).toBeLessThan(projectRank([session("w", "working", 1)]));
+    expect(projectRank([background])).toBeGreaterThan(projectRank([session("i", "idle", 2)]));
+    expect(projectRank([background, session("i", "idle", 2)])).toBe(projectRank([session("i", "idle", 2)]));
     expect(consoleActivity([background])).toBe("working");
   });
 });
@@ -224,7 +225,7 @@ describe("sortProjects", () => {
       [project("d", "delta"), project("a10", "item 10"), project("b", "beta"), project("a2", "item 2"), project("c", "charlie"), project("z", "zulu", true)],
       (p) => sessions[p.id] ?? [],
     );
-    expect(ordered.map((p) => p.id)).toEqual(["c", "b", "d", "z", "a2", "a10"]);
+    expect(ordered.map((p) => p.id)).toEqual(["c", "d", "b", "z", "a2", "a10"]);
   });
 
   it("keeps interrupted sessions ahead of empty and archived-only projects, without dimming", () => {
@@ -392,8 +393,8 @@ describe("focusGroups", () => {
       "hub",
     );
     expect(groups.map((g) => [g.project.id, g.sessions.map((row) => [row.session.id, row.under?.id])])).toEqual([
-      ["b", [["b-mine", undefined]]],
       ["a", [["a-mine", undefined], ["a-under-mine", "a-mine"]]],
+      ["b", [["b-mine", undefined]]],
     ]);
     const byName = focusGroups(
       [project("a", "alpha"), project("b", "beta")],

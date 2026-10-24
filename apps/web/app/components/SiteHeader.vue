@@ -11,7 +11,7 @@ const glass = ref<HTMLElement | null>(null);
 useLiquidGlass(glass);
 useLiquidGlassPointer(glass);
 const sections = [
-  { id: "benefits", key: "navBenefits" },
+  { id: "benefits", key: "navContinuity" },
   { id: "product-preview", key: "previewEyebrow" },
   { id: "how-it-works", key: "navHow" },
   { id: "questions", key: "navFaq" },
@@ -140,7 +140,7 @@ onBeforeUnmount(() => {
               class="menu-toggle"
               :class="{ 'is-open': open, 'menu-floating-close': open }"
               type="button"
-              :aria-label="t(open ? 'navClose' : 'navMenu')"
+              :aria-label="t(open ? 'navClose' : 'navOpen')"
               :aria-expanded="open"
               aria-controls="site-menu"
               @click="open ? closeMenu() : showMenu()"
@@ -153,7 +153,6 @@ onBeforeUnmount(() => {
                 id="site-menu"
                 ref="menuPanel"
                 class="menu-overlay"
-                :aria-label="t('navMenu')"
               >
                 <div class="menu-top">
                   <NuxtLink

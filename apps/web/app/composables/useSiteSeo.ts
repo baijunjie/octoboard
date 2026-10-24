@@ -25,12 +25,12 @@ export function useSiteSeo() {
   const locale = computed(() => localeByCode(code.value));
   const canonical = computed(() => canonicalUrl(siteUrl, route.path));
   const title = computed(() =>
-    t(kind.value === "privacy" ? "privacySeoTitle" : "seoTitle"),
+    t(kind.value === "privacy" ? "privacySeoTitle" : "workspaceSeoTitle"),
   );
   const description = computed(() =>
-    t(kind.value === "privacy" ? "privacySeoDescription" : "seoDescription"),
+    t(kind.value === "privacy" ? "privacySeoDescription" : "workspaceSeoDescription"),
   );
-  const siteDescription = computed(() => t("seoDescription"));
+  const siteDescription = computed(() => t("workspaceSeoDescription"));
 
   useHead(() => {
     const contentPage = kind.value === "home" || kind.value === "privacy";
@@ -54,7 +54,7 @@ export function useSiteSeo() {
           licenseUrl: `${config.public.repositoryUrl}/blob/main/LICENSE`,
           languages: locales.map((item) => item.language),
           featureTitles: homeFeatures.map((feature) =>
-            t(`feature${feature.key}Title`),
+            t(`${feature.key}FeatureTitle`).replaceAll("\n", " "),
           ),
           questions: homeQuestions.map((question) => ({
             question: t(`faq${question}Question`),

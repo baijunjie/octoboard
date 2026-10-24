@@ -452,6 +452,32 @@ it("cuts a running view-switch animation short when reduced motion is requested"
 });
 
 
+it("orders project groups by their sessions' priority and follows status changes from the daemon", () => {
+  onTestFinished(() => {
+    act(() => vi.runOnlyPendingTimers());
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  const alpha = projectOf("p-alpha", main.id, "Alpha");
+  const beta = projectOf("p-beta", main.id, "Beta");
+  const a = sessionOf("s-alpha", main.id, alpha.id, "Alpha task", "working");
+  const b = sessionOf("s-beta", main.id, beta.id, "Beta task", "idle");
+  const { container, daemon } = mountSidebar({ projects: [alpha, beta], sessions: [a, b] });
+  const order = () => Array.from(container.querySelectorAll<HTMLElement>("[data-flip]"))
+    .map((row) => row.dataset.flip).filter((id) => id === alpha.id || id === beta.id);
+  expect(order()).toEqual([beta.id, alpha.id]);
+
+  const background = { ...b, background_tasks: [{ id: "watch" }] };
+  act(() => daemon.store.setState({ sessions: sessionMap([a, background]) }));
+  expect(order()).toEqual([beta.id, alpha.id]);
+
+  const idle = { ...a, status: "idle" as const };
+  act(() => daemon.store.setState({ sessions: sessionMap([idle, background]) }));
+  expect(order()).toEqual([alpha.id, beta.id]);
+
+  act(() => daemon.store.setState({ sessions: sessionMap([idle, { ...b, status: "waiting_user" }]) }));
+  expect(order()).toEqual([beta.id, alpha.id]);
+});
+
 it("expands only projects with unarchived sessions and keeps interrupted projects undimmed", () => {
   onTestFinished(() => {
     act(() => vi.runOnlyPendingTimers());

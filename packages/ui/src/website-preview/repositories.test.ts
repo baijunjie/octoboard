@@ -3,6 +3,7 @@ import { posix } from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { objectIdCheck } from "../gallery/fixtures/invariants";
+import { sessionStatusKind } from "../sessionLabel";
 import { previewRepositories } from "./repositories";
 import { createPreviewDaemon } from "./daemon";
 import { createPreviewScenario } from "./scenarios";
@@ -344,7 +345,7 @@ describe("the website's eight independent repository fixtures", () => {
 
   it("preserves all scenes, the report bridge marker and project branch metadata", () => {
     for (const lang of ["en", "zh-Hans"] as const)
-      for (const scene of ["overview", "report", "changes"] as const) {
+      for (const scene of ["overview", "focus", "changes"] as const) {
         const { scenario } = createPreviewScenario(scene, lang);
         expect(scenario.steps).toHaveLength(scene === "changes" ? 4 : 1);
         expect(scenario.files).toBeUndefined();
@@ -358,4 +359,46 @@ describe("the website's eight independent repository fixtures", () => {
           );
       }
   });
+
+  it.each(["en", "zh-Hans"] as const)(
+    "keeps one ongoing workspace behind every %s view",
+    (language) => {
+      const overview = createPreviewScenario("overview", language);
+      for (const scene of ["overview", "focus", "changes"] as const) {
+        const { scenario, output } = createPreviewScenario(scene, language);
+        const sessions = scenario.state!.sessions!;
+        expect(
+          Object.fromEntries(
+            [...sessions].map(([id, session]) => [id, sessionStatusKind(session)]),
+          ),
+        ).toEqual({
+          "preview-coordinator": "working",
+          "preview-admin-session": "idle",
+          "preview-merchant-session": "working",
+          "preview-customer-session": "working",
+          "preview-server-session": "working",
+          "preview-review": "background",
+          "preview-order-checks": "waiting_user",
+          "preview-mobile-session": "working",
+          "preview-tablet-session": "working",
+          "preview-pos-session": "idle",
+          "preview-kitchen-session": "working",
+        });
+        expect(sessions.get("preview-review")).toMatchObject({
+          status: "idle",
+          background_tasks: [
+            { type: "shell", description: "pnpm test --watch" },
+          ],
+        });
+        expect(output("preview-review")).toContain("pnpm test --watch");
+        for (const id of sessions.keys()) {
+          expect(output(id)).toBeDefined();
+          expect(output(id)).toBe(overview.output(id));
+        }
+        expect(scenario.state!.pages!.get("preview-coordinator")![0].html).toBe(
+          overview.scenario.state!.pages!.get("preview-coordinator")![0].html,
+        );
+      }
+    },
+  );
 });
