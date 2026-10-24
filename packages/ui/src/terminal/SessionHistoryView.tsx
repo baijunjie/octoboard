@@ -1,47 +1,48 @@
-import { Spinner, Switch } from "@heroui/react";
+import { Spinner } from "@heroui/react";
 import { FileQuestion, MessageSquareOff } from "lucide-react";
-import React, { Suspense, lazy, useCallback, useId, useRef, useState } from "react";
+import React, { Suspense, lazy, useCallback, useId, useRef } from "react";
 
 import { useHasPainted } from "../components/useHasPainted";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { PaneFailure } from "../components/PaneFailure";
 import { PaneTitle } from "../components/PaneTitle";
-import { SessionContextLabel } from "../components/SessionMetadata";
+import { ArchivedSessionMetadata, SessionContextLabel } from "../components/SessionMetadata";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
+import { useFocusVisibleProps } from "../components/useFocusVisibleProps";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useFadeRegion, useScrollFade } from "../components/scrollFade";
 import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
-import type { HistoryMessage, SessionContext } from "../protocol";
+import type { HistoryMessage, Session } from "../protocol";
 import { useOctoboardTheme } from "../theme";
 import { RendererBoundary } from "../viewer/codeRenderer";
 import { CODE_THEMES } from "../viewer/codeTheme";
 import { FencedCode } from "../viewer/FencedCode";
 import { useSessionHistory } from "./useSessionHistory";
 
+type ConversationMessage = Omit<HistoryMessage, "speaker"> & { speaker: "user" | "agent" };
+
 // The Markdown renderer, with its library, loads the first time a reply is shown.
 const MarkdownDocument = lazy(() => import("../viewer/MarkdownDocument").then((module) => ({ default: module.MarkdownDocument })));
 
 /**
- * What an archived session was about, in place of its terminal: the messages the user sent, told
- * apart from those Octoboard wrote into the session, and on request the agent's final reply to
- * each turn, with its context size beside the heading. Read-only; the way back to the
+ * What an archived session was about, in place of its terminal: the messages the user sent and
+ * the agent's final reply to each turn, with its context size beside the heading. Read-only; the way back to the
  * terminal is reopening the session.
  */
-export function SessionHistoryView({ sessionId, context }: { sessionId: string; context?: SessionContext | null }): React.ReactElement {
+export function SessionHistoryView({ session }: { session: Pick<Session, "id" | "context" | "started_at" | "ended_at"> }): React.ReactElement {
   const t = useT();
-  const { history, reload } = useSessionHistory(sessionId);
+  const { history, reload } = useSessionHistory(session.id);
   const painted = useHasPainted();
-  const [showReplies, setShowReplies] = useState(false);
-  const switchLabelId = useId();
+  const focus = useFocusVisibleProps();
   const rootRef = useRef<HTMLElement>(null);
   // The retry button goes away under focus, into the loading state: it moves to the messages when
-  // there are any, else to the switch, which is what it finds then.
+  // there are any, else to the view itself.
   const held = useFocusHandoff(() => {
-    (rootRef.current?.querySelector<HTMLElement>("[role=region][tabindex]") ?? rootRef.current?.querySelector<HTMLElement>("input"))?.focus();
+    (rootRef.current?.querySelector<HTMLElement>("[role=region][tabindex]") ?? rootRef.current)?.focus();
   });
-  const messages = history.state === "loaded" ? history.messages : [];
+  const messages = history.state === "loaded" ? history.messages.filter((message): message is ConversationMessage => message.speaker !== "octoboard") : [];
   const spoken =
     history.state === "loading"
       ? t("history.loading")
@@ -51,27 +52,23 @@ export function SessionHistoryView({ sessionId, context }: { sessionId: string; 
           ? t("history.empty")
           : undefined;
   return (
-    <section ref={rootRef} {...held} aria-label={t("history.title")} className="absolute inset-0 flex flex-col bg-panel">
-      {/* A pane header: its height and groove run its bottom line on from the sidebar's and the side
-          pane's headers. */}
-      <header className="flex h-(--pane-header-height) shrink-0 items-center gap-2 groove-b px-(--pane-inset)">
+    <section
+      ref={rootRef}
+      tabIndex={-1}
+      {...focus}
+      onFocus={(event) => { focus.onFocus?.(event); held.onFocus(event); }}
+      onBlur={(event) => { focus.onBlur?.(event); held.onBlur(event); }}
+      aria-label={t("history.title")}
+      className="absolute inset-0 flex flex-col bg-panel outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus data-focus-visible:ring-inset"
+    >
+      {/* At narrow widths the header wraps its contents so the dates stay readable. */}
+      <header className="flex min-h-(--pane-header-height) shrink-0 flex-wrap items-center gap-x-3 gap-y-2 groove-b px-(--pane-inset) py-1.5">
         {/* The context badge follows the heading and never shrinks; the heading clips first. */}
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="flex min-w-24 flex-1 items-center gap-2">
           <PaneTitle heading={t("history.title")} className="min-w-0" />
-          <SessionContextLabel context={context} />
+          <SessionContextLabel context={session.context} />
         </div>
-        <div className="control-fills flex shrink-0 items-center gap-2">
-          <span id={switchLabelId} className="text-sm">
-            {t("history.showReplies")}
-          </span>
-          <Switch size="sm" aria-labelledby={switchLabelId} isSelected={showReplies} onChange={setShowReplies}>
-            <Switch.Content>
-              <Switch.Control>
-                <Switch.Thumb />
-              </Switch.Control>
-            </Switch.Content>
-          </Switch>
-        </div>
+        <ArchivedSessionMetadata session={session} />
       </header>
       <StatusAnnouncer text={spoken} />
       {history.state === "loading" && (
@@ -95,7 +92,7 @@ export function SessionHistoryView({ sessionId, context }: { sessionId: string; 
             <EmptyPanel icon={MessageSquareOff} message={t("history.empty")} silent />
           </div>
         ) : (
-          <MessageList messages={messages} showReplies={showReplies} />
+          <MessageList messages={messages} />
         ))}
     </section>
   );
@@ -103,7 +100,7 @@ export function SessionHistoryView({ sessionId, context }: { sessionId: string; 
 
 /** The messages in a scrolling region of their own, which takes focus so they can be scrolled from
  * the keyboard. The bottom padding clears the floating bar the pane lays over the view. */
-function MessageList({ messages, showReplies }: { messages: HistoryMessage[]; showReplies: boolean }): React.ReactElement {
+function MessageList({ messages }: { messages: ConversationMessage[] }): React.ReactElement {
   const t = useT();
   // Always a region, even when the messages fit: it is the pane's F6 landing and what the keyboard
   // scrolls.
@@ -113,21 +110,18 @@ function MessageList({ messages, showReplies }: { messages: HistoryMessage[]; sh
     <div className={`flex min-h-0 flex-1 flex-col rounded-xl ${region.focused ? "ring-2 ring-focus ring-inset" : ""}`}>
       <div {...fade}>
         <ol className="flex flex-col gap-4">
-          {messages.map((message, index) =>
-            showReplies || message.speaker !== "agent" ? (
-              // The index in the whole list, so a message keeps its identity when replies come and go.
-              <li key={index}>
-                <Message message={message} />
-              </li>
-            ) : null,
-          )}
+          {messages.map((message, index) => (
+            <li key={index}>
+              <Message message={message} />
+            </li>
+          ))}
         </ol>
       </div>
     </div>
   );
 }
 
-function Message({ message }: { message: HistoryMessage }): React.ReactElement {
+function Message({ message }: { message: ConversationMessage }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
   const { resolved: theme } = useOctoboardTheme();
@@ -167,7 +161,7 @@ function Message({ message }: { message: HistoryMessage }): React.ReactElement {
       ) : (
         <p
           dir="auto"
-          className={`text-sm leading-6 break-words whitespace-pre-wrap ${message.speaker === "octoboard" ? "border-s-2 border-separator ps-3 text-app-muted" : "rounded-xl bg-default px-3 py-2"}`}
+          className="rounded-xl bg-default px-3 py-2 text-sm leading-6 break-words whitespace-pre-wrap"
         >
           {message.text}
         </p>

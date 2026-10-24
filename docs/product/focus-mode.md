@@ -69,8 +69,7 @@ console session above them (see "A project's focus mode" below and "The binding 
 
 **Archived (n)**, in both, only while the view has archived sessions — with none, the section is not shown at all: the
 archive preview described in "The archive view" in `docs/product/archive-view.md`, each row showing its agent's icon
-and its title on one compact line, with its context-size chip at the trailing end when the context size is known and above zero (see "The
-context-size chip" in `docs/product/session-context.md`). These preview rows show no creation or archive time. The heading
+and its title on one compact line, with the relative archive time at the trailing end as described there. The heading
 counts every archived session in the view's scope, including those the preview leaves out. Clicking a row selects
 it while leaving it archived. Its action menu offers **Reopen**, which selects and resumes the session, then **Copy
 session ID** (see "Session rows" in `docs/product/sidebar-session-rows.md`), and after a separator **Delete**, disabled

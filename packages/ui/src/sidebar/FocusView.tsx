@@ -12,7 +12,7 @@ import { IndicatorTooltip } from "../components/IndicatorTooltip";
 import { InlineReference } from "../components/InlineReference";
 import { PaneTitle } from "../components/PaneTitle";
 import { RowControls, RowIconGroup, RowIconLine, RowIconSlot } from "../components/RowControls";
-import { hasVisibleContext, SessionContextLabel } from "../components/SessionMetadata";
+import { ArchivedSessionTime, hasVisibleContext, SessionContextLabel } from "../components/SessionMetadata";
 import { StatusIcon } from "../components/StatusIcon";
 import { TitledControl } from "../components/TitledControl";
 import { useListMotion } from "../components/useListMotion";
@@ -665,7 +665,7 @@ function ArchivedRow({
   return (
     <TreeRow
       ref={rowRef}
-      describedBy={hasVisibleContext(session.context) ? metadataId : undefined}
+      describedBy={session.ended_at != null ? metadataId : undefined}
       // The model and effort are in the agent mark's tooltip only, so the row's name carries them too.
       ariaLabel={joinPhrases(language, [sessionAriaLabel(t, language, session, accounts, undefined, defaultNames), sessionModelLabel(t, session.agent, launch)])}
       selected={selected}
@@ -675,7 +675,7 @@ function ArchivedRow({
       <RowLabel title={sessionDisplayTitle(t, session)} className="min-w-0 flex-1">
         <span className="text-app-muted">{sessionDisplayTitle(t, session)}</span>
       </RowLabel>
-      {hasVisibleContext(session.context) && <span id={metadataId}><SessionContextLabel context={session.context} touchPopover={false} /></span>}
+      {session.ended_at != null && <span id={metadataId}><ArchivedSessionTime endedAt={session.ended_at} /></span>}
       <RowControls>
         <SessionActions handlers={handlers} session={session} accounts={accounts} hasBoundSessions={false} rowRef={rowRef} />
       </RowControls>

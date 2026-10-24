@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it, onTestFinished } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import { sessionOf } from "../gallery/fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import type { SessionContext } from "../protocol";
-import { ArchivedSessionMetadata, SessionContextLabel } from "./SessionMetadata";
+import { ArchivedSessionMetadata, ArchivedSessionTime, SessionContextLabel } from "./SessionMetadata";
 import { enter, mountForTooltip, openTooltip, trigger, withFakeTimers } from "./tooltipTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -34,13 +34,6 @@ it("leads the compact-size badge with a ring of the share used, and names the ex
   expect(indicator.querySelector(":scope > [aria-hidden]")?.getAttribute("aria-hidden")).toBe("true");
   expect(container.querySelector("button")).toBeNull();
   expect(indicator.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }))).toBe(false);
-});
-
-it("draws the same ring-led badge without a tooltip on a menu's surface, named by the same sentence", () => {
-  const { container } = mount(<SessionContextLabel context={context} plain />);
-  expect(container.textContent).toBe("190.1K");
-  expect(container.querySelector("[data-variant] > .progress-circle")).not.toBeNull();
-  expect(container.querySelector('[role="img"]')?.getAttribute("aria-label")).toBe(`Context ${isolate("190,123")} tokens, Limit: ${isolate("475,000")}, ${isolate("40%")} used, ${isolate("284,877")} left`);
 });
 
 it("shows the compact size as a badge when the agent records no limit", () => {
@@ -123,4 +116,17 @@ it("shows both absolute timestamps and never invents a missing archive timestamp
   render(<ArchivedSessionMetadata session={{ ...session, ended_at: null }} />);
   expect(container.querySelectorAll("time")).toHaveLength(1);
   expect(container.textContent).not.toContain("Archived");
+});
+
+it("shows the archive time as relative text, names the full date, and omits an unknown time", () => {
+  const endedAt = 1700000000000;
+  const clock = vi.spyOn(Date, "now").mockReturnValue(endedAt + 5 * 60_000);
+  onTestFinished(() => clock.mockRestore());
+  const { container, render } = mount(<ArchivedSessionTime endedAt={endedAt} />);
+  const time = container.querySelector("time")!;
+  expect(time.textContent).toBe("5 minutes ago");
+  expect(time.dateTime).toBe(new Date(endedAt).toISOString());
+  expect(time.getAttribute("aria-label")).toContain("Archived");
+  render(<ArchivedSessionTime endedAt={null} />);
+  expect(container.innerHTML).toBe("");
 });

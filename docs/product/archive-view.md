@@ -18,10 +18,13 @@ as rows of their own, most recently archived first, at most ten. A session inset
 below) is left out of the preview and reached through View all; every other archived session is a preview row,
 including one bound to a project session that is not archived, such as a session of a lead session that is still
 live, and one whose owner is no longer known. A submenu item shows the session's agent's icon, its title and, at the
-item's end edge, its context-size chip while the size is known and above zero (see "The context-size chip" in
-`docs/product/session-context.md`). Neither the icon nor the chip carries a tooltip in a submenu; the size is read as
-part of the item's accessible name, after its title. Focus mode's preview rows are described in "What both views
-show" in `docs/product/focus-mode.md`.
+item's end edge, how long ago it was archived. The time is plain muted text; these previews show no context-size
+chip or creation time. Relative times are worded in the current language, read as now for anything under a minute,
+and keep up with the clock while shown, never more than 30 seconds behind it. Assistive technology receives the
+archive time as a labeled absolute date with year, month, day, hour and minute, formatted in the current language
+and the client's local time zone; in a submenu this is part of the item's accessible name. An unknown archive time
+is omitted, with no creation-time fallback. Neither the icon nor the time carries a tooltip in a submenu. Focus
+mode's preview rows are described in "What both views show" in `docs/product/focus-mode.md`.
 
 - It **covers the terminal's area only**: the sidebar and the right pane stay as they are.
   The terminal goes on running beneath it and is not resized.
@@ -41,7 +44,7 @@ show" in `docs/product/focus-mode.md`.
   mode session card's does. At the trailing end, a metadata block shows only dates: the archive date first,
   when known, then the creation date, each identified by its meaning. These are absolute dates with year, month, day,
   hour and minute, formatted in the current language and the client's local time zone. An unknown archive date is
-  omitted; the creation date never stands in for it. Archive previews show no dates. The date block sits
+  omitted; the creation date never stands in for it. The date block sits
   flush at the row's end in the reading direction, on the right in a left-to-right language. The row's **Reopen** and
   **Delete** buttons show only while the row is hovered or holds keyboard focus, and are still reached with Tab.
   Hidden, they take no room, so a resting row's title runs up to the date block; shown, they appear just before the

@@ -163,7 +163,7 @@ function archivePreviewState(count: 10 | 11, includeUnused = false) {
       ...Array.from({ length: count === 11 ? 2 : 0 }, (_, i) => sessionOf(`s-preview-child-${i}`, console_.id, emptyProject.id, `Session ${i + 1} of the archived lead`, "archived", { bound_to: previewLead.id, agent: i === 1 ? "codex" : "claude", ended_at: minutesAgo(2 + i * 3) })),
       ...Array.from({ length: count - 1 }, (_, i) => {
         const unused = includeUnused && i === 2;
-        return sessionOf(`s-preview-${i}`, console_.id, emptyProject.id, unused ? "Unused archived draft" : (i === 0 ? "A completed search investigation with a long archived preview title" : i === 1 ? "A completed search investigation whose long archived title scrolls only when hovering the text" : `Bound archived session ${i + 1}`), "archived", { bound_to: unused ? undefined : previewHub.id, has_conversation: !unused, ended_at: minutesAgo(10 + i * 5), ...(i === 0 ? { context: { tokens: 0 } } : {}) });
+        return sessionOf(`s-preview-${i}`, console_.id, emptyProject.id, unused ? "Unused archived draft" : (i === 0 ? "A completed search investigation with a long archived preview title" : i === 1 ? "A completed search investigation whose long archived title scrolls only when hovering the text" : `Bound archived session ${i + 1}`), "archived", { bound_to: unused ? undefined : previewHub.id, has_conversation: !unused, ended_at: i === 7 ? undefined : minutesAgo(10 + i * 5), ...(i === 0 ? { context: { tokens: 0 } } : {}) });
       }),
     ],
   });
@@ -435,7 +435,7 @@ export const focusScenarios: Scenario[] = [
     state: projectArchiveInConsoleState,
     sessionRecords: unusedBoundRecords,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
-    description: "Search API's heading menu is open on View archive. The submenu lists only that project's archived sessions in Hub's archive: the archived lead session and the older, completed ones bound to Hub, with a compact-size badge on the archived lead session (it reported a window, so a small warning-coloured ring at 65% leads its number) and on one of the older ones (the number alone). Archived work for Hub 2, Last week's spike (unbound) and Archived work of the active lead stay out, as does the archived lead's own child, which View all keeps. View all opens Hub's archive, the same as View all under the Archived list.",
+    description: "Search API's heading menu is open on View archive. The submenu lists only that project's archived sessions in Hub's archive: the archived lead session and the older, completed ones bound to Hub, with a localized relative archive time at the end of every row, including the archived lead session and older sessions with recorded context sizes. Archived work for Hub 2, Last week's spike (unbound) and Archived work of the active lead stay out, as does the archived lead's own child, which View all keeps. View all opens Hub's archive, the same as View all under the Archived list.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),
@@ -557,7 +557,7 @@ export const focusScenarios: Scenario[] = [
     state: projectArchivePreviewTen,
     sessionRecords: { "s-preview-2": "absent" },
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}`, projectFocusIncludeConsoleSessions: true },
-    description: "The headings count zero live sessions and ten archived parents, all shown without View all; the Show all project sessions switch is absent even when its saved preference is on. Compact archive rows omit dates and show a context-size badge only for a positive size. Hover or focus Unused archived draft to see its Delete shortcut before the menu: it has no conversation, so it deletes and moves any native records to the Trash without confirmation, while used rows have only their menu, where Delete still asks. Delete the unused draft or reopen a row, then archive it again: the remaining rows slide into place.",
+    description: "The headings count zero live sessions and ten archived parents, all shown without View all; the Show all project sessions switch is absent even when its saved preference is on. Compact archive rows end in a localized relative archive time, including the archived lead with its recorded context size and the session with zero context; the full archive date and time is in each time’s accessible name. Bound archived session 8 has no recorded archive time, so its row leaves the time out. Hover or focus Unused archived draft to see its Delete shortcut before the menu: it has no conversation, so it deletes and moves any native records to the Trash without confirmation, while used rows have only their menu, where Delete still asks. Delete the unused draft or reopen a row, then archive it again: the remaining rows slide into place.",
   },
   {
     id: "focus-archived-session-menu",

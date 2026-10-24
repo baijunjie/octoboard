@@ -121,7 +121,7 @@ const archiveState = {
 };
 
 // The project menu's "View archive" submenu shows ten at most: older archived sessions, a few
-// with a context size, join the project so its preview has more rows than fit.
+// with a recorded context size, join the project so its preview has more rows than fit.
 const longArchiveState = {
   ...archiveState,
   sessions: new Map([
@@ -207,7 +207,7 @@ export const archiveScenarios: Scenario[] = [
     category: "normal",
     title: "Project archive menu, ten newest",
     state: longArchiveState,
-    description: "The menu lists the ten newest of thirteen archived rows, with their last active task titles, then View all; the three oldest are left to the full archive. Each item ends in a compact-size badge, absent for a zero size and for a session that never reported one; where the agent reported a window (Release lead session, Older archived session 1) a small ring of the share used, in the tone of how full it is, leads the number, and the menu has no tooltip. The archived child of the active lead is listed on its own, while the two children of the archived lead stay out. Long archived names fade at the menu edge and run as a marquee when their row is hovered.",
+    description: "The menu lists the ten newest of thirteen archived rows, with their last active task titles, then View all; the three oldest are left to the full archive. Each item ends in a localized relative archive time, including sessions with a recorded context size; its accessible name gives the full archive date and time. The archived child of the active lead is listed on its own, while the two children of the archived lead stay out. Long archived names fade at the menu edge and run as a marquee when their row is hovered.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: boundProject.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),
@@ -248,7 +248,7 @@ export const archiveScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Console menu, archived console sessions",
-    description: "The console's menu (the same one opens from its avatar in the rail) lists Add project, Console settings, View archive and Delete console below a separator, with no Export configuration. The submenu lists all eight archived console sessions (it shows ten at most), newest first, with their last active task titles and a context-size badge at the end of the first, then View all.",
+    description: "The console's menu (the same one opens from its avatar in the rail) lists Add project, Console settings, View archive and Delete console below a separator, with no Export configuration. The submenu lists all eight archived console sessions (it shows ten at most), newest first, with their last active task titles and a localized relative archive time at the end of each row, then View all.",
     state: archiveState,
     steps: [
       (ui) => ui.press(ui.t("sidebar.console.actions", { name: console_.name })),

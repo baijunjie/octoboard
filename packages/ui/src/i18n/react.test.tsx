@@ -51,7 +51,7 @@ it.each(["en", "zh-Hans", "ar"] as const)("keeps fixed product references rich a
   act(() => root.render(<Message id="dialog.session.ownerFixed" params={{ name: <InlineReference dir="auto" wrap>{name}</InlineReference> }} />));
   expect(container.querySelector("[data-inline-reference]")?.textContent).toBe(name);
   expect(container.textContent).toBe(format(language, "dialog.session.ownerFixed", { name }));
-  // Whole labels can deliberately supply their existing presentation instead of a referenced product chip.
-  act(() => root.render(<Message id="history.speaker.octoboard" params={{ appName: globalParam("appName") } as never} />));
+  // A caller can supply its own product-name presentation instead of a referenced product chip.
+  act(() => root.render(<Message id="app.quit.title" params={{ appName: globalParam("appName") } as never} />));
   expect(container.querySelector("[data-inline-reference]")).toBeNull();
 });

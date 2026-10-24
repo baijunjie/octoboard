@@ -26,6 +26,7 @@ vi.mock("../viewer/MarkdownDocument", () => ({
   MarkdownDocument: ({ text }: { text: string }) => <div data-testid="markdown">{text}</div>,
 }));
 
+const session = { id: "s-1", started_at: 1700000000000, ended_at: 1700000600000 };
 const roots: Root[] = [];
 beforeEach(() => {
   daemon.request.mockReset();
@@ -52,25 +53,24 @@ async function mount(reply: Event | Promise<Event> | Error, context?: SessionCon
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  await act(async () => root.render(<SessionHistoryView sessionId="s-1" context={context} />));
-  // The lazily loaded renderer settles after the reply.
-  await act(async () => {});
+  await act(async () => root.render(<SessionHistoryView session={{ ...session, context }} />));
+  // Settle the lazy renderer even when this is the first test to show an agent reply.
+  if (!vi.isFakeTimers()) await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
   return container;
 }
 
 const articles = (container: HTMLElement) =>
   [...container.querySelectorAll("article")].map((node) => document.getElementById(node.getAttribute("aria-labelledby")!)?.textContent);
 
-it("shows the context size beside the heading, before the switch, which keeps its name", async () => {
+it("shows the context size beside the heading, before the dates", async () => {
   const container = await mount({ type: "session_history", session: "s-1", messages: history }, { tokens: 130000, window: 200000, used_percent: 65 });
   const header = container.querySelector("header")!;
   const badge = header.querySelector<HTMLElement>('[role="img"]')!;
   expect(header.querySelector("h2")!.compareDocumentPosition(badge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(badge.compareDocumentPosition(header.querySelector("input")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(badge.compareDocumentPosition(header.querySelector("time")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(badge.getAttribute("aria-label")).toContain(`${isolate("65%")} used`);
   expect(badge.querySelector("[data-variant] > .progress-circle")).not.toBeNull();
-  const label = header.querySelector("[aria-labelledby]")!;
-  expect(document.getElementById(label.getAttribute("aria-labelledby")!)?.textContent).toBe("Show agent replies");
+
 });
 
 it("shows no context badge in the header for a session whose size is unknown", async () => {
@@ -78,22 +78,28 @@ it("shows no context badge in the header for a session whose size is unknown", a
   expect(container.querySelector('header [role="img"]')).toBeNull();
 });
 
-it("asks for the session's history and lists the user's and Octoboard's messages by default", async () => {
+it("shows the session's archive and creation times even when its history is unavailable", async () => {
+  const container = await mount({ type: "session_history", session: "s-1", messages: [], unavailable: true });
+  const times = [...container.querySelectorAll<HTMLTimeElement>("header time")];
+  expect(times.map((time) => time.dateTime)).toEqual(["2023-11-14T22:23:20.000Z", "2023-11-14T22:13:20.000Z"]);
+  expect(times[0].textContent).toContain("Archived");
+  expect(times[1].textContent).toContain("Created");
+});
+
+it("shows user messages and agent replies while omitting Octoboard messages", async () => {
   const container = await mount({ type: "session_history", session: "s-1", messages: history });
   expect(daemon.request).toHaveBeenCalledWith({ type: "read_session_history", session: "s-1" });
-  expect(articles(container)).toEqual(["Octoboard", "You"]);
+  expect(articles(container)).toEqual(["Agent", "You", "Agent"]);
   expect(container.textContent).toContain("Why is it slow?");
-  expect(container.textContent).not.toContain("The query scans the table.");
+  expect(container.textContent).toContain("The query scans the table.");
+  expect(container.textContent).not.toContain("Ship it");
+  expect(container.querySelector("[role=switch]")).toBeNull();
   expect(container.querySelector("h2")?.textContent).toBe("Session history");
   expect(container.querySelector("[role=region]")?.getAttribute("aria-label")).toBe("Messages of this session");
 });
 
-it("shows each turn's reply, rendered as Markdown, once the toggle is on", async () => {
+it("renders agent replies as Markdown without a toggle", async () => {
   const container = await mount({ type: "session_history", session: "s-1", messages: history });
-  const toggle = container.querySelector<HTMLInputElement>("input[role=switch]")!;
-  expect(toggle.getAttribute("aria-labelledby")).not.toBeNull();
-  await act(async () => toggle.click());
-  expect(articles(container)).toEqual(["Octoboard", "Agent", "You", "Agent"]);
   expect([...container.querySelectorAll("[data-testid=markdown]")].map((node) => node.textContent)).toEqual([
     "**Planned**",
     "The query scans the table.",
@@ -144,7 +150,7 @@ it("shows a failed request as an error with Try again, and reads again when it i
   await act(async () => {});
   expect(daemon.request).toHaveBeenCalledTimes(2);
   expect(container.querySelector("[role=alert]")).toBeNull();
-  expect(articles(container)).toEqual(["Octoboard", "You"]);
+  expect(articles(container)).toEqual(["Agent", "You", "Agent"]);
 });
 
 it("reads a failed request again when a fresh snapshot arrives, but a loaded one is left alone", async () => {
@@ -152,23 +158,19 @@ it("reads a failed request again when a fresh snapshot arrives, but a loaded one
   daemon.request.mockResolvedValue({ type: "session_history", session: "s-1", messages: history });
   store.snapshotEpoch = 1;
   const root = roots[0]!;
-  await act(async () => root.render(<SessionHistoryView sessionId="s-1" />));
+  await act(async () => root.render(<SessionHistoryView session={session} />));
   await act(async () => {});
-  expect(articles(container)).toEqual(["Octoboard", "You"]);
+  expect(articles(container)).toEqual(["Agent", "You", "Agent"]);
   const reads = daemon.request.mock.calls.length;
   store.snapshotEpoch = 2;
-  await act(async () => root.render(<SessionHistoryView sessionId="s-1" />));
+  await act(async () => root.render(<SessionHistoryView session={session} />));
   expect(daemon.request.mock.calls.length).toBe(reads);
 });
 
-it("names each message by its speaker and keeps a message's key when replies are toggled", async () => {
-  const container = await mount({ type: "session_history", session: "s-1", messages: history });
-  const article = container.querySelector("article")!;
-  expect(article.getAttribute("aria-label")).toBeNull();
-  expect(document.getElementById(article.getAttribute("aria-labelledby")!)?.textContent).toBe("Octoboard");
-  const user = container.querySelectorAll("article")[1]!;
-  await act(async () => container.querySelector<HTMLInputElement>("input[role=switch]")!.click());
-  expect(container.querySelectorAll("article")[2]).toBe(user);
+it("treats a history containing only Octoboard messages as empty", async () => {
+  const container = await mount({ type: "session_history", session: "s-1", messages: history.filter((message) => message.speaker === "octoboard") });
+  expect(container.textContent).toContain("No messages in this session");
+  expect(container.querySelector("article")).toBeNull();
 });
 
 it("speaks an unavailable and an empty history through a status", async () => {
@@ -190,23 +192,23 @@ it("shows a loading state until the reply arrives", async () => {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  await act(async () => root.render(<SessionHistoryView sessionId="s-1" />));
+  await act(async () => root.render(<SessionHistoryView session={session} />));
   await act(async () => void (await new Promise((resolve) => setTimeout(resolve, 200))));
   expect(container.querySelector("[role=status]")?.textContent).toBe("Loading history…");
   expect(container.querySelector("article")).toBeNull();
 });
 
-it("keeps focus in the view when Try again goes away under it, on the switch while the messages are not there yet", async () => {
+it("keeps focus in the view when Try again goes away under it, on the view while the messages are not there yet", async () => {
   const container = await mount(new Error("gone"));
   let answer!: (reply: unknown) => void;
   daemon.request.mockImplementation(() => new Promise((resolve) => { answer = resolve; }));
   const retry = [...container.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
   retry.focus();
   await act(async () => retry.click());
-  expect(document.activeElement).toBe(container.querySelector("input[role=switch]"));
+  expect(document.activeElement).toBe(container.querySelector("section"));
   await act(async () => answer({ type: "session_history", session: "s-1", messages: history }));
   expect(container.querySelector("[role=region][tabindex]")).not.toBeNull();
-  expect(document.activeElement).toBe(container.querySelector("input[role=switch]"));
+  expect(document.activeElement).toBe(container.querySelector("section"));
 });
 
 
@@ -217,7 +219,7 @@ it("retains the daemon reason for rich rendering inside the Alert, which announc
   expect(container.querySelectorAll("[role=alert]")).toHaveLength(1);
   expect(container.querySelector("[role=alert]")?.querySelector("button")).toBeNull();
   expect(errorAlerts.report).not.toHaveBeenCalled();
-  await act(async () => roots[0]!.render(<SessionHistoryView sessionId="s-1" />));
+  await act(async () => roots[0]!.render(<SessionHistoryView session={session} />));
   expect(container.querySelectorAll("[role=alert]")).toHaveLength(1);
   expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Try again")).toBe(true);
 });

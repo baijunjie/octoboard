@@ -66,8 +66,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   place), links in the output (web addresses and file paths: click to open, the OSC 8 target tooltip, which paths
   link), and the creation offer while a console has nothing in it.
 - [Session history](product/session-history.md) — what an archived session shows in the terminal's place: the user's
-  and Octoboard's messages read from the agent's own record, the Show agent replies switch, per-agent differences, the
-  loading / empty / unavailable / failed states, and keyboard focus.
+  messages and the agent's final replies read from the agent's own record, with Octoboard messages hidden, per-agent
+  differences, the loading / empty / unavailable / failed states, and keyboard focus.
 - [Session titles](product/session-titles.md) — the task title alongside created session names: where it is
   displayed, what renaming edits, where it comes from (the agent's records, its decorated terminal title, the first
   prompt), how titles are retained, and the accepted terminal sequences.

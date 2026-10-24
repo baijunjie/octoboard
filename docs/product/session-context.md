@@ -45,8 +45,7 @@ window shows until the relaunched process reports its own.
 
 ## The context-size chip
 
-The sidebar's session rows outside focus mode, focus mode's live session cards, its archive preview rows, the items
-of the project and console "View archive" submenus, the full archive view, and the header of an archived
+The sidebar's session rows outside focus mode, focus mode's live session cards, the full archive view, and the header of an archived
 session's Session history show the context size as a chip only when it is known and greater than zero; an unknown or
 zero size shows no chip at all. The chip is set apart from neighbouring text by spacing alone, with no separator
 character. It looks the same in every one of these places, for live and archived sessions alike:
@@ -64,8 +63,8 @@ shows, which sets a fixed 12,000-token baseline aside as neither used nor availa
 window, rounded down; Claude Code's is the size over the window rounded to the nearest whole percent, as its own status
 line computes it. All are between 0% and 100%, a size beyond the window showing 100%.
 
-Hovering the chip shows its tooltip, a **Context window** card, whether or not the chip holds a ring; only in the archive
-submenus does hovering the chip show no tooltip. A tap on the chip beside the Session history's heading opens the same
+Hovering the chip shows its tooltip, a **Context window** card, whether or not the chip holds a ring.
+A tap on the chip beside the Session history's heading opens the same
 card in a popover; a tap on a chip in a row is the row's press (see "Tooltips on indicators" in
 `docs/product/labels-and-tooltips.md`). With a window known, the card has:
 
@@ -82,10 +81,10 @@ window is known, the window as the limit, the share in use, and the tokens left 
 Limit: 475,000, 40% used, 284,877 left"); without a window it is the context size alone. The chip is not a tab stop.
 
 For where the sidebar-row chip appears, see "Session rows" in `docs/product/sidebar-session-rows.md`; for the live-card
-chip, see "What both views show" in `docs/product/focus-mode.md`; for the archive submenus' chip, which has no tooltip
-there, see "The archive view" in `docs/product/archive-view.md`; for the Session history's chip, see "The context
-size beside the heading" in `docs/product/session-history.md`. Archive dates and the archive metadata block are
-described in "The archive view" in `docs/product/archive-view.md`.
+chip, see "What both views show" in `docs/product/focus-mode.md`; for the Session history's chip, see "The context
+size beside the heading" in `docs/product/session-history.md`. Archive previews show archive times as described in
+"The archive view" in `docs/product/archive-view.md`. The history's dates are described in "Archive and creation times"
+in `docs/product/session-history.md`.
 
 ## When the context size refreshes
 

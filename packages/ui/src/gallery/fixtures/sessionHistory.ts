@@ -9,7 +9,7 @@ const project = projectOf("p-1", console_.id, "Website");
 
 /** The archived session with the context its agent last reported, which the history header shows as the context badge beside its heading. */
 function archivedWith(context?: SessionContext): Session {
-  return sessionOf("s-history", console_.id, project.id, "Speed up the pricing page", "archived", { ended_at: minutesAgo(60 * 20), ...(context && { context }) });
+  return sessionOf("s-history", console_.id, project.id, "Speed up the pricing page", "archived", { started_at: minutesAgo(60 * 24), ended_at: minutesAgo(60 * 19), ...(context && { context }) });
 }
 const archived = archivedWith();
 function stateWith(context?: SessionContext) {
@@ -158,7 +158,7 @@ const MESSAGES: HistoryMessage[] = [
 
 /** The sidebar in the project's focus mode, which lists the project's archived sessions, and the one
  * press that selects the archived session from there, leaving its history in the pane. */
-const preferences = { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` } satisfies Scenario["preferences"];
+const preferences = { panelStacks: { project: { open: [], shares: {} } }, sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` } satisfies Scenario["preferences"];
 const openHistory: NonNullable<Scenario["steps"]> = [(ui) => ui.press(ui.session(archived.title))];
 
 const base = { group: GROUP, category: "normal", state: stateWith(warningContext), preferences } satisfies Partial<Scenario>;
@@ -169,19 +169,9 @@ export const sessionHistoryScenarios: Scenario[] = [
     id: "history-loaded",
     title: "Archived session history",
     description:
-      "The pane shows the session's history in place of a terminal. The brief, the notice and the report that Octoboard wrote into the session are labelled with the app's name and set apart by a rule and muted text, not hidden; the user's messages are labelled You. Right after the \"Session history\" heading sits the context badge, 130K, led by a ring in the warning colour for the 65% used; hovering it shows the Context window card. The \"Show agent replies\" switch stays at the end of the header. The long message wraps, the long path breaks inside the column and a Chinese message ends the list; scroll to reach it. \"Show agent replies\" is off. The floating bar at the bottom says the session is archived and offers Reopen; the last message scrolls clear of it.",
+      "The pane shows user messages and agent replies together in place of a terminal. Octoboard briefs, notices and reports are hidden, while the agent's replies to them remain. Agent replies render Markdown headings, lists, inline code, fenced code blocks, bold text and a table on a code-coloured surface; scroll for the code blocks and table. User messages are labelled You, with a Chinese message at the end. The long message wraps and the long path breaks inside the column. The header holds the context badge, 130K with a warning ring for 65% used, followed by the labelled archive and creation times on two lines; no reply switch is present. Hover the badge for the Context window card. The floating bar says the session is archived and offers Reopen; the last message scrolls clear of it.",
     sessionHistory: { [archived.id]: MESSAGES },
     steps: openHistory,
-  },
-  {
-    ...base,
-    id: "history-replies",
-    title: "Archived session history with agent replies",
-    description:
-      "With \"Show agent replies\" on, each turn's final reply follows its opening message as a Markdown document on a code-coloured surface: headings, ordered and bullet lists, inline code, fenced code blocks, bold text and a table. A turn opened by Octoboard gets a reply too. Scroll for the code blocks and the table. Beside the heading the context badge, 182K, has a ring in the danger colour for the 91% used.",
-    state: stateWith(dangerContext),
-    sessionHistory: { [archived.id]: MESSAGES },
-    steps: [...openHistory, (ui) => ui.press(ui.t("history.showReplies")), (ui) => ui.wait(500)],
   },
   {
     ...base,
@@ -195,17 +185,17 @@ export const sessionHistoryScenarios: Scenario[] = [
   {
     ...base,
     id: "history-empty",
-    title: "Archived session with no messages",
-    description: "The record holds no message: an empty panel says so, under the \"Show agent replies\" switch, which stays available. The context badge beside the heading, 60K, has a ring in the accent colour for the 30% used.",
+    title: "Archived session with no conversation messages",
+    description: "The record contains only Octoboard briefs, notices and reports, so the pane shows the normal empty state without displaying them. The header keeps the archive and creation times visible. The context badge beside the heading, 60K, has an accent ring for the 30% used.",
     state: stateWith(accentContext),
-    sessionHistory: { [archived.id]: [] },
+    sessionHistory: { [archived.id]: MESSAGES.filter((message) => message.speaker === "octoboard") },
     steps: openHistory,
   },
   {
     ...base,
     id: "history-loading",
     title: "Archived session history loading",
-    description: "The daemon has not answered yet: a spinner and \"Loading history…\" fill the pane. The floating bar already offers Reopen. The agent reported no window, so the badge beside the heading shows only the compact size, 130K, with no ring.",
+    description: "The daemon has not answered yet: a spinner and \"Loading history…\" fill the pane. The archive and creation times stay visible in the header above the loading state. The floating bar already offers Reopen. The agent reported no window, so the badge beside the heading shows only the compact size, 130K, with no ring.",
     state: stateWith(windowlessContext),
     sessionHistory: { [archived.id]: "pending" },
     steps: openHistory,
@@ -214,7 +204,8 @@ export const sessionHistoryScenarios: Scenario[] = [
     ...base,
     id: "history-unavailable",
     title: "Archived session history unavailable",
-    description: "The agent's record of the session is missing or unreadable: a silent, neutral empty panel with a muted glyph, the heading and the reason, and under it the remedy of reopening the session to see its terminal. It is no failure, so there is no danger glyph, no Try again, since reading it again would not help, and no Details, since there is no raw text.",
+    description: "The agent's record of the session is missing or unreadable: a silent, neutral empty panel with a muted glyph, the heading and the reason, and under it the remedy of reopening the session to see its terminal. The archive and creation times remain visible in the header above the unavailable state. It is no failure, so there is no danger glyph, no Try again, since reading it again would not help, and no Details, since there is no raw text.",
+    state: stateWith(dangerContext),
     sessionHistory: { [archived.id]: "unavailable" },
     steps: openHistory,
   },
@@ -223,7 +214,7 @@ export const sessionHistoryScenarios: Scenario[] = [
     category: "exceptional",
     id: "history-failed",
     title: "Archived session history request failed",
-    description: "The pane takes the empty-state shape with a danger glyph, the heading and the application's generic sentence for an unexpected failure under it. Try again, the primary button, requests history again, and the secondary Details holds the daemon's raw message; the floating bar still offers Reopen.",
+    description: "The pane takes the empty-state shape with a danger glyph, the heading and the application's generic sentence for an unexpected failure under it. The archive and creation times stay visible in the header above the failure. Try again, the primary button, requests history again, and the secondary Details holds the daemon's raw message; the floating bar still offers Reopen.",
     sessionHistory: { [archived.id]: historyFailure },
     steps: openHistory,
   },

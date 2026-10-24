@@ -6,7 +6,7 @@ import { ExternalLinkIcon } from "../components/ExternalLinkIcon";
 import { RepositoryIcon } from "../components/RepositoryIcon";
 import { repositoryLink } from "../repositoryLink";
 import { FadeOverflow } from "../components/FadeOverflow";
-import { SessionContextLabel } from "../components/SessionMetadata";
+import { ArchivedSessionTime } from "../components/SessionMetadata";
 import { AgentIcon } from "../components/AgentIcon";
 import { PathText } from "../components/PathText";
 import type { Translate } from "../i18n/catalog";
@@ -20,7 +20,7 @@ import { SessionColourSwatches } from "./SessionColourSwatches";
 import type { ArchiveScope, SidebarHandlers } from "./types";
 
 /** "View archive": the archive's preview (`archivePreviewSessions`), each item selecting its session
- * and showing its context size, then "View all", which opens the full archive. */
+ * and showing its archive time, then "View all", which opens the full archive. */
 export function archiveSubmenu(
   t: Translate,
   label: string,
@@ -32,7 +32,7 @@ export function archiveSubmenu(
     label: sessionChoiceTitle(t, session),
     content: <FadeOverflow as="span" dir="auto" className="block" titleWhenClipped={sessionDisplayTitle(t, session)}>{sessionDisplayTitle(t, session)}</FadeOverflow>,
     icon: <AgentIcon agent={session.agent} />,
-    end: <SessionContextLabel context={session.context} plain />,
+    end: <ArchivedSessionTime endedAt={session.ended_at} />,
     onClick: () => onSelect(session),
   }));
   if (archived.length === 0) {

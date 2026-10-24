@@ -26,27 +26,24 @@ record dated it, the date and time, written for the app's language:
 
 - **You** — a message the user typed or pasted. A slash command the user invoked reads as typed, `/name args`, not as
   what it expanded to. A paste reads as its text, without the wrapper the agent records around it.
-- **Octoboard** (the app's name) — a message Octoboard itself wrote into the session: the brief a session was started
-  with, a report from a session under it, a report panel form submission, information shared with the session (or the
-  copy of what it shared), a notice that begins "Message from Octoboard", and the opening prompt of a session started
-  at another session's request, of one handed branches by the session that started it, or of one taking over a
-  handed-off session (see `docs/product/handing-off-sessions.md`). These are shown, set apart from the user's
-  messages, not hidden.
-- **Agent** — the agent's reply to a turn, shown only while "Show agent replies" is on (below).
+- **Agent** — the agent's final reply to a turn, always shown. A turn the agent did not answer has none. A reply
+  is rendered as Markdown, its headings ranking below the history's own title; a web address in it opens in the
+  user's own browser.
 
-Each message the user or Octoboard sent opens a turn. Left out altogether: tool calls and their output, the model's
-reasoning, the replies of a turn before its last one, slash-command expansions, the note an agent leaves when a turn
-is interrupted, and what the agent injects into its conversation on its own.
+**Messages Octoboard wrote into the session are hidden**: the brief a session was started with, a report from a
+session under it, a report panel form submission, information shared with the session (or the copy of what it
+shared), a notice that begins "Message from Octoboard", and the opening prompt of a session started at another
+session's request, of one handed branches by the session that started it, or of one taking over a handed-off session
+(see `docs/product/handing-off-sessions.md`). This hides only those messages from the history view; the original
+conversation record is unchanged. The agent's final reply to a hidden message remains visible.
 
 **Which messages are Octoboard's is told from how they begin.** So text an owner session sends with `send_message`,
 which has no fixed opening, reads as the user's; and a message the user typed that happens to begin the way one of
-Octoboard's does reads as Octoboard's.
+Octoboard's does is hidden too.
 
-### Show agent replies
-
-A **Show agent replies** switch in the history's header, off each time a history is shown, adds each turn's final reply
-from the agent under the message that opened the turn. A turn the agent did not answer has none. A reply is rendered
-as Markdown, its headings ranking below the history's own title; a web address in it opens in the user's own browser.
+Each message the user or Octoboard sent opens a turn. Also left out: tool calls and their output, the model's
+reasoning, the replies of a turn before its last one, slash-command expansions, the note an agent leaves when a turn
+is interrupted, and what the agent injects into its conversation on its own.
 
 ### Per agent
 
@@ -66,16 +63,25 @@ The history's header shows the session's last known context size right after the
 whatever state the history is in, as the session's context-size chip (see "The context-size chip" in
 `docs/product/session-context.md`): the same compact number badge as the sidebar's session rows, led by a ring of the
 share in use when a window is known, with the same Context window card on hover and the same accessible name. With
-the context size unknown or zero, nothing follows the heading.
+the context size unknown or zero, no context-size chip follows the heading.
 
-The Show agent replies switch stays at the header's end. As the header narrows, the heading clips and fades while the
-chip keeps its size. Pressing the chip does not move keyboard focus.
+As the header narrows, the heading clips and fades while the chip keeps its size; the header wraps its contents
+when needed to keep the dates readable. Pressing the chip does not move keyboard focus.
+
+## Archive and creation times
+
+The history's header shows the archive time first, when known, then the creation time on the line below it, at the
+trailing end after the heading and its optional context-size chip. Each is labeled by its meaning and aligned to the
+trailing edge of the date block. Both are absolute dates with year, month, day, hour and minute, formatted in the
+current language and the client's local time zone. An unknown archive time is omitted; the creation time never stands
+in for it. The dates remain visible while messages scroll and in every loading, empty, unavailable or failed state.
 
 ## Loading, empty, unavailable and failed
 
 - **Loading**: a spinner and a line saying the history is loading.
 - **Empty**: a full empty panel (see "The full panel" in `docs/product/empty-states.md`) saying there are no messages
-  in the session — nothing was said in it, including a session that never had a conversation.
+  to display — including a session that never had a conversation, or one with only Octoboard messages and no
+  agent replies.
 - **Unavailable**: a neutral empty panel in the history's place (no danger glyph, since the record's state is not a
   failed load and reading it again would not change it), headed that the history is unavailable, saying the agent's
   record of the session could not be found or read and suggesting reopening the session to see its terminal. It has
@@ -95,7 +101,9 @@ failure when it appears after the history was drawn.
 The messages are a scrolling region of their own, which takes keyboard focus so they can be scrolled from the
 keyboard. Whatever hands keyboard focus to the terminal — `F6` reaching the terminal's region, for one (see "Moving
 focus between regions with F6" in `docs/product/moving-focus-between-regions.md`) — puts it on that region instead for
-an archived session; while there are no messages to list, on the history's first control, the Show agent replies
-switch; and failing that, on the floating bar's Reopen. Focus in the terminal when the session on screen is archived
-moves to the history the same way, and so does focus left on nothing by a refused reopen. When Try again holds focus
-and goes away as the history reloads, focus goes to the messages, or to the switch while there are none.
+an archived session; while there are no messages to list, on the history's first available control, such as Try again
+in a failed state; otherwise on the history view itself, and failing that, on the floating bar's Reopen. Focus in the
+terminal when the session on screen is archived moves to the history the same way, and so does focus left on nothing
+by a refused reopen. When Try again holds focus
+and goes away as the history reloads, focus goes to the messages, or to the history view itself while there are none.
+Both the scrolling region and the history view show a visible ring when focused from the keyboard.

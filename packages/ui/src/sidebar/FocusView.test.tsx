@@ -330,7 +330,7 @@ it("a project's View archive in a console session's focus mode previews only tha
   act(() => container.querySelector<HTMLElement>(`button[aria-label="Actions for project ${isolate("Website")}"]`)?.click());
   const archive = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find((el) => el.textContent === "View archive")!;
   act(() => archive.click());
-  const labels = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).map((el) => el.textContent);
+  const labels = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).map((el) => el.querySelector(".label")?.textContent ?? el.textContent);
   expect(labels).toContain(mine.title);
   expect(labels).toContain(lead.title);
   for (const left of [other, loose, elsewhere, underLead]) expect(labels).not.toContain(left.title);
@@ -560,19 +560,21 @@ it.each(["idle", "archived"] as const)("runs only the hovered text of an %s focu
   expectIndependentMarquees(labels, [row, ...row.querySelectorAll("button, svg")]);
 });
 
-it("leads an archived preview's context badge with the ring of the share used where the agent reported a window", () => {
+it("shows an archived preview's archive time instead of its context size", () => {
   const archived = sessionOf("old-window", main.id, web.id, "Old window", "archived", { ended_at: 1000, context: { tokens: 130000, window: 200000, used_percent: 65 } });
   const { container } = mount((h) => <ProjectFocusView handlers={h} console={main} project={web} sessions={[archived]} owners={owners} />);
   const row = Array.from(container.querySelectorAll<HTMLElement>('div[role="button"]')).find((element) => element.getAttribute("aria-label")?.startsWith(isolate(archived.title)))!;
-  expect(row.querySelector("[data-variant] > .progress-circle")).not.toBeNull();
-  expect(row.textContent).toContain("130K");
+  expect(row.querySelector("time")?.dateTime).toBe(new Date(1000).toISOString());
+  expect(row.querySelector("time")?.getAttribute("aria-label")).toContain("Archived");
+  expect(row.querySelector("[data-variant] > .progress-circle")).toBeNull();
+  expect(row.textContent).not.toContain("130K");
 });
 
-it("updates the context size on active cards and keeps archived previews compact without dates", () => {
+it("updates the context size on active cards and omits an unknown archive time", () => {
   let update!: () => void;
   const zeroContext = { tokens: 0 };
   const active = sessionOf("live-context", main.id, web.id, "Live context", "working", { context: zeroContext });
-  const archived = sessionOf("old-context", main.id, web.id, "Old context", "archived", { ended_at: 1000, context: zeroContext });
+  const archived = sessionOf("old-context", main.id, web.id, "Old context", "archived", { ended_at: null, context: zeroContext });
   function View({ handlers }: { handlers: SidebarHandlers }) {
     const [session, setSession] = useState(active);
     update = () => setSession({ ...active, context: { tokens: 1200 } });

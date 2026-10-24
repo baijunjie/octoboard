@@ -487,17 +487,18 @@ it("moves focus held inside the pane to the history when the session on screen b
   expect(container.querySelector("section")?.contains(document.activeElement)).toBe(true);
 });
 
-it("reaches the history's first control through the handle while it is still loading", () => {
+it("reaches the history itself through the handle while it is still loading", () => {
   daemon.request.mockImplementationOnce(() => new Promise(() => {}));
   const { container, handle } = mountArchived();
   act(() => handle.current?.focus());
-  expect(document.activeElement).toBe(container.querySelector("section input"));
+  expect(document.activeElement).toBe(container.querySelector("section"));
 });
 
 it("falls back to the Reopen button when the history has no control to focus", () => {
   daemon.request.mockImplementationOnce(() => new Promise(() => {}));
   const { container, handle } = mountArchived();
   container.querySelector("section")!.replaceChildren();
+  container.querySelector("section")!.removeAttribute("tabindex");
   act(() => handle.current?.focus());
   expect(document.activeElement?.textContent).toBe("Reopen");
 });

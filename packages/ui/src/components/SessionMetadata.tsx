@@ -5,6 +5,8 @@ import { isolate } from "../i18n/isolate";
 import { joinPhrases } from "../i18n/joinPhrases";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Session, SessionContext } from "../protocol";
+import { formatRelativeTime } from "../relativeTime";
+import { useNow } from "../useNow";
 import { IndicatorTooltip } from "./IndicatorTooltip";
 import { StatusBadge } from "./StatusBadge";
 
@@ -103,24 +105,20 @@ function useContextFacts(context: SessionContext): { details: string; title: str
 }
 
 /** The context size as a badge of the compact size, led by a ring of the share used when the agent
- * gives a limit; the exact counts are in the name and the tooltip's card. `plain` leaves the tooltip
- * out, for a menu's transient surface, where no mark carries one; the size then reaches assistive
- * technology through its name alone. */
+ * gives a limit; the exact counts are in the name and the tooltip's card. */
 export function SessionContextLabel({
   context,
-  plain,
   touchPopover,
 }: {
   context?: SessionContext | null;
-  plain?: boolean;
   /** Whether a tap opens the tooltip's card in a popover; off inside a pressable row, whose tap it is. */
   touchPopover?: boolean;
 }): React.ReactElement | null {
   if (!hasVisibleContext(context)) return null;
-  return <ContextLabel context={context} plain={plain} touchPopover={touchPopover} />;
+  return <ContextLabel context={context} touchPopover={touchPopover} />;
 }
 
-function ContextLabel({ context, plain, touchPopover }: { context: SessionContext; plain?: boolean; touchPopover?: boolean }): React.ReactElement {
+function ContextLabel({ context, touchPopover }: { context: SessionContext; touchPopover?: boolean }): React.ReactElement {
   const { details, title, compactSize, amount, usage } = useContextFacts(context);
   // The badge keeps the metadata line as tall as the text beside it, the ring included.
   const mark = (
@@ -131,7 +129,6 @@ function ContextLabel({ context, plain, touchPopover }: { context: SessionContex
       </StatusBadge>
     </span>
   );
-  if (plain) return <span role="img" aria-label={details} className="flex shrink-0 items-center">{mark}</span>;
   return (
     <IndicatorTooltip tooltip={<ContextTooltip title={title} amount={amount} usage={usage} />} label={details} className="flex shrink-0 items-center" touchPopover={touchPopover}>
       {mark}
@@ -139,7 +136,7 @@ function ContextLabel({ context, plain, touchPopover }: { context: SessionContex
   );
 }
 
-export function ArchivedSessionMetadata({ session }: { session: Session }): React.ReactElement {
+export function ArchivedSessionMetadata({ session }: { session: Pick<Session, "started_at" | "ended_at"> }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
   const date = new Intl.DateTimeFormat(language, {
@@ -150,5 +147,25 @@ export function ArchivedSessionMetadata({ session }: { session: Session }): Reac
       {session.ended_at != null && <time dateTime={new Date(session.ended_at).toISOString()}>{t("session.meta.archived", { time: isolate(date.format(session.ended_at)) })}</time>}
       <time dateTime={new Date(session.started_at).toISOString()}>{t("session.meta.created", { time: isolate(date.format(session.started_at)) })}</time>
     </div>
+  );
+}
+
+/** A compact archive time for preview rows and menu items, named by its full local date. */
+export function ArchivedSessionTime({ endedAt }: { endedAt: Session["ended_at"] }): React.ReactElement | null {
+  const t = useT();
+  const language = useCurrentLanguage();
+  const now = useNow();
+  if (endedAt == null) return null;
+  const date = new Intl.DateTimeFormat(language, {
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+  });
+  return (
+    <time
+      dateTime={new Date(endedAt).toISOString()}
+      aria-label={t("session.meta.archived", { time: isolate(date.format(endedAt)) })}
+      className="shrink-0 text-xs text-app-muted whitespace-nowrap"
+    >
+      {formatRelativeTime(language, endedAt, now)}
+    </time>
   );
 }
