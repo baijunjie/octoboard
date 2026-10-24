@@ -167,10 +167,17 @@ fn read_branches(git: &Git, repo: &Path, names: &[Vec<u8>]) -> Vec<BranchState> 
         .collect()
 }
 
-/// The remote branch the Git mode compares the main working copy's branch `main` with.
+/// The remote branch of the main working copy's branch `main`: the one it tracks, else the one of
+/// its name on a remote. The remote default branch the Git mode falls back to is not looked for.
 fn main_upstream(git: &Git, repo: &Path, main: &[u8]) -> Result<Option<UpstreamInfo>, String> {
-    let list = compare::branches_in(&git.browse_env(), repo, repo, &AtomicBool::new(false))
-        .map_err(|err| format!("{err:#}"))?;
+    let list = compare::branches_in(
+        &git.browse_env(),
+        repo,
+        repo,
+        false,
+        &AtomicBool::new(false),
+    )
+    .map_err(|err| format!("{err:#}"))?;
     if !list.complete || !list.upstreams_complete {
         return Err("the repository's branch list was cut short".to_owned());
     }

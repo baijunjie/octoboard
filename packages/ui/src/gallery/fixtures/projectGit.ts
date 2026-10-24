@@ -539,14 +539,37 @@ export const UNPUSHED_GIT: FixtureGit = {
   commits: { ...SAMPLE_GIT.commits, "origin/main..main": { commits: UNPUSHED_COMMITS } },
 };
 
-/** `main` has never been pushed: no upstream, and no branch of its name on a remote, so its Committed
- * section is its whole history, compared with the empty tree. */
+/** `main` has never been pushed: no upstream, and no branch of its name on a remote, and the repository
+ * has no remote default branch either, so its Committed section is its whole history, compared with
+ * the empty tree. */
 export const NEVER_PUSHED_GIT: FixtureGit = {
   ...SAMPLE_GIT,
   changes: { ...SAMPLE_GIT.changes, "wt-main": MAIN_FEW_CHANGES },
   branches: BRANCHES.map((branch) => (branch.name === "main" ? { name: branch.name, commit: branch.commit } : branch)),
   comparisons: { ...SAMPLE_GIT.comparisons, "..main": WHOLE_COMPARISON },
   commits: { ...SAMPLE_GIT.commits, "..main": { commits: WHOLE_COMMITS } },
+};
+
+/** The branch the main working copy has checked out in `FORKED_GIT`: made from `main`, it has two commits
+ * of its own, the ones `main` has in `UNPUSHED_GIT`. */
+const PAGE_BRANCH = "feature/page-size";
+
+/** A branch never pushed, checked out where the project's folder is, in a repository whose remote
+ * default branch is `origin/main`, which the last fetch left at `UPSTREAM_TIP`, the commit the branch
+ * forked at: its Committed section lists what it changed since, not the whole history. `main` has no
+ * upstream of its own here, as only the main working copy's branch has one looked up. */
+export const FORKED_GIT: FixtureGit = {
+  ...SAMPLE_GIT,
+  worktrees: [{ ...WORKTREES[0], branch: PAGE_BRANCH }, WORKTREES[1], WORKTREES[2]],
+  changes: { ...SAMPLE_GIT.changes, "wt-main": MAIN_FEW_CHANGES },
+  branches: [
+    // The branches the checked-out branch forked from are at the commit it forked at.
+    ...BRANCHES.map(({ upstream: _upstream, ...branch }) => (branch.commit === MAIN_TIP ? { ...branch, commit: UPSTREAM_TIP } : branch)),
+    { name: PAGE_BRANCH, commit: MAIN_TIP },
+  ],
+  defaultBranch: { name: "origin/main", commit: UPSTREAM_TIP },
+  comparisons: { ...SAMPLE_GIT.comparisons, [`origin/main..${PAGE_BRANCH}`]: UNPUSHED_COMPARISON },
+  commits: { ...SAMPLE_GIT.commits, [`origin/main..${PAGE_BRANCH}`]: { commits: UNPUSHED_COMMITS } },
 };
 
 /** How many commits the daemon lists for a branch at most. */
@@ -764,10 +787,22 @@ const reviewScenarios: Scenario[] = [
     category: "normal",
     title: "A branch that has never been pushed",
     description:
-      "main is checked out where the project's folder is, and neither it nor a remote has a branch to compare it with: the line above the list says it has no remote branch, so all of its commits are listed, with no fork named. Committed lists every file at its tip as added.",
+      "main is checked out where the project's folder is, and neither it nor the repository has a remote branch to compare it with, not even a remote default branch: the line above the list says it has no remote branch, so all of its commits are listed, with no fork named. Committed lists every file at its tip as added.",
     state,
     preferences,
     git: NEVER_PUSHED_GIT,
+    steps: openGit,
+  },
+  {
+    id: "git-changes-never-pushed-forked",
+    group: GROUP,
+    category: "normal",
+    title: "A branch that has never been pushed, forked from the default branch",
+    description:
+      "feature/page-size is checked out where the project's folder is and has no remote branch, but the repository's remote default branch is origin/main: the line above the list reads Forked from origin/main at the commit it forked at, now at the branch's tip, and not that the branch has no remote branch. Committed lists only the two files the branch changed since the fork, not every file as added.",
+    state,
+    preferences,
+    git: FORKED_GIT,
     steps: openGit,
   },
   {
@@ -1161,7 +1196,7 @@ const reviewScenarios: Scenario[] = [
     group: "File viewer",
     category: "normal",
     title: "A change from a branch's whole history in the viewer",
-    description: "The subtitle names the branch and the commit it is at, with all of its history, because the branch has no remote branch to say where it forked from. A committed change has no File manager or Default application buttons.",
+    description: "The subtitle names the branch and the commit it is at, with all of its history, because neither the branch nor the repository has a remote branch to say where it forked from. A committed change has no File manager or Default application buttons.",
     state,
     preferences,
     git: NEVER_PUSHED_GIT,

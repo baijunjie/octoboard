@@ -283,6 +283,7 @@ impl Fixture {
             &self.env(),
             &self.common_dir,
             &self.common_dir,
+            true,
             &AtomicBool::new(false),
         )
         .unwrap()

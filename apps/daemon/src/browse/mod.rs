@@ -263,6 +263,7 @@ pub fn serve(
                 branches: list.branches,
                 complete: list.complete,
                 upstreams_complete: list.upstreams_complete,
+                default_branch: list.default_branch,
             })
         }
         BrowseBody::CompareProjectBranches {

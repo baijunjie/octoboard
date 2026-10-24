@@ -14,9 +14,10 @@ import type { BranchList } from "./useBranchList";
  * `HEAD`), `noBase` when the main working copy is on no branch, and `compare`, with that branch
  * as `base`, otherwise. When the branch is that very one, it is compared with the remote-tracking
  * branch the branch list gives it instead (`baseKind` "remote", `base` its name): its upstream or
- * the branch of its name on a remote. With neither, all its commits are its own, compared with
- * nothing (`baseKind` "empty", `base` empty). None while the list is not loaded, or lacks the
- * branch, or when it has no upstream for the branch and says its lookup gave up.
+ * the branch of its name on a remote, else the repository's remote default branch. With none of
+ * them, all its commits are its own, compared with nothing (`baseKind` "empty", `base` empty).
+ * None while the list is not loaded, or lacks the branch, or when it has none of them and says its
+ * lookup gave up.
  */
 export interface ChangesScope {
   ownBranch: string | undefined;
@@ -45,7 +46,8 @@ function committedScope(branch: string | undefined, baseBranch: string | undefin
   // A list lacking the branch says nothing of it: it is not listed while it has no commit.
   const listed = branches.branches.find((b) => b.name === branch);
   if (!listed) return { state: "none" };
-  if (listed.upstream) return { state: "compare", base: listed.upstream.name, baseKind: "remote", branch };
+  const remote = listed.upstream ?? branches.defaultBranch;
+  if (remote) return { state: "compare", base: remote.name, baseKind: "remote", branch };
   // A lookup that gave up says nothing of the branch having none.
   return branches.upstreamsComplete === false ? { state: "none" } : { state: "compare", base: "", baseKind: "empty", branch };
 }

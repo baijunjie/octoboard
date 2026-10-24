@@ -117,11 +117,15 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
     Object.values(git?.commits ?? {})
       .flatMap(listedCommits)
       .find((listed) => listed.commit === commit && listed.parent === (parent ?? null));
+  /** The commit a remote-tracking branch is at: the upstream some branch has, else the default
+   * branch the list gives. */
+  const remoteTip = (name: string): string | undefined =>
+    git?.branches?.find((b) => b.upstream?.name === name)?.upstream?.commit ?? (git?.defaultBranch?.name === name ? git.defaultBranch.commit : undefined);
   /** The commit a name is at in the branch list: a local branch, else the remote-tracking branch
-   * some branch has as its upstream. A pair's key spells a remote-tracking left side by its name
+   * some branch has as its upstream or the list gives as the default one. A pair's key spells a remote-tracking left side by its name
    * alone, as no local branch of the fixtures is named like one, and the empty tree by no name at all. */
   const tipOf = (name: string): string | undefined =>
-    name === "" ? EMPTY_TREE : git?.branches?.find((b) => b.name === name)?.commit ?? git?.branches?.find((b) => b.upstream?.name === name)?.upstream?.commit;
+    name === "" ? EMPTY_TREE : git?.branches?.find((b) => b.name === name)?.commit ?? remoteTip(name);
   /** The commit two branches fork at: their own, if they are at one commit, else the one `forks`
    * names, else `left`'s tip, as a branch made from it forks. `null` for two with no commit in common. */
   const forkOf = (key: string, left: string, right: string): string | null =>
@@ -254,18 +258,18 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
       case "list_project_branches": {
         const gone = compared ? (git?.gone ?? []) : [];
         const listed = (git?.branches ?? []).filter((branch) => !gone.includes(branch.name));
-        // A lookup past its budgets leaves the main branch without an upstream, and the list says so.
+        // A lookup past its budgets leaves the main branch without an upstream and the list without a default branch, and the list says so.
         if (git?.upstreamsCut) {
           return { type: "project_branches", project: body.project, branches: listed.map(({ upstream: _upstream, ...branch }) => branch), complete: true, upstreams_complete: false };
         }
-        return { type: "project_branches", project: body.project, branches: listed, complete: true };
+        return { type: "project_branches", project: body.project, branches: listed, complete: true, ...(git?.defaultBranch ? { default_branch: git.defaultBranch } : {}) };
       }
       case "compare_project_branches": {
         const resolve = (name: string, remote: boolean) => {
           if (remote) {
-            const upstream = git?.branches?.find((b) => b.upstream?.name === name)?.upstream;
-            if (!upstream) return fail({ code: "unknown_branch", params: { branch: name }, message: `there is no remote-tracking branch ${name}` });
-            return { branch: name, commit: upstream.commit, remote: true };
+            const commit = remoteTip(name);
+            if (commit === undefined) return fail({ code: "unknown_branch", params: { branch: name }, message: `there is no remote-tracking branch ${name}` });
+            return { branch: name, commit, remote: true };
           }
           const branch = git?.branches?.find((b) => b.name === name);
           if (!branch || git?.missing?.includes(name) || (compared && git?.gone?.includes(name))) return fail({ code: "unknown_branch", params: { branch: name }, message: `there is no local branch ${name}` });

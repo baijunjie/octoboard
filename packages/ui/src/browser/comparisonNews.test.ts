@@ -37,6 +37,7 @@ describe("a remote-tracking base", () => {
     ["the upstream at the compared commit says nothing", tracking("c1"), { moved: false, gone: [], tips: ["c1", "c2"] }],
     ["the upstream at another commit has moved", tracking("c9"), { moved: true, gone: [], tips: ["c9", "c2"] }],
     ["an upstream no branch has any longer is not gone, the branch gets another base", tracking(undefined), { moved: false, gone: [], tips: ["", "c2"] }],
+    ["the default branch is read like an upstream", { ...tracking(undefined), defaultBranch: { name: "origin/main", commit: "c9" } } as BranchList, { moved: true, gone: [], tips: ["c9", "c2"] }],
   ])("%s", (_, branches, expected) => {
     expect(comparisonNews(branches, remote)).toMatchObject(expected);
   });

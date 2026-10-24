@@ -8,7 +8,7 @@ import { FixtureUnfillableError } from "../banner";
 import { createFixtureDaemon } from "../fixtureDaemon";
 import { EMPTY_TREE, listedCommits, type FixtureGit } from "./changeFixtures";
 import { objectIdCheck } from "./invariants";
-import { LONG_HISTORY_GIT, NEVER_PUSHED_GIT, projectGitScenarios, SAMPLE_GIT, UNPUSHED_GIT } from "./projectGit";
+import { FORKED_GIT, LONG_HISTORY_GIT, NEVER_PUSHED_GIT, projectGitScenarios, SAMPLE_GIT, UNPUSHED_GIT } from "./projectGit";
 
 describe("the sample repository's changes", () => {
   const fileSide = (side: ChangeSide) => side.state === "present" && side.kind === "file";
@@ -154,6 +154,28 @@ describe("the sample repository's changes", () => {
         if (branch.upstream) expect([branch.name, git.worktrees.some((worktree) => worktree.main && worktree.branch === branch.name)]).toEqual([branch.name, true]);
       }
     }
+  });
+
+  it("give a default branch only to a repository whose main working copy's branch has no upstream", () => {
+    const repositories = [...REPOSITORIES, FORKED_GIT, ...projectGitScenarios.flatMap(({ git }) => (git ? [git] : []))];
+    for (const git of repositories) {
+      if (!git.defaultBranch) continue;
+      const main = git.worktrees.find((worktree) => worktree.main)?.branch;
+      expect(git.branches?.find((branch) => branch.name === main)?.upstream).toBeUndefined();
+    }
+  });
+
+  it("answer a comparison of a branch with the default branch the list gives", async () => {
+    const daemon = sampleDaemon(FORKED_GIT);
+    const listed = await daemon.request({ type: "list_project_branches", project: "p-1" });
+    expect(listed).toMatchObject({ type: "project_branches", default_branch: FORKED_GIT.defaultBranch });
+    const compared = await daemon.request({ type: "compare_project_branches", project: "p-1", left: "origin/main", left_remote: true, right: "feature/page-size" });
+    expect(compared).toMatchObject({ type: "project_comparison", left: { branch: "origin/main", remote: true }, base: FORKED_GIT.defaultBranch?.commit });
+    expect(compared.type === "project_comparison" ? compared.changes.length : 0).toBe(2);
+    // A lookup past its budgets leaves the default branch out, as it does the upstream.
+    const cut = await sampleDaemon({ ...FORKED_GIT, upstreamsCut: true }).request({ type: "list_project_branches", project: "p-1" });
+    expect(cut).toMatchObject({ type: "project_branches", upstreams_complete: false });
+    expect(cut.type === "project_branches" ? cut.default_branch : null).toBeUndefined();
   });
 
   it("answer a comparison of a branch with its upstream or with nothing", async () => {

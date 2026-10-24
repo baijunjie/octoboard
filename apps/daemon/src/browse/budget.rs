@@ -138,10 +138,10 @@ pub const BRANCH_LIST_STDOUT: usize = 3584 * 1024;
 pub const BRANCH_ENTRY_BYTES: usize = 128;
 
 /// The most bytes of reference names one upstream lookup asks `git for-each-ref` for: the same
-/// branch's name on each of the repository's remotes, so room for some two thousand of them. The
-/// output is about these names again with an object id on each line, plus what lies below a name
-/// asked for (`refs/remotes/origin/a` also names `refs/remotes/origin/a/b`), which is not bounded
-/// here.
+/// branch's name and the `HEAD` on each of the repository's remotes, so room for some one thousand
+/// remotes. The output is about these names again with an object id on each line, plus what lies
+/// below a name asked for (`refs/remotes/origin/a` also names `refs/remotes/origin/a/b`), which is
+/// not bounded here.
 pub const UPSTREAM_PATTERN_BYTES: usize = 64 * 1024;
 
 /// The most stdout the `git remote` of an upstream lookup may print.

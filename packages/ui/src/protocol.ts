@@ -952,6 +952,13 @@ export type ChangeEntry =
   | { group: ChangeGroup | "committed"; old: ChangeSide; new: ChangeSide; stats?: LineStats }
   | { group: "conflicted"; path: string; conflict: ConflictKind };
 
+/** A remote-tracking branch with the commit it is at as of the last fetch: a branch's upstream, or the
+ * remote default branch, `name` being below `refs/remotes/` (such as `origin/main`). */
+export interface UpstreamInfo {
+  name: string;
+  commit: string;
+}
+
 /** One local branch, as `project_branches` lists it: its name below `refs/heads/` (a wire path) and
  * the object id its reference named when it was listed — the commit at its tip, unless the branch
  * is broken (a missing object, or not a commit), which a comparison then refuses. */
@@ -962,7 +969,7 @@ export interface BranchInfo {
    * to compare it with, with the commit that reference names as of the last fetch: the one it
    * tracks or, failing that, the branch of its name on a configured remote; absent for a branch
    * with neither. */
-  upstream?: { name: string; commit: string };
+  upstream?: UpstreamInfo;
   /** The session working on the branch; absent when the daemon cannot name one: no session's own
    * git reported creating it. */
   origin?: BranchOrigin;
@@ -1742,7 +1749,7 @@ export type Event =
     patch: FileContent | null;
   }
   /** In byte order of the names; `complete` is false when the list was cut at a budget. */
-  | { type: "project_branches"; id?: string; project: string; branches: BranchInfo[]; complete: boolean; upstreams_complete?: boolean }
+  | { type: "project_branches"; id?: string; project: string; branches: BranchInfo[]; complete: boolean; upstreams_complete?: boolean; default_branch?: UpstreamInfo }
   /** `left` and `right` are the branches as asked for and the commits they were resolved to, and
    * `base` the commit they forked at (their merge base); every change in `changes` (all
    * `committed`) is between exactly `base` and `right`'s commit. */

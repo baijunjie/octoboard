@@ -145,8 +145,8 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
     } else if (comparing && comparison.state === "error" && branchList.state === "loaded") {
       pair = JSON.stringify([committed.base, committed.baseKind === "remote", committed.branch]);
       if (askedFor.current?.pair !== pair) return;
-      tips = [branchTip(branchList.branches, committed.branch, false) ?? ""];
-      if (committed.baseKind !== "empty") tips.unshift(branchTip(branchList.branches, committed.base, committed.baseKind === "remote") ?? "");
+      tips = [branchTip(branchList, committed.branch, false) ?? ""];
+      if (committed.baseKind !== "empty") tips.unshift(branchTip(branchList, committed.base, committed.baseKind === "remote") ?? "");
       if (tips.includes("")) return;
     } else {
       return;

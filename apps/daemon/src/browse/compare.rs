@@ -43,8 +43,12 @@ pub struct BranchList {
     /// False when the list was cut at a budget.
     pub complete: bool,
     /// False when the upstream lookup was past a budget: a branch checked out then lacks its
-    /// upstream, though it may have one.
+    /// upstream, and the list its default branch, though it may have them.
     pub upstreams_complete: bool,
+    /// The remote branch the repository's remote default branch points at, when asked for, the
+    /// branch the main working copy has checked out has no upstream and the repository has one
+    /// ([`find_remote_branches`]).
+    pub default_branch: Option<UpstreamInfo>,
     /// When the listing was taken. A list is a snapshot, and what has happened to the repository
     /// since it was taken is not in it; `branch_origin` holds its own records against this rather
     /// than against the time they are read. An [`Instant`] because only the order of the two
@@ -54,20 +58,23 @@ pub struct BranchList {
 
 /// Lists the local branches of the repository `at` is in, each with the object id its reference
 /// names: the commit at its tip, and for the one the main working copy has checked out the
-/// remote-tracking branch to compare it with ([`find_upstream`]) when the repository has one. A
-/// broken branch — naming an object the repository does not have, or one that is not a commit —
-/// is listed as it is rather than looked into, since asking `git` for what a missing object is
+/// remote-tracking branch to compare it with when the repository has one, or else the
+/// repository's remote default branch ([`find_remote_branches`]). A broken branch — naming an
+/// object the repository does not have, or one that is not a commit — is listed as it is rather than looked into, since asking `git` for what a missing object is
 /// fails the whole listing; comparing it is refused (`blob::resolve_branch`).
 pub fn branches(env: &GitEnv, at: &Located, cancel: &AtomicBool) -> Result<BranchList> {
-    branches_in(env, &at.root, &at.repository.common_dir, cancel)
+    branches_in(env, &at.root, &at.repository.common_dir, true, cancel)
 }
 
 /// [`branches`] for the repository `dir` is in, where `dir` is any directory `git` can run in
-/// there: a worktree, or the repository's common directory `common_dir` itself.
+/// there: a worktree, or the repository's common directory `common_dir` itself. The remote default
+/// branch is looked for only when `with_default`, so a caller that has no use for it neither pays
+/// for the lookup nor fails on its budgets.
 pub fn branches_in(
     env: &GitEnv,
     dir: &Path,
     common_dir: &Path,
+    with_default: bool,
     cancel: &AtomicBool,
 ) -> Result<BranchList> {
     // Taken before `git` reads the refs, so nothing that happens while it runs is claimed to be
@@ -95,6 +102,7 @@ pub fn branches_in(
         branches: Vec::new(),
         complete: true,
         upstreams_complete: true,
+        default_branch: None,
         listed_at,
     };
     // The branch the main working copy has checked out is named by the `HEAD` of the common
@@ -115,9 +123,10 @@ pub fn branches_in(
             .find(|&(_, raw, _)| raw == main.as_slice())
             .and_then(|(_, _, configured)| configured);
         if let Some(configured) = configured {
-            let (found, complete) = find_upstream(env, dir, (main, configured), cancel)?;
-            upstream = found;
-            list.upstreams_complete = complete;
+            let found = find_remote_branches(env, dir, (main, configured), with_default, cancel)?;
+            upstream = found.upstream;
+            list.default_branch = found.default_branch;
+            list.upstreams_complete = found.complete;
         }
     }
     let mut name_bytes = 0;
@@ -211,40 +220,66 @@ fn main_branch(env: &GitEnv, common_dir: &Path, cancel: &AtomicBool) -> Result<H
     }
 }
 
-/// The remote-tracking branch to compare local branch `name` with, and whether the lookup was
-/// complete. That is the upstream it is set to track (`configured`, the reference `git` resolved
-/// it to, empty for none), else the branch of its name on a configured remote — `origin`'s, else
-/// the first remote's in byte order. An upstream that is another local branch, or whose reference
-/// is gone, is none. A reference is a remote's branch only as `refs/remotes/<remote>/<name>` for a
-/// configured `<remote>`, so `refs/remotes/origin/backup/main` is not `main` on a remote
-/// `origin/backup` that was never added.
+/// What [`find_remote_branches`] found.
+#[derive(Default)]
+struct Found {
+    /// The remote-tracking branch to compare the local branch with.
+    upstream: Option<UpstreamInfo>,
+    /// The repository's remote default branch, looked for only when asked to and the branch has no
+    /// upstream.
+    default_branch: Option<UpstreamInfo>,
+    /// False when a lookup was past a budget, and until the lookups have run to the end.
+    complete: bool,
+}
+
+/// The remote-tracking branch to compare local branch `name` with, and, when `with_default` and
+/// there is none, the repository's remote default branch; and whether the lookup was complete.
+///
+/// The upstream is the one the branch is set to track (`configured`, the reference `git` resolved
+/// it to, empty for none), else the branch of its name on a configured remote, preferred by
+/// [`preferred`]. An upstream that is another local branch, or whose reference is gone, is none. A
+/// reference is a remote's branch only as `refs/remotes/<remote>/<name>` for a configured
+/// `<remote>`, so `refs/remotes/origin/backup/main` is not `main` on a remote `origin/backup` that
+/// was never added.
+///
+/// The default branch is what `refs/remotes/<remote>/HEAD` names (left by `git clone` or `git
+/// remote set-head`) for a configured `<remote>`, preferred by [`preferred`] among the remotes
+/// whose `HEAD` is a symbolic reference to a branch the repository has below `refs/remotes/`.
 ///
 /// Only the references asked for are looked up, by exact name: first the upstream and, when it is
-/// none, `git remote` and the same name on each remote, so a repository with thousands of
-/// remote-tracking references is no slower, and a branch tracking one costs one `git` run. A
-/// lookup that passes a budget ([`budget::UPSTREAM_PATTERN_BYTES`] of names asked for, the output
-/// of `git remote` or of a lookup) gives up with what it has found so far, the upstream if that
-/// was found, and says it was not complete.
-fn find_upstream(
+/// none, `git remote` and, in one run, the same name and the `HEAD` of each remote, so a
+/// repository with thousands of remote-tracking references is no slower, and a branch tracking one
+/// costs one `git` run. A lookup that passes a budget ([`budget::UPSTREAM_PATTERN_BYTES`] of names
+/// asked for, the output of `git remote` or of a lookup) gives up with what it has found so far,
+/// the upstream if that was found, and says it was not complete.
+fn find_remote_branches(
     env: &GitEnv,
     dir: &Path,
     (name, configured): (&[u8], &[u8]),
+    with_default: bool,
     cancel: &AtomicBool,
-) -> Result<(Option<UpstreamInfo>, bool)> {
+) -> Result<Found> {
+    let mut found = Found::default();
     if configured.starts_with(b"refs/remotes/") {
         let Some(stdout) = lookup(env, dir, vec![configured.to_vec()], cancel)? else {
-            return Ok((None, false));
+            return Ok(found);
         };
-        if let Some(found) = upstream_of(&tips(&stdout), configured) {
-            return Ok((Some(found), true));
+        if let Some(upstream) = upstream_of(&tips(&stdout), configured) {
+            found.upstream = Some(upstream);
+            found.complete = true;
+            return Ok(found);
         }
     }
-    if name == b"HEAD" {
-        return Ok((None, true));
+    // A branch named `HEAD` has no same-named branch on a remote: that reference is the remote's
+    // own `HEAD`.
+    let same_name = name != b"HEAD";
+    if !same_name && !with_default {
+        found.complete = true;
+        return Ok(found);
     }
     let stdout = match env.run(dir, "remote", &[], budget::UPSTREAM_REMOTES_STDOUT, cancel) {
         Ok(stdout) => stdout,
-        Err(GitError::Stopped(BoundedFailure::StdoutExceeded(_))) => return Ok((None, false)),
+        Err(GitError::Stopped(BoundedFailure::StdoutExceeded(_))) => return Ok(found),
         Err(err) => return Err(git_error(err)),
     };
     let remotes = || {
@@ -252,47 +287,91 @@ fn find_upstream(
             .split(|&b| b == b'\n')
             .filter(|remote| !remote.is_empty())
     };
-    let refname = |remote: &[u8]| [b"refs/remotes/", remote, b"/", name].concat();
-    let Some(lookup_stdout) = lookup(env, dir, remotes().map(refname).collect(), cancel)? else {
-        return Ok((None, false));
+    let named = |remote: &[u8]| [b"refs/remotes/", remote, b"/", name].concat();
+    let head = |remote: &[u8]| [b"refs/remotes/", remote, b"/HEAD"].concat();
+    let mut asked = Vec::new();
+    for remote in remotes() {
+        if same_name {
+            asked.push(named(remote));
+        }
+        if with_default {
+            asked.push(head(remote));
+        }
+    }
+    let Some(lookup_stdout) = lookup(env, dir, asked, cancel)? else {
+        return Ok(found);
     };
     let tips = tips(&lookup_stdout);
-    // `origin`'s, else the first in byte order of the remotes that have the branch.
-    let remote = remotes()
-        .filter(|&remote| tips.contains_key(refname(remote).as_slice()))
-        .min_by_key(|&remote| (remote != b"origin", remote));
-    Ok((
-        remote.and_then(|remote| upstream_of(&tips, &refname(remote))),
-        true,
-    ))
+    found.complete = true;
+    if same_name {
+        let remote =
+            preferred(remotes().filter(|&remote| tips.contains_key(named(remote).as_slice())));
+        found.upstream = remote.and_then(|remote| upstream_of(&tips, &named(remote)));
+    }
+    if with_default && found.upstream.is_none() {
+        let default_on = |remote: &[u8]| default_of(&tips, &head(remote));
+        let remote = preferred(remotes().filter(|&remote| default_on(remote).is_some()));
+        found.default_branch = remote.and_then(default_on);
+    }
+    Ok(found)
 }
 
-/// What a lookup printed, by reference: the object id each reference it was asked for names.
-type Tips<'a> = HashMap<&'a [u8], &'a [u8]>;
+/// The remote to take a branch from among those that have it: `origin`, else the first in byte
+/// order of the names.
+fn preferred<'a>(remotes: impl Iterator<Item = &'a [u8]>) -> Option<&'a [u8]> {
+    remotes.min_by_key(|&remote| (remote != b"origin", remote))
+}
 
-/// The lines of a lookup's output, `<object id> <reference>`, indexed by reference.
+/// What a lookup printed, by reference: the object id each reference it was asked for names, and
+/// the reference it is a symbolic reference to (empty for none).
+type Tips<'a> = HashMap<&'a [u8], (&'a [u8], &'a [u8])>;
+
+/// The lines of a lookup's output, `<object id> <reference> <symbolic target>`, indexed by
+/// reference.
 fn tips(stdout: &[u8]) -> Tips<'_> {
     stdout
         .split(|&b| b == b'\n')
         .filter_map(|line| {
-            let space = line.iter().position(|&b| b == b' ')?;
-            Some((&line[space + 1..], &line[..space]))
+            let mut fields = line.splitn(3, |&b| b == b' ');
+            Some((
+                fields.next()?,
+                fields.next()?,
+                fields.next().unwrap_or_default(),
+            ))
         })
+        .map(|(oid, refname, symref)| (refname, (oid, symref)))
         .collect()
 }
 
 /// The tip of remote-tracking reference `refname`, when `tips` (a lookup's answer) has it.
 fn upstream_of(tips: &Tips, refname: &[u8]) -> Option<UpstreamInfo> {
-    let commit = String::from_utf8_lossy(tips.get(refname)?).into_owned();
+    let (commit, _) = tips.get(refname)?;
     let below = refname.strip_prefix(b"refs/remotes/")?;
     Some(UpstreamInfo {
         name: wire_path::encode(below),
-        commit,
+        commit: String::from_utf8_lossy(commit).into_owned(),
     })
 }
 
-/// Asks `git for-each-ref` for the references `names` by their exact names, and gives back what
-/// it printed. `None` when the names are past [`budget::UPSTREAM_PATTERN_BYTES`],
+/// The branch the remote's `HEAD`, `refname`, is a symbolic reference to, when `tips` (a lookup's
+/// answer) has it and the branch is below `refs/remotes/`; the object id printed for a symbolic
+/// reference is its target's.
+fn default_of(tips: &Tips, refname: &[u8]) -> Option<UpstreamInfo> {
+    let (commit, symref) = tips.get(refname)?;
+    let below = symref
+        .strip_prefix(b"refs/remotes/")
+        .filter(|name| !name.is_empty())?;
+    Some(UpstreamInfo {
+        name: wire_path::encode(below),
+        commit: String::from_utf8_lossy(commit).into_owned(),
+    })
+}
+
+/// The `--format` of a lookup.
+const FORMAT: &[u8] = b"--format=%(objectname) %(refname) %(symref)";
+
+/// Asks `git for-each-ref` for the references `names` by their exact names, printed as [`FORMAT`],
+/// and gives back what it printed. `None` when the names are past [`budget::UPSTREAM_PATTERN_BYTES`],
 /// or the output passes its budget.
 fn lookup(
     env: &GitEnv,
@@ -306,7 +385,7 @@ fn lookup(
     if names.iter().map(|name| name.len() + 1).sum::<usize>() > budget::UPSTREAM_PATTERN_BYTES {
         return Ok(None);
     }
-    let mut args: Vec<&[u8]> = vec![b"--format=%(objectname) %(refname)"];
+    let mut args: Vec<&[u8]> = vec![FORMAT];
     args.extend(names.iter().map(Vec::as_slice));
     match env.run(
         dir,

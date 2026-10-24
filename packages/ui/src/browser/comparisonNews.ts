@@ -1,6 +1,6 @@
 // What a branch list says of the branches a comparison on screen was made from: pure, so the rule
 // is one place and tested on its own.
-import type { BranchInfo, ComparisonEndpoint } from "../protocol";
+import type { ComparisonEndpoint } from "../protocol";
 import type { BranchList } from "./useBranchList";
 
 /**
@@ -8,7 +8,7 @@ import type { BranchList } from "./useBranchList";
  * now at another commit, so the comparison is to be made again at the commits they are at now, and
  * `gone`, the ones a complete list no longer has; `tips` are the commits the list has the two
  * branches at, left's first, an empty string for one it does not have. A remote-tracking branch is
- * the upstream of a listed branch. A comparison with a branch gone is not made again — it would
+ * the upstream of a listed branch, or the list's default branch. A comparison with a branch gone is not made again — it would
  * fail for the missing one — and keeps the commits it was made at, so it is never `moved` while
  * one is gone.
  */
@@ -19,9 +19,11 @@ export interface ComparisonNews {
 }
 
 /** The commit the list has branch `name` at, or remote-tracking branch `name` when `remote`
- * (the upstream of a listed branch); none when it does not have it. */
-export function branchTip(branches: readonly BranchInfo[], name: string, remote: boolean): string | undefined {
-  return remote ? branches.find((branch) => branch.upstream?.name === name)?.upstream?.commit : branches.find((branch) => branch.name === name)?.commit;
+ * (the upstream of a listed branch, or the list's default branch); none when it does not have it. */
+export function branchTip(list: Extract<BranchList, { state: "loaded" }>, name: string, remote: boolean): string | undefined {
+  if (!remote) return list.branches.find((branch) => branch.name === name)?.commit;
+  if (list.defaultBranch?.name === name) return list.defaultBranch.commit;
+  return list.branches.find((branch) => branch.upstream?.name === name)?.upstream?.commit;
 }
 
 /**
@@ -40,7 +42,7 @@ export function comparisonNews(
   for (const endpoint of [comparison.left, comparison.right]) {
     // The empty tree is no branch, and does not move.
     if (endpoint.empty) continue;
-    const now = branchTip(branches.branches, endpoint.branch, endpoint.remote === true);
+    const now = branchTip(branches, endpoint.branch, endpoint.remote === true);
     tips.push(now ?? "");
     if (now !== undefined && now !== endpoint.commit) moved = true;
     // A remote-tracking branch no branch has as its upstream any more is not gone: the list then

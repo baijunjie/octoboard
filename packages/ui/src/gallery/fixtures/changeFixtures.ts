@@ -7,7 +7,7 @@
 // what the real daemon's reply for that kind carries and derives the rest, so a change that could
 // not be answered faithfully cannot be written at all. That is the half of the net the types can
 // hold; the fixture daemon refuses at run time what no signature can settle.
-import type { BranchInfo, ChangeEntry, ChangeSide, ConflictKind, ContentSource, FileContent, LineStats, WorktreeInfo } from "../../protocol";
+import type { BranchInfo, ChangeEntry, ChangeSide, ConflictKind, ContentSource, FileContent, LineStats, UpstreamInfo, WorktreeInfo } from "../../protocol";
 import type { FixtureError } from "./projectFiles";
 import { text } from "./builders";
 
@@ -70,7 +70,10 @@ export const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
  * longer finds. `gone` are branches deleted once a comparison involving one of them has been made: from then on neither
  * the list nor a new comparison finds them, where `missing` ones are refused from the start. With
  * `comparing: "pending"` a comparison is never answered. With `upstreamsCut` the branch list leaves
- * the main working copy's branch without an upstream and says the lookup was past a budget. */
+ * the main working copy's branch without an upstream and says the lookup was past a budget.
+ * `defaultBranch` is the remote default branch of a repository whose main working
+ * copy's branch has no upstream: the list gives it, and a comparison names it as a remote-tracking
+ * branch; a cut lookup leaves it out as it does the upstream. */
 export interface FixtureGit {
   worktrees: WorktreeInfo[];
   changes: Record<string, FixtureChange[] | FixtureError>;
@@ -87,6 +90,7 @@ export interface FixtureGit {
   cutShort?: boolean;
   comparing?: "pending";
   upstreamsCut?: boolean;
+  defaultBranch?: UpstreamInfo;
 }
 
 /** Which section of a change list a change with two sides belongs to; `committed` is a branch

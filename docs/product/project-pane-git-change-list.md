@@ -79,19 +79,25 @@ What the branch has committed is compared with its **base**:
 
 - **Any branch but the main working copy's** — the one the repository's **main working copy** has checked out — has
   that branch as its base.
-- **The main working copy's branch itself** has its **remote branch** as its base, so what is listed is what it has
-  committed and not pushed. Its remote branch is, in this order:
+- **The main working copy's branch itself** has a **remote branch** as its base, so what is listed is what it has
+  committed since it forked from that branch — what it has not pushed, where the base is its own remote branch. The
+  base is, in this order:
   1. the remote-tracking branch it is set to track, when what it tracks is a remote branch the repository has;
   2. otherwise the branch of the same name on one of the repository's configured remotes — `origin`'s when that has
      one, else the first such remote's in byte order of the remotes' names;
-  3. otherwise none — a branch never pushed — and **its whole history** is listed (see below).
+  3. otherwise (a branch never pushed) the repository's **remote default branch** — the branch the `HEAD` of a configured remote points at
+     (`origin/HEAD` after a clone, or `git remote set-head`), `origin`'s when that has one, else the first such
+     remote's in byte order of the remotes' names, among those whose `HEAD` points at a remote branch the repository
+     has;
+  4. otherwise none — a repository with no remote default branch — and **its whole history** is listed (see below).
 
   The remote branch is as the repository last fetched it — the branch badge's check fetches, for one (see "When a
   project is checked" in `docs/product/project-git-status.md`); the Git mode never does. A branch list read later that shows the
-  remote branch at another commit, or gives the branch a remote branch where it had none or another one, has it
-  compared again (see "Keeping the list up to date" below). Until a branch list that has the branch is in, and when
-  the repository could not be asked which remote branch it has — the lookup past the daemon's limits, or Git unable
-  to say which branch the main working copy has checked out — the branch has no Committed section, and nothing says so.
+  remote branch (or the remote default branch) at another commit, or gives the branch a remote branch where it had
+  none or another one, or another remote default branch, has it compared again (see "Keeping the list up to date"
+  below). Until a branch list that has the branch is in, and when the repository could not be asked which remote
+  branch (or remote default branch) it has — the lookup past the daemon's limits, or Git unable to say which branch
+  the main working copy has checked out — the branch has no Committed section, and nothing says so.
 
 The comparison:
 
@@ -101,9 +107,9 @@ The comparison:
   moved on is not shown as changes undone. Where the two have more than one best common ancestor, the one
   `git merge-base` gives is the fork. A branch at the fork itself — at the base's commit, or one the base already
   contains — has nothing committed to list.
-- **With its whole history**, for the main working copy's branch with no remote branch: it is compared with the empty
-  tree, so every file at its tip is listed as added and, grouped by commit, its commits are listed back to its first
-  (see "Grouped by commit" below).
+- **With its whole history**, for the main working copy's branch with no remote branch and no remote default branch to
+  take its place: it is compared with the empty tree, so every file at its tip is listed as added and, grouped by
+  commit, its commits are listed back to its first (see "Grouped by commit" below).
 - **At the commits the branches were at when it was made.** The fork is found once, together with the two tips, and the
   committed changes listed, and every one opened from them, are between those commits until the comparison is made
   again (see "Keeping the list up to date" below).
@@ -119,9 +125,10 @@ A line above the list says what the committed part is:
 
 - **Forked from** the base **at** the fork's commit, **now at** the branch's tip, each commit by its first seven
   characters, once the comparison is in; **Comparing with** the base while it is made with none on screen. A remote
-  branch is named with its remote — `origin/main`, say.
-- **No remote branch** — the main working copy's branch listed with its whole history: the line says the branch has
-  no remote branch, so all of its commits are listed, in place of the two above, while the comparison is made too.
+  branch, the remote default branch included, is named with its remote — `origin/main`, say.
+- **No remote branch** — the main working copy's branch listed with its whole history, there being no remote default
+  branch either: the line says the branch has no remote branch, so all of its commits are listed, in place of the two
+  above, while the comparison is made too.
 - **The main working copy is on no branch** — its `HEAD` detached: the branch's commits cannot be compared, and only
   its uncommitted changes are listed.
 - Where the branch has no commit yet (see "Uncommitted changes" above), or the main working copy's branch has none,

@@ -2664,9 +2664,13 @@ pub enum Event {
         branches: Vec<BranchInfo>,
         complete: bool,
         /// Absent when true; false when the upstream lookup was past a budget, so that the main
-        /// working copy's branch may lack its `upstream` though it has one.
+        /// working copy's branch may lack its `upstream` or `default_branch` though it has one.
         #[serde(skip_serializing_if = "is_true")]
         upstreams_complete: bool,
+        /// The remote branch the repository's remote default branch points at, when the main
+        /// working copy's branch has no `upstream`; absent when there is none to give.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        default_branch: Option<UpstreamInfo>,
     },
     /// The reply to `compare_project_branches`: the two branches with the commits they were
     /// resolved to, the commit they forked at (`base`, their merge base), and the changes from

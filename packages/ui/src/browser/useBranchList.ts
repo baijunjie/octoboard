@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ErrorPresentation } from "../errorPresentation";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { abbreviateHome } from "../pathDisplay";
-import type { BranchInfo } from "../protocol";
+import type { BranchInfo, UpstreamInfo } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { browseFailure } from "./browseError";
 import { gitMoment } from "./gitRequests";
@@ -11,14 +11,16 @@ import { sendBrowseListRequest } from "./browseListRequests";
 import { AUTO_REFRESH_MS } from "./useDirectoryListings";
 
 /** A repository's local branches as the client holds them. `upstreamsComplete` is false when the
- * daemon could not list the remote-tracking branches, so that no branch carries an upstream though it
- * may have one. `sentAt` is when the request this list
+ * daemon could not list the remote-tracking branches, so that no branch carries an upstream (nor the
+ * list a `defaultBranch`) though it may have one. `defaultBranch` is the remote branch the
+ * repository's remote default branch points at, given when the main working copy's branch has no
+ * upstream. `sentAt` is when the request this list
  * answers was sent (`gitMoment`), so a list can be told to be newer than something received
  * before it. A list or a failure stays on screen while a refresh is out, and a list stays through
  * a refresh that fails, with that failure beside it (`error`) until a refresh succeeds. */
 export type BranchList =
   | { state: "loading" }
-  | { state: "loaded"; branches: BranchInfo[]; complete: boolean; upstreamsComplete?: boolean; sentAt: number; error?: ErrorPresentation }
+  | { state: "loaded"; branches: BranchInfo[]; complete: boolean; upstreamsComplete?: boolean; defaultBranch?: UpstreamInfo; sentAt: number; error?: ErrorPresentation }
   | { state: "error"; message: ErrorPresentation };
 
 /**
@@ -56,7 +58,7 @@ export function useBranchList(project: string, active: boolean): { branches: Bra
     })
       .then((reply) => {
         if (!reply || !current() || reply.type !== "project_branches" || reply.project !== project) return;
-        setBranches({ state: "loaded", branches: reply.branches, complete: reply.complete, upstreamsComplete: reply.upstreams_complete, sentAt });
+        setBranches({ state: "loaded", branches: reply.branches, complete: reply.complete, upstreamsComplete: reply.upstreams_complete, defaultBranch: reply.default_branch, sentAt });
       })
       .catch((err: unknown) => {
         if (!current()) return;

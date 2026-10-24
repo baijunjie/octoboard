@@ -1,12 +1,12 @@
 import { expect, it } from "vitest";
 
-import type { BranchInfo, GitSourceInfo, WorktreeInfo } from "../protocol";
+import type { BranchInfo, GitSourceInfo, UpstreamInfo, WorktreeInfo } from "../protocol";
 import { changesScope as scopeOf } from "./changesScope";
 import type { BranchList } from "./useBranchList";
 
 const tree = (id: string, branch: string | null, main = false): WorktreeInfo => ({ id, root: `/${id}`, main, head: "c1", branch, scope_present: true });
 const repository = (own: string, worktrees: WorktreeInfo[]): GitSourceInfo => ({ repository: "repo", common_dir: "/r/.git", worktree: own, scope: "", worktrees });
-const loaded = (branches: BranchInfo[], complete = true, upstreamsComplete = true): BranchList => ({ state: "loaded", branches, complete, upstreamsComplete, sentAt: 1 });
+const loaded = (branches: BranchInfo[], complete = true, upstreamsComplete = true, defaultBranch?: UpstreamInfo): BranchList => ({ state: "loaded", branches, complete, upstreamsComplete, defaultBranch, sentAt: 1 });
 const branch = (name: string, upstream?: string): BranchInfo => ({ name, commit: "c1", upstream: upstream ? { name: upstream, commit: "c0" } : undefined });
 const LISTED = loaded([branch("main", "origin/main"), branch("topic")]);
 const changesScope = (git: GitSourceInfo | null, chosen: string | undefined, branches: BranchList = LISTED) => scopeOf(git, chosen, branches);
@@ -26,6 +26,16 @@ it("compares the main working copy's own branch with nothing when the list gives
   const git = repository("m", [MAIN, TOPIC]);
   const own = { state: "compare", base: "", baseKind: "empty", branch: "main" };
   expect(changesScope(git, "main", loaded([branch("main"), branch("topic")])).committed).toEqual(own);
+});
+
+it("compares the main working copy's own branch with the remote default branch when it has no remote branch", () => {
+  const git = repository("m", [MAIN, TOPIC]);
+  const trunk = { name: "origin/trunk", commit: "c0" };
+  expect(changesScope(git, "main", loaded([branch("main"), branch("topic")], true, true, trunk)).committed).toEqual({ state: "compare", base: "origin/trunk", baseKind: "remote", branch: "main" });
+  // Its own remote branch comes first.
+  expect(changesScope(git, "main", loaded([branch("main", "origin/main"), branch("topic")], true, true, trunk)).committed).toMatchObject({ base: "origin/main" });
+  // Another branch is compared with the main working copy's, not the default branch.
+  expect(changesScope(git, "topic", loaded([branch("main"), branch("topic")], true, true, trunk)).committed).toMatchObject({ base: "main", baseKind: "local" });
 });
 
 it("waits for the branch list, and the branch in it, before saying anything of the main working copy's own branch", () => {

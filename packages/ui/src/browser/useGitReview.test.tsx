@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
-import type { ChangeEntry, CommitChanges, Event, RequestBody, WorktreeInfo } from "../protocol";
+import type { ChangeEntry, CommitChanges, Event, RequestBody, UpstreamInfo, WorktreeInfo } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { noteSessionSwitch, useProjectBrowserState } from "./browserState";
 import { directoryKey, sectionKey, type ChangeItem } from "./changes";
@@ -46,7 +46,7 @@ const asked = (type: RequestBody["type"]) => pending.filter((request) => request
 
 type Tree = { id: string; branch: string | null; main?: boolean };
 /** `responsible` is the session working on the branch; none when the daemon names no one. */
-type Made = { name: string; commit?: string; responsible?: string; upstream?: { name: string; commit: string } };
+type Made = { name: string; commit?: string; responsible?: string; upstream?: UpstreamInfo };
 type Replies = Partial<Record<RequestBody["type"], (body: RequestBody) => Event>>;
 
 const worktreeInfo = (w: Tree): WorktreeInfo => ({ id: w.id, root: `/${w.id}`, main: w.main ?? false, head: "c1", branch: w.branch, scope_present: true });

@@ -288,15 +288,21 @@ fn local_branches_are_listed_with_their_tips_and_cut_at_their_budget() {
 }
 
 /// What the branch list says of the main working copy's branch (`main`) after `setup` has
-/// arranged the repository, given the commit `main` is at: its upstream, and whether the list
-/// says the lookup was complete.
-fn main_upstream(label: &str, setup: impl FnOnce(&Path, &str)) -> (Option<UpstreamInfo>, bool) {
+/// arranged the repository, given the commit `main` is at: its upstream, the repository's remote
+/// default branch, and whether the list says the lookup was complete.
+fn main_lookup(
+    label: &str,
+    setup: impl FnOnce(&Path, &str),
+) -> (Option<UpstreamInfo>, Option<UpstreamInfo>, bool) {
     let repo = repo_with(label, &[(b"a.txt", b"a\n")]);
-    main_upstream_in(&repo, setup)
+    main_lookup_in(&repo, setup)
 }
 
-/// [`main_upstream`] in the repository `repo` as it is.
-fn main_upstream_in(repo: &Path, setup: impl FnOnce(&Path, &str)) -> (Option<UpstreamInfo>, bool) {
+/// [`main_lookup`] in the repository `repo` as it is.
+fn main_lookup_in(
+    repo: &Path,
+    setup: impl FnOnce(&Path, &str),
+) -> (Option<UpstreamInfo>, Option<UpstreamInfo>, bool) {
     let fixture = Fixture::new();
     let main = rev_parse(repo, "main");
     setup(repo, &main);
@@ -308,10 +314,11 @@ fn main_upstream_in(repo: &Path, setup: impl FnOnce(&Path, &str)) -> (Option<Ups
         Event::ProjectBranches {
             branches,
             upstreams_complete,
+            default_branch,
             ..
         } => {
             let main = branches.iter().find(|b| b.name == "main").unwrap();
-            (main.upstream.clone(), upstreams_complete)
+            (main.upstream.clone(), default_branch, upstreams_complete)
         }
         other => panic!("not a branch list: {other:?}"),
     }
@@ -346,7 +353,7 @@ fn upstream(name: &str, commit: &str) -> Option<UpstreamInfo> {
 
 #[test]
 fn the_main_working_copys_branch_has_the_remote_branch_it_tracks_as_its_upstream() {
-    let (found, complete) = main_upstream("upstream-tracked", |repo, main| {
+    let (found, _, complete) = main_lookup("upstream-tracked", |repo, main| {
         remote(repo, "origin");
         tracks(repo, "main", "origin", "refs/heads/main");
         git(repo, &["update-ref", "refs/remotes/origin/main", main]);
@@ -364,7 +371,7 @@ fn the_main_working_copys_branch_has_the_remote_branch_it_tracks_as_its_upstream
 #[test]
 fn a_branch_without_a_remote_upstream_has_the_branch_of_its_name_on_a_configured_remote() {
     // Tracking nothing, `origin`'s is preferred to another remote's that sorts first.
-    let (found, complete) = main_upstream("upstream-origin", |repo, main| {
+    let (found, _, complete) = main_lookup("upstream-origin", |repo, main| {
         remote(repo, "origin");
         remote(repo, "alpha");
         git(repo, &["update-ref", "refs/remotes/origin/main", main]);
@@ -374,7 +381,7 @@ fn a_branch_without_a_remote_upstream_has_the_branch_of_its_name_on_a_configured
     assert!(complete);
 
     // Else the first in byte order, a name with a slash in it included.
-    let (found, _) = main_upstream("upstream-first", |repo, main| {
+    let (found, _, _) = main_lookup("upstream-first", |repo, main| {
         remote(repo, "zeta");
         remote(repo, "alpha/b");
         git(repo, &["update-ref", "refs/remotes/zeta/main", main]);
@@ -383,20 +390,20 @@ fn a_branch_without_a_remote_upstream_has_the_branch_of_its_name_on_a_configured
     assert_eq!(found.map(|u| u.name).as_deref(), Some("alpha/b/main"));
 
     // An upstream whose reference is gone, or that is a local branch, is none.
-    let (found, _) = main_upstream("upstream-gone", |repo, main| {
+    let (found, _, _) = main_lookup("upstream-gone", |repo, main| {
         remote(repo, "origin");
         tracks(repo, "main", "origin", "refs/heads/gone");
         git(repo, &["update-ref", "refs/remotes/origin/main", main]);
     });
     assert_eq!(found.map(|u| u.name).as_deref(), Some("origin/main"));
-    let (found, _) = main_upstream("upstream-local", |repo, main| {
+    let (found, _, _) = main_lookup("upstream-local", |repo, main| {
         remote(repo, "origin");
         tracks(repo, "main", ".", "refs/heads/other");
         git(repo, &["branch", "other"]);
         git(repo, &["update-ref", "refs/remotes/origin/main", main]);
     });
     assert_eq!(found.map(|u| u.name).as_deref(), Some("origin/main"));
-    let (found, complete) = main_upstream("upstream-local-only", |repo, _| {
+    let (found, _, complete) = main_lookup("upstream-local-only", |repo, _| {
         remote(repo, "origin");
         tracks(repo, "main", ".", "refs/heads/other");
         git(repo, &["branch", "other"]);
@@ -404,7 +411,7 @@ fn a_branch_without_a_remote_upstream_has_the_branch_of_its_name_on_a_configured
     assert_eq!((found, complete), (None, true));
 
     // A remote-tracking reference below a name is not on a remote that was never added.
-    let (found, complete) = main_upstream("upstream-backup", |repo, main| {
+    let (found, _, complete) = main_lookup("upstream-backup", |repo, main| {
         remote(repo, "origin");
         git(
             repo,
@@ -412,6 +419,113 @@ fn a_branch_without_a_remote_upstream_has_the_branch_of_its_name_on_a_configured
         );
     });
     assert_eq!((found, complete), (None, true));
+}
+
+/// Makes `refs/remotes/<remote>/<branch>` at `commit` and the remote's `HEAD` point at it.
+fn remote_default(repo: &Path, remote_name: &str, branch: &str, commit: &str) {
+    remote(repo, remote_name);
+    let reference = format!("refs/remotes/{remote_name}/{branch}");
+    git(repo, &["update-ref", &reference, commit]);
+    git(
+        repo,
+        &[
+            "symbolic-ref",
+            &format!("refs/remotes/{remote_name}/HEAD"),
+            &reference,
+        ],
+    );
+}
+
+#[test]
+fn a_main_branch_with_no_upstream_gets_the_remote_default_branch() {
+    // The branch the remote's `HEAD` names, at its own commit.
+    let mut trunk = String::new();
+    let (_, found, complete) = main_lookup("default-origin", |repo, _| {
+        trunk = commit_on(repo, "trunk-source", "main", &[("b.txt", Some(b"b\n"))]);
+        remote_default(repo, "origin", "trunk", &trunk);
+    });
+    assert_eq!(found, upstream("origin/trunk", &trunk));
+    assert!(complete);
+
+    // `origin`'s is preferred to another remote's that sorts first; else the first in byte order.
+    let (_, found, _) = main_lookup("default-prefer-origin", |repo, main| {
+        remote_default(repo, "alpha", "dev", main);
+        remote_default(repo, "origin", "trunk", main);
+    });
+    assert_eq!(found.map(|u| u.name).as_deref(), Some("origin/trunk"));
+    let (_, found, _) = main_lookup("default-first", |repo, main| {
+        remote_default(repo, "zeta", "dev", main);
+        remote_default(repo, "alpha", "stable", main);
+    });
+    assert_eq!(found.map(|u| u.name).as_deref(), Some("alpha/stable"));
+
+    // A `HEAD` that is no symbolic reference, or names one outside `refs/remotes/`, is skipped for
+    // another remote's valid one, even `origin`'s.
+    let (_, found, complete) = main_lookup("default-skips-invalid", |repo, main| {
+        remote(repo, "origin");
+        git(repo, &["update-ref", "refs/remotes/origin/HEAD", main]);
+        remote_default(repo, "alpha", "trunk", main);
+        remote(repo, "beta");
+        git(
+            repo,
+            &["symbolic-ref", "refs/remotes/beta/HEAD", "refs/heads/main"],
+        );
+    });
+    assert_eq!(found.map(|u| u.name).as_deref(), Some("alpha/trunk"));
+    assert!(complete);
+
+    // A remote without a `HEAD`, or with one naming nothing, has no default branch.
+    let (_, found, complete) = main_lookup("default-none", |repo, main| {
+        remote(repo, "origin");
+        git(repo, &["update-ref", "refs/remotes/origin/trunk", main]);
+        git(
+            repo,
+            &[
+                "symbolic-ref",
+                "refs/remotes/origin/HEAD",
+                "refs/remotes/origin/gone",
+            ],
+        );
+    });
+    assert_eq!((found, complete), (None, true));
+    let (_, found, complete) = main_lookup("default-no-remote", |_, _| {});
+    assert_eq!((found, complete), (None, true));
+}
+
+#[test]
+fn a_main_branch_with_an_upstream_is_given_no_default_branch() {
+    let (_, found, complete) = main_lookup("default-upstream", |repo, main| {
+        remote_default(repo, "origin", "trunk", main);
+        git(repo, &["update-ref", "refs/remotes/origin/main", main]);
+    });
+    assert_eq!((found, complete), (None, true));
+}
+
+#[test]
+fn a_default_branch_lookup_past_a_budget_says_so() {
+    // The names asked for, the same name and the `HEAD` of each remote, passing theirs (64 KiB)
+    // though the same name alone does not, and `git remote` printing less than its budget.
+    let setup = |repo: &Path, main: &str| {
+        many_remotes(repo, "r", 1_800);
+        git(repo, &["update-ref", "refs/remotes/r00001/trunk", main]);
+        git(
+            repo,
+            &[
+                "symbolic-ref",
+                "refs/remotes/r00001/HEAD",
+                "refs/remotes/r00001/trunk",
+            ],
+        );
+    };
+    let (_, found, complete) = main_lookup("default-many-asked", setup);
+    assert_eq!((found, complete), (None, false));
+
+    // A caller that does not want the default branch is not bound by it.
+    let repo = repo_with("default-not-asked", &[(b"a.txt", b"a\n")]);
+    setup(&repo, &rev_parse(&repo, "main"));
+    let env = GitEnv::new(SYSTEM_GIT.to_string(), isolated_git_env());
+    let list = compare::branches_in(&env, &repo, &repo, false, &AtomicBool::new(false)).unwrap();
+    assert!(list.upstreams_complete && list.default_branch.is_none());
 }
 
 #[test]
@@ -472,7 +586,7 @@ fn the_main_working_copys_branch_is_found_in_either_reference_format() {
     std::fs::write(repo.join("a.txt"), b"a\n").unwrap();
     git(&repo, &["add", "-A"]);
     git(&repo, &["commit", "-q", "-m", "fixture"]);
-    let (found, complete) = main_upstream_in(&repo, |repo, main| {
+    let (found, _, complete) = main_lookup_in(&repo, |repo, main| {
         remote(repo, "origin");
         git(repo, &["update-ref", "refs/remotes/origin/main", main]);
     });
@@ -487,7 +601,8 @@ fn a_head_git_cannot_read_leaves_the_upstream_unknown_and_says_so() {
     // of a detached `HEAD`.
     let elsewhere = ScratchDir::new("upstream-bad-head-dir");
     let env = GitEnv::new(SYSTEM_GIT.to_string(), isolated_git_env());
-    let list = compare::branches_in(&env, &repo, &elsewhere, &AtomicBool::new(false)).unwrap();
+    let list =
+        compare::branches_in(&env, &repo, &elsewhere, true, &AtomicBool::new(false)).unwrap();
     assert!(!list.upstreams_complete);
     assert!(list.branches.iter().all(|b| b.upstream.is_none()));
 }
@@ -505,7 +620,7 @@ fn many_remotes(repo: &Path, prefix: &str, count: usize) {
 fn a_lookup_past_one_of_its_budgets_says_so_and_keeps_what_it_found() {
     // The remotes' names passing the output of `git remote` (32 KiB), the names asked for
     // staying within theirs.
-    let (found, complete) = main_upstream("upstream-many-names", |repo, main| {
+    let (found, _, complete) = main_lookup("upstream-many-names", |repo, main| {
         many_remotes(repo, "remote-with-a-rather-long-name-", 1_000);
         git(
             repo,
@@ -519,14 +634,14 @@ fn a_lookup_past_one_of_its_budgets_says_so_and_keeps_what_it_found() {
     assert_eq!((found, complete), (None, false));
 
     // The names asked for (64 KiB) passing theirs, `git remote` printing less than its budget.
-    let (found, complete) = main_upstream("upstream-many-asked", |repo, main| {
+    let (found, _, complete) = main_lookup("upstream-many-asked", |repo, main| {
         many_remotes(repo, "r", 4_000);
         git(repo, &["update-ref", "refs/remotes/r00001/main", main]);
     });
     assert_eq!((found, complete), (None, false));
 
     // The lookup's output (128 KiB) passing its own, with what lies below the name asked for.
-    let (found, complete) = main_upstream("upstream-much-output", |repo, main| {
+    let (found, _, complete) = main_lookup("upstream-much-output", |repo, main| {
         remote(repo, "origin");
         let refs: String = (0..3_000)
             .map(|n| format!("create refs/remotes/origin/main/sub{n:06} {main}\n"))
@@ -537,7 +652,7 @@ fn a_lookup_past_one_of_its_budgets_says_so_and_keeps_what_it_found() {
 
     // The upstream it tracks is found before any of that is asked, and kept when the fallback
     // would have passed a budget.
-    let (found, complete) = main_upstream("upstream-kept", |repo, main| {
+    let (found, _, complete) = main_lookup("upstream-kept", |repo, main| {
         remote(repo, "origin");
         tracks(repo, "main", "origin", "refs/heads/main");
         git(repo, &["update-ref", "refs/remotes/origin/main", main]);
