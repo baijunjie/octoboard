@@ -129,12 +129,13 @@ export interface WindowChromeCapability {
 }
 
 export interface AppMenuCapability {
-  /** Subscribes to the menu's Settings item (Cmd+,), returning the function that undoes it. */
+  /** Subscribes to the menu's Settings item (Cmd+, unless rebound), returning the function that undoes it. */
   onSettingsRequested(handler: () => void): () => void;
   /** Hands the shell the menu's labels, keyed by `menu.*` message key and already in the UI's
-   * language; the shell rebuilds the menu with them, and keeps its English text for any label
-   * missing. */
-  setLabels(labels: Record<string, string>): Promise<void>;
+   * language, and the accelerator of the Settings item as a Tauri accelerator string (the user can
+   * rebind it); the shell rebuilds the menu with them, keeps its English text for any label
+   * missing, and its own accelerator for one that is missing or that it cannot parse. */
+  setLabels(labels: Record<string, string>, settingsAccelerator?: string): Promise<void>;
 }
 
 /** The menu bar icon's menu, already in the UI's language; it also decides the icon's picture,

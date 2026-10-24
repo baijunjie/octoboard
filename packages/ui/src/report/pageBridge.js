@@ -87,13 +87,23 @@
 
   // Escape keeps its default action in the frame (closing an open `<dialog>` or `<select>`), while
   // F6 is the window's own key and the browser's default for it (moving focus to its own chrome) is
-  // cancelled. ⌘[ and ⌘] (nothing else held) are the window's Back and Forward, relayed only where
-  // the window has them (`config.historyKeys`) and cancelled in the frame. Ctrl+Tab, with or without
-  // Shift and nothing else held, is the window's move between console sessions
-  // (`config.switchKeys`): cancelled in the frame wherever the window has that shortcut, even when
-  // it does nothing at the moment, since Ctrl+Tab has no use in a static page; a held key is
-  // cancelled but relayed once. All are skipped while an IME composition is active, where Escape
-  // cancels the composition rather than meaning "close". Present on history pages too.
+  // cancelled. The window's Back and Forward (`config.historyKeys`, as the window has them bound,
+  // ⌘[ and ⌘] by default) are relayed only where the window has them and cancelled in the frame. Its
+  // move between console sessions (`config.switchKeys`, ⌃Tab and ⌃⇧Tab by default) is cancelled in
+  // the frame wherever the window has that shortcut, even when it does nothing at the moment, since
+  // Ctrl+Tab has no use in a static page; a held key is cancelled but relayed once. All are skipped
+  // while an IME composition is active, where Escape cancels the composition rather than meaning
+  // "close". Present on history pages too.
+  function pressed(key, event) {
+    return (
+      key &&
+      event.code === key.code &&
+      event.metaKey === key.metaKey &&
+      event.ctrlKey === key.ctrlKey &&
+      event.altKey === key.altKey &&
+      event.shiftKey === key.shiftKey
+    );
+  }
   win.addEventListener(
     "keydown",
     function (event) {
@@ -110,28 +120,19 @@
         event.preventDefault();
         post({ source: config.sources.region, backward: event.shiftKey }, "*");
       }
-      if (
-        config.historyKeys &&
-        (event.code === "BracketLeft" || event.code === "BracketRight") &&
-        !event.isComposing &&
-        event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        !event.shiftKey
-      ) {
-        event.preventDefault();
-        post({ source: config.sources.history, backward: event.code === "BracketLeft" }, "*");
+      if (!event.isComposing && config.historyKeys) {
+        var back = pressed(config.historyKeys.back, event);
+        if (back || pressed(config.historyKeys.forward, event)) {
+          event.preventDefault();
+          post({ source: config.sources.history, backward: back }, "*");
+        }
       }
-      if (
-        config.switchKeys &&
-        event.key === "Tab" &&
-        !event.isComposing &&
-        event.ctrlKey &&
-        !event.altKey &&
-        !event.metaKey
-      ) {
-        event.preventDefault();
-        if (!event.repeat) post({ source: config.sources.switch, backward: event.shiftKey }, "*");
+      if (!event.isComposing && config.switchKeys) {
+        var previous = pressed(config.switchKeys.previous, event);
+        if (previous || pressed(config.switchKeys.next, event)) {
+          event.preventDefault();
+          if (!event.repeat) post({ source: config.sources.switch, backward: previous }, "*");
+        }
       }
     },
     true,

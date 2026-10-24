@@ -5,17 +5,16 @@ import { refocusIfLost } from "../components/refocusIfLost";
 import { MODAL_OPEN } from "../layout/useRegionCycle";
 import { usePlatform } from "../platform/react";
 import type { Session } from "../protocol";
+import { matchesCommand } from "../shortcuts/store";
 import { useDaemon, useDaemonStore } from "../store";
 import { IS_MAC, useWindowShortcut } from "../useWindowShortcut";
 import { canGo, EMPTY_HISTORY, go, type Location, locationKey, push, replaceCurrent } from "./history";
 
-/** ⌘[ and ⌘]: Back and Forward, matched on the physical key so a keyboard layout does not move
- * them. Only ⌘ with nothing else held; Alt+arrow is not used, being the word motions in a terminal. */
+/** Back and Forward, ⌘[ and ⌘] unless rebound, matched on the physical key so a keyboard layout does not move
+ * them. Alt+arrow is not used, being the word motions in a terminal. */
 function shortcutDirection(event: KeyboardEvent): -1 | 1 | undefined {
-  if (!IS_MAC || !event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return undefined;
-  if (event.code === "BracketLeft") return -1;
-  if (event.code === "BracketRight") return 1;
-  return undefined;
+  if (matchesCommand("back", event)) return -1;
+  return matchesCommand("forward", event) ? 1 : undefined;
 }
 
 export interface Navigation {
@@ -61,7 +60,8 @@ export interface Navigation {
  * has just become disabled) goes to the terminal, through `focusTerminal`. The history is in
  * memory only.
  *
- * ⌘[ and ⌘] work in the macOS application, where `windowChrome` is present (`useWindowShortcut`).
+ * The keys for Back and Forward (⌘[ and ⌘] unless rebound) work in the macOS application, where `windowChrome` is
+ * present (`useWindowShortcut`).
  */
 export function useNavigationHistory({
   location,
@@ -146,7 +146,7 @@ export function useNavigationHistory({
     if (!windowChrome || document.querySelector(MODAL_OPEN)) return;
     move(backward ? -1 : 1);
   };
-  useWindowShortcut(shortcutDirection, (direction) => moveByShortcut(direction === -1), windowChrome !== undefined);
+  useWindowShortcut(shortcutDirection, (direction) => moveByShortcut(direction === -1), windowChrome !== undefined && IS_MAC);
 
   const canGoBack = useDaemonStore((s) => canGo(history, -1, (target) => isLive(target, s.sessions)));
   const canGoForward = useDaemonStore((s) => canGo(history, 1, (target) => isLive(target, s.sessions)));

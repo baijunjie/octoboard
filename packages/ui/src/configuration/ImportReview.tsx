@@ -283,6 +283,7 @@ export function ImportReview({
   onReview,
   applySettings,
   onApplySettings,
+  shortcuts,
   shown,
 }: {
   fileName: string;
@@ -291,6 +292,8 @@ export function ImportReview({
   onReview: (review: ReviewState) => void;
   applySettings: boolean;
   onApplySettings: (apply: boolean) => void;
+  /** What the document's keyboard shortcuts would do on this device; `undefined` when it carries none. */
+  shortcuts?: { count: number; changes: boolean };
   /** Holds a field's message back until the user has tried to import. */
   shown: (message: string | undefined) => string | undefined;
 }): React.ReactElement {
@@ -317,6 +320,14 @@ export function ImportReview({
       )}
       {typeof settings.auto_approve_resume_requests === "boolean" && typeof settings.current_auto_approve_resume_requests === "boolean" && (
         <SettingNote label={t("settings.autoApproveResume.label")} wanted={settings.auto_approve_resume_requests} current={settings.current_auto_approve_resume_requests} turnsOn="configuration.import.settings.autoApproveResume.turnsOn" />
+      )}
+      {shortcuts && (
+        <span className="block">
+          <Message
+            id={!shortcuts.changes ? "configuration.import.settings.shortcuts.same" : shortcuts.count === 0 ? "configuration.import.settings.shortcuts.reset" : "configuration.import.settings.shortcuts.changes"}
+            params={{ setting: <InlineReference dir="auto" wrap>{t("settings.section.shortcuts")}</InlineReference>, count: shortcuts.count }}
+          />
+        </span>
       )}
     </>
   );

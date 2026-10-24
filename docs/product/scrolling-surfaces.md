@@ -24,7 +24,8 @@ alone, are in "The surfaces that fade" below.
   "What both views show" in `docs/product/focus-mode.md` and "Folding a section" in
   `docs/product/project-pane-git-change-list.md` for the headings' scrolling behavior. In Settings' Agent accounts section it
   begins below the agent tab strip once the strip is pinned at the top (see "The agent strip" in
-  `docs/product/agent-accounts.md`).
+  `docs/product/agent-accounts.md`), and in its Keyboard shortcuts section below a group's heading once that heading is
+  pinned at the top (see "The Keyboard shortcuts section" in `docs/product/keyboard-shortcuts.md`).
 - Only the **top and bottom** edges fade, apart from the strips that scroll sideways and fade at their sideways
   edges: focus mode's strip of console session chips (see "The switch strip" in `docs/product/focus-mode.md`), a
   strip of tabs, and the Files panel's header controls (see "A panel's header" in
@@ -119,8 +120,8 @@ covers. These are:
 **Keyboard focus does not land under a fade**: a row, a control or a region scrolled into view stops 24 px short of
 the edge, clear of the fade, rather than arriving underneath. In focus mode's lists and the Git mode's change lists
 that space is measured below the section heading (see "What both views show" in `docs/product/focus-mode.md` and
-"Folding a section" in `docs/product/project-pane-git-change-list.md`), and in Settings' Agent accounts section below the
-agent tab strip. A strip of tabs instead suppresses its fade while a tab has visible keyboard focus, as above. For
+"Folding a section" in `docs/product/project-pane-git-change-list.md`), in Settings' Agent accounts section below the
+agent tab strip, and in its Keyboard shortcuts section below a group's heading. A strip of tabs instead suppresses its fade while a tab has visible keyboard focus, as above. For
 focus visibility in the Files panel's header controls, see "A panel's header" in `docs/product/right-pane-panels.md`.
 
 **A control in a section heading pinned at the top is not scrolled to**: in the sidebar, in focus mode and in

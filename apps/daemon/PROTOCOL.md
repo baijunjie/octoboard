@@ -1045,7 +1045,10 @@ Document { format: "octoboard-configuration", version: 1,
                         sidebar_order_by_status?,            // absent or null in an older document: left as it is
                         auto_start_quota_windows?,           // absent or null in an older document: left as it is
                         auto_approve_session_requests?,      // absent or null in an older document: left as it is
-                        auto_approve_resume_requests? },     // absent or null in an older document: left as it is
+                        auto_approve_resume_requests?,       // absent or null in an older document: left as it is
+                        keyboard_shortcuts? },               // the exporting client's changed shortcuts by command id
+                                                             // (`{}`: all at their defaults), added by the client, never
+                                                             // the daemon (see below)
            consoles: DocumentConsole[] }
 DocumentConsole { name, icon?, default_agent,
                   project_session_agent?,                           // absent in an older document: follows default_agent
@@ -1072,9 +1075,11 @@ ProjectAccountRef { kind: "inherit" } | { kind: "default" } | { kind: "account",
 - **Scope.** With `console`, the document holds that console alone and no `settings`; without it, it holds every console
   and `settings`, which are the portable application settings (`auto_pull_repositories`,
   `auto_delete_unresumable_archives`, `auto_select_account`, `sidebar_order_by_status`, `auto_start_quota_windows`,
-  `auto_approve_session_requests` and `auto_approve_resume_requests`). The shape is the same either way: a full export
-  is a list of consoles that happens to hold all of them. Consoles are ordered by creation time and a console's
-  `projects` by name, with the stored id breaking a tie, so the order is the same on every export; the id itself is not
+  `auto_approve_session_requests` and `auto_approve_resume_requests`), and the client's `keyboard_shortcuts`, an
+  opaque JSON value the daemon never builds, stores or reads: the client adds it to the document it saves, applies it
+  itself on import, and the daemon passes it through (`settings_applied` carries it back as it came). The shape is the
+  same either way: a full export is a list of consoles that happens to hold all of them. Consoles are ordered by
+  creation time and a console's `projects` by name, with the stored id breaking a tie, so the order is the same on every export; the id itself is not
   in the document. `projects` is all of a console's projects, whether or not a project is a git repository.
 - **Nothing is an id.** No console, project or account carries an `id`. A console's `workdir` is not in the document
   either: the daemon derives it from the console's id when it creates the console, so it would carry that id and the
@@ -1150,7 +1155,8 @@ ProjectResolution { console, project,                   // indexes into the docu
 
 configuration_imported { settings_applied?: { auto_pull_repositories, auto_delete_unresumable_archives?, auto_select_account?,
                                            sidebar_order_by_status?, auto_start_quota_windows?,
-                                           auto_approve_session_requests?, auto_approve_resume_requests? },
+                                           auto_approve_session_requests?, auto_approve_resume_requests?,
+                                           keyboard_shortcuts? },   // the document's, as it came; the client applies it
                          settings_error?: Failure,   // the settings asked for could not be applied
                          consoles: ImportedConsole[] }
 ImportedConsole   { name, status: "created" | "failed",
@@ -1222,7 +1228,9 @@ Failure           { code, params, message }             // as an `error` reply c
   broadcast when the value changes), and `settings_applied` in the result reports what was applied. Asking for them of a
   document that has none is refused (`import_settings_missing`) rather than ignored, so a request never silently does
   less than it was told to. Settings that could not be applied are `settings_error`, and the import is reported all the
-  same.
+  same. `keyboard_shortcuts` is the one setting the daemon does not apply: it is the client's changed shortcuts by
+  command id, `{}` meaning every shortcut at its default (which is what a client with none changed writes), and the
+  daemon echoes it in `settings_applied` when the settings were applied, for the client to apply to itself.
 - **In the result.** A project with no resolution is `left_out`. One whose directory cannot be obtained (the path is
   gone, a clone fails or its target exists, the choice has nothing to use) is `failed` with its `error`, and the rest
   carry on; its console is still created. A console that cannot be created (the disk is full, the data directory cannot

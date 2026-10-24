@@ -6,6 +6,7 @@ import type {
   InspectedProject,
   ProjectResolution,
 } from "../protocol";
+import { overridesEqual, sanitizeOverrides, type Overrides } from "../shortcuts/store";
 
 /** The choices a project's offers can name: the three directories the daemon works out. The fourth,
  * a directory the user points at, is never offered, and leaving the project out is no directory. */
@@ -165,4 +166,23 @@ export function outcomeOf(consoles: ImportedConsole[]): ImportOutcome {
     }
   }
   return outcome;
+}
+
+/** The keyboard shortcut changes a `keyboard_shortcuts` value holds, as the client that exported it put them there
+ * (an empty object is every shortcut at its default); `undefined` when the value is not an object, which leaves this
+ * client's shortcuts as they are. */
+export function shortcutsRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+}
+
+/** The keyboard shortcut changes a document carries in its settings; `undefined` when it carries none. */
+export function documentShortcuts(document: unknown): Record<string, unknown> | undefined {
+  return shortcutsRecord((document as { settings?: { keyboard_shortcuts?: unknown } | null } | null)?.settings?.keyboard_shortcuts);
+}
+
+/** What applying a document's shortcuts would do here: how many changed shortcuts it holds that can stand on
+ * this client, and whether they differ from the `current` ones. */
+export function shortcutsReview(shortcuts: Record<string, unknown>, current: Overrides): { count: number; changes: boolean } {
+  const { overrides } = sanitizeOverrides(shortcuts);
+  return { count: Object.keys(overrides).length, changes: !overridesEqual(overrides, current) };
 }

@@ -11,7 +11,7 @@ account's settings dialog, after the default account's directory and on the shar
 accounts table", "The account settings dialog" and "Sharing the default configuration" in
 `docs/product/agent-accounts.md`, and "Explanations in help tips" in `docs/product/labels-and-tooltips.md`). The
 sections, in order, are **General**, **Git**, **Agent accounts**, **Trusted folders**, **Permissions**, **Agent
-permissions**, **Notifications** and **Configuration**; the dialog opens on General unless it was asked to open on
+permissions**, **Notifications**, **Keyboard shortcuts** and **Configuration**; the dialog opens on General unless it was asked to open on
 another section.
 
 A console session can read the default clone directory, the automatic pulling of repositories, the automatic deletion of
@@ -52,7 +52,8 @@ leaving the dialog.
 Settings opens from:
 
 - the **Settings** button at the bottom of the rail (see "The rail" in `docs/product/window-layout.md`);
-- in the macOS application, the application menu's **Settings…** item, shortcut `Cmd+,`. The menu item does nothing
+- in the macOS application, the application menu's **Settings…** item, whose shortcut is Open settings' — `Cmd+,`
+  unless the user has changed it (see `docs/product/keyboard-shortcuts.md`). The menu item does nothing
   while the window has nothing to show yet (before the daemon's state has first arrived), while Settings is already
   open, and while another dialog or an action menu — a row's or a header's, its submenus included — is open;
 - the **Manage accounts** button beside the title of the console dialog's Agent default accounts section, which opens
@@ -346,6 +347,12 @@ undecided (see "The rail" in `docs/product/window-layout.md`). It cannot be dism
 browser. Once the browser has answered, whichever the answer, the bell is gone, and answering from either place
 updates the other. The macOS application never shows the bell, since it asks nothing. A browser's state is read
 again whenever the window regains focus, since it can be changed in the browser's own settings meanwhile.
+
+## Keyboard shortcuts
+
+Every keyboard shortcut of the client, grouped, with a way to change the app's own commands' keys, reset one, or
+restore every default. The changes are this client's own, and a client lists only the commands it has. What the section
+lists and how a shortcut is changed are in `docs/product/keyboard-shortcuts.md`.
 
 ## Configuration
 

@@ -649,8 +649,8 @@ Not mirrored:
   clear space for them there (see "The top bar" above).
 - **The notifications bell's dot**, a mark on the glyph itself rather than a decoration of the layout: it stays at the
   glyph's top right, unlike the waiting count's badge above it on the rail.
-- **Notation read in a fixed order**: a keyboard shortcut's key caps, as the Focus mode menu items show them (see "The
-  focus mode shortcut" in `docs/product/focus-mode.md`), stay in the order the shortcut is written in; the report
+- **Notation read in a fixed order**: a keyboard shortcut's key caps, wherever they are shown (see "How a combination
+  is written and matched" in `docs/product/keyboard-shortcuts.md`), stay in the order the shortcut is written in; the report
   panel's position reads "current / total", so "1 / 12" is page 1 of 12 (see "Paging through the history" in
   `docs/product/report-panel.md`); and the waiting count's overflow label reads "99+".
 - **A literal to type, and program text**: the query parameter and the environment-variable names the startup screen

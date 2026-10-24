@@ -108,9 +108,9 @@ function tauriAppMenu(): AppMenuCapability {
       });
       return undo;
     },
-    async setLabels(labels) {
+    async setLabels(labels, settingsAccelerator) {
       const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("set_menu_labels", { labels });
+      await invoke("set_menu_labels", { labels, settingsAccelerator });
     },
   };
 }

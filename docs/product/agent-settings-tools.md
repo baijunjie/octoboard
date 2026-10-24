@@ -23,8 +23,8 @@ requests or resume requests are approved automatically (see "Approving requests 
 `docs/product/session-requests.md`), since a session could otherwise approve its own requests; reading or changing
 whether usage windows are started automatically (see "Start usage windows automatically" in
 `docs/product/settings.md`), since that spends the user's quota. Each of those stays the user's own, in the UI. Nor
-do the tools reach what a window keeps for itself rather than the daemon, such as the appearance, Markdown style and
-language.
+do the tools reach what a window keeps for itself rather than the daemon, such as the appearance, Markdown style,
+language and keyboard shortcuts.
 
 The console session's instructions tell it that projects, its console and the application settings belong to the
 user: it changes one only when asked to, says what it changed, and treats accounts and trusted folders as read-only.

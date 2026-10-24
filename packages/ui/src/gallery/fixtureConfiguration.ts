@@ -13,6 +13,7 @@ import type {
   DocumentConsole,
   DocumentProject,
   DocumentProjectAccount,
+  DocumentSettings,
   Event,
   Project,
   ProjectAccount,
@@ -148,6 +149,18 @@ export function importDisagreement(
   return undefined;
 }
 
+/** The result with the document's `keyboard_shortcuts` echoed in `settings_applied`, as the daemon does when it applied
+ * the settings: it does not apply them itself, so it hands them back as they came, for the client to apply. A document
+ * without them, or a result that reports no settings applied (none asked for, or a `settings_error`), echoes nothing. */
+export function withShortcutsEcho(
+  request: Extract<RequestBody, { type: "import_configuration" }>,
+  result: Omit<Extract<Event, { type: "configuration_imported" }>, "type">,
+): Omit<Extract<Event, { type: "configuration_imported" }>, "type"> {
+  const carried = (request.document as { settings?: { keyboard_shortcuts?: unknown } | null } | null)?.settings?.keyboard_shortcuts;
+  if (!result.settings_applied || carried === undefined || carried === null) return result;
+  return { ...result, settings_applied: { ...result.settings_applied, keyboard_shortcuts: carried as NonNullable<DocumentSettings["keyboard_shortcuts"]> } };
+}
+
 /** The reply to a configuration request, or `undefined` for a request that is not one. `fail`
  * throws a daemon error as the fixture daemon words it. */
 export function createConfigurationReplies(
@@ -172,7 +185,7 @@ export function createConfigurationReplies(
         if ("code" in imported) return fail(imported);
         const disagreement = importDisagreement(body, imported);
         if (disagreement !== undefined) return refuseUnfillable(`the scenario's import result does not follow from its steps: ${disagreement}`);
-        return { type: "configuration_imported", ...imported };
+        return { type: "configuration_imported", ...withShortcutsEcho(body, imported) };
       }
       default:
         return undefined;

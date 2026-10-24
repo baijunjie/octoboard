@@ -43,7 +43,7 @@ export function NewSessionMenu({
   const { quick: heldQuick, blocked } = useNewSessionMode();
   // A shortcut chooses the action before the project picker opens; releasing its keys must not
   // change that choice. Pointer-opened menus keep following the held modifier.
-  const [shortcutMode, setShortcutMode] = useState<"create" | "quickCreate">();
+  const [shortcutMode, setShortcutMode] = useState<"newSession" | "quickCreate">();
   const quick = shortcutMode === undefined ? heldQuick : shortcutMode === "quickCreate";
   const triggerRef = useRef<HTMLButtonElement>(null);
   useWindowShortcut((event) => {
@@ -73,7 +73,7 @@ export function NewSessionMenu({
   return (
     <ActionMenu
       label={name}
-      tooltip={<ShortcutTooltip action={quick ? "quickCreate" : "create"}>{name}</ShortcutTooltip>}
+      tooltip={<ShortcutTooltip action={quick ? "quickCreate" : "newSession"}>{name}</ShortcutTooltip>}
       triggerRef={triggerRef}
       onClosed={() => setShortcutMode(undefined)}
       trigger={quick ? <Zap aria-hidden="true" className="size-4" /> : <Plus aria-hidden="true" className="size-4" />}

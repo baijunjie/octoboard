@@ -18,6 +18,8 @@ import type { PanePeek } from "../layout/usePaneToggles";
 import { usePlatform } from "../platform/react";
 import type { Page } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
+import { eventKey } from "../shortcuts/binding";
+import { useStableBinding } from "../shortcuts/store";
 import { PageDocumentTransform } from "./pageDocumentTransform";
 import {
   composePageDocument,
@@ -314,14 +316,22 @@ function PageFrame({
   // State rather than a memo: React may drop a memo's cache, and a new nonce reloads the frame,
   // losing whatever the user has typed into the page.
   const [nonce] = useState(newNonce);
+  // The window's own keys are baked into the document, so rebinding one reloads the frame; a
+  // binding that is set again to the same keys (an import, a replace) does not.
+  const back = useStableBinding("back");
+  const forward = useStableBinding("forward");
+  const next = useStableBinding("nextConsoleSession");
+  const previous = useStableBinding("previousConsoleSession");
   const srcDoc = useMemo(
-    () =>
-      transformDocument(composePageDocument(page.html, isHistory, nonce, {
+    () => {
+      const inWindow = platform.windowChrome !== undefined;
+      return transformDocument(composePageDocument(page.html, isHistory, nonce, {
         noContextMenu: platform.kind === "tauri",
-        relayHistoryKeys: platform.windowChrome !== undefined,
-        relaySwitchKeys: platform.windowChrome !== undefined,
-      })),
-    [page.html, isHistory, nonce, platform.kind, platform.windowChrome, transformDocument],
+        historyKeys: inWindow ? { back: eventKey(back), forward: eventKey(forward) } : undefined,
+        switchKeys: inWindow ? { next: eventKey(next), previous: eventKey(previous) } : undefined,
+      }));
+    },
+    [page.html, isHistory, nonce, platform.kind, platform.windowChrome, back, forward, next, previous, transformDocument],
   );
 
   useEffect(() => {

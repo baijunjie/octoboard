@@ -85,9 +85,10 @@ function Cell({
  * line for each project (and for a console that failed or came out empty) saying what came of it
  * (created and how it was placed, left out, failed and why, not tried), and every account reference
  * that fell back to a default account under a heading of its own. The summary gives the totals and
- * the table the items, so neither repeats the other.
+ * the table the items, so neither repeats the other. `shortcuts` says what came of the document's
+ * keyboard shortcuts, when they were applied here.
  */
-export function ImportResult({ result }: { result: Imported }): React.ReactElement {
+export function ImportResult({ result, shortcuts }: { result: Imported; shortcuts?: { applied: number; skipped: number } }): React.ReactElement {
   const t = useT();
   const failureNode = useFailureNode();
   const failureText = useFailureText();
@@ -172,6 +173,12 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
         settingLine(t("settings.autoApproveSession.label"), result.settings_applied.auto_approve_session_requests)}
       {typeof result.settings_applied?.auto_approve_resume_requests === "boolean" &&
         settingLine(t("settings.autoApproveResume.label"), result.settings_applied.auto_approve_resume_requests)}
+      {shortcuts && (
+        <p>
+          <Message id={shortcuts.applied === 0 ? "configuration.import.result.shortcutsReset" : "configuration.import.result.shortcuts"} params={{ setting: <InlineReference dir="auto" wrap>{t("settings.section.shortcuts")}</InlineReference>, count: shortcuts.applied }} />
+          {shortcuts.skipped > 0 && <> {t("configuration.import.result.shortcutsSkipped", { count: shortcuts.skipped })}</>}
+        </p>
+      )}
       {result.settings_error && (
         <ErrorAlert
           announce

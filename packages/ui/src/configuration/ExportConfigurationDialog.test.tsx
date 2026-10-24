@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { setInteractionModality } from "react-aria";
-import { expect, it, vi } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import { consoleOf } from "../gallery/fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import type { SavedConfigurationFile } from "../platform";
 import type { ConfigurationDocument, Event, RequestBody } from "../protocol";
+import { shortcutOverrides } from "../shortcuts/store";
 import { ExportConfigurationDialog, exportFileName } from "./ExportConfigurationDialog";
 import { mountDialog, press } from "./testSupport";
 
@@ -86,6 +87,25 @@ it("saves the document as the daemon sent it, under a name for the console, and 
   expect(mounted.save).toHaveBeenCalledExactlyOnceWith("octoboard-Main.json", `${JSON.stringify(DOCUMENT, null, 2)}\n`);
   expect(mounted.notices()).toEqual([`Configuration saved as ${isolate("octoboard-Main.json")}.`]);
   expect(mounted.closed()).toBe(1);
+});
+
+it("adds this client's changed keyboard shortcuts to a full export, and to nothing else", async () => {
+  const lock = { code: "KeyK", primary: true, shift: true };
+  shortcutOverrides.set({ lock });
+  onTestFinished(() => shortcutOverrides.set({}));
+  const full: ConfigurationDocument = { ...DOCUMENT, settings: { auto_pull_repositories: true } };
+  const save = vi.fn<Save>(async (name) => ({ kind: "saved", name }));
+  mountDialog((onClose) => <ExportConfigurationDialog onClose={onClose} />, () => Promise.resolve({ type: "configuration_exported", document: full }), { save, open: vi.fn() });
+  await press("Export");
+  expect(JSON.parse(save.mock.calls[0][1]).settings).toEqual({ auto_pull_repositories: true, keyboard_shortcuts: { lock } });
+});
+
+it("leaves a single console's export as the daemon sent it, whatever shortcuts this client has changed", async () => {
+  shortcutOverrides.set({ lock: { code: "KeyK", primary: true, shift: true } });
+  onTestFinished(() => shortcutOverrides.set({}));
+  const mounted = mount();
+  await press("Export");
+  expect(mounted.save).toHaveBeenCalledExactlyOnceWith("octoboard-Main.json", `${JSON.stringify(DOCUMENT, null, 2)}\n`);
 });
 
 it("says only that the configuration was downloaded when the platform hands the file over without saying where", async () => {

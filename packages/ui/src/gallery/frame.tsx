@@ -67,7 +67,8 @@ let requestQuit: (() => void) | undefined;
 
 /** The browser platform, with what the desktop app alone offers added so it can be driven in the
  * gallery: `windowChrome` while the URL says `chrome=1` (the window shortcuts among it, ⌃Tab
- * between console sessions; it also puts the top bar's drag region on), the macOS privacy grants
+ * between console sessions; it also puts the top bar's drag region on) and, with the scenario's `desktopApp`,
+ * the native menu bar (which no menu is drawn for), the macOS privacy grants
  * stubbed from the scenario's `macosPermissions`, there being no other way to look at those rows
  * than to really change a system setting, and `backgroundRun` for a scenario that says so (the
  * Settings switch), the clipboard taken away for a scenario that says so, and the configuration-file
@@ -82,7 +83,8 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
   let clipboardText = typeof scenario?.clipboard === "object" ? scenario.clipboard.text : "";
   return {
     ...platform,
-    ...(params.get("chrome") === "1" && { windowChrome: { leftInset: () => 0, subscribe: () => () => {} } }),
+    ...((params.get("chrome") === "1" || scenario?.desktopApp) && { windowChrome: { leftInset: () => 0, subscribe: () => () => {} } }),
+    ...(scenario?.desktopApp && { appMenu: { onSettingsRequested: () => () => {}, setLabels: async () => {} } }),
     ...(grants && {
       macosPermissions: {
         status: () =>

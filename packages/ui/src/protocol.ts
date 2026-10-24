@@ -712,6 +712,10 @@ export interface DocumentSettings {
   auto_approve_session_requests?: boolean | null;
   /** Absent in a file exported before the setting was carried; applying then leaves it as it is. */
   auto_approve_resume_requests?: boolean | null;
+  /** The keyboard shortcuts the exporting client changed, by command id: added by the client to the
+   * document it saves, never by the daemon, which only carries them through. Absent in a file
+   * without them; applying then leaves the client's shortcuts as they are. */
+  keyboard_shortcuts?: Record<string, unknown> | null;
 }
 
 /** What `export_configuration` answers and a user keeps as a file. The client saves it as it is

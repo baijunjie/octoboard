@@ -1,5 +1,6 @@
 import purify from "dompurify/dist/purify.min.js?raw";
 
+import type { EventKey } from "../shortcuts/binding";
 import bridge from "./pageBridge.js?raw";
 
 /** The `source` tag on the message the bridge script posts to the parent for a submitted form.
@@ -19,16 +20,16 @@ export const ESCAPE_MESSAGE_SOURCE = "octoboard-page-escape";
  * the frame by keyboard. It carries only `backward`, whether Shift was held. */
 export const REGION_MESSAGE_SOURCE = "octoboard-page-region";
 
-/** The `source` tag on the message the bridge posts when ⌘[ or ⌘] is pressed inside the page, for
- * the same reason as `ESCAPE_MESSAGE_SOURCE`: without the relay the window's Back and Forward
- * shortcuts would not work while the page holds focus. It carries only `backward`, whether it was
- * ⌘[. */
+/** The `source` tag on the message the bridge posts when the window's Back or Forward key is
+ * pressed inside the page, for the same reason as `ESCAPE_MESSAGE_SOURCE`: without the relay the
+ * window's Back and Forward shortcuts would not work while the page holds focus. It carries only
+ * `backward`, whether it was Back. */
 export const HISTORY_MESSAGE_SOURCE = "octoboard-page-history";
 
-/** The `source` tag on the message the bridge posts when ⌃Tab or ⌃⇧Tab is pressed inside the page,
- * for the same reason as `ESCAPE_MESSAGE_SOURCE`: without the relay the window's shortcut between
- * console sessions would not work while the page holds focus. It carries only `backward`, whether
- * Shift was held. */
+/** The `source` tag on the message the bridge posts when the window's key to the next or previous
+ * console session is pressed inside the page, for the same reason as `ESCAPE_MESSAGE_SOURCE`: without
+ * the relay the window's shortcut between console sessions would not work while the page holds focus.
+ * It carries only `backward`, whether it was the previous one. */
 export const SWITCH_MESSAGE_SOURCE = "octoboard-page-switch";
 
 /** What the page may do with the network, stated once: nothing. The only script the frame runs is
@@ -88,8 +89,10 @@ function scriptJson(value: unknown): string {
 /** What the window around a report page has, which the page's frame follows. */
 export interface PageDocumentOptions {
   noContextMenu?: boolean;
-  relayHistoryKeys?: boolean;
-  relaySwitchKeys?: boolean;
+  /** The window's Back and Forward keys, where the window has them. */
+  historyKeys?: { back: EventKey; forward: EventKey };
+  /** The window's keys to the next and previous console session, where the window has them. */
+  switchKeys?: { next: EventKey; previous: EventKey };
 }
 
 /**
@@ -106,23 +109,24 @@ export interface PageDocumentOptions {
  *
  * The `options` are what the window the frame sits in has: `noContextMenu` makes the frame suppress
  * its own right-click menu, outside text fields, as the desktop app does for the rest of its
- * window. `relayHistoryKeys` makes it relay ⌘[ and ⌘] to the window and keep them from the page,
- * where the window has those shortcuts (the macOS app); the browser's own meaning of the keys is
- * left alone elsewhere. `relaySwitchKeys` does the same for ⌃Tab and ⌃⇧Tab, the window's shortcut
- * between console sessions, where it has that one (the same window).
+ * window. `historyKeys` makes it relay the window's Back and Forward keys, as they are bound
+ * now (⌘[ and ⌘] by default), and keep them from the page, where the window has those shortcuts (the
+ * macOS app); the browser's own meaning of the keys is left alone elsewhere. `switchKeys` does the
+ * same for the window's shortcut between console sessions (⌃Tab and ⌃⇧Tab by default), where it
+ * has that one (the same window).
  */
 export function composePageDocument(
   html: string,
   isHistory: boolean,
   nonce: string,
-  { noContextMenu = false, relayHistoryKeys = false, relaySwitchKeys = false }: PageDocumentOptions = {},
+  { noContextMenu = false, historyKeys, switchKeys }: PageDocumentOptions = {},
 ): string {
   const page = {
     html,
     history: isHistory,
     noContextMenu,
-    historyKeys: relayHistoryKeys,
-    switchKeys: relaySwitchKeys,
+    historyKeys,
+    switchKeys,
     sources: {
       submit: SUBMIT_MESSAGE_SOURCE,
       escape: ESCAPE_MESSAGE_SOURCE,

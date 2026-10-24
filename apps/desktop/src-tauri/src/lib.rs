@@ -53,7 +53,10 @@ use exit::{
     confirm_quit, frontend_exit_heartbeat, install_application_should_terminate_override,
     request_quit, should_let_quit_through, ExitState,
 };
-use menu::{build_menu, set_menu_labels, Labels, SETTINGS_ITEM_ID, SETTINGS_REQUESTED_EVENT};
+use menu::{
+    build_menu, set_menu_labels, Labels, DEFAULT_SETTINGS_ACCELERATOR, SETTINGS_ITEM_ID,
+    SETTINGS_REQUESTED_EVENT,
+};
 use sidecar::{mark_daemon_stopped, spawn_daemon_and_wait_for_port, DaemonState};
 
 /// The label of the one window the application opens.
@@ -115,7 +118,11 @@ pub fn run() {
             }
         })
         .setup(|app| {
-            app.set_menu(build_menu(app.handle(), &Labels::default())?)?;
+            app.set_menu(build_menu(
+                app.handle(),
+                &Labels::default(),
+                DEFAULT_SETTINGS_ACCELERATOR,
+            )?)?;
             tray::create(app.handle())?;
             #[cfg(target_os = "macos")]
             background::show_on_activation(app.handle());

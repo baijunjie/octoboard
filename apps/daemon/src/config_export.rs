@@ -79,6 +79,15 @@ pub struct DocumentSettings {
     /// setting as it is.
     #[serde(default)]
     pub auto_approve_resume_requests: Option<bool>,
+    /// The keyboard shortcuts the exporting client has changed, by command id, which only the client
+    /// reads and writes: the client adds them to a full export it saves (an empty object when it has
+    /// none changed, which on import means every shortcut at its default) and applies them from an
+    /// import. The daemon builds none, stores them nowhere and does not read them, so they pass
+    /// through an import's reply as they came. Absent in a document exported before they were
+    /// carried, or one a client saved without them: importing it leaves the client's shortcuts as
+    /// they are.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keyboard_shortcuts: Option<serde_json::Value>,
 }
 
 /// A reference to an account: its name, which is unique within its agent. The agent is the one
@@ -199,6 +208,7 @@ pub fn build(
             auto_start_quota_windows: Some(store.auto_start_quota_windows()?),
             auto_approve_session_requests: Some(store.auto_approve_session_requests()?),
             auto_approve_resume_requests: Some(store.auto_approve_resume_requests()?),
+            keyboard_shortcuts: None,
         }),
     };
 
@@ -475,6 +485,28 @@ mod tests {
         (document, text)
     }
 
+    /// The keyboard shortcuts are the client's to add: the daemon's document has none, and one
+    /// that carries them reads and writes them back as they were.
+    #[test]
+    fn the_daemon_builds_no_keyboard_shortcuts_and_passes_a_clients_through() {
+        let (_, text) = exported(None);
+        let built: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert!(built["settings"].get("keyboard_shortcuts").is_none());
+
+        let mut carried = built.clone();
+        carried["settings"]["keyboard_shortcuts"] = serde_json::json!({});
+        let document: ConfigurationDocument = serde_json::from_value(carried).unwrap();
+        assert_eq!(
+            document.settings.as_ref().unwrap().keyboard_shortcuts,
+            Some(serde_json::json!({}))
+        );
+        let written = serde_json::to_value(&document).unwrap();
+        assert_eq!(
+            written["settings"]["keyboard_shortcuts"],
+            serde_json::json!({})
+        );
+    }
+
     #[test]
     fn a_full_export_holds_every_console_with_its_projects_and_the_application_settings() {
         let (document, _) = exported(None);
@@ -497,6 +529,7 @@ mod tests {
                 auto_start_quota_windows: Some(false),
                 auto_approve_session_requests: Some(false),
                 auto_approve_resume_requests: Some(false),
+                keyboard_shortcuts: None,
             })
         );
         assert_eq!(

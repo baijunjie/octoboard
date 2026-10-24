@@ -869,6 +869,11 @@ included, even one about a single field's value — is an asynchronous failure a
 form stays open with its values intact. Field validation never opens the dialog, and neither does a failure shown on
 the screen or as a row's mark: those are the error's only presentation.
 
+A control that records a key combination rather than taking text (Settings' Keyboard shortcuts rows) refuses a
+combination the way a field's validation does: synchronously, in a line drawn as a `FieldError` under the row,
+referenced from the row's controls by `aria-describedby`. Having no field to carry an invalid state, it speaks the
+refusal through `StatusAnnouncer` instead, again on a repeated refusal in the same words.
+
 #### The error alert dialog
 
 Every asynchronous failure of an operation the user started opens the dedicated error alert dialog and remains there

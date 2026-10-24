@@ -1,37 +1,25 @@
-import { Kbd } from "@heroui/react";
 import type { ReactElement, ReactNode } from "react";
 
-import { IS_MAC, isPrimaryModifier } from "../useWindowShortcut";
+import type { CommandId } from "../shortcuts/commands";
+import { ShortcutKbd } from "../shortcuts/ShortcutKbd";
+import { matchesCommand } from "../shortcuts/store";
 
-const KEYS = { create: "N", quickCreate: "N", lock: "L", pin: "P", archive: "A", copyId: "C" } as const;
-export type SessionShortcutAction = keyof typeof KEYS;
+/** The commands that act on sessions, which a menu item or a tooltip shows the key of. */
+export type SessionShortcutAction = Extract<CommandId, "newSession" | "quickCreate" | "lock" | "pin" | "archive" | "copyId">;
 
-export function matchCreateShortcut(event: KeyboardEvent): "create" | "quickCreate" | undefined {
-  if (event.code !== "KeyN" || event.altKey || !isPrimaryModifier(event)) return undefined;
-  return event.shiftKey ? "quickCreate" : "create";
+type SessionAction = Extract<SessionShortcutAction, "lock" | "pin" | "archive" | "copyId">;
+
+const SESSION_ACTIONS: readonly SessionAction[] = ["lock", "pin", "archive", "copyId"];
+
+export function matchCreateShortcut(event: KeyboardEvent): "newSession" | "quickCreate" | undefined {
+  if (matchesCommand("newSession", event)) return "newSession";
+  return matchesCommand("quickCreate", event) ? "quickCreate" : undefined;
 }
 
-export function matchSessionActionShortcut(event: KeyboardEvent): Exclude<SessionShortcutAction, "create" | "quickCreate"> | undefined {
-  if (!event.shiftKey || event.altKey || !isPrimaryModifier(event)) return undefined;
-  switch (event.code) {
-    case "KeyL": return "lock";
-    case "KeyP": return "pin";
-    case "KeyA": return "archive";
-    case "KeyC": return "copyId";
-    default: return undefined;
-  }
-}
-
-export function SessionShortcutKbd({ action }: { action: SessionShortcutAction }): ReactElement {
-  return (
-    <Kbd dir="ltr" slot="keyboard" className="ms-auto shrink-0 in-data-[hovered=true]:bg-surface">
-      {action !== "create" && <Kbd.Abbr keyValue="shift" />}
-      <Kbd.Abbr keyValue={IS_MAC ? "command" : "ctrl"} />
-      <Kbd.Content>{KEYS[action]}</Kbd.Content>
-    </Kbd>
-  );
+export function matchSessionActionShortcut(event: KeyboardEvent): SessionAction | undefined {
+  return SESSION_ACTIONS.find((action) => matchesCommand(action, event));
 }
 
 export function ShortcutTooltip({ children, action }: { children: ReactNode; action: SessionShortcutAction }): ReactElement {
-  return <span className="flex items-center gap-3"><span>{children}</span><SessionShortcutKbd action={action} /></span>;
+  return <span className="flex items-center gap-3"><span>{children}</span><ShortcutKbd command={action} /></span>;
 }

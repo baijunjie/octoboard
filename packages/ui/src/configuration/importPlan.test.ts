@@ -7,9 +7,12 @@ import {
   availableFor,
   choicesFor,
   directoryProblem,
+  documentShortcuts,
   initialReview,
   outcomeOf,
   resolutionsOf,
+  shortcutsRecord,
+  shortcutsReview,
   targetOf,
   withRow,
 } from "./importPlan";
@@ -136,5 +139,30 @@ describe("outcomeOf", () => {
       { agent: "claude", name: "Work", console: "A" },
       { agent: "codex", name: "Personal", console: "A", project: "a1" },
     ]);
+  });
+});
+
+describe("the keyboard shortcuts of a document", () => {
+  const lock = { code: "KeyK", primary: true, shift: true };
+  const pin = { code: "KeyJ", primary: true, shift: true };
+
+  it("are the object in its settings, an empty one meaning every default, and nothing for anything else", () => {
+    expect(documentShortcuts({ settings: { keyboard_shortcuts: { lock } } })).toEqual({ lock });
+    expect(documentShortcuts({ settings: { keyboard_shortcuts: {} } })).toEqual({});
+    for (const document of [undefined, null, {}, { settings: null }, { settings: {} }, { settings: { keyboard_shortcuts: null } }, { settings: { keyboard_shortcuts: [lock] } }, { settings: { keyboard_shortcuts: "lock" } }]) {
+      expect(documentShortcuts(document)).toBeUndefined();
+    }
+    expect(shortcutsRecord(7)).toBeUndefined();
+  });
+
+  it("are counted as those that can stand, and compared with the ones given", () => {
+    expect(shortcutsReview({ lock, bad: 1 }, {})).toEqual({ count: 1, changes: true });
+    expect(shortcutsReview({ lock }, { lock })).toEqual({ count: 1, changes: false });
+    expect(shortcutsReview({}, {})).toEqual({ count: 0, changes: false });
+    expect(shortcutsReview({}, { pin })).toEqual({ count: 0, changes: true });
+  });
+
+  it("count a swap and a chain whole", () => {
+    expect(shortcutsReview({ lock: { code: "KeyP", primary: true, shift: true }, pin: { code: "KeyL", primary: true, shift: true } }, {})).toEqual({ count: 2, changes: true });
   });
 });

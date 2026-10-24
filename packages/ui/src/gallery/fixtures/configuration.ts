@@ -322,6 +322,43 @@ const refusal = (name: string, text: string, inspection: FixtureError): Configur
 const DIRECTORY_PROJECT = "Notes for production release coordination مرحبا 发布";
 const DIRECTORY_REVIEW = { ...REVIEW, consoles: REVIEW.consoles.map((console) => ({ ...console, projects: console.projects.map((project) => project.name === "Notes" ? { ...project, name: DIRECTORY_PROJECT } : project) })) };
 
+/** A full export's document, with `keyboard_shortcuts` as the client that saved it wrote them. The fixture daemon
+ * echoes them in the result's `settings_applied`, as the real one does, so a result scenario needs none of its own. */
+const documentWith = (shortcuts: Record<string, unknown>) => ({
+  name: FILE.name,
+  text: JSON.stringify(
+    { format: "octoboard-configuration", version: 1, settings: { auto_pull_repositories: true, keyboard_shortcuts: shortcuts }, consoles: [] },
+    null,
+    2,
+  ),
+});
+
+/** A document that carries the keyboard shortcuts its client had changed: three that can stand here, one for a
+ * command this version has no name for and one that clashes with a key the file gives an earlier entry, which keeps it. */
+const SHORTCUTS_FILE = documentWith({
+  focusMode: { code: "KeyG", primary: true, shift: true },
+  lock: { code: "KeyK", primary: true, shift: true },
+  newSession: { code: "KeyO", primary: true },
+  teleport: { code: "KeyT", primary: true, shift: true },
+  pin: { code: "KeyK", primary: true, shift: true },
+});
+
+/** A document whose client had changed none: an empty `keyboard_shortcuts`, which puts every shortcut back to its default. */
+const SHORTCUTS_DEFAULT_FILE = documentWith({});
+
+/** The same shortcuts, as the device the document is imported on has them already. */
+const SHORTCUTS_HERE = {
+  focusMode: { code: "KeyG", primary: true, shift: true },
+  lock: { code: "KeyK", primary: true, shift: true },
+  newSession: { code: "KeyO", primary: true },
+} as const;
+
+/** `SETTINGS_FAILED_RESULT`'s consoles with the settings applied this time. */
+const SETTINGS_APPLIED_RESULT: Omit<Imported, "type"> = {
+  settings_applied: { auto_pull_repositories: false },
+  consoles: SETTINGS_FAILED_RESULT.consoles,
+};
+
 const reviewing = (extra: Partial<ConfigurationFixture> = {}): ConfigurationFixture => ({ file: FILE, inspection: REVIEW, imported: MIXED_RESULT, ...extra });
 
 export const configurationScenarios: Scenario[] = [
@@ -526,9 +563,9 @@ export const configurationScenarios: Scenario[] = [
     category: "normal",
     title: "Import, review",
     description:
-      "Projects found at recorded or default paths, clone candidates, missing paths, account fallbacks and an empty console appear together; settings start unchecked, and their note has seven lines: automatic pull turns on, archive cleanup turns off, automatic account selection turns on, ordering the sidebar by status turns off, starting usage windows automatically turns on, and the two automatic approvals of agents' requests (sessions, resumes) turn on.",
+      "Projects found at recorded or default paths, clone candidates, missing paths, account fallbacks and an empty console appear together; settings start unchecked, and their note has eight lines: automatic pull turns on, archive cleanup turns off, automatic account selection turns on, ordering the sidebar by status turns off, starting usage windows automatically turns on, the two automatic approvals of agents' requests (sessions, resumes) turn on, and the last says applying sets the Keyboard shortcuts on this device to those in the file, 3 of them changed from the defaults, applying to this device or browser only.",
     state,
-    configuration: reviewing(),
+    configuration: reviewing({ file: SHORTCUTS_FILE }),
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -573,6 +610,34 @@ export const configurationScenarios: Scenario[] = [
       ...importFromSettings,
       chooseFile,
       applySettings,
+    ],
+  },
+  {
+    id: "configuration-import-review-shortcuts-same",
+    group: GROUP,
+    category: "normal",
+    title: "Import, keyboard shortcuts the device already has",
+    description: "The settings note ends in a line saying the Keyboard shortcuts in the file are the ones this device already has, so applying changes nothing, after the one line about automatic pull.",
+    state: autoPulling,
+    preferences: { keyboardShortcuts: SHORTCUTS_HERE },
+    configuration: { file: SHORTCUTS_FILE, inspection: WITH_SETTING_OFF },
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+    ],
+  },
+  {
+    id: "configuration-import-review-shortcuts-reset",
+    group: GROUP,
+    category: "normal",
+    title: "Import, a file whose keyboard shortcuts are all defaults",
+    description: "The settings note ends in a line saying applying puts the Keyboard shortcuts on this device back to their defaults, after the one line about automatic pull.",
+    state: autoPulling,
+    preferences: { keyboardShortcuts: SHORTCUTS_HERE },
+    configuration: { file: SHORTCUTS_DEFAULT_FILE, inspection: WITH_SETTING_OFF },
+    steps: [
+      ...importFromSettings,
+      chooseFile,
     ],
   },
   {
@@ -642,8 +707,24 @@ export const configurationScenarios: Scenario[] = [
     category: "exceptional",
     title: "Import result with failures and fallbacks",
     state: state,
-    configuration: reviewing(),
-    description: "Placement outcomes, failed projects and consoles, fallback accounts and applied settings share the result; the settings show seven lines, automatic pull on, archive cleanup off, automatic account selection on, ordering the sidebar by status off, starting usage windows automatically on and both automatic approvals of agents' requests on. A failed project or console reads like the other outcomes in its Result cell: a danger-coloured circled \"!\" followed by the word \"Failed\", as one button named after the project (or the console, when the whole console failed), such as \"Website failed\", and its Detail cell is empty. Short height exposes scrolling; Phone folds rows.",
+    configuration: reviewing({ file: SHORTCUTS_FILE }),
+    description: "Placement outcomes, failed projects and consoles, fallback accounts and applied settings share the result; the settings show eight lines, automatic pull on, archive cleanup off, automatic account selection on, ordering the sidebar by status off, starting usage windows automatically on, both automatic approvals of agents' requests on, and last the Keyboard shortcuts on this device now having 3 changes from the defaults, followed on the same line by 2 shortcuts in the file that could not be applied here and were left out. A failed project or console reads like the other outcomes in its Result cell: a danger-coloured circled \"!\" followed by the word \"Failed\", as one button named after the project (or the console, when the whole console failed), such as \"Website failed\", and its Detail cell is empty. Short height exposes scrolling; Phone folds rows.",
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+      applySettings,
+      importNow,
+    ],
+  },
+  {
+    id: "configuration-import-result-shortcuts-reset",
+    group: GROUP,
+    category: "normal",
+    title: "Import result, keyboard shortcuts back to their defaults",
+    description: "The settings lines say automatic pull is now off and the Keyboard shortcuts on this device are now back to their defaults, with no count of changes or of shortcuts left out.",
+    state: autoPulling,
+    preferences: { keyboardShortcuts: SHORTCUTS_HERE },
+    configuration: { file: SHORTCUTS_DEFAULT_FILE, inspection: WITH_SETTING_OFF, imported: SETTINGS_APPLIED_RESULT },
     steps: [
       ...importFromSettings,
       chooseFile,

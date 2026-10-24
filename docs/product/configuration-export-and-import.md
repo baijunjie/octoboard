@@ -28,8 +28,8 @@ daemon, one larger than 64 MiB, as too large to be a configuration file, and one
 file; either is told in the import dialog, and another file can be chosen.
 
 **Exporting** opens a dialog that asks what to export: the console the sidebar shows, or everything; with no console
-there is only everything. Each choice says whether the application settings go with it: everything carries them, a
-single console does not. Under that choice is a checkbox, **Include full project paths**, unchecked by default; its
+there is only everything. Each choice says whether the application settings go with it: everything carries them, this
+device's keyboard shortcuts included, and a single console does not. Under that choice is a checkbox, **Include full project paths**, unchecked by default; its
 note says that without them the file records only each project's directory name, and that an import then places each
 project in the default clone directory or clones it from its remote (see "Project paths" below). Only while it is
 checked, and so before anything is saved, a warning says that the file contains each project's full directory path on
@@ -60,14 +60,19 @@ them. A document with application settings gets a checkbox for them, unchecked, 
 the document carries — one an older document leaves out has no line — saying what applying it would change from what
 is set now: that it turns the setting on, and what then follows, in that setting's own words (see "The application
 settings a full export carries" below); that it turns it off; or that it is already as the document has it, so
-applying changes nothing.
+applying changes nothing. A document that carries keyboard shortcuts adds a line for them, which says that applying
+sets this device's shortcuts to the file's — with how many of them differ from the defaults, counting only those that
+can be used here — and that they apply to this device or browser only; or that applying puts this device's shortcuts
+back to their defaults; or that the file's are the ones this device already has, so applying changes nothing.
 
 The review's **Import** button sends the document unchanged, with the choice of every project that is placed, in one
 request; a project left out is sent none. A directory the user typed that is not usable stops the import before any
 request and is marked on its row. The dialog cannot be dismissed while the request runs, which with clones can be long.
 The **result** replaces the review. It opens with a summary of the totals (only what happened, and that nothing failed
-when so) and, when the application settings were applied, a line for each setting applied, saying it is now on or off;
-when they could not be applied, a red alert saying so with the reason. Under it a table has a line for each project,
+when so) and, when the application settings were applied, a line for each setting applied, saying it is now on or off, and
+for keyboard shortcuts a line saying how many changes from the defaults this device's shortcuts now have, or that
+they are back to their defaults, followed by how many of the file's shortcuts could not be used here and were left
+out, when any were; when they could not be applied, a red alert saying so with the reason. Under it a table has a line for each project,
 under its console, with its result (created, left out, not tried, each in words with a glyph) and a detail: how a
 created project was placed (at its exported path, in the default clone directory, cloned, in the directory chosen), or
 that a project was not tried because its console could not be created. A line that failed has no detail: its result
@@ -204,6 +209,14 @@ boolean.
   review's line for turning it on says that a session's request to reopen or resume a session, or to resume a
   conversation in a new session, is then approved without asking first.
 
+**The keyboard shortcuts of the exporting client** travel with these, under `keyboard_shortcuts`. They are not the
+daemon's: each client keeps its own (see "Where the shortcuts are kept" in `docs/product/keyboard-shortcuts.md`), so
+the client adds them to the document it saves — only the shortcuts it has changed from their defaults, and `{}` when
+it has changed none — and the daemon neither builds nor reads them. A full document asked of the daemon by any other
+program therefore has none. Their form is in "The shortcuts as data" in `docs/product/keyboard-shortcuts.md`. A
+document without them leaves the importing client's shortcuts as they are when its settings are applied; one with `{}`
+puts them back to their defaults.
+
 A single console's document carries no application settings at all. The settings that belong to one machine or to its
 accounts stay out of every document (see "What is not configuration and never travels" above).
 
@@ -317,6 +330,13 @@ once (see "When an account is kicked" in `docs/product/account-quotas.md`), and 
 or off changes no request already waiting — and the result of the import reports what was applied. Asking to apply the
 settings of a document that carries none is refused rather than quietly ignored, so a request never does less than it
 was told to.
+
+The keyboard shortcuts follow the same choice, and are applied by the client that runs the import, to itself alone,
+once the daemon reports the other settings applied; when those could not be applied, neither are the shortcuts. They
+**replace** that client's shortcuts: every command the document does not name goes back to its default. The document's
+shortcuts are judged as one set, under the same rules as a shortcut the user records, and an entry that cannot be used
+on the importing client is dropped and counted (see "The shortcuts as data" in `docs/product/keyboard-shortcuts.md`).
+Other clients — another browser, or the desktop app — keep their own.
 
 ### What is refused, and what is reported instead
 

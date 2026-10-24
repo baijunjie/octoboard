@@ -135,10 +135,10 @@ goes to the row.
 ## Session keyboard shortcuts
 
 These shortcuts act on the **selected session**, regardless of which row or control has keyboard focus, including
-while typing in the terminal. They work both inside and outside focus mode. Use **Cmd** on an Apple keyboard or
-**Ctrl** elsewhere:
+while typing in the terminal. They work both inside and outside focus mode. The table gives their defaults, with
+**Cmd** on an Apple keyboard or **Ctrl** elsewhere; each can be changed (see `docs/product/keyboard-shortcuts.md`):
 
-| Action | Shortcut | Availability |
+| Action | Default shortcut | Availability |
 |---|---|---|
 | Lock / Unlock | Cmd/Ctrl+Shift+L | A session that is not archived |
 | Pin / Unpin | Cmd/Ctrl+Shift+P | A session that is not archived |
@@ -150,11 +150,11 @@ card offers no pin control. The archive shortcut follows the normal archive conf
 "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`); for an unused session
 it still archives, even when its menu and button offer Delete. It never deletes the session.
 
-The corresponding session menu items show their shortcut, and the Unlock, Unpin and Archive button tooltips show it
-too. Project pin controls have no session shortcut hint. Menu and button actions still act on their own session;
+The corresponding session menu items show their current shortcut, and the Unlock, Unpin and Archive button tooltips
+show it too. Project pin controls have no session shortcut hint. Menu and button actions still act on their own session;
 the keyboard shortcuts always act on the selected one.
 
-The shortcuts match physical letter keys whatever the keyboard layout. With no selected session, the key combinations
+The shortcuts match physical keys whatever the keyboard layout. With no selected session, the key combinations
 are left alone. With a selection, holding a combination does not repeat its action; unavailable actions do nothing.
 No action runs while a dialog or menu is open or during input-method composition. Outside composition, recognized
 combinations are withheld from the terminal even when the action is unavailable.

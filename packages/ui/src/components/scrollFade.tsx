@@ -188,7 +188,7 @@ type FadedScrollerProps = Omit<React.ComponentProps<typeof ScrollShadow>, "size"
  * While the scroller overflows sideways it carries `data-scrolls-sideways`, which keeps the
  * horizontal scrollbar clear of the mask (`style.css`).
  *
- * A list with sticky headings (the sidebar's, the Settings agent strip) passes `stickyHeadingHeight`
+ * A list with sticky headings (the sidebar's, the Settings agent strip, the Keyboard shortcuts groups') passes `stickyHeadingHeight`
  * and uses overlays instead: its headings paint at z-3 above the z-2 fades, and the top fade and
  * scroll padding start below the heading. The top fade follows the first element marked `data-sticky-heading`: at the
  * scroller's edge while that one still sits further down, below it once it is pinned. The wrapper

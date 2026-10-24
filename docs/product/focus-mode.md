@@ -213,9 +213,10 @@ its report panel; this is a single visit in the window's history (see `docs/prod
 selecting its row does, it resumes the console session when it is interrupted (see "Selecting a session" in
 `docs/product/sidebar.md`). Pressing it with the mouse does not move keyboard focus into the sidebar.
 
-**`Ctrl+Tab` moves to the next chip and `Ctrl+Shift+Tab` to the previous one**, going round from either end, starting
-from the console session in focus. It exists only in the macOS application; a browser keeps the keys for its own
-tabs.
+**Next console session moves to the next chip and Previous console session to the previous one** — `Ctrl+Tab` and
+`Ctrl+Shift+Tab` unless the user has changed them (see `docs/product/keyboard-shortcuts.md`) — going round from either
+end, starting from the console session in focus. They exist only in the macOS application; a browser keeps the keys
+for its own tabs.
 
 - It works only while the sidebar is shown — docked, or as an open drawer below 1168 px; not while it is hidden or
   only floating in (see "Hiding the sidebar" in `docs/product/window-layout.md`) — in a console
@@ -253,10 +254,12 @@ and selecting it from the console session's focus mode leaves that focus mode.
 
 ## Creating sessions from the keyboard
 
-In either focus mode, **Cmd+N** on an Apple keyboard or **Ctrl+N** elsewhere takes the header's **+** action;
-adding **Shift** takes its quick form, opening a session with defaults (see "Opening a session with defaults" in
-`docs/product/sessions.md`). The header's tooltip shows the normal shortcut, or the quick shortcut while the primary
-modifier is held. These creation shortcuts are available only in focus mode.
+In either focus mode, **New session** — `Cmd+N` on an Apple keyboard or `Ctrl+N` elsewhere, unless the user has
+changed it — takes the header's **+** action, and **New session with defaults** — `Shift+Cmd+N` or `Ctrl+Shift+N`
+unless changed — takes its quick form, opening a session with defaults (see "Opening a session with defaults" in
+`docs/product/sessions.md`). How either is changed is in `docs/product/keyboard-shortcuts.md`. The header's tooltip
+shows New session's shortcut, or New session with defaults' while the primary modifier is held. These creation
+shortcuts are available only in focus mode.
 
 In a project's focus mode, the normal shortcut opens its new-session dialog and the quick shortcut creates an
 unbound session in that project. In a console session's focus mode, either shortcut opens the header's project menu;
@@ -264,15 +267,16 @@ choosing a project opens its dialog or creates with defaults, bound to the conso
 shortcut keys before choosing the project does not change which action was requested. A menu opened with the pointer
 continues to follow the held modifier instead.
 
-The shortcuts match the physical N key whatever the keyboard layout, work across the window including the terminal,
+The shortcuts match the physical key whatever the keyboard layout, work across the window including the terminal,
 and do nothing while a dialog or menu is open or during input-method composition. Holding the keys does not repeat
 creation. The header's existing availability and quick-creation refusals apply to the shortcuts too.
 
 ## The focus mode shortcut
 
-**A keyboard shortcut toggles focus mode**: `Shift+Cmd+F` on a Mac (the macOS application, or a browser on a Mac),
-`Ctrl+Shift+F` elsewhere, matched on the physical F key whatever the keyboard layout. The Focus mode items of the
-project and console session menus show it.
+**A keyboard shortcut toggles focus mode**: Toggle focus mode, `Shift+Cmd+F` on a Mac (the macOS application, or a
+browser on a Mac) and `Ctrl+Shift+F` elsewhere unless the user has changed it (see
+`docs/product/keyboard-shortcuts.md`), matched on the physical key whatever the keyboard layout. The Focus mode items
+of the project and console session menus show it.
 
 - Outside focus mode it enters focus mode for the selected session's context, switching the sidebar to that session's
   console first when needed: a project session's project, or, with a console session selected, that console session
@@ -284,7 +288,7 @@ project and console session menus show it.
 ## Keyboard focus on entering and leaving
 
 **Entering or leaving focus mode by selecting a session hands keyboard focus to that session's terminal**, as
-selecting any session does: pressing a switch strip chip, `Ctrl+Tab` or `Ctrl+Shift+Tab` (see "The switch strip"
+selecting any session does: pressing a switch strip chip, Next or Previous console session (see "The switch strip"
 above), or selecting a session that does not belong to what is in focus. A console session that a chip press resumes
 gets it once it is running again.
 

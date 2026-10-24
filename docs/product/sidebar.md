@@ -200,8 +200,8 @@ for the current scope (see "A console with nothing in it" in `docs/product/sessi
 
 ## Selecting a session
 
-Selecting a session shows its terminal; selecting an interrupted one resumes it, except by `Ctrl+Tab` or
-`Ctrl+Shift+Tab` in a console session's focus mode, which only shows an interrupted console session (see "The switch
+Selecting a session shows its terminal; selecting an interrupted one resumes it, except by Next or Previous console
+session (`Ctrl+Tab` or `Ctrl+Shift+Tab` by default) in a console session's focus mode, which only shows an interrupted console session (see "The switch
 strip" in `docs/product/focus-mode.md`). Selecting an archived one does not reopen it: it is shown still archived,
 with its history in place of its terminal (see `docs/product/session-history.md`), and pressing Reopen reopens it
 (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md` and "Interrupted, archived and dormant

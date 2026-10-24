@@ -1,5 +1,5 @@
 import { Modal, Tabs } from "@heroui/react";
-import { Bell, FileCog, FolderCheck, GitBranch, KeyRound, Settings2, ShieldCheck, UserCheck, type LucideIcon } from "lucide-react";
+import { Bell, FileCog, FolderCheck, GitBranch, Keyboard, KeyRound, Settings2, ShieldCheck, UserCheck, type LucideIcon } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { TitledControl } from "../components/TitledControl";
@@ -18,6 +18,7 @@ import { GeneralSection } from "./GeneralSection";
 import { GitSection } from "./GitSection";
 import { NotificationsSection } from "./NotificationsSection";
 import { PermissionsSection } from "./PermissionsSection";
+import { SHORTCUT_GROUP_HEADING_HEIGHT, ShortcutsSection } from "./ShortcutsSection";
 import { SettingsFocusContext } from "./useSectionRefocus";
 import { TrustedFoldersSection } from "./TrustedFoldersSection";
 
@@ -38,6 +39,7 @@ const SECTIONS = [
   { id: "permissions", label: "settings.section.permissions", Icon: ShieldCheck, Content: PermissionsSection },
   { id: "agent-permissions", label: "settings.section.agentPermissions", Icon: UserCheck, Content: AgentPermissionsSection },
   { id: "notifications", label: "settings.section.notifications", Icon: Bell, Content: NotificationsSection },
+  { id: "shortcuts", label: "settings.section.shortcuts", Icon: Keyboard, Content: ShortcutsSection, stickyHeadingHeight: SHORTCUT_GROUP_HEADING_HEIGHT },
   { id: "configuration", label: "settings.section.configuration", Icon: FileCog, Content: ConfigurationSection },
 ] as const satisfies readonly Section[];
 

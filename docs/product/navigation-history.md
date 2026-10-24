@@ -64,8 +64,9 @@ the **100** most recent places; older ones are dropped.
 
 ## Keyboard shortcuts
 
-**In the macOS application**, `Cmd+[` goes back and `Cmd+]` goes forward, matched on the physical bracket keys
-whatever the keyboard layout, and only with no other modifier held.
+**In the macOS application**, Back's shortcut goes back and Forward's goes forward: `Cmd+[` and `Cmd+]` unless the
+user has changed them (see `docs/product/keyboard-shortcuts.md`), matched on the physical keys whatever the keyboard
+layout, and only with no other modifier held.
 
 - They work wherever keyboard focus is, the terminal included, and the keys never reach the terminal, so the agent
   never receives them. Pressed inside a report page they are passed to the window (see "Window shortcuts inside a

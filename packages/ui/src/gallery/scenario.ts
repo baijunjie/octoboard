@@ -9,6 +9,7 @@ import type { GroupTitle } from "./fixtures/groups";
 import type { FixtureGit } from "./fixtures/changeFixtures";
 import type { ViewerSubject } from "../viewer/content";
 import type { MarkdownStyle } from "../viewer/markdownStyle";
+import type { Overrides } from "../shortcuts/store";
 import type { State, ToastRequest } from "../store";
 import type { TerminalBehaviour } from "./fakeTerminal";
 import type { Ui } from "./interact";
@@ -39,6 +40,8 @@ export interface Preferences {
   markdownStyle?: MarkdownStyle;
   /** Closing the window keeps the app running in the background; off by default. */
   runInBackground?: boolean;
+  /** The keyboard shortcuts the user has changed, by command; the others keep their defaults. */
+  keyboardShortcuts?: Overrides;
 }
 
 /** What the window shows in place of the app, for the screens that have no daemon behind them. A
@@ -277,6 +280,10 @@ export interface Scenario {
    * answers that the permission was not granted, which is how a scenario reaches the row's System
    * Settings guidance — nothing in a browser can raise a real prompt. */
   macosPermissions?: MacosPermissionsStatus | "unreadable";
+  /** The platform has what the desktop app's window has, so a view that lists or uses it shows the app's: the
+   * window chrome (the `chrome=1` of the frame URL, which a view that exists only in the app cannot leave to
+   * the address) and the native menu bar. */
+  desktopApp?: boolean;
   /** The platform offers the desktop app's run-in-background capability, so the Settings switch for
    * it is shown; the browser platform has none. */
   backgroundRun?: boolean;

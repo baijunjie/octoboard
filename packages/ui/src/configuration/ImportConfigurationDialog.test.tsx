@@ -8,6 +8,7 @@ import { MIXED_RESULT, REVIEW } from "../gallery/fixtures/configuration";
 import { isolate } from "../i18n/isolate";
 import { ConfigurationFileError } from "../platform";
 import type { Event, RequestBody } from "../protocol";
+import { bindingFor, shortcutOverrides } from "../shortcuts/store";
 import { ImportConfigurationDialog } from "./ImportConfigurationDialog";
 import { mountDialog, press } from "./testSupport";
 
@@ -160,6 +161,100 @@ it("applies the application settings only once they are asked for", async () => 
   await act(async () => document.body.querySelector<HTMLInputElement>("input[type=checkbox]")!.click());
   await press("Import");
   expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: true });
+});
+
+const LOCK = { code: "KeyK", primary: true, shift: true };
+/** A daemon that, when asked for the settings, applies them and echoes the document's keyboard shortcuts as they came
+ * (or as `echo` has it, where given); asked for no settings, it reports none applied. */
+const echoing = (settings: Record<string, unknown> = {}) => (body: RequestBody): Promise<Event> => {
+  if (body.type !== "import_configuration") return reply(body);
+  const carried = (body.document as { settings?: { keyboard_shortcuts?: unknown } }).settings?.keyboard_shortcuts;
+  const applied = { ...MIXED_RESULT.settings_applied!, ...(carried !== undefined && carried !== null && { keyboard_shortcuts: carried as never }), ...settings };
+  return Promise.resolve({ type: "configuration_imported", ...MIXED_RESULT, settings_applied: body.apply_settings ? applied : undefined });
+};
+const PIN = { code: "KeyJ", primary: true, shift: true };
+const withShortcuts = (shortcuts: unknown) => JSON.stringify({ ...DOCUMENT, settings: { ...DOCUMENT.settings, keyboard_shortcuts: shortcuts } });
+
+it("says nothing of keyboard shortcuts when the document carries none", async () => {
+  await reviewing();
+  expect(text()).not.toContain("Keyboard shortcuts");
+});
+
+it("says what the document's keyboard shortcuts would do on this device", async () => {
+  onTestFinished(() => shortcutOverrides.set({}));
+  await reviewing({ text: withShortcuts({ lock: LOCK, bad: 1 }) });
+  expect(text()).toContain("Applying sets the Keyboard shortcuts on this device to those in the file, 1 of them changed from the default.");
+  expect(text()).toContain("this device or browser only");
+});
+
+it("replaces this device's keyboard shortcuts with the document's once the settings are applied, and reports it", async () => {
+  onTestFinished(() => shortcutOverrides.set({}));
+  shortcutOverrides.set({ pin: { code: "KeyJ", primary: true, shift: true } });
+  await reviewing({ text: withShortcuts({ lock: LOCK, bad: 1 }), reply: echoing() });
+  await act(async () => document.body.querySelector<HTMLInputElement>("input[type=checkbox]")!.click());
+  await press("Import");
+  expect(bindingFor("lock")).toEqual(LOCK);
+  expect(bindingFor("pin")).toEqual({ code: "KeyP", primary: true, shift: true });
+  expect(text()).toContain("the Keyboard shortcuts on this device now have 1 change from the defaults");
+  expect(text()).toContain("1 shortcut in the file could not be applied here and was left out.");
+});
+
+it("leaves this device's keyboard shortcuts alone unless the settings are asked for", async () => {
+  onTestFinished(() => shortcutOverrides.set({}));
+  await reviewing({ text: withShortcuts({ lock: LOCK }), reply: echoing() });
+  await press("Import");
+  expect(bindingFor("lock")).not.toEqual(LOCK);
+  expect(text()).not.toContain("Keyboard shortcuts");
+});
+
+async function importing(shortcuts: unknown, settings?: Record<string, unknown>) {
+  shortcutOverrides.set({ pin: PIN });
+  await reviewing({ text: withShortcuts(shortcuts), reply: echoing(settings) });
+  await act(async () => document.body.querySelector<HTMLInputElement>("input[type=checkbox]")!.click());
+  await press("Import");
+}
+
+it("puts every shortcut back to its default when the document carries an empty set, and says so", async () => {
+  onTestFinished(() => shortcutOverrides.set({}));
+  shortcutOverrides.set({ pin: PIN });
+  await reviewing({ text: withShortcuts({}), reply: echoing() });
+  expect(text()).toContain("Applying puts the Keyboard shortcuts on this device back to their defaults.");
+  expect(text()).not.toContain("0 of them");
+  await act(async () => document.body.querySelector<HTMLInputElement>("input[type=checkbox]")!.click());
+  await press("Import");
+  expect(bindingFor("pin")).toEqual({ code: "KeyP", primary: true, shift: true });
+  expect(text()).toContain("the Keyboard shortcuts on this device are now back to their defaults");
+  expect(text()).not.toContain("0 changes");
+});
+
+it("leaves this device's keyboard shortcuts alone when the settings could not be applied", async () => {
+  onTestFinished(() => shortcutOverrides.set({}));
+  const failing = (body: RequestBody): Promise<Event> =>
+    body.type === "import_configuration"
+      ? Promise.resolve({ type: "configuration_imported", ...MIXED_RESULT, settings_applied: null, settings_error: { code: "import_settings_missing", params: {}, message: "no settings" } as never })
+      : reply(body);
+  shortcutOverrides.set({ pin: PIN });
+  await reviewing({ text: withShortcuts({ lock: LOCK }), reply: failing });
+  await act(async () => document.body.querySelector<HTMLInputElement>("input[type=checkbox]")!.click());
+  await press("Import");
+  expect(bindingFor("pin")).toEqual(PIN);
+  expect(bindingFor("lock")).not.toEqual(LOCK);
+});
+
+it.each([[[LOCK]], ["lock"], [null], [7]])("ignores a keyboard_shortcuts echo that is not an object (%j)", async (echo) => {
+  onTestFinished(() => shortcutOverrides.set({}));
+  await importing({ lock: LOCK }, { keyboard_shortcuts: echo });
+  expect(bindingFor("pin")).toEqual(PIN);
+  expect(bindingFor("lock")).not.toEqual(LOCK);
+});
+
+it("leaves this device's keyboard shortcuts alone when the document carries none, whatever else is applied", async () => {
+  onTestFinished(() => shortcutOverrides.set({}));
+  shortcutOverrides.set({ pin: { code: "KeyJ", primary: true, shift: true } });
+  await reviewing();
+  await act(async () => document.body.querySelector<HTMLInputElement>("input[type=checkbox]")!.click());
+  await press("Import");
+  expect(bindingFor("pin")).toEqual({ code: "KeyJ", primary: true, shift: true });
 });
 
 it("notes what applying each application setting would change", async () => {

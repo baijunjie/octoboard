@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ImportedProject } from "../protocol";
-import { importDisagreement } from "./fixtureConfiguration";
+import { importDisagreement, withShortcutsEcho } from "./fixtureConfiguration";
 
 const project = (name: string, status: ImportedProject["status"], via: ImportedProject["via"] = null): ImportedProject => ({
   name,
@@ -57,5 +57,23 @@ describe("importDisagreement", () => {
 
   it("finds application settings asked for that the result does not report", () => {
     expect(importDisagreement(request([], true), result([]))).toMatch(/asked for the application settings/);
+  });
+});
+
+describe("withShortcutsEcho", () => {
+  const lock = { code: "KeyK", primary: true, shift: true };
+  const asked = (settings: unknown) => ({ type: "import_configuration" as const, document: { settings }, apply_settings: true });
+  const applied = result([], { settings_applied: { auto_pull_repositories: true } });
+
+  it("hands back the document's shortcuts in what was applied, an empty object included", () => {
+    expect(withShortcutsEcho(asked({ keyboard_shortcuts: { lock } }), applied).settings_applied).toEqual({ auto_pull_repositories: true, keyboard_shortcuts: { lock } });
+    expect(withShortcutsEcho(asked({ keyboard_shortcuts: {} }), applied).settings_applied?.keyboard_shortcuts).toEqual({});
+  });
+
+  it("echoes nothing for a document without shortcuts or a result that applied no settings", () => {
+    expect(withShortcutsEcho(asked({}), applied)).toBe(applied);
+    expect(withShortcutsEcho(asked({ keyboard_shortcuts: null }), applied)).toBe(applied);
+    const none = result([]);
+    expect(withShortcutsEcho(asked({ keyboard_shortcuts: { lock } }), none)).toBe(none);
   });
 });

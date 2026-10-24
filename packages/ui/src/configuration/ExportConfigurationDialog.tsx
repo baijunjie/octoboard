@@ -11,6 +11,7 @@ import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import type { Console, Event } from "../protocol";
+import { shortcutOverrides } from "../shortcuts/store";
 import { useDaemon } from "../store";
 import { fileFailureText } from "./failureText";
 
@@ -32,7 +33,9 @@ export function exportFileName(console?: Pick<Console, "name">): string {
  * appears with that choice, so it is read before the document exists. The daemon builds the
  * document; this saves it as the daemon sent it, through the platform's save dialog, and says what
  * became of it: the name it was saved under, or only that it was downloaded where the platform
- * cannot say more. Dismissing the save dialog leaves this one open.
+ * cannot say more. The one thing added is this client's keyboard shortcut changes, which the daemon does not
+ * know of: a full export always gets them (an empty set when none is changed). Dismissing the save dialog
+ * leaves this one open.
  */
 export function ExportConfigurationDialog({
   console: inHand,
@@ -57,9 +60,13 @@ export function ExportConfigurationDialog({
         Event,
         { type: "configuration_exported" }
       >;
+      // The daemon knows nothing of this client's shortcuts: a full export (the one with settings) gets them here.
+      const file = reply.document.settings
+        ? { ...reply.document, settings: { ...reply.document.settings, keyboard_shortcuts: shortcutOverrides.get() } }
+        : reply.document;
       let saved;
       try {
-        saved = await configurationFile.save(exportFileName(exported), `${JSON.stringify(reply.document, null, 2)}\n`);
+        saved = await configurationFile.save(exportFileName(exported), `${JSON.stringify(file, null, 2)}\n`);
       } catch (err) {
         throw new ActionableError(fileFailureText(t, err, "configuration.export.failed"), "file", { cause: err });
       }

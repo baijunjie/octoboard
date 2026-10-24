@@ -5,6 +5,7 @@ import type { Language } from "../i18n/languages";
 import { panelId, type PanelKind } from "../panels/stackState";
 import { DORMANT_STATUSES, LIVE_STATUSES, type AccountQuota, type Agent, type AgentAvailability, type Event as DaemonEvent, type GitStatus } from "../protocol";
 import { activityLabel, statusLabel } from "../sessionLabel";
+import { eventKey, type Binding } from "../shortcuts/binding";
 import { ACTIVITIES } from "../sidebar/order";
 import type { Daemon, State } from "../store";
 import type { TerminalElement } from "../terminal/TerminalController";
@@ -337,6 +338,9 @@ export interface Ui {
   focusControl: (matcher: Matcher) => Promise<void>;
   /** Presses `key` on the focused control, for what a user closes or confirms with the keyboard. */
   key: (key: string) => Promise<void>;
+  /** Presses the key combination `binding` on the focused control, with the modifiers it stands for on this
+   * platform (⌘ for `primary` on an Apple keyboard, Ctrl elsewhere), for a shortcut the page records or matches. */
+  chord: (binding: Binding) => Promise<void>;
   /** Focuses the text field labelled `label`, waiting for it to appear, so `type` has one to fill. */
   focus: (label: string) => Promise<void>;
   /** Types `text` into the focused field, waiting for a field to take focus, and replaces what it holds. */
@@ -618,6 +622,15 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       const target = doc.activeElement ?? doc.body;
       for (const type of ["keydown", "keyup"]) {
         target.dispatchEvent(new KeyboardEvent(type, { key, bubbles: true, cancelable: true }));
+      }
+      await wait(300);
+    },
+    async chord(binding) {
+      const { code, ...modifiers } = eventKey(binding);
+      const key = /^Key[A-Z]$/.test(code) ? (binding.shift ? code.slice(3) : code.slice(3).toLowerCase()) : code;
+      const target = doc.activeElement ?? doc.body;
+      for (const type of ["keydown", "keyup"]) {
+        target.dispatchEvent(new KeyboardEvent(type, { key, code, ...modifiers, bubbles: true, cancelable: true }));
       }
       await wait(300);
     },

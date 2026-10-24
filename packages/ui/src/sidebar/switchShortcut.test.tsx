@@ -7,6 +7,7 @@ import { consoleOf, sessionOf } from "../gallery/fixtures/builders";
 import type { PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import type { Session } from "../protocol";
+import { IS_MAC } from "../useWindowShortcut";
 import type { FocusTarget } from "./types";
 import { useSwitchShortcut } from "./switchShortcut";
 
@@ -44,8 +45,11 @@ function mount({
   return { onSwitch, move: (backward: boolean) => move(backward) };
 }
 
+// The key the shortcut means by "Control" in the desktop app: Ctrl on macOS, where it exists.
+const control = IS_MAC ? { ctrlKey: true } : { metaKey: true };
+
 const press = (init: KeyboardEventInit) => {
-  const event = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true, ...init });
+  const event = new KeyboardEvent("keydown", { key: "Tab", code: "Tab", bubbles: true, cancelable: true, ...init });
   act(() => void document.body.dispatchEvent(event));
   return event;
 };
@@ -53,9 +57,9 @@ const press = (init: KeyboardEventInit) => {
 describe("useSwitchShortcut", () => {
   it("moves to the next console session on Ctrl+Tab and the previous on Ctrl+Shift+Tab, going round", () => {
     const { onSwitch } = mount();
-    expect(press({ ctrlKey: true }).defaultPrevented).toBe(true);
+    expect(press({ ...control }).defaultPrevented).toBe(true);
     expect(onSwitch).toHaveBeenLastCalledWith(hubs[1]);
-    press({ ctrlKey: true, shiftKey: true });
+    press({ ...control, shiftKey: true });
     expect(onSwitch).toHaveBeenLastCalledWith(hubs[2]);
   });
 
@@ -67,7 +71,7 @@ describe("useSwitchShortcut", () => {
       { shown: false },
     ]) {
       const { onSwitch } = mount(options);
-      expect(press({ ctrlKey: true }).defaultPrevented).toBe(false);
+      expect(press({ ...control }).defaultPrevented).toBe(false);
       expect(onSwitch).not.toHaveBeenCalled();
       act(() => root?.unmount());
       container?.remove();
@@ -79,9 +83,9 @@ describe("useSwitchShortcut", () => {
     for (const init of [
       {},
       { shiftKey: true },
-      { ctrlKey: true, altKey: true },
+      { ...control, altKey: true },
       { ctrlKey: true, metaKey: true },
-      { ctrlKey: true, isComposing: true },
+      { ...control, isComposing: true },
     ]) {
       expect(press(init).defaultPrevented).toBe(false);
     }
@@ -90,9 +94,9 @@ describe("useSwitchShortcut", () => {
 
   it("keeps a held key from the terminal but moves only on the first press", () => {
     const { onSwitch } = mount();
-    press({ ctrlKey: true });
-    expect(press({ ctrlKey: true, repeat: true }).defaultPrevented).toBe(true);
-    press({ ctrlKey: true, repeat: true });
+    press({ ...control });
+    expect(press({ ...control, repeat: true }).defaultPrevented).toBe(true);
+    press({ ...control, repeat: true });
     expect(onSwitch).toHaveBeenCalledTimes(1);
   });
 
@@ -101,7 +105,7 @@ describe("useSwitchShortcut", () => {
     const dialog = document.body.appendChild(document.createElement("div"));
     dialog.setAttribute("role", "dialog");
     dialog.setAttribute("aria-modal", "true");
-    expect(press({ ctrlKey: true }).defaultPrevented).toBe(true);
+    expect(press({ ...control }).defaultPrevented).toBe(true);
     move(false);
     expect(onSwitch).not.toHaveBeenCalled();
   });

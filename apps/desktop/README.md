@@ -77,7 +77,7 @@ The shell defines eleven Tauri IPC commands, permitted through `src-tauri/capabi
 
 - `frontend_exit_heartbeat` — marks the webview as the one handling the exit flow, and is re-invoked on every quit gesture.
 - `confirm_quit` — marks a pending quit as user-confirmed and exits.
-- `set_menu_labels` (`menu.rs`) — takes the menu's labels from the UI and rebuilds the native menu bar.
+- `set_menu_labels` (`menu.rs`) — takes the menu's labels and the Open settings accelerator the user has chosen from the UI and rebuilds the native menu bar.
 - `set_tray_menu` (`tray.rs`) — takes the menu bar icon's menu, attention state, selected-session quota indicator and console-account quota indicators for submenu openers from the UI.
 - `set_run_in_background` (`background.rs`) — the UI's choice of whether closing the window keeps the app running.
 - `bring_to_front` (`background.rs`) — shows, restores and activates the window.
@@ -103,7 +103,7 @@ shell open, Dock badge, window theme, window show and window drag/zoom commands 
 | `src-tauri/src/tray.rs` | The menu bar icon: its menu rebuilt from `set_tray_menu`, its template image and orange attention-dot overlay, selected-session quota label and icon updates, and the `tray-session-chosen` and `tray-menu-opened` events |
 | `src-tauri/src/tray_icon.rs` | Composes the menu bar icon's template image and attention-dot layer with an optional two-layer quota capsule (a main bar and, when given, a thinner weekly bar) |
 | `src-tauri/src/tray_lines.rs` | The menu bar icon's custom menu rows (session headings, account headers, notes, quota windows and the two-layer 5-hour/weekly `meter` row), plus `dress_quota_openers`, which attaches quota bars to native submenu titles while preserving AppKit's submenu handling |
-| `src-tauri/src/menu.rs` | The native macOS menu bar built from the UI's labels, including the Settings… item |
+| `src-tauri/src/menu.rs` | The native macOS menu bar built from the UI's labels, including the Settings… item, whose accelerator the UI sets at runtime |
 | `src-tauri/src/sidecar.rs` | Spawns `octoboardd`, parses its startup port line, reports how it terminated, and keeps `DaemonState` |
 | `src-tauri/src/permissions.rs` | The macOS privacy permission commands and `capture_launch_state()` |
 | `src-tauri/src/configuration_file.rs` | The two configuration-file commands |

@@ -259,8 +259,13 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   ⌘, and when that is ignored), how it closes and where focus goes, its General (Appearance, Language, the default
   clone directory and, in the macOS application alone, keeping Octoboard running in the background), Git, Agent
   accounts, Trusted folders, Permissions, Agent permissions (automatically approving session requests and resume
-  requests, each its own switch), Notifications and Configuration (exporting and importing the configuration
-  document, where the window can save and open files) sections.
+  requests, each its own switch), Notifications, Keyboard shortcuts and Configuration (exporting and importing the
+  configuration document, where the window can save and open files) sections.
+- [Keyboard shortcuts](product/keyboard-shortcuts.md) — every shortcut the window lists and its default, which can be
+  changed and which are fixed, how a combination is written and matched by physical key, Settings' Keyboard shortcuts
+  section (changing, recording, resetting, restoring the defaults, what assistive technology is told), which
+  combinations are refused and why, where the shortcuts show, that they are kept per browser or device, and their
+  form in a configuration document.
 - [Agent accounts](product/agent-accounts.md) — Settings' Agent accounts section: the added agents list (how it is
   first filled, the undecided state, where it applies), the agent strip and its not-installed warning, Add agent,
   reordering and removing an agent, the empty state, the default account and renaming it, owned accounts and their

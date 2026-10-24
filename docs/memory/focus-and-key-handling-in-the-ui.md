@@ -190,9 +190,33 @@ while focus is still in the popover and is overridden. Time it from the popover'
 `focusRow.ts` does. jsdom runs no exit animation, so a component test passes against the close-timed version too;
 settle such a focus return in a browser on the gallery page, driven from the keyboard.
 
-## The platform's shortcut modifier comes from `isPrimaryModifier`, never a check of your own
+## A window shortcut is a command in the shortcut registry, never a key compared by hand
 
-Any Cmd-on-Apple / Ctrl-elsewhere test in `packages/ui` — a key shortcut or a modifier+click alike — goes through
-`isPrimaryModifier` (and, for showing the key, `IS_MAC`) from `packages/ui/src/useWindowShortcut.ts`. Do not derive
-the platform again (from `navigator.userAgent` or anything else) and do not accept `metaKey || ctrlKey`: the helper
-also requires the *other* modifier to be up, so every shortcut and click in the window agrees on which key it is.
+Applies to `packages/ui`, to every key combination the window answers or shows as a shortcut. Register it in
+`packages/ui/src/shortcuts/commands.ts` — `REBINDABLE`, or `FIXED` for a key the user may not change — match it with
+`matchesCommand` from `packages/ui/src/shortcuts/store.ts` inside `useWindowShortcut`, and show its key with
+`ShortcutKbd` (`packages/ui/src/shortcuts/ShortcutKbd.tsx`). A key compared by hand is missing from Settings' list,
+cannot be rebound, and is outside the set that `packages/ui/src/shortcuts/validate.ts` checks a recorded or imported
+binding against, so the user can bind another command onto it. Matching is exact — no modifier more or less — and the
+Cmd-on-Apple / Ctrl-elsewhere split of a binding is made in `packages/ui/src/shortcuts/binding.ts` alone.
+
+Any other Cmd / Ctrl test — a modifier+click, the held-modifier quick-create affordance, a widget's own key — goes
+through `isPrimaryModifier` (and, for showing the key, `IS_MAC`) from `packages/ui/src/useWindowShortcut.ts`. Do not
+derive the platform again (from `navigator.userAgent` or anything else) and do not accept `metaKey || ctrlKey`: the
+helper also requires the *other* modifier to be up, so every shortcut and click in the window agrees on which key it is.
+
+Registering does not reach two places the window's listeners never see:
+
+- a report page is a document of its own, and relays to the window only the keys passed in `composePageDocument`'s
+  options (`packages/ui/src/report/pageDocument.ts`, from `ReportPanel.tsx`); add a command there if it should work
+  while a page holds focus;
+- a native menu item's key is the menu's accelerator, so a command that is one has its binding pushed to the shell as
+  the Settings item's is (`useNativeMenuLabels`, `set_menu_labels` in `apps/desktop/src-tauri/src/menu.rs`), and is
+  refused ⇧ with a number or symbol key in `validate.ts` as `openSettings` is: AppKit matches a menu key against the
+  character with Shift applied, so such a combination never fires.
+
+Add a window `keydown` listener in an effect (`useWindowShortcut`), never as a module is evaluated:
+`packages/ui/src/shortcuts/recording.ts` installs its capture listener at module load so that it runs first and keeps
+every key from the rest of the window while a shortcut is being recorded, and a listener installed before it would
+see those keys. For the same reason keep it in the statically imported graph from `App.tsx`: loading the Settings dialog
+or its Keyboard shortcuts section lazily would install it after the window's own listeners.

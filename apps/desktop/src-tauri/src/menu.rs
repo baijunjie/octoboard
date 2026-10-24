@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use muda::accelerator::Accelerator;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::AppHandle;
 
@@ -10,6 +11,9 @@ pub const APP_NAME: &str = env!("OCTOBOARD_APP_NAME");
 
 /// The Settings item's id, which `on_menu_event` in `lib.rs` matches.
 pub const SETTINGS_ITEM_ID: &str = "settings";
+
+/// The Settings item's accelerator until the UI sends the one the user has chosen.
+pub const DEFAULT_SETTINGS_ACCELERATOR: &str = "CmdOrCtrl+,";
 
 /// What `on_menu_event` emits to the webview when the Settings item is chosen; the platform
 /// adapter's `tauri.ts` listens for it.
@@ -28,12 +32,35 @@ impl Labels {
     }
 }
 
-/// Rebuilds the menu bar from the labels the UI sent and makes it the app's menu.
+/// Rebuilds the menu bar from the labels the UI sent, and the Settings item's accelerator when it
+/// sent one, and makes it the app's menu. An accelerator that does not parse leaves the item with
+/// the default one (see `usable_accelerator`).
 #[tauri::command]
-pub fn set_menu_labels(app: AppHandle, labels: HashMap<String, String>) -> Result<(), String> {
-    let menu = build_menu(&app, &Labels(labels)).map_err(|err| err.to_string())?;
+pub fn set_menu_labels(
+    app: AppHandle,
+    labels: HashMap<String, String>,
+    settings_accelerator: Option<String>,
+) -> Result<(), String> {
+    let menu = build_menu(
+        &app,
+        &Labels(labels),
+        settings_accelerator
+            .as_deref()
+            .unwrap_or(DEFAULT_SETTINGS_ACCELERATOR),
+    )
+    .map_err(|err| err.to_string())?;
     app.set_menu(menu).map_err(|err| err.to_string())?;
     Ok(())
+}
+
+/// `accelerator` when the menu can parse it, the default one otherwise. Tauri's menu items drop an
+/// accelerator that does not parse and leave the item without a key, so it is parsed here first.
+fn usable_accelerator(accelerator: &str) -> &str {
+    if accelerator.parse::<Accelerator>().is_ok() {
+        accelerator
+    } else {
+        DEFAULT_SETTINGS_ACCELERATOR
+    }
 }
 
 /// Builds the app's menu bar. It is close to the framework's own default macOS menu, with one
@@ -41,7 +68,9 @@ pub fn set_menu_labels(app: AppHandle, labels: HashMap<String, String>) -> Resul
 /// `PredefinedMenuItem::quit`. The predefined one sends the native `terminate:` selector straight
 /// to the app, which ends the process through no `RunEvent` any confirmation flow can intercept; a
 /// plain menu item instead reaches `on_menu_event` in `lib.rs`, which routes it into the same
-/// `exit-requested` path as Cmd+Q and the menu bar icon's Quit.
+/// `exit-requested` path as Cmd+Q and the menu bar icon's Quit. `settings_accelerator` is the
+/// Settings item's key, which the user can change (the default one stands in for a key that does
+/// not parse); Quit's is fixed.
 ///
 /// The Dock icon's own Quit sends that same native `terminate:` straight to the process, with no
 /// menu item of this crate's own in the way — `exit::install_application_should_terminate_override`
@@ -49,6 +78,7 @@ pub fn set_menu_labels(app: AppHandle, labels: HashMap<String, String>) -> Resul
 pub fn build_menu(
     app: &AppHandle,
     labels: &Labels,
+    settings_accelerator: &str,
 ) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
     let quit =
         MenuItemBuilder::with_id("quit", labels.get("menu.quit", &format!("Quit {APP_NAME}")))
@@ -58,7 +88,7 @@ pub fn build_menu(
     // A plain item for the same reason as Quit: the UI owns what opening settings means.
     let settings =
         MenuItemBuilder::with_id(SETTINGS_ITEM_ID, labels.get("menu.settings", "Settings…"))
-            .accelerator("CmdOrCtrl+,")
+            .accelerator(usable_accelerator(settings_accelerator))
             .build(app)?;
 
     // The submenu title is the product name, which no language translates.
@@ -100,4 +130,28 @@ pub fn build_menu(
     MenuBuilder::new(app)
         .items(&[&app_menu, &edit_menu, &view_menu, &window_menu])
         .build()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_key_the_menu_cannot_parse_gives_way_to_the_default() {
+        for accelerator in [
+            "CmdOrCtrl+,",
+            "CmdOrCtrl+Shift+Backslash",
+            "Ctrl+Alt+IntlBackslash",
+            "CmdOrCtrl+Numpad5",
+            "CmdOrCtrl+F13",
+        ] {
+            assert_eq!(usable_accelerator(accelerator), accelerator);
+        }
+        for accelerator in ["", "CmdOrCtrl+", "Hyperdrive+K", "CmdOrCtrl+Nonsense"] {
+            assert_eq!(
+                usable_accelerator(accelerator),
+                DEFAULT_SETTINGS_ACCELERATOR
+            );
+        }
+    }
 }

@@ -177,15 +177,20 @@ Neither this signal nor Escape's carries anything from the page.
 In the macOS application, two of the window's keyboard shortcuts are passed to the window when pressed while focus is
 inside a page, on a history page too, and are kept from the page itself:
 
-- `Cmd+[` and `Cmd+]`, with no other modifier held, go back and forward (see "Keyboard shortcuts" in
+- Back and Forward's shortcuts, `Cmd+[` and `Cmd+]` by default, go back and forward (see "Keyboard shortcuts" in
   `docs/product/navigation-history.md`).
-- `Ctrl+Tab` and `Ctrl+Shift+Tab`, with neither `Cmd` nor `Option` held, move to the next or previous console session
-  (see "The switch strip" in `docs/product/focus-mode.md`). The page never gets them, even when the window has
-  nowhere to move at that moment; a key held down is passed on once.
+- Next and Previous console session's shortcuts, `Ctrl+Tab` and `Ctrl+Shift+Tab` by default, move to the next or
+  previous console session (see "The switch strip" in `docs/product/focus-mode.md`). The page never gets them, even
+  when the window has nowhere to move at that moment; a key held down is passed on once.
 
 As with Escape and `F6`, neither is passed on during an input method's composition, the signal is acted on only while
 focus is inside the page's frame, and it carries nothing from the page. In a browser neither is passed on, and the
 page keeps the browser's own handling of the keys.
+
+The keys are passed on only as the exact combinations they are bound to, as the window matches them (see "How a
+combination is written and matched" in `docs/product/keyboard-shortcuts.md`). Changing one of these four shortcuts
+starts the page the panel shows over again from its markup, so anything typed into its form and not submitted is gone; setting a shortcut to
+the keys it already has does not.
 
 ## Right-click inside a page
 

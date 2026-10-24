@@ -20,6 +20,7 @@ import { railQuotaScenarios } from "./railQuota";
 import { reportScenarios } from "./report";
 import { sessionHistoryScenarios } from "./sessionHistory";
 import { settingsScenarios } from "./settings";
+import { shortcutsScenarios } from "./shortcuts";
 import { structuredErrorScenarios } from "./structuredErrors";
 import { startupScenarios } from "./startup";
 import { terminalPanelScenarios } from "./terminalPanel";
@@ -54,6 +55,7 @@ export const SCENARIOS: Scenario[] = [
   ...projectFilesScenarios,
   ...projectGitScenarios,
   ...settingsScenarios,
+  ...shortcutsScenarios,
   ...dialogScenarios,
   ...handoffScenarios,
   ...quotaGatingScenarios,

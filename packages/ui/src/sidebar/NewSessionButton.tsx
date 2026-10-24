@@ -61,7 +61,7 @@ export function NewSessionButton({
       ref={ref}
       icon={quick ? Zap : Plus}
       label={quick ? quickLabel : label}
-      title={shortcut ? <ShortcutTooltip action={quick ? "quickCreate" : "create"}>{tooltip}</ShortcutTooltip> : tooltip}
+      title={shortcut ? <ShortcutTooltip action={quick ? "quickCreate" : "newSession"}>{tooltip}</ShortcutTooltip> : tooltip}
       isDisabled={blocked}
       unavailable={quickUnavailable}
       onPress={(event) => {

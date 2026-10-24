@@ -219,3 +219,14 @@ it("press finds a switch by the text beside it that labels it, past a label hold
   await pressed;
   expect(control.checked).toBe(true);
 });
+
+it("chord presses a portable binding with this platform's modifiers on the focused control", async () => {
+  document.body.innerHTML = "<button id=\"target\"></button>";
+  document.getElementById("target")!.focus();
+  const seen: string[] = [];
+  document.addEventListener("keydown", (event) => seen.push([event.code, event.key, event.metaKey, event.ctrlKey, event.shiftKey].join(":")));
+  const done = createUi(document, "en").chord({ code: "KeyF", primary: true, shift: true });
+  await vi.advanceTimersByTimeAsync(400);
+  await done;
+  expect(seen).toEqual([`KeyF:F:${IS_MAC}:${!IS_MAC}:true`]);
+});

@@ -11,16 +11,17 @@ import { dialogAround } from "../dialogs/dialogElement";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
+import { replaceOverrides, shortcutOverrides } from "../shortcuts/store";
 import { useDaemon } from "../store";
 import { fileFailureText } from "./failureText";
-import { hasDirectoryProblem, initialReview, resolutionsOf, type ReviewState } from "./importPlan";
+import { documentShortcuts, hasDirectoryProblem, initialReview, resolutionsOf, shortcutsRecord, shortcutsReview, type ReviewState } from "./importPlan";
 import { ImportResult, type Imported } from "./ImportResult";
 import { ImportReview, type Inspection } from "./ImportReview";
 
 type Stage =
   | { kind: "choose" }
   | { kind: "review"; fileName: string; document: unknown; inspection: Inspection }
-  | { kind: "result"; result: Imported };
+  | { kind: "result"; result: Imported; shortcuts?: { applied: number; skipped: number } };
 
 /** How long after the window regains focus a file may still arrive before the picker is taken as
  * dismissed: a browser reports the chosen file just after the focus returns. */
@@ -75,6 +76,8 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
       clearTimeout(timer);
     };
   }, [waiting]);
+  const currentShortcuts = shortcutOverrides.useValue();
+  const shortcuts = stage.kind === "review" ? documentShortcuts(stage.document) : undefined;
   const bodyRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (stopped > 0) bodyRef.current?.querySelector<HTMLElement>("input[aria-invalid=true]")?.focus();
@@ -136,7 +139,11 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
         resolutions: resolutionsOf(review),
         apply_settings: applySettings,
       })) as Imported;
-      setStage({ kind: "result", result });
+      // The daemon applied the settings it knows and echoed the shortcuts it passes through, which are this
+      // client's own to apply: it does so only for what the daemon says it applied.
+      const carried = shortcutsRecord(result.settings_applied?.keyboard_shortcuts);
+      const applied = carried && replaceOverrides(carried);
+      setStage({ kind: "result", result, shortcuts: applied });
     });
   };
 
@@ -195,10 +202,11 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
             onReview={setReview}
             applySettings={applySettings}
             onApplySettings={setApplySettings}
+            shortcuts={shortcuts && shortcutsReview(shortcuts, currentShortcuts)}
             shown={shown}
           />
         )}
-        {stage.kind === "result" && <ImportResult result={stage.result} />}
+        {stage.kind === "result" && <ImportResult result={stage.result} shortcuts={stage.shortcuts} />}
       </div>
     </Dialog>
   );

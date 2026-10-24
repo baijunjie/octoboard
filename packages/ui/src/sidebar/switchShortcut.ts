@@ -1,17 +1,19 @@
 import type { Session } from "../protocol";
 import { MODAL_OPEN } from "../layout/useRegionCycle";
 import { usePlatform } from "../platform/react";
+import { matchesCommand } from "../shortcuts/store";
 import { useWindowShortcut } from "../useWindowShortcut";
 import { cycleConsoleSession } from "./focus";
 import type { FocusTarget } from "./types";
 
-/** ⌃Tab and ⌃⇧Tab: the next and the previous console session. It exists only in the desktop app (macOS),
- * where Ctrl rather than ⌘ is the browsers' own choice for switching tabs; matched on the key, since
- * Tab is not a layout-dependent one. A held key is matched too, to be kept from the terminal, but
- * `repeat` has it not move on, so it cannot race through the strip. */
+/** The keys of the next and the previous console session, ⌃Tab and ⌃⇧Tab unless rebound. It exists only in the
+ * desktop app (macOS), where Ctrl rather than ⌘ is the browsers' own choice for switching tabs; matched on the
+ * physical key. A held key is matched too, to be kept from the terminal, but `repeat` has it not move on, so it
+ * cannot race through the strip. */
 function matchSwitchShortcut(event: KeyboardEvent): { backward: boolean; repeat: boolean } | undefined {
-  if (event.key !== "Tab" || !event.ctrlKey || event.metaKey || event.altKey) return undefined;
-  return { backward: event.shiftKey, repeat: event.repeat };
+  if (matchesCommand("nextConsoleSession", event)) return { backward: false, repeat: event.repeat };
+  if (matchesCommand("previousConsoleSession", event)) return { backward: true, repeat: event.repeat };
+  return undefined;
 }
 
 /**

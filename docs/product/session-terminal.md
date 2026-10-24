@@ -123,7 +123,8 @@ covers in "Reconnecting" above.
 - Selecting an interrupted session resumes it rather than attaching, unless it is shown as switching its account (see
   "While a session is switching" in `docs/product/switching-session-accounts.md`). Two ways of reaching one only show it, with its
   card, and never resume it: moving with Back or Forward (see "Moving back and forward" in
-  `docs/product/navigation-history.md`), and `Ctrl+Tab` / `Ctrl+Shift+Tab` in a console session's focus mode (see
+  `docs/product/navigation-history.md`), and Next or Previous console session (`Ctrl+Tab` / `Ctrl+Shift+Tab` by
+  default) in a console session's focus mode (see
   "The switch strip" in `docs/product/focus-mode.md`). While a session has no process and no resume of
   it is under way, the terminal shows a card at its bottom centre, raised over it by a large shadow with no outline
   (see "The window chrome and the content panel" in `docs/product/window-layout.md`): for an interrupted session it

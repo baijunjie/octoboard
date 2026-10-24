@@ -1790,6 +1790,7 @@ mod tests {
                 auto_start_quota_windows: None,
                 auto_approve_session_requests: None,
                 auto_approve_resume_requests: None,
+                keyboard_shortcuts: None,
             })
         );
         assert!(state.store.auto_pull_repositories().unwrap());
@@ -1916,6 +1917,7 @@ mod tests {
                 auto_start_quota_windows: None,
                 auto_approve_session_requests: None,
                 auto_approve_resume_requests: None,
+                keyboard_shortcuts: None,
             })
         );
         assert!(state.store.auto_pull_repositories().unwrap());
@@ -1944,9 +1946,32 @@ mod tests {
                 auto_start_quota_windows: None,
                 auto_approve_session_requests: None,
                 auto_approve_resume_requests: None,
+                keyboard_shortcuts: None,
             })
         );
         assert!(state.store.auto_pull_repositories().unwrap());
+    }
+
+    /// The keyboard shortcuts a client adds to a full export belong to the client: an import
+    /// inspects and applies a document that carries them, and hands them back as they came, and
+    /// one without them is still read.
+    #[tokio::test]
+    async fn the_keyboard_shortcuts_of_a_document_pass_through_untouched() {
+        let (state, _dir) = app_state("import-keyboard-shortcuts");
+        let shortcuts = json!({ "lock": { "code": "KeyK", "primary": true, "shift": true } });
+        let mut full = with_settings(document(vec![console("Hub", Vec::new())]), true, false);
+        full["settings"]["keyboard_shortcuts"] = shortcuts.clone();
+
+        inspect(&state, &full).await.unwrap();
+        let imported = apply(&state, &full, Vec::new(), true).await.unwrap();
+        assert_eq!(
+            imported.settings_applied.unwrap().keyboard_shortcuts,
+            Some(shortcuts)
+        );
+
+        let without = with_settings(document(vec![console("Hub", Vec::new())]), true, false);
+        let imported = apply(&state, &without, Vec::new(), true).await.unwrap();
+        assert_eq!(imported.settings_applied.unwrap().keyboard_shortcuts, None);
     }
 
     #[tokio::test]

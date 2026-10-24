@@ -13,8 +13,7 @@ import type { Translate } from "../i18n/catalog";
 import type { Account, AccountSharing, Agent, Console, Project, Session, Settings } from "../protocol";
 import { accountUsage } from "../quota/accountUsage";
 import { sessionChoiceTitle, sessionDisplayTitle } from "../sessionLabel";
-import { SessionShortcutKbd } from "./sessionShortcuts";
-import { FocusShortcutKbd } from "./focusShortcut";
+import { ShortcutKbd } from "../shortcuts/ShortcutKbd";
 import { archivePreviewSessions, isUnusedSession } from "./order";
 import { SessionColourSwatches } from "./SessionColourSwatches";
 import type { ArchiveScope, SidebarHandlers } from "./types";
@@ -106,7 +105,7 @@ export function projectMenu(
   const repository = repositoryLink(project.remote_url);
   return [
     ...(placement === "focused" ? [] : [pinItem(t, project.pinned, () => handlers.onSetPinned({ project }, !project.pinned))]),
-    ...(placement === "list" ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <FocusShortcutKbd />, onClick: () => handlers.onFocus({ project }) }] : []),
+    ...(placement === "list" ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <ShortcutKbd command="focusMode" />, onClick: () => handlers.onFocus({ project }) }] : []),
     ...(handlers.visibleBrowserProjectId === project.id
       ? []
       : [{ label: t("sidebar.project.browse"), icon: FolderOpen, onClick: () => handlers.onBrowseProject(project) }]),
@@ -275,10 +274,10 @@ export function sessionMenu(
   const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts, defaultNames, quota, sharing, disabledDefaults);
   const focusable = session.role === "console" && !archived && !focused;
   return [
-    ...(!archived ? [{ label: t(session.locked ? "sidebar.session.unlock" : "sidebar.session.lock"), icon: session.locked ? LockOpen : Lock, end: <SessionShortcutKbd action="lock" />, onClick: () => handlers.onSetLocked(session, !session.locked) }] : []),
+    ...(!archived ? [{ label: t(session.locked ? "sidebar.session.unlock" : "sidebar.session.lock"), icon: session.locked ? LockOpen : Lock, end: <ShortcutKbd command="lock" />, onClick: () => handlers.onSetLocked(session, !session.locked) }] : []),
     ...(archived ? [{ label: t("sidebar.session.reopen"), icon: RotateCcw, onClick: () => handlers.onReopenSession(session) }] : []),
-    ...(archived || focused ? [] : [{ ...pinItem(t, session.pinned, () => handlers.onSetPinned({ session }, !session.pinned)), end: <SessionShortcutKbd action="pin" /> }]),
-    ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <FocusShortcutKbd />, onClick: () => handlers.onFocus({ consoleSession: session }) }] : []),
+    ...(archived || focused ? [] : [{ ...pinItem(t, session.pinned, () => handlers.onSetPinned({ session }, !session.pinned)), end: <ShortcutKbd command="pin" /> }]),
+    ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <ShortcutKbd command="focusMode" />, onClick: () => handlers.onFocus({ consoleSession: session }) }] : []),
     ...(!archived ? ["separator" as const] : []),
     ...(!archived ? [{ label: t("sidebar.session.rename"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) }] : []),
     {
@@ -295,7 +294,7 @@ export function sessionMenu(
       ),
       description: session.id,
       icon: Copy,
-      end: <SessionShortcutKbd action="copyId" />,
+      end: <ShortcutKbd command="copyId" />,
       onClick: () => handlers.onCopySessionId(session),
     },
     ...(session.role === "console" && !archived ? [colourSubmenu(t, handlers, session)] : []),
@@ -306,6 +305,6 @@ export function sessionMenu(
     "separator",
     offersDelete(session, hasBoundSessions)
       ? { label: t("sidebar.session.delete"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-session", session }), destructive: true, disabled: session.locked }
-      : { label: t("sidebar.session.archive"), icon: Archive, end: <SessionShortcutKbd action="archive" />, onClick: () => handlers.onArchiveSession(session), disabled: session.locked },
+      : { label: t("sidebar.session.archive"), icon: Archive, end: <ShortcutKbd command="archive" />, onClick: () => handlers.onArchiveSession(session), disabled: session.locked },
   ];
 }
