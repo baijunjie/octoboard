@@ -27,12 +27,10 @@
 - [ ] Details moved inside: the shared confirmation warning (`ConfirmWarning`) used by Delete session, Archive
   session, Remove project and Delete all archived — the list of sessions deleted, archived or ended along with the
   subject goes inside its Alert. The account-switch failure alert's per-session list is checked the same way.
-- [ ] The consequence lines of ticked options ("Also permanently deletes …"): proposal — they move inside the same
-  warning Alert after the list, as its description lines, because they are what the warning warns about; with no
-  bound sessions but a ticked option, the Alert's title names the consequence ("This also permanently deletes:"-style
-  title, wording settled at implementation) and the lines follow. The checkboxes above do not move when a line is
-  added, as now, because the Alert sits below them. (Alternative the user may prefer: keep the lines outside the
-  Alert, separated from it by a divider or heading.)
+- [ ] The consequence lines of ticked options ("Also permanently deletes …") move inside the same warning Alert after
+  the list, as its description lines, because they are what the warning warns about (user decision); with no bound
+  sessions but a ticked option, the Alert's title sums up the consequence (wording settled at implementation) and the
+  lines follow. The checkboxes above do not move when a line is added, as now, because the Alert sits below them.
 
 ## Implementation plan
 
