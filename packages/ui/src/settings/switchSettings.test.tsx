@@ -6,6 +6,8 @@ import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { LanguageProvider } from "../i18n/react";
 import { ArchiveCleanupSetting } from "./ArchiveCleanupSetting";
 import { AutoApproveResumeRequestsSetting } from "./AutoApproveResumeRequestsSetting";
+import { AutoApproveAccountSwitchesSetting } from "./AutoApproveAccountSwitchesSetting";
+import { AutoApproveHandoffsSetting } from "./AutoApproveHandoffsSetting";
 import { AutoApproveSessionRequestsSetting } from "./AutoApproveSessionRequestsSetting";
 import { AutoSelectAccountSetting } from "./AutoSelectAccountSetting";
 import { SidebarOrderSetting } from "./SidebarOrderSetting";
@@ -34,6 +36,8 @@ const OFF_TEXT = "Once this is on";
 const switches = [
   { Setting: ArchiveCleanupSetting, key: "auto_delete_unresumable_archives", onText: "is deleted automatically" },
   { Setting: AutoApproveResumeRequestsSetting, key: "auto_approve_resume_requests", onText: "without asking you first" },
+  { Setting: AutoApproveAccountSwitchesSetting, key: "auto_approve_account_switches", onText: "without asking you first" },
+  { Setting: AutoApproveHandoffsSetting, key: "auto_approve_handoffs", onText: "without asking you first" },
   { Setting: AutoApproveSessionRequestsSetting, key: "auto_approve_session_requests", onText: "without asking you first" },
   { Setting: AutoSelectAccountSetting, key: "auto_select_account", onText: "whose weekly quota resets soonest" },
   { Setting: SidebarOrderSetting, key: "sidebar_order_by_status", onText: "move as their status changes" },

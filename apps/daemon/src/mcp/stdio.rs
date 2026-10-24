@@ -146,9 +146,10 @@ impl ServerHandler for OctoboardMcp {
         }))
         .map_err(|err| ErrorData::internal_error(err.to_string(), None))?;
         let path = format!("/mcp/{}", self.token);
-        // Only a session request is withdrawn when its call is cancelled. Any other call is left to
-        // finish in the daemon: the daemon stops serving a call whose connection goes, and a
-        // `new_session` or a `report` cut off part-way would leave its work half done.
+        // Only the calls in `WITHDRAWN_ON_CANCEL` are withdrawn when cancelled: those waiting for the
+        // user's answer. Any other call is left to finish in the daemon, which stops serving a call
+        // whose connection goes, so a `new_session` or a `report` cut off part-way would leave its
+        // work half done.
         let cancelled = async {
             if WITHDRAWN_ON_CANCEL.contains(&&*request.name) {
                 context.ct.cancelled().await;
@@ -207,9 +208,16 @@ enum Forwarded {
     Cancelled,
 }
 
-/// The tools whose call the daemon has to learn the agent cancelled: a session request waits in
-/// front of the user, and is withdrawn when its call's connection to the daemon goes.
-const WITHDRAWN_ON_CANCEL: &[&str] = &["request_session", "request_resume_session"];
+/// The tools whose call the daemon has to learn the agent cancelled: a session request, or a switch
+/// or a handoff the user is asked to approve, waits in front of the user and is withdrawn when its
+/// call's connection to the daemon goes. A switch or a handoff that runs without asking finishes
+/// on a task of its own, so the connection going leaves it alone.
+const WITHDRAWN_ON_CANCEL: &[&str] = &[
+    "request_session",
+    "request_resume_session",
+    "switch_session_account",
+    "handoff_session",
+];
 
 /// Forwards one call to the daemon and waits for its answer, unless `cancelled` completes first —
 /// for a call the agent cancels (`notifications/cancelled`, which cancels the call's context). A

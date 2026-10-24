@@ -282,7 +282,9 @@ naming the account, the agent and the window (the five-hour window as "session" 
 Claude Code's account-wide weekly window as "Weekly · all models" when the reading also has a model's own weekly
 window, any other by its `window` name), about how long until it resets when known, and saying to choose another
 account or wait for the reset. A session request is refused that way before the user is asked, and again on approval
-should the account be used up by then (see `docs/product/session-requests.md`). Only a session being opened is
+should the account be used up by then (see `docs/product/session-requests.md`); an owner's handoff the user is asked
+to approve is refused for it only on approval, since its form lets the user choose another account (see "The user's
+approval of an owner's handoff" in `docs/product/handing-off-sessions.md`). Only a session being opened is
 checked: a session already on the account keeps running, and resuming, reopening or restarting it is never refused for
 this.
 
@@ -715,7 +717,8 @@ and only these six.
   holds its session at *waiting for the user* for as long as the session's rendered screen shows it, whatever the
   agent's hook reports say meanwhile; once it is gone the session shows the agent's last reported status again. Which
   screens are recognised is in "Messages held until a session can take them" in `docs/product/message-delivery.md`.
-- A session request — a `request_session` or `request_resume_session` call — waiting for the user's answer holds
+- A session request — a `request_session` or `request_resume_session` call, or an owner's `switch_session_account` or
+  `handoff_session` call the user is asked to approve — waiting for the user's answer holds
   its session at *waiting for the user* for the whole wait, whatever the agent's own events say meanwhile; when the
   request ends the session goes back to where its agent was last seen to be (see "Waiting for the answer" in
   `docs/product/session-requests.md`).

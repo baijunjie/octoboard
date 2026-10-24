@@ -11,7 +11,9 @@ names and effort levels are each agent's own. These are the defaults for a sessi
 The console session pair never reaches a project session, and the project session pair never reaches a console
 session.
 
-Each session can override **each value independently** when it is opened:
+Each session can override **each value independently** when it is opened, and an owner's switch of its account that
+the user approves can change either (see "The user's approval of an owner's switch" in
+`docs/product/switching-session-accounts.md`):
 
 - **Inherited** — no session choice is recorded, and the value the defaults above give at that moment is read on
   every launch, including a resume. Sessions with no recorded override follow this rule.

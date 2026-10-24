@@ -187,7 +187,7 @@ it("tells of each application setting that was applied, and of none the file did
     act(() => root.unmount());
     container.remove();
   });
-  const render = (settings_applied: { auto_pull_repositories: boolean; auto_delete_unresumable_archives?: boolean; auto_select_account?: boolean; auto_approve_session_requests?: boolean; auto_approve_resume_requests?: boolean }) =>
+  const render = (settings_applied: { auto_pull_repositories: boolean; auto_delete_unresumable_archives?: boolean; auto_select_account?: boolean; auto_approve_session_requests?: boolean; auto_approve_resume_requests?: boolean; auto_approve_account_switches?: boolean; auto_approve_handoffs?: boolean }) =>
     act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles: [], settings_applied }} /></DaemonProvider>));
   render({ auto_pull_repositories: true, auto_delete_unresumable_archives: false, auto_select_account: false });
   expect(container.textContent).toContain("Automatically pull repositories is now on");
@@ -197,6 +197,9 @@ it("tells of each application setting that was applied, and of none the file did
   render({ auto_pull_repositories: true, auto_approve_session_requests: true, auto_approve_resume_requests: false });
   expect(container.textContent).toContain("Automatically approve session requests is now on");
   expect(container.textContent).toContain("Automatically approve resume requests is now off");
+  render({ auto_pull_repositories: true, auto_approve_account_switches: true, auto_approve_handoffs: false });
+  expect(container.textContent).toContain("Automatically approve account switches is now on");
+  expect(container.textContent).toContain("Automatically approve handoffs is now off");
   render({ auto_pull_repositories: true });
   expect(container.textContent).toContain("Automatically pull repositories is now on");
   expect(container.textContent).not.toContain("Automatically approve");

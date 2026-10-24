@@ -1,11 +1,14 @@
 import React from "react";
 
 import { useT } from "../i18n/react";
+import { AutoApproveAccountSwitchesSetting } from "./AutoApproveAccountSwitchesSetting";
+import { AutoApproveHandoffsSetting } from "./AutoApproveHandoffsSetting";
 import { AutoApproveResumeRequestsSetting } from "./AutoApproveResumeRequestsSetting";
 import { AutoApproveSessionRequestsSetting } from "./AutoApproveSessionRequestsSetting";
 
 /** What a session may do without asking the user first: whether its requests to start a session and
- * to resume a conversation are approved on the spot, each by its own switch. */
+ * to resume a conversation, and its account switches and handoffs, are approved on the spot, each
+ * by its own switch. */
 export function AgentPermissionsSection(): React.ReactElement {
   const t = useT();
   return (
@@ -16,6 +19,8 @@ export function AgentPermissionsSection(): React.ReactElement {
       <div className="groove-t">
         <AutoApproveSessionRequestsSetting />
         <AutoApproveResumeRequestsSetting />
+        <AutoApproveAccountSwitchesSetting />
+        <AutoApproveHandoffsSetting />
       </div>
     </>
   );

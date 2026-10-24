@@ -302,13 +302,14 @@ back the section shows neither line and nothing else either.
 
 ## Agent permissions
 
-What a session may do without asking the user first. A paragraph under the heading says as much, above two rows:
-**Automatically approve session requests**, then **Automatically approve resume requests**. The section is the same in
-every client. Each switch is kept by the daemon, so every window shows the same, and besides its row only an import
-asked to apply a full configuration document's application settings changes it (see "The application settings a full
-export carries" in `docs/product/configuration-export-and-import.md`); turning one on or off leaves the other as it
-is. What an automatic approval does, what turning a switch on changes, and why agents cannot change either switch are
-in "Approving requests automatically" in `docs/product/session-requests.md`.
+What a session may do without asking the user first. A paragraph under the heading says as much, above four rows:
+**Automatically approve session requests**, **Automatically approve resume requests**, **Automatically approve account
+switches**, then **Automatically approve handoffs**. The section is the same in every client. Each switch is kept by the
+daemon, so every window shows the same, and besides its row only an import asked to apply a full configuration
+document's application settings changes it (see "The application settings a full export carries" in
+`docs/product/configuration-export-and-import.md`); turning one on or off leaves the others as they are. What an
+automatic approval does, what turning a switch on changes, and why agents cannot change any of the switches are in
+"Approving requests automatically" in `docs/product/session-requests.md`.
 
 ### Automatically approve session requests
 
@@ -326,6 +327,26 @@ A switch, **off to begin with** — installations from before the switch existed
 it on will do, and while it is on it says what is happening now: a session can reopen or resume a session, or resume a
 conversation in a new session, without asking first; a reopened or resumed session keeps its owner and has its
 archived owners reopened with it; and a new session started this way is owned by nobody but the user.
+
+### Automatically approve account switches
+
+A switch, **off to begin with** — installations from before the switch existed included: whether an owner's
+`switch_session_account` call, which switches the account of one of its own sessions, is made without asking the user
+(see "The user's approval of an owner's switch" in `docs/product/switching-session-accounts.md`). While the switch is
+off the row's description says that, once it is on, a session can do so without asking first, and that until then the
+user is asked and can change the account, model and reasoning effort before confirming; while it is on, it says that a
+session does so without asking, and that turning it off has the user asked again, with those choices. The Switch
+account the user makes from the window is not affected.
+
+### Automatically approve handoffs
+
+A switch, **off to begin with** — installations from before the switch existed included: whether an owner's
+`handoff_session` call, which hands one of its own sessions off to a session of another agent, is made without asking
+the user (see "The user's approval of an owner's handoff" in `docs/product/handing-off-sessions.md`). While the switch
+is off the row's description says that, once it is on, a session can do so without asking first, and that until then
+the user is asked and can change the agent, account, model and reasoning effort before confirming; while it is on, it
+says that a session does so without asking, and that turning it off has the user asked again, with those choices. The
+Hand off the user makes from the window is not affected.
 
 ## Notifications
 

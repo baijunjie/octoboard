@@ -876,6 +876,14 @@ pub struct Settings {
     /// `auto_approve_session_requests` does for `request_session`, independently of it. Off unless
     /// the user turned it on; only the user's own client changes it.
     pub auto_approve_resume_requests: bool,
+    /// Whether an owner's `switch_session_account` calls run without asking the user, as
+    /// `auto_approve_session_requests` does for `request_session`, independently of the other
+    /// approvals. Off unless the user turned it on; only the user's own client changes it.
+    pub auto_approve_account_switches: bool,
+    /// Whether an owner's `handoff_session` calls run without asking the user, as
+    /// `auto_approve_session_requests` does for `request_session`, independently of the other
+    /// approvals. Off unless the user turned it on; only the user's own client changes it.
+    pub auto_approve_handoffs: bool,
     /// Whether a new session whose account was left out runs on the account of its agent whose
     /// weekly quota resets soonest and still has some left. Off unless the user turned it on.
     /// When nothing ranks, the account is chosen as it is while this is off.
@@ -919,6 +927,8 @@ impl Default for Settings {
             auto_delete_unresumable_archives: true,
             auto_approve_session_requests: false,
             auto_approve_resume_requests: false,
+            auto_approve_account_switches: false,
+            auto_approve_handoffs: false,
             auto_select_account: false,
             sidebar_order_by_status: true,
             auto_start_quota_windows: false,
@@ -1957,10 +1967,23 @@ pub enum RequestBody {
     /// describes, unbound; anything else, dismissing the dialog included, refuses it and changes
     /// nothing. The first answer wins: one for a request already answered, timed out or withdrawn
     /// changes nothing and is refused. An approval is answered with `session_opened` for the
-    /// session it started, a refusal with an ack.
+    /// session it started, a refusal with an ack. For the request of a `switch` or a `handoff`
+    /// the user may change what it asks for in the dialog, and an approval carries the values the
+    /// dialog ended on: `agent` (a handoff only), `account` (a switch's target account or a
+    /// handoff's receiving account; null for the agent's default account), and `model` and
+    /// `effort`, each absent to leave what the request had, null for the agent's own default, or a
+    /// value. Every other request ignores them.
     AnswerSessionRequest {
         request_id: String,
         approve: bool,
+        #[serde(default)]
+        agent: Option<Agent>,
+        #[serde(default, deserialize_with = "present_option")]
+        account: Option<Option<String>>,
+        #[serde(default, deserialize_with = "present_option")]
+        model: Option<Option<String>>,
+        #[serde(default, deserialize_with = "present_option")]
+        effort: Option<Option<String>>,
     },
     /// Each settable field absent means "leave it alone". Broadcasts `settings_updated` only when
     /// something actually changed, as `remove_trusted_directory` does.
@@ -1970,6 +1993,10 @@ pub enum RequestBody {
         auto_approve_session_requests: Option<bool>,
         #[serde(default)]
         auto_approve_resume_requests: Option<bool>,
+        #[serde(default)]
+        auto_approve_account_switches: Option<bool>,
+        #[serde(default)]
+        auto_approve_handoffs: Option<bool>,
         #[serde(default)]
         auto_select_account: Option<bool>,
         #[serde(default)]
@@ -2479,8 +2506,9 @@ pub enum Event {
         trust_dir: Option<String>,
     },
     /// A session asked with `request_session` for a session that has no owner, or with
-    /// `request_resume_session` to resume a conversation, and its call is waiting for the user's
-    /// answer. Broadcast once, when the call is made, and sent again to a client after each
+    /// `request_resume_session` to resume a conversation, or an owner called `switch_session_account`
+    /// or `handoff_session` while the user's approval is required, and its call is waiting for the
+    /// user's answer. Broadcast once, when the call is made, and sent again to a client after each
     /// `snapshot`, oldest first, for every request still waiting.
     SessionRequest {
         request_id: String,
@@ -2488,16 +2516,20 @@ pub enum Event {
         session: String,
         /// What an approval does.
         action: SessionRequestAction,
-        /// Whether the session asked for would be a console session or a project session.
+        /// Whether the session asked for would be a console session or a project session; for
+        /// `switch` and `handoff`, which the target is.
         role: Role,
-        /// The console the new session would be in, or the console of the session to bring back.
+        /// The console the new session would be in, or the console of the session to bring back,
+        /// switch or hand off.
         console: String,
-        /// The project the new session would be in, or the project of the session to bring back;
-        /// null for a console session.
+        /// The project the new session would be in, or the project of the session to bring back,
+        /// switch or hand off; null for a console session.
         project: Option<String>,
-        /// The agent the new session would run, or the agent of the session to bring back.
+        /// The agent the new session would run, or the agent of the session to bring back or
+        /// switch; for `handoff`, the receiving agent.
         agent: Agent,
-        /// For `reopen` and `resume`: the session an approval brings back. Null otherwise.
+        /// For `reopen`, `resume`, `switch` and `handoff`: the session an approval brings back,
+        /// switches or hands off. Null otherwise.
         target: Option<String>,
         /// For `reopen` and `resume`: the session the target reports to, which is where an approval
         /// leaves it; null when it has no owner. Null otherwise.
@@ -2505,8 +2537,10 @@ pub enum Event {
         /// For `reopen` and `resume`: the archived owners an approval brings back together with
         /// the target, topmost first, as they stood when the request was made. Empty otherwise.
         reopened_owners: Vec<String>,
-        /// For `resume_record`: the account that holds the conversation's record, null for the
-        /// agent's default account. Null otherwise.
+        /// For `resume_record`: the account that holds the conversation's record; for `switch`,
+        /// the account the call asked to move the session to; for `handoff`, the account the
+        /// receiving session would run on, settled when the call was made. Null for the agent's
+        /// default account, and for every other request.
         account: Option<String>,
         /// For `resume_record`: the conversation's id as the agent writes it. Null otherwise.
         conversation: Option<String>,
@@ -2514,6 +2548,12 @@ pub enum Event {
         /// `refs/heads/`: ones the requesting session is responsible for, checked when it asked.
         /// Empty when the request hands none over.
         branches: Vec<String>,
+        /// For `handoff`: the model and effort the call asked for, as `Session::model` states an
+        /// override: absent when the call left it out, null for the agent's own default.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        model: Option<Option<String>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        effort: Option<Option<String>>,
         /// Milliseconds since the epoch, which is what orders several requests oldest first.
         requested_at: i64,
     },
@@ -3120,6 +3160,11 @@ pub enum SessionRequestAction {
     /// Opens a new session, with no owner, on an agent's own record of a conversation that no
     /// session holds.
     ResumeRecord,
+    /// Moves the session `target`, which the asking session owns, to another account of its agent.
+    Switch,
+    /// Hands the session `target`, which the asking session owns, off to a new session of another
+    /// agent.
+    Handoff,
 }
 
 /// Why a `session_request` stopped waiting.
@@ -4809,6 +4854,40 @@ mod tests {
         }
     }
 
+    /// An answer to a request carries only the values the user changed, and keeps a value left
+    /// out apart from one set to null, which is the agent's own default.
+    #[test]
+    fn an_answer_to_a_session_request_tells_a_value_left_out_from_a_null_one() {
+        let parsed = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
+            RequestBody::AnswerSessionRequest {
+                approve,
+                agent,
+                account,
+                model,
+                effort,
+                ..
+            } => (approve, agent, account, model, effort),
+            _ => panic!("parses as answer_session_request"),
+        };
+        assert_eq!(
+            parsed(r#"{"type":"answer_session_request","request_id":"r","approve":true}"#),
+            (true, None, None, None, None)
+        );
+        assert_eq!(
+            parsed(
+                r#"{"type":"answer_session_request","request_id":"r","approve":true,
+                    "agent":"grok","account":null,"model":"m","effort":null}"#
+            ),
+            (
+                true,
+                Some(crate::protocol::Agent::Grok),
+                Some(None),
+                Some(Some("m".to_string())),
+                Some(None)
+            )
+        );
+    }
+
     /// One field is enough: the others stay absent, and a body that names nothing leaves
     /// `auto_select_account`, `sidebar_order_by_status` and `auto_start_quota_windows` absent too.
     #[test]
@@ -4819,6 +4898,8 @@ mod tests {
                 auto_delete_unresumable_archives,
                 auto_approve_session_requests,
                 auto_approve_resume_requests,
+                auto_approve_account_switches,
+                auto_approve_handoffs,
                 auto_select_account,
                 sidebar_order_by_status,
                 auto_start_quota_windows,
@@ -4828,6 +4909,8 @@ mod tests {
                 auto_delete_unresumable_archives,
                 auto_approve_session_requests,
                 auto_approve_resume_requests,
+                auto_approve_account_switches,
+                auto_approve_handoffs,
                 auto_select_account,
                 sidebar_order_by_status,
                 auto_start_quota_windows,
@@ -4837,23 +4920,97 @@ mod tests {
         };
         assert_eq!(
             parsed(r#"{"type":"update_settings","auto_select_account":true}"#),
-            (None, None, None, None, Some(true), None, None, None)
+            (
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(true),
+                None,
+                None,
+                None
+            )
         );
         assert_eq!(
             parsed(r#"{"type":"update_settings","auto_approve_resume_requests":true}"#),
-            (None, None, None, Some(true), None, None, None, None)
+            (
+                None,
+                None,
+                None,
+                Some(true),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None
+            )
+        );
+        assert_eq!(
+            parsed(r#"{"type":"update_settings","auto_approve_account_switches":true}"#),
+            (
+                None,
+                None,
+                None,
+                None,
+                Some(true),
+                None,
+                None,
+                None,
+                None,
+                None
+            )
+        );
+        assert_eq!(
+            parsed(r#"{"type":"update_settings","auto_approve_handoffs":true}"#),
+            (
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(true),
+                None,
+                None,
+                None,
+                None
+            )
         );
         assert_eq!(
             parsed(r#"{"type":"update_settings","sidebar_order_by_status":false}"#),
-            (None, None, None, None, None, Some(false), None, None)
+            (
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(false),
+                None,
+                None
+            )
         );
         assert_eq!(
             parsed(r#"{"type":"update_settings","auto_start_quota_windows":true}"#),
-            (None, None, None, None, None, None, Some(true), None)
+            (
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(true),
+                None
+            )
         );
         assert_eq!(
             parsed(r#"{"type":"update_settings"}"#),
-            (None, None, None, None, None, None, None, None)
+            (None, None, None, None, None, None, None, None, None, None)
         );
     }
 

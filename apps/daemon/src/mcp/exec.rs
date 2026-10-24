@@ -1816,7 +1816,7 @@ pub(super) mod tests {
     }
 
     /// The waiting request of `caller`, once it is there.
-    async fn wait_for_request(state: &Arc<AppState>, caller: &str) -> Event {
+    pub(in crate::mcp) async fn wait_for_request(state: &Arc<AppState>, caller: &str) -> Event {
         let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
         loop {
             let found = session_request::pending_events(state).into_iter().find(
@@ -3181,9 +3181,9 @@ pub(super) mod tests {
         }
     }
 
-    /// The automatic approval of session requests and of resume requests is the user's alone: an
-    /// agent can neither read either nor change either through the settings tools, whatever it
-    /// passes.
+    /// The automatic approvals of session requests, resume requests, account switches and handoffs
+    /// are the user's alone: an agent can neither read them nor change them through the settings
+    /// tools, whatever it passes.
     #[tokio::test]
     async fn the_automatic_approvals_are_out_of_the_agents_reach() {
         let (state, _dir) = settings_state("app-settings-auto-approve");
@@ -3192,6 +3192,8 @@ pub(super) mod tests {
             .unwrap();
         assert!(listed.get("auto_approve_session_requests").is_none());
         assert!(listed.get("auto_approve_resume_requests").is_none());
+        assert!(listed.get("auto_approve_account_switches").is_none());
+        assert!(listed.get("auto_approve_handoffs").is_none());
 
         for (stored, passed) in [(false, true), (true, false)] {
             state
@@ -3202,6 +3204,11 @@ pub(super) mod tests {
                 .store
                 .set_auto_approve_resume_requests(stored)
                 .unwrap();
+            state
+                .store
+                .set_auto_approve_account_switches(stored)
+                .unwrap();
+            state.store.set_auto_approve_handoffs(stored).unwrap();
             let updated = call(
                 &state,
                 "a",
@@ -3209,6 +3216,8 @@ pub(super) mod tests {
                 &arguments(json!({
                     "auto_approve_session_requests": passed,
                     "auto_approve_resume_requests": passed,
+                    "auto_approve_account_switches": passed,
+                    "auto_approve_handoffs": passed,
                     "default_clone_dir": "/tmp/clones",
                 })),
             )
@@ -3216,9 +3225,13 @@ pub(super) mod tests {
             .unwrap();
             assert!(updated.get("auto_approve_session_requests").is_none());
             assert!(updated.get("auto_approve_resume_requests").is_none());
+            assert!(updated.get("auto_approve_account_switches").is_none());
+            assert!(updated.get("auto_approve_handoffs").is_none());
             assert_eq!(updated["default_clone_dir"], "/tmp/clones");
             assert_eq!(state.store.auto_approve_session_requests().unwrap(), stored);
             assert_eq!(state.store.auto_approve_resume_requests().unwrap(), stored);
+            assert_eq!(state.store.auto_approve_account_switches().unwrap(), stored);
+            assert_eq!(state.store.auto_approve_handoffs().unwrap(), stored);
         }
     }
 

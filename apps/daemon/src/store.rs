@@ -272,6 +272,8 @@ impl Store {
                 auto_delete_unresumable_archives INTEGER NOT NULL DEFAULT 1,
                 auto_approve_session_requests INTEGER NOT NULL DEFAULT 0,
                 auto_approve_resume_requests INTEGER NOT NULL DEFAULT 0,
+                auto_approve_account_switches INTEGER NOT NULL DEFAULT 0,
+                auto_approve_handoffs INTEGER NOT NULL DEFAULT 0,
                 auto_select_account INTEGER NOT NULL DEFAULT 0,
                 sidebar_order_by_status INTEGER NOT NULL DEFAULT 1,
                 auto_start_quota_windows INTEGER NOT NULL DEFAULT 0,
@@ -379,6 +381,20 @@ impl Store {
             conn.execute(
                 "ALTER TABLE settings \
                  ADD COLUMN auto_approve_resume_requests INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
+        if !column_exists(&conn, "settings", "auto_approve_account_switches")? {
+            conn.execute(
+                "ALTER TABLE settings \
+                 ADD COLUMN auto_approve_account_switches INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
+        if !column_exists(&conn, "settings", "auto_approve_handoffs")? {
+            conn.execute(
+                "ALTER TABLE settings \
+                 ADD COLUMN auto_approve_handoffs INTEGER NOT NULL DEFAULT 0",
                 [],
             )?;
         }
@@ -1179,6 +1195,8 @@ impl Store {
             auto_delete_unresumable_archives: self.auto_delete_unresumable_archives()?,
             auto_approve_session_requests: self.auto_approve_session_requests()?,
             auto_approve_resume_requests: self.auto_approve_resume_requests()?,
+            auto_approve_account_switches: self.auto_approve_account_switches()?,
+            auto_approve_handoffs: self.auto_approve_handoffs()?,
             auto_select_account: self.auto_select_account()?,
             sidebar_order_by_status: self.sidebar_order_by_status()?,
             auto_start_quota_windows: self.auto_start_quota_windows()?,
@@ -1387,6 +1405,42 @@ impl Store {
         let changed = self.lock().execute(
             "UPDATE settings SET auto_approve_resume_requests = ?2 \
              WHERE id = ?1 AND auto_approve_resume_requests != ?2",
+            params![SETTINGS_ID, value],
+        )?;
+        Ok(changed > 0)
+    }
+
+    pub fn auto_approve_account_switches(&self) -> Result<bool> {
+        Ok(self.lock().query_row(
+            "SELECT auto_approve_account_switches FROM settings WHERE id = ?1",
+            params![SETTINGS_ID],
+            |row| row.get(0),
+        )?)
+    }
+
+    /// Whether the setting actually changed.
+    pub fn set_auto_approve_account_switches(&self, value: bool) -> Result<bool> {
+        let changed = self.lock().execute(
+            "UPDATE settings SET auto_approve_account_switches = ?2 \
+             WHERE id = ?1 AND auto_approve_account_switches != ?2",
+            params![SETTINGS_ID, value],
+        )?;
+        Ok(changed > 0)
+    }
+
+    pub fn auto_approve_handoffs(&self) -> Result<bool> {
+        Ok(self.lock().query_row(
+            "SELECT auto_approve_handoffs FROM settings WHERE id = ?1",
+            params![SETTINGS_ID],
+            |row| row.get(0),
+        )?)
+    }
+
+    /// Whether the setting actually changed.
+    pub fn set_auto_approve_handoffs(&self, value: bool) -> Result<bool> {
+        let changed = self.lock().execute(
+            "UPDATE settings SET auto_approve_handoffs = ?2 \
+             WHERE id = ?1 AND auto_approve_handoffs != ?2",
             params![SETTINGS_ID, value],
         )?;
         Ok(changed > 0)
@@ -2129,6 +2183,29 @@ impl Store {
         self.lock().execute(
             "UPDATE sessions SET pinned = ?2 WHERE id = ?1",
             params![id, pinned],
+        )?;
+        Ok(())
+    }
+
+    /// Replaces the session's model and effort overrides, each as `Session::model` states it: absent
+    /// inherits, `Some(None)` leaves the choice to the agent, a value pins it. Written apart from
+    /// [`Self::update_session`], which keeps what is stored.
+    pub fn set_session_launch_overrides(
+        &self,
+        id: &str,
+        model: &Option<Option<String>>,
+        effort: &Option<Option<String>>,
+    ) -> Result<()> {
+        self.lock().execute(
+            "UPDATE sessions SET model = ?2, effort = ?3, model_override = ?4, effort_override = ?5
+             WHERE id = ?1",
+            params![
+                id,
+                model.as_ref().and_then(|value| value.as_deref()),
+                effort.as_ref().and_then(|value| value.as_deref()),
+                model.is_some(),
+                effort.is_some(),
+            ],
         )?;
         Ok(())
     }
@@ -4620,6 +4697,22 @@ mod tests {
                 read: |settings| settings.auto_approve_resume_requests,
                 get: Store::auto_approve_resume_requests,
                 set: Store::set_auto_approve_resume_requests,
+                added_later: true,
+            },
+            Setting {
+                column: "auto_approve_account_switches",
+                default: false,
+                read: |settings| settings.auto_approve_account_switches,
+                get: Store::auto_approve_account_switches,
+                set: Store::set_auto_approve_account_switches,
+                added_later: true,
+            },
+            Setting {
+                column: "auto_approve_handoffs",
+                default: false,
+                read: |settings| settings.auto_approve_handoffs,
+                get: Store::auto_approve_handoffs,
+                set: Store::set_auto_approve_handoffs,
                 added_later: true,
             },
             Setting {

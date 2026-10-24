@@ -1316,6 +1316,19 @@ impl AppState {
         Ok(())
     }
 
+    /// Replaces the session's model and effort overrides and tells every client; see
+    /// [`Store::set_session_launch_overrides`].
+    pub fn set_session_launch_overrides(
+        &self,
+        id: &str,
+        model: &Option<Option<String>>,
+        effort: &Option<Option<String>>,
+    ) -> Result<()> {
+        self.store.set_session_launch_overrides(id, model, effort)?;
+        self.publish_session_by_id(id);
+        Ok(())
+    }
+
     /// Deletes the session's record and its saved output if it is archived, and broadcasts
     /// `session_deleted` when it was. `false` means it was not archived, is gone already, or is
     /// being launched right now (a resume in flight). Checked and deleted under the live-sessions

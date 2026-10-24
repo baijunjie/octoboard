@@ -173,6 +173,10 @@ export function ImportResult({ result, shortcuts }: { result: Imported; shortcut
         settingLine(t("settings.autoApproveSession.label"), result.settings_applied.auto_approve_session_requests)}
       {typeof result.settings_applied?.auto_approve_resume_requests === "boolean" &&
         settingLine(t("settings.autoApproveResume.label"), result.settings_applied.auto_approve_resume_requests)}
+      {typeof result.settings_applied?.auto_approve_account_switches === "boolean" &&
+        settingLine(t("settings.autoApproveAccountSwitches.label"), result.settings_applied.auto_approve_account_switches)}
+      {typeof result.settings_applied?.auto_approve_handoffs === "boolean" &&
+        settingLine(t("settings.autoApproveHandoffs.label"), result.settings_applied.auto_approve_handoffs)}
       {shortcuts && (
         <p>
           <Message id={shortcuts.applied === 0 ? "configuration.import.result.shortcutsReset" : "configuration.import.result.shortcuts"} params={{ setting: <InlineReference dir="auto" wrap>{t("settings.section.shortcuts")}</InlineReference>, count: shortcuts.applied }} />

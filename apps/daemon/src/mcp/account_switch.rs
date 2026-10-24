@@ -1,8 +1,9 @@
 //! The tool with which an owner moves a session of its own to another account of its agent,
 //! `switch_session_account`. What the switch does and refuses is the coordinator's
 //! (`coordinator::switch_session_account`); what is here is the caller's side: that the session is
-//! its own, the account is read for the session's own agent, and what the result tells it, since
-//! the session is not sent a message for the switch.
+//! its own, the account is read for the session's own agent, the user being asked first unless
+//! they chose to have switches approved without asking (`session_request`), and what the result
+//! tells it, since the session is not sent a message for the switch.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -10,8 +11,9 @@ use std::sync::Arc;
 use anyhow::Result;
 use serde_json::{json, Map, Value};
 
-use crate::coordinator;
+use crate::coordinator::{self, LaunchEdit};
 use crate::protocol::Session;
+use crate::session_request::{self, Change, Edits, Perform, Performed};
 use crate::state::AppState;
 
 use super::args::required_str;
@@ -22,6 +24,10 @@ use super::settings::resolve_account;
 /// see `coordinator::switch_session_account` for what happens to it and what is refused. The
 /// session is not told: it is relaunched on the new account and comes back awaiting instructions,
 /// which the result tells the caller to send.
+///
+/// Unless the user has chosen to have account switches approved without asking, the call
+/// waits while the user is asked, who may change the account and the session's model and
+/// reasoning effort; the result then names what was done.
 ///
 /// The shell environment the default account is read from comes from `snapshot` and the session is
 /// relaunched through `launch`: `env_shell::launch_snapshot` and `term::launch` outside the tests,
@@ -35,13 +41,85 @@ pub(super) async fn switch_session_account(
 ) -> Result<Value> {
     let target = resolve_owned_session(state, caller, required_str(arguments, "session")?)?;
     let account = resolve_account(state, target.agent, required_str(arguments, "account")?)?;
+    let run = {
+        let (state, caller_id, target, account) = (
+            state.clone(),
+            caller.id.clone(),
+            target.clone(),
+            account.clone(),
+        );
+        move |edits| async move {
+            perform(
+                &state, &caller_id, &target.id, account, edits, snapshot, launch,
+            )
+            .await
+        }
+    };
+    // Read once: the call acts on it.
+    if state.store.auto_approve_account_switches()? {
+        return session_request::run_unasked(
+            state,
+            caller,
+            "switch_session_account",
+            &target.id,
+            run(Edits::default()),
+        )
+        .await;
+    }
+    // Where nothing the user changes in the dialog could help.
+    coordinator::refuse_if_archived(&target)?;
+    coordinator::refuse_if_on_account(&target, &account)?;
+    coordinator::refuse_if_account_disabled(state, target.agent, account.as_deref())?;
+    let change = Change::Switch {
+        target: target.id.clone(),
+        account,
+        perform: Perform::new(run),
+    };
+    session_request::ask_to_change(
+        state,
+        caller,
+        &target,
+        change,
+        session_request::ANSWER_TIME_LIMIT,
+    )
+    .await
+}
+
+/// How a model or effort a switch set is told: its value, or the agent's own default.
+fn setting_text(value: &Option<String>) -> String {
+    value.as_deref().map_or_else(
+        || "the agent's own default".to_string(),
+        |text| format!("`{text}`"),
+    )
+}
+
+/// Switches the session `target_id` to `asked`, or to the account the user chose instead, with the
+/// model and reasoning effort the user changed, which become the session's own. What the user
+/// changed is put back when the switch fails.
+async fn perform(
+    state: &Arc<AppState>,
+    caller_id: &str,
+    target_id: &str,
+    asked: Option<String>,
+    edits: Edits,
+    snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
+    launch: impl FnOnce(crate::term::LaunchRequest) -> Result<crate::term::Launch> + Send + 'static,
+) -> Result<Performed> {
+    // As it stands now, which is not as it stood when the user was asked.
+    let target = state.session_record(target_id)?;
+    let account = edits.account.clone().unwrap_or_else(|| asked.clone());
+    let chose_otherwise = account != asked;
     coordinator::switch_session_account_with(
         state,
         &target.id,
         Some(account),
-        Some(&caller.id),
+        Some(caller_id),
         // An owner asks over MCP, which has no window appearance to match.
         None,
+        LaunchEdit {
+            model: edits.model.clone(),
+            effort: edits.effort.clone(),
+        },
         snapshot,
         launch,
     )
@@ -63,20 +141,45 @@ pub(super) async fn switch_session_account(
     if !(target.has_conversation && target.agent_session_id.is_some()) {
         note.push_str(" It had no conversation yet, so it starts fresh there.");
     }
-    Ok(json!({
+    if chose_otherwise {
+        note.push_str(" The user chose this account instead of the one you asked for.");
+    }
+    let mut result = json!({
         "session": moved.id,
         "agent": moved.agent,
         "account": account,
         "account_name": name,
-        "note": note,
-    }))
+    });
+    if let Some(model) = &moved.model {
+        result["model"] = json!(model);
+    }
+    if let Some(effort) = &moved.effort {
+        result["effort"] = json!(effort);
+    }
+    if let Some(model) = &edits.model {
+        note.push_str(&format!(
+            " The user set its model to {}.",
+            setting_text(model)
+        ));
+    }
+    if let Some(effort) = &edits.effort {
+        note.push_str(&format!(
+            " The user set its reasoning effort to {}.",
+            setting_text(effort)
+        ));
+    }
+    result["note"] = json!(note);
+    Ok(Performed {
+        session: moved,
+        result,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::mcp::exec::tests::{arguments, peer_state, shared_console_state};
-    use crate::protocol::{Account, Agent, DEFAULT_ACCOUNT_NAME};
+    use crate::protocol::{Account, Agent, Event, SessionRequestAction, DEFAULT_ACCOUNT_NAME};
     use crate::test_support::{
         heard_after_marker, running, stand_in_launch, Launched, ScratchDir, StandIn,
     };
@@ -126,9 +229,17 @@ mod tests {
         record.has_conversation = true;
         record.agent_session_id = Some("agent-1".to_string());
         state.store.update_session(&record).unwrap();
+        default_env(dir)
+    }
+
+    /// The shell environment `prepare` makes the default account's directory come from, for a
+    /// switch that reads it again, so that no test reads the real one.
+    fn default_env(
+        dir: &ScratchDir,
+    ) -> impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static {
         let env = HashMap::from([(
             "CLAUDE_CONFIG_DIR".to_string(),
-            default.to_string_lossy().into_owned(),
+            dir.join("default-claude").to_string_lossy().into_owned(),
         )]);
         move || Ok(env)
     }
@@ -203,6 +314,7 @@ mod tests {
     #[tokio::test]
     async fn a_console_session_switches_a_session_of_its_own() {
         let (state, dir) = shared_console_state("switch-console");
+        state.store.set_auto_approve_account_switches(true).unwrap();
         let snapshot = prepare(&state, &dir, "of-a");
         let caller = running(&state, "a");
         let _original = live_and_watched(&state, "of-a");
@@ -233,6 +345,7 @@ mod tests {
     #[tokio::test]
     async fn an_unbound_project_session_switches_a_session_of_its_own() {
         let (state, dir) = peer_state("switch-project");
+        state.store.set_auto_approve_account_switches(true).unwrap();
         let snapshot = prepare(&state, &dir, "mine");
         let caller = running(&state, "starter");
         let _original = live_and_watched(&state, "mine");
@@ -317,5 +430,353 @@ mod tests {
         assert!(!original.poll_exit(), "the process was left running");
         assert!(!dir.join("claude-a").exists());
         assert_eq!(sessions_as_stored(&state), before);
+    }
+
+    /// The request a switch left waiting, and the caller that is held on it.
+    fn spawn_switch(
+        state: &Arc<AppState>,
+        caller: &str,
+        input: Value,
+        snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
+        launch: impl FnOnce(crate::term::LaunchRequest) -> Result<crate::term::Launch> + Send + 'static,
+    ) -> tokio::task::JoinHandle<Result<Value>> {
+        let (state, caller) = (state.clone(), state.session_record(caller).unwrap());
+        tokio::spawn(async move {
+            switch_session_account(&state, &caller, &arguments(input), snapshot, launch).await
+        })
+    }
+
+    fn add_second_account(state: &Arc<AppState>, dir: &ScratchDir) {
+        state
+            .store
+            .insert_account(&Account {
+                id: "claude-b".to_string(),
+                agent: Agent::Claude,
+                name: "claude-b name".to_string(),
+                config_dir: dir.join("claude-b").to_string_lossy().into_owned(),
+                share_default_config: false,
+                share_default_config_incomplete: false,
+                disabled: false,
+            })
+            .unwrap();
+    }
+
+    /// With the user not having waived the dialog, the call waits, naming the session and the
+    /// account asked for, with the caller's hand up; the account the user picks instead is the one
+    /// the session is moved to, the model and effort they set become the session's own, and the
+    /// result names what was done.
+    #[tokio::test]
+    async fn a_switch_waits_for_the_user_and_moves_the_session_where_the_user_chose() {
+        let (state, dir) = shared_console_state("switch-asks");
+        let snapshot = prepare(&state, &dir, "of-a");
+        add_second_account(&state, &dir);
+        let _caller = running(&state, "a");
+        let _original = live_and_watched(&state, "of-a");
+        let (launches, started, resumed): (Launches, Started, Resumed) = Default::default();
+        let call = spawn_switch(
+            &state,
+            "a",
+            json!({ "session": "of-a", "account": "claude-a" }),
+            snapshot,
+            recording_launch(&started, &launches, &resumed),
+        );
+
+        let Event::SessionRequest {
+            request_id,
+            session,
+            action,
+            target,
+            account,
+            agent,
+            ..
+        } = crate::mcp::exec::tests::wait_for_request(&state, "a").await
+        else {
+            panic!("a session request");
+        };
+        assert_eq!(session, "a");
+        assert_eq!(action, SessionRequestAction::Switch);
+        assert_eq!(target.as_deref(), Some("of-a"));
+        assert_eq!(account.as_deref(), Some("claude-a"));
+        assert_eq!(agent, Agent::Claude);
+        assert!(state.session_requests.is_waiting_for("a"));
+        assert!(
+            launches.lock().unwrap().is_empty(),
+            "nothing moves before the answer"
+        );
+
+        let moved = session_request::answer(
+            &state,
+            &request_id,
+            true,
+            Edits {
+                account: Some(Some("claude-b".to_string())),
+                model: Some(None),
+                effort: Some(None),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        let result = call.await.unwrap().unwrap();
+        assert_eq!(moved.id, "of-a");
+        assert_eq!(result["account"], "claude-b");
+        assert_eq!(result["account_name"], "claude-b name");
+        let record = state.store.get_session("of-a").unwrap().unwrap();
+        assert_eq!(record.account_id.as_deref(), Some("claude-b"));
+        assert_eq!((record.model, record.effort), (Some(None), Some(None)));
+        assert_eq!(launches.lock().unwrap().len(), 1);
+    }
+
+    /// A refusal ends the call with an error saying the user refused and nothing changed.
+    #[tokio::test]
+    async fn a_refused_switch_returns_an_error_and_changes_nothing() {
+        let (state, dir) = shared_console_state("switch-refused-by-user");
+        let snapshot = prepare(&state, &dir, "of-a");
+        let _caller = running(&state, "a");
+        let original = live_and_watched(&state, "of-a");
+        let before = sessions_as_stored(&state);
+        let (launches, started, resumed): (Launches, Started, Resumed) = Default::default();
+        let call = spawn_switch(
+            &state,
+            "a",
+            json!({ "session": "of-a", "account": "claude-a" }),
+            snapshot,
+            recording_launch(&started, &launches, &resumed),
+        );
+        let Event::SessionRequest { request_id, .. } =
+            crate::mcp::exec::tests::wait_for_request(&state, "a").await
+        else {
+            panic!("a session request");
+        };
+
+        assert!(
+            session_request::answer(&state, &request_id, false, Edits::default())
+                .await
+                .unwrap()
+                .is_none()
+        );
+
+        let err = call.await.unwrap().expect_err("refused");
+        assert!(err.to_string().contains("the user refused"), "{err}");
+        assert!(err.to_string().contains("nothing was changed"), "{err}");
+        assert!(launches.lock().unwrap().is_empty());
+        assert!(!original.poll_exit(), "the process was left running");
+        assert!(!state.session_requests.is_waiting_for("a"));
+        assert_eq!(sessions_as_stored(&state), before);
+    }
+
+    /// A switch the user approves with another account and a model and effort change, whose
+    /// relaunch fails, leaves the session on its account with its model and effort as they were.
+    #[tokio::test]
+    async fn a_failed_approved_switch_puts_back_the_account_model_and_effort() {
+        let (state, dir) = shared_console_state("switch-fails-after-approval");
+        let snapshot = prepare(&state, &dir, "of-a");
+        let _caller = running(&state, "a");
+        let _original = live_and_watched(&state, "of-a");
+        let call = spawn_switch(
+            &state,
+            "a",
+            json!({ "session": "of-a", "account": "claude-a" }),
+            snapshot,
+            |_| Err(anyhow::anyhow!("the agent would not start")),
+        );
+        let Event::SessionRequest { request_id, .. } =
+            crate::mcp::exec::tests::wait_for_request(&state, "a").await
+        else {
+            panic!("a session request");
+        };
+
+        session_request::answer(
+            &state,
+            &request_id,
+            true,
+            Edits {
+                model: Some(None),
+                effort: Some(None),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect_err("the relaunch fails");
+
+        let err = call.await.unwrap().expect_err("could not be carried out");
+        assert!(err.to_string().contains("the user approved"), "{err}");
+        let record = state.store.get_session("of-a").unwrap().unwrap();
+        assert_eq!((record.model, record.effort), (None, None));
+        assert_eq!(record.account_id, None);
+    }
+
+    /// With the switches approved without asking, a call dropped while the switch runs does not
+    /// stop it, and the outcome is written into the caller's session.
+    #[tokio::test]
+    async fn a_dropped_unasked_switch_finishes_and_tells_the_caller() {
+        let (state, dir) = shared_console_state("switch-unasked-dropped");
+        state.store.set_auto_approve_account_switches(true).unwrap();
+        let snapshot = prepare(&state, &dir, "of-a");
+        let caller = running(&state, "a");
+        let original = live_and_watched(&state, "of-a");
+        let (launches, started, resumed): (Launches, Started, Resumed) = Default::default();
+        let call = spawn_switch(
+            &state,
+            "a",
+            json!({ "session": "of-a", "account": "claude-a" }),
+            snapshot,
+            recording_launch(&started, &launches, &resumed),
+        );
+        // Dropped once the switch is under way: it has ended the session's process.
+        let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
+        while !original.poll_exit() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the switch never started"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+        call.abort();
+
+        // Polled without blocking the runtime the switch runs on.
+        let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
+        let mut heard = String::new();
+        while !heard.contains("is now on the Claude Code account") {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the caller was never told: {heard}"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            heard = String::from_utf8_lossy(&caller.recent_output(8 * 1024)).into_owned();
+        }
+        assert_moved_to_claude_a(&state, &dir, "of-a", &resumed);
+    }
+
+    /// An account the user turned off is refused before the user is asked.
+    #[tokio::test]
+    async fn a_switch_to_a_turned_off_account_is_refused_without_asking() {
+        let (state, dir) = shared_console_state("switch-turned-off");
+        let snapshot = prepare(&state, &dir, "of-a");
+        add_second_account(&state, &dir);
+        state.store.set_account_disabled("claude-b", true).unwrap();
+        let _caller = running(&state, "a");
+        let (launches, started, resumed): (Launches, Started, Resumed) = Default::default();
+
+        let err = switch_session_account(
+            &state,
+            &state.session_record("a").unwrap(),
+            &arguments(json!({ "session": "of-a", "account": "claude-b" })),
+            snapshot,
+            recording_launch(&started, &launches, &resumed),
+        )
+        .await
+        .expect_err("refused");
+
+        assert!(err.to_string().contains("is disabled"), "{err}");
+        assert!(!state.session_requests.is_waiting_for("a"));
+    }
+
+    /// A switch to the account the session is on is refused before the user is asked.
+    #[tokio::test]
+    async fn a_switch_to_the_current_account_is_refused_without_asking() {
+        let (state, dir) = shared_console_state("switch-current");
+        let snapshot = prepare(&state, &dir, "of-a");
+        let _caller = running(&state, "a");
+        let (launches, started, resumed): (Launches, Started, Resumed) = Default::default();
+
+        let err = switch_session_account(
+            &state,
+            &state.session_record("a").unwrap(),
+            &arguments(json!({ "session": "of-a", "account": "default" })),
+            snapshot,
+            recording_launch(&started, &launches, &resumed),
+        )
+        .await
+        .expect_err("refused");
+
+        assert!(err.to_string().contains("on that account already"), "{err}");
+        assert!(!state.session_requests.is_waiting_for("a"));
+    }
+
+    /// Switches of two different sessions of one owner wait side by side; a second call for the
+    /// same session takes the first one's place and leaves the other session's alone.
+    #[tokio::test]
+    async fn switches_wait_per_session() {
+        let (state, dir) = shared_console_state("switch-per-session");
+        let snapshot = prepare(&state, &dir, "of-a");
+        state
+            .store
+            .insert_session(&crate::mcp::exec::tests::project_session(
+                "of-a-too",
+                "console-1",
+                Some("a"),
+            ))
+            .unwrap();
+        let _caller = running(&state, "a");
+        let (launches, started, resumed): (Launches, Started, Resumed) = Default::default();
+        let first = spawn_switch(
+            &state,
+            "a",
+            json!({ "session": "of-a", "account": "claude-a" }),
+            snapshot,
+            recording_launch(&started, &launches, &resumed),
+        );
+        crate::mcp::exec::tests::wait_for_request(&state, "a").await;
+        let other = spawn_switch(
+            &state,
+            "a",
+            json!({ "session": "of-a-too", "account": "claude-a" }),
+            default_env(&dir),
+            recording_launch(&started, &launches, &resumed),
+        );
+        let waiting = || session_request::pending_events(&state).len();
+        let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
+        while waiting() < 2 {
+            assert!(std::time::Instant::now() < deadline, "both never waited");
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+        let again = spawn_switch(
+            &state,
+            "a",
+            json!({ "session": "of-a", "account": "claude-a" }),
+            default_env(&dir),
+            recording_launch(&started, &launches, &resumed),
+        );
+
+        let err = first.await.unwrap().expect_err("replaced");
+        assert!(err.to_string().contains("withdrawn"), "{err}");
+        assert!(!other.is_finished(), "the other session's request waits on");
+        other.abort();
+        again.abort();
+    }
+
+    /// A switch that runs without asking withdraws the request for the same session that still
+    /// waits.
+    #[tokio::test]
+    async fn an_unasked_switch_withdraws_a_waiting_request_for_the_same_session() {
+        let (state, dir) = shared_console_state("switch-unasked-replaces");
+        let snapshot = prepare(&state, &dir, "of-a");
+        let _caller = running(&state, "a");
+        let _original = live_and_watched(&state, "of-a");
+        let (launches, started, resumed): (Launches, Started, Resumed) = Default::default();
+        let waiting = spawn_switch(
+            &state,
+            "a",
+            json!({ "session": "of-a", "account": "claude-a" }),
+            snapshot,
+            recording_launch(&started, &launches, &resumed),
+        );
+        crate::mcp::exec::tests::wait_for_request(&state, "a").await;
+        state.store.set_auto_approve_account_switches(true).unwrap();
+        let unasked = spawn_switch(
+            &state,
+            "a",
+            json!({ "session": "of-a", "account": "claude-a" }),
+            default_env(&dir),
+            |_| Err(anyhow::anyhow!("not started")),
+        );
+
+        let err = waiting.await.unwrap().expect_err("withdrawn");
+        assert!(err.to_string().contains("withdrawn"), "{err}");
+        assert!(!state.session_requests.is_waiting_for("a"));
+        let _ = unasked.await;
     }
 }

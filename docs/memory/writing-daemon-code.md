@@ -130,7 +130,9 @@ claim covers only the checks made once it is held: one made before it — includ
 the operation that takes the claim, such as an MCP tool checking that the session asked about is the caller's — is
 repeated inside the operation under the claim, with whatever it needs passed in. When the judging ran before the claim
 was taken, re-read everything that decided it under the claim — each member of a group and its standing, not only the
-one row — and back out if any of it changed. Put
+one row — and back out if any of it changed. The same goes for what the operation writes on the way: a write that
+goes with it (the model and effort an account switch sets) is made under the claim, after its checks, and put back on
+each of its failure paths, since one made before the claim is read by whatever launches in between. Put
 blocking filesystem or process work in a handler on `tokio::task::spawn_blocking` and await it; do not use
 `block_in_place`, which panics under the current-thread runtime plain `#[tokio::test]` gives the coordinator tests.
 

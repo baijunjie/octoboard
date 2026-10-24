@@ -69,6 +69,8 @@ type SettingMessage =
   | "configuration.import.settings.autoStartQuotaWindows.turnsOn"
   | "configuration.import.settings.autoApproveSession.turnsOn"
   | "configuration.import.settings.autoApproveResume.turnsOn"
+  | "configuration.import.settings.autoApproveAccountSwitches.turnsOn"
+  | "configuration.import.settings.autoApproveHandoffs.turnsOn"
   | "configuration.import.settings.turnsOff"
   | "configuration.import.settings.alreadyOn"
   | "configuration.import.settings.alreadyOff";
@@ -320,6 +322,12 @@ export function ImportReview({
       )}
       {typeof settings.auto_approve_resume_requests === "boolean" && typeof settings.current_auto_approve_resume_requests === "boolean" && (
         <SettingNote label={t("settings.autoApproveResume.label")} wanted={settings.auto_approve_resume_requests} current={settings.current_auto_approve_resume_requests} turnsOn="configuration.import.settings.autoApproveResume.turnsOn" />
+      )}
+      {typeof settings.auto_approve_account_switches === "boolean" && typeof settings.current_auto_approve_account_switches === "boolean" && (
+        <SettingNote label={t("settings.autoApproveAccountSwitches.label")} wanted={settings.auto_approve_account_switches} current={settings.current_auto_approve_account_switches} turnsOn="configuration.import.settings.autoApproveAccountSwitches.turnsOn" />
+      )}
+      {typeof settings.auto_approve_handoffs === "boolean" && typeof settings.current_auto_approve_handoffs === "boolean" && (
+        <SettingNote label={t("settings.autoApproveHandoffs.label")} wanted={settings.auto_approve_handoffs} current={settings.current_auto_approve_handoffs} turnsOn="configuration.import.settings.autoApproveHandoffs.turnsOn" />
       )}
       {shortcuts && (
         <span className="block">

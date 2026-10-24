@@ -1909,3 +1909,42 @@ async fn an_automatic_approval_opens_a_session_on_the_record() {
     );
     assert!(pending_events(&state).is_empty());
 }
+
+/// A switch nobody answers within the limit ends with an error saying so and that nothing was
+/// changed, and runs nothing.
+#[tokio::test]
+async fn a_switch_nobody_answers_times_out_without_running() {
+    let (state, _dir) = fixture("switch-timeout");
+    let _asker = running(&state, "asker");
+    state
+        .store
+        .insert_session(&project_session("owned"))
+        .unwrap();
+    let ran = Arc::new(AtomicUsize::new(0));
+    let action = Change::Switch {
+        target: "owned".to_string(),
+        account: None,
+        perform: Perform::new({
+            let ran = ran.clone();
+            move |_| async move {
+                ran.fetch_add(1, Ordering::SeqCst);
+                bail!("not to be run")
+            }
+        }),
+    };
+    let caller = state.session_record("asker").unwrap();
+    let target = state.session_record("owned").unwrap();
+
+    let err = ask_to_change(&state, &caller, &target, action, Duration::from_millis(50))
+        .await
+        .expect_err("timed out");
+
+    assert!(
+        err.to_string()
+            .contains("the user did not respond to this switch of the session's account"),
+        "{err}"
+    );
+    assert!(err.to_string().contains("nothing was changed"), "{err}");
+    assert_eq!(ran.load(Ordering::SeqCst), 0);
+    assert!(!state.session_requests.is_waiting_for("asker"));
+}

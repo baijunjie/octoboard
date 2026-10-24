@@ -272,6 +272,10 @@ it("states what turning on the automatic approvals lets agents do", async () => 
   expect(text()).toContain("request to start a session that reports to you is then approved without asking you first");
   expect(text()).toContain("Turns on Automatically approve resume requests");
   expect(text()).toContain("request to reopen or resume a session");
+  expect(text()).toContain("Turns on Automatically approve account switches");
+  expect(text()).toContain("request to switch the account of one of its sessions is then approved without asking you first");
+  expect(text()).toContain("Turns on Automatically approve handoffs");
+  expect(text()).toContain("request to hand one of its sessions off to another agent is then approved without asking you first");
 });
 
 it("leaves out the automatic approvals when the file does not carry them", async () => {
@@ -281,6 +285,8 @@ it("leaves out the automatic approvals when the file does not carry them", async
       ...REVIEW.settings!,
       auto_approve_session_requests: null,
       auto_approve_resume_requests: null,
+      auto_approve_account_switches: null,
+      auto_approve_handoffs: null,
     },
   };
   await reviewing({ reply: (body) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected", ...without }) : reply(body)) });

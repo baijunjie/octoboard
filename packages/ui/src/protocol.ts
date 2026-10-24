@@ -56,7 +56,7 @@ export type Role = "console" | "project";
 export type Origin = "console" | "user";
 /** What approving a `session_request` does. A client that does not know a value does not
  * offer the request, and the daemon's timeout ends the call. */
-export const SESSION_REQUEST_ACTIONS = ["start", "reopen", "resume", "resume_record"] as const;
+export const SESSION_REQUEST_ACTIONS = ["start", "reopen", "resume", "resume_record", "switch", "handoff"] as const;
 export type SessionRequestAction = (typeof SESSION_REQUEST_ACTIONS)[number];
 export type SessionStatus = "starting" | "working" | "waiting_user" | "idle" | "interrupted" | "archived";
 export type HostKind = "local" | "ssh";
@@ -599,6 +599,13 @@ export interface Settings {
   /** `auto_approve_session_requests` for a session's `request_resume_session` call, independent of
    * it. Optional only so that a state built without it reads as off; the daemon always sends it. */
   auto_approve_resume_requests?: boolean;
+  /** Off (the default): an owner's `switch_session_account` calls wait for the user's approval.
+   * On: they run without asking. Optional only so that a state built without it reads as off; the
+   * daemon always sends it. */
+  auto_approve_account_switches?: boolean;
+  /** `auto_approve_account_switches` for an owner's `handoff_session` calls, independent of it.
+   * Optional only so that a state built without it reads as off; the daemon always sends it. */
+  auto_approve_handoffs?: boolean;
   /** Off (the default): a new session uses the account the console or project resolves to. On: it
    * uses the account of that agent whose weekly quota resets soonest, so quota that is about to
    * reset is used before it is lost. Optional only so that a state built without it reads as off;
@@ -712,6 +719,10 @@ export interface DocumentSettings {
   auto_approve_session_requests?: boolean | null;
   /** Absent in a file exported before the setting was carried; applying then leaves it as it is. */
   auto_approve_resume_requests?: boolean | null;
+  /** Absent in a file exported before the setting was carried; applying then leaves it as it is. */
+  auto_approve_account_switches?: boolean | null;
+  /** Absent in a file exported before the setting was carried; applying then leaves it as it is. */
+  auto_approve_handoffs?: boolean | null;
   /** The keyboard shortcuts the exporting client changed, by command id: added by the client to the
    * document it saves, never by the daemon, which only carries them through. Absent in a file
    * without them; applying then leaves the client's shortcuts as they are. */
@@ -808,6 +819,14 @@ export interface InspectedSettings {
   auto_approve_resume_requests?: boolean | null;
   /** This machine's value. Absent when the reply predates the setting. */
   current_auto_approve_resume_requests?: boolean;
+  /** Absent when the document predates the setting. */
+  auto_approve_account_switches?: boolean | null;
+  /** This machine's value. Absent when the reply predates the setting. */
+  current_auto_approve_account_switches?: boolean;
+  /** Absent when the document predates the setting. */
+  auto_approve_handoffs?: boolean | null;
+  /** This machine's value. Absent when the reply predates the setting. */
+  current_auto_approve_handoffs?: boolean;
 }
 
 /** An `error` reply's `code`, `params` and `message`, for something an import could not do. */
@@ -1314,15 +1333,19 @@ export type RequestBody =
   | { type: "remove_trusted_directory"; path: string }
   /** The user's answer to a `session_request`: `approve` does what it describes (starts a session
    * with no owner, brings back the session that holds a conversation, or opens one on a
-   * conversation's record); a refusal, dismissing the dialog included, changes nothing. The first
+   * conversation's record, moves a session to another account, or hands one off); a refusal,
+   * dismissing the dialog included, changes nothing. For a `switch` or `handoff` the values the
+   * user ended the form on travel with an approval: `agent` and `account` (a handoff's receiving
+   * agent and its account; a switch's target account), and `model` and `effort`, each absent where
+   * the request's own value stands and null for the agent's own default. The first
    * answer from any client wins; a later one is refused with `SESSION_REQUEST_ANSWERED`, or
    * `SESSION_REQUEST_NOT_WAITING` when the session stopped waiting. An approval is answered with
    * `session_opened` for the session it started or brought back, a refusal with `ack`. */
-  | { type: "answer_session_request"; request_id: string; approve: boolean }
+  | { type: "answer_session_request"; request_id: string; approve: boolean; agent?: Agent; account?: string | null; model?: string | null; effort?: string | null }
   /** Each settable field is optional: absent means leave it as it is. Answered with `ack`;
    * broadcasts `settings_updated` only when something actually changed (the trusted-folders
    * pattern). */
-  | { type: "update_settings"; auto_pull_repositories?: boolean; auto_delete_unresumable_archives?: boolean; auto_approve_session_requests?: boolean; auto_approve_resume_requests?: boolean; auto_select_account?: boolean; sidebar_order_by_status?: boolean; auto_start_quota_windows?: boolean; default_clone_dir?: string }
+  | { type: "update_settings"; auto_pull_repositories?: boolean; auto_delete_unresumable_archives?: boolean; auto_approve_session_requests?: boolean; auto_approve_resume_requests?: boolean; auto_approve_account_switches?: boolean; auto_approve_handoffs?: boolean; auto_select_account?: boolean; sidebar_order_by_status?: boolean; auto_start_quota_windows?: boolean; default_clone_dir?: string }
   /** Answered with `ack` at once; each reading that finishes arrives as `account_quotas_updated`.
    * Re-reads the quotas of the accounts it selects whose last attempt is older than the polling
    * interval, and also those whose last attempt is over 30 seconds old and which hold no windows
@@ -1617,8 +1640,10 @@ export type Event =
     /** The requesting session. */
     session: string;
     /** What an approval does: `start` a new session with no owner, `reopen` the archived session
-     * that holds a conversation, `resume` the interrupted one, or open a new session on the agent's
-     * own record of a conversation no session holds (`resume_record`). */
+     * that holds a conversation, `resume` the interrupted one, open a new session on the agent's
+     * own record of a conversation no session holds (`resume_record`), or move the session `target`
+     * to another account of its agent (`switch`) or hand it off to a new session of another agent
+     * (`handoff`). */
     action: SessionRequestAction;
     /** Whether the session asked for would be a console session or a project session. */
     role: Role;
@@ -1627,9 +1652,11 @@ export type Event =
     /** The project the new session would be in, or the project of the session to bring back; null
      * for a console session. */
     project: string | null;
-    /** The agent the new session would run, or the agent of the session to bring back. */
+    /** The agent the new session would run, or the agent of the session to bring back or switch; for
+     * `handoff`, the receiving agent. */
     agent: Agent;
-    /** For `reopen` and `resume`: the session an approval brings back. Null otherwise. */
+    /** For `reopen`, `resume`, `switch` and `handoff`: the session an approval brings back, switches
+     * or hands off. Null otherwise. */
     target: string | null;
     /** For `reopen` and `resume`: the session the target reports to, null when it has none. Null
      * otherwise. */
@@ -1637,14 +1664,19 @@ export type Event =
     /** For `reopen` and `resume`: the archived owners that come back with the target, topmost
      * first. Empty otherwise. */
     reopened_owners: string[];
-    /** For `resume_record`: the account that holds the record, null for the agent's default
-     * account. Null otherwise. */
+    /** For `resume_record`: the account that holds the record; for `switch`, the account the call
+     * asked for; for `handoff`, the account the receiving session would run on. Null for the agent's
+     * default account, and for every other request. */
     account: string | null;
     /** For `resume_record`: the conversation's id. Null otherwise. */
     conversation: string | null;
     /** The branches an approval would hand to the new session, as wire paths below `refs/heads/`;
      * empty when the request hands none over. */
     branches: string[];
+    /** For `handoff`: the model and effort the call asked for; absent when it left them out, null
+     * for the agent's own default. */
+    model?: string | null;
+    effort?: string | null;
     /** Milliseconds since the epoch; several requests are shown oldest first. */
     requested_at: number;
   }

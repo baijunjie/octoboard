@@ -46,19 +46,37 @@ export function useChoiceGroups(): ChoiceGroup[] {
  * the one whose weekly quota resets soonest rather than the one the project or console resolves to.
  * A forced choice that can still be picked wins over that. Switching to an agent whose remembered
  * account is no longer an entry falls back the same way.
+ *
+ * `preset` is where the pickers start: an agent and account, and the model and effort, each absent
+ * to follow the parent. `overrides` then holds what the user changed, starting from the preset's
+ * values. `presetGone` is whether the preset's agent can no longer be picked, or its account is no
+ * longer among that agent's accounts, and nothing has been picked since: the dialog then shows the
+ * pickers empty rather than a fallback the user never chose.
  */
-export function useLaunchChoice(parentConsole: Console, project: Project | undefined, exclude?: Agent, forced?: AccountChoice) {
+export function useLaunchChoice(parentConsole: Console, project: Project | undefined, exclude?: Agent, forced?: AccountChoice, preset?: { choice: AccountChoice } & Overrides) {
   const t = useT();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const autoSelect = useDaemonStore((s) => s.settings.auto_select_account) ?? false;
   const now = useNow();
-  const [pickedAgent, setPickedAgent] = useState<Agent>();
-  const [pickedAccounts, setPickedAccounts] = useState<Partial<Record<Agent, string | null>>>({});
-  const [launchSettings, setLaunchSettings] = useState<Partial<Record<Agent, Overrides>>>({});
+  const [pickedAgent, setPickedAgentValue] = useState<Agent | undefined>(preset?.choice.agent);
+  const [touched, setTouched] = useState(false);
+  const [pickedAccounts, setPickedAccounts] = useState<Partial<Record<Agent, string | null>>>(preset ? { [preset.choice.agent]: preset.choice.account } : {});
+  const [launchSettings, setLaunchSettings] = useState<Partial<Record<Agent, Overrides>>>(
+    preset && (preset.model !== undefined || preset.effort !== undefined)
+      ? { [preset.choice.agent]: { ...(preset.model !== undefined && { model: preset.model }), ...(preset.effort !== undefined && { effort: preset.effort }) } }
+      : {},
+  );
 
   const groups = useChoiceGroups().filter((group) => group.agent !== exclude);
+  const presetGroup = preset && groups.find((group) => group.agent === preset.choice.agent);
+  const presetGone = preset !== undefined && !touched
+    && (!presetGroup?.selectable || !presetGroup.entries.some((entry) => entry.account === preset.choice.account));
+  const setPickedAgent = (agent: Agent) => {
+    setTouched(true);
+    setPickedAgentValue(agent);
+  };
   const openingAccount = (agent: Agent): string | null =>
     accountOpenedOn(parentConsole, project, agent, accounts, groups, autoSelect ? { now } : undefined);
   const pickedAccount = pickedAgent ? pickedAccounts[pickedAgent] : undefined;
@@ -97,6 +115,8 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
     choice,
     /** No agent that may be picked. */
     blocked,
+    /** The preset's agent or account can no longer be picked, and the user has not picked since. */
+    presetGone,
     /** Why the chosen account cannot run a session, when it is disabled, its quota is used up or its sharing change runs. */
     unavailable: disabled && chosenEntry
       ? { title: t("accountChoice.disabled.title"), description: t("accountChoice.disabled.description", { name: isolate(chosenEntry.name) }) }

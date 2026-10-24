@@ -1121,6 +1121,7 @@ async fn a_switch_onto_an_account_that_stopped_sharing_that_fails_leaves_the_con
         Some(Some("claude-a".to_string())),
         None,
         None,
+        crate::coordinator::LaunchEdit::default(),
         move || Ok(shell),
         launches.launch(true),
     )
@@ -1514,6 +1515,7 @@ async fn nothing_of_the_account_starts_while_its_change_runs() {
             Some(Some("claude-a".to_string())),
             None,
             None,
+            crate::coordinator::LaunchEdit::default(),
             || Ok(std::collections::HashMap::new()),
             launches.launch(false),
         )
@@ -1529,6 +1531,7 @@ async fn nothing_of_the_account_starts_while_its_change_runs() {
             Some(None),
             None,
             None,
+            crate::coordinator::LaunchEdit::default(),
             || Ok(std::collections::HashMap::new()),
             launches.launch(false),
         )
@@ -1680,6 +1683,7 @@ async fn no_launch_or_switch_carries_a_change_out() {
         Some(Some("claude-a".to_string())),
         None,
         None,
+        crate::coordinator::LaunchEdit::default(),
         || Ok(std::collections::HashMap::new()),
         launches.launch(false),
     )

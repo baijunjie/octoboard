@@ -1,6 +1,6 @@
 import { Archive, ArrowLeftRight, Copy, Download, Focus, Forward, Folder, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Lock, LockOpen, Palette, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Unlink, Upload, SquareArrowOutUpRight } from "lucide-react";
 
-import { ownAccountChangingUnavailable, sessionSwitchingUnavailable, sharingChangeUnavailable, switchEntries, type QuotaReadings } from "../accountChoices";
+import { handoffBlock, switchEntries, switchEntryBlock, type QuotaReadings } from "../accountChoices";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanel, ActionMenuSubmenu } from "../components/ActionMenu";
 import { ExternalLinkIcon } from "../components/ExternalLinkIcon";
 import { RepositoryIcon } from "../components/RepositoryIcon";
@@ -178,7 +178,7 @@ function switchAccountSubmenu(
       // not marked used up; a removed account's directory has no quota.
       const usage = accountUsage(t, session.agent, quota, current ? undefined : exhaustedBy, readings?.now ?? 0);
       // Nothing can be switched onto an account whose sharing change runs, nor away from one, whatever its quota.
-      const unavailable = current ? undefined : switching ? sessionSwitchingUnavailable(t) : changingSharing ? sharingChangeUnavailable(t) : ownChanging ? ownAccountChangingUnavailable(t) : undefined;
+      const unavailable = switchEntryBlock(t, { current, changingSharing }, { switching, ownChanging });
       const { icon, detail, reason } = unavailable ? { icon: usage.icon, ...unavailable } : usage;
       return {
         label: name,
@@ -202,16 +202,16 @@ function switchAccountSubmenu(
  * middle of a turn or still starting, which the daemon refuses (`session_working`), while it
  * is locked, as Archive is, and while no other agent could take it over (`hasTarget`); and, with the reason
  * shown, while the session's own account is changing its sharing (`ownChanging`), which the daemon refuses, and
- * while an account switch holds the session. */
+ * while an account switch holds the session (see `handoffBlock`). */
 function handOffItem(t: Translate, handlers: SidebarHandlers, session: Session, hasTarget: boolean, ownChanging: boolean): ActionMenuItem {
-  const unavailable = session.switching_account ? sessionSwitchingUnavailable(t) : ownChanging ? ownAccountChangingUnavailable(t) : undefined;
+  const block = handoffBlock(t, session, ownChanging);
   return {
-    ...(unavailable ? { description: unavailable.detail, reason: unavailable.reason } : {}),
+    ...(block?.reason ? { description: block.detail, reason: block.reason } : {}),
     label: t("sidebar.session.handOff"),
     icon: Forward,
     iconClassName: "rtl:-scale-x-100",
     onClick: () => handlers.onOpenDialog({ kind: "hand-off", session }),
-    disabled: !hasTarget || session.locked || session.status === "working" || session.status === "starting",
+    disabled: !hasTarget || block !== undefined,
   };
 }
 

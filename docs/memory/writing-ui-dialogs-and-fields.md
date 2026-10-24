@@ -32,6 +32,16 @@ For an input in `packages/ui`, follow `docs/ui-accessibility.md`, "Input placeho
 placeholder. That project standard takes precedence over the generic "Input placeholders" guidance in
 `.claude/skills/knowledge-i18n-copy/SKILL.md`.
 
+## A choice the user has to make again starts empty, never on a fallback
+
+Applies to a `packages/ui` form that must not go on until the user has picked something themselves — what was asked
+for is gone, say. A react-aria single `Select` (so `OptionSelect`) calls `onChange` only when the key changes, so
+picking the value it already shows reports nothing: a form that pre-fills a fallback and waits for "the user picked"
+can never be satisfied by choosing that fallback. Show the picker with no value and a placeholder until the pick
+instead. With `OptionSelect` that is its `placeholder` variant, which is clearable back to `null`: where `null` would
+stand for a real choice (the default account), use it only while nothing is picked, then render the required variant
+in the same JSX position, a ternary rather than two `&&` slots, so the focused picker is not remounted.
+
 ## A single-line field hands its form the trimmed value
 
 Leading and trailing whitespace is never meant, so a form never holds it: every single-line text field in

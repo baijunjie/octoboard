@@ -11,6 +11,12 @@ it leaves a string literal alone as well (`format_strings` is off), so a long de
 schema is invisible to it; ESLint's formatting rules set no maximum line length. Clean format, lint and type checks
 therefore do not prove that prose meets its width, and only a reader catches an over-long line.
 
+Rust code is the other way round: its layout is whatever `cargo fmt` produces, which the format check holds it to. A
+code line rustfmt leaves past 100 columns because it cannot break it (a closure head, a long signature) is not fixed
+by wrapping it by hand, and rustfmt also collapses a block body written out by hand back onto one line when it fits.
+So such a line is not a review finding to answer with formatting; shorten it only by changing the code, such as
+binding part of it to a local, or leave it.
+
 An edit made in place is what produces them — a sentence added to a doc comment, a clause changed mid-paragraph
 in Markdown — because the line grows while the rest of the paragraph keeps the old wrapping. So after editing a
 comment or any prose, re-wrap that whole paragraph rather than only the line you touched.

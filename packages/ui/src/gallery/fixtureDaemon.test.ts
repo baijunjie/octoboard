@@ -512,7 +512,18 @@ describe("the fixture daemon's settings and trusted folders", () => {
     expect(daemon.store.getState().settings.auto_approve_resume_requests).toBe(false);
     expect(daemon.store.getState().settings.auto_approve_session_requests).toBe(true);
     expect(exportedDocument(daemon.store.getState()).settings?.auto_approve_resume_requests).toBe(false);
-    await daemon.request({ type: "update_settings", auto_approve_session_requests: false });
+    for (const [setting, other] of [["auto_approve_account_switches", "auto_approve_handoffs"], ["auto_approve_handoffs", "auto_approve_account_switches"]] as const) {
+      expect(daemon.store.getState().settings[setting]).toBeUndefined();
+      expect(exportedDocument(daemon.store.getState()).settings).not.toHaveProperty(setting);
+      await daemon.request({ type: "update_settings", [setting]: true });
+      expect(daemon.store.getState().settings[setting]).toBe(true);
+      // Setting one never moves the other: absent before the first turns on, as it was left for the second.
+      expect(daemon.store.getState().settings[other]).toBe(setting === "auto_approve_account_switches" ? undefined : true);
+      expect(daemon.store.getState().settings.auto_approve_resume_requests).toBe(false);
+      expect(exportedDocument(daemon.store.getState()).settings?.[setting]).toBe(true);
+      await daemon.request({ type: "update_settings", auto_approve_session_requests: false });
+      expect(daemon.store.getState().settings[setting]).toBe(true);
+    }
     expect(exportedDocument(daemon.store.getState()).settings).not.toHaveProperty("auto_select_account");
     await daemon.request({ type: "update_settings", auto_select_account: true });
     expect(daemon.store.getState().settings.auto_select_account).toBe(true);

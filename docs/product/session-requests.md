@@ -11,10 +11,18 @@ A session's `request_resume_session` call is a session request too, asking the u
 setting of its own), the wait, the ways a request ends, the rule of one request per session and the outcome
 message, which this doc describes; the rest of it is `request_session`'s.
 
-**The user's confirmation is enforced by Octoboard, not by a prompt.** Nothing is started or resumed on the call
-alone: the call waits while the user is asked, and only the user's approval acts — or the user's standing approval,
-where they have chosen to have requests of that kind approved automatically (see "Approving requests automatically"
-below).
+An owner's `switch_session_account` and `handoff_session` calls are session requests as well, while **Automatically
+approve account switches** and **Automatically approve handoffs** respectively are off: the switch or the handoff is
+made only once the user approves it, in a form that lets them change what the call asked for (see "The user's approval
+of an owner's switch" in `docs/product/switching-session-accounts.md` and "The user's approval of an owner's handoff" in
+`docs/product/handing-off-sessions.md`). They share the wait, the ways a request ends, the outcome message and how the
+dialog behaves, as this doc describes them; what it says of the session an approval starts, its brief and the branches
+it is handed does not apply to them.
+
+**The user's confirmation is enforced by Octoboard, not by a prompt.** Nothing is started, resumed, switched or handed
+off on the call alone: the call waits while the user is asked, and only the user's approval acts — or the user's
+standing approval, where they have chosen to have requests of that kind approved automatically (see "Approving
+requests automatically" below).
 
 ## Who is offered the tool
 
@@ -64,11 +72,13 @@ request cannot hand over (see "Handing branches over" below).
 
 ## Approving requests automatically
 
-Each kind of request has an application setting of its own, both **off by default** and independent of each other:
-**Automatically approve session requests** for `request_session` and **Automatically approve resume requests** for
-`request_resume_session` (see "Automatically approve session requests" and "Automatically approve resume requests" in
-`docs/product/settings.md`). While a call's own setting is on, the call, once it passes every check made before the
-user is asked, is **approved at once**, without asking:
+Each kind of request has an application setting of its own, all four **off by default** and independent of one
+another: **Automatically approve session requests** for `request_session`, **Automatically approve resume requests**
+for `request_resume_session`, **Automatically approve account switches** for an owner's `switch_session_account`, and
+**Automatically approve handoffs** for an owner's `handoff_session` (see the sections of the same names in
+`docs/product/settings.md`).
+While a `request_session` or `request_resume_session` call's own setting is on, the call, once it passes every check
+made before the user is asked, is **approved at once**, without asking:
 
 - **No one is asked.** No confirmation dialog is shown in any window, the session does not read *waiting for the user*
   and raises no hand, and no notification is fired. The call does not wait for an answer, so nothing in "Waiting for
@@ -93,13 +103,26 @@ user is asked, is **approved at once**, without asking:
   daemon dropping — does not stop it: the session is still started or brought back, the branches still handed over,
   and the outcome message still reaches the caller's session.
 
-Each tool's description tells the agent that the call waits for the user's answer unless the user has chosen to have
-such requests approved automatically, in which case the result says so and the call does not wait.
+**A switch or a handoff under its setting is not a request at all.** While **Automatically approve account switches**
+is on, an owner's `switch_session_account` call makes the switch at once, and while **Automatically approve handoffs**
+is on, its `handoff_session` call makes the handoff at once:
+no dialog is shown, the caller raises no hand, no notification is fired, and the call does not wait for an answer. What
+the switch or the handoff refuses is refused at that moment, an account whose quota is used up included (see "When a
+switch fails" in `docs/product/switching-session-accounts.md` and "What can be handed off" in
+`docs/product/handing-off-sessions.md`). The result is the tool's own and says nothing of an approval. The setting is
+read once, when the call is made, and a request the caller has waiting to make the same change — to switch the same
+session's account, or to hand the same session off — is withdrawn first. Once the call has started the switch or the
+handoff, cancelling the call does not stop it; when the call is gone by the time it ends, what was done, or why it could
+not be done, is written into the caller's session as the outcome message is (see "The outcome message" below).
 
-An agent can neither read nor change either setting through the settings tools (see "Application settings:
+Each tool's description tells the agent that the call waits for the user's answer unless the user has chosen to have
+such requests approved automatically, in which case the call does not wait; for `request_session` and
+`request_resume_session` the result then says so.
+
+An agent can neither read nor change any of the four settings through the settings tools (see "Application settings:
 `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`), so a session cannot approve its own
-requests. Besides Settings, the only other way either changes is an import of a full configuration document that the
-user asks to apply its application settings, whose review says beforehand when the document would turn one on (see
+requests. Besides Settings, the only other way any of them changes is an import of a full configuration document that
+the user asks to apply its application settings, whose review says beforehand when the document would turn one on (see
 "The application settings a full export carries" in `docs/product/configuration-export-and-import.md`).
 
 ## Waiting for the answer
@@ -159,10 +182,10 @@ connected window.
 
 | Ending | What the call returns | What changes |
 |---|---|---|
-| The user approves | The result described under "On approval" below; for `request_resume_session`, under "On approval" in `docs/product/requests-to-resume-a-conversation.md`. | The session is started, or brought back, as described there. |
-| The user refuses — the **Refuse** button, Escape or the dialog's close button | A tool error in fixed prose saying the user refused the request and nothing was started (for `request_resume_session`, nothing was resumed); it ends by telling the agent not to ask again unless the user tells it to, to tell the user in its terminal what it wanted the session for, and to follow the user's direction on continuing its own work or leaving handover notes and ending. | Nothing. |
+| The user approves | The result described under "On approval" below; for `request_resume_session`, under "On approval" in `docs/product/requests-to-resume-a-conversation.md`; for a switch or a handoff, the tool's own result (see "Switching from an owner's tool" in `docs/product/switching-session-accounts.md` and "Handing off from an owner's tool" in `docs/product/handing-off-sessions.md`). | The session is started, brought back, switched or handed off, as described there. |
+| The user refuses — the **Refuse** button, Escape or the dialog's close button | A tool error in fixed prose saying the user refused the request and nothing was started (for `request_resume_session`, nothing was resumed); it ends by telling the agent not to ask again unless the user tells it to, to tell the user in its terminal what it wanted the session for, and to follow the user's direction on continuing its own work or leaving handover notes and ending. For a switch or a handoff it says that nothing was changed, and ends by telling the agent not to ask again unless the user tells it to, to tell the user in its terminal why it wanted the change, and to follow their direction on what to do instead. | Nothing. |
 | Nobody answers within the time limit | A tool error of the same shape, saying the user did not respond within the limit. | Nothing. |
-| The request is withdrawn | A tool error saying the request was withdrawn before the user answered and nothing was started, where the call is still there to receive it. | Nothing. |
+| The request is withdrawn | A tool error saying the request was withdrawn before the user answered and nothing was started (nothing resumed, or nothing changed, for the other tools), where the call is still there to receive it. | Nothing. |
 
 The user is not asked for a reason when refusing.
 
@@ -171,14 +194,19 @@ A request is **withdrawn** on the signals Octoboard sees for every agent alike:
 - the caller's process ends — it is interrupted, archived, deleted or exits;
 - the call's connection to the daemon is dropped;
 - the agent cancels the call over MCP, which gets it a tool error saying the call was cancelled. This holds for
-  `request_session` and `request_resume_session` only: a cancelled call of any other Octoboard tool is left to finish
-  in the daemon;
-- the same session makes another request.
+  `request_session`, `request_resume_session`, `switch_session_account` and `handoff_session` only: a cancelled call of
+  any other Octoboard tool is left to finish in the daemon, and so is a switch or a handoff made without asking (see
+  "Approving requests automatically" above);
+- the same session makes another request that takes its place (see below).
 
-**A session has at most one request waiting**, of either tool. A new request takes the place of the one the session
-already has waiting, which is withdrawn; the hand stays up through the change.
+**A session has at most one request for a session waiting**, of either `request_session` or `request_resume_session`.
+A new one takes the place of the one the session already has waiting, which is withdrawn; the hand stays up through the
+change. A request to switch a session's account takes the place only of the caller's waiting request to switch that same
+session, and a request to hand a session off only of its waiting request to hand that same session off: an owner can
+have a request for a session and several switches and handoffs, each of a session of its own, waiting at once, each
+shown in its own dialog.
 
-A request made while an approval of the same session's earlier request — from the dialog or automatic — is being
+A request made while an approval of a request it would take the place of — from the dialog or automatic — is being
 carried out is refused, saying the earlier request has just been approved and is being carried out, and that its
 outcome will arrive in the session's terminal as a message.
 
@@ -284,8 +312,8 @@ the caller is still responsible for them.
 **An approval's outcome is also written into the caller's session as a message**, after the call's result, through
 the delivery every message takes (see "Messages held until a session can take them" in
 `docs/product/message-delivery.md`). It carries the same note as the result, says it is from Octoboard about the
-call that made the request, naming its tool — `request_session` or `request_resume_session` — and that there is
-nothing more to do if the call already returned it. This is how a caller
+call that made the request, naming its tool — `request_session`, `request_resume_session`, `switch_session_account`
+or `handoff_session` — and that there is nothing more to do if the call already returned it. This is how a caller
 whose agent gave up on the call by a time limit of its own, without any signal reaching Octoboard, still learns what
 came of its request (see "Waiting for the answer" above).
 
@@ -301,9 +329,12 @@ is not spared: that turn is reported on as any other, whether the caller continu
 When an approval cannot be carried out, nothing is started and no branch is handed over, the call returns a tool
 error saying the user approved but it could not be carried out, with the reason, and the window that approved shows
 the reason in an error alert about the requesting session. For an automatic approval the error says instead that the
-request was approved automatically but could not be carried out, and no window shows an alert. For a
-`request_session` it is for one of these reasons (a `request_resume_session`'s, and the session its alert is about, are
-in "When an approval cannot be carried out" in `docs/product/requests-to-resume-a-conversation.md`):
+request was approved automatically but could not be carried out, and no window shows an alert. A switch or a handoff
+the user approved that cannot be carried out leaves everything as a failed switch or handoff leaves it (see "When a
+switch fails" in `docs/product/switching-session-accounts.md` and "When a handoff fails" in
+`docs/product/handing-off-sessions.md`), and is answered the same way, the alert being about the requesting session.
+For a `request_session` it is for one of these reasons (a `request_resume_session`'s, and the session its alert is
+about, are in "When an approval cannot be carried out" in `docs/product/requests-to-resume-a-conversation.md`):
 
 - the caller's process ended before the session could be started, which gives the same error as an approval after a
   withdrawal (see "The confirmation dialog" below);
@@ -315,7 +346,9 @@ in "When an approval cannot be carried out" in `docs/product/requests-to-resume-
 
 For a `request_session`, a plain confirmation titled "Start a session?", with two buttons, **Refuse** and **Start
 session**; what a `request_resume_session`'s says is in "The confirmation dialog" in
-`docs/product/requests-to-resume-a-conversation.md`.
+`docs/product/requests-to-resume-a-conversation.md`, and what a switch's and a handoff's say and let the user change is
+in "The user's approval of an owner's switch" in `docs/product/switching-session-accounts.md` and "The user's approval
+of an owner's handoff" in `docs/product/handing-off-sessions.md`.
 
 - **One sentence says who asks and for what.** It names the requesting session by its displayed name (see
   "Displayed names" in `docs/product/session-titles.md`; its id where the window does not know the session) and where

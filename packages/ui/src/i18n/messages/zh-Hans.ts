@@ -1352,6 +1352,24 @@ export const zhHans: Translation<"other"> = {
   },
   "dialog.sessionRequest.confirm": "启动会话",
   "dialog.sessionRequest.refuse": "拒绝",
+  "dialog.sessionRequest.switch.title": "切换账户？",
+  "dialog.sessionRequest.switch.confirm": "切换账户",
+  "dialog.sessionRequest.question.switch":
+    "{requester} 请求将其会话 {session} 切换到 {agent} 账户 {account}。会话会保留其对话，正在进行的一轮会被中断。确认前，你可以修改账户、模型和推理强度。",
+  "dialog.sessionRequest.switch.account": "切换到",
+  "dialog.sessionRequest.switch.current": "当前",
+  "dialog.sessionRequest.switch.archived": "会话已归档，无法切换其账户。",
+  "dialog.sessionRequest.switch.starting": "会话仍在启动，暂时无法切换其账户。",
+  "dialog.sessionRequest.switch.accountGone": "所请求的账户已不存在，请另选一个。",
+  "dialog.sessionRequest.switch.alreadyOn": "会话已在 {account} 上。",
+  "dialog.sessionRequest.switch.launchNote": "你修改的模型或推理强度会从现在起保留给此会话。",
+  "dialog.sessionRequest.handoff.title": "移交会话？",
+  "dialog.sessionRequest.handoff.presetGone": "所请求的智能体或账户已不可用，请另选一个。",
+  "dialog.sessionRequest.handoff.agentPlaceholder": "选择智能体",
+  "dialog.sessionRequest.handoff.accountPlaceholder": "选择账户",
+  "dialog.sessionRequest.handoff.confirm": "移交会话",
+  "dialog.sessionRequest.question.handoff":
+    "{requester} 请求将其会话 {session} 移交给账户 {account} 上的一个新的 {agent} 会话。原会话会被归档，工作转移到新会话。确认前，你可以修改智能体、账户、模型和推理强度。",
   "dialog.sessionRequest.reopen.title": "重新打开会话？",
   "dialog.sessionRequest.reopen.confirm": "重新打开会话",
   "dialog.sessionRequest.resume.title": "恢复会话？",
@@ -1421,6 +1439,8 @@ export const zhHans: Translation<"other"> = {
   "configuration.import.settings.autoStartQuotaWindows.turnsOn": "开启 {setting}（目前为关闭）。之后尚未开始计时的用量窗口会通过一次很小的请求启动，该请求会消耗账户的少量额度。",
   "configuration.import.settings.autoApproveSession.turnsOn": "开启 {setting}（目前为关闭）。之后会话请求启动向你汇报的新会话时，将直接获批，不再先询问你。",
   "configuration.import.settings.autoApproveResume.turnsOn": "开启 {setting}（目前为关闭）。之后会话请求重新打开、恢复会话或在新会话中恢复对话时，将直接获批，不再先询问你。",
+  "configuration.import.settings.autoApproveAccountSwitches.turnsOn": "开启 {setting}（目前为关闭）。之后会话请求切换其名下某个会话的账户时，将直接获批，不再先询问你。",
+  "configuration.import.settings.autoApproveHandoffs.turnsOn": "开启 {setting}（目前为关闭）。之后会话请求将其名下某个会话移交给另一个智能体时，将直接获批，不再先询问你。",
   "configuration.import.settings.turnsOff": "关闭 {setting}（目前为开启）。",
   "configuration.import.settings.alreadyOn": "文件中 {setting} 为开启，当前也已开启，因此应用后不会有任何变化。",
   "configuration.import.settings.alreadyOff": "文件中 {setting} 为关闭，当前也已关闭，因此应用后不会有任何变化。",
@@ -1623,6 +1643,16 @@ export const zhHans: Translation<"other"> = {
     "开启后，会话可以直接重新打开或恢复某个会话，或在新会话中恢复某段对话，无需先征得你的同意。被重新打开或恢复的会话保留原有的所有者，已归档的所有者也会一并重新打开；以这种方式新启动的会话除你之外没有其他所有者。",
   "settings.autoApproveResume.description.on":
     "会话可以直接重新打开或恢复某个会话，或在新会话中恢复某段对话，无需先征得你的同意。被重新打开或恢复的会话保留原有的所有者，已归档的所有者也会一并重新打开；以这种方式新启动的会话除你之外没有其他所有者。",
+  "settings.autoApproveAccountSwitches.label": "自动批准账户切换",
+  "settings.autoApproveAccountSwitches.description.off":
+    "开启后，会话可以直接切换其名下某个会话的账户，无需先征得你的同意。在此之前，每次都会先询问你，你可以在确认前修改账户、模型和推理强度。",
+  "settings.autoApproveAccountSwitches.description.on":
+    "会话可以直接切换其名下某个会话的账户，无需先征得你的同意。关闭后会先询问你，你可以在确认前修改账户、模型和推理强度。",
+  "settings.autoApproveHandoffs.label": "自动批准移交",
+  "settings.autoApproveHandoffs.description.off":
+    "开启后，会话可以直接将其名下某个会话移交给另一个智能体的新会话，无需先征得你的同意。在此之前，每次都会先询问你，你可以在确认前修改智能体、账户、模型和推理强度。",
+  "settings.autoApproveHandoffs.description.on":
+    "会话可以直接将其名下某个会话移交给另一个智能体的新会话，无需先征得你的同意。关闭后会先询问你，你可以在确认前修改智能体、账户、模型和推理强度。",
   "settings.autoSelect.label": "自动选择账户",
   "settings.autoSelect.description.off":
     "开启后，新建会话会使用周额度最快重置的账户，以免即将重置的额度被浪费。",
@@ -1773,6 +1803,8 @@ export const zhHans: Translation<"other"> = {
   "accountChoice.ownSharingChange.reason": "账户正在更改共享",
   "accountChoice.ownSharingChange.detail": "此会话所用账户的共享正在更改，暂时无法使用",
   "accountChoice.switching.reason": "正在切换账户",
+  "accountChoice.handoff.working": "会话正在进行一轮对话，暂时无法移交。",
+  "accountChoice.handoff.locked": "会话已锁定，无法移交。",
   "accountChoice.switching.detail": "此会话正在切换账户，暂时无法使用",
   "accountChoice.disabled.reason": "已停用",
   "accountChoice.disabled.detail": "此账户已停用，暂时无法使用",

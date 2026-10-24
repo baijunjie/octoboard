@@ -185,9 +185,9 @@ accounts and which accounts are turned off (see "Added agents", "The default acc
 
 ### The application settings a full export carries
 
-Seven, each under its own key. The first is in every document that has application settings. Each of the other six
+Nine, each under its own key. The first is in every document that has application settings. Each of the other eight
 is missing from a document exported before it was carried, and applying that document's settings then leaves the
-importing machine's value as it is; the import review notes each of the six only when the document carries it as a
+importing machine's value as it is; the import review notes each of the eight only when the document carries it as a
 boolean.
 
 - **Automatically pull repositories** (see "Automatically pulling repositories" in
@@ -208,6 +208,12 @@ boolean.
 - **Automatically approve resume requests** (see the same section), under `auto_approve_resume_requests`. The
   review's line for turning it on says that a session's request to reopen or resume a session, or to resume a
   conversation in a new session, is then approved without asking first.
+- **Automatically approve account switches** (see the same section), under `auto_approve_account_switches`. The
+  review's line for turning it on says that a session's request to switch the account of one of its sessions is then
+  approved without asking first.
+- **Automatically approve handoffs** (see the same section), under `auto_approve_handoffs`. The review's line for
+  turning it on says that a session's request to hand one of its sessions off to another agent is then approved without
+  asking first.
 
 **The keyboard shortcuts of the exporting client** travel with these, under `keyboard_shortcuts`. They are not the
 daemon's: each client keeps its own (see "Where the shortcuts are kept" in `docs/product/keyboard-shortcuts.md`), so
@@ -318,10 +324,10 @@ A document's application settings are applied **only when the import is explicit
 applied by default. Automatically pull repositories makes the daemon fast-forward the user's own repositories by itself,
 automatically deleting archived sessions makes it delete sessions by itself, automatic account selection makes a
 later new session that names no account take the one whose weekly quota resets soonest, starting usage windows
-automatically spends a little of the accounts' quota by itself, and the two automatic approvals let agents' requests
-through without asking the user, so applying them changes how the daemon's host behaves rather than only adding to what
-it holds. The inspection says both what the document sets and what is set now, so what applying would change can be
-shown before anything is done. The settings are applied last, through the same path as a change made in Settings — so an
+automatically spends a little of the accounts' quota by itself, and the four automatic approvals let agents'
+requests, account switches and handoffs through without asking the user, so applying them changes how the daemon's host
+behaves rather than only adding to what it holds. The inspection says both what the document sets and what is set now,
+so what applying would change can be shown before anything is done. The settings are applied last, through the same path as a change made in Settings — so an
 import that turns automatic pulling on runs the same immediate fast-forward pass turning it on by hand does (see
 "Turning the switch on" in `docs/product/project-git-status.md`), one that turns the automatic deletion on deletes
 nothing until the next scheduled check, as the switch does, one that turns automatic account selection on or off changes

@@ -79,6 +79,14 @@ pub struct DocumentSettings {
     /// setting as it is.
     #[serde(default)]
     pub auto_approve_resume_requests: Option<bool>,
+    /// Absent in a document exported before the setting was carried: importing it leaves the
+    /// setting as it is.
+    #[serde(default)]
+    pub auto_approve_account_switches: Option<bool>,
+    /// Absent in a document exported before the setting was carried: importing it leaves the
+    /// setting as it is.
+    #[serde(default)]
+    pub auto_approve_handoffs: Option<bool>,
     /// The keyboard shortcuts the exporting client has changed, by command id, which only the client
     /// reads and writes: the client adds them to a full export it saves (an empty object when it has
     /// none changed, which on import means every shortcut at its default) and applies them from an
@@ -208,6 +216,8 @@ pub fn build(
             auto_start_quota_windows: Some(store.auto_start_quota_windows()?),
             auto_approve_session_requests: Some(store.auto_approve_session_requests()?),
             auto_approve_resume_requests: Some(store.auto_approve_resume_requests()?),
+            auto_approve_account_switches: Some(store.auto_approve_account_switches()?),
+            auto_approve_handoffs: Some(store.auto_approve_handoffs()?),
             keyboard_shortcuts: None,
         }),
     };
@@ -529,6 +539,8 @@ mod tests {
                 auto_start_quota_windows: Some(false),
                 auto_approve_session_requests: Some(false),
                 auto_approve_resume_requests: Some(false),
+                auto_approve_account_switches: Some(false),
+                auto_approve_handoffs: Some(false),
                 keyboard_shortcuts: None,
             })
         );

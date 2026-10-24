@@ -984,8 +984,18 @@ async fn handle_inner(
         RequestBody::AnswerSessionRequest {
             request_id: asked,
             approve,
+            agent,
+            account,
+            model,
+            effort,
         } => {
-            let started = crate::session_request::answer(state, &asked, approve).await?;
+            let edits = crate::session_request::Edits {
+                agent,
+                account,
+                model,
+                effort,
+            };
+            let started = crate::session_request::answer(state, &asked, approve, edits).await?;
             Ok(started.map(|session| Event::SessionOpened {
                 id: request_id,
                 session: state.wire_session(session),
@@ -997,6 +1007,8 @@ async fn handle_inner(
             auto_delete_unresumable_archives,
             auto_approve_session_requests,
             auto_approve_resume_requests,
+            auto_approve_account_switches,
+            auto_approve_handoffs,
             auto_select_account,
             sidebar_order_by_status,
             auto_start_quota_windows,
@@ -1009,6 +1021,8 @@ async fn handle_inner(
                     auto_delete_unresumable_archives,
                     auto_approve_session_requests,
                     auto_approve_resume_requests,
+                    auto_approve_account_switches,
+                    auto_approve_handoffs,
                     auto_select_account,
                     sidebar_order_by_status,
                     auto_start_quota_windows,
@@ -2578,6 +2592,15 @@ struct ResolvedOpen {
 /// owner, an agent that is not available or not added, an account of another agent, a disabled
 /// account, and an account whose plan quota is used up.
 fn resolve_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<ResolvedOpen> {
+    resolve_open_with(state, request, true)
+}
+
+/// [`resolve_open`], refusing an account whose quota is used up only when `enforce_quota`.
+fn resolve_open_with(
+    state: &Arc<AppState>,
+    request: &OpenRequest,
+    enforce_quota: bool,
+) -> Result<ResolvedOpen> {
     let console = state
         .store
         .get_console(&request.console_id)?
@@ -2629,7 +2652,14 @@ fn resolve_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<Resolved
         request.account.clone(),
     )?;
     refuse_if_account_disabled(state, agent, account_id.as_deref())?;
-    refuse_if_account_quota_exhausted(state, agent, account_id.as_deref(), config_dir.as_deref())?;
+    if enforce_quota {
+        refuse_if_account_quota_exhausted(
+            state,
+            agent,
+            account_id.as_deref(),
+            config_dir.as_deref(),
+        )?;
+    }
     // Asked again by the launch under its claim; asked here so that nothing is recorded.
     crate::shared_config::refuse_if_changing(state, account_id.as_deref())?;
     Ok(ResolvedOpen {
@@ -2941,24 +2971,90 @@ async fn check_launch_settings(
 /// whose opening waits on the user's answer, so that a request which could never be carried out is
 /// refused to the asker rather than put to the user. Returns the agent the session would be of.
 pub async fn check_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<Agent> {
+    Ok(check_open_with(state, request, true).await?.0)
+}
+
+/// [`check_open`] for a session whose opening waits on the user's choice of account, which is not
+/// refused for an account whose quota is used up (the user can pick another; the refusal comes at
+/// approval). Returns the account the session would open on.
+pub async fn check_open_asking(
+    state: &Arc<AppState>,
+    request: &OpenRequest,
+) -> Result<Option<String>> {
+    Ok(check_open_with(state, request, false).await?.1)
+}
+
+/// The checks of [`check_open`], refusing an account whose quota is used up only when
+/// `enforce_quota`; returns the agent and the account the session would open on.
+async fn check_open_with(
+    state: &Arc<AppState>,
+    request: &OpenRequest,
+    enforce_quota: bool,
+) -> Result<(Agent, Option<String>)> {
     let ResolvedOpen {
         project,
         console,
         agent,
         account_id,
         ..
-    } = resolve_open(state, request)?;
+    } = resolve_open_with(state, request, enforce_quota)?;
     check_launch_settings(
         state,
         agent,
-        account_id,
+        account_id.clone(),
         project.as_ref(),
         &console,
         request.model.clone(),
         request.effort.clone(),
     )
     .await?;
-    Ok(agent)
+    Ok((agent, account_id))
+}
+
+/// The model and reasoning effort a user changed for a switch, each absent to leave the session's
+/// own override as it is, `Some(None)` for the agent's own default.
+#[derive(Default)]
+pub(crate) struct LaunchEdit {
+    pub model: Option<Option<String>>,
+    pub effort: Option<Option<String>>,
+}
+
+/// The model and effort overrides `session` would have with `edit` applied, each value left
+/// unchanged keeping what the session has, refused for a value the agent does not offer under
+/// `account_id`; `None` when there is nothing to change.
+async fn checked_launch_overrides(
+    state: &Arc<AppState>,
+    session: &Session,
+    account_id: Option<String>,
+    edit: LaunchEdit,
+) -> Result<Option<(Option<Option<String>>, Option<Option<String>>)>> {
+    if edit.model.is_none() && edit.effort.is_none() {
+        return Ok(None);
+    }
+    let project = match &session.project_id {
+        Some(project_id) => Some(
+            state
+                .store
+                .get_project(project_id)?
+                .ok_or_else(|| CodedError::unknown_project(project_id))?,
+        ),
+        None => None,
+    };
+    let console = state
+        .store
+        .get_console(&session.console_id)?
+        .ok_or_else(|| CodedError::unknown_console(&session.console_id))?;
+    let checked = check_launch_settings(
+        state,
+        session.agent,
+        account_id,
+        project.as_ref(),
+        &console,
+        edit.model.or_else(|| session.model.clone()),
+        edit.effort.or_else(|| session.effort.clone()),
+    )
+    .await?;
+    Ok(Some(checked))
 }
 
 /// Why `owner` cannot own `session`, in prose for the model, or `None` when it can. These are the
@@ -4293,6 +4389,7 @@ pub async fn switch_session_account(
         account,
         None,
         terminal_appearance,
+        LaunchEdit::default(),
         snapshot,
         term::launch,
     )
@@ -4301,14 +4398,18 @@ pub async fn switch_session_account(
 
 /// [`switch_session_account`] with the asker: `asked_by` is the asking owner's id, `None` for the
 /// user. The session must still be bound to the owner once the switch holds its claim (the owner
-/// checked before it), else the switch is refused with nothing changed. `launch` is
+/// checked before it), else the switch is refused with nothing changed. `launch_edit` is what the
+/// user changed of the session's model and effort, checked with the rest and recorded just before
+/// the relaunch that reads it, and put back with the account when the switch fails. `launch` is
 /// `term::launch` outside the tests, which cannot start an agent.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn switch_session_account_with(
     state: &Arc<AppState>,
     id: &str,
     account: Option<Option<String>>,
     asked_by: Option<&str>,
     terminal_appearance: Option<TerminalAppearance>,
+    launch_edit: LaunchEdit,
     snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
     launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
 ) -> Result<()> {
@@ -4320,17 +4421,9 @@ pub(crate) async fn switch_session_account_with(
     let claim = state.begin_account_switch(id)?;
     let before = state.session_record(id)?;
     refuse_unless_still_askers(&before, asked_by)?;
-    if before.status == SessionStatus::Archived {
-        return Err(session_archived(id));
-    }
+    refuse_if_archived(&before)?;
     let target_account = checked_account_reference(state, before.agent, account)?;
-    if target_account == before.account_id {
-        return Err(CodedError::raised(
-            error_code::SESSION_ALREADY_ON_ACCOUNT,
-            "this session is on that account already",
-            &[("session", id)],
-        ));
-    }
+    refuse_if_on_account(&before, &target_account)?;
     let target_dir = state.store.account_dir(&target_account)?;
     refuse_if_account_disabled(state, before.agent, target_account.as_deref())?;
     refuse_if_account_quota_exhausted(
@@ -4342,6 +4435,8 @@ pub(crate) async fn switch_session_account_with(
     // Asked under the claim, which a change of the source's sharing counts as a session starting.
     crate::shared_config::refuse_if_changing(state, before.account_id.as_deref())?;
     crate::shared_config::refuse_if_changing(state, target_account.as_deref())?;
+    let overrides =
+        checked_launch_overrides(state, &before, target_account.clone(), launch_edit).await?;
 
     let plan = {
         let (agent, resume_id) = (before.agent, resumable_agent_session_id(&before));
@@ -4392,6 +4487,12 @@ pub(crate) async fn switch_session_account_with(
     }
     state.set_session_account(id, target_account.as_deref(), target_dir.as_deref())?;
     drop(copying);
+    if let Some((model, effort)) = &overrides {
+        if let Err(err) = state.set_session_launch_overrides(id, model, effort) {
+            put_back_on_account(state, &before);
+            return Err(err);
+        }
+    }
 
     if let Err(err) = relaunch_session_with(
         state,
@@ -4437,9 +4538,23 @@ pub(crate) fn refuse_unless_still_askers(session: &Session, asked_by: Option<&st
     }
 }
 
-/// Records the account and directory a switched session had before, `before`'s. A revert that
-/// fails is logged, never allowed to hide the reason the switch failed.
+/// Records the account, directory, model and effort a switched session had before, `before`'s. A
+/// revert that fails is logged, never allowed to hide the reason the switch failed.
 fn put_back_on_account(state: &Arc<AppState>, before: &Session) {
+    // The model and effort a switch recorded for its relaunch go back with the account.
+    if let Ok(now) = state.session_record(&before.id) {
+        if (&now.model, &now.effort) != (&before.model, &before.effort) {
+            if let Err(revert) =
+                state.set_session_launch_overrides(&before.id, &before.model, &before.effort)
+            {
+                tracing::warn!(
+                    session = %before.id,
+                    %revert,
+                    "putting the session's model and effort back failed"
+                );
+            }
+        }
+    }
     if let Err(revert) = state.set_session_account(
         &before.id,
         before.account_id.as_deref(),
@@ -4460,6 +4575,27 @@ async fn put_back_once_down(state: &Arc<AppState>, before: &Session) {
         tracing::warn!(session = %before.id, %err, "the relaunched process was not recorded as ended");
     }
     put_back_on_account(state, before);
+}
+
+/// Refuses a switch of `session` to the account it is on already (`None` for the default account).
+pub(crate) fn refuse_if_on_account(session: &Session, account: &Option<String>) -> Result<()> {
+    if *account == session.account_id {
+        return Err(CodedError::raised(
+            error_code::SESSION_ALREADY_ON_ACCOUNT,
+            "this session is on that account already",
+            &[("session", &session.id)],
+        ));
+    }
+    Ok(())
+}
+
+/// Refuses an archived session, which a switch is refused for, before the user is asked to approve
+/// one.
+pub(crate) fn refuse_if_archived(session: &Session) -> Result<()> {
+    if session.status == SessionStatus::Archived {
+        return Err(session_archived(&session.id));
+    }
+    Ok(())
 }
 
 fn session_archived(id: &str) -> anyhow::Error {
@@ -5241,7 +5377,7 @@ fn set_account_disabled(
 /// Refuses to put a new session on an account the user turned off, going by the flag as it stands.
 /// Applies to every origin, the user's own request included; a session already on the account is
 /// never asked about.
-fn refuse_if_account_disabled(
+pub(crate) fn refuse_if_account_disabled(
     state: &Arc<AppState>,
     agent: Agent,
     account_id: Option<&str>,
@@ -5687,6 +5823,8 @@ pub struct SettingsChanges {
     pub auto_delete_unresumable_archives: Option<bool>,
     pub auto_approve_session_requests: Option<bool>,
     pub auto_approve_resume_requests: Option<bool>,
+    pub auto_approve_account_switches: Option<bool>,
+    pub auto_approve_handoffs: Option<bool>,
     pub auto_select_account: Option<bool>,
     pub sidebar_order_by_status: Option<bool>,
     pub auto_start_quota_windows: Option<bool>,
@@ -5702,6 +5840,8 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         auto_delete_unresumable_archives,
         auto_approve_session_requests,
         auto_approve_resume_requests,
+        auto_approve_account_switches,
+        auto_approve_handoffs,
         auto_select_account,
         sidebar_order_by_status,
         auto_start_quota_windows,
@@ -5730,6 +5870,12 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     }
     if let Some(value) = auto_approve_resume_requests {
         changed |= state.store.set_auto_approve_resume_requests(value)?;
+    }
+    if let Some(value) = auto_approve_account_switches {
+        changed |= state.store.set_auto_approve_account_switches(value)?;
+    }
+    if let Some(value) = auto_approve_handoffs {
+        changed |= state.store.set_auto_approve_handoffs(value)?;
     }
     if let Some(value) = auto_select_account {
         changed |= state.store.set_auto_select_account(value)?;
@@ -10360,6 +10506,7 @@ mod tests {
             Some(Some("claude-a".to_string())),
             Some("other-hub"),
             None,
+            LaunchEdit::default(),
             shell_env(&dir),
             |_| panic!("a refused switch launches nothing"),
         )
@@ -10831,6 +10978,7 @@ mod tests {
                         Some(Some("claude-a".to_string())),
                         None,
                         None,
+                        LaunchEdit::default(),
                         || Ok(HashMap::new()),
                         launch,
                     )

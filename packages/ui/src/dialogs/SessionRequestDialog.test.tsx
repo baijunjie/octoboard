@@ -7,7 +7,7 @@ import { setLanguage } from "../i18n/language";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "../gallery/fixtures/builders";
 import { SESSION_REQUEST_NOT_WAITING } from "../protocol";
 import type { SessionRequest, TrustPrompt } from "../store";
-import { mountPendingQuestionDialog, pressButton } from "./pendingQuestionTestSupport";
+import { findButton, mountPendingQuestionDialog, pressButton } from "./pendingQuestionTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -263,4 +263,197 @@ it("does not warn while the account's sharing change is running", () => {
     sessionRequests: [reopening],
   }, ack);
   expect(dialogText()).not.toContain("sharing change");
+});
+
+// A request to switch a session's account or hand it off names the session, the agent and the account
+// asked for, and holds a form that starts on those values: an approval carries what the form ended on,
+// and nothing it was not asked to change.
+const owned = sessionOf("s-held", "c-1", "p-1", "Old work", "idle", { account_id: "a-one" });
+const claudeAccounts = [
+  { id: "a-one", agent: "claude" as const, name: "One", config_dir: "/a/one" },
+  { id: "a-two", agent: "claude" as const, name: "Two", config_dir: "/a/two" },
+];
+const switching: SessionRequest = { ...request, action: "switch", agent: "claude", target: "s-held", account: "a-two" };
+
+const mountOwned = (asked: SessionRequest) => mountPendingQuestionDialog({
+  ...snapshotState({ sessions: [owned] }),
+  ...names,
+  settings: { ...snapshotState({}).settings!, accounts: claudeAccounts },
+  sessionRequests: [asked],
+}, ack);
+
+it("a switch names the session and the account asked for, and approves with that account", async () => {
+  const dialog = mountOwned(switching);
+  expect(document.body.querySelector("[role=alertdialog] [slot=title]")?.textContent).toBe("Switch account?");
+  expect(dialogText()).toContain("asks to switch its session Old work to the Claude Code account Two.");
+  await pressButton("Switch account");
+  expect(dialog.sent()).toEqual([{ type: "answer_session_request", request_id: "r-1", approve: true, account: "a-two" }]);
+});
+
+it("a switch to the account the session is on cannot be confirmed", () => {
+  mountOwned({ ...switching, account: "a-one" });
+  expect(dialogText()).toContain("The session is on One already");
+  expect(findButton("Switch account")?.disabled).toBe(true);
+});
+
+it("refusing a switch sends no values", async () => {
+  const dialog = mountOwned(switching);
+  await pressButton("Refuse");
+  expect(dialog.sent()).toEqual([{ type: "answer_session_request", request_id: "r-1", approve: false }]);
+});
+
+it("a handoff approves with the agent and account asked for", async () => {
+  const dialog = mountOwned({ ...request, action: "handoff", agent: "codex", target: "s-held", account: null, model: "gpt-x" });
+  expect(document.body.querySelector("[role=alertdialog] [slot=title]")?.textContent).toBe("Hand off a session?");
+  expect(dialogText()).toContain("asks to hand off its session Old work to a new Codex session on the account Default.");
+  expect(dialogText()).not.toContain("Fix the build");
+  await pressButton("Hand off session");
+  expect(dialog.sent()).toEqual([{ type: "answer_session_request", request_id: "r-1", approve: true, agent: "codex", account: null, model: "gpt-x" }]);
+});
+
+it("a handoff approves with the agent the user changed it to", async () => {
+  const dialog = mountOwned({ ...request, action: "handoff", agent: "codex", target: "s-held", account: null });
+  const trigger = document.body.querySelector<HTMLElement>('[role=alertdialog] [data-slot="select-trigger"]');
+  await act(async () => trigger?.click());
+  const grok = [...document.body.querySelectorAll<HTMLElement>("[role=option]")].find((option) => option.textContent?.includes("Grok"));
+  await act(async () => grok?.click());
+  await pressButton("Hand off session");
+  expect(dialog.sent()).toEqual([expect.objectContaining({ type: "answer_session_request", approve: true, agent: "grok", account: null })]);
+});
+
+it("a handoff of a session that is working cannot be confirmed", () => {
+  const working = sessionOf("s-held", "c-1", "p-1", "Old work", "working", { account_id: "a-one" });
+  mountPendingQuestionDialog({
+    ...snapshotState({ sessions: [working] }),
+    ...names,
+    settings: { ...snapshotState({}).settings!, accounts: claudeAccounts },
+    sessionRequests: [{ ...request, action: "handoff", agent: "codex", target: "s-held", account: null }],
+  }, ack);
+  expect(dialogText()).toContain("in the middle of a turn");
+  expect(findButton("Hand off session")?.disabled).toBe(true);
+});
+
+it("a switch to an account that no longer exists says so and cannot be confirmed", () => {
+  mountOwned({ ...switching, account: "a-gone" });
+  expect(dialogText()).toContain("The account asked for no longer exists");
+  expect(findButton("Switch account")?.disabled).toBe(true);
+});
+
+// An account the user turned off is listed but cannot be chosen, whether it is a stored account or the
+// agent's default one, and the dialog says why; Confirm stays off until the user picks another.
+it.each([
+  { name: "a stored account", asked: switching, accounts: [claudeAccounts[0], { ...claudeAccounts[1], disabled: true }], extra: {} },
+  { name: "the default account", asked: { ...switching, account: null }, accounts: claudeAccounts, extra: { settings: { ...snapshotState({}).settings!, accounts: claudeAccounts, disabled_default_accounts: ["claude" as const] } } },
+])("a switch to a turned-off account cannot be confirmed: $name", ({ asked, accounts, extra }) => {
+  mountPendingQuestionDialog({
+    ...snapshotState({ sessions: [owned] }),
+    ...names,
+    settings: { ...snapshotState({}).settings!, accounts: accounts as never },
+    sessionRequests: [asked],
+    ...extra,
+  }, ack);
+  expect(dialogText()).toContain("is disabled, so a session cannot use it");
+  expect(dialogText()).toContain("Account is disabled");
+  expect(findButton("Switch account")?.disabled).toBe(true);
+});
+
+const half = { id: "a-two", agent: "claude" as const, name: "Two", config_dir: "/a/two", share_default_config: true, share_default_config_incomplete: true };
+const mountWith = (asked: SessionRequest, session = owned, accounts: typeof claudeAccounts | (typeof claudeAccounts[number] | typeof half)[] = claudeAccounts, extra: Parameters<typeof mountPendingQuestionDialog>[0] = {}, reply = ack) => mountPendingQuestionDialog({
+  ...snapshotState({ sessions: [session] }),
+  ...names,
+  settings: { ...snapshotState({}).settings!, accounts: accounts as never },
+  sessionRequests: [asked],
+  ...extra,
+}, reply);
+const pickOption = async (text: string, which = 0) => {
+  const trigger = document.body.querySelectorAll<HTMLElement>('[role=alertdialog] [data-slot="select-trigger"]')[which];
+  await act(async () => trigger.click());
+  const option = [...document.body.querySelectorAll<HTMLElement>("[role=option]")].find((item) => item.textContent?.includes(text));
+  await act(async () => option?.click());
+};
+
+it("a switch leaves out a turned-off account that is neither the session's nor the one chosen", async () => {
+  const three = { id: "a-three", agent: "claude" as const, name: "Three", config_dir: "/a/three", disabled: true };
+  mountWith(switching, owned, [...claudeAccounts, three] as never);
+  const trigger = document.body.querySelector<HTMLElement>('[role=alertdialog] [data-slot="select-trigger"]');
+  await act(async () => trigger?.click());
+  const options = [...document.body.querySelectorAll<HTMLElement>("[role=option]")].map((option) => option.textContent ?? "");
+  expect(options.some((text) => text.includes("Two"))).toBe(true);
+  expect(options.some((text) => text.includes("Three"))).toBe(false);
+});
+
+it("a switch warns of an unfinished sharing change of the account its form is on, and follows the form", async () => {
+  mountWith(switching, owned, [claudeAccounts[0], half]);
+  expect(dialogText()).toContain("The last sharing change of Two did not finish");
+  await pickOption("Default");
+  expect(dialogText()).not.toContain("sharing change of Two");
+});
+
+it("a switch approves with the account the user picked instead", async () => {
+  const dialog = mountWith(switching);
+  await pickOption("Default");
+  await pressButton("Switch account");
+  expect(dialog.sent()).toEqual([{ type: "answer_session_request", request_id: "r-1", approve: true, account: null }]);
+});
+
+it("a switch has no clear button on its account picker", () => {
+  mountWith(switching);
+  const picker = document.body.querySelector('[role=alertdialog] [data-slot="select-trigger"]')?.closest('[data-slot="select"]');
+  expect(picker).not.toBeNull();
+  expect(picker?.querySelector('[data-slot="select-clear-button"]')).toBeNull();
+});
+
+it("the form is locked while the approval is carried out", async () => {
+  const dialog = mountWith(switching, owned, claudeAccounts, {}, () => new Promise(() => {}));
+  await pressButton("Switch account");
+  const trigger = document.body.querySelector<HTMLElement>('[role=alertdialog] [data-slot="select-trigger"]');
+  expect(trigger?.hasAttribute("disabled") || trigger?.getAttribute("aria-disabled") === "true" || trigger?.hasAttribute("data-disabled")).toBe(true);
+  expect(dialog.sent()).toHaveLength(1);
+});
+
+it.each([
+  { name: "locked", session: sessionOf("s-held", "c-1", "p-1", "Old work", "idle", { locked: true }), text: "is locked" },
+  { name: "being switched", session: sessionOf("s-held", "c-1", "p-1", "Old work", "idle", { switching_account: true }), text: "switch" },
+])("a handoff of a session that is $name cannot be confirmed", ({ session, text }) => {
+  mountWith({ ...request, action: "handoff", agent: "codex", target: "s-held", account: null }, session);
+  expect(dialogText()).toContain(text);
+  expect(findButton("Hand off session")?.disabled).toBe(true);
+});
+
+it("a handoff of a session whose account changes its sharing cannot be confirmed", () => {
+  const session = sessionOf("s-held", "c-1", "p-1", "Old work", "idle", { account_id: "a-one" });
+  mountWith({ ...request, action: "handoff", agent: "codex", target: "s-held", account: null }, session, claudeAccounts, {
+    accountSharing: new Map([["a-one", { account: "a-one", progress: { share: true, phase: "changing", done: 1, total: 3 } }]]) as never,
+  });
+  expect(findButton("Hand off session")?.disabled).toBe(true);
+});
+
+it("a handoff whose account was removed says so, shows empty pickers, and can be confirmed once the user picks", async () => {
+  const dialog = mountWith({ ...request, action: "handoff", agent: "codex", target: "s-held", account: "a-gone" });
+  expect(dialogText()).toContain("no longer available");
+  expect(findButton("Hand off session")?.disabled).toBe(true);
+  expect(dialogText()).toContain("Choose an agent");
+  await pickOption("Codex");
+  expect(findButton("Hand off session")?.disabled).toBe(false);
+  await pressButton("Hand off session");
+  expect(dialog.sent()).toEqual([expect.objectContaining({ approve: true, agent: "codex" })]);
+});
+
+it("a handoff whose agent can no longer be picked shows empty pickers until the user picks", async () => {
+  mountWith({ ...request, action: "handoff", agent: "codex", target: "s-held", account: null }, owned, claudeAccounts, {
+    settings: { ...snapshotState({}).settings!, accounts: claudeAccounts as never, added_agents: ["claude", "grok"] },
+  });
+  expect(dialogText()).toContain("no longer available");
+  expect(findButton("Hand off session")?.disabled).toBe(true);
+  await pickOption("Grok");
+  expect(findButton("Hand off session")?.disabled).toBe(false);
+});
+
+it.each([
+  { status: "archived" as const, text: "is archived" },
+  { status: "starting" as const, text: "still starting" },
+])("a switch of a session that is $status cannot be confirmed", ({ status, text }) => {
+  mountWith(switching, sessionOf("s-held", "c-1", "p-1", "Old work", status, { account_id: "a-one" }));
+  expect(dialogText()).toContain(text);
+  expect(findButton("Switch account")?.disabled).toBe(true);
 });

@@ -184,6 +184,18 @@ it("keeps what a session request says it does, and drops it when it closes", () 
   expect(daemon.store.getState().sessionRequests.map((r) => r.requestId)).toEqual(["r-2"]);
 });
 
+it("keeps what a switch and a handoff request carry", () => {
+  const daemon = createDaemon("http://localhost:1234");
+  const base = { type: "session_request" as const, session: "s", role: "project" as const, console: "c", project: "p", agent: "codex" as const, branches: [], requested_at: 1, owner: null, reopened_owners: [], conversation: null, target: "t", account: "a" };
+  client.onEvents!([
+    { ...base, request_id: "r-1", action: "switch" },
+    { ...base, request_id: "r-2", action: "handoff", account: null, model: "m", effort: null, requested_at: 2 },
+  ]);
+  const [switching, handing] = daemon.store.getState().sessionRequests;
+  expect(switching).toMatchObject({ action: "switch", target: "t", account: "a" });
+  expect(handing).toMatchObject({ action: "handoff", target: "t", account: null, model: "m", effort: null });
+});
+
 it("does not offer a session request that lacks what its action needs or has an action it does not know", () => {
   const daemon = createDaemon("http://localhost:1234");
   const base = { type: "session_request" as const, session: "s", role: "project" as const, console: "c", project: "p", agent: "claude" as const, branches: [], requested_at: 1, owner: null, reopened_owners: [], target: null, account: null, conversation: null };
@@ -191,6 +203,8 @@ it("does not offer a session request that lacks what its action needs or has an 
     { ...base, request_id: "r-1", action: "reopen" },
     { ...base, request_id: "r-2", action: "resume" },
     { ...base, request_id: "r-3", action: "resume_record" },
+    { ...base, request_id: "r-5", action: "switch" },
+    { ...base, request_id: "r-6", action: "handoff" },
     { ...base, request_id: "r-4", action: "from_the_future" as never },
   ]);
   expect(daemon.store.getState().sessionRequests).toEqual([]);

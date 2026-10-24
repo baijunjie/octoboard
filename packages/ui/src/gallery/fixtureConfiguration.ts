@@ -109,6 +109,8 @@ export function exportedDocument(state: State, consoleId?: string, includePaths 
         ...(typeof state.settings.auto_start_quota_windows === "boolean" && { auto_start_quota_windows: state.settings.auto_start_quota_windows }),
         ...(typeof state.settings.auto_approve_session_requests === "boolean" && { auto_approve_session_requests: state.settings.auto_approve_session_requests }),
         ...(typeof state.settings.auto_approve_resume_requests === "boolean" && { auto_approve_resume_requests: state.settings.auto_approve_resume_requests }),
+        ...(typeof state.settings.auto_approve_account_switches === "boolean" && { auto_approve_account_switches: state.settings.auto_approve_account_switches }),
+        ...(typeof state.settings.auto_approve_handoffs === "boolean" && { auto_approve_handoffs: state.settings.auto_approve_handoffs }),
       },
     }),
     consoles,

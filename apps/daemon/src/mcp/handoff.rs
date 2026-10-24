@@ -1,15 +1,19 @@
 //! The tool with which an owner hands a session of its own off to a new session of another agent,
 //! `handoff_session`. What moves and what is refused is the operation's
 //! (`crate::handoff::operation`); what is here is the caller's side: that the session is its own,
-//! and what the result tells it, since it is not sent the message that tells an owner of a handoff.
+//! the user being asked first unless they chose to have handoffs approved without asking
+//! (`session_request`), and what the result tells it, since it is not sent the message that tells
+//! an owner of a handoff.
 
 use std::sync::Arc;
 
 use anyhow::Result;
 use serde_json::{json, Map, Value};
 
+use crate::coordinator;
 use crate::handoff::operation;
-use crate::protocol::Session;
+use crate::protocol::{Agent, Session};
+use crate::session_request::{self, Change, Edits, Perform, Performed};
 use crate::state::AppState;
 
 use super::args::{optional_string, parse_agent, present_text, required_str};
@@ -19,6 +23,10 @@ use super::settings::resolve_account;
 /// Hands a session of the caller's off to a new session of another agent, which takes its place and
 /// stays the caller's; see `handoff::operation` for what moves and what is refused. The caller is
 /// not sent the message that tells an owner of a handoff, since the result tells it.
+///
+/// Unless the user has chosen to have handoffs approved without asking, the call
+/// waits while the user is asked, who may change the agent, the account, the model and the
+/// reasoning effort; the result then names what was done.
 ///
 /// The new session is launched through `launch`: `term::launch` outside the tests, which cannot
 /// start an agent.
@@ -35,35 +43,188 @@ pub(super) async fn handoff_session(
         // A session the caller owns is always in the caller's own console.
         None => account_when_unset(state, caller, agent, true)?,
     };
+    let asked = Asked {
+        agent,
+        account,
+        model: present_text(arguments, "model")?,
+        effort: present_text(arguments, "effort")?,
+        title: optional_string(arguments, "title"),
+        note: optional_string(arguments, "note"),
+    };
+    let target_id = target.id.clone();
+    // Read once: the call acts on it.
+    if state.store.auto_approve_handoffs()? {
+        let (state_for_run, caller_id, target) = (state.clone(), caller.id.clone(), target.clone());
+        return session_request::run_unasked(
+            state,
+            caller,
+            "handoff_session",
+            &target_id,
+            async move {
+                perform(
+                    &state_for_run,
+                    &caller_id,
+                    &target,
+                    &asked,
+                    Edits::default(),
+                    launch,
+                )
+                .await
+            },
+        )
+        .await;
+    }
+    // Where nothing the user changes in the dialog could help.
+    operation::refuse_unless_it_can_be_handed_off(&target, agent)?;
+    let open = operation::receiving_request(state, &target, &asked.handoff(&target), None);
+    let account = coordinator::check_open_asking(state, &open).await?;
+    let change = Change::Handoff {
+        target: target_id,
+        agent,
+        account: account.clone(),
+        model: asked.model.clone(),
+        effort: asked.effort.clone(),
+        perform: Perform::new({
+            let (state, caller_id, target) = (state.clone(), caller.id.clone(), target.clone());
+            // The account the dialog showed stands, rather than one settled again at approval.
+            let asked = Asked {
+                account: Some(account),
+                ..asked
+            };
+            move |edits| async move { perform(&state, &caller_id, &target, &asked, edits, launch).await }
+        }),
+    };
+    session_request::ask_to_change(
+        state,
+        caller,
+        &target,
+        change,
+        session_request::ANSWER_TIME_LIMIT,
+    )
+    .await
+}
+
+/// What the call asked for.
+struct Asked {
+    agent: Agent,
+    account: Option<Option<String>>,
+    model: Option<Option<String>>,
+    effort: Option<Option<String>>,
+    title: Option<String>,
+    note: Option<String>,
+}
+
+impl Asked {
+    /// The operation's request for `target` as asked.
+    fn handoff(&self, target: &Session) -> operation::Handoff {
+        operation::Handoff {
+            session: target.id.clone(),
+            agent: self.agent,
+            account: self.account.clone(),
+            model: self.model.clone(),
+            effort: self.effort.clone(),
+            title: self.title.clone(),
+            note: self.note.clone(),
+            asked_by: None,
+            terminal_appearance: None,
+        }
+    }
+}
+
+/// How a setting the user chose is told: its value, or the agent's own default.
+fn setting_text(value: &Option<String>) -> String {
+    value.as_deref().map_or_else(
+        || "the agent's own default".to_string(),
+        |text| format!("`{text}`"),
+    )
+}
+
+/// Hands `target` off as `asked`, with what the user changed in the dialog standing in place of it:
+/// another agent takes its own account unless the user chose one, and the model and effort the call
+/// asked for belong to the agent it asked for.
+async fn perform(
+    state: &Arc<AppState>,
+    caller_id: &str,
+    target: &Session,
+    asked: &Asked,
+    edits: Edits,
+    launch: impl FnOnce(crate::term::LaunchRequest) -> Result<crate::term::Launch> + Send + 'static,
+) -> Result<Performed> {
+    let (edited_model, edited_effort) = (edits.model.is_some(), edits.effort.is_some());
+    let agent = edits.agent.unwrap_or(asked.agent);
+    let as_asked = agent == asked.agent;
+    let account = match edits.account {
+        Some(account) => Some(account),
+        None if as_asked => asked.account.clone(),
+        // Another agent than the call named, and no account chosen: as a call naming that agent.
+        None => {
+            let caller = state.session_record(caller_id)?;
+            account_when_unset(state, &caller, agent, true)?
+        }
+    };
+    let (model, effort) = if as_asked {
+        (
+            edits.model.or_else(|| asked.model.clone()),
+            edits.effort.or_else(|| asked.effort.clone()),
+        )
+    } else {
+        (edits.model, edits.effort)
+    };
+    let chose_otherwise = !as_asked || account != asked.account;
+    let (set_model, set_effort) = (model.clone(), effort.clone());
     let moved = operation::hand_off_with(
         state,
         operation::Handoff {
             session: target.id.clone(),
             agent,
             account,
-            model: present_text(arguments, "model")?,
-            effort: present_text(arguments, "effort")?,
-            title: optional_string(arguments, "title"),
-            note: optional_string(arguments, "note"),
-            asked_by: Some(caller.id.clone()),
+            model,
+            effort,
+            title: asked.title.clone(),
+            note: asked.note.clone(),
+            asked_by: Some(caller_id.to_string()),
             terminal_appearance: None,
         },
         launch,
     )
     .await?;
+    let account_name = state
+        .store
+        .account_display_name(moved.receiving.agent, moved.receiving.account_id.as_deref())?;
     let mut answer = json!({
         "session": moved.receiving.id,
         "agent": moved.receiving.agent,
         "archived": target.id,
+        "account": moved.receiving.account_id.clone().unwrap_or_else(|| "default".to_string()),
+        "account_name": account_name,
         "owned_sessions": moved.owned.iter().map(|session| &session.id).collect::<Vec<_>>(),
     });
     let mut note = format!(
         "Handed off: `{}` was archived and the work moved to the new session `{}`, a session of \
-         {} that reports to you like the original did. Drive it with the usual tools.",
+         {} on the account `{account_name}` that reports to you like the original did. Drive \
+         it with the usual tools.",
         target.id,
         moved.receiving.id,
         moved.receiving.agent.label(),
     );
+    if let Some(model) = &moved.receiving.model {
+        answer["model"] = json!(model);
+    }
+    if let Some(effort) = &moved.receiving.effort {
+        answer["effort"] = json!(effort);
+    }
+    if chose_otherwise {
+        note.push_str(" The user changed the agent or account you asked for.");
+    }
+    if let Some(model) = set_model.filter(|_| edited_model) {
+        note.push_str(&format!(" Its model is {}.", setting_text(&model)));
+    }
+    if let Some(effort) = set_effort.filter(|_| edited_effort) {
+        note.push_str(&format!(
+            " Its reasoning effort is {}.",
+            setting_text(&effort)
+        ));
+    }
     match moved.branches {
         Ok(branches) => answer["branches"] = json!(branches),
         Err(reason) => {
@@ -75,14 +236,17 @@ pub(super) async fn handoff_session(
         }
     }
     answer["note"] = json!(note);
-    Ok(answer)
+    Ok(Performed {
+        session: moved.receiving,
+        result: answer,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::mcp::exec::tests::{arguments, peer_state, project_session, shared_console_state};
-    use crate::protocol::{Agent, SessionStatus};
+    use crate::protocol::{Agent, Event, SessionRequestAction, SessionStatus};
     use crate::test_support::{heard_after_marker, running, stand_in_launch, Launched, StandIn};
     use std::sync::Mutex;
 
@@ -115,6 +279,7 @@ mod tests {
     #[tokio::test]
     async fn a_console_session_hands_off_a_session_of_its_own() {
         let (state, _dir) = shared_console_state("handoff-console");
+        state.store.set_auto_approve_handoffs(true).unwrap();
         let caller = running(&state, "a");
         let _original = running(&state, "of-a");
         let (launches, started) = (Launches::default(), Started::default());
@@ -159,6 +324,7 @@ mod tests {
     #[tokio::test]
     async fn an_unbound_project_session_hands_off_a_session_of_its_own() {
         let (state, _dir) = peer_state("handoff-project");
+        state.store.set_auto_approve_handoffs(true).unwrap();
         let caller = running(&state, "starter");
         let _mine = running(&state, "mine");
         let mut owned = project_session("owned-by-mine", "console-1", Some("mine"));
@@ -199,6 +365,7 @@ mod tests {
     #[tokio::test]
     async fn a_handoff_to_the_callers_agent_takes_the_callers_account_and_the_title_given() {
         let (state, _dir) = shared_console_state("handoff-callers-account");
+        state.store.set_auto_approve_handoffs(true).unwrap();
         state
             .store
             .insert_account(&crate::protocol::Account {
@@ -249,6 +416,7 @@ mod tests {
     #[tokio::test]
     async fn a_handoff_takes_the_soonest_weekly_reset_when_automatic_selection_is_on() {
         let (state, _dir) = shared_console_state("handoff-follows-auto-select");
+        state.store.set_auto_approve_handoffs(true).unwrap();
         state.store.set_auto_select_account(true).unwrap();
         for (id, dir) in [
             ("codex-work", "/tmp/codex-work"),
@@ -322,6 +490,39 @@ mod tests {
         assert_eq!(record.account_id.as_deref(), Some("sooner"));
     }
 
+    /// An account the user turned off is refused before the user is asked.
+    #[tokio::test]
+    async fn a_handoff_to_a_turned_off_account_is_refused_without_asking() {
+        let (state, _dir) = shared_console_state("handoff-turned-off");
+        state
+            .store
+            .insert_account(&crate::protocol::Account {
+                id: "codex-off".to_string(),
+                agent: Agent::Codex,
+                name: "codex-off".to_string(),
+                config_dir: "/tmp/codex-off".to_string(),
+                share_default_config: false,
+                share_default_config_incomplete: false,
+                disabled: true,
+            })
+            .unwrap();
+        let _caller = running(&state, "a");
+        let _original = running(&state, "of-a");
+        let (launches, started) = (Launches::default(), Started::default());
+
+        let err = handoff_session(
+            &state,
+            &state.session_record("a").unwrap(),
+            &arguments(json!({ "session": "of-a", "agent": "codex", "account": "codex-off" })),
+            stand_in_launch(&started, &launches, || {}),
+        )
+        .await
+        .expect_err("refused");
+
+        assert!(err.to_string().contains("is disabled"), "{err}");
+        assert!(!state.session_requests.is_waiting_for("a"));
+    }
+
     /// What is not the caller's to hand off (another owner's session, the caller itself), what the
     /// operation refuses (a session in the middle of a turn), a bad agent and an account of
     /// another agent are all refused in prose: nothing is launched and no session changes.
@@ -383,5 +584,169 @@ mod tests {
         }
         assert!(launches.lock().unwrap().is_empty());
         assert_eq!(sessions_as_stored(&state), before);
+    }
+
+    /// With the user not having waived the dialog, the call waits, the request carrying what the
+    /// call asked for with the account settled; the agent the user picks instead is the one
+    /// handed off to, and the result names it.
+    #[tokio::test]
+    async fn a_handoff_waits_for_the_user_and_goes_where_the_user_chose() {
+        let (state, _dir) = shared_console_state("handoff-asks");
+        let caller = running(&state, "a");
+        let _original = running(&state, "of-a");
+        let (launches, started) = (Launches::default(), Started::default());
+        let call = {
+            let (state, caller) = (state.clone(), state.session_record("a").unwrap());
+            let launch = stand_in_launch(&started, &launches, || {});
+            tokio::spawn(async move {
+                handoff_session(
+                    &state,
+                    &caller,
+                    &arguments(json!({
+                        "session": "of-a",
+                        "agent": "codex",
+                        "title": "Fix the build",
+                        "note": "Start with the failing test.",
+                    })),
+                    launch,
+                )
+                .await
+            })
+        };
+
+        let Event::SessionRequest {
+            request_id,
+            action,
+            target,
+            agent,
+            account,
+            model,
+            effort,
+            ..
+        } = crate::mcp::exec::tests::wait_for_request(&state, "a").await
+        else {
+            panic!("a session request");
+        };
+        assert_eq!(action, SessionRequestAction::Handoff);
+        assert_eq!(target.as_deref(), Some("of-a"));
+        assert_eq!(agent, Agent::Codex);
+        assert_eq!(
+            account, None,
+            "the default account, settled when the call was made"
+        );
+        assert_eq!((model, effort), (None, None));
+        assert!(
+            launches.lock().unwrap().is_empty(),
+            "nothing moves before the answer"
+        );
+
+        let receiving = session_request::answer(
+            &state,
+            &request_id,
+            true,
+            Edits {
+                agent: Some(Agent::Grok),
+                account: Some(None),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        let result = call.await.unwrap().unwrap();
+        assert_eq!(result["agent"], "grok");
+        assert_eq!(result["session"], receiving.id);
+        let record = state.store.get_session(&receiving.id).unwrap().unwrap();
+        assert_eq!(record.agent, Agent::Grok);
+        assert_eq!(record.title, "Fix the build");
+        assert_eq!(
+            state.store.get_session("of-a").unwrap().unwrap().status,
+            SessionStatus::Archived
+        );
+        assert_caller_not_told(&state, &caller);
+    }
+
+    /// A refusal ends the call with an error saying the user refused and nothing changed.
+    #[tokio::test]
+    async fn a_refused_handoff_returns_an_error_and_changes_nothing() {
+        let (state, _dir) = shared_console_state("handoff-refused-by-user");
+        let _caller = running(&state, "a");
+        let _original = running(&state, "of-a");
+        let before = sessions_as_stored(&state);
+        let (launches, started) = (Launches::default(), Started::default());
+        let call = {
+            let (state, caller) = (state.clone(), state.session_record("a").unwrap());
+            let launch = stand_in_launch(&started, &launches, || {});
+            tokio::spawn(async move {
+                handoff_session(
+                    &state,
+                    &caller,
+                    &arguments(json!({ "session": "of-a", "agent": "codex" })),
+                    launch,
+                )
+                .await
+            })
+        };
+        let Event::SessionRequest { request_id, .. } =
+            crate::mcp::exec::tests::wait_for_request(&state, "a").await
+        else {
+            panic!("a session request");
+        };
+
+        session_request::answer(&state, &request_id, false, Edits::default())
+            .await
+            .unwrap();
+
+        let err = call.await.unwrap().expect_err("refused");
+        assert!(err.to_string().contains("the user refused"), "{err}");
+        assert!(err.to_string().contains("nothing was changed"), "{err}");
+        assert!(launches.lock().unwrap().is_empty());
+        assert_eq!(sessions_as_stored(&state), before);
+    }
+
+    /// An approval that changes the agent and names no account takes the account a call naming
+    /// that agent would, and the result says what was done and that the user changed the ask.
+    #[tokio::test]
+    async fn a_handoff_to_an_agent_the_user_chose_resolves_its_account() {
+        let (state, _dir) = shared_console_state("handoff-changed-agent");
+        let _caller = running(&state, "a");
+        let _original = running(&state, "of-a");
+        let (launches, started) = (Launches::default(), Started::default());
+        let call = {
+            let (state, caller) = (state.clone(), state.session_record("a").unwrap());
+            let launch = stand_in_launch(&started, &launches, || {});
+            tokio::spawn(async move {
+                handoff_session(
+                    &state,
+                    &caller,
+                    &arguments(json!({ "session": "of-a", "agent": "codex" })),
+                    launch,
+                )
+                .await
+            })
+        };
+        let Event::SessionRequest { request_id, .. } =
+            crate::mcp::exec::tests::wait_for_request(&state, "a").await
+        else {
+            panic!("a session request");
+        };
+
+        crate::session_request::answer(
+            &state,
+            &request_id,
+            true,
+            crate::session_request::Edits {
+                agent: Some(Agent::Grok),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let result = call.await.unwrap().unwrap();
+        assert_eq!(result["agent"], "grok");
+        assert_eq!(result["account"], "default");
+        assert!(result["note"].as_str().unwrap().contains("user changed"));
     }
 }

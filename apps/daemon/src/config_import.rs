@@ -156,6 +156,12 @@ pub struct InspectedSettings {
     /// Absent when the document predates the setting, which applying it then leaves as it is.
     pub auto_approve_resume_requests: Option<bool>,
     pub current_auto_approve_resume_requests: bool,
+    /// Absent when the document predates the setting, which applying it then leaves as it is.
+    pub auto_approve_account_switches: Option<bool>,
+    pub current_auto_approve_account_switches: bool,
+    /// Absent when the document predates the setting, which applying it then leaves as it is.
+    pub auto_approve_handoffs: Option<bool>,
+    pub current_auto_approve_handoffs: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -521,6 +527,10 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
             current_auto_approve_session_requests: state.store.auto_approve_session_requests()?,
             auto_approve_resume_requests: settings.auto_approve_resume_requests,
             current_auto_approve_resume_requests: state.store.auto_approve_resume_requests()?,
+            auto_approve_account_switches: settings.auto_approve_account_switches,
+            current_auto_approve_account_switches: state.store.auto_approve_account_switches()?,
+            auto_approve_handoffs: settings.auto_approve_handoffs,
+            current_auto_approve_handoffs: state.store.auto_approve_handoffs()?,
         }),
         None => None,
     };
@@ -709,6 +719,8 @@ pub async fn apply(
             auto_delete_unresumable_archives: settings.auto_delete_unresumable_archives,
             auto_approve_session_requests: settings.auto_approve_session_requests,
             auto_approve_resume_requests: settings.auto_approve_resume_requests,
+            auto_approve_account_switches: settings.auto_approve_account_switches,
+            auto_approve_handoffs: settings.auto_approve_handoffs,
             auto_select_account: settings.auto_select_account,
             sidebar_order_by_status: settings.sidebar_order_by_status,
             auto_start_quota_windows: settings.auto_start_quota_windows,
@@ -1790,6 +1802,8 @@ mod tests {
                 auto_start_quota_windows: None,
                 auto_approve_session_requests: None,
                 auto_approve_resume_requests: None,
+                auto_approve_account_switches: None,
+                auto_approve_handoffs: None,
                 keyboard_shortcuts: None,
             })
         );
@@ -1850,6 +1864,11 @@ mod tests {
         source.store.set_auto_approve_resume_requests(true).unwrap();
         source
             .store
+            .set_auto_approve_account_switches(true)
+            .unwrap();
+        source.store.set_auto_approve_handoffs(true).unwrap();
+        source
+            .store
             .insert_console(&crate::test_support::console(&source_dir))
             .unwrap();
         let full =
@@ -1857,6 +1876,8 @@ mod tests {
                 .unwrap();
         assert_eq!(full["settings"]["auto_approve_session_requests"], true);
         assert_eq!(full["settings"]["auto_approve_resume_requests"], true);
+        assert_eq!(full["settings"]["auto_approve_account_switches"], true);
+        assert_eq!(full["settings"]["auto_approve_handoffs"], true);
 
         let (target, _target_dir) = app_state("import-auto-approve-target");
         let inspection = inspect(&target, &full).await.unwrap();
@@ -1865,13 +1886,21 @@ mod tests {
         assert!(!settings.current_auto_approve_session_requests);
         assert_eq!(settings.auto_approve_resume_requests, Some(true));
         assert!(!settings.current_auto_approve_resume_requests);
+        assert_eq!(settings.auto_approve_account_switches, Some(true));
+        assert!(!settings.current_auto_approve_account_switches);
+        assert_eq!(settings.auto_approve_handoffs, Some(true));
+        assert!(!settings.current_auto_approve_handoffs);
 
         apply(&target, &full, Vec::new(), false).await.unwrap();
         assert!(!target.store.auto_approve_session_requests().unwrap());
         assert!(!target.store.auto_approve_resume_requests().unwrap());
+        assert!(!target.store.auto_approve_account_switches().unwrap());
+        assert!(!target.store.auto_approve_handoffs().unwrap());
         apply(&target, &full, Vec::new(), true).await.unwrap();
         assert!(target.store.auto_approve_session_requests().unwrap());
         assert!(target.store.auto_approve_resume_requests().unwrap());
+        assert!(target.store.auto_approve_account_switches().unwrap());
+        assert!(target.store.auto_approve_handoffs().unwrap());
     }
 
     /// A document from before the cleanup setting existed leaves it as the importing machine has
@@ -1917,6 +1946,8 @@ mod tests {
                 auto_start_quota_windows: None,
                 auto_approve_session_requests: None,
                 auto_approve_resume_requests: None,
+                auto_approve_account_switches: None,
+                auto_approve_handoffs: None,
                 keyboard_shortcuts: None,
             })
         );
@@ -1946,6 +1977,8 @@ mod tests {
                 auto_start_quota_windows: None,
                 auto_approve_session_requests: None,
                 auto_approve_resume_requests: None,
+                auto_approve_account_switches: None,
+                auto_approve_handoffs: None,
                 keyboard_shortcuts: None,
             })
         );

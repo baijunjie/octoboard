@@ -1,7 +1,8 @@
-import type { Account, Settings } from "../../protocol";
+import type { Account, AccountQuota, AccountSharing, Settings } from "../../protocol";
 import type { SessionRequest } from "../../store";
 import type { Scenario } from "../scenario";
 import { ALL_AGENTS, SAMPLE, consoleOf, projectOf, sessionOf, snapshotState } from "./builders";
+import { quotaOf, quotaWindow } from "./quotas";
 import { SHELL_TIMEOUT } from "./shellTimeout";
 
 const TRUST = "Trust prompts and toasts";
@@ -79,6 +80,64 @@ const resumeState = (requesting: string, request: SessionRequest, settings?: Set
   sessionRequests: [request],
   settings,
 });
+
+// Requests to switch or hand off a session the requester owns: the console session asks about Verify the migration, a
+// Claude Code session of Website bound to it and running on the default account, mid-turn for a switch and idle for a
+// handoff, which the daemon refuses while the session works. Claude Code has Work (its session window used up),
+// Personal (quota left) and Client (its sharing change is running in some scenarios, unfinished in another), Codex has
+// Team.
+const ownedSession = sessionOf("s-owned-session", console_.id, web.id, "Verify the migration", "working", { bound_to: SAMPLE.consoleSession.id });
+const idleOwnedSession = { ...ownedSession, status: "idle" as const };
+const startingOwnedSession = { ...ownedSession, status: "starting" as const };
+const archivedOwnedSession = { ...ownedSession, status: "archived" as const };
+const moveAccounts: Account[] = [
+  { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
+  { id: "a-personal", agent: "claude", name: "Personal", config_dir: "/Users/dev/.claude-personal" },
+  { id: "a-client", agent: "claude", name: "Client", config_dir: "/Users/dev/.claude-client" },
+  { id: "a-team", agent: "codex", name: "Team", config_dir: "/Users/dev/.codex-team" },
+];
+const moveQuotas: AccountQuota[] = [
+  quotaOf("claude", null, "max", [quotaWindow("session", 22, 190), quotaWindow("weekly", 41, 3 * 24 * 60 + 4 * 60)]),
+  quotaOf("claude", "a-work", "pro", [quotaWindow("session", 100, 125), quotaWindow("weekly", 63, 2 * 24 * 60 + 5 * 60)]),
+  quotaOf("claude", "a-personal", "pro", [quotaWindow("session", 36, 40), quotaWindow("weekly", 48, 24 * 60 + 90)]),
+  quotaOf("codex", null, "plus", [quotaWindow("session", 20, 95), quotaWindow("weekly", 52, 5 * 24 * 60)]),
+  quotaOf("codex", "a-team", "pro", [quotaWindow("session", 30, 200), quotaWindow("weekly", 41, 3 * 24 * 60 + 60)]),
+];
+const moveState = (request: SessionRequest, options: { target?: typeof ownedSession; accountSharing?: AccountSharing[]; accounts?: Account[]; quotas?: AccountQuota[] } = {}) => snapshotState({
+  consoles: [console_],
+  projects: [web, api, grokProject],
+  sessions: [...sessions.map(waiting(SAMPLE.consoleSession.id)), options.target ?? ownedSession],
+  sessionRequests: [request],
+  settings: { ...resumeSettings, accounts: options.accounts ?? moveAccounts },
+  accountQuotas: options.quotas ?? moveQuotas,
+  accountSharing: options.accountSharing,
+});
+// The daemon names the target's own project in a request, whichever session asks.
+const switchRequestTo = (account: string | null) => requestOf({
+  action: "switch",
+  session: SAMPLE.consoleSession.id,
+  role: "project",
+  console: console_.id,
+  project: web.id,
+  agent: "claude",
+  target: ownedSession.id,
+  account,
+});
+const handoffRequestOn = (account: string) => requestOf({
+  action: "handoff",
+  session: SAMPLE.consoleSession.id,
+  role: "project",
+  console: console_.id,
+  project: web.id,
+  agent: "codex",
+  target: ownedSession.id,
+  account,
+  model: "gpt-5.6-sol",
+  effort: "high",
+});
+const handoffRequest = handoffRequestOn("a-team");
+// The quotas with Team's session window used up.
+const teamUsedUpQuotas = moveQuotas.map((quota) => quota.account === "a-team" ? quotaOf("codex", "a-team", "pro", [quotaWindow("session", 100, 125), quotaWindow("weekly", 41, 3 * 24 * 60 + 60)]) : quota);
 
 export const noticeScenarios: Scenario[] = [
   {
@@ -242,6 +301,23 @@ export const noticeScenarios: Scenario[] = [
     })),
   },
   {
+    id: "session-request-switch",
+    group: TRUST,
+    category: "normal",
+    title: "Request to switch a session's account",
+    description: "The console session asks to switch Verify the migration, its Claude Code session, to the account Personal. The form under the question has Personal chosen in the Switch to picker, with the model and reasoning effort below it and a note that a change to them is kept for the session. Confirm reads Switch account and is enabled.",
+    state: moveState(switchRequestTo("a-personal")),
+  },
+  {
+    id: "session-request-handoff",
+    group: TRUST,
+    category: "normal",
+    title: "Request to hand off a session",
+    description: "The console session asks to hand off Verify the migration, which is idle, to a new Codex session on the account Team. Under the question the agent and account picker stands on Codex and Team, with the Advanced section open on the model GPT-5.6-Sol and the reasoning effort the call asked for. Nothing the asking session wrote is shown. Confirm reads Hand off session and is enabled.",
+    state: moveState(handoffRequest, { target: idleOwnedSession }),
+    steps: [(ui) => ui.press(ui.t("dialog.agentSettings.advanced"))],
+  },
+  {
     id: "session-request-reopen-long-names",
     group: TRUST,
     category: "normal",
@@ -293,6 +369,86 @@ export const noticeScenarios: Scenario[] = [
       owner: SAMPLE.consoleSession.id,
       reopenedOwners: [],
     })),
+  },
+  {
+    id: "session-request-switch-used-up",
+    group: TRUST,
+    category: "exceptional",
+    title: "Request to switch to an account whose quota is used up",
+    description: "The account asked for, Work, has its session quota used up. The picker still stands on Work, and an error above it says the quota is used up and when it resets. Confirm is disabled until another account is chosen.",
+    state: moveState(switchRequestTo("a-work")),
+  },
+  {
+    id: "session-request-switch-sharing-change",
+    group: TRUST,
+    category: "exceptional",
+    title: "Request to switch to an account whose sharing change is running",
+    description: "The account asked for, Client, is having its sharing changed. The picker stands on Client, and an error above it says its sharing is changing, so the session cannot move to it yet. Confirm is disabled until another account is chosen.",
+    state: moveState(switchRequestTo("a-client"), { accountSharing: [{ account: "a-client", progress: { share: true, phase: "changing", done: 2, total: 9, item: "skills/" } }] }),
+  },
+  {
+    id: "session-request-switch-disabled",
+    group: TRUST,
+    category: "exceptional",
+    title: "Request to switch to an account that is turned off",
+    description: "The account asked for, Personal, was turned off in Settings while the request waited (a request for an account that is already off is refused before it is asked). An error above the picker, titled Account is disabled, says a session cannot use Personal and to choose another account or turn it back on in Settings. The picker stands on Personal, whose entry in the open list reads Unavailable while this account is disabled. Confirm is disabled until another account is chosen.",
+    state: moveState(switchRequestTo("a-personal"), { accounts: moveAccounts.map((account) => account.id === "a-personal" ? { ...account, disabled: true } : account) }),
+  },
+  {
+    id: "session-request-switch-account-gone",
+    group: TRUST,
+    category: "exceptional",
+    title: "Request to switch to an account that no longer exists",
+    description: "The account asked for was removed after the request was made. The picker is empty with its placeholder, and an error above it says the account no longer exists and asks to choose another. Confirm is disabled until one is chosen.",
+    state: moveState(switchRequestTo("a-removed")),
+  },
+  {
+    id: "session-request-switch-incomplete",
+    group: TRUST,
+    category: "exceptional",
+    title: "Request to switch to an account whose sharing change did not finish",
+    description: "The account asked for, Client, had its last sharing change left unfinished, so a warning line sits between the form and the buttons, naming the account and saying its configuration and conversations may be incomplete. Confirm stays Switch account and is enabled: the dialog itself is the confirmation.",
+    state: moveState(switchRequestTo("a-client"), { accounts: moveAccounts.map((account) => account.id === "a-client" ? { ...account, share_default_config_incomplete: true } : account) }),
+  },
+  {
+    id: "session-request-switch-starting",
+    group: TRUST,
+    category: "exceptional",
+    title: "Request to switch a session that is still starting",
+    description: "The session to switch has not finished starting. An error above the picker says it cannot be switched yet, and Confirm is disabled, though Personal is chosen and available.",
+    state: moveState(switchRequestTo("a-personal"), { target: startingOwnedSession }),
+  },
+  {
+    id: "session-request-switch-archived",
+    group: TRUST,
+    category: "exceptional",
+    title: "Request to switch a session that was archived",
+    description: "The session to switch was archived while the request waited. An error above the picker says an archived session cannot be switched, and Confirm is disabled, though Personal is chosen and available.",
+    state: moveState(switchRequestTo("a-personal"), { target: archivedOwnedSession }),
+  },
+  {
+    id: "session-request-handoff-used-up",
+    group: TRUST,
+    category: "exceptional",
+    title: "Request to hand off to an account whose quota is used up",
+    description: "The account asked for, Team, has its session quota used up. The picker still stands on Team, and an error above it says the quota is used up and when it resets. Confirm is disabled until another account is chosen.",
+    state: moveState(handoffRequestOn("a-team"), { target: idleOwnedSession, quotas: teamUsedUpQuotas }),
+  },
+  {
+    id: "session-request-handoff-choice-gone",
+    group: TRUST,
+    category: "exceptional",
+    title: "Request to hand off to an account that no longer exists",
+    description: "The account asked for was removed after the request was made, so the question names it by its id. The agent and the account pickers are both empty, each with its placeholder, and an error above them asks to choose again. Confirm is disabled until an agent or account is chosen.",
+    state: moveState(handoffRequestOn("a-removed"), { target: idleOwnedSession }),
+  },
+  {
+    id: "session-request-handoff-working",
+    group: TRUST,
+    category: "exceptional",
+    title: "Request to hand off a session that has started working",
+    description: "The session to hand off started a turn while the request waited. An error above the picker says the session is in the middle of a turn and cannot be handed off yet. Confirm is disabled, and Refuse is the way out.",
+    state: moveState(handoffRequest),
   },
   {
     id: "toast-error",

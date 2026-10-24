@@ -676,8 +676,9 @@ const HANDOVER_BRANCHES: ToolDef = ToolDef {
     },
 };
 
-/// How an owner moves a session of its own to another agent, without the user: the receiving
-/// session takes the original's whole place and stays the owner's, and the original is archived.
+/// How an owner moves a session of its own to another agent, with the user's approval: the
+/// receiving session takes the original's whole place and stays the owner's, and the original is
+/// archived.
 const HANDOFF_SESSION: ToolDef = ToolDef {
     name: "handoff_session",
     description: "Hand one of your sessions (`yours: true`) off to a new session of another \
@@ -688,10 +689,18 @@ const HANDOFF_SESSION: ToolDef = ToolDef {
                   todo list and the files it changed. What moves is what only Octoboard holds: \
                   the branches the original is responsible for and the sessions it owns now \
                   belong to the new session, which reports to you like the original did, and the \
-                  original is archived. Needs no approval. Refused, changing nothing, while the \
-                  session is in the middle of a turn, and for the agent the session already runs \
-                  on (switching it to another account of that agent keeps the conversation). \
-                  Returns the new session's id, the branches that moved and the sessions it now \
+                  original is archived. The user is asked first, and may change the agent, the \
+                  account, the model and the reasoning effort you chose, so read what the result \
+                  says was done; the call waits for their answer, for several minutes at most — \
+                  unless the user has chosen to have handoffs approved \
+                  automatically, in which case the call does not wait. A refusal, or no answer in \
+                  time, comes back as an error and changes nothing. Refused, changing nothing, \
+                  while the session is in the middle of a turn, and for the agent the session \
+                  already runs on (switching it to another account of that agent keeps the \
+                  conversation). An account whose quota is used up is refused only once the user \
+                  has approved (they can pick another in the form), or at once when handoffs are \
+                  approved without asking. Returns the new session's id, its agent, account and, \
+                  where set, model and effort, the branches that moved and the sessions it now \
                   owns. Pass `account` only when the user asked for a particular one.",
     schema: || {
         object_schema(
@@ -750,7 +759,7 @@ const HANDOFF_SESSION: ToolDef = ToolDef {
 };
 
 /// How an owner moves a session of its own to another account of its agent, keeping the
-/// conversation, as the user's Switch account does.
+/// conversation, as the user's Switch account does, with the user's approval.
 const SWITCH_SESSION_ACCOUNT: ToolDef = ToolDef {
     name: "switch_session_account",
     description: "Move one of your sessions (`yours: true`) to another account of the agent it \
@@ -758,10 +767,18 @@ const SWITCH_SESSION_ACCOUNT: ToolDef = ToolDef {
                   keeps its conversation: its process is ended, the conversation is copied to \
                   the account and the session is relaunched resuming it. It is not sent a \
                   message for this: it comes back awaiting instructions, and a turn in progress \
-                  is cut off, so send it the next step with `send_message`. Needs no approval. \
-                  Refused, changing nothing, for an account of another agent, the account the session is \
-                  on already, and an archived session. Returns the session with its new \
-                  account.",
+                  is cut off, so send it the next step with `send_message`. The user is asked \
+                  first, and may change the account and the session's model and reasoning effort, \
+                  so read what the result says was done; the call waits for their answer, for \
+                  several minutes at most — unless the user has chosen to have account \
+                  switches approved automatically, in which case the call does not wait. A \
+                  refusal, or no answer in time, comes back as an error and changes nothing. \
+                  Refused at once, before the user is asked and changing nothing, for an account \
+                  of another agent, an account the user turned off, the account the session is \
+                  on already, and an archived session; other refusals (an account whose quota \
+                  is used up, say) can come after the user has chosen. Returns the session with \
+                  the account it is now on and its model and reasoning effort where it has its \
+                  own.",
     schema: || {
         object_schema(
             json!({

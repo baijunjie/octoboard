@@ -128,9 +128,12 @@ pub(super) fn update_settings(
                 arguments,
                 "auto_delete_unresumable_archives",
             )?,
-            // Neither is settable by an agent: either would let a session approve its own requests.
+            // None of these is settable by an agent: each would let a session approve its own
+            // requests.
             auto_approve_session_requests: None,
             auto_approve_resume_requests: None,
+            auto_approve_account_switches: None,
+            auto_approve_handoffs: None,
             auto_select_account: optional_bool(arguments, "auto_select_account")?,
             sidebar_order_by_status: optional_bool(arguments, "sidebar_order_by_status")?,
             // Not settable by an agent: it spends the user's quota.

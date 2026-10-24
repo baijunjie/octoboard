@@ -509,7 +509,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Agent permissions",
-    description: "The lead line sits under the section heading, above a rule that opens the two rows: the session-request switch, then the resume-request switch, both off. Each description starts with \"Once this is on\" and the resume one names reopening, resuming and resuming a conversation in a new session. Switch each on to read its other description; neither moves the other.",
+    description: "The lead line sits under the section heading, above a rule that opens the four rows: the session-request switch, the resume-request switch, the account-switch switch, then the handoff switch, all off. Each description starts with \"Once this is on\"; the resume one names reopening, resuming and resuming a conversation in a new session, and the last two say that until then you are asked and can change the account (and for a handoff the agent), model and reasoning effort before confirming. Switch each on to read its other description; none moves another.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -520,11 +520,11 @@ export const settingsScenarios: Scenario[] = [
     id: "settings-agent-permissions-on",
     group: GROUP,
     category: "normal",
-    title: "Agent permissions, both approved automatically",
-    description: "Both switches are on, and each description now states the behaviour instead of starting with \"Once this is on\".",
+    title: "Agent permissions, all approved automatically",
+    description: "All four switches are on, and each description now states the behaviour instead of starting with \"Once this is on\".",
     state: {
       ...browserState,
-      settings: { ...browserState.settings!, auto_approve_session_requests: true, auto_approve_resume_requests: true },
+      settings: { ...browserState.settings!, auto_approve_session_requests: true, auto_approve_resume_requests: true, auto_approve_account_switches: true, auto_approve_handoffs: true },
     },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),

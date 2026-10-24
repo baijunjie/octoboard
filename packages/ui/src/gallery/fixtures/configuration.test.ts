@@ -82,6 +82,12 @@ it("reports the setting this machine has now as the scenario's own state has it"
     if (typeof inspection.settings!.auto_approve_resume_requests === "boolean") {
       expect(inspection.settings!.current_auto_approve_resume_requests, id).toBe(machine!.auto_approve_resume_requests ?? false);
     }
+    if (typeof inspection.settings!.auto_approve_account_switches === "boolean") {
+      expect(inspection.settings!.current_auto_approve_account_switches, id).toBe(machine!.auto_approve_account_switches ?? false);
+    }
+    if (typeof inspection.settings!.auto_approve_handoffs === "boolean") {
+      expect(inspection.settings!.current_auto_approve_handoffs, id).toBe(machine!.auto_approve_handoffs ?? false);
+    }
   }
 });
 
@@ -171,6 +177,12 @@ it("reports application settings only for a document that carries them", () => {
       }
       if (typeof inspection.settings.auto_approve_resume_requests === "boolean") {
         expect(result.settings_applied.auto_approve_resume_requests, id).toBe(inspection.settings.auto_approve_resume_requests);
+      }
+      if (typeof inspection.settings.auto_approve_account_switches === "boolean") {
+        expect(result.settings_applied.auto_approve_account_switches, id).toBe(inspection.settings.auto_approve_account_switches);
+      }
+      if (typeof inspection.settings.auto_approve_handoffs === "boolean") {
+        expect(result.settings_applied.auto_approve_handoffs, id).toBe(inspection.settings.auto_approve_handoffs);
       }
     }
   }

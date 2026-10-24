@@ -82,33 +82,7 @@ pub(crate) async fn hand_off_with(
     crate::shared_config::refuse_if_changing(state, original.account_id.as_deref())?;
 
     let key = Uuid::new_v4().to_string();
-    let open = OpenRequest {
-        console_id: original.console_id.clone(),
-        project_id: original.project_id.clone(),
-        agent: Some(request.agent),
-        account: request.account,
-        model: request.model,
-        effort: request.effort,
-        task: None,
-        // The name the original is shown under, task title included, unless the owner asking
-        // names it anew, so the work is recognised in the list: the receiving agent starts a new
-        // conversation and has no task title of its own yet.
-        title: Some(
-            request
-                .title
-                .unwrap_or_else(|| state.display_title(&original)),
-        ),
-        origin: original.origin,
-        // A bound session's owner is reported to from the first launch. A lead session is bound
-        // after the launch instead, for it launches as an unbound one does, with the tools of one.
-        bound_to: original
-            .has_bound_role()
-            .then(|| original.bound_to.clone())
-            .flatten(),
-        resume_agent_session_id: None,
-        session_id: Some(key.clone()),
-        terminal_appearance: request.terminal_appearance,
-    };
+    let open = receiving_request(state, &original, &request, Some(key.clone()));
 
     // Refused here for what opening would refuse, before the package is read and written.
     coordinator::check_open(state, &open).await?;
@@ -150,7 +124,46 @@ pub(crate) async fn hand_off_with(
     Ok(moved)
 }
 
-fn refuse_unless_it_can_be_handed_off(original: &Session, agent: Agent) -> Result<()> {
+/// What opening the receiving session of `request` asks for, `session_id` being the id to record it
+/// under (`None` for a request only checked, before the user is asked): the original's console,
+/// project and origin, the agent, account, model and effort asked for, and the name the original is
+/// shown under, task title included, unless the owner asking names it anew, so the work is
+/// recognised in the list: the receiving agent starts a new conversation and has no task title of
+/// its own yet.
+pub(crate) fn receiving_request(
+    state: &Arc<AppState>,
+    original: &Session,
+    request: &Handoff,
+    session_id: Option<String>,
+) -> OpenRequest {
+    OpenRequest {
+        console_id: original.console_id.clone(),
+        project_id: original.project_id.clone(),
+        agent: Some(request.agent),
+        account: request.account.clone(),
+        model: request.model.clone(),
+        effort: request.effort.clone(),
+        task: None,
+        title: Some(
+            request
+                .title
+                .clone()
+                .unwrap_or_else(|| state.display_title(original)),
+        ),
+        origin: original.origin,
+        // A bound session's owner is reported to from the first launch. A lead session is bound
+        // after the launch instead, for it launches as an unbound one does, with the tools of one.
+        bound_to: original
+            .has_bound_role()
+            .then(|| original.bound_to.clone())
+            .flatten(),
+        resume_agent_session_id: None,
+        session_id,
+        terminal_appearance: request.terminal_appearance,
+    }
+}
+
+pub(crate) fn refuse_unless_it_can_be_handed_off(original: &Session, agent: Agent) -> Result<()> {
     let named = format!("`{}` (\"{}\")", original.id, one_line(&original.title));
     match original.status {
         SessionStatus::Archived => {

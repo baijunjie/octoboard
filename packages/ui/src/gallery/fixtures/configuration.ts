@@ -101,6 +101,10 @@ export const REVIEW: Omit<Inspection, "type"> = {
     current_auto_approve_session_requests: false,
     auto_approve_resume_requests: true,
     current_auto_approve_resume_requests: false,
+    auto_approve_account_switches: true,
+    current_auto_approve_account_switches: false,
+    auto_approve_handoffs: true,
+    current_auto_approve_handoffs: false,
   },
   consoles: [
     {
@@ -224,7 +228,7 @@ const LONG_CLONE_DETAIL = [
  * it was imported, a clone that failed with a long reason, a project nothing placed, a console that
  * could not be created with its project not tried, and the account references that fell back. */
 export const MIXED_RESULT: Omit<Imported, "type"> = {
-  settings_applied: { auto_pull_repositories: true, auto_delete_unresumable_archives: false, auto_select_account: true, sidebar_order_by_status: false, auto_start_quota_windows: true, auto_approve_session_requests: true, auto_approve_resume_requests: true },
+  settings_applied: { auto_pull_repositories: true, auto_delete_unresumable_archives: false, auto_select_account: true, sidebar_order_by_status: false, auto_start_quota_windows: true, auto_approve_session_requests: true, auto_approve_resume_requests: true, auto_approve_account_switches: true, auto_approve_handoffs: true },
   consoles: [
     {
       name: "Work laptop",
@@ -563,7 +567,7 @@ export const configurationScenarios: Scenario[] = [
     category: "normal",
     title: "Import, review",
     description:
-      "Projects found at recorded or default paths, clone candidates, missing paths, account fallbacks and an empty console appear together; settings start unchecked, and their note has eight lines: automatic pull turns on, archive cleanup turns off, automatic account selection turns on, ordering the sidebar by status turns off, starting usage windows automatically turns on, the two automatic approvals of agents' requests (sessions, resumes) turn on, and the last says applying sets the Keyboard shortcuts on this device to those in the file, 3 of them changed from the defaults, applying to this device or browser only.",
+      "Projects found at recorded or default paths, clone candidates, missing paths, account fallbacks and an empty console appear together; settings start unchecked, and their note has ten lines: automatic pull turns on, archive cleanup turns off, automatic account selection turns on, ordering the sidebar by status turns off, starting usage windows automatically turns on, the four automatic approvals of agents' requests (sessions, resumes, account switches, handoffs) turn on, and the last says applying sets the Keyboard shortcuts on this device to those in the file, 3 of them changed from the defaults, applying to this device or browser only.",
     state,
     configuration: reviewing({ file: SHORTCUTS_FILE }),
     steps: [
@@ -708,7 +712,7 @@ export const configurationScenarios: Scenario[] = [
     title: "Import result with failures and fallbacks",
     state: state,
     configuration: reviewing({ file: SHORTCUTS_FILE }),
-    description: "Placement outcomes, failed projects and consoles, fallback accounts and applied settings share the result; the settings show eight lines, automatic pull on, archive cleanup off, automatic account selection on, ordering the sidebar by status off, starting usage windows automatically on, both automatic approvals of agents' requests on, and last the Keyboard shortcuts on this device now having 3 changes from the defaults, followed on the same line by 2 shortcuts in the file that could not be applied here and were left out. A failed project or console reads like the other outcomes in its Result cell: a danger-coloured circled \"!\" followed by the word \"Failed\", as one button named after the project (or the console, when the whole console failed), such as \"Website failed\", and its Detail cell is empty. Short height exposes scrolling; Phone folds rows.",
+    description: "Placement outcomes, failed projects and consoles, fallback accounts and applied settings share the result; the settings show ten lines, automatic pull on, archive cleanup off, automatic account selection on, ordering the sidebar by status off, starting usage windows automatically on, all four automatic approvals of agents' requests (sessions, resumes, account switches, handoffs) on, and last the Keyboard shortcuts on this device now having 3 changes from the defaults, followed on the same line by 2 shortcuts in the file that could not be applied here and were left out. A failed project or console reads like the other outcomes in its Result cell: a danger-coloured circled \"!\" followed by the word \"Failed\", as one button named after the project (or the console, when the whole console failed), such as \"Website failed\", and its Detail cell is empty. Short height exposes scrolling; Phone folds rows.",
     steps: [
       ...importFromSettings,
       chooseFile,

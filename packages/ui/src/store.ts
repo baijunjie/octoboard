@@ -85,8 +85,9 @@ interface SessionRequestBase {
   requestedAt: number;
 }
 
-/** A session's request for a session with no owner, or to resume a conversation, waiting for the
- * user's answer. What it carries depends on what an approval does, which `action` tells. */
+/** A session's request for a session with no owner, to resume a conversation, or to switch or hand
+ * off a session it owns, waiting for the user's answer. What it carries depends on what an approval
+ * does, which `action` tells. */
 export type SessionRequest = SessionRequestBase & (
   | { action: "start" }
   | {
@@ -105,10 +106,27 @@ export type SessionRequest = SessionRequestBase & (
     /** The conversation's id. */
     conversation: string;
   }
+  | {
+    action: "switch";
+    /** The session an approval moves. */
+    target: string;
+    /** The account the call asked for; null for the agent's default account. */
+    account: string | null;
+  }
+  | {
+    action: "handoff";
+    /** The session an approval hands off. */
+    target: string;
+    /** The account the receiving session would run on; null for the agent's default account. */
+    account: string | null;
+    /** The model and effort the call asked for, absent where it left them out. */
+    model?: string | null;
+    effort?: string | null;
+  }
 );
 
 /** The request a `session_request` event describes, or undefined for one that does not carry what
- * its action needs (a reopen or resume without a target, a record without its conversation) or
+ * its action needs (a reopen, resume, switch or handoff without a target, a record without its conversation) or
  * has an action this client does not know: the dialog is the one place an approval is enforced, so
  * a request it cannot describe is not offered at all, and the daemon's own timeout ends the call. */
 function sessionRequestOf(event: Extract<Event, { type: "session_request" }>): SessionRequest | undefined {
@@ -133,6 +151,12 @@ function sessionRequestOf(event: Extract<Event, { type: "session_request" }>): S
     case "resume_record":
       if (event.conversation === null) return undefined;
       return { ...base, action, account: event.account, conversation: event.conversation };
+    case "switch":
+      if (event.target === null) return undefined;
+      return { ...base, action, target: event.target, account: event.account };
+    case "handoff":
+      if (event.target === null) return undefined;
+      return { ...base, action, target: event.target, account: event.account, model: event.model, effort: event.effort };
     default:
       return { ...base, action };
   }

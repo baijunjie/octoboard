@@ -161,14 +161,14 @@ working directory. Neither the avatar itself nor the console's console session i
 `sidebar_order_by_status` and `default_clone_dir`, under the rules of the same settings in Settings: the switches take
 `true` or `false`, a clone directory must be absolute or start with `~/`, and a blank one goes back to the built-in
 default. A refused value leaves the others unapplied too. An `auto_approve_session_requests`,
-`auto_approve_resume_requests` or `auto_start_quota_windows` argument is ignored — the setting stays as it is,
-`get_settings` never lists any of them, and the rest of the call applies as usual. Turning `auto_pull_repositories` on
-fast-forwards the projects already known to be behind at once, as turning the switch on in Settings does, which changes
-files in the user's repositories. Turning `auto_delete_unresumable_archives` on deletes nothing at once, and turning it
-off stops a deletion pass under way, exactly as the switch in Settings does. Turning `auto_select_account` on or off
-changes no session already open; it is read when a later `new_session`, `request_session` or `handoff_session` leaves
-the account out (see "Which account a session uses" in `docs/product/sessions.md`). The call answers as `get_settings`
-does.
+`auto_approve_resume_requests`, `auto_approve_account_switches`, `auto_approve_handoffs` or `auto_start_quota_windows`
+argument is ignored — the setting stays as it is, `get_settings` never lists any of them, and the rest of the call
+applies as usual. Turning `auto_pull_repositories` on fast-forwards the projects already known to be behind at once, as
+turning the switch on in Settings does, which changes files in the user's repositories. Turning
+`auto_delete_unresumable_archives` on deletes nothing at once, and turning it off stops a deletion pass under way,
+exactly as the switch in Settings does. Turning `auto_select_account` on or off changes no session already open; it is
+read when a later `new_session`, `request_session` or `handoff_session` leaves the account out (see "Which account a
+session uses" in `docs/product/sessions.md`). The call answers as `get_settings` does.
 
 ## When a change takes effect
 

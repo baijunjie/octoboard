@@ -1,13 +1,14 @@
 # Switching a session's account
 
-A session can be moved to another account of its own agent from its row's **Switch account** submenu (see "Session
-rows" in `docs/product/sidebar-session-rows.md`); a console session is switched from its own row, among that session's
-own agent's accounts. The submenu is offered only when the agent has another account that is turned on, and the user
-is asked to confirm. An owner moves a session of its own with the `switch_session_account` tool (see "Switching from an owner's
-tool" below). Both run the same switch, described from "What a switch does" on. A switch is made only when the user or
-an owner asks for one: Octoboard never switches a session on its own, not even off an account whose quota is used up.
-A session cannot be switched onto a used-up account (see "A used-up account" in `docs/product/account-quotas.md`), nor
-onto a turned-off one (see "Turning an account off" in `docs/product/agent-accounts.md`).
+A session can be moved to another account of its own agent from its row's **Switch account** submenu (see "Session rows"
+in `docs/product/sidebar-session-rows.md`); a console session is switched from its own row, among that session's own
+agent's accounts. The submenu is offered only when the agent has another account that is turned on, and the user is
+asked to confirm. An owner moves a session of its own with the `switch_session_account` tool, once the user approves it
+unless they have chosen to have switches approved without asking (see "Switching from an owner's tool" below). Both run
+the same switch, described from "What a switch does" on. A switch is made only when the user or an owner asks for one:
+Octoboard never switches a session on its own, not even off an account whose quota is used up. A session cannot be
+switched onto a used-up account (see "A used-up account" in `docs/product/account-quotas.md`), nor onto a turned-off one
+(see "Turning an account off" in `docs/product/agent-accounts.md`).
 
 ## Confirming a switch
 
@@ -101,9 +102,11 @@ While a session is shown as switching:
 
 `switch_session_account` is offered to every session that can own sessions — a console session, an unbound project
 session and a lead session — and not to a session with the role of a bound one (see "The console session's tools" and
-"The unbound project session's tools" in `docs/product/hub-orchestration.md`). It needs no approval: an owner switches
-a session of its own without the user. It switches the one session it names; it has no counterpart of the
-confirmation's choices of several sessions.
+"The unbound project session's tools" in `docs/product/hub-orchestration.md`). The user is asked to approve the switch
+first (see "The user's approval of an owner's switch" below), unless **Automatically approve account switches** is on,
+in which case the switch is made at once (see "Approving requests automatically" in
+`docs/product/session-requests.md`). It switches the one session it names; it has no counterpart of the confirmation's
+choices of several sessions.
 
 | Argument | Required | Contents |
 |---|---|---|
@@ -114,7 +117,8 @@ The session is sent no message about the switch, and neither is the caller, whic
 comes back *awaiting instructions* like any switched session; a turn it was in the middle of when its process was ended
 is cut off, so the caller sends it its next step with `send_message`. A session with no conversation yet (see "Carrying
 the conversation" below) starts a fresh one on the new account. The call is answered once the switch's outcome is
-known, which can take a few seconds (see "What a switch does" below).
+known — after the user's answer, where the user is asked — which can take a few seconds (see "What a switch does"
+below).
 
 The call returns:
 
@@ -124,19 +128,75 @@ The call returns:
 | `agent` | Its agent. |
 | `account` | The account it is now on: the account's id, or `default` for the default account. |
 | `account_name` | That account's name; for the default account the name the user gave it, else `Default` (see "The default account" in `docs/product/agent-accounts.md`). |
-| `note` | Prose naming the account and agent the session is now on, saying that it is back awaiting instructions with any turn in progress cut off and is to be sent its next step with `send_message`, and, for a session that had no conversation yet, that it starts fresh there. |
+| `model`, `effort` | The session's own choice of model and of reasoning effort (see `docs/product/model-and-reasoning-effort.md`): a value, or `null` for the agent's own default; each absent where the session inherits it. |
+| `note` | Prose naming the account and agent the session is now on, saying that it is back awaiting instructions with any turn in progress cut off and is to be sent its next step with `send_message`, and, for a session that had no conversation yet, that it starts fresh there. Where the user chose another account than the one asked for, it says so, and it names each model or reasoning effort the user set — a value, or the agent's own default. |
 
-Refused, with the reason in prose (as a tool error) and nothing changed:
+Refused before the user is asked, with the reason in prose (as a tool error) and nothing changed:
 
 - a session that is not the caller's — an unbound one, one bound to another session, a console session, or the caller
   itself — with a reason naming who owns it, as for the other tools that act on a session of the caller's;
+- an `account` that is not one of the session's agent's, an account of another agent included;
+- an `account` the user turned off (`account_disabled`);
+- an archived session, and the account the session is on already.
+
+Refused when the switch is made — on approval, or at once when the switch is made without asking — with nothing
+changed:
+
 - a session that stopped being the caller's after the call was checked and before the switch took hold of it, handed
   to another owner meanwhile;
-- an `account` that is not one of the session's agent's, an account of another agent included;
-- everything a switch refuses (see "When a switch fails" below), such as an archived session or the account the
-  session is on already.
+- everything a switch refuses (see "When a switch fails" below), such as a target account whose quota is used up,
+  which is not refused before the user is asked since the user can choose another account.
 
 What fails after that is answered as in "When a switch fails" below, as a tool error.
+
+## The user's approval of an owner's switch
+
+While **Automatically approve account switches** is off, a `switch_session_account` call is a session
+request (see `docs/product/session-requests.md`): it waits for the user's answer for up to 8 minutes, with the caller's
+hand raised meanwhile, and ends as any request ends — approved, refused, timed out, or withdrawn, the agent cancelling
+the call included — with an approval's outcome also written into the caller's session (see "Waiting for the answer",
+"How a request ends" and "The outcome message" there). A later call for the same session takes the place of the one
+waiting; a call for another of the caller's sessions waits beside it.
+
+The confirmation is titled "Switch account?", with two buttons, **Refuse** and **Switch account**. One sentence names
+the requesting session, as a request for a session names it (see "The confirmation dialog" in
+`docs/product/session-requests.md`), then the session to switch, by its displayed name, and the agent and the account
+the call asked for; it says that the session keeps its conversation and that a turn in progress is cut off, and that
+the user can change the account, model and reasoning effort before confirming. A form follows:
+
+- **Switch to** — the accounts of the session's own agent, by the rules of the row's Switch account submenu (see
+  "Session rows" in `docs/product/sidebar-session-rows.md`): the default account first, the account the session is on
+  marked as current and not offered, an account whose quota is used up listed with its usage but not offered, an
+  account the user turned off left out, unless it is the one chosen, when it is listed with its reason and not offered
+  (the call is refused before the dialog when the account it asks for is turned off then, so this is an account turned
+  off while the dialog is open), and an account whose sharing change runs — or every other account while the session's
+  own account's sharing changes or a switch holds the session — listed with the reason and not offered. It starts on
+  the account the call asked for.
+- The collapsed **Advanced** section — the session's model and reasoning effort, starting on what the session would be
+  launched with (see "The Advanced section" in `docs/product/model-and-reasoning-effort.md`), the models listed being
+  those of the account chosen. Its note says that a value the user changes stays the session's own from then on. Only
+  values the user changed are sent with the approval.
+
+**Switch account cannot be pressed**, and an alert at the top of the dialog says why, while:
+
+- the account the call asked for no longer exists — the picker then shows no account chosen, until the user picks one;
+- the account chosen is the one the session is on already;
+- the account chosen is turned off — a danger callout says that the account is turned off, so a session cannot use it,
+  and to choose another account or turn it back on in Settings (and the used-up alert is not shown then);
+- the account chosen is used up — the alert names the account, the quota it has used up and when it resets;
+- the account chosen is not offered for one of the other reasons above;
+- the session is archived, or still starting.
+
+Where the chosen account's last change of sharing is incomplete, the dialog carries a warning line saying so instead of
+asking again on confirming (see "Starting a session on an account whose last change is incomplete" in
+`docs/product/sharing-the-default-configuration.md`). A window that does not know the session shows no form, and its
+approval is for the account the call asked for.
+
+**On approval the switch is made with what the form ended on**, as described from "What a switch does" on. Each model
+or reasoning effort the user changed is checked as opening a session checks it, against the account the session is
+switched to, and recorded as the session's own choice before the relaunch reads it; a switch that fails puts the
+session's earlier model and reasoning effort back with its account. Everything a switch refuses is refused at that
+moment, and is answered as in "When an approval cannot be carried out" in `docs/product/session-requests.md`.
 
 ## What a switch does
 

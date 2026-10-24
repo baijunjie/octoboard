@@ -152,8 +152,10 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            (`reopen_session` is for yours, and needs no approval). What it resumes keeps its \
            owner, or reports to the user, and is not yours to drive. The user approves it first; \
            the call waits for their answer.\n\
-         - `handoff_session` moves a session of yours to a new session of another agent, without \
-           asking the user. The conversation does not move: the new session reads a package built \
+         - `handoff_session` moves a session of yours to a new session of another agent. The \
+           user approves it first and may change the agent, account, model and effort; the call \
+           waits for their answer, unless they have chosen to approve handoffs \
+           without asking. The conversation does not move: the new session reads a package built \
            from the original's record, and takes over its branches and the sessions it owns. It \
            is yours like the original was, and the original is archived. Only a session that is \
            not in the middle of a turn can be handed off; moving to another account of the same \
@@ -166,8 +168,10 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            `to` may not. Nothing changes in git: the answer lists each branch's worktree and \
            whether it holds uncommitted changes. A session that is working or waiting for the \
            user cannot give branches up. It replaces no session; that is `handoff_session`.\n\
-         - `switch_session_account` moves a session of yours to another account of its own agent, \
-           without asking the user. The session keeps its conversation: its process is ended and \
+         - `switch_session_account` moves a session of yours to another account of its own agent. \
+           The user approves it first and may change the account, model and effort; the call \
+           waits for their answer, unless they have chosen to approve account \
+           switches without asking. The session keeps its conversation: its process is ended and \
            relaunched resuming it on the new account, and it is sent no message for it. It \
            comes back awaiting instructions and a turn in progress is cut off, so send it the \
            next step with `send_message`. Use it rather than a handoff when the same agent can \

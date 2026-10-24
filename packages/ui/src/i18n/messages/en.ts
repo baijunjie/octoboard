@@ -1481,6 +1481,24 @@ export const en = {
   },
   "dialog.sessionRequest.confirm": "Start session",
   "dialog.sessionRequest.refuse": "Refuse",
+  "dialog.sessionRequest.switch.title": "Switch account?",
+  "dialog.sessionRequest.switch.confirm": "Switch account",
+  "dialog.sessionRequest.question.switch":
+    "{requester} asks to switch its session {session} to the {agent} account {account}. The session keeps its conversation, and a turn in progress is cut off. You can change the account, model and reasoning effort before you confirm.",
+  "dialog.sessionRequest.switch.account": "Switch to",
+  "dialog.sessionRequest.switch.current": "Current",
+  "dialog.sessionRequest.switch.archived": "The session is archived, so its account cannot be switched.",
+  "dialog.sessionRequest.switch.starting": "The session is still starting, so its account cannot be switched yet.",
+  "dialog.sessionRequest.switch.accountGone": "The account asked for no longer exists. Choose another one.",
+  "dialog.sessionRequest.switch.alreadyOn": "The session is on {account} already.",
+  "dialog.sessionRequest.switch.launchNote": "A model or reasoning effort you change is kept for this session from now on.",
+  "dialog.sessionRequest.handoff.title": "Hand off a session?",
+  "dialog.sessionRequest.handoff.presetGone": "The agent or account asked for is no longer available. Choose another one.",
+  "dialog.sessionRequest.handoff.agentPlaceholder": "Choose an agent",
+  "dialog.sessionRequest.handoff.accountPlaceholder": "Choose an account",
+  "dialog.sessionRequest.handoff.confirm": "Hand off session",
+  "dialog.sessionRequest.question.handoff":
+    "{requester} asks to hand off its session {session} to a new {agent} session on the account {account}. The session is archived and the work moves to the new one. You can change the agent, account, model and reasoning effort before you confirm.",
   "dialog.sessionRequest.reopen.title": "Reopen a session?",
   "dialog.sessionRequest.reopen.confirm": "Reopen session",
   "dialog.sessionRequest.resume.title": "Resume a session?",
@@ -1565,6 +1583,10 @@ export const en = {
     "Turns on {setting}, which is currently off. A session's request to start a session that reports to you is then approved without asking you first.",
   "configuration.import.settings.autoApproveResume.turnsOn":
     "Turns on {setting}, which is currently off. A session's request to reopen or resume a session, or to resume a conversation in a new session, is then approved without asking you first.",
+  "configuration.import.settings.autoApproveAccountSwitches.turnsOn":
+    "Turns on {setting}, which is currently off. A session's request to switch the account of one of its sessions is then approved without asking you first.",
+  "configuration.import.settings.autoApproveHandoffs.turnsOn":
+    "Turns on {setting}, which is currently off. A session's request to hand one of its sessions off to another agent is then approved without asking you first.",
   "configuration.import.settings.turnsOff": "Turns off {setting}, which is currently on.",
   "configuration.import.settings.alreadyOn":
     "{setting} is on in the file and already on, so applying changes nothing.",
@@ -1786,6 +1808,16 @@ export const en = {
     "Once this is on, a session can reopen or resume a session, or resume a conversation in a new session, without asking you first. A reopened or resumed session keeps its owner, and its archived owners are reopened with it. A new session started this way is owned by nobody but you.",
   "settings.autoApproveResume.description.on":
     "A session can reopen or resume a session, or resume a conversation in a new session, without asking you first. A reopened or resumed session keeps its owner, and its archived owners are reopened with it. A new session started this way is owned by nobody but you.",
+  "settings.autoApproveAccountSwitches.label": "Automatically approve account switches",
+  "settings.autoApproveAccountSwitches.description.off":
+    "Once this is on, a session can switch the account of one of its own sessions without asking you first. Until then you are asked, and can change the account, model and reasoning effort before confirming.",
+  "settings.autoApproveAccountSwitches.description.on":
+    "A session can switch the account of one of its own sessions without asking you first. Turn this off to be asked, and to change the account, model and reasoning effort before confirming.",
+  "settings.autoApproveHandoffs.label": "Automatically approve handoffs",
+  "settings.autoApproveHandoffs.description.off":
+    "Once this is on, a session can hand one of its own sessions off to a session of another agent without asking you first. Until then you are asked, and can change the agent, account, model and reasoning effort before confirming.",
+  "settings.autoApproveHandoffs.description.on":
+    "A session can hand one of its own sessions off to a session of another agent without asking you first. Turn this off to be asked, and to change the agent, account, model and reasoning effort before confirming.",
   "settings.autoSelect.label": "Automatically select an account",
   "settings.autoSelect.description.off":
     "Once this is on, a new session uses the account whose weekly quota resets soonest, so quota that is about to reset is used before it is lost.",
@@ -1943,6 +1975,8 @@ export const en = {
   "accountChoice.ownSharingChange.reason": "Account changing sharing",
   "accountChoice.ownSharingChange.detail": "Unavailable while this session’s account is having its sharing changed",
   "accountChoice.switching.reason": "Switching account",
+  "accountChoice.handoff.working": "The session is in the middle of a turn, so it cannot be handed off yet.",
+  "accountChoice.handoff.locked": "The session is locked, so it cannot be handed off.",
   "accountChoice.switching.detail": "Unavailable while this session is switching its account",
   "accountChoice.disabled.reason": "Disabled",
   "accountChoice.disabled.detail": "Unavailable while this account is disabled",
