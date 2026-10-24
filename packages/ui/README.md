@@ -186,17 +186,19 @@ it starts. `--lang <list>` names them, and `--lang all` sweeps every language wi
 to `LANGUAGE_SENSITIVE` when code that branches on the language is written outside `src/i18n/`.
 
 The page loads wait for a free heavy-step slot, the machine-wide lock `pnpm verify` also takes (`OCTOBOARD_VERIFY_SLOTS`
-sets how many), and say who holds it while they wait, so sweeps in several worktrees queue rather than overload the
-machine. A page that came out clean (scenario, language and theme) is recorded against a key of everything the result
-depends on: this package including the git-ignored `src/gallery/preview/`, `config/`, `scripts/env.mjs` and
-`scripts/env.d.mts`, the env files the dev server reads (`.env`, `.env.local`), the manifests, the lockfile and the
-dependency patches, the Node version, the browser's version and the `OCTOBOARD_DAEMON_PORT` and `VITE_*` environment
-variables. The key covers the whole package at once, so any edit under `packages/ui` loads everything again. A later sweep of the same content skips the recorded
-pages and reports how many it skipped; `--fresh` loads them anyway. Only clean pages are recorded, and not when the
-content changed during the run. The records are kept with `pnpm verify`'s stamps, in `verify-stamps/` of the repository's
-common git directory, so every worktree shares them; with `--url`, whose gallery is another checkout's content, none are
-read or written. A clean page also counts as clean for a later sweep that loads more pages at once, though a failure
-that shows only under load is what that sweep would have looked for.
+sets how many), and say who holds it and who is queued ahead while they wait, so sweeps in several worktrees queue
+rather than overload the machine. The queue is first come, first served: a sweep run again after another run started
+waiting lines up behind it. A page that came out clean (scenario, language and theme) is recorded against a key of
+everything the result depends on: this package including the git-ignored `src/gallery/preview/`, `config/`,
+`scripts/env.mjs` and `scripts/env.d.mts`, the env files the dev server reads (`.env`, `.env.local`), the manifests, the
+lockfile and the dependency patches, the Node version, the browser's version and the `OCTOBOARD_DAEMON_PORT` and
+`VITE_*` environment variables. The key covers the whole package at once, so any edit under `packages/ui` loads
+everything again. A later sweep of the same content skips the recorded pages and reports how many it skipped; `--fresh`
+loads them anyway. Only clean pages are recorded, and not when the content changed during the run. The records are kept
+with `pnpm verify`'s stamps, in `verify-stamps/` of the repository's common git directory, so every worktree shares
+them; with `--url`, whose gallery is another checkout's content, none are read or written. A clean page also counts as
+clean for a later sweep that loads more pages at once, though a failure that shows only under load is what that sweep
+would have looked for.
 
 ## Layout
 

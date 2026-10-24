@@ -29,7 +29,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { acquireSlot } from "../../../scripts/verify/lock.mjs";
+import { acquireSlot, describeWait } from "../../../scripts/verify/lock.mjs";
 import { contentKey, readStamp, recordPasses, stampDirectory, stepKey } from "../../../scripts/verify/stamp.mjs";
 import { idsAt, workingTree } from "../../../scripts/verify/tree.mjs";
 import { languagesFromChanges } from "./gallery-languages.mjs";
@@ -627,7 +627,7 @@ async function main() {
     }
     release = await acquireSlot(`${path.basename(path.resolve(packageDir, "../.."))}: gallery sweep`, {
       root: stateDir && path.join(stateDir, "slots"),
-      onWait: (holders) => console.error(`Waiting for a free heavy-step slot; running now: ${holders.join("; ")}`),
+      onWait: (holders, ahead) => console.error(`Waiting for a free heavy-step slot; ${describeWait(holders, ahead)}`),
     });
     return await sweepPages(browser, origin, pending, concurrency, skipped.length, records, started);
   } finally {

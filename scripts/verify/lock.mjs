@@ -4,9 +4,16 @@
 // own workers cannot prevent that, so the runs queue for a slot here instead.
 //
 // A slot is a directory made with `mkdir`, which is atomic, holding an `owner.json` with the
-// holder's pid. A slot whose holder is gone (killed without releasing) is taken over on the next poll.
+// holder's pid and a token that marks it as the holder's. A slot whose holder is gone (killed
+// without releasing) is taken over on the next poll.
+//
+// Waiters are served first come, first served: each takes a numbered ticket in `queue/` before it
+// looks at the slots, and claims one only while fewer waiters are ahead of it than slots are free.
+// Otherwise whoever polled first after a release would win, and a waiter could keep losing to runs
+// that arrived after it. A ticket whose waiter is gone is dropped by the next waiter behind it.
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { linkSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -41,7 +48,10 @@ function isAlive({ pid, started }) {
   } catch (error) {
     if (error.code !== "EPERM") return false;
   }
-  return !started || startOf(pid) === started;
+  // An empty start means `ps` itself failed, which a loaded machine can cause; the process exists, so
+  // it is taken as alive rather than have its slot or ticket taken from it.
+  const now = started && startOf(pid);
+  return !now || now === started;
 }
 
 function readOwner(dir) {
@@ -61,58 +71,177 @@ function isOrphaned(dir, owner) {
   }
 }
 
-// Tries each slot once: the claimed directory, or the labels of the runs holding them all.
-function tryClaim(root, slots, label) {
+// Removes `dir` if its holder is gone; checked again right before the move, since a waiter that got
+// there first may already have replaced it.
+function clearOrphan(dir) {
+  const owner = readOwner(dir);
+  if (!isOrphaned(dir, owner) || JSON.stringify(readOwner(dir)) !== JSON.stringify(owner)) return false;
+  const stale = `${dir}.stale-${process.pid}`;
+  try {
+    renameSync(dir, stale);
+  } catch {
+    // Another waiter took it over first, and may already hold it.
+    return false;
+  }
+  rmSync(stale, { recursive: true, force: true });
+  return true;
+}
+
+// The free slots' directories and the labels of the runs holding the others.
+function inspectSlots(root, slots) {
+  const free = [];
   const holders = [];
   for (let index = 0; index < slots; index++) {
     const dir = path.join(root, `slot-${index}`);
-    try {
-      mkdirSync(dir);
-      writeFileSync(path.join(dir, "owner.json"), JSON.stringify({ pid: process.pid, started: startOf(process.pid), label }));
-      return { dir };
-    } catch (error) {
-      if (error.code !== "EEXIST") throw error;
-    }
-    const owner = readOwner(dir);
-    // Checked again right before the move: a waiter that got there first may already have replaced the slot.
-    if (isOrphaned(dir, owner) && JSON.stringify(readOwner(dir)) === JSON.stringify(owner)) {
-      const stale = `${dir}.stale-${process.pid}`;
+    if (!statOrNull(dir) || clearOrphan(dir)) free.push(dir);
+    else holders.push(readOwner(dir)?.label ?? "another run");
+  }
+  return { free, holders };
+}
+
+function statOrNull(file) {
+  try {
+    return statSync(file);
+  } catch {
+    return null;
+  }
+}
+
+function claim(dir, owner) {
+  try {
+    mkdirSync(dir);
+  } catch (error) {
+    if (error.code === "EEXIST") return false;
+    throw error;
+  }
+  writeFileSync(path.join(dir, "owner.json"), JSON.stringify(owner));
+  return true;
+}
+
+// The queue's tickets in order, as `{ number, file }`; names that are not ticket numbers are skipped.
+function tickets(queue) {
+  return readdirSync(queue)
+    .filter((name) => /^\d+$/.test(name))
+    .map((name) => ({ number: Number(name), file: path.join(queue, name) }))
+    .sort((a, b) => a.number - b.number);
+}
+
+// Takes the number after the highest ticket. The ticket is written under a temporary name and linked
+// into place, so it is never seen without its owner, and the link fails if another waiter took the
+// number first. A waiter that arrives while another is taking its ticket may get the lower number:
+// the two arrived at the same moment, so either order is first come, first served.
+function takeTicket(queue, owner) {
+  const temporary = path.join(queue, `.ticket-${process.pid}-${Date.now()}`);
+  writeFileSync(temporary, JSON.stringify(owner));
+  try {
+    let number = (tickets(queue).at(-1)?.number ?? 0) + 1;
+    for (;;) {
+      const file = path.join(queue, String(number));
       try {
-        renameSync(dir, stale);
-        rmSync(stale, { recursive: true, force: true });
-      } catch {
-        // Another waiter took it over first.
+        linkSync(temporary, file);
+        return file;
+      } catch (error) {
+        if (error.code !== "EEXIST") throw error;
+        number++;
       }
     }
-    holders.push(owner?.label ?? "another run");
+  } finally {
+    unlinkSync(temporary);
   }
-  return { holders };
+}
+
+// The labels of the live waiters ahead of `mine`, or null when `mine` is no longer in the queue; the
+// tickets of waiters that are gone are removed.
+function waitersAhead(queue, mine) {
+  const ahead = [];
+  for (const ticket of tickets(queue)) {
+    if (ticket.file === mine.file) return ahead;
+    const owner = readTicket(ticket.file);
+    if (owner && !isAlive(owner)) rmSync(ticket.file, { force: true });
+    else if (owner) ahead.push(owner.label ?? "another run");
+  }
+  return null;
+}
+
+function holdsTicket(file, owner) {
+  return readTicket(file)?.token === owner.token;
+}
+
+function readTicket(file) {
+  try {
+    return JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+// A temporary ticket left by a waiter killed between writing and linking it.
+function clearTemporaryTickets(queue) {
+  for (const name of readdirSync(queue)) {
+    if (!name.startsWith(".ticket-")) continue;
+    const file = path.join(queue, name);
+    const stat = statOrNull(file);
+    if (stat && Date.now() - stat.mtimeMs > NO_OWNER_GRACE_MS) rmSync(file, { force: true });
+  }
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Resolves with a `release` function once a slot is held; `onWait(holders)` is called when the
-// first attempt fails and then every `reminderMs`. Releasing twice is harmless.
+// How a waiter tells what it is waiting for: "running now: <holders>", and the waiters ahead of it.
+export function describeWait(holders, ahead) {
+  const running = `running now: ${holders.length > 0 ? holders.join("; ") : "nothing (a slot is being handed over)"}`;
+  return ahead.length > 0 ? `${running}; queued ahead (${ahead.length}): ${ahead.join("; ")}` : running;
+}
+
+// Resolves with a `release` function once a slot is held. `onWait(holders, ahead)` gets the labels of
+// the runs holding the slots and of the waiters queued ahead; it is called when the first attempt
+// fails, whenever the number ahead changes, and otherwise every `reminderMs`. Releasing twice is harmless.
 export async function acquireSlot(label, { root = defaultRoot, slots = slotCount(), pollMs = 2000, reminderMs = 60_000, onWait = () => {} } = {}) {
-  mkdirSync(root, { recursive: true });
-  let nextReminder = 0;
-  for (;;) {
-    const claim = tryClaim(root, slots, label);
-    if (claim.dir) {
-      // Only the holder's own slot is removed: one that was taken over meanwhile belongs to someone else.
-      const release = () => {
-        if (readOwner(claim.dir)?.pid === process.pid) rmSync(claim.dir, { recursive: true, force: true });
-      };
-      process.once("exit", release);
-      return () => {
-        process.off("exit", release);
-        release();
-      };
+  const queue = path.join(root, "queue");
+  mkdirSync(queue, { recursive: true });
+  // The token tells this run's ticket and slot from another's that reused the number or took the slot over.
+  const owner = { pid: process.pid, started: startOf(process.pid), label, token: randomUUID() };
+  const ticket = { file: takeTicket(queue, owner) };
+  const leaveQueue = () => {
+    if (holdsTicket(ticket.file, owner)) rmSync(ticket.file, { force: true });
+  };
+  process.once("exit", leaveQueue);
+  try {
+    let nextReminder = 0;
+    let lastAhead = -1;
+    for (;;) {
+      let ahead = waitersAhead(queue, ticket);
+      // This waiter's ticket was removed, or its number reused: it queues again, at the back.
+      if (!ahead || !holdsTicket(ticket.file, owner)) {
+        ticket.file = takeTicket(queue, owner);
+        ahead = waitersAhead(queue, ticket);
+      }
+      const { free, holders } = inspectSlots(root, slots);
+      // Only as many waiters as there are free slots may claim one, the earliest first; a waiter whose
+      // place cannot be read this poll claims nothing.
+      const dir = ahead && ahead.length < free.length ? free.find((candidate) => claim(candidate, owner)) : undefined;
+      ahead ??= [];
+      if (dir) {
+        // Only the holder's own slot is removed: one that was taken over meanwhile belongs to someone else.
+        const release = () => {
+          if (readOwner(dir)?.token === owner.token) rmSync(dir, { recursive: true, force: true });
+        };
+        process.once("exit", release);
+        return () => {
+          process.off("exit", release);
+          release();
+        };
+      }
+      if (Date.now() >= nextReminder || ahead.length !== lastAhead) {
+        onWait(holders, ahead);
+        nextReminder = Date.now() + reminderMs;
+        lastAhead = ahead.length;
+      }
+      clearTemporaryTickets(queue);
+      await sleep(pollMs);
     }
-    if (Date.now() >= nextReminder) {
-      onWait(claim.holders);
-      nextReminder = Date.now() + reminderMs;
-    }
-    await sleep(pollMs);
+  } finally {
+    process.off("exit", leaveQueue);
+    leaveQueue();
   }
 }

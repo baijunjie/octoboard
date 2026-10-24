@@ -17,12 +17,13 @@
 // ancestor of HEAD, cannot be judged and runs the full set.
 //
 // Steps that passed on the same content (tree and toolchain) are skipped. Heavy steps wait for a
-// machine-wide slot (`scripts/verify/lock.mjs`); light ones never wait. The UI gallery's quick check
-// is not run here: `agent-gallery` decides it from the scenarios touched.
+// machine-wide slot (`scripts/verify/lock.mjs`), and consecutive ones hold it together; light ones
+// never wait. The UI gallery's quick check is not run here: `agent-gallery` decides it from the
+// scenarios touched.
 import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
 import { changedFiles, resolveBase } from "./verify/changes.mjs";
-import { acquireSlot } from "./verify/lock.mjs";
+import { acquireSlot, describeWait } from "./verify/lock.mjs";
 import { MENU_KEYS_FILE, planScope } from "./verify/scope.mjs";
 import { contentKey, readStamp, recordPass, stampDirectory, stepKey } from "./verify/stamp.mjs";
 import { checkSteps, formatSteps } from "./verify/steps.mjs";
@@ -109,17 +110,9 @@ function exec(step) {
 let recorded = true;
 
 async function runStep(step, key, tree) {
-  const label = `${path.basename(root)}: ${step.label}`;
-  let release = () => {};
-  if (step.heavy) {
-    release = await acquireSlot(label, {
-      onWait: (holders) => console.log(`verify: heavy step "${step.label}" is waiting for a free slot; running now: ${holders.join("; ")}`),
-    });
-  }
   console.log(`verify: ${step.label}: ${step.cmd.join(" ")}`);
   const started = Date.now();
   const code = await exec(step);
-  release();
   if (code !== 0) {
     console.error(`verify: FAILED ${step.label} (exit ${code}); later steps were not run`);
     process.exit(code);
@@ -165,9 +158,28 @@ for (const step of current.formats) {
 // Formatting may have rewritten files, so the plan and the content the stamp names are taken again.
 if (current.formats.length > 0) current = plan(base);
 const key = contentKey(current.tree, toolchain);
+const pending = current.checks.filter((step) => !passedOn(current.tree, step));
 for (const step of current.checks) {
-  if (passedOn(current.tree, step)) console.log(`verify: skipped ${step.label}: passed earlier on this content`);
-  else await runStep(step, key, current.tree);
+  if (!pending.includes(step)) console.log(`verify: skipped ${step.label}: passed earlier on this content`);
+}
+// The steps to run, with consecutive heavy ones grouped to run in one hold of the slot: it is served
+// first come, first served, so releasing it between them would send the next one to the back of the
+// queue, behind every run that started waiting meanwhile.
+const groups = [];
+for (const step of pending) {
+  const last = groups.at(-1);
+  if (step.heavy && last?.[0].heavy) last.push(step);
+  else groups.push([step]);
+}
+for (const group of groups) {
+  let release = () => {};
+  if (group[0].heavy) {
+    release = await acquireSlot(`${path.basename(root)}: ${group.map((step) => step.label).join(", then ")}`, {
+      onWait: (holders, ahead) => console.log(`verify: heavy step "${group[0].label}" is waiting for a free slot; ${describeWait(holders, ahead)}`),
+    });
+  }
+  for (const step of group) await runStep(step, key, current.tree);
+  release();
 }
 if (current.scope.packages.includes("ui") || current.scope.mode === "full") {
   console.log("verify: the gallery quick check is not part of this command; run it through the agent-gallery skill");
