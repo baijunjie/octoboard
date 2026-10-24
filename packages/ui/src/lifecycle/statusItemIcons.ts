@@ -130,5 +130,21 @@ export async function withIcons(draft: StatusItemMenuDraft, appearance: Appearan
       if (key !== undefined && icon) icons[key] = icon;
     }),
   );
-  return { ...draft, icons };
+  return {
+    ...draft,
+    icons,
+    submenus: draft.submenus.map((submenu) => ({
+      ...submenu,
+      items: submenu.items.map((item) => {
+        if (item.kind !== "header" || !item.status) return item;
+        const expression = item.status === "available" ? "var(--success-soft-foreground)"
+          : item.status === "used_up" ? "var(--danger-soft-foreground)" : "var(--app-muted)";
+        const colour = resolveCssColour(expression, appearance);
+        if (!colour) return item;
+        const channel = (offset: number) => Number.parseInt(colour.slice(offset, offset + 2), 16);
+        const status_colour: [number, number, number] = [channel(1), channel(3), channel(5)];
+        return { ...item, status_colour };
+      }),
+    })),
+  };
 }

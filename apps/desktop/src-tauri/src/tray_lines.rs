@@ -20,19 +20,20 @@
 //! attributed title shows the current console's account quota without replacing submenu tracking,
 //! highlight or keyboard handling; the menu item's accessible label gives its complete quota phrase.
 //!
-//! Every colour is a dynamic system colour, resolved as the view is drawn, so a menu follows the
-//! light or dark look it is shown in, and a switch between them while it is open.
+//! System colours resolve as a view is drawn. A quota status picture takes its semantic tint from
+//! the UI stylesheet in the application appearance, just as the menu's other status pictures do.
 
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 use objc2::{define_class, msg_send, DefinedClass, MainThreadMarker, MainThreadOnly, Message};
 use objc2_app_kit::{
     NSAccessibility, NSAutoresizingMaskOptions, NSBezierPath, NSColor, NSFont, NSFontAttributeName,
-    NSForegroundColorAttributeName, NSImage, NSImageView, NSMenu, NSStringDrawing, NSView,
+    NSForegroundColorAttributeName, NSImage, NSImageScaling, NSImageView, NSMenu, NSStringDrawing,
+    NSView,
 };
 use objc2_foundation::{NSDictionary, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString};
 
-use crate::tray::{AgentKind, MeterLayer, SubmenuItem};
+use crate::tray::{AgentKind, MeterLayer, QuotaStatus, SubmenuItem};
 
 /// The narrowest a row is, in points; a row whose text needs more is as wide as it needs, and the
 /// menu is as wide as its widest row.
@@ -374,14 +375,69 @@ fn single_line_row(string: &str, small: bool, mtm: MainThreadMarker) -> Retained
 
 /// An account's header: one line of small secondary text, its title at the left and, when there is
 /// one, when its reading was taken right-aligned.
-fn header_row(title: &str, detail: Option<&str>, mtm: MainThreadMarker) -> Retained<NSView> {
-    let Some(detail) = detail else {
+fn header_row(
+    title: &str,
+    detail: Option<&str>,
+    status: Option<QuotaStatus>,
+    status_colour: Option<[u8; 3]>,
+    mtm: MainThreadMarker,
+) -> Retained<NSView> {
+    if detail.is_none() && status.is_none() {
         return single_line_row(title, true, mtm);
+    }
+    let icon = status.and_then(|status| {
+        let symbol = match status {
+            QuotaStatus::Available => "checkmark.circle.fill",
+            QuotaStatus::UsedUp => "minus.circle.fill",
+            QuotaStatus::Unknown => "questionmark.circle.fill",
+        };
+        let colour = status_colour.map_or_else(NSColor::secondaryLabelColor, |[r, g, b]| {
+            NSColor::colorWithSRGBRed_green_blue_alpha(
+                f64::from(r) / 255.0,
+                f64::from(g) / 255.0,
+                f64::from(b) / 255.0,
+                1.0,
+            )
+        });
+        let image = NSImage::imageWithSystemSymbolName_accessibilityDescription(
+            &NSString::from_str(symbol),
+            None,
+        )?;
+        let icon = picture_view(&image, mtm);
+        icon.setImageScaling(NSImageScaling::ScaleProportionallyUpOrDown);
+        icon.setContentTintColor(Some(&colour));
+        Some(icon)
+    });
+    let line = TextLine::new(
+        title,
+        detail.unwrap_or(""),
+        &NSColor::secondaryLabelColor(),
+        true,
+        mtm,
+    );
+    let icon_size: f64 = 13.0;
+    let icon_gap = 5.0;
+    let leading = if icon.is_some() {
+        icon_size + icon_gap
+    } else {
+        0.0
     };
-    let line = TextLine::new(title, detail, &NSColor::secondaryLabelColor(), true, mtm);
-    let width = line.width.max(MIN_WIDTH);
-    let row = row_view(width, line.height + LINE_PAD * 2.0, mtm);
-    line.place(&row, width, LINE_PAD);
+    let height = line.height.max(icon_size);
+    let width = (line.width + leading).max(MIN_WIDTH);
+    let row = row_view(width, height + LINE_PAD * 2.0, mtm);
+    let text_y = LINE_PAD + (height - line.height) / 2.0;
+    line.place(&row, width, text_y);
+    line.name
+        .setFrameOrigin(NSPoint::new(INSET + leading, text_y));
+    if let Some(icon) = icon {
+        icon.setFrame(rect(
+            INSET,
+            LINE_PAD + (height - icon_size) / 2.0,
+            icon_size,
+            icon_size,
+        ));
+        row.addSubview(&icon);
+    }
     row
 }
 
@@ -436,9 +492,19 @@ pub fn dress_submenu(menu: &NSMenu, items: &[SubmenuItem], mtm: MainThreadMarker
     for (item, model) in menu.itemArray().iter().zip(items) {
         match model {
             SubmenuItem::Separator => {}
-            SubmenuItem::Header { title, detail, .. } => {
-                item.setView(Some(&header_row(title, detail.as_deref(), mtm)))
-            }
+            SubmenuItem::Header {
+                title,
+                detail,
+                status,
+                status_colour,
+                ..
+            } => item.setView(Some(&header_row(
+                title,
+                detail.as_deref(),
+                *status,
+                *status_colour,
+                mtm,
+            ))),
             SubmenuItem::Note { text } => item.setView(Some(&single_line_row(text, false, mtm))),
             SubmenuItem::Window {
                 name,

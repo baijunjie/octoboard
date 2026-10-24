@@ -163,6 +163,17 @@ pub struct MeterLayer {
     pub fraction: f64,
 }
 
+/// The quota eligibility mark drawn beside an account header. The text still names its state,
+/// so neither colour nor the picture is needed to understand or hear the account's availability.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum QuotaStatus {
+    Available,
+    UsedUp,
+    #[serde(other)]
+    Unknown,
+}
+
 /// What a submenu holds, none of it choosable: an account's header (with when its reading was
 /// taken), a quota window's row with the bar the shell draws (`fraction` of it filled, in the colour
 /// of `agent`), the 5-hour and weekly windows as one two-layer meter, a note, and the rules between
@@ -173,6 +184,10 @@ pub struct MeterLayer {
 pub enum SubmenuItem {
     Header {
         title: String,
+        #[serde(default)]
+        status: Option<QuotaStatus>,
+        #[serde(default)]
+        status_colour: Option<[u8; 3]>,
         /// When the account's reading was taken, drawn right-aligned on its line.
         #[serde(default)]
         detail: Option<String>,
@@ -979,6 +994,28 @@ mod tests {
                 Some("Quota unavailable"),
             ]
         );
+    }
+
+    #[test]
+    fn quota_header_status_is_optional_and_keeps_the_accessible_phrase() {
+        for (status, expected) in [
+            (None, None),
+            (Some("available"), Some(QuotaStatus::Available)),
+            (Some("used_up"), Some(QuotaStatus::UsedUp)),
+            (Some("unknown"), Some(QuotaStatus::Unknown)),
+            (Some("future_status"), Some(QuotaStatus::Unknown)),
+        ] {
+            let mut value = serde_json::json!({
+                "kind": "header", "title": "Work · Available",
+                "label": "Work · Available · updated just now"
+            });
+            if let Some(status) = status {
+                value["status"] = serde_json::json!(status);
+            }
+            let item: SubmenuItem = serde_json::from_value(value).unwrap();
+            assert_eq!(item.text(), Some("Work · Available · updated just now"));
+            assert!(matches!(item, SubmenuItem::Header { status, .. } if status == expected));
+        }
     }
 
     #[test]

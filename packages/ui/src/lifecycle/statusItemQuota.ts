@@ -6,7 +6,7 @@ import type { Language } from "../i18n/languages";
 import type { StatusItemSubmenu, StatusItemSubmenuItem } from "../platform";
 import { joinPhrases } from "../i18n/joinPhrases";
 import type { Account, AccountQuota, Agent, AgentAvailability, Console, QuotaWindow, Settings } from "../protocol";
-import { isNotLoggedIn, orderedQuotaWindows, planLabel, quotaResetsIn, quotaWindowLabel, remainingPercentAt, twoLayerWindows, usageBarWindows, type QuotaNaming } from "../quota/quotaFormat";
+import { exhaustedQuotaWindow, isNotLoggedIn, orderedQuotaWindows, planLabel, quotaResetsIn, quotaWindowLabel, remainingPercentAt, twoLayerWindows, usageBarWindows, type QuotaNaming } from "../quota/quotaFormat";
 import { formatRelativeTime, isJustNow } from "../relativeTime";
 import { accountQuotaLabel } from "../quota/sessionQuota";
 import { accountQuotaOf } from "../quota/accountQuotaOf";
@@ -65,15 +65,20 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
   // An entry with no windows is unavailable whether or not it says why, which the menu does not, except for an
   // account that is not logged in: a state to be told in a word, not a failure.
   if (quota.windows.length === 0) return [{ kind: "header", title }, { kind: "note", text: t(isNotLoggedIn(quota.unavailable) ? "statusItem.quota.notLoggedIn" : "quota.unavailable") }];
+  const status = exhaustedQuotaWindow(quota, source.now) ? "used_up"
+    : quota.unavailable || !usageBarWindows(quota) ? "unknown" : "available";
+  const statusTitle = t(status === "used_up" ? "statusItem.quota.accountUsedUp"
+    : status === "unknown" ? "statusItem.quota.accountUnknown" : "statusItem.quota.accountAvailable", { account: title });
   const age = formatRelativeTime(source.language, quota.fetched_at, source.now);
   // The header says when the windows were read, at its right, even when the latest read failed; a native menu has
   // no popover for the reason, so the out-of-date note only says that the last read failed.
   const justNow = isJustNow(quota.fetched_at, source.now);
   const lines: StatusItemSubmenuItem[] = [{
     kind: "header",
-    title,
+    title: statusTitle,
+    status,
     detail: justNow ? t("quota.updatedNow") : t("quota.updated", { age }),
-    label: justNow ? t("statusItem.quota.updatedNow", { header: title }) : t("statusItem.quota.updated", { header: title, age }),
+    label: justNow ? t("statusItem.quota.updatedNow", { header: statusTitle }) : t("statusItem.quota.updated", { header: statusTitle, age }),
   }];
   if (quota.unavailable) lines.push({ kind: "note", text: t("statusItem.quota.stale") });
   const layers = twoLayerWindows(quota.windows);

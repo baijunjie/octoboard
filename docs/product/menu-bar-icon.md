@@ -112,8 +112,21 @@ From top to bottom:
      ("Default · Max"), the default account first and then the accounts the user owns, each set off by a separator.
      For an account with windows to show, how long ago they were read is right-aligned on the header line in the same
      small secondary text ("Updated 3 minutes ago", "Updated just now" under a minute), also when they are kept after a
-     newer reading failed, and assistive technology reads the line as one phrase ("Default · Max · updated 3 minutes
-     ago"); it is left out for an account still being read or with no windows to show;
+     newer reading failed, and assistive technology reads the line as one phrase ("Default · Max · Available ·
+     updated 3 minutes ago"); it is left out for an account still being read or with no windows to show;
+   - an account with windows also has a quota status after its name and plan, included in the header's accessible
+     name: used-up quota follows "A used-up account" in `docs/product/account-quotas.md`, including kept windows
+     after a failed reading. Otherwise quota is available when the latest reading succeeded and contains an
+     account-wide window; its status is unknown when the latest reading failed or only model-specific windows were
+     reported. Availability describes the account-wide quota, not whether every model can be used. The status is
+     written in the UI's language. A native picture before the account name also marks the status: a filled circle
+     with a checkmark in green for available, a filled circle with a minus in red for used up, and a filled circle
+     with a question mark in muted grey for unknown. These colours use the application's shared success, danger and
+     muted palette for its current appearance; if a colour cannot be resolved, the picture uses the native menu's
+     secondary text colour. The picture occupies a **13 pt** square, vertically centred with the small header text,
+     with a **5 pt** gap before the name. It is not read
+     separately by assistive technology. Accounts still being read or with no windows keep only their reading,
+     unavailable or login note below the header;
    - under the header, each window is one row, except as the next point says: its name on the left, as in "Quota
      windows" in `docs/product/account-quotas.md` ("5h", "Session"), "N% remaining · resets in <countdown>" ("82% remaining · resets in 1h 57m", "resets now" once the time has passed, no countdown for a
      window with no reset time) right-aligned in the secondary text colour, and a bar of what remains directly

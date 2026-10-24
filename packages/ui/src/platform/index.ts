@@ -201,8 +201,10 @@ export interface StatusItemSubmenu {
  * and a line cannot be chosen. */
 export type StatusItemSubmenuItem =
   /** An account's line: `title` at the left and, right-aligned, `detail` (when its reading was taken) when
-   * there is one. `label`, when given, is the whole line as one phrase, for assistive technology. */
-  | { kind: "header"; title: string; detail?: string; label?: string }
+   * there is one. `status` supplies the leading native quota icon; `title` includes the status in words.
+   * `status_colour` is its semantic tint from the UI stylesheet, as sRGB bytes.
+   * `label`, when given, is the whole line as one phrase, for assistive technology. */
+  | { kind: "header"; title: string; detail?: string; label?: string; status?: "available" | "used_up" | "unknown"; status_colour?: [number, number, number] }
   /** A window's name and, right-aligned, its detail, with a bar of `fraction` (0 to 1) beneath in
    * `agent`'s colour. `label` is the whole line as one phrase, for assistive technology. */
   | { kind: "window"; name: string; detail: string; label: string; fraction: number; agent: Agent }
