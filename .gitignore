@@ -35,8 +35,5 @@ coverage/
 # Review-only gallery scenarios and the record of the preview serving them, per checkout
 /packages/ui/src/gallery/preview/
 
-# UI audit captures and raw validation output stay outside Git.
-/docs/plans/20261020-ui-standard-audit/evidence/
-
 # Git worktrees
 .worktrees/

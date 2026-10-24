@@ -36,6 +36,35 @@ let openMenus = 0;
  * right-click in the meantime takes it over, so focus is returned once, when that one closes. */
 let handedFocus: HTMLElement | null = null;
 
+/** Ends the wait set up by `skipKeyContextMenu`, if one is running. */
+let endKeyContextMenuSkip: (() => void) | null = null;
+
+/** Skips the `contextmenu` event a browser may still raise for a Menu key or Shift+F10 that a menu has
+ * already opened from: some raise it only as the key comes back up (Chromium on Windows, for the Menu
+ * key), when cancelling the keydown no longer prevents it, and it would open the menu a second time or
+ * the browser's own menu over it. The wait ends with that event, the next keydown or pointer press, the
+ * menu closing or going away, or a second. */
+function skipKeyContextMenu(): void {
+  endKeyContextMenuSkip?.();
+  const listeners = new AbortController();
+  const end = () => {
+    listeners.abort();
+    clearTimeout(timer);
+    if (endKeyContextMenuSkip === end) endKeyContextMenuSkip = null;
+  };
+  const skip = (event: Event) => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    end();
+  };
+  window.addEventListener("contextmenu", skip, { capture: true, signal: listeners.signal });
+  // A held key repeats its keydown before the keyup that raises the late event, so repeats leave the skip on.
+  window.addEventListener("keydown", (event) => { if (!event.repeat) end(); }, { capture: true, signal: listeners.signal });
+  window.addEventListener("pointerdown", end, { capture: true, signal: listeners.signal });
+  const timer = setTimeout(end, 1000);
+  endKeyContextMenuSkip = end;
+}
+
 /** Whether any action menu's popover is open, which holds keyboard focus like a modal does. */
 export function isActionMenuOpen(): boolean {
   return openMenus > 0;
@@ -166,7 +195,9 @@ function PanelBody({ children }: { children: (context: ActionMenuPanelContext) =
   );
 }
 
-function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElement {
+/** `autoFocus` is the root menu's, for a menu opened from the keyboard on its context target, which
+ * focuses its first item as a menu opened from its trigger with the keyboard does. */
+function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; autoFocus?: "first" }): React.ReactElement {
   const t = useT();
   const prefix = useId();
   const itemId = (index: number) => `${prefix}:${index}`;
@@ -267,7 +298,7 @@ function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElem
     }
   }
   return (
-    <Dropdown.Menu onAction={run} {...(keepDisabled as React.ComponentProps<typeof Dropdown.Menu>)}>
+    <Dropdown.Menu onAction={run} {...(autoFocus && { autoFocus })} {...(keepDisabled as React.ComponentProps<typeof Dropdown.Menu>)}>
       {nodes}
     </Dropdown.Menu>
   );
@@ -338,12 +369,12 @@ function LoadedMenuItems({ load }: { load: () => Promise<ActionMenuEntry[]> }): 
 
 /** The entries of a menu given as a function, read when the menu opens (the popover mounts its content
  * then), so that what they judge against the clock is the time they are looked at. */
-function ResolvedMenuItems({ source, onGone }: { source: ActionMenuEntry[] | (() => ActionMenuEntry[]); onGone: () => void }): React.ReactElement {
+function ResolvedMenuItems({ source, onGone, autoFocus }: { source: ActionMenuEntry[] | (() => ActionMenuEntry[]); onGone: () => void; autoFocus?: "first" }): React.ReactElement {
   // The popover unmounts its content only once its exit animation has run, which is when the menu
   // has really left the page.
   const goneRef = useLatest(onGone);
   useEffect(() => () => goneRef.current(), [goneRef]);
-  return <MenuItems entries={typeof source === "function" ? source() : source} />;
+  return <MenuItems entries={typeof source === "function" ? source() : source} autoFocus={autoFocus} />;
 }
 
 export function ActionMenu({
@@ -371,7 +402,9 @@ export function ActionMenu({
    * visible text already says what it does. */
   tooltip?: React.ReactNode;
   /** An element whose right-click (context menu) opens this same menu at the pointer: the row or
-   * header the menu belongs to. A menu opened that way is anchored to the pointer, not the trigger. */
+   * header the menu belongs to. A menu opened that way is anchored to the pointer, not the trigger.
+   * The Menu key or Shift+F10 on the element, or on what has focus inside it, opens it as well,
+   * anchored below the focused element; such a menu gives focus back to that element. */
   contextTargetRef?: React.RefObject<HTMLElement | null>;
   /** Opens only from the target's context menu gesture, without a visible or tabbable trigger. */
   contextOnly?: boolean;
@@ -388,6 +421,9 @@ export function ActionMenu({
   const [isOpen, setIsOpen] = useState(false);
   // Where a right-click opened the menu; `null` while it is anchored to its trigger.
   const [pointerAt, setPointerAt] = useState<{ x: number; y: number } | null>(null);
+  // Whether the Menu key or Shift+F10 opened the menu, which then focuses its first item; a
+  // right-click's menu focuses the menu itself, as react-aria's does for a pointer.
+  const [openedByKey, setOpenedByKey] = useState(false);
   // Set only for a pointer-opened menu: react-aria returns focus to the trigger when a menu closes,
   // which is right for the keyboard but would pull it off the terminal for the mouse.
   const pointerFocus = usePointerFocusReturn();
@@ -407,6 +443,7 @@ export function ActionMenu({
     return () => {
       mountedRef.current = false;
       settleKeyboardOpen();
+      endKeyContextMenuSkip?.();
     };
   }, []);
   const onPopoverGone = () => {
@@ -453,6 +490,8 @@ export function ActionMenu({
       return;
     }
     setPointerAt(null);
+    setOpenedByKey(false);
+    endKeyContextMenuSkip?.();
     const previous = restore?.previous;
     // Offered at once to a menu opened in the same gesture (a right-click on another row closes this
     // one, and on macOS opens that one before the timeout below runs); that menu takes it.
@@ -488,7 +527,7 @@ export function ActionMenu({
         if (contextOnly) event.stopPropagation();
       }
     };
-    const onContextMenu = (event: MouseEvent) => {
+    const onContextMenu = (event: MouseEvent, byKey = false) => {
       event.preventDefault();
       if (contextOnly) event.stopPropagation();
       contextOpenRef.current?.();
@@ -500,22 +539,29 @@ export function ActionMenu({
       handedFocus = null;
       pointerFocus.notePress(adopt);
       setPointerAt({ x: event.clientX, y: event.clientY });
+      setOpenedByKey(byKey);
       onOpenChange(true);
     };
+    // The Menu key and Shift+F10 are handled here rather than left to the `contextmenu` event they
+    // raise, because WebKit raises none for either key. Chromium raises one for the Menu key as the
+    // keydown's default action, which `preventDefault` cancels, so the menu opens once; one raised
+    // later is skipped (`skipKeyContextMenu`). An inner target that has opened its own menu has
+    // already cancelled the key, and an outer one leaves it.
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!contextOnly || (event.key !== "ContextMenu" && !(event.key === "F10" && event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey))) return;
+      if (event.defaultPrevented || (event.key !== "ContextMenu" && !(event.key === "F10" && event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey))) return;
       event.preventDefault();
-      event.stopPropagation();
+      if (contextOnly) event.stopPropagation();
+      skipKeyContextMenu();
       const rect = (event.target instanceof Element ? event.target : target).getBoundingClientRect();
-      onContextMenu(new MouseEvent("contextmenu", { clientX: rect.left, clientY: rect.bottom }));
+      onContextMenu(new MouseEvent("contextmenu", { clientX: rect.left, clientY: rect.bottom }), true);
     };
     target.addEventListener("mousedown", onMouseDown, contextOnly);
     target.addEventListener("contextmenu", onContextMenu, contextOnly);
-    target.addEventListener("keydown", onKeyDown, true);
+    target.addEventListener("keydown", onKeyDown, contextOnly);
     return () => {
       target.removeEventListener("mousedown", onMouseDown, contextOnly);
       target.removeEventListener("contextmenu", onContextMenu, contextOnly);
-      target.removeEventListener("keydown", onKeyDown, true);
+      target.removeEventListener("keydown", onKeyDown, contextOnly);
     };
   }, [contextTargetRef, contextOnly, contextOpenRef]);
 
@@ -574,7 +620,7 @@ export function ActionMenu({
             departure from the ARIA rule that a dialog has a name: it only wraps the named menu, so a
             name would just repeat it. The empty value wins over react-aria's and refers to nothing. */}
         <Dropdown.Popover aria-labelledby="" className="min-w-48 max-w-72" getTargetRect={pointerAt ? () => new DOMRect(pointerAt.x, pointerAt.y, 0, 0) : undefined}>
-          <ResolvedMenuItems source={items} onGone={onPopoverGone} />
+          <ResolvedMenuItems source={items} onGone={onPopoverGone} autoFocus={openedByKey ? "first" : undefined} />
         </Dropdown.Popover>
       </Dropdown>
     </div>

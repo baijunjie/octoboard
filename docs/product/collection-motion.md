@@ -21,7 +21,10 @@ the focused item is removed, that surface's usual focus handoff applies.
 
 The first appearance of a collection shows its items without animation. Adding an item to an already displayed
 empty collection uses the entrance effect. Scrolling and adjusting the collection's width do not animate its
-items. In the virtualized file and Git change collections, adding or removing rows from the displayed list uses
+items. In the tab strips listed above, a tab that grows or shrinks on its own — an agent tab gaining or losing its
+not-installed warning mark, a terminal tab whose title changes — has the tabs after it slide to their new positions;
+every tab changing width at once, as when the text is zoomed or its font changes, counts as adjusting the width and
+does not animate. In the virtualized file and Git change collections, adding or removing rows from the displayed list uses
 the same entrance and exit effects for rendered rows, except for rows that fold. Rows that appear or vanish because
 their directory, commit or change section is expanded or folded have no entrance or exit effect; only the rows
 around them slide to their new positions. The entrance and exit effects apply to top-level rows, to rows added or

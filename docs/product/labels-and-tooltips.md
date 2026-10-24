@@ -17,6 +17,7 @@ carries it — a control, an indicator or a label too long for its space:
 - **Only one is open at a time**: opening one takes any other away.
 - It goes the moment the pointer leaves what carries it, with no lingering, and it goes when what it sits over is
   scrolled. It takes no pointer input of its own, so a press lands on whatever is under it.
+- Where the system asks for reduced motion, it appears and goes at once, without fading or scaling.
 - A tooltip on clipped text or a change row's status letter closes on any pointer press or key press in the window,
   even while waiting to open. It stays closed until the pointer leaves and returns, including when the press opens
   a dialog without moving the pointer. The tooltip showing an OSC 8 hyperlink's target in a session's terminal also

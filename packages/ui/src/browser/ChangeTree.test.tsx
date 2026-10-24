@@ -6,7 +6,7 @@ import { isolate } from "../i18n/isolate";
 import { ChangeTree } from "./ChangeTree";
 import { HEADING_HEIGHT } from "./changeSectionHeading";
 import { ROW_HEIGHT } from "./treeRow";
-import { change, committedChange, mountRows } from "./browserTestSupport";
+import { change, committedChange, mountRows, pressTab } from "./browserTestSupport";
 import type { ChangeLayout } from "./changeLayout";
 import { changeItems, commitItems, commitKey, commitScope, directoryKey, sectionKey, type ChangeItem } from "./changes";
 
@@ -237,4 +237,15 @@ it("returns focus to a change row's Actions button when its keyboard-opened menu
   press(item, "Escape");
   await vi.waitFor(() => expect(document.activeElement).toBe(actions));
   expect(document.querySelector("[role=menu]")).toBeNull();
+});
+
+it("leaves the list on Option+Tab and Option+Shift+Tab from where Tab and Shift+Tab do, past the rows' Actions buttons", () => {
+  const container = render(new Set());
+  const tree = container.querySelector<HTMLElement>("[role=treegrid]")!;
+  const first = row(container, items[0].key);
+  const firstActions = first.querySelector<HTMLElement>("button[aria-haspopup]")!;
+  for (const altKey of [false, true]) {
+    expect(pressTab(first, { altKey })).toEqual({ unprevented: true, movedTo: row(container, items[3].key).querySelector("button[aria-haspopup]") });
+    expect(pressTab(firstActions, { altKey, shiftKey: true })).toEqual({ unprevented: true, movedTo: tree });
+  }
 });

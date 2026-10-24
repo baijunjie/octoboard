@@ -5,7 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { isolate } from "../i18n/isolate";
 import type { PlatformAdapter } from "../platform";
 import { FileTree } from "./FileTree";
-import { mountRows } from "./browserTestSupport";
+import { mountRows, pressTab } from "./browserTestSupport";
 import { rowKey, type TreeNode } from "./tree";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -120,6 +120,17 @@ it("gives each file row an actions button, named for its file, that the row's ar
   expect(document.activeElement).toBe(actions);
   press(actions, "ArrowLeft");
   expect(document.activeElement).toBe(row);
+});
+
+it("leaves the tree on Option+Tab and Option+Shift+Tab from where Tab and Shift+Tab do, past the rows' Actions buttons", () => {
+  const container = render([fileNode("a.ts", false), fileNode("b.ts", false)], { clipboard: { writeText: async () => {} } });
+  const tree = container.querySelector<HTMLElement>("[role=treegrid]")!;
+  const [first, last] = [...container.querySelectorAll<HTMLElement>("[role=row]")];
+  const firstActions = first.querySelector<HTMLElement>("button[aria-haspopup]")!;
+  for (const altKey of [false, true]) {
+    expect(pressTab(first, { altKey })).toEqual({ unprevented: true, movedTo: last.querySelector("button[aria-haspopup]") });
+    expect(pressTab(firstActions, { altKey, shiftKey: true })).toEqual({ unprevented: true, movedTo: tree });
+  }
 });
 
 // What the menu does with the path is `RowActions`' own, pinned in `RowActions.test.tsx`; what the

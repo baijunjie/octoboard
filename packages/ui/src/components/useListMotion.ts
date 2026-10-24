@@ -17,9 +17,9 @@ interface ListMotionOptions {
   /** How those identities nest, so that rows a parent folds in or out appear and vanish with it. */
   folds?: ListFolds;
   /** A row of items as wide as its content and aligned to its reading start, such as a tab strip: it grows and
-   * shrinks at its reading end with its items, so a change of its width that comes with a change of items is that
-   * change, not a resize, and positions are taken from its reading-start edge, which stays put as it does (its
-   * right edge under RTL). */
+   * shrinks at its reading end with its items, so a change of its width that comes with a change of items, or with
+   * one of its items growing or shrinking on its own (not all at once), is that change, not a resize, and positions
+   * are taken from its reading-start edge, which stays put as it does (its right edge under RTL). */
   contentWidth?: boolean;
 }
 
@@ -233,8 +233,6 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
     const newHeight = list.clientHeight;
     const scrolled = scrollTop !== list.scrollTop || scrollLeft !== list.scrollLeft;
     const newOrder = JSON.stringify(rows.map((element) => element.dataset.listMotion ?? element.dataset.flip));
-    const resized = width !== newWidth && !(contentWidth && newOrder !== order);
-    const moving = initialized && animate && !prefersReducedMotion() && !resized && (!virtualized || (height === newHeight && !scrolled));
     const base = virtualized ? list.getBoundingClientRect() : anchor();
     // Read all geometry before creating or cancelling animations, keeping layout reads in one pass.
     const moves = rows.map((element) => {
@@ -259,11 +257,18 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
       next.set(key, position);
       return { element, position, before, residual, transform: style?.transform ?? "none" };
     });
+    // In a content-width row, an item that has grown or shrunk on its own (a tab gaining a mark, renamed) is a
+    // change of the items, which the ones after it slide along with; every item changing width at once (the
+    // text's zoom or font) is a resize, as is a change of the row's width with none of them changing.
+    const sized = contentWidth ? moves.filter(({ before, position }) => before && before.element === position.element && before.width !== position.width).length : 0;
+    const itemResized = sized > 0 && sized < moves.length;
+    const resized = width !== newWidth && !(contentWidth && (newOrder !== order || itemResized));
+    const moving = initialized && animate && !prefersReducedMotion() && !resized && (!virtualized || (height === newHeight && !scrolled));
     // A pure reorder at the same width (a drag let go) brings nothing in or out, so it has no travel to hold in.
     const reordered = next.size === positions.size && newOuterWidth === outerWidth && [...next.keys()].every((key) => positions.has(key));
     // Before any exit is placed, as holding the list's width can move its box.
     if (!moving) settle();
-    else if (contentWidth && newOrder !== order && !reordered) hold(newOuterWidth);
+    else if (contentWidth && ((newOrder !== order && !reordered) || itemResized)) hold(newOuterWidth);
     for (const key of exits.keys()) if (!moving || next.has(key)) clearExit(key);
     if (moving && virtualized) {
       for (const [key, before] of departing) {

@@ -101,7 +101,10 @@ export function PickedTag({
             </FadeOverflow>
           </span>
           <TitledControl title={removeTitle}>
+            {/* Out of the tab order, so the tag group stays one tab stop: a tag is removed from the
+                keyboard with Delete or Backspace on the tag itself, which react-aria describes on it. */}
             <Tag.RemoveButton
+              excludeFromTabOrder
               aria-label={t("common.removeTag")}
               aria-describedby=""
               className={`${REMOVE_CLASS} ${REMOVE_COLOUR_CLASS}`}

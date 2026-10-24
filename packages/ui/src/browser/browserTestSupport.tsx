@@ -12,6 +12,23 @@ import type { ChangeEntry, LineStats } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
 import type { ChangeViewState } from "./changeView";
 
+/** Presses Tab on `element`, with Option held for `altKey`, and returns where the key put focus for
+ * the browser's own move to go on from, and whether that move was left to happen. jsdom makes no such
+ * move, so the collection's later effects can pull focus back to its row; only the first move counts. */
+export function pressTab(element: HTMLElement, { altKey = false, shiftKey = false } = {}): { movedTo: EventTarget | null; unprevented: boolean } {
+  act(() => element.focus());
+  let movedTo: EventTarget | null = null;
+  const record = (event: FocusEvent) => (movedTo ??= event.target);
+  document.addEventListener("focusin", record);
+  let unprevented = true;
+  act(() => {
+    unprevented = element.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", altKey, shiftKey, bubbles: true, cancelable: true }));
+    element.dispatchEvent(new KeyboardEvent("keyup", { key: "Tab", altKey, shiftKey, bubbles: true }));
+  });
+  document.removeEventListener("focusin", record);
+  return { movedTo, unprevented };
+}
+
 /** A modified file, in the staged or the unstaged section, with the lines the daemon counted for it. */
 export const change = (group: "staged" | "unstaged", path: string, stats?: LineStats): ChangeEntry => ({
   group,

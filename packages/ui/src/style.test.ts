@@ -86,3 +86,72 @@ it("pins tw-animate-css to the version @heroui/styles depends on", () => {
   const heroui = read(new URL("../node_modules/@heroui/styles/package.json", import.meta.url)).dependencies?.["tw-animate-css"];
   expect(own, "tw-animate-css in package.json").toBe(heroui);
 });
+
+// HeroUI's popover-level overlays (menus, popovers, tooltips, select and combo box lists) zoom and fade in and out
+// whatever the motion preference, so `style.css` stops every overlay's entering and exiting animation itself. The
+// rule has to stay outside any cascade layer: an unlayered declaration is the only kind that wins over the
+// components layer the sheets are imported into, whatever their selectors' specificity.
+it("stops every imported overlay's enter and exit animation under reduced motion, outside the cascade layers", () => {
+  const style = readFileSync(new URL("style.css", SRC), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const animated = imported.filter((name) => /\[data-(entering|exiting)="true"\][^{]*\{[^}]*animate-(in|out)/.test(readFileSync(new URL(`${name}.css`, STYLES_DIST), "utf8")));
+  expect(animated, "imported sheets that animate an overlay in or out").not.toEqual([]);
+  expect(style).not.toMatch(/@layer\s+[\w-]+\s*\{/);
+  const reduced = [...style.matchAll(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/g)].map((match) => match[1]);
+  expect(reduced.some((block) => /\[data-entering="true"\],\s*\[data-exiting="true"\]\s*\{\s*animation: none;\s*\}/.test(block))).toBe(true);
+});
+
+/** The blocks of a stylesheet whose own declarations start a transition with no `motion-reduce:transition-none`
+ * beside it, as the path of their nested selectors. */
+function unguardedTransitions(sheet: string): string[][] {
+  const css = sheet.replace(/\/\*[\s\S]*?\*\//g, "");
+  const found: string[][] = [];
+  const path: string[] = [];
+  const bodies: string[] = [""];
+  let text = "";
+  for (const char of css) {
+    if (char === "{") {
+      path.push(text.split(";").at(-1)!.trim());
+      bodies.push("");
+      text = "";
+    } else if (char === "}") {
+      const body = bodies.pop()! + text;
+      const transitions = /(^|[\s;])transition\s*:(?!\s*none)|@apply[^;]*\btransition(-[\w[\],-]+)?(?=[\s;])(?<!transition-none)/.test(body);
+      if (transitions && !body.includes("motion-reduce:transition-none")) found.push([...path]);
+      path.pop();
+      text = "";
+    } else {
+      text += char;
+      if (char === ";") {
+        bodies[bodies.length - 1] += text;
+        text = "";
+      }
+    }
+  }
+  return found;
+}
+
+// HeroUI guards its transitions with `motion-reduce:transition-none`, all but a few, which `style.css` guards itself.
+// Left out: an overlay entering or leaving, whose animation the rule above stops (nothing changes its opacity or
+// transform outside the keyframes, so no transition runs there), and the autofill rule's 9999s background
+// transition, which keeps the browser's autofill colour from showing rather than animating anything.
+it("stops under reduced motion every transition an imported HeroUI sheet leaves running", () => {
+  const style = readFileSync(new URL("style.css", SRC), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const guarded = new Set(
+    [...style.matchAll(/@media \(prefers-reduced-motion: reduce\) \{\s*([^{]+)\{\s*transition: none;\s*\}/g)].flatMap(([, selectors]) => selectors.split(",").map((selector) => selector.trim())),
+  );
+  const missing = imported.flatMap((name) =>
+    unguardedTransitions(readFileSync(new URL(`${name}.css`, STYLES_DIST), "utf8"))
+      .filter((path) => !path.some((selector) => /data-(entering|exiting)|autofill/.test(selector)))
+      .filter((path) => {
+        // Every selector of the list counts on its own, and of each only the subject: the compound after the last
+        // descendant or child combinator, a nested `&` standing for the parent's selector.
+        const members = path.at(-1)!.split(",").map((member) => member.trim().replace(/^&/, path.at(-2) ?? ""));
+        return !members.every((member) => {
+          const subject = member.split(/\s*>\s*|\s+(?![^[]*\])/).at(-1)!;
+          return (subject.match(/\.[\w-]+|\[data-slot="[\w-]+"\]/g) ?? []).some((name) => guarded.has(name));
+        });
+      })
+      .map((path) => `${name}.css: ${path.join(" ")}`),
+  );
+  expect(missing, "unguarded transitions").toEqual([]);
+});

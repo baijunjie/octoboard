@@ -333,3 +333,87 @@ describe("a disabled item", () => {
     expect(description?.classList.contains("sr-only")).toBe(true);
   });
 });
+
+describe("the Menu key and Shift+F10 on the context target", () => {
+  function mountTarget(): { target: HTMLElement; inner: HTMLElement } {
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    unmount = () => {
+      act(() => root.unmount());
+      container.remove();
+    };
+    function Target() {
+      const ref = useRef<HTMLDivElement>(null);
+      return (
+        <div ref={ref} tabIndex={0} data-testid="target">
+          <span tabIndex={-1} data-testid="inner" />
+          <ActionMenu label="Actions of X" items={[{ label: "Delete", icon: Trash2, onClick: () => {} }]} contextTargetRef={ref} />
+        </div>
+      );
+    }
+    act(() => root.render(<Target />));
+    return { target: container.querySelector<HTMLElement>("[data-testid=target]")!, inner: container.querySelector<HTMLElement>("[data-testid=inner]")! };
+  }
+
+  it.each([{ key: "ContextMenu" }, { key: "F10", shiftKey: true }])("opens the menu from %o, cancelling the key's own context menu, and gives focus back to the target", async (init) => {
+    const { target } = mountTarget();
+    act(() => target.focus());
+    let unprevented = true;
+    act(() => {
+      unprevented = target.dispatchEvent(new KeyboardEvent("keydown", { ...init, bubbles: true, cancelable: true }));
+    });
+    expect(unprevented).toBe(false);
+    expect(document.querySelector("[role=menu]")).not.toBeNull();
+    // The first item, as for a menu opened from its trigger with the keyboard, so Enter acts at once.
+    const item = document.querySelector<HTMLElement>("[role=menuitem]")!;
+    await vi.waitFor(() => expect(document.activeElement).toBe(item));
+    act(() => {
+      item.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    });
+    await vi.waitFor(() => expect(document.querySelector("[role=menu]")).toBeNull());
+    await vi.waitFor(() => expect(document.activeElement).toBe(target));
+  });
+
+  it("skips the contextmenu event a browser raises after the key it opened from, and opens again on the next right-click", async () => {
+    const { target } = mountTarget();
+    act(() => target.focus());
+    act(() => {
+      target.dispatchEvent(new KeyboardEvent("keydown", { key: "ContextMenu", bubbles: true, cancelable: true }));
+    });
+    const item = document.querySelector<HTMLElement>("[role=menuitem]")!;
+    act(() => item.focus());
+    let late = true;
+    act(() => {
+      late = item.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    });
+    expect(late).toBe(false);
+    expect(document.querySelectorAll("[role=menu]")).toHaveLength(1);
+    expect(document.activeElement).toBe(item);
+    act(() => {
+      item.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    });
+    await vi.waitFor(() => expect(document.querySelector("[role=menu]")).toBeNull());
+    act(() => {
+      target.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 30, clientY: 40 }));
+    });
+    expect(document.querySelector("[role=menu]")).not.toBeNull();
+  });
+
+  it("focuses the menu itself, not its first item, when a right-click opens it", async () => {
+    const { target } = mountTarget();
+    act(() => {
+      target.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 30, clientY: 40 }));
+    });
+    await vi.waitFor(() => expect(document.activeElement?.getAttribute("role")).toBe("menu"));
+  });
+
+  it("leaves a Menu key that an element inside the target has already handled", () => {
+    const { inner } = mountTarget();
+    inner.addEventListener("keydown", (event) => event.preventDefault());
+    act(() => inner.focus());
+    act(() => {
+      inner.dispatchEvent(new KeyboardEvent("keydown", { key: "ContextMenu", bubbles: true, cancelable: true }));
+    });
+    expect(document.querySelector("[role=menu]")).toBeNull();
+  });
+});

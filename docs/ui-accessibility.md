@@ -164,6 +164,16 @@ that runs along the row (`keyboardNavigationBehavior` defaults to `"arrow"`) mov
 That is the grid and tree pattern and it meets this rule. The row actions of the change list and of the Files tree,
 and the Files tree's folder icons, all rely on it, so do not give such a control a tab stop of its own.
 
+WebKit's Option+Tab (and Option+Shift+Tab) reaches every control while macOS's Keyboard navigation setting is off,
+which is the default, and react-aria leaves a collection in one step on Tab and Shift+Tab only, matching the modifiers
+exactly. So a collection whose rows hold tabbable controls also takes `useCollectionOptionTab`
+(`packages/ui/src/components/collectionOptionTab.ts`) on its element, which makes the same moves for the Option
+variants; the Files tree and the change list do.
+
+A picked tag's remove button (`PickedTag`) is out of the tab order (`excludeFromTabOrder`), so a tag group is one tab
+stop and arrows move between its tags: react-aria's tag group would otherwise send Tab from a tag into its button. The
+keyboard removes a tag with Delete or Backspace on the tag, which react-aria describes on it.
+
 `preventFocusOnPress` only keeps a *mouse* press from taking focus; the control still has to be reachable.
 
 A control revealed only on hover or focus has to be reachable by touch too. `RowControls`
@@ -395,14 +405,19 @@ control that did not have focus still takes none.
 A dialog opened from a control that never took focus, is disabled, or is gone by the time it closes cannot always hand
 focus back to it: React Aria restores focus to what held it when the dialog opened, which is not the control after an
 accessibility activation or a `preventFocusOnPress` press, and finds nothing that takes it when the control is disabled
-or gone, so focus ends on `<body>`, where VoiceOver reads the whole web area instead of the control the user was on. Two
+or gone, so focus ends on `<body>`, where VoiceOver reads the whole web area instead of the control the user was on. Three
 hand-offs repair it. The login hand-off (`useLoginFocusReturn` in `packages/ui/src/settings/AgentAccountsSection.tsx`):
 the row's own Log in button is shown only while the account reads as signed out and is disabled while a login runs, so
 after a success focus goes to the row's actions, and after a cancel to the Log in button once it is enabled again, else
 to the actions. The console dialog's Settings (`packages/ui/src/dialogs/ConsoleDialog.tsx`) is handed the exact opener
 that opened it, so closing Settings by its backdrop returns focus there even when Manage accounts was activated without
-taking focus. Both wait a frame past React Aria's restore and leave a restore that landed right alone; they act where
-focus is on `<body>`, and the login hand-off also where it is on its going button.
+taking focus. A Shell terminal closed through its busy confirmation is repaired once the confirmation goes
+(`focusAfterConfirmedClose` in `packages/ui/src/terminal/ShellTerminalPanel.tsx`): when the terminal's tab or view that
+the dialog gave focus back to has gone with it, focus goes to the shown tab after a close asked from a menu, or to the
+shown terminal after one asked from the terminal itself; the ring is turned on only as it moves focus, so a close the
+daemon refuses leaves focus where the dialog put it back, ringed or not as the press was. All three wait at least a frame
+past React Aria's restore and leave a restore that landed right alone; they act where focus is on `<body>`, and the
+login hand-off also where it is on its going button.
 
 A dialog opened by a press inside the sidebar's drawer is a third such case: the drawer is not modal and a tap does not
 move focus, so React Aria would restore focus to whatever held it behind the drawer. The window remembers the drawer
@@ -1057,11 +1072,13 @@ window's main content carries `role="region"` with a name (`<section aria-label>
 ### A context menu has a visible trigger too
 
 A menu that opens on right-click also opens from the keyboard with the Menu key or Shift+F10 on the focused element,
-and a visible `ActionMenu` trigger offers the same items, since nothing on the element tells a keyboard or
-screen-reader user that a context menu exists. The Settings agent strip is the instance: each tab's menu, plus a
-"More actions for {agent}" button at the strip's end acting on the selected tab. Reordering by dragging has a
-keyboard counterpart in that menu, labelled by reading order ("Move earlier" / "Move later", never left and right,
-which swap in a right-to-left layout), and the moved item gets focus back once it lands.
+with focus on its first item, as a menu opened from its trigger with the keyboard has, so Enter acts at once (a
+right-click's menu takes focus itself, as react-aria's does for a pointer); a visible `ActionMenu` trigger offers the
+same items, since nothing on the element tells a keyboard or screen-reader user that a context menu exists. The
+Settings agent strip is the instance: each tab's menu, plus a "More actions for {agent}" button at the strip's end
+acting on the selected tab. Reordering by dragging has a keyboard counterpart in that menu, labelled by reading order
+("Move earlier" / "Move later", never left and right, which swap in a right-to-left layout), and the moved item gets
+focus back once it lands.
 
 ### Announcing a change
 
@@ -1219,7 +1236,8 @@ it does not choose separate colours for the same ellipsis action.
   its visibility transition finishes.
 - Closing a menu that was opened from the focused trigger by the keyboard returns focus to that same trigger while its
   row survives. A menu opened with the Menu key, Shift+F10 or a right-click goes through the context-menu path and
-  returns focus to the row instead.
+  returns focus to where it stood when the menu opened instead: the row, for a key pressed on the row; the Actions
+  button, for one pressed while the button had focus.
 
 Measure both appearances on the rendered resting, hovered and selected surfaces. Read the final
 computed colours after transitions settle, composite translucent ancestor fills, and check the
@@ -1473,14 +1491,21 @@ should not (see "The UI state gallery" in `packages/ui/README.md`).
 An animation or transition that is not essential stops under `prefers-reduced-motion: reduce` (Tailwind's
 `motion-safe:` / `motion-reduce:` variants). Motion driven from script reads `prefersReducedMotion()` before it starts
 and subscribes with `onReducedMotion()` (`packages/ui/src/reducedMotion.ts`) to cut a running effect short, leaving it
-at its end state, when the preference turns on.
+at its end state, when the preference turns on. Overlays that react-aria opens and closes (menus, popovers, tooltips,
+select and combo box lists, dialogs, toasts) appear and go at once: one rule in `packages/ui/src/style.css` stops the
+enter and exit animation of every element marked `data-entering` / `data-exiting`, which HeroUI leaves running for its
+popover-level overlays, so a new overlay needs no guard of its own. The few stock transitions HeroUI leaves unguarded
+(a select's chevron turning as its list opens, a combo box trigger's hover and press fade, and a checkbox's checkmark
+drawing itself in) are guarded there too, and `packages/ui/src/style.test.ts`
+fails on any other an imported HeroUI sheet brings.
 
 ### Dynamic collections
 
-When items are added, removed, reordered or folded within a visible collection, surviving items that change
-position slide into place using the shared list-motion implementation. This applies to navigation lists, settings
-records, tab strips, selected tags, wrapping chips and virtualized file and change collections. Use stable item identities,
-not array indices or translated labels. Horizontal and wrapping collections move on both axes, including under RTL.
+When items are added, removed, reordered or folded within a visible collection, or an item in a row as wide as its
+items (a tab strip) grows or shrinks on its own, surviving items that change position slide into place using the
+shared list-motion implementation. This applies to navigation lists, settings records, tab strips, selected tags,
+wrapping chips and virtualized file and change collections. Use stable item identities, not array indices or
+translated labels. Horizontal and wrapping collections move on both axes, including under RTL.
 
 Use a 300 ms ease with `cubic-bezier(0.2, 0, 0, 1)` for position changes. In nonvirtualized collections, new items
 fade in from the left while removed items fade out to the right as inert, accessibility-hidden visual copies.
@@ -1488,9 +1513,11 @@ These effects move by 25% of each item's own width over 300 ms with `cubic-bezie
 the surviving items' movement. Removed items stop accepting input immediately; do not delay an action or keep a
 removed control reachable to play an exit animation. Preserve keyboard focus on surviving controls and retain the
 surface's focus handoff when the focused item is removed: a tab removed while it or its context menu holds focus
-hands focus to the strip's shown tab, or into the panel when no tab is left, with the ring shown.
+hands focus to the strip's shown tab, or into the panel when no tab is left, with the ring shown, and so does one
+closed through a confirmation its context menu asked for, once the confirmation has gone.
 
-Initial rendering, scrolling, viewport recycling and container resizing do not trigger item movement animations.
+Initial rendering, scrolling, viewport recycling and container resizing do not trigger item movement animations, and
+neither does every item of a row changing width at once (the text zoomed).
 Virtualized collections keep virtualization and animate only surviving rendered identities whose layout changes.
 In a tree, rows that appear or vanish because their parent expands or folds move with the fold and play no entry or
 exit; only rows added to or removed from a parent that stays expanded do. Pass the tree's parents and expanded rows

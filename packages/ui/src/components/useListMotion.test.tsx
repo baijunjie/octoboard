@@ -435,10 +435,10 @@ function Strip({ keys, rtl }: { keys: string[]; rtl?: boolean }) {
   return <div ref={ref} style={{ direction: rtl ? "rtl" : "ltr" }}>{keys.map((key) => <button key={key} data-list-motion={key}>{key}</button>)}</div>;
 }
 
-function mountStrip(initial: string[], rtl = false) {
-  // The strip is `width` wide, each tab 80 pixels.
+function mountStrip(initial: string[], rtl = false, tabWidths: Record<string, number> = {}) {
+  // The strip is `width` wide, each tab 80 pixels unless `tabWidths` says otherwise.
   const offsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth")!;
-  Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get(this: HTMLElement) { return this.dataset.listMotion === undefined ? width : 80; } });
+  Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get(this: HTMLElement) { const key = this.dataset.listMotion; return key === undefined ? width : tabWidths[key] ?? 80; } });
   onTestFinished(() => { Object.defineProperty(HTMLElement.prototype, "offsetWidth", offsetWidth); });
   const host = document.body.appendChild(document.createElement("div"));
   const root = createRoot(host);
@@ -470,6 +470,48 @@ it("takes a content-width strip's change of width with its tabs as that change, 
   animate.mockClear();
   width = 200;
   points = { b: [0, 0], c: [100, 0] };
+  act(() => resize());
+  expect(animate).not.toHaveBeenCalled();
+});
+
+it("slides the tabs after one that grows or shrinks on its own, but not when every tab changes width at once", () => {
+  const tabWidths: Record<string, number> = {};
+  width = 240;
+  points = { a: [0, 0], b: [80, 0], c: [160, 0] };
+  const strip = mountStrip(["a", "b", "c"], false, tabWidths);
+  // `b` gains a mark and grows by 20: `c` slides along from where it stood.
+  tabWidths.b = 100;
+  width = 260;
+  points.c = [180, 0];
+  act(() => resize());
+  expect(animate.mock.calls.map(([frames]) => frames)).toEqual([[{ translate: "-20px 0px" }, { translate: "0px 0px" }]]);
+  // Once that slide is over the mark goes again, and the strip keeps its width until `c` has slid back.
+  animate.mockClear();
+  progress = 1;
+  delete tabWidths.b;
+  width = 240;
+  points.c = [160, 0];
+  act(() => resize());
+  expect(animate.mock.calls.map(([frames]) => frames)).toEqual([[{ translate: "20px 0px" }, { translate: "0px 0px" }]]);
+  expect(strip.strip.style.minWidth).toBe("260px");
+  // Every tab wider at once (the text zoomed) is a resize: nothing moves.
+  animate.mockClear();
+  Object.assign(tabWidths, { a: 90, b: 90, c: 90 });
+  width = 270;
+  points = { a: [0, 0], b: [90, 0], c: [180, 0] };
+  act(() => resize());
+  expect(animate).not.toHaveBeenCalled();
+});
+
+it("puts the tabs after one that changed width straight in place while reduced motion is asked for", () => {
+  const tabWidths: Record<string, number> = {};
+  reduced = true;
+  width = 160;
+  points = { a: [0, 0], b: [80, 0] };
+  mountStrip(["a", "b"], false, tabWidths);
+  tabWidths.a = 100;
+  width = 180;
+  points.b = [100, 0];
   act(() => resize());
   expect(animate).not.toHaveBeenCalled();
 });

@@ -97,6 +97,12 @@ moves to the terminal now shown; focus on its tab, or in that tab's open context
 strip. With no tab left, either moves into the panel (to New terminal). The control focus lands on shows its focus
 ring, except after a touch. Focus anywhere else stays where it is.
 
+A busy terminal's close confirmation hands focus on as it goes. After Cancel, focus goes back to where the close was
+asked from. After Close terminal, when what focus would go back to has gone, focus moves to the shown tab in the strip
+(to New terminal with no tab left) if the close was asked from a menu, or to the terminal now shown if it was asked
+with the tab's close mark, showing its focus ring except after a touch. A close the daemon refuses leaves focus where
+the confirmation put it back.
+
 ## The shell terminal
 
 The shown tab's terminal fills the panel under its header. It is live: keystrokes go to the shell, `Ctrl+C`, `Tab` and

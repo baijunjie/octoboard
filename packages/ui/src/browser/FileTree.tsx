@@ -6,6 +6,7 @@ import { Collection, ListLayout, Tree, TreeItem, TreeItemContent, Virtualizer, t
 import { failureParam, FailureBody } from "../components/DaemonErrorMessage";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { FailureMark } from "../components/FailureMark";
+import { useCollectionOptionTab } from "../components/collectionOptionTab";
 import { useScrollFade } from "../components/scrollFade";
 import type { ErrorPresentation } from "../errorPresentation";
 import { retryCanHelp } from "../errorRecovery";
@@ -123,7 +124,8 @@ export function FileTree({
     return { visibleKeys: keys, folds: { parents, open } };
   }, [items, expanded]);
   const motion = useBrowserListMotion(treeRef, visibleKeys, folds);
-  const fade = useScrollFade({ ref: motion.ref, className: "min-h-0 flex-1 overflow-auto py-1 outline-none" });
+  const collectionRef = useCollectionOptionTab(motion.ref);
+  const fade = useScrollFade({ ref: collectionRef, className: "min-h-0 flex-1 overflow-auto py-1 outline-none" });
   // react-aria-components 1.21.1 decides whether a row can expand — its `aria-expanded` and Left /
   // Right — from the children it holds, not from `hasChildItems`, which it hands only to the
   // chevron slot. So a collapsed directory, whose rows are not built, holds one

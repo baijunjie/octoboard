@@ -70,6 +70,20 @@ it("removes by the raw mixed-script tag key and returns focus to the input", () 
   expect(document.querySelector('[role="tooltip"]')).toBeNull();
 });
 
+it.each(["Delete", "Backspace"])("keeps the tags one tab stop, removing the focused tag on %s and handing focus to the input", (key) => {
+  const { container, input, onChange } = mountTags(["Alpha", "Beta"]);
+  const grid = container.querySelector<HTMLElement>('[role="grid"]')!;
+  const [first] = [...grid.querySelectorAll<HTMLElement>('[role="row"]')];
+  act(() => first.focus());
+  expect([...grid.querySelectorAll<HTMLElement>("*")].filter((element) => element.tabIndex >= 0)).toEqual([first]);
+  act(() => {
+    first.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    first.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true }));
+  });
+  expect(onChange).toHaveBeenCalledExactlyOnceWith(["Beta"]);
+  expect(document.activeElement).toBe(input);
+});
+
 it("matches suggestions case-insensitively and submits their raw spelling without sentence isolates", () => {
   const raw = "مراجعة-中文/Alpha(2)";
   const { type, enter, input, onChange, container } = mountTags([], [raw]);

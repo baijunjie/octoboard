@@ -1083,6 +1083,31 @@ html.pane-resizing * {
   }
 }
 
+/* An overlay react-aria opens or closes (a menu, a popover, a tooltip, a select's or combo box's
+   list, a dialog, a toast) carries `data-entering` / `data-exiting` while it animates in or out.
+   HeroUI guards its dialogs and toasts against reduced motion but not its popover-level overlays,
+   which zoom and fade regardless; here every one of them appears and goes at once. react-aria ends
+   the exit when its animations settle, so one cut short as the preference turns on unmounts at
+   once too. */
+@media (prefers-reduced-motion: reduce) {
+  [data-entering="true"],
+  [data-exiting="true"] {
+    animation: none;
+  }
+}
+
+/* The few transitions HeroUI leaves running under reduced motion, where it guards the rest with
+   `motion-reduce:transition-none`: a select's chevron turning as its list opens, a combo box trigger's
+   hover and press fade, and a checkbox's checkmark drawing itself in. `style.test.ts` finds any other
+   in the imported sheets. */
+@media (prefers-reduced-motion: reduce) {
+  .select__indicator,
+  .combo-box__trigger,
+  [data-slot="checkbox-default-indicator--checkmark"] {
+    transition: none;
+  }
+}
+
 /* A panel's incoming content (a project's browser, a project's terminals), when the user switches
    projects in a right pane that is already on screen (`panel-switch` on the panel's root; a pane
    that docks or floats in plays none), fades in where it stands, the pane's geometry fixed. A

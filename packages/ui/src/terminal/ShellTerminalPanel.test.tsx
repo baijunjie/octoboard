@@ -342,3 +342,99 @@ it("leaves focus where the user put it after the tab that held it has gone", asy
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   expect(document.activeElement).toBe(elsewhere);
 });
+
+/** Has the daemon end a terminal as it answers its close, as it does for one already idle at the prompt. */
+function closesAtOnce(panel: ReturnType<typeof mount>) {
+  panel.request.mockImplementation(async (body: RequestBody): Promise<Event> => {
+    if (body.type === "close_shell_terminal") remove(panel, body.shell_terminal);
+    return { type: "ack" } as Event;
+  });
+}
+
+/** Opens the context menu of `tab` and chooses Close terminal, which asks about a busy terminal first. */
+async function closeFromContextMenu(tab: HTMLElement) {
+  act(() => tab.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 20, clientY: 30 })));
+  await vi.waitFor(() => expect(document.activeElement?.closest("[role=menu]")).not.toBeNull());
+  const item = Array.from(document.querySelectorAll<HTMLElement>("[role=menuitem]")).find((each) => each.textContent === "Close terminal")!;
+  await act(async () => item.click());
+  await vi.waitFor(() => expect(document.querySelector("[role=alertdialog]")).not.toBeNull());
+}
+
+const dialogButton = (name: string) =>
+  Array.from(document.querySelectorAll<HTMLButtonElement>("[role=alertdialog] button")).find((button) => button.textContent === name)!;
+
+it("hands focus to the shown tab, with the focus ring, when a busy tab closed from its context menu goes on confirming", async () => {
+  const panel = mount([shell("a", 1, { busy: true }), shell("b", 2)]);
+  closesAtOnce(panel);
+  await closeFromContextMenu(panel.tabs()[0]);
+  act(() => dialogButton("Close terminal").focus());
+  pointerModality();
+  await act(async () => dialogButton("Close terminal").click());
+  expect(panel.request).toHaveBeenCalledWith({ type: "close_shell_terminal", shell_terminal: "a" });
+  await vi.waitFor(() => expect(document.activeElement).toBe(panel.tabs()[0]));
+  expect(panel.tabs().map((tab) => tab.textContent)).toEqual(["shell b"]);
+  expect(document.querySelector("[role=alertdialog]")).toBeNull();
+  expect(getInteractionModality()).toBe("keyboard");
+});
+
+it("hands focus to the New terminal button when the last tab, busy, goes on confirming its close", async () => {
+  const panel = mount([shell("a", 1, { busy: true })]);
+  closesAtOnce(panel);
+  await closeFromContextMenu(panel.tabs()[0]);
+  act(() => dialogButton("Close terminal").focus());
+  await act(async () => dialogButton("Close terminal").click());
+  await vi.waitFor(() => expect(document.activeElement).toBe(panel.container.querySelector("button[aria-label='New terminal']")));
+});
+
+it("hands focus to the shown terminal when the shown tab, busy, closed from its close mark goes on confirming", async () => {
+  const panel = mount([shell("a", 1), shell("b", 2, { busy: true })]);
+  closesAtOnce(panel);
+  act(() => panel.container.querySelector<HTMLElement>("[data-view=b]")!.focus());
+  await act(async () => panel.tabs()[1].querySelector<HTMLElement>("span[aria-hidden=true]")!.click());
+  await vi.waitFor(() => expect(document.querySelector("[role=alertdialog]")).not.toBeNull());
+  focused.length = 0;
+  act(() => dialogButton("Close terminal").focus());
+  await act(async () => dialogButton("Close terminal").click());
+  await vi.waitFor(() => expect(focused).toEqual(["a"]));
+  expect(panel.shown()).toBe("a");
+});
+
+// Where focus goes back to after Cancel is the dialog's own return, which needs a browser (the gallery's
+// shell-panel-tab-menu-focused); here only that the panel moves it nowhere itself.
+it("hands nothing on when the close of a busy tab is declined", async () => {
+  const panel = mount([shell("a", 1, { busy: true }), shell("b", 2)]);
+  await closeFromContextMenu(panel.tabs()[0]);
+  act(() => dialogButton("Cancel").focus());
+  await act(async () => dialogButton("Cancel").click());
+  await vi.waitFor(() => expect(document.querySelector("[role=alertdialog]")).toBeNull());
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  expect(document.activeElement).not.toBe(panel.tabs()[1]);
+  // The click's own modality: no hand-off asked for the focus ring.
+  expect(getInteractionModality()).toBe("virtual");
+  expect(panel.request).not.toHaveBeenCalledWith({ type: "close_shell_terminal", shell_terminal: "a" });
+});
+
+// jsdom runs no restore of focus as a dialog closes, so the test puts focus back where React Aria would: on the
+// shown terminal that held it when the close mark was pressed.
+it("leaves focus where the confirmation put it back, with no ring, when the daemon refuses a busy tab's close", async () => {
+  const panel = mount([shell("a", 1, { busy: true }), shell("b", 2)]);
+  panel.request.mockImplementation(async (body: RequestBody): Promise<Event> => {
+    if (body.type === "close_shell_terminal") throw new Error("refused");
+    return { type: "ack" } as Event;
+  });
+  const view = panel.container.querySelector<HTMLElement>("[data-view=b]")!;
+  act(() => view.focus());
+  await act(async () => panel.tabs()[0].querySelector<HTMLElement>("span[aria-hidden=true]")!.click());
+  await vi.waitFor(() => expect(document.querySelector("[role=alertdialog]")).not.toBeNull());
+  act(() => dialogButton("Close terminal").focus());
+  pointerModality();
+  await act(async () => dialogButton("Close terminal").click());
+  expect(document.querySelector("[role=alertdialog]")).toBeNull();
+  act(() => view.focus());
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  expect(panel.request).toHaveBeenCalledWith({ type: "close_shell_terminal", shell_terminal: "a" });
+  expect(document.activeElement).toBe(view);
+  expect(getInteractionModality()).not.toBe("keyboard");
+  expect(panel.tabs()).toHaveLength(2);
+});

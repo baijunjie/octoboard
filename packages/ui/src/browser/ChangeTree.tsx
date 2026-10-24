@@ -2,6 +2,7 @@ import React, { useMemo, useRef } from "react";
 import { Collection, Tree, TreeHeader, TreeItem, TreeItemContent, TreeSection, Virtualizer, type Key } from "react-aria-components";
 
 import { FadeOverflow } from "../components/FadeOverflow";
+import { useCollectionOptionTab } from "../components/collectionOptionTab";
 import { useStickyScrollFade } from "../components/scrollFade";
 import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
@@ -108,7 +109,8 @@ export function ChangeTree({
     return { visibleKeys: keys, folds: { parents, open } };
   }, [groups, expanded, collapsed]);
   const motion = useBrowserListMotion(listRef, visibleKeys, folds);
-  const { props: fade, wrap } = useStickyScrollFade({ ref: motion.ref, className: "min-h-0 flex-1 overflow-auto pb-1 outline-none " + CHANGE_SCROLL_CLASS, stickyHeadingHeight: HEADING_HEIGHT });
+  const collectionRef = useCollectionOptionTab(motion.ref);
+  const { props: fade, wrap } = useStickyScrollFade({ ref: collectionRef, className: "min-h-0 flex-1 overflow-auto pb-1 outline-none " + CHANGE_SCROLL_CLASS, stickyHeadingHeight: HEADING_HEIGHT });
 
   // Only the commits and directories this list shows are decided here: the sections' own keys and
   // the rows inside a folded section all stay as they are.

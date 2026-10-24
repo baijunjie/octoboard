@@ -19,15 +19,17 @@ import { ROW_ICON_BUTTON_CLASS } from "../components/RowControls";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useTabScrollLabels } from "../components/tabScrollLabels";
 import { TitledControl } from "../components/TitledControl";
-import { useLatest } from "../components/useLatest";
+import { useLatest, useStableHandler } from "../components/useLatest";
 import { useListMotion } from "../components/useListMotion";
 import { ConfirmDialog } from "../dialogs/ConfirmDialog";
+import { dialogAround } from "../dialogs/dialogElement";
 import { RenameDialog } from "../dialogs/RenameDialog";
 import { errorPresentation } from "../errorPresentation";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { Project, ShellTerminal } from "../protocol";
 import { useDaemon, type Daemon } from "../store";
+import { ringForAutomaticFocus } from "../touchInput";
 import { setActiveShellTerminal, startShellTerminal, useActiveShellTerminal, useProjectShellTerminals, useShellTerminalStarting } from "./shellTerminals";
 import { ShellTerminalView, type ShellTerminalViewHandle } from "./ShellTerminalView";
 
@@ -76,7 +78,12 @@ export function ShellTerminalPanel({
   }, [activeId]);
   const activeTerminal = terminals.find((terminal) => terminal.id === activeId);
   const [closingIds, setClosingIds] = useState<ReadonlySet<string>>(new Set());
-  const [confirmClose, setConfirmClose] = useState<string>();
+  // The busy terminal a close is being asked about, and where the close was asked from.
+  const [confirmClose, setConfirmClose] = useState<{ id: string; from: CloseOrigin }>();
+  // Whether that question was declined, after which its dialog gives focus back where it was asked from.
+  const closeDeclined = useRef(false);
+  // An element inside the confirmation's dialog, kept past its unmount, so the dialog can be found as it goes.
+  const confirmScope = useRef<HTMLElement | null>(null);
   const [renaming, setRenaming] = useState<string>();
   const rootRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -129,17 +136,20 @@ export function ShellTerminalPanel({
       else rootRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
     });
 
+  /** The shown tab, or the panel's first control when no tab is left. */
+  const focusShownTabNow = () => {
+    const id = latest.current.activeId;
+    const tab = id === undefined ? undefined : tabs.current.get(id);
+    if (tab) tab.focus();
+    else rootRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+  };
+
   /** Focus for the strip once the tab that held it (or its context menu) has gone: the shown tab, or
    * the panel's first control when no tab is left. After the strip's own re-aiming of focus, and only
    * while focus has fallen to the page, so a place the user or a dialog has put it stays. */
   const focusShownTab = () =>
     afterCollectionFocus(() => {
-      const active = document.activeElement;
-      if (active && active !== document.body) return;
-      const id = latest.current.activeId;
-      const tab = id === undefined ? undefined : tabs.current.get(id);
-      if (tab) tab.focus();
-      else rootRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+      if (focusFellToPage()) focusShownTabNow();
     });
 
   // The terminal a start from here made, to be focused once its view is shown: its record can come
@@ -202,14 +212,33 @@ export function ShellTerminalPanel({
     });
   };
   /** Closes at once a terminal with nothing running, and asks first about one that is busy. */
-  const requestClose = (terminal: ShellTerminal) => {
-    if (terminal.state === "running" && terminal.busy) setConfirmClose(terminal.id);
-    else void close(terminal);
-  };
+  const requestClose = useStableHandler((terminal: ShellTerminal, from: CloseOrigin) => {
+    if (terminal.state === "running" && terminal.busy) {
+      closeDeclined.current = false;
+      setConfirmClose({ id: terminal.id, from });
+    } else void close(terminal);
+  });
+  const declineClose = useStableHandler(() => {
+    closeDeclined.current = true;
+    setConfirmClose(undefined);
+  });
+
+  /** Focus for the panel once the close confirmation has gone, when the element its dialog would give
+   * focus back to went with the terminal (its tab, the menu item, its view), so focus fell to the page:
+   * the shown tab after a close asked from a menu, the shown terminal after one asked from the terminal
+   * itself, with the focus ring. The dialog's own return of focus, a frame after it closes, comes first
+   * and stands, and so does focus left where it was when the daemon refused the close. */
+  const focusAfterConfirmedClose = (from: CloseOrigin) =>
+    afterCollectionFocus(() => {
+      if (!focusFellToPage()) return;
+      ringForAutomaticFocus();
+      if (from === "menu") focusShownTabNow();
+      else focusShown();
+    });
 
   const actionsOf = (terminal: ShellTerminal): ActionMenuEntry[] => [
     { label: t("shellTerminal.rename"), icon: Pencil, onClick: () => setRenaming(terminal.id) },
-    { label: t("shellTerminal.close"), icon: X, onClick: () => requestClose(terminal), disabled: closingIds.has(terminal.id) },
+    { label: t("shellTerminal.close"), icon: X, onClick: () => requestClose(terminal, "menu"), disabled: closingIds.has(terminal.id) },
   ];
 
   // The box of terminals is the shown tab's panel, under the ids react-aria gave the tab: the tab
@@ -285,7 +314,7 @@ export function ShellTerminalPanel({
                       {/* First among what goes away with the tab, so focus inside it is still found. */}
                       <HandOffOnUnmount from={`[data-key="${CSS.escape(terminal.id)}"]`} to={focusShownTab} />
                       <FadeOverflow as="span" dir="auto" className="max-w-40 min-w-0" titleWhenClipped={tabLabel(terminal)}>{tabLabel(terminal)}</FadeOverflow>
-                      <TabCloseMark title={t("shellTerminal.close")} onClose={() => requestClose(terminal)} />
+                      <TabCloseMark title={t("shellTerminal.close")} onClose={() => requestClose(terminal, "terminal")} />
                     </Tabs.Tab>
                   ))}
                 </Tabs.List>
@@ -307,7 +336,7 @@ export function ShellTerminalPanel({
                   shown={terminal.id === activeId}
                   resizing={resizing}
                   onViewFile={onViewFile}
-                  onClose={() => requestClose(terminal)}
+                  onClose={() => requestClose(terminal, "terminal")}
                 />
               </React.Fragment>
             ))}
@@ -333,19 +362,31 @@ export function ShellTerminalPanel({
         const tab = tabNodes.get(terminal.id);
         return tab && <TabContextMenu key={terminal.id} label={t("shellTerminal.actions", { title: isolate(terminal.title) })} items={actionsOf(terminal)} tab={tab} onGone={focusShownTab} />;
       })}
-      {confirmClose !== undefined && terminals.some((terminal) => terminal.id === confirmClose) && (
-        <ConfirmDialog
-          title={<Message id="shellTerminal.closeBusy.title" params={{ title: <InlineReference dir="auto" wrap>{terminals.find((terminal) => terminal.id === confirmClose)!.title}</InlineReference> }} />}
-          message={t("shellTerminal.closeBusy.message")}
-          confirmLabel={t("shellTerminal.close")}
-          destructive
-          onCancel={() => setConfirmClose(undefined)}
-          onConfirm={async () => {
-            const terminal = terminals.find((candidate) => candidate.id === confirmClose);
-            setConfirmClose(undefined);
-            if (terminal) await close(terminal);
-          }}
-        />
+      {confirmClose !== undefined && terminals.some((terminal) => terminal.id === confirmClose.id) && (
+        <>
+          {/* First, so focus is still found in the dialog as it goes. */}
+          <HandOffOnUnmount
+            from={() => (closeDeclined.current ? null : dialogAround(confirmScope) ?? null)}
+            to={() => focusAfterConfirmedClose(confirmClose.from)}
+            ring={false}
+          />
+          <ConfirmDialog
+            title={(
+              <span ref={(element) => { if (element) confirmScope.current = element; }}>
+                <Message id="shellTerminal.closeBusy.title" params={{ title: <InlineReference dir="auto" wrap>{terminals.find((terminal) => terminal.id === confirmClose.id)!.title}</InlineReference> }} />
+              </span>
+            )}
+            message={t("shellTerminal.closeBusy.message")}
+            confirmLabel={t("shellTerminal.close")}
+            destructive
+            onCancel={declineClose}
+            onConfirm={async () => {
+              const terminal = terminals.find((candidate) => candidate.id === confirmClose.id);
+              setConfirmClose(undefined);
+              if (terminal) await close(terminal);
+            }}
+          />
+        </>
       )}
       {renaming !== undefined && terminals.some((terminal) => terminal.id === renaming) && (
         <RenameDialog
@@ -363,6 +404,17 @@ export function ShellTerminalPanel({
     </>
   );
 }
+
+/** Whether focus has fallen to the page, as it does when the element holding it goes. */
+function focusFellToPage(): boolean {
+  const active = document.activeElement;
+  return !active || active === document.body;
+}
+
+/** Where a close was asked from: a menu (a tab's context menu, the header's) or the terminal itself (its
+ * tab's close mark, its view's Close button), which decides where focus goes once a confirmed close has
+ * taken away what held it. */
+type CloseOrigin = "menu" | "terminal";
 
 /** Asks the daemon to close `terminal`; a refusal is reported as an error. Settles once it has answered. */
 async function closeShellTerminal(daemon: Pick<Daemon, "request" | "toastError">, terminal: string): Promise<void> {
