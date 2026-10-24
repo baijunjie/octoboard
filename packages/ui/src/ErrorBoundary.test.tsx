@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { ErrorBoundary } from "./ErrorBoundary";
+import { en } from "./i18n/messages/en";
 import type { PlatformAdapter } from "./platform";
 import { PlatformProvider } from "./platform/react";
 
@@ -16,7 +17,7 @@ function Crashing(): React.ReactElement {
 
 /** Mounts the boundary over a component that crashes, measuring every element as `scrollHeight`
  * tall in a `clientHeight` box, since jsdom has no layout and the fade's state follows those. */
-async function mountCrashed(sizes: { scrollHeight: number; clientHeight: number }): Promise<HTMLElement> {
+async function mountCrashed(sizes: { scrollHeight: number; clientHeight: number }, Child: () => React.ReactElement = Crashing): Promise<HTMLElement> {
   const restore = (["scrollHeight", "clientHeight"] as const).map((key) => {
     const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, key);
     Object.defineProperty(HTMLElement.prototype, key, { configurable: true, get: () => sizes[key] });
@@ -37,7 +38,7 @@ async function mountCrashed(sizes: { scrollHeight: number; clientHeight: number 
     root.render(
       <PlatformProvider value={platform}>
         <ErrorBoundary>
-          <Crashing />
+          <Child />
         </ErrorBoundary>
       </PlatformProvider>,
     ),
@@ -79,4 +80,27 @@ it.each([
   const fitting = scroller(await mountCrashed({ scrollHeight: 100, clientHeight: 100 }));
   expect(fitting.hasAttribute("role")).toBe(false);
   expect(fitting.hasAttribute("tabindex")).toBe(false);
+});
+
+it("keeps the error's own message out of the Alert and in the diagnostic block", async () => {
+  const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 });
+  const description = container.querySelector('[data-slot="alert-description"]')!;
+  expect(description.textContent).toBe(en["error.crashed.alertDescription"]);
+  expect(stack(container).textContent).toContain("boom");
+});
+
+it.each([
+  ["leaves out the name and message, as WebKit's does", "boom", "Crashing@app.js:1:1", "TypeError: boom\nCrashing@app.js:1:1"],
+  ["already begins with them, as V8's does", "boom", "TypeError: boom\n    at Crashing (app.js:1:1)", "TypeError: boom\n    at Crashing (app.js:1:1)"],
+  ["has a frame that contains the message", "render", "renderWithHooks@app.js:1:1", "TypeError: render\nrenderWithHooks@app.js:1:1"],
+  ["belongs to an error with an empty message", "", "renderWithHooks@app.js:1:1", "TypeError\nrenderWithHooks@app.js:1:1"],
+  ["is missing", "boom", undefined, "TypeError: boom"],
+])("heads the diagnostic block with the error's name and message once when the stack %s", async (_case, message, trace, shown) => {
+  function CrashingThus(): React.ReactElement {
+    const error = new TypeError(message);
+    error.stack = trace;
+    throw error;
+  }
+  const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 }, CrashingThus);
+  expect(stack(container).textContent).toBe(shown);
 });

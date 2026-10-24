@@ -135,6 +135,7 @@ export const zhHans: Translation<"other"> = {
   "error.acknowledge": "确定",
   "error.crashed": "{appName} 遇到了无法恢复的错误。",
   "error.crashed.alertTitle": "发生意外错误",
+  "error.crashed.alertDescription": "请重试。如果再次出现，请附上下方的错误文本进行报告。",
   "error.tryAgain": "重试",
   "error.unexpectedReply": "守护进程返回了意料之外的响应。",
   "error.stack": "堆栈跟踪",

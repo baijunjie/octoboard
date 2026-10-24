@@ -147,6 +147,7 @@ export const en = {
   "error.acknowledge": "OK",
   "error.crashed": "{appName} hit an error it could not recover from.",
   "error.crashed.alertTitle": "An unexpected error occurred",
+  "error.crashed.alertDescription": "Try again. If it happens again, report it with the error text below.",
   "error.tryAgain": "Try again",
   "error.unexpectedReply": "The daemon answered with something unexpected.",
   "error.stack": "Stack trace",

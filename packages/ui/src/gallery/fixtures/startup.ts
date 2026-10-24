@@ -60,7 +60,7 @@ export const startupScenarios: Scenario[] = [
     category: "exceptional",
     title: "The UI crashed",
     description:
-      "One main landmark contains the crash page heading, centred, a danger alert titled \"An unexpected error occurred\" over the error's message, which starts at the edge, and a separate centred Try again control. Acknowledge the error dialog to inspect the page. The stack stays outside the alert in its own scroll region: use Short to see its bottom fade, then Tab onto the stack for its frame-shaped focus ring and keyboard scrolling; Fit shows it whole without a fade. The native-capable browser stub exposes Quit without closing the preview.",
+      "One main landmark contains the crash page heading, centred, a danger alert titled \"An unexpected error occurred\" over an instruction in the application's own words, which starts at the edge, and a separate centred Try again control. Acknowledge the error dialog to inspect the page. The error's message is not in the alert: it heads the stack, outside the alert in its own scroll region. Use Short to see its bottom fade, then Tab onto the stack for its frame-shaped focus ring and keyboard scrolling; Fit shows it whole without a fade. The native-capable browser stub exposes Quit without closing the preview.",
     quitRequested: true,
     startup: { kind: "crash", stack: stackOf(12) },
   },

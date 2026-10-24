@@ -41,10 +41,21 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
   }
 }
 
-/** The fallback, a function component because only one can read the current language. */
+/** The error's own text for the diagnostic block: its stack, led by the error's name and message
+ * where the stack leaves them out, as WebKit's does. */
+function diagnostic(error: Error): string {
+  const heading = error.message ? `${error.name}: ${error.message}` : error.name;
+  if (!error.stack) return heading;
+  return error.stack.startsWith(heading) ? error.stack : `${heading}\n${error.stack}`;
+}
+
+/** The fallback, a function component because only one can read the current language. The error's
+ * own message is raw text, so the Alert says what to do in the application's words and the message
+ * stands in the diagnostic block under it. */
 function ErrorScreen({ error, onRetry }: { error: Error; onRetry: () => void }): React.ReactElement {
   const t = useT();
-  useEffect(() => { errorAlerts.report({ message: error.message, title: <Message id="error.crashed" />, content: <CodeBlock dir="ltr" wrap={false} className="text-xs">{error.stack ?? error.message}</CodeBlock> }); }, [error, t]);
+  const text = diagnostic(error);
+  useEffect(() => { errorAlerts.report({ message: error.message, title: <Message id="error.crashed" />, content: <CodeBlock dir="ltr" wrap={false} className="text-xs">{text}</CodeBlock> }); }, [error, text, t]);
   // Reachable from the keyboard while it scrolls, as a dialog's body is: nothing else on the screen
   // would scroll the stack.
   const region = useFadeRegion({ label: t("error.stack") });
@@ -54,7 +65,7 @@ function ErrorScreen({ error, onRetry }: { error: Error; onRetry: () => void }):
         <CodeToneContext value="danger">
           <div className="flex min-w-0 flex-col gap-4">
             <StartupHeading><Message id="error.crashed" /></StartupHeading>
-            <ErrorAlert announce={false} title={t("error.crashed.alertTitle")}>{error.message}</ErrorAlert>
+            <ErrorAlert announce={false} title={t("error.crashed.alertTitle")}>{t("error.crashed.alertDescription")}</ErrorAlert>
             {/* The stack is taller than the screen more often than not, so it fades at the edge it
                 hides the rest behind. The ring goes on this wrapper, which draws it outside its own box, so
                 it needs no room of its own. `overflow-auto` beside the fade's own `overflow-y`: a long
@@ -64,7 +75,7 @@ function ErrorScreen({ error, onRetry }: { error: Error; onRetry: () => void }):
                 {/* A stack trace is program text: its indentation and its frames read left to right in
                     any interface language. */}
                 <CodeBlock dir="ltr" wrap={false} className="text-xs">
-                  {error.stack ?? error.message}
+                  {text}
                 </CodeBlock>
               </FadedScroller>
             </div>

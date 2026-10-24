@@ -93,12 +93,15 @@ for the file viewer's header; a report page's own content lines up with it by de
 what it cannot do" in `docs/product/report-panel.md`).
 
 On the screens shown before there is anything to show — while connecting to the daemon, and the screens for a daemon
-that could not start or a UI that failed — there is no rail: under the top bar, the content panel spans the window.
-On the screens for a daemon that could not start, for no daemon address being known, and for a UI that failed, the
-message's heading and the row of buttons under it are centred; the rest of the message — its alert, the explanation
-and any list in it, the stack trace — starts at the reading edge. Each of those screens' alerts is titled with what
-went wrong in short — that the daemon could not be connected to, or that an unexpected error occurred — with the
-detail under the title.
+that could not start or a UI that failed — there is no rail: under the top bar, the content panel spans the window. On
+the screens for a daemon that could not start, for no daemon address being known, and for a UI that failed, the
+message's heading and the row of buttons under it are centred; the rest of the message — its alert, the explanation and
+any list in it, the stack trace — starts at the reading edge. Each of those screens' alerts is titled with what went
+wrong in short — that the daemon could not be connected to, or that an unexpected error occurred — with the detail under
+the title. On the screen for a UI that failed, that detail is the application's own instruction — try again, and if it
+happens again, report it with the error text below — never the error's raw message: the error's name and message head
+the stack trace under the alert instead, and the stack follows them, not repeating that line where the stack already
+begins with it. The error alert shown first, over the screen, holds the same stack trace, headed the same way.
 
 ## What an open dialog, menu or popover covers
 
