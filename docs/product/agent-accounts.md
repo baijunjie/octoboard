@@ -120,10 +120,11 @@ it.
 ## The default account
 
 Each agent's panel starts with the agent's **default account**, with the directory it currently resolves to. A "?"
-ends its name line, after the plan, and says in its tooltip, or in a popover once pressed, that the default account is
-the setup a session runs under when no account is pinned. Its directory cannot be edited, and the default account cannot
-be removed. It has no sharing switch: its directory is the one other accounts share. Its actions menu holds
-**Rename**; where **Log in** appears follows "Logging an account in" below.
+ends its name line, after the plan, and says in its tooltip, or in a popover opened by a touch or pen press or a
+screen reader's activation, that the default account is the setup a session runs under when no account is pinned. Its
+directory cannot be edited, and the default account cannot be removed. It has no sharing switch: its directory is the
+one other accounts share. Its actions menu holds **Rename**; where **Log in** appears follows "Logging an account in"
+below.
 
 **Rename** opens a dialog, titled for the default account of that agent, with a single name field holding the name the
 user gave it, empty when there is none, and a note that leaving it empty uses the standard name. The name is stored

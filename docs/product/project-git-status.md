@@ -77,7 +77,9 @@ message. It is one tooltip in both placements, the sidebar row and focus mode's 
 badge's text is cut — so the branch name and the error can still be read once the row has squeezed the text away. The
 one state with no tooltip at all is the one saying in visible text that the repository has no commits yet, which a
 tooltip would only repeat; that text still runs as a marquee while the pointer is over the text itself (see "Names too
-long for their space" in `docs/product/labels-and-tooltips.md`).
+long for their space" in `docs/product/labels-and-tooltips.md`). In focus mode's header a tap on the badge opens the
+same sentence in a popover; on the sidebar row a tap is the row's press (see "Tooltips on indicators" in
+`docs/product/labels-and-tooltips.md`).
 
 **What assistive technology hears.** A project row announces itself as one control, so the badge's facts are folded
 into the row's own name instead of being announced separately: the branch (or why there is none), the ahead and behind

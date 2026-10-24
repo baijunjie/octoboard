@@ -1,4 +1,4 @@
-import { Badge, Switch, Tooltip } from "@heroui/react";
+import { Badge, Switch } from "@heroui/react";
 import { ArrowLeft, FolderPlus, List, MessageSquarePlus } from "lucide-react";
 import React, { memo, useId, useLayoutEffect, useRef } from "react";
 
@@ -8,6 +8,7 @@ import { ActivityMarker } from "../components/ActivityMarker";
 import { SessionAgentIcon } from "../components/SessionAgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
+import { IndicatorTooltip } from "../components/IndicatorTooltip";
 import { InlineReference } from "../components/InlineReference";
 import { PaneTitle } from "../components/PaneTitle";
 import { RowControls, RowIconGroup, RowIconLine, RowIconSlot } from "../components/RowControls";
@@ -134,7 +135,8 @@ export function ProjectFocusView({
     <>
       <FocusHeader handlers={handlers} ref={headerRef}>
         <FocusTitle heading={project.name} overline={parentConsole.name} />
-        <GitBadge status={gitStatus} />
+        {/* Alone in the header, so a tap on it opens the popover. */}
+        <GitBadge status={gitStatus} touchPopover />
         <RowIconGroup>
           <NewSessionButton shortcut label={t("sidebar.project.openSession")} quickLabel={t("sidebar.project.openSessionQuick")} target={newSession} onOpen={handlers.onOpenDialog} onQuickCreate={handlers.onQuickCreateSession} />
           <ActionMenu
@@ -149,25 +151,23 @@ export function ProjectFocusView({
           <StickySectionHeading
             action={elsewhere && (
               <span className="contents" {...switchFocus}>
-                <Tooltip>
-                  {/* Switch sends hover props to its hidden input; this trigger covers the visible control without adding a tab stop. */}
-                  <Tooltip.Trigger role="presentation" tabIndex={-1}>
-                    <Switch
-                      size="sm"
-                      aria-label={t("sidebar.focus.includeConsoleSessions")}
-                      aria-describedby=""
-                      isSelected={includeConsoleSessions}
-                      onChange={(value) => projectFocusIncludeConsoleSessions.set(value)}
-                    >
-                      <Switch.Content>
-                        <Switch.Control>
-                          <Switch.Thumb />
-                        </Switch.Control>
-                      </Switch.Content>
-                    </Switch>
-                  </Tooltip.Trigger>
-                  <Tooltip.Content className="pointer-events-none">{t("sidebar.focus.includeConsoleSessions")}</Tooltip.Content>
-                </Tooltip>
+                {/* Switch sends hover props to its hidden input; this trigger covers the visible control without adding a tab stop.
+                    No touch popover: a tap on the switch toggles it. */}
+                <IndicatorTooltip tooltip={t("sidebar.focus.includeConsoleSessions")} touchPopover={false}>
+                  <Switch
+                    size="sm"
+                    aria-label={t("sidebar.focus.includeConsoleSessions")}
+                    aria-describedby=""
+                    isSelected={includeConsoleSessions}
+                    onChange={(value) => projectFocusIncludeConsoleSessions.set(value)}
+                  >
+                    <Switch.Content>
+                      <Switch.Control>
+                        <Switch.Thumb />
+                      </Switch.Control>
+                    </Switch.Content>
+                  </Switch>
+                </IndicatorTooltip>
               </span>
             )}
           >
@@ -625,7 +625,7 @@ const SessionCard = memo(function SessionCard({
         </FadeOverflow>
       </div>
       <RowIconLine
-        icon={<SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} />}
+        icon={<SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} touchPopover={false} />}
         className="text-xs text-app-muted"
       >
         <FadeOverflow
@@ -636,7 +636,7 @@ const SessionCard = memo(function SessionCard({
           {agentLine}
         </FadeOverflow>
         <div className="flex shrink-0 items-center gap-2">
-          {hasVisibleContext(session.context) && <div id={metadataId}><SessionContextLabel context={session.context} /></div>}
+          {hasVisibleContext(session.context) && <div id={metadataId}><SessionContextLabel context={session.context} touchPopover={false} /></div>}
           <span>{formatRelativeTime(language, session.started_at, now)}</span>
         </div>
       </RowIconLine>
@@ -671,11 +671,11 @@ function ArchivedRow({
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
     >
-      <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} />
+      <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} touchPopover={false} />
       <RowLabel title={sessionDisplayTitle(t, session)} className="min-w-0 flex-1">
         <span className="text-app-muted">{sessionDisplayTitle(t, session)}</span>
       </RowLabel>
-      {hasVisibleContext(session.context) && <span id={metadataId}><SessionContextLabel context={session.context} /></span>}
+      {hasVisibleContext(session.context) && <span id={metadataId}><SessionContextLabel context={session.context} touchPopover={false} /></span>}
       <RowControls>
         <SessionActions handlers={handlers} session={session} accounts={accounts} hasBoundSessions={false} rowRef={rowRef} />
       </RowControls>

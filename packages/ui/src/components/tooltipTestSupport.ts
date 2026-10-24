@@ -32,6 +32,47 @@ export function leave(element: Element): void {
   act(() => void element.dispatchEvent(pointer("pointerout")));
 }
 
+/**
+ * A press of `element` by `pointerType`, a finger by default: the pointer events react-aria's
+ * `usePress` reads, then the `click` that follows. The box has a size, since react-aria reads a
+ * pointer event of no size as a virtual one.
+ *
+ * After a touch press (not a pen's) react-aria ignores the mouse's hover for half a second (the
+ * emulated mouse events iOS sends), which would swallow the next hover, this test's or the next
+ * test's. The wait is run out on the fake clock where there is one, and otherwise when the test
+ * ends.
+ */
+export function press(element: Element, pointerType: "mouse" | "touch" | "pen" = "touch"): void {
+  const init = { bubbles: true, cancelable: true, button: 0, pointerId: 1, isPrimary: true, pointerType, width: 20, height: 20 };
+  act(() => {
+    element.dispatchEvent(new PointerEvent("pointerdown", init));
+    element.dispatchEvent(new PointerEvent("pointerup", init));
+    element.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0, detail: 1 }));
+  });
+  if (pointerType !== "touch") return;
+  if (vi.isFakeTimers()) act(() => void vi.advanceTimersByTime(600));
+  else onTestFinished(() => new Promise((resolve) => setTimeout(resolve, 600)));
+}
+
+/** A click with no pointer behind it, which react-aria reads as a virtual press: what assistive
+ * technology activating a control, or `element.click()`, sends. */
+export function activate(element: HTMLElement): void {
+  act(() => element.click());
+}
+
+/** A key pressed and released on `element`, as a keyboard press of a control is. */
+export function tap(element: Element, key: "Enter" | " "): void {
+  act(() => {
+    element.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+    element.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true }));
+  });
+}
+
+/** The touch popover, or `null` while none is open. */
+export function openPopover(): Element | null {
+  return document.querySelector('[role="dialog"]');
+}
+
 /** The one tooltip that can be open at a time, or `null` while none is. */
 export function openTooltip(): Element | null {
   return document.querySelector('[role="tooltip"]');

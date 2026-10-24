@@ -59,7 +59,16 @@ function ScrollingCountArrow({ direction }: { direction: "up" | "down" }): React
  * Only the branch name gives way and runs as a marquee. The grid reserves room for the state
  * glyph and upstream counts, keeping them visible even when none of the branch name fits.
  */
-export function GitBadge({ status, decorative }: { status: GitStatus | undefined; decorative?: boolean }): React.ReactElement | null {
+export function GitBadge({
+  status,
+  decorative,
+  touchPopover,
+}: {
+  status: GitStatus | undefined;
+  decorative?: boolean;
+  /** Whether a tap opens the tooltip's content in a popover; off inside a pressable row, whose tap it is. */
+  touchPopover?: boolean;
+}): React.ReactElement | null {
   const t = useT();
   const language = useCurrentLanguage();
   if (!status || !status.repository) return null;
@@ -115,7 +124,7 @@ export function GitBadge({ status, decorative }: { status: GitStatus | undefined
     );
   }
   return (
-    <IndicatorTooltip tooltip={gitBadgeContent(language, t, status)} label={decorative ? undefined : label} className={className}>
+    <IndicatorTooltip tooltip={gitBadgeContent(language, t, status)} label={decorative ? undefined : label} className={className} touchPopover={touchPopover}>
       {/* `contents` keeps the glyph, branch and counts the trigger's own grid items. */}
       {decorative ? (
         <span aria-hidden="true" className="contents">

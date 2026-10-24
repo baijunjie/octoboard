@@ -80,7 +80,8 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
 - `state` is built with `snapshotState` from `builders.ts`, so a protocol change breaks it at typecheck. State that
   lives in a component rather than the store (a dialog, the archive view, the selected session) is reached with the
   shortest `steps`, which press controls by name as a user would (`ui.press(ui.t("rail.settings"))`; `ui.confirm()`
-  presses a dialog's confirming button, `ui.contextMenu` opens a row's right-click menu).
+  presses a dialog's confirming button, `ui.contextMenu` opens a row's right-click menu, `ui.touchPress` and `ui.tapTopBarStatus` press with a finger,
+  for the popover a touch opens in place of a tooltip).
 - Other fields of the scenario type (`scenario.ts`) include `preferences` (what the app persists), `toasts`,
   `sessionOpenError`, `terminal: "refuse"`, `clipboard: "unavailable"` (a plain browser over insecure http),
   `shellTerminal` (how the Terminal panel's shell terminals behave: `"shell"` at its prompt by default, or `"refuse"`; an exited shell

@@ -20,6 +20,10 @@ import { sessionDisplayTitle } from "../sessionLabel";
  * `colour?: ConsoleSessionColour | null` (`protocol.ts`), so one built without it is reachable from
  * a fixture or a future caller; drawn with none, nothing renders.
  *
+ * It has no touch popover (`touchPopover={false}`): wherever it is not decorative it sits in a session's
+ * row, whose press (selecting the session) a tap on the dot would share with the popover, so a touch
+ * has no route to the owner's name beyond the row's own label.
+ *
  * The tooltip is an `IndicatorTooltip`: the badge is a non-interactive dot, so it shows on pointer
  * hover only and adds no tab stop to the row; a screen-reader user has the row's own `aria-label`
  * ("Bound to …"), and there is today no keyboard route to the owner's name for a sighted user who
@@ -45,7 +49,7 @@ export function BindingBadge({ owner, decorative }: { owner: Session; decorative
   if (decorative) return dot;
   const label = t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, owner)) });
   return (
-    <IndicatorTooltip tooltip={<Message id="sidebar.session.boundTo" params={{ name: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, owner)}</InlineReference> }} />} label={label} className="inline-flex">
+    <IndicatorTooltip tooltip={<Message id="sidebar.session.boundTo" params={{ name: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, owner)}</InlineReference> }} />} label={label} className="inline-flex" touchPopover={false}>
       {dot}
     </IndicatorTooltip>
   );

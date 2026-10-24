@@ -24,6 +24,17 @@ carries it — a control, an indicator or a label too long for its space:
   the tooltip on the tab of an added agent that is not installed, in Settings, Escape included, and it stays closed
   until the pointer is off the tab and the tab has lost keyboard focus, or until keyboard focus arrives on the tab
   again (see "Tooltips on indicators" below).
+- **A touch has no hover, so on a touch screen the same text opens in a popover.** Which of the two shows follows the
+  input of the interaction, not the device: a mouse hover and keyboard focus open the tooltip, and a finger's or a
+  pen's press opens the popover, on a phone, on a tablet with a trackpad and on a touch-screen laptop alike; on the
+  "?" help tip so does a screen reader's activation. A mouse press opens nothing extra, and neither does a keyboard
+  press, since keyboard focus has the tooltip open already. The popover is drawn like the tooltip (the same surface,
+  padding, text size and width) and takes focus while open; a tap outside it or Escape closes it — that tap does
+  nothing else — and focus goes back to what held it. It opens on a mark that only carries a tooltip (which marks, see
+  "Tooltips on indicators" below) and on the "?" help tip. It does not open on a control that has an action of its
+  own, where a tap runs the action (an icon-only button, a menu trigger, a switch), nor on a mark inside a row, a
+  button or an option, where the tap belongs to what holds the mark, nor on clipped text or a change row's status
+  letter. Where a tap opens none, a touch screen has no route to the text.
 - Text too long for the tooltip's width **wraps at word boundaries**. A single run with no boundary in it — a path, a
   long branch name — is broken within rather than widening the tooltip. A script written without spaces wraps between
   its characters, which is its word boundary.
@@ -90,13 +101,11 @@ application buttons below. These are:
   config directories" in `docs/product/consoles.md`);
 - the "?" help tip, a small muted icon button that takes an explanation out of the visible text (see "Explanations in
   help tips" below): its tooltip is the explanation — plain text, or text with literals such as file names set apart
-  as chips — and the name announced for it says what it explains ("About automatic pulling"), so the explanation
-  is the control's description while the tooltip is open. Pressing it (a click, a tap, Enter or Space) opens the same
-  explanation in a popover instead, which holds the tooltip back while it is open, stays until an outside press,
-  Escape or another press of the "?" closes it, and gives focus back to the "?" — the way a touch screen, which has no
-  hover, reaches it. When the popover closes with the pointer resting on the "?" or the keyboard in use, the tooltip
-  stays shut until focus or the pointer leaves the "?", so it does not reopen at once; closed by an outside press with
-  the pointer elsewhere, nothing is held back, and the next rest on the "?" shows the tooltip;
+  as chips — and the name announced for it says what it explains ("About automatic pulling"), so the explanation is
+  the control's description while the tooltip is open. A mouse only ever gets the tooltip, a mouse press opening
+  nothing, and Enter or Space leaves the tooltip open; a finger's or a pen's press or a screen reader's activation
+  opens the explanation in the popover a touch gets (see "How a tooltip behaves" above), and closing it gives focus
+  back to the "?";
 - the close button of every dismissable dialog, of Settings and of each toast ("Close").
 
 The rail's **Account quota** button is an exception: it has **no tooltip**, on hover or on keyboard focus. Resting
@@ -144,7 +153,7 @@ An explanation can be split: the part of either kind above goes into the help ti
 tip sits at the end of the line it explains, beside the label rather than inside it, so the name announced for that
 label or field does not include it. A section heading carries no help tip.
 
-Help tips are used in four places:
+Help tips are used in five places:
 
 - Settings' **Automatically pull repositories** row, at the end of the row's name: that the remote is checked every few
   minutes whichever way the switch is set (see "Git" in `docs/product/settings.md`);
@@ -154,6 +163,9 @@ Help tips are used in four places:
 - each agent's **default account** in Settings' Agent accounts section, at the end of its name line: that it is the
   setup a session runs under when no account is pinned (see "The default account" in
   `docs/product/agent-accounts.md`);
+- the **Share default configuration** switch of each account the user owns in Settings' Agent accounts section,
+  beside the switch's label: what is linked to the default account's directory, what is never shared and what
+  happens when sharing is turned off (see "Sharing the default configuration" in `docs/product/agent-accounts.md`);
 - the permission-approval headings in Settings' Agent accounts section (see "Approval modes" in
   `docs/product/agent-accounts.md`).
 
@@ -216,6 +228,17 @@ Carrying a tooltip makes none of them a control. A mouse press on such a mark do
 keyboard focus; where the mark sits in something that answers a press, the press goes on to that and does what a press
 there does — pressing a session's status glyph on its sidebar row selects the session, as pressing the row does, and
 pressing a change row's status letter opens the change. So such a mark is no dead spot in what carries it.
+
+On a touch screen a tap on a mark opens its tooltip's content in a popover (see "How a tooltip behaves" above) where
+the tap has nothing else to do: the status glyph on the top bar's breadcrumb, the status glyph and agent icon of each
+session a confirmation lists, the branch badge in a project's focus mode header and the context-size chip beside the
+Session history's heading (see "The context-size chip" in `docs/product/session-context.md`). On a device with a
+touch screen such a mark answers a press, and a hover, across at least 24 by 24 pixels, even where it is drawn
+smaller. A mark inside a row, a button or an option opens none, as the tap there selects, folds, switches or chooses:
+the status glyph, agent icon, context-size chip and binding badge on a sidebar row, a focus mode card or archived row
+and an archive view row, the branch badge on a project's sidebar row, the activity marker, and the
+responsible-session badge in the Git mode's branch lists. A touch has no route to what such a mark's tooltip says;
+assistive technology has it in the accessible name of what holds the mark.
 
 These are:
 

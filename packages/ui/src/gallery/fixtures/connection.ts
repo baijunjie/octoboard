@@ -148,6 +148,15 @@ export const connectionScenarios: Scenario[] = [
     steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(400), (ui) => ui.hoverTerminalLink("layout notes")],
   },
   {
+    id: "terminal-status-touch-popover",
+    group: TERMINAL,
+    category: "normal",
+    title: "Tapping the top bar's status glyph",
+    description: "The glyph at the end of the top bar's breadcrumb has been tapped with a finger, so its text, Working, stays open in a popover drawn like the tooltip, above it and with no tooltip on top of it; unlike the tooltip, it stays until Escape or an outside tap.",
+    state: connected("open"),
+    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.tapTopBarStatus()],
+  },
+  {
     id: "terminal-broken-url-hover",
     group: TERMINAL,
     category: "normal",

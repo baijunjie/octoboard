@@ -3,7 +3,7 @@ import { expect, it, vi } from "vitest";
 
 import type { Activity } from "../sidebar/order";
 import { ActivityMarker } from "./ActivityMarker";
-import { enter, leave, mountForTooltip, openTooltip, trigger, withFakeTimers } from "./tooltipTestSupport";
+import { enter, leave, mountForTooltip, openPopover, openTooltip, press, trigger, withFakeTimers } from "./tooltipTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -38,4 +38,10 @@ it("adds nothing to the accessible name of the row or chip the marker sits in", 
 it("draws no marker, and so no tooltip, where nothing is going on", () => {
   const container = mountForTooltip(<ActivityMarker activity={undefined} />);
   expect(container.firstElementChild).toBeNull();
+});
+
+it("opens no popover on a tap: both places it stands in are pressable, and the tap is theirs", () => {
+  const container = mountForTooltip(<ActivityMarker activity="waiting" />);
+  press(trigger(container));
+  expect(openPopover()).toBeNull();
 });

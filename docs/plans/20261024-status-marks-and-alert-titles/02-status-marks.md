@@ -1,7 +1,8 @@
 # 02 Error and warning status marks
 
 > Goal: one status mark for an error, a warning or a note, whose content opens from the glyph in one floating surface
-> only — a popover for errors and warnings (also opened by mouse hover), the 01 wrapper for notes.
+> only — a popover for errors and warnings (also opened by mouse hover), the tooltip wrapper (`IndicatorTooltip`,
+> with its touch popover) for notes.
 > Completion criteria: `FailureMark`'s callers (file tree folder failure, Git pane section and branch-list failures,
 > account quota read failure and out-of-date reading, import result row, inline Markdown failures) show one surface;
 > no mark shows a tooltip and a popover; hovering an error or warning mark with a mouse opens its popover without moving
@@ -10,8 +11,8 @@
 
 ## Technical design
 
-- [ ] Tones: danger and warning open a popover; a note (informational) uses the 01 wrapper. Glyphs per tone: circled
-  `!`, triangle, circled `i`.
+- [ ] Tones: danger and warning open a popover; a note (informational) uses the tooltip wrapper (`IndicatorTooltip`).
+  Glyphs per tone: circled `!`, triangle, circled `i`.
 - [ ] Popover opening: a press (mouse, touch, Enter, Space) opens it and moves focus in; a mouse hover opens it without
   moving focus, after a short delay, and closes it after a short grace once the pointer has left both the mark and the
   popover. Escape closes it and returns focus where it was.
@@ -24,7 +25,7 @@
 ## Implementation plan
 
 - [ ] Rebuild `FailureMark` (renamed if a tone-neutral name fits better) on the hover-openable popover; the content-less
-  form becomes the note/text form on the 01 wrapper.
+  form becomes the note/text form on the tooltip wrapper.
 - [ ] Check every caller listed in the completion criteria, including surfaces that watch presses outside themselves
   (the rail quota panel tells the mark's popover apart by its marker attribute).
 - [ ] Update `docs/ui-accessibility.md` "A failure that belongs to one row": always a popover for an error or warning,

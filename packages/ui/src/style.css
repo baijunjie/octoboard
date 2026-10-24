@@ -869,6 +869,31 @@ html {
   overflow-wrap: break-word;
 }
 
+/* A mark that opens a touch popover is a touch target (`IndicatorTooltip`), so on a device that has
+   a coarse pointer its hit area reaches 24 by 24 CSS pixels, as "Pointer target size" in
+   docs/ui-accessibility.md asks, where the drawing is smaller: an `::after` that grows to that size
+   and never shrinks, so a larger mark is untouched. The query asks about the device, not the input
+   in use, so a hybrid device's mouse gets the grown area too; the cost is a hover that begins a
+   little early beside a neighbouring mark. The `::after` sits behind the mark's own content
+   (`z-index: -1` inside an isolated stacking context), or it would take the hover from what the
+   mark holds, such as a marquee. It positions itself against the mark unless the mark is already
+   positioned by its own class. */
+@media (any-pointer: coarse) {
+  .touch-target {
+    isolation: isolate;
+  }
+  .touch-target:not(.absolute, .fixed, .sticky) {
+    position: relative;
+  }
+  .touch-target::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset-inline: min(0px, calc((100% - 24px) / 2));
+    inset-block: min(0px, calc((100% - 24px) / 2));
+  }
+}
+
 /* A tooltip over a dialog: HeroUI draws both on `--overlay`, so the tooltip lands on its own colour
    and only `--overlay-shadow` marks its edge. In light that shadow is a real drop shadow and is
    left alone; in dark it is a faint inset line and nothing else, so the tooltip takes a step off

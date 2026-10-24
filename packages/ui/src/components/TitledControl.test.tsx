@@ -6,6 +6,7 @@ import { afterEach, expect, it } from "vitest";
 
 import { Button } from "./Button";
 import { TitledControl } from "./TitledControl";
+import { activate, mountForTooltip, openPopover, press, tap } from "./tooltipTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -64,4 +65,54 @@ it("leaves a control's own aria-describedby alone", () => {
   const button = openTooltip("Refresh", <Button aria-label="Refresh" aria-describedby="hint">R</Button>);
   expect(document.querySelector('[role="tooltip"]')).not.toBeNull();
   expect(button.getAttribute("aria-describedby")).toBe("hint");
+});
+
+/** Mounts `control` in a `TitledControl` with `touchPopover` as given, and returns its button. */
+function mountControl(control: React.ComponentProps<typeof TitledControl>["children"], touchPopover?: boolean): HTMLButtonElement {
+  const container = mountForTooltip(<TitledControl title="Refresh the list" touchPopover={touchPopover}>{control}</TitledControl>);
+  return container.querySelector("button")!;
+}
+
+it("opens no popover on a touch press by default: the tap is the control's action", () => {
+  let pressed = 0;
+  const button = mountControl(<Button aria-label="Refresh" onPress={() => pressed++}>R</Button>);
+  press(button, "touch");
+  expect(pressed).toBe(1);
+  expect(openPopover()).toBeNull();
+});
+
+it("opens the title in a popover on a touch press where the control asks for one, its own action still run", () => {
+  let pressed = 0;
+  const button = mountControl(<Button aria-label="Refresh" onPress={() => pressed++}>R</Button>, true);
+  press(button, "touch");
+  expect(pressed).toBe(1);
+  expect(openPopover()?.textContent).toBe("Refresh the list");
+  expect(openPopover()?.getAttribute("aria-label")).toBe("Refresh");
+  expect(button.getAttribute("aria-describedby")).toBeFalsy();
+});
+
+it("opens no popover on a mouse press even where the control asks for one", () => {
+  const button = mountControl(<Button aria-label="Refresh">R</Button>, true);
+  press(button, "mouse");
+  expect(openPopover()).toBeNull();
+});
+
+it("adds no element around the control with a popover asked for", () => {
+  const container = mountForTooltip(<TitledControl title="Refresh" touchPopover><Button aria-label="Refresh">R</Button></TitledControl>);
+  expect(container.firstElementChild?.tagName).toBe("BUTTON");
+});
+
+it("opens the title in a popover on a virtual press where the control asks for one", () => {
+  const button = mountControl(<Button aria-label="Refresh">R</Button>, true);
+  activate(button);
+  expect(openPopover()?.textContent).toBe("Refresh the list");
+});
+
+it("opens no popover on a key press, with the popover asked for or not", () => {
+  for (const touchPopover of [undefined, true]) {
+    const button = mountControl(<Button aria-label="Refresh">R</Button>, touchPopover);
+    tap(button, "Enter");
+    tap(button, " ");
+    expect(openPopover()).toBeNull();
+  }
 });

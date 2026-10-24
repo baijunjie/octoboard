@@ -68,15 +68,20 @@ function statusGlyph(status: ShownStatusKind, naming: Naming): React.ReactElemen
  * to the trigger belongs to the named element rather than to a presentational wrapper around it. A
  * decorative glyph leaves the trigger unnamed too, adding nothing to the name of the row or trail
  * it sits in.
+ *
+ * `touchPopover` is the caller's to set (see `IndicatorTooltip`): on where the glyph stands alone, off
+ * inside a pressable row, whose press a tap on the glyph would share.
  */
 export function StatusIcon({
   status,
   decorative,
   withTooltip,
+  touchPopover,
 }: {
   status: ShownStatusKind;
   decorative?: boolean;
   withTooltip?: boolean;
+  touchPopover?: boolean;
 }): React.ReactElement {
   const t = useT();
   const label = statusLabel(t, status);
@@ -84,7 +89,7 @@ export function StatusIcon({
   const glyph = statusGlyph(status, named && !withTooltip ? { role: "img", "aria-label": label } : { "aria-hidden": true });
   if (!withTooltip) return glyph;
   return (
-    <IndicatorTooltip tooltip={label} label={named ? label : undefined} className="inline-flex shrink-0">
+    <IndicatorTooltip tooltip={label} label={named ? label : undefined} className="inline-flex shrink-0" touchPopover={touchPopover}>
       {glyph}
     </IndicatorTooltip>
   );

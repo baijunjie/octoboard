@@ -22,6 +22,9 @@ import { WavingHand, WorkingDot } from "./statusGlyphs";
  * console session exactly as pressing the chip's title does; the anchored shape, the only
  * alternative the library offers, would answer a hover anywhere on the chip rather than on the
  * marker, which is the one thing this tooltip is for.
+ *
+ * It never opens a touch popover (`touchPopover={false}`): both places are pressable, a project's
+ * row (a tap folds it) and the chip (a tap switches console session), and the tap is theirs.
  */
 export function ActivityMarker({ activity }: { activity: Activity }): React.ReactElement | null {
   const t = useT();
@@ -29,7 +32,7 @@ export function ActivityMarker({ activity }: { activity: Activity }): React.Reac
   const label = activityLabel(t, activity);
   if (label === undefined) return marker;
   return (
-    <IndicatorTooltip tooltip={label} className="inline-flex shrink-0">
+    <IndicatorTooltip tooltip={label} className="inline-flex shrink-0" touchPopover={false}>
       {marker}
     </IndicatorTooltip>
   );

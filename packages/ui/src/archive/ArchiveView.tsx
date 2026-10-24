@@ -272,7 +272,7 @@ function ArchiveRow({
       onActivate={() => onSelect(session)}
       className="min-h-12 flex-wrap items-center gap-x-3 gap-y-1 px-2 py-2"
     >
-      <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} />
+      <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} touchPopover={false} />
       <div className="min-w-24 flex-1">
         <FadeOverflow dir="auto" className="text-sm" titleWhenClipped={sessionDisplayTitle(t, session)}>
           {sessionDisplayTitle(t, session)}
@@ -281,7 +281,7 @@ function ArchiveRow({
           <FadeOverflow className="min-w-0" titleWhenClipped={agentLine}>
             <span aria-hidden="true">{agentLine}</span>
           </FadeOverflow>
-          {context && <span id={contextId}><SessionContextLabel context={session.context} /></span>}
+          {context && <span id={contextId}><SessionContextLabel context={session.context} touchPopover={false} /></span>}
         </div>
       </div>
       {/* The actions and the dates move to a line of their own together, so a narrow pane still

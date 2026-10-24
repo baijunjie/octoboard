@@ -73,7 +73,8 @@ function Breadcrumb({ session }: { session: Session }): React.ReactElement {
   const trail = session.role === "console" ? [consoleName, sessionDisplayTitle(t, session)] : [consoleName, projectName, sessionDisplayTitle(t, session)];
   return (
     <Trail names={trail.map((part) => part ?? "…")}>
-      <StatusIcon status={sessionShownStatusKind(session)} withTooltip />
+      {/* Alone on the title bar, so a tap on it opens the popover. */}
+      <StatusIcon status={sessionShownStatusKind(session)} withTooltip touchPopover />
     </Trail>
   );
 }

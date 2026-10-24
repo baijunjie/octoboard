@@ -121,12 +121,12 @@ sets it apart. The rule is the `.tooltip` one under `html:has(.modal__backdrop, 
 A tooltip or popover is portalled to the end of `<body>`, so it never inherits the `.control-fills` that the pane or
 dialog around its trigger carries, and a control drawn from `--default` inside it, a secondary button or a ghost
 button's hover, would sit at about 1.19:1 against its `--overlay` surface. The shared tooltip and popover components
-(`IndicatorTooltip`, `AnchoredTooltip`, `TitledControl`, `HelpTip`'s popover) therefore carry `control-fills`
-themselves, giving 1.27:1 in light and 1.45:1 in dark. A dark tooltip over a dialog sits a step lighter, so it takes its
-own fill (`--tooltip-on-dialog-fill`, 1.27:1) from the same `.tooltip` rule as `--tooltip-on-dialog`. A new tooltip or
-popover that can hold a control drawn from `--default` carries `control-fills` too. The project filter's popover keeps
-HeroUI's own fills: it holds a search field, and the remap would leave the field's `--field-border` and `--field-focus`,
-computed from the root's `--default`, no longer matching its fill.
+(`IndicatorTooltip`, `AnchoredTooltip`, `TitledControl`, and the touch popover they open, which is drawn as a tooltip)
+therefore carry `control-fills` themselves, giving 1.27:1 in light and 1.45:1 in dark. A dark tooltip over a dialog
+sits a step lighter, so it takes its own fill (`--tooltip-on-dialog-fill`, 1.27:1) from the same `.tooltip` rule as
+`--tooltip-on-dialog`. A new tooltip or popover that can hold a control drawn from `--default` carries `control-fills`
+too. The project filter's popover keeps HeroUI's own fills: it holds a search field, and the remap would leave the
+field's `--field-border` and `--field-focus`, computed from the root's `--default`, no longer matching its fill.
 
 ## Keyboard
 
@@ -504,6 +504,10 @@ the "Tooltips on icon-only controls" section of `docs/product/labels-and-tooltip
 name of that shape by default. The one exception is a button whose hover opens a floating panel that shows what
 its tooltip would say (the rail's account quota button, above): it carries only its accessible name.
 
+A tap does not open that tooltip, and on such a control it must not: a tap on an icon-only button or a menu trigger runs
+its action. `TitledControl`'s `touchPopover` is therefore off by default; see "A tooltip is the application's own" below
+for what it does where it is on.
+
 A copy button (`CopyButton`) takes its accessible name from its tooltip, which changes to "Copied" once the text is on
 the clipboard. A control that keeps focus is not reliably re-read when its name changes, so the button also announces
 the copied text through a `role="status"` region beside it. Its tooltip stays open through the press (`keepOpenOnPress`
@@ -536,6 +540,45 @@ keyboard focus as well. So whatever a tooltip says must reach a screen reader by
 label's full text is in the document whether it fits or not, a row or a tab carries its own accessible name, and an
 indicator that means something on its own is a named `role="img"`.
 
+**One wrapper, and the input chooses the surface.** Every tooltip in the window goes through one of three shapes over one
+shared core (`components/tooltipCore.tsx`), none through HeroUI's `Tooltip` directly: the control shape
+(`TitledControl`, a react-aria control as the child), the mark shape (`IndicatorTooltip`, a non-control indicator) and
+the anchored shape (`AnchoredTooltip`, the caller's hover). What shows follows the input of the interaction, not the
+device, so a touch-screen laptop or a tablet with a trackpad gets what the input it used answers:
+
+- a mouse hover and keyboard focus open the tooltip, as always; a mouse press opens nothing extra;
+- a touch or pen press opens the same content in a **touch popover**, where the shape allows it; on the control shape
+  so does an assistive technology's activation (a virtual press). A keyboard press (Enter or Space) opens none:
+  keyboard focus already shows the tooltip, and with `touchPopover` on a press does not close it (`shouldCloseOnPress`
+  off, as `keepOpenOnPress` does), so the text stays on screen. The popover is drawn like the tooltip, from the one
+  definition: it carries HeroUI's own `tooltip` class (surface, padding, text size, width cap, word breaking, and the
+  dialog fills of `style.css`) and the same `control-fills`, rather than a copy of them. It is modal, as a popover is:
+  an outside tap or Escape closes it, and focus, which it takes, goes back to what held it. Being modal it hides its
+  trigger from assistive technology while open, so it is not linked to the trigger as a description, as the tooltip
+  is; its dialog is named by the trigger's name (or, for a mark with none, by the text itself). The tooltip is closed
+  and held back while it is open, as a pen can hover before it presses and an open tooltip would swallow Escape ahead
+  of the popover.
+
+Whether a shape opens it is a parameter, not a guess. Recognising from the DOM or from props whether a trigger "is a
+button" is unreliable: a react-aria control hides its press handling in its own hooks, a mark's own trigger is a
+`role="button"` element, and a row's action lives on an ancestor. So the default follows the shape's trigger, which the
+wrapper knows statically:
+
+- the control shape's `touchPopover` is **off**, since a tap on a control is its action; it is on for `HelpTip`'s "?",
+  whose only action is to show its text;
+- the mark shape's `touchPopover` is **on**, since a tap on a mark does nothing else; it is turned off, with the reason
+  in a comment, for a mark inside something that handles the same tap (a tree row, a button, an option), or the popover
+  would open over what the press does;
+- the anchored shape has no such parameter and never opens one: it has no trigger to tap, and a tap on its row is the
+  row's action.
+
+The mark shape is also the one trigger that fits a control whose hover is sent to a hidden input, so it takes no tooltip
+trigger from context (focus mode's include-console-sessions switch). That use turns the popover off, as a tap on the
+switch toggles it, and the shape's mouse-press cancel does not stop the switch: react-aria's press takes its own focus
+and toggles on the click (tested).
+
+A mark that opens a touch popover is a touch target (see "Pointer target size").
+
 One anchored tooltip is kept without that route: the real target of an OSC 8 hyperlink in a session terminal, whose
 visible text may differ from where it leads. Nothing else carries the target, but the terminal's output as a whole
 reaches no assistive technology (xterm.js keeps its rows `aria-hidden` and runs without its screen-reader mode), so the
@@ -549,12 +592,17 @@ text it replaced was.
 
 - It is a tab stop with an accessible name of its own ("About the default account"), not the explanation itself, so
   the name stays short and the explanation reaches assistive technology as a description while its tooltip is open.
-- Hover and keyboard focus open the tooltip; a press — click, tap, Enter or Space — opens the same text in a named
-  popover dialog that holds focus and returns it to the "?" when Escape, an outside press or another press closes it.
-  This press is what reaches the explanation on touch, where no tooltip opens.
-- The tooltip is held back while the popover is open, and after it closes for as long as the tooltip would otherwise
-  reopen at once (focus returned from the keyboard, or the pointer still on the "?"). Without that, the explanation
-  just dismissed comes straight back, and the next Escape closes the dialog around it instead.
+- It is `TitledControl` around the "?" with `touchPopover` on, so it follows "A tooltip is the application's own":
+  mouse hover and keyboard focus open the tooltip; a touch or pen press or an assistive technology's activation opens
+  the same text in a popover drawn like the tooltip, named like the "?", closed by an outside tap or Escape, with focus
+  returned to the "?". That popover is what reaches the explanation on touch, where no tooltip opens. A mouse press
+  opens nothing more, and neither does Enter or Space: the tooltip focus opened stays open through the press, so there
+  is no popover to close and hold the tooltip back for. After a keyboard press the first Escape closes the tooltip, as
+  for any focused control. After an assistive technology's activation, Escape closes the popover and focus returns to
+  the "?" by keyboard, which shows the tooltip again, so one more Escape is spent on the tooltip, and where the "?" sits
+  in a dialog the dialog's own close follows it (`useEscapeWhileTooltipOpen`), as for any focused control with a
+  tooltip. That is the one route where the tooltip reappears behind a dismissed popover, and no hold-back is built
+  for it.
 - It sits beside the label it explains, never inside it: a button nested in a `<label>` is nested interactive
   content, and its name would become part of the label's.
 - The explanation may carry inline references (a file name such as `CLAUDE.md`); it reaches assistive technology the same
@@ -656,6 +704,17 @@ the trigger unnamed instead, adding nothing to the name of the row or trail arou
 
 What is left over is a shortfall kept on purpose, marked at its code: a sighted user who works from the keyboard
 reaches no tooltip, so a name that lives only there is a name they do not get.
+
+On touch, a mark opens its tooltip's content in a popover when tapped (the mark shape's `touchPopover`, on by default;
+see "A tooltip is the application's own"). It is turned off for every mark that sits inside something answering the
+same tap, since the popover must not open over what the press does: the marks of a session row in the sidebar, in a
+focus mode (card and archive preview) and in the archive view (status glyph, agent icon, context size and binding
+badge), the project row's Git badge, the activity marker (a project row, the console-switch chip), a branch's
+responsible-session badge (an option), and the switch behind focus mode's include-console-sessions tooltip. The same
+mark where it stands alone, such as the title bar's status glyph, the requested-sessions dialog's status and agent
+glyphs, a focus mode's header Git badge and the history header's context badge, opens it. The rest of what a row's
+marks say reaches touch through the row's accessible name alone, a kept shortfall: the row's press is its own, and no
+second route to the marks is built for it yet.
 
 One exception to the content model is kept on purpose: the trigger is a `div`, so an indicator inside a real
 `<button>` — focus mode's console-switch chip — nests one where no content model allows it. The library offers no
@@ -1247,10 +1306,17 @@ its horizontal centre with the status and agent glyphs. All three lines use `Row
 the actions' leading gap with them. Do not space individual trailing icons with the text row's gap or add local
 offsets. Verify the shared columns with actions hidden, hovered, focused and open, including right-to-left layout.
 
-The criterion is about controls, so a mark that only opens a tooltip is not held to it: a tooltip is not an action,
-and a mark too small to aim at reliably costs a hover that can be tried again, not an activation. Several such marks
-are drawn well under 24 — the binding badge on a session row, a branch's responsible-session badge, a change row's
+The criterion is about controls, so a mark that only opens a tooltip with a mouse is not held to it: a tooltip is not an
+action, and a mark too small to aim at reliably costs a hover that can be tried again, not an activation. Several such
+marks are drawn well under 24 — the binding badge on a session row, a branch's responsible-session badge, a change row's
 status letter — and the press under them, where there is one, belongs to the row and keeps the row's own target.
+
+A mark whose tap opens a touch popover (`IndicatorTooltip`, `touchPopover` on) is an activation on touch, so it is held
+to it there: `.touch-target` in `style.css` grows its hit area to 24 by 24 on a device that has a coarse pointer
+(`any-pointer: coarse`, which a hybrid device's mouse falls under too) with an `::after` that never shrinks a larger mark,
+changes nothing drawn and sits behind the mark's own content so it takes no hover from it. Where two such marks
+sit closer than 24 pixels, their grown areas overlap and the later one wins the overlap. The marks that keep the
+row's own target instead have the popover off.
 
 Neither exception in the criterion is easy to rely on here. *Spacing* needs a 24-pixel circle centred on the target to
 touch no other target, which a small control placed over a larger one (a delete badge on a corner) fails by

@@ -327,7 +327,7 @@ const openAccounts: Scenario["steps"] = [
 const openSharingHelp: Scenario["steps"] = [
   (ui) => ui.press(ui.t("rail.settings")),
   (ui) => ui.press(ui.t("settings.section.accounts")),
-  (ui) => ui.press(ui.t("settings.accounts.sharing.helpLabel")),
+  (ui) => ui.touchPress(ui.t("settings.accounts.sharing.helpLabel")),
 ];
 
 /** What turning sharing off for Work left unfinished: a directory entry, and a conversation two
@@ -574,13 +574,13 @@ export const settingsScenarios: Scenario[] = [
     id: "settings-accounts-default-help-popover",
     group: GROUP,
     category: "normal",
-    title: "Settings: accounts, default account help popover open",
-    description: "The \"?\" at the end of the default account's name line has been pressed, so the explanation stays open in a popover above it, with no tooltip on top of it; unlike the tooltip, it stays until Escape or an outside press.",
+    title: "Settings: accounts, default account help popover open on touch",
+    description: "The \"?\" at the end of the default account's name line has been touched with a finger, so the explanation stays open in a popover above it, drawn like the tooltip and with no tooltip on top of it; unlike the tooltip, it stays until Escape or an outside tap.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.press(ui.t("settings.accounts.defaultHelp")),
+      (ui) => ui.touchPress(ui.t("settings.accounts.defaultHelp")),
     ],
   },
   {
@@ -614,13 +614,13 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: `Settings: accounts, ${AGENT_LABEL[agent]} permission approval explanation`,
-    description: "The help button beside the Permission approval column heading is pressed. Its popover keeps the agent-specific explanation next to the selectors it describes, without a tooltip on top.",
+    description: "The help button beside the Permission approval column heading is touched with a finger. Its popover, drawn like the tooltip, keeps the agent-specific explanation next to the selectors it describes, without a tooltip on top.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
       ...(agent === "codex" ? [((ui) => ui.press(AGENT_LABEL.codex)) satisfies Step] : []),
-      (ui) => ui.press(ui.t("settings.accounts.approval.heading")),
+      (ui) => ui.touchPress(ui.t("settings.accounts.approval.heading")),
     ],
   })),
   {
@@ -1034,7 +1034,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Claude Code sharing explanation",
-    description: "The help button beside Share default configuration is pressed, so the explanation stays open. It says what is shared, configuration and conversation history, then what is never shared: login credentials, .claude.json (noting it holds user-scope MCP servers) and plans/, the two paths as chips. The popover keeps the same narrow width whatever the window, so a chip that does not fit at the end of a line moves to the next one whole, and no empty chip fragment is left behind at the end of the line above. The last sentence is what turning sharing off does.",
+    description: "The help button beside Share default configuration is touched with a finger, so the explanation stays open in a popover. It says what is shared, configuration and conversation history, then what is never shared: login credentials, .claude.json (noting it holds user-scope MCP servers) and plans/, the two paths as chips. The popover keeps the same narrow width whatever the window, so a chip that does not fit at the end of a line moves to the next one whole, and no empty chip fragment is left behind at the end of the line above. The last sentence is what turning sharing off does.",
     state: sharingHelpState("claude"),
     steps: openSharingHelp,
   },

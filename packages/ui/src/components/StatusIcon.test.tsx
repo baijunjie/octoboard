@@ -4,7 +4,7 @@ import { expect, it, vi } from "vitest";
 
 import type { StatusKind } from "../sessionLabel";
 import { StatusIcon } from "./StatusIcon";
-import { enter, leave, mountForTooltip, openTooltip, trigger, withFakeTimers } from "./tooltipTestSupport";
+import { enter, leave, mountForTooltip, openPopover, openTooltip, press, trigger, withFakeTimers } from "./tooltipTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -64,4 +64,16 @@ it("carries no tooltip where a visible status label sits beside the glyph", () =
   settle();
   expect(openTooltip()).toBeNull();
   expect(vi.getTimerCount()).toBe(0);
+});
+
+it("opens its text in a popover on a tap where the caller leaves the popover on", () => {
+  const container = mountForTooltip(<StatusIcon status="interrupted" withTooltip touchPopover />);
+  press(trigger(container));
+  expect(openPopover()?.textContent).toBe("Interrupted");
+});
+
+it("opens no popover on a tap where the caller turns it off, as in a pressable row", () => {
+  const container = mountForTooltip(<StatusIcon status="interrupted" decorative withTooltip touchPopover={false} />);
+  press(trigger(container));
+  expect(openPopover()).toBeNull();
 });

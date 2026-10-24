@@ -65,7 +65,9 @@ window, rounded down; Claude Code's is the size over the window rounded to the n
 line computes it. All are between 0% and 100%, a size beyond the window showing 100%.
 
 Hovering the chip shows its tooltip, a **Context window** card, whether or not the chip holds a ring; only in the archive
-submenus does hovering the chip show no tooltip. With a window known, the card has:
+submenus does hovering the chip show no tooltip. A tap on the chip beside the Session history's heading opens the same
+card in a popover; a tap on a chip in a row is the row's press (see "Tooltips on indicators" in
+`docs/product/labels-and-tooltips.md`). With a window known, the card has:
 
 - a top line with the "Context window" title at its start and, at its end, the size against the window in compact,
   localized numbers (for example "14.7K / 200K");

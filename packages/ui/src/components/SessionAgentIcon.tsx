@@ -60,6 +60,9 @@ export function SessionAgentIcon(props: {
   accounts: Account[];
   defaultNames: Settings["default_account_names"];
   launch?: LaunchPair;
+  /** Whether a tap opens the tooltip's content in a popover; off inside a pressable row, whose tap it is. */
+  touchPopover?: boolean;
 }): React.ReactElement {
-  return <AgentIcon agent={props.session.agent} tooltip={<SessionAgentTooltip {...props} />} />;
+  const { touchPopover, ...tooltip } = props;
+  return <AgentIcon agent={props.session.agent} tooltip={<SessionAgentTooltip {...tooltip} />} touchPopover={touchPopover} />;
 }

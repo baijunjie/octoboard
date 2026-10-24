@@ -77,10 +77,11 @@
 
 ## Milestones
 
-1. [01 Tooltip wrapper that works on touch](01-touch-tooltip.md)
+1. 01 Tooltip wrapper that works on touch (closed)
 2. [02 Error and warning status marks](02-status-marks.md)
 3. [03 File viewer notices become status marks](03-viewer-status-marks.md)
 4. [04 Every Alert has a title and holds its own details](04-alert-titles.md)
+5. [05 Final confirmation](05-final-confirmation.md)
 
-Milestones 01–03 depend on each other in that order; 04 depends on none of them but runs after 03, which removes the
+Milestones 02 and 03 depend on each other in that order; 04 depends on none of them but runs after 03, which removes the
 viewer's Alert-based notices so 04 need not convert them.

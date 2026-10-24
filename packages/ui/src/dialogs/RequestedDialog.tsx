@@ -62,8 +62,9 @@ function ConfirmWarning({ title, sessions, lines = [] }: { title?: string; sessi
         <ul ref={sessionsRef} className="relative mt-1 flex min-w-0 flex-col gap-1 self-stretch text-sm text-foreground">
           {sessions.map((session) => (
             <li key={session.id} data-list-motion={session.id} className="flex min-w-0 items-center gap-2">
-              {session.status !== "archived" && <StatusIcon status={sessionShownStatusKind(session)} withTooltip />}
-              <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} />
+              {/* The list items are not pressable, so a tap on a mark opens the popover. */}
+              {session.status !== "archived" && <StatusIcon status={sessionShownStatusKind(session)} withTooltip touchPopover />}
+              <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} touchPopover />
               {/* The icon is decorative, and nothing else here names the agent. */}
               <span className="sr-only">{sessionAgentLabel(t, session, accounts, defaultNames)}</span>
               <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={sessionDisplayTitle(t, session)}>

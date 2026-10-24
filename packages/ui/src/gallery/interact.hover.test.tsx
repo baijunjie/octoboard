@@ -12,11 +12,12 @@ import { changeItems } from "../browser/changes";
 import { ActivityMarker } from "../components/ActivityMarker";
 import { AgentIcon } from "../components/AgentIcon";
 import { AnchoredTooltip } from "../components/AnchoredTooltip";
+import { HelpTip } from "../components/HelpTip";
 import { SessionAgentTooltip } from "../components/SessionAgentIcon";
 import { SessionContextLabel } from "../components/SessionMetadata";
 import { StatusIcon } from "../components/StatusIcon";
 import { TitledControl } from "../components/TitledControl";
-import { leave, mountForTooltip, openTooltip } from "../components/tooltipTestSupport";
+import { leave, mountForTooltip, openPopover, openTooltip } from "../components/tooltipTestSupport";
 import { gitBadgeAriaLabel } from "../gitStatusLabel";
 import { isolate } from "../i18n/isolate";
 import { LanguageProvider } from "../i18n/react";
@@ -107,6 +108,7 @@ function mountWindow(): void {
       <TitledControl title="Billing" placement="end" focusOnly>
         <Button isIconOnly aria-label="Billing" />
       </TitledControl>
+      <HelpTip label="About Billing">Billing is charged monthly.</HelpTip>
       <div role="button" aria-label="Card, Claude Code, Idle">
         <div>
           <StatusIcon status="idle" decorative />
@@ -606,4 +608,25 @@ it("hoverAnchored fails where the tooltip that opens is not the one named", asyn
   await vi.advanceTimersByTimeAsync(3000);
   await done;
   release(document.querySelector('[aria-label="Codex (not installed)"]')!);
+});
+
+it("touchPress opens a help tip's explanation in the popover a finger gets", async () => {
+  mountWindow();
+  await settled(createUi(document, "en").touchPress("About Billing"));
+  expect(openPopover()?.textContent).toBe("Billing is charged monthly.");
+  expect(openTooltip()).toBeNull();
+});
+
+it("touchPress fails for a control whose touch press opens no popover", async () => {
+  mountWindow();
+  const done = expect(createUi(document, "en").touchPress("Billing")).rejects.toThrow(/opened no popover/);
+  await vi.advanceTimersByTimeAsync(6000);
+  await done;
+});
+
+it("tapTopBarStatus opens the top bar glyph's text in a popover", async () => {
+  mountWindow();
+  await settled(createUi(document, "en").tapTopBarStatus());
+  expect(openPopover()?.textContent).toBe("Archived");
+  expect(openTooltip()).toBeNull();
 });

@@ -144,6 +144,18 @@ export interface Ui {
    * on the sidebar's heading row (earlier in the DOM) and in the filter picker, so pressing it
    * again to unpick it would hit the sidebar row. */
   press: (matcher: Matcher) => Promise<void>;
+  /** Presses the control named `matcher` with a finger: the touch pointer events a touch screen sends, then the
+   * click that follows. For a control that opens its text in a popover on a touch, pen or virtual press and
+   * shows it as a tooltip on mouse hover and keyboard focus, such as a help tip's "?": a real mouse press opens
+   * nothing and Enter or Space keep the focus tooltip, so a scenario of the popover needs a touch. (`press`
+   * clicks without pointer events, which is a virtual press: it opens the popover too, but is no touch.) It
+   * returns once that popover is up, and fails if none opens, which also catches a control with no touch
+   * popover. */
+  touchPress: (matcher: Matcher) => Promise<void>;
+  /** Taps the status glyph at the end of the top bar's breadcrumb with a finger and leaves the popover it
+   * opens up, as `touchPress` does. The glyph is the one named `role="img"` in the bar, as
+   * `hoverTopBarStatus` finds it; fails while no session is selected or the tap opens no popover. */
+  tapTopBarStatus: () => Promise<void>;
   /** `press` with the platform's shortcut modifier (⌘, or Ctrl elsewhere) down for the press alone, as a user
    * pressing a control with the key held does: for what the modifier changes when the page has not seen it held
    * (a new-session "+", whose quick form a press with the modifier runs). */
@@ -492,6 +504,25 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     pointAt(indicator);
     await wait(TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS);
     return indicator;
+  };
+
+  /** Presses `element` with a finger: the pointer events react-aria's `usePress` reads, then the click
+   * that ends the press. The box has a size, since react-aria reads a pointer event of no size as a virtual one. */
+  const touch = (element: HTMLElement) => {
+    const init: PointerEventInit = { bubbles: true, cancelable: true, button: 0, pointerId: 1, isPrimary: true, pointerType: "touch", width: 20, height: 20 };
+    element.dispatchEvent(new PointerEvent("pointerdown", init));
+    element.dispatchEvent(new PointerEvent("pointerup", init));
+    element.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0, detail: 1 }));
+  };
+
+  /** The popover a touch press opens in place of a tooltip, drawn like it (`TouchPopover`), once it is up. */
+  const touchPopover = (): HTMLElement | undefined => doc.querySelector<HTMLElement>(".tooltip[role=dialog]") ?? undefined;
+
+  /** Touches what `look` finds, waiting for it to appear, then for the popover, and waits for it to finish fading in. */
+  const touchAndWait = async (look: () => HTMLElement | undefined, missing: string, unopened: string): Promise<void> => {
+    touch(await waitFor(look, missing));
+    await waitFor(touchPopover, unopened);
+    await wait(TOOLTIP_SHOW_MS);
   };
 
   /** The row of the confirmation dialog's callout list for the session titled `title`: the title is
@@ -884,6 +915,16 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     },
     async press(matcher) {
       await clickWhenFound(() => find(matcher), `Nothing to press matching ${String(matcher)}`);
+    },
+    async touchPress(matcher) {
+      await touchAndWait(() => find(matcher), `Nothing to press matching ${String(matcher)}`, `A touch press of ${String(matcher)} opened no popover`);
+    },
+    async tapTopBarStatus() {
+      await touchAndWait(
+        () => doc.querySelector<HTMLElement>("[data-region=topbar] [role=img]") ?? undefined,
+        "No status glyph in the top bar",
+        "A tap on the top bar's status glyph opened no popover",
+      );
     },
     async pressWithModifier(matcher) {
       await clickWhenFound(() => find(matcher), `Nothing to press matching ${String(matcher)}`, true);

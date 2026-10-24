@@ -3,7 +3,7 @@ import { act } from "react";
 import { expect, it } from "vitest";
 
 import { HelpTip } from "./HelpTip";
-import { enter, leave, mountForTooltip, openTooltip, withFakeTimers } from "./tooltipTestSupport";
+import { activate, enter, mountForTooltip, openPopover, openTooltip, press, tap, withFakeTimers } from "./tooltipTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -19,7 +19,7 @@ it("is a button named for what it explains, with no text of its own", () => {
   expect(openTooltip()).toBeNull();
 });
 
-it("shows the explanation once the pointer has rested on it", () => {
+it("shows the explanation once the mouse has rested on it", () => {
   const runTimers = withFakeTimers();
   const button = mount();
   enter(button);
@@ -38,128 +38,117 @@ it("shows the explanation at once on keyboard focus and describes the button by 
   expect(button.getAttribute("aria-describedby")).toBe(tooltip?.id);
 });
 
-function press(element: HTMLElement) {
+it("opens nothing more on a mouse press: the tooltip is all a mouse has", () => {
+  const button = mount();
+  press(button, "mouse");
+  expect(openPopover()).toBeNull();
+  expect(button.hasAttribute("aria-expanded")).toBe(false);
+});
+
+it("opens the explanation in a popover on a touch press", () => {
+  const button = mount();
+  press(button, "touch");
+  const popover = openPopover();
+  expect(popover?.textContent).toBe("It runs under no account.");
+  expect(popover?.getAttribute("aria-label")).toBe("About the default account");
+  // The modal popover hides its trigger from assistive technology, so it is not linked to it.
+  expect(button.getAttribute("aria-describedby")).toBeFalsy();
+});
+
+function focusFromKeyboard(button: HTMLElement) {
   act(() => {
-    for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
-      element.dispatchEvent(new MouseEvent(type, { bubbles: true, button: 0 }));
-    }
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    button.focus();
   });
 }
 
-const dialog = () => document.querySelector('[role="dialog"]');
+it("opens the popover on a virtual press, which is what assistive technology sends", async () => {
+  const button = mount();
+  focusFromKeyboard(button);
+  expect(openTooltip()).not.toBeNull();
+  activate(button);
+  expect(openPopover()?.textContent).toBe("It runs under no account.");
+  // The tooltip that focus opened is closed, or its own Escape listener would swallow the popover's.
+  expect(openTooltip()).toBeNull();
+  await act(() => new Promise((resolve) => setTimeout(resolve, 100)));
+  act(() => void document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  expect(openPopover()).toBeNull();
+});
 
-it("opens the explanation in a popover when pressed, leaving the tooltip out of its way", () => {
+it.each([["Enter", "Enter"], ["Space", " "]] as const)("keeps the tooltip open on %s and opens no popover", (_name, key) => {
+  const button = mount();
+  focusFromKeyboard(button);
+  tap(button, key);
+  expect(openPopover()).toBeNull();
+  expect(openTooltip()?.textContent).toBe("It runs under no account.");
+});
+
+it("closes the tooltip on Escape after a keyboard press, the dialog around it left to the next one", () => {
+  const button = mount();
+  focusFromKeyboard(button);
+  tap(button, "Enter");
+  const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+  act(() => void button.dispatchEvent(escape));
+  expect(openTooltip()).toBeNull();
+});
+
+it("shows the tooltip again after Escape closes a virtual press's popover, as focus returns by keyboard", async () => {
+  const button = mount();
+  act(() => button.focus());
+  activate(button);
+  // The popover takes focus once the press has settled.
+  await act(() => new Promise((resolve) => setTimeout(resolve, 100)));
+  expect(openPopover()!.contains(document.activeElement)).toBe(true);
+  act(() => void document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  expect(openPopover()).toBeNull();
+  await act(() => new Promise((resolve) => setTimeout(resolve, 300)));
+  expect(document.activeElement).toBe(button);
+  expect(openTooltip()?.textContent).toBe("It runs under no account.");
+});
+
+it("opens the popover on a pen press as well", () => {
+  press(mount(), "pen");
+  expect(openPopover()?.textContent).toBe("It runs under no account.");
+});
+
+// A popover is portalled out of the pane that carries the fills, so it carries them itself, and it
+// is drawn with the tooltip's own class.
+it("draws its popover like a tooltip, with the control fills", () => {
+  press(mount());
+  expect(openPopover()?.classList.contains("tooltip")).toBe(true);
+  expect(openPopover()?.classList.contains("control-fills")).toBe(true);
+});
+
+it("keeps the tooltip out while the popover is open", () => {
   const runTimers = withFakeTimers();
   const button = mount();
   enter(button);
   runTimers();
   expect(openTooltip()).not.toBeNull();
-  press(button);
-  expect(dialog()?.textContent).toBe("It runs under no account.");
-  expect(dialog()?.getAttribute("aria-label")).toBe("About the default account");
-  expect(button.getAttribute("aria-expanded")).toBe("true");
+  press(button, "pen");
   runTimers();
+  expect(openPopover()).not.toBeNull();
   expect(openTooltip()).toBeNull();
 });
 
-// A popover is portalled out of the pane that carries the fills, so it carries them itself.
-it("gives its popover the control fills of a dialog's surface", () => {
+it("closes the popover on a tap outside it", () => {
   press(mount());
-  expect(dialog()?.closest(".control-fills")).not.toBeNull();
-});
-
-it("closes the popover on a press outside it", () => {
-  const button = mount();
-  press(button);
-  expect(dialog()).not.toBeNull();
+  expect(openPopover()).not.toBeNull();
   press(document.body);
-  expect(dialog()).toBeNull();
+  expect(openPopover()).toBeNull();
 });
 
-it("closes the popover when the button is pressed again", () => {
+it("closes the popover on Escape and gives focus back to the button after a touch alone", async () => {
   const button = mount();
-  press(button);
-  press(button);
-  expect(dialog()).toBeNull();
-});
-
-it("keeps the tooltip shut after Escape closes the popover, until focus leaves and returns", () => {
-  const button = mount();
-  act(() => {
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
-    button.focus();
-  });
-  press(button);
-  act(() => void dialog()!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
-  expect(dialog()).toBeNull();
-  expect(document.activeElement).toBe(button);
-  expect(openTooltip()).toBeNull();
-  act(() => button.blur());
-  act(() => {
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
-    button.focus();
-  });
-  expect(openTooltip()?.textContent).toBe("It runs under no account.");
-});
-
-it("keeps the tooltip shut after the popover closes, until the pointer leaves and rests on it again", () => {
-  const runTimers = withFakeTimers();
-  const button = mount();
-  enter(button);
-  press(button);
-  press(document.body);
-  expect(dialog()).toBeNull();
-  runTimers();
-  expect(openTooltip()).toBeNull();
-  leave(button);
-  enter(button);
-  runTimers();
-  expect(openTooltip()?.textContent).toBe("It runs under no account.");
-});
-
-it("shows the tooltip on the first hover after an outside press closed the popover", () => {
-  const runTimers = withFakeTimers();
-  const button = mount();
-  press(button);
-  press(document.body);
-  expect(dialog()).toBeNull();
-  enter(button);
-  runTimers();
-  expect(openTooltip()?.textContent).toBe("It runs under no account.");
-});
-
-it("shows the tooltip on the next hover after the pointer moved away and pressed outside, as a mouse does", () => {
-  const runTimers = withFakeTimers();
-  const button = mount();
-  enter(button);
-  press(button);
-  // jsdom has no layout, so every box is empty at the origin and a pointer anywhere else is off the "?".
-  act(() => {
-    document.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: 300, clientY: 300 }));
-  });
-  press(document.body);
-  expect(dialog()).toBeNull();
-  enter(button);
-  runTimers();
-  expect(openTooltip()?.textContent).toBe("It runs under no account.");
-});
-
-it("keeps the tooltip shut after Escape closes a keyboard-opened popover although the mouse moved meanwhile", () => {
-  const button = mount();
-  act(() => {
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
-    button.focus();
-  });
-  act(() => void button.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
-  act(() => void button.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true })));
-  expect(dialog()).not.toBeNull();
-  act(() => {
-    document.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: 300, clientY: 300 }));
-  });
-  act(() => void dialog()!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
-  expect(dialog()).toBeNull();
+  // A tap focuses the button as the browser's emulated mouse press does, with no key pressed.
   act(() => button.focus());
-  expect(openTooltip()).toBeNull();
+  press(button);
+  expect(openPopover()).not.toBeNull();
+  act(() => void openPopover()!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  expect(openPopover()).toBeNull();
+  // Focus goes back a frame later.
+  await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+  expect(document.activeElement).toBe(button);
 });
 
 it("shows rich content in the tooltip, as the button's description, and again in the popover", () => {
@@ -177,5 +166,5 @@ it("shows rich content in the tooltip, as the button's description, and again in
   expect(tooltip?.querySelector("code")?.textContent).toBe("CLAUDE.md");
   expect(button.getAttribute("aria-describedby")).toBe(tooltip?.id);
   press(button);
-  expect(dialog()?.querySelector("code")?.textContent).toBe("CLAUDE.md");
+  expect(openPopover()?.querySelector("code")?.textContent).toBe("CLAUDE.md");
 });

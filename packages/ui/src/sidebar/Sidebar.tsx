@@ -813,7 +813,8 @@ const ProjectNode = memo(function ProjectNode({
             <ChevronDown aria-hidden="true" className="h-3.5 w-0 shrink-0 overflow-hidden text-app-muted opacity-0 transition-[opacity,width,margin] duration-150 motion-reduce:transition-none group-hover:ms-2 group-hover:w-3.5 group-hover:opacity-100 group-data-focus-visible:ms-2 group-data-focus-visible:w-3.5 group-data-focus-visible:opacity-100" />
           )}
         </div>
-        <GitBadge status={gitStatus} decorative />
+        {/* No touch popover: a tap on the project row folds it. */}
+        <GitBadge status={gitStatus} decorative touchPopover={false} />
         {isCollapsed && <ActivityMarker activity={activity} />}
         <RowControls fixed={project.pinned ? <PinButton name={project.name} onUnpin={() => handlers.onSetPinned({ project }, false)} returnFocusTo={rowRef} /> : undefined}>
           <NewSessionButton label={t("sidebar.project.openSession")} quickLabel={t("sidebar.project.openSessionQuick")} target={newSession} onOpen={handlers.onOpenDialog} onQuickCreate={handlers.onQuickCreateSession} />
@@ -900,11 +901,12 @@ const SessionRow = memo(function SessionRow({
       locked={session.locked}
       onActivate={() => handlers.onSelectSession(session)}
     >
-      <StatusIcon status={sessionShownStatusKind(session)} decorative withTooltip />
-      <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} />
+      {/* No touch popover on the marks of a pressable row: a tap on one is the row's press. */}
+      <StatusIcon status={sessionShownStatusKind(session)} decorative withTooltip touchPopover={false} />
+      <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} touchPopover={false} />
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <RowLabel title={sessionDisplayTitle(t, session)} className="min-w-0">{sessionDisplayTitle(t, session)}</RowLabel>
-        {hasVisibleContext(session.context) && <span id={metadataId} className="shrink-0"><SessionContextLabel context={session.context} /></span>}
+        {hasVisibleContext(session.context) && <span id={metadataId} className="shrink-0"><SessionContextLabel context={session.context} touchPopover={false} /></span>}
       </div>
       <RowControls
         fixed={badgeOwner?.colour || session.pinned || session.locked ? (

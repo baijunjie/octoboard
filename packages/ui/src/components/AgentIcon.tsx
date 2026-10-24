@@ -9,8 +9,19 @@ import { IndicatorTooltip } from "./IndicatorTooltip";
 /** The mark of a session's agent. Always decorative: wherever it appears, the agent's name is in
  * the accessible name of the row or written out beside it (`sessionAriaLabel`). `tooltip`, where
  * given, shows on pointer hover only, through `IndicatorTooltip`, without a name of its own, the
- * mark being decorative. */
-export function AgentIcon({ agent, className = "size-4", tooltip }: { agent: Agent; className?: string; tooltip?: React.ReactNode }): React.ReactElement {
+ * mark being decorative. A tap opens the tooltip's content in a popover unless `touchPopover` is off, which
+ * a mark inside a pressable row turns off, as the tap is the row's. */
+export function AgentIcon({
+  agent,
+  className = "size-4",
+  tooltip,
+  touchPopover,
+}: {
+  agent: Agent;
+  className?: string;
+  tooltip?: React.ReactNode;
+  touchPopover?: boolean;
+}): React.ReactElement {
   const { d, fill } = AGENT_MARKS[agent];
   const icon = (
     <svg viewBox="0 0 24 24" className={`shrink-0 ${className}`} fill={fill} fillRule="evenodd" aria-hidden="true">
@@ -19,7 +30,7 @@ export function AgentIcon({ agent, className = "size-4", tooltip }: { agent: Age
   );
   if (!tooltip) return icon;
   return (
-    <IndicatorTooltip tooltip={tooltip} className="flex shrink-0">
+    <IndicatorTooltip tooltip={tooltip} className="flex shrink-0" touchPopover={touchPopover}>
       {icon}
     </IndicatorTooltip>
   );

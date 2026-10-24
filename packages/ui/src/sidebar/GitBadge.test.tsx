@@ -3,13 +3,14 @@ import React from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { expectIndependentMarquees, stubMarquee } from "../components/marqueeTestSupport";
-import { enter, leave, mountForTooltip, openTooltip, withFakeTimers } from "../components/tooltipTestSupport";
+import { enter, leave, mountForTooltip, openPopover, openTooltip, press, withFakeTimers } from "../components/tooltipTestSupport";
 import { consoleOf, gitStatusOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import { PlatformProvider } from "../platform/react";
 import type { GitStatus } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ProjectFocusView } from "./FocusView";
+import { GitBadge } from "./GitBadge";
 import { Sidebar } from "./Sidebar";
 import type { SidebarHandlers } from "./types";
 
@@ -224,4 +225,15 @@ it.each(PLACEMENTS)("runs only the hovered project name or branch in $name, leav
     .find((element) => element.textContent === main.name);
   if (consoleName) labels.unshift(consoleName);
   expectIndependentMarquees(labels, [surface, badge.querySelector("svg")!, badge.querySelector(".col-start-3")!, ...surface.querySelectorAll("button")]);
+});
+
+it("opens the badge's tooltip content in a popover on a tap only where the caller leaves it on", () => {
+  const status = gitStatusOf(web.id, { branch: "feature/x" });
+  const alone = mountForTooltip(<GitBadge status={status} touchPopover />);
+  press(alone.querySelector<HTMLElement>('[role="img"]')!);
+  expect(openPopover()?.textContent).toContain("feature/x");
+  press(document.body);
+  const inRow = mountForTooltip(<GitBadge status={status} decorative touchPopover={false} />);
+  press(inRow.firstElementChild!);
+  expect(openPopover()).toBeNull();
 });

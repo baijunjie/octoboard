@@ -5,8 +5,8 @@ settings fill the right under the section's heading, one row per setting: on the
 it saying what it does — a trusted folder's row has its path alone — and on the right its control. Under a right-to-left
 language the sides swap (see "Right-to-left layout" in `docs/product/window-layout.md`). A section that explains itself
 as a whole does so in a paragraph under its heading, and no section heading has a "?" help tip; help tips are on one
-row in "Git", on each agent's default account and on the permission-approval headings in Agent accounts (see "Approval
-modes" and "The default account" in
+row in "Git", and in Agent accounts on each agent's default account, on each owned account's sharing switch and on the
+permission-approval headings (see "The default account", "Sharing the default configuration" and "Approval modes" in
 `docs/product/agent-accounts.md`, and "Explanations in help tips" in `docs/product/labels-and-tooltips.md`). The
 sections, in order, are **General**, **Git**, **Agent accounts**, **Trusted folders**, **Permissions**, **Agent
 permissions**, **Notifications** and **Configuration**; the dialog opens on General unless it was asked to open on

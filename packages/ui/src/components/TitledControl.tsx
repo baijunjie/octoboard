@@ -1,5 +1,8 @@
 import { Tooltip } from "@heroui/react";
 import React from "react";
+import type { PressEvent } from "react-aria";
+
+import { CloseTooltipWhile, opensTouchPopover, TooltipSurface, TouchPopover, useTouchPopover } from "./tooltipCore";
 
 /** Gives a control a HeroUI tooltip, which shows on hover and on keyboard focus. HeroUI's buttons
  * are react-aria-components', which drop a native `title` prop (`filterDOMProps`). The child must
@@ -20,7 +23,16 @@ import React from "react";
  * repeats the control's `aria-label` would thus be heard twice, so such a control is given an empty
  * `aria-describedby`, which wins over the tooltip's and refers to nothing. A tooltip that says more
  * than the name stays its description, and a control that sets its own `aria-describedby` keeps
- * it. */
+ * it.
+ *
+ * A touch has no hover, so a tooltip never reaches it. With `touchPopover` a touch or pen press, or
+ * an assistive technology's activation, opens the same text in a popover drawn like the tooltip
+ * (`tooltipCore.tsx`). A mouse press opens nothing, and neither does Enter or Space: keyboard focus
+ * has the tooltip open already, and a press does not close it (as with `keepOpenOnPress`), so the
+ * text stays on screen with no popover to close and hold the tooltip back for. It is off by
+ * default, because a tap on a control is the control's action (an icon-only button, a menu
+ * trigger); it is for a control whose only action is to show its text, such as `HelpTip`'s "?". The
+ * control then has to take `onPress`, which it keeps: its own handler runs first. */
 export function TitledControl({
   title,
   children,
@@ -28,10 +40,11 @@ export function TitledControl({
   focusOnly,
   isDisabled,
   keepOpenOnPress,
+  touchPopover = false,
   onOpenChange,
 }: {
   title: React.ReactNode;
-  children: React.ReactElement<{ "aria-label"?: string; "aria-describedby"?: string }>;
+  children: React.ReactElement<{ "aria-label"?: string; "aria-describedby"?: string; onPress?: (event: PressEvent) => void }>;
   /** Where the tooltip opens relative to the control; HeroUI's default is above it. `end` is the
    * reading direction's, so a control on a vertical strip at the window's start edge opens it
    * toward the content under either direction. */
@@ -44,15 +57,31 @@ export function TitledControl({
   /** A press does not close the tooltip, for a control whose tooltip answers the press (a copy
    * button's changes to "Copied"). It still closes as the pointer or focus leaves. */
   keepOpenOnPress?: boolean;
+  /** A touch, pen or virtual press opens the text in a popover drawn like the tooltip; see above. */
+  touchPopover?: boolean;
   /** Told when the tooltip opens or closes. */
   onOpenChange?: (isOpen: boolean) => void;
 }): React.ReactElement {
+  const popover = useTouchPopover();
   if (!title) return children;
-  const repeatsName = children.props["aria-label"] === title && children.props["aria-describedby"] === undefined;
+  const own = children.props;
+  const repeatsName = own["aria-label"] === title && own["aria-describedby"] === undefined;
+  const extra: Partial<typeof own> = {};
+  if (repeatsName) extra["aria-describedby"] = "";
+  if (touchPopover) {
+    extra.onPress = (event) => {
+      own.onPress?.(event);
+      if (opensTouchPopover(event.pointerType)) popover.open(event.target);
+    };
+  }
   return (
-    <Tooltip trigger={focusOnly ? "focus" : undefined} isDisabled={isDisabled} shouldCloseOnPress={keepOpenOnPress ? false : undefined} onOpenChange={onOpenChange}>
-      {repeatsName ? React.cloneElement(children, { "aria-describedby": "" }) : children}
-      <Tooltip.Content placement={placement} className="control-fills pointer-events-none">{title}</Tooltip.Content>
-    </Tooltip>
+    <>
+      <Tooltip trigger={focusOnly ? "focus" : undefined} isDisabled={isDisabled || popover.isOpen} shouldCloseOnPress={keepOpenOnPress || touchPopover ? false : undefined} onOpenChange={onOpenChange}>
+        {Object.keys(extra).length > 0 ? React.cloneElement(children, extra) : children}
+        <TooltipSurface placement={placement}>{title}</TooltipSurface>
+        {touchPopover && <CloseTooltipWhile active={popover.isOpen} />}
+      </Tooltip>
+      {touchPopover && <TouchPopover state={popover} label={own["aria-label"]} placement={placement}>{title}</TouchPopover>}
+    </>
   );
 }

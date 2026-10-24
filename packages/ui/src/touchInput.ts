@@ -29,11 +29,16 @@ function fromHardwareKeyboard(event: KeyboardEvent): boolean {
   return NAVIGATION_KEYS.has(event.key) || event.ctrlKey || event.metaKey || event.altKey;
 }
 
+/** Whether a press of this pointer type is a tap: a finger or a pen, which has no hover. */
+function isTouchPointer(pointerType: string | null | undefined): boolean {
+  return pointerType === "touch" || pointerType === "pen";
+}
+
 /** What the interaction under way came from: the last press's pointer (a finger and a pen alike
  * count as a tap), or a hardware keyboard's key. */
 let lastInput: "touch" | "other" | undefined;
 if (typeof document !== "undefined") {
-  document.addEventListener("pointerdown", (event) => (lastInput = event.pointerType === "touch" || event.pointerType === "pen" ? "touch" : "other"), true);
+  document.addEventListener("pointerdown", (event) => (lastInput = isTouchPointer(event.pointerType) ? "touch" : "other"), true);
   document.addEventListener("keydown", (event) => {
     if (fromHardwareKeyboard(event)) lastInput = "other";
   }, true);

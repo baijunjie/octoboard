@@ -106,12 +106,21 @@ function useContextFacts(context: SessionContext): { details: string; title: str
  * gives a limit; the exact counts are in the name and the tooltip's card. `plain` leaves the tooltip
  * out, for a menu's transient surface, where no mark carries one; the size then reaches assistive
  * technology through its name alone. */
-export function SessionContextLabel({ context, plain }: { context?: SessionContext | null; plain?: boolean }): React.ReactElement | null {
+export function SessionContextLabel({
+  context,
+  plain,
+  touchPopover,
+}: {
+  context?: SessionContext | null;
+  plain?: boolean;
+  /** Whether a tap opens the tooltip's card in a popover; off inside a pressable row, whose tap it is. */
+  touchPopover?: boolean;
+}): React.ReactElement | null {
   if (!hasVisibleContext(context)) return null;
-  return <ContextLabel context={context} plain={plain} />;
+  return <ContextLabel context={context} plain={plain} touchPopover={touchPopover} />;
 }
 
-function ContextLabel({ context, plain }: { context: SessionContext; plain?: boolean }): React.ReactElement {
+function ContextLabel({ context, plain, touchPopover }: { context: SessionContext; plain?: boolean; touchPopover?: boolean }): React.ReactElement {
   const { details, title, compactSize, amount, usage } = useContextFacts(context);
   // The badge keeps the metadata line as tall as the text beside it, the ring included.
   const mark = (
@@ -124,7 +133,7 @@ function ContextLabel({ context, plain }: { context: SessionContext; plain?: boo
   );
   if (plain) return <span role="img" aria-label={details} className="flex shrink-0 items-center">{mark}</span>;
   return (
-    <IndicatorTooltip tooltip={<ContextTooltip title={title} amount={amount} usage={usage} />} label={details} className="flex shrink-0 items-center">
+    <IndicatorTooltip tooltip={<ContextTooltip title={title} amount={amount} usage={usage} />} label={details} className="flex shrink-0 items-center" touchPopover={touchPopover}>
       {mark}
     </IndicatorTooltip>
   );

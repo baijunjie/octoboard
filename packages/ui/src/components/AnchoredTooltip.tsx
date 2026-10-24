@@ -2,6 +2,8 @@ import { Tooltip } from "@heroui/react";
 import React, { useContext, useEffect } from "react";
 import { TooltipTriggerStateContext } from "react-aria-components";
 
+import { TooltipSurface } from "./tooltipCore";
+
 /**
  * A tooltip on something that cannot be a tooltip's trigger: a run of text, a mark inside a row
  * that walks its focusable descendants with the arrow keys, where a trigger of its own would become
@@ -31,6 +33,9 @@ import { TooltipTriggerStateContext } from "react-aria-components";
  * to reach a screen reader another way: the text it belongs to, which is in the document whether or not
  * it is clipped, the name of the row it is in, or the control's own name.
  *
+ * It never opens a touch popover: with no trigger of its own there is nothing to tap, and a tap on
+ * the row it sits in is the row's action.
+ *
  * With no trigger element, react-aria holds no Escape listener for it either, so the key is not
  * swallowed while it is open. It is marked `data-anchored-tooltip` for the code that tells a
  * tooltip which swallows the key from one that does not.
@@ -58,14 +63,9 @@ export function AnchoredTooltip({
   return (
     <Tooltip>
       <OpenWhileMounted immediate={immediate} />
-      <Tooltip.Content
-        triggerRef={anchor}
-        placement={placement}
-        className="control-fills pointer-events-none"
-        data-anchored-tooltip=""
-      >
+      <TooltipSurface triggerRef={anchor} placement={placement} data-anchored-tooltip="">
         {tooltip}
-      </Tooltip.Content>
+      </TooltipSurface>
     </Tooltip>
   );
 }
