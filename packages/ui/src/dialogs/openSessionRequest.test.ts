@@ -4,7 +4,7 @@ import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import type { Account, AccountQuota, Agent, AgentAvailability, Console, Project } from "../protocol";
 import { format, type Translate } from "../i18n/catalog";
 import type { NewSessionBinding } from "./dialogRequest";
-import { defaultOpenSessionRequest, openSessionRequest } from "./openSessionRequest";
+import { defaultOpenSessionRequest, openSessionRequest, quickCreateUnavailable } from "./openSessionRequest";
 
 const quick = (...[translate, parentConsole, project, binding, accounts, agentAvailability, added, accountQuotas = [], now = 0]: [
   Translate, Console, Project | undefined, NewSessionBinding, Account[], Map<Agent, AgentAvailability>, Agent[] | null, AccountQuota[]?, number?,
@@ -102,4 +102,29 @@ it("opens on another account of the agent when the inherited one is changing its
   const state = (accountQuotas: AccountQuota[]) => ({ settings: { accounts, added_agents: null }, agentAvailability: available(), accountQuotas, accountSharing: changing });
   expect(defaultOpenSessionRequest(t, onClaude, undefined, { kind: "unbound" }, state([]), 1, "light")).toMatchObject({ request: { agent: "claude", account: null } });
   expect(defaultOpenSessionRequest(t, onClaude, undefined, { kind: "unbound" }, state([usedUp(null)]), 1, "light")).toEqual({ changingSharing: { account: "w", name: "Work" } });
+});
+
+it("opens on another account of the agent when the inherited one is disabled, and names the account when none is left", () => {
+  const onClaude = consoleOf("c-1", "Main", { default_agent: "claude", claude_account_id: "w" });
+  const state = (stored: Account[], disabledDefaults: Agent[] = []) => ({ settings: { accounts: stored, added_agents: null, disabled_default_accounts: disabledDefaults, default_account_names: { claude: "Personal" } }, agentAvailability: available(), accountQuotas: [] });
+  const off = [{ ...accounts[0]!, disabled: true }];
+  const open = (stored: Account[], disabledDefaults?: Agent[]) => defaultOpenSessionRequest(t, onClaude, undefined, { kind: "unbound" }, state(stored, disabledDefaults), 1, "light");
+  expect(open(off)).toMatchObject({ request: { agent: "claude", account: null } });
+  expect(open(off, ["claude"])).toEqual({ disabled: { agent: "claude", account: "w", name: "Work" } });
+  // Every account off with the default one inherited: it is named as the user named it.
+  const onDefault = consoleOf("c-2", "Main", { default_agent: "claude" });
+  expect(defaultOpenSessionRequest(t, onDefault, undefined, { kind: "unbound" }, state(off, ["claude"]), 1, "light")).toEqual({ disabled: { agent: "claude", account: null, name: "Personal" } });
+});
+
+it("counts an agent whose every account is used up or turned off as having nothing for a quick create, a mix of the two included", () => {
+  const onClaude = consoleOf("c-1", "Main", { default_agent: "claude" });
+  const target = { kind: "new-console-session" as const, console: onClaude };
+  const state = (stored: Account[], disabledDefaults: Agent[], accountQuotas: AccountQuota[]) => ({ settings: { accounts: stored, added_agents: null, disabled_default_accounts: disabledDefaults, default_account_names: undefined }, agentAvailability: available(), accountQuotas });
+  const off = { ...accounts[0]!, disabled: true };
+  expect(quickCreateUnavailable(target, state(accounts, [], []), 1)).toBe(false);
+  expect(quickCreateUnavailable(target, state([off], ["claude"], []), 1)).toBe(true);
+  // The default account is used up and the stored one is off.
+  expect(quickCreateUnavailable(target, state([off], [], [usedUp(null)]), 1)).toBe(true);
+  // One free account is enough.
+  expect(quickCreateUnavailable(target, state([off], [], []), 1)).toBe(false);
 });

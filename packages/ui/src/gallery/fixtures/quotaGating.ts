@@ -128,6 +128,35 @@ const openSwitchTo = (account: string) => [
  * session on it, whatever its quota. */
 const clientChangingSharing = accountSharingOf([{ account: "a-client", progress: { share: true, phase: "changing", done: 2, total: 9, item: "skills/" } }]);
 
+/** Work and Claude Code's default account turned off, Personal and Client left on: a session on Work, or one that would
+ * inherit it, has two accounts to pass over. */
+const claudeTurnedOff: Settings = {
+  ...settings,
+  disabled_default_accounts: ["claude"],
+  accounts: accounts.map((account) => (account.id === "a-work" ? { ...account, disabled: true } : account)),
+};
+
+/** Codex's Team turned off, its default account left on: with the default account's own window used up, no Codex account
+ * can open a session, for two different reasons. */
+const codexTeamOff: Settings = {
+  ...settings,
+  accounts: accounts.map((account) => (account.id === "a-team" ? { ...account, disabled: true } : account)),
+};
+
+/** Client turned off as well as the default account and Work: the session's own account, Work, is off too, which only
+ * stops new work on it. */
+const claudeOnlyPersonalOn: Settings = {
+  ...claudeTurnedOff,
+  accounts: claudeTurnedOff.accounts.map((account) => (account.id === "a-client" ? { ...account, disabled: true } : account)),
+};
+
+/** Every Codex account turned off, the default one and Team. */
+const codexTurnedOff: Settings = {
+  ...settings,
+  disabled_default_accounts: ["codex"],
+  accounts: accounts.map((account) => (account.id === "a-team" ? { ...account, disabled: true } : account)),
+};
+
 /** Client's last sharing change did not finish and none runs now, so starting a session on it asks first. */
 const clientIncomplete: Settings = {
   ...settings,
@@ -149,6 +178,13 @@ const refusedWithReset = {
   code: "account_quota_exhausted",
   params: { agent: "Claude Code", account: "Work", window: "5-hour", window_kind: "session", window_minutes: "300", resets_at: String(minutesFromNow(95)) },
   message: "Work has used up its Claude Code quota (5-hour)",
+};
+
+/** The daemon refusing a session on Work, which it turned off since the window last heard. */
+const refusedDisabled = {
+  code: "account_disabled",
+  params: { agent: "Claude Code", account: "Work" },
+  message: "Work is disabled for Claude Code. Choose another account, or turn it back on in Settings → Agent accounts.",
 };
 
 /** Hub's own Codex handoff: the default account is spent and Team is not. */
@@ -174,6 +210,15 @@ export const quotaGatingScenarios: Scenario[] = [
     title: "New session, account picker with a sharing change running",
     description: "Website would run on Client, whose sharing change is running, so the Claude Code account field opens on Default instead, with no alert. The open picker lists Default (selected), Work, Personal and Client, each with an empty usage track, none having a reading yet. Client is unselectable, its name and track faded and the short reason \"Changing sharing\" at full contrast under the name; the other accounts can be chosen.",
     state: { ...launchState([onClient], []), accountSharing: clientChangingSharing },
+    steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Claude Code"))],
+  },
+  {
+    id: "dialog-new-session-disabled-picker",
+    group: GROUP,
+    category: "normal",
+    title: "New session, account picker with accounts turned off",
+    description: "Website would run on Work, which is turned off, so the Claude Code account field opens on Personal, the first account that is on, with no alert. The open picker lists only the accounts that are on, Personal (selected) and Client, each with an empty usage track, none having a reading yet: Default and Work, turned off, are not listed at all.",
+    state: { ...launchState([onWork], []), settings: claudeTurnedOff },
     steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Claude Code"))],
   },
   {
@@ -230,6 +275,19 @@ export const quotaGatingScenarios: Scenario[] = [
     description: "Grok Build has only its default account, and its account picker is still there beside the agent select, offering that one option. Its credit pool is used up: the open picker lists Default unselectable, its name and empty bar faded and its reason at full contrast under the name on two lines, \"Used up\" and when it resets. Open is disabled and a stock danger alert at the top of the dialog names the unavailable account in its status-coloured title, with the quota reason and reset time in its muted description.",
     state: launchState([chat], grokSpent),
     steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Grok Build"))],
+  },
+  {
+    id: "dialog-hand-off-all-disabled",
+    group: GROUP,
+    category: "exceptional",
+    title: "Hand off, every Codex account is turned off",
+    description: "Hub hands off to Codex, whose two accounts, Default and Team, are both turned off, so none can be preselected: Hand off is disabled and a stock danger alert at the top of the dialog, above the lines about what moves, says the account is disabled in its status-coloured title, and in its muted description names Default, the account the field holds, as disabled and advises choosing another account or turning it back on in Settings. The open account picker lists only that one, Default, the account the choice landed on, with the short reason \"Disabled\" under its name; it is greyed out and cannot be chosen, and Team is not listed.",
+    state: { ...launchState([], []), settings: codexTurnedOff },
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.session.actions", { title: hub.title })),
+      (ui) => ui.press(ui.t("sidebar.session.handOff")),
+      (ui) => ui.press(accountField(ui, "Codex")),
+    ],
   },
   {
     id: "dialog-new-session-incomplete-launch",
@@ -292,7 +350,7 @@ export const quotaGatingScenarios: Scenario[] = [
     group: "Settings",
     category: "exceptional",
     title: "Settings opened from the question about an account's unfinished sharing change",
-    description: "Search API runs on Team, a Codex account whose last sharing change did not finish. Open asked first, and View in Settings was pressed: the launch is cancelled, the question and the session dialog beneath it are gone, and Settings is open on Agent accounts with the Codex tab selected. Team's Share default configuration switch, shown on, its position before the change, is scrolled into view with the focus ring on it, and the warning that the last attempt to turn sharing off did not finish sits right below.",
+    description: "Search API runs on Team, a Codex account whose last sharing change did not finish. Open asked first, and View in Settings was pressed: the launch is cancelled, the question and the session dialog beneath it are gone, and Settings is open on Agent accounts with the Codex tab selected and Team's settings dialog in front. Team's Share default configuration switch, shown on, its position before the change, has the focus ring on it, and the warning that the last attempt to turn sharing off did not finish sits right below.",
     state: { ...launchState([onTeam], []), settings: teamIncomplete },
     steps: [openSessionDialog, (ui) => ui.confirm(), (ui) => ui.press(ui.t("dialog.incompleteLaunch.viewSettings"))],
   },
@@ -304,6 +362,16 @@ export const quotaGatingScenarios: Scenario[] = [
     description: "The daemon holds a newer reading than the window: Work's session quota is used up. An error dialog opens over the session dialog, which stays behind it: it names the account and the agent, says the session quota is used up and in how long it resets, and advises another account or waiting.",
     state: launchState([onWork], []),
     sessionOpenError: refusedWithReset,
+    steps: [openSessionDialog, (ui) => ui.confirm()],
+  },
+  {
+    id: "dialog-new-session-disabled-refused",
+    group: GROUP,
+    category: "exceptional",
+    title: "Session launch refused, the account was turned off",
+    description: "Work was turned off elsewhere after this window last heard, so it still looks usable and the dialog opened on it. Opening is refused by the daemon: an error dialog opens over the session dialog, which stays behind it, names the account and the agent and says it is disabled so a session cannot be opened on it, then advises choosing another account or turning this account back on; a Manage accounts… button beside OK opens Settings on Agent accounts.",
+    state: launchState([onWork], []),
+    sessionOpenError: refusedDisabled,
     steps: [openSessionDialog, (ui) => ui.confirm()],
   },
   {
@@ -360,6 +428,27 @@ export const quotaGatingScenarios: Scenario[] = [
     ],
   },
   {
+    id: "sidebar-session-switch-account-disabled-menu",
+    group: GROUP,
+    category: "normal",
+    title: "Switch account menu, accounts turned off",
+    description: "The session runs on Work, which is turned off, and keeps running: Work stays in the Switch account submenu, marked as current and neither greyed out nor labelled, since turning an account off does not touch the sessions already on it. Personal, which is on, is listed and can be chosen; Default and Client, turned off, are not listed at all.",
+    state: { ...switchState([], accounts[0]), settings: claudeOnlyPersonalOn },
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Review the release checklist" })),
+      (ui) => ui.press(ui.t("sidebar.session.switchAccount")),
+    ],
+  },
+  {
+    id: "dialog-switch-account-disabled",
+    group: GROUP,
+    category: "exceptional",
+    title: "Switch account, the account turned out disabled",
+    description: "The menu offered Client, and it was turned off after the menu was built (here by the steps, as another window would): Confirm is disabled and a stock danger alert at the top of the dialog says in its title that the account is disabled, with the advice to choose another account or turn it back on in Settings in its description, above the lines about what switches.",
+    state: switchState([]),
+    steps: [...openSwitchTo("Client"), (ui) => ui.daemonEvents((state) => ({ type: "settings_updated", settings: { ...state.settings, accounts: state.settings.accounts.map((account) => (account.id === "a-client" ? { ...account, disabled: true } : account)) } }))],
+  },
+  {
     id: "dialog-switch-account-quota-used-up",
     group: GROUP,
     category: "exceptional",
@@ -398,9 +487,9 @@ export const quotaGatingScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     held: true,
-    title: "Quick create, the default agent's accounts used up",
-    description: "With the modifier held the new-session buttons are bolts. The console's sessions run on Codex, the default agent, and both Codex accounts are used up, so the bolt in the sidebar header looks disabled but can be focused and hovered: the pointer rests on it and its tooltip is the short reason \"Default agent's quota used up\", while its accessible name stays \"New console session with defaults\". Search API's project row has the same disabled bolt, whose tooltip shows the same reason on hover.",
-    state: launchState([searchApi], codexSpent, codexConsole),
+    title: "Quick create, the default agent's accounts used up or turned off",
+    description: "With the modifier held the new-session buttons are bolts. The console's sessions run on Codex, the default agent: its default account has used up its 5h window and Team is turned off, so no Codex account can open a session. The bolt in the sidebar header looks disabled but can be focused and hovered: the pointer rests on it and its tooltip is the short reason \"Default agent's accounts unavailable\", while its accessible name stays \"New console session with defaults\". Search API's project row has the same disabled bolt, whose tooltip shows the same reason on hover.",
+    state: { ...launchState([searchApi], [codexSpent[0]], codexConsole), settings: codexTeamOff },
     // The "+" is still plain while the steps run: the modifier is pressed after them, and the open tooltip then reads the reason.
     steps: [(ui) => ui.hoverTitledControl(ui.t("sidebar.consoleSessions.new"))],
   },
@@ -409,8 +498,17 @@ export const quotaGatingScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Quick create refused, the default agent's accounts used up",
-    description: "The console's sessions run on Codex, the default agent, whose accounts are all used up. A press of the new console session button with the modifier down, before the page noticed it, opens no session: an error dialog says that creating a new console session with defaults is unavailable because the default agent's accounts have all used up their quota, and advises choosing another agent in the new session dialog or trying again once the quota resets.",
+    description: "The console's sessions run on Codex, the default agent, whose accounts are all used up. A press of the new console session button with the modifier down, before the page noticed it, opens no session: an error dialog says that creating a new console session with defaults is unavailable because none of the default agent's accounts can open a session right now, each being used up or turned off, and advises choosing another agent in the new session dialog or trying again once a quota resets or an account is turned back on.",
     state: launchState([searchApi], codexSpent, codexConsole),
+    steps: [(ui) => ui.pressWithModifier(ui.t("sidebar.consoleSessions.new"))],
+  },
+  {
+    id: "sidebar-quick-create-disabled-refused",
+    group: GROUP,
+    category: "exceptional",
+    title: "Quick create refused, the default agent's account is turned off",
+    description: "The console's sessions run on Codex, the default agent, whose two accounts are both turned off, and nothing else is free to fall back on. A press of the new console session button with the modifier down, before the page noticed it, opens no session and shows the daemon's own refusal rather than the quota one: an error dialog says that the account is disabled so a session cannot be opened on it, with a Manage accounts… button and the advice to choose another account or turn this account back on.",
+    state: { ...launchState([searchApi], [], codexConsole), settings: codexTurnedOff },
     steps: [(ui) => ui.pressWithModifier(ui.t("sidebar.consoleSessions.new"))],
   },
   {
@@ -433,7 +531,7 @@ export const quotaGatingScenarios: Scenario[] = [
     category: "exceptional",
     held: true,
     title: "Quick create menu with an agent's accounts used up",
-    description: "With the modifier held, the project chooser opened from the focus header is in its quick form: Search API, whose default agent (Codex) has all its accounts used up, is greyed out and cannot be chosen, with the short reason \"Default agent's quota used up\" under its name, while Website, which can fall back to Default, is offered.",
+    description: "With the modifier held, the project chooser opened from the focus header is in its quick form: Search API, whose default agent (Codex) has all its accounts used up, is greyed out and cannot be chosen, with the short reason \"Default agent's accounts unavailable\" under its name, while Website, which can fall back to Default, is offered.",
     state: launchState([onWork, searchApi], [...claudeQuotas, ...codexSpent]),
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub.id}` },
     steps: [(ui) => ui.press(ui.t("sidebar.focus.newSession"))],

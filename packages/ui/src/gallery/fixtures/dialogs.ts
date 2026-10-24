@@ -671,6 +671,26 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
+    state: {
+      ...dialogState,
+      settings: {
+        ...dialogState.settings!,
+        disabled_default_accounts: ["claude"],
+        accounts: dialogState.settings!.accounts.map((account) => (account.id === "a-work" ? { ...account, disabled: true } : account)),
+      },
+    },
+    id: "dialog-new-console-accounts-disabled",
+    group: "Consoles",
+    category: "normal",
+    title: "New console, account picker with accounts turned off",
+    description: "The open Claude Code account picker in the \"Agent default accounts\" section lists Default and Personal. Default, turned off, is the account the console holds, so it stays listed and selected with the short reason \"Disabled\" under its name, since a console keeps its account as a lasting preference and only opening a session on a disabled account is refused; Work, also turned off but not held, is not listed.",
+    steps: [
+      (ui) => ui.press(ui.t("rail.newConsole")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.account", { agent: "Claude Code" })),
+    ],
+  },
+  {
+    ...dialogFixture,
     state: { ...dialogState, settings: { ...accountsState.settings!, accounts: [] } },
     id: "dialog-new-console-advanced",
     group: "Consoles",
@@ -1375,6 +1395,26 @@ export const dialogScenarios: Scenario[] = [
     description: "Same as console, default and long named accounts coexist. The first option's grey badge names the console's account and is too long for the list: it fades out with the label at the clipped edge. Hover a clipped account option to reveal its text as a marquee.",
     steps: [
       (ui) => projectActions(ui, onDefault.name),
+      (ui) => ui.press(ui.t("sidebar.project.edit")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.account", { agent: "Claude Code" })),
+    ],
+  },
+  {
+    ...dialogFixture,
+    state: {
+      ...dialogState,
+      settings: {
+        ...dialogState.settings!,
+        accounts: dialogState.settings!.accounts.map((account) => (account.id === "a-work" ? { ...account, disabled: true } : account)),
+      },
+    },
+    id: "dialog-edit-project-account-choices-disabled",
+    group: "Projects",
+    category: "normal",
+    title: "Project account choices with an account turned off",
+    description: "Configured Site's project settings hold Work, which is turned off. The open Claude Code account picker lists Same as console, Default, Work and Personal; Work, the account the project holds, stays listed and selected with the short reason \"Disabled\" under its name, since a project keeps its account as a lasting preference and only opening a session on a disabled account is refused.",
+    steps: [
+      (ui) => projectActions(ui, configured.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),
       (ui) => ui.press(ui.t("dialog.agentSettings.account", { agent: "Claude Code" })),
     ],

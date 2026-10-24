@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { accountOpenedOn, avoidExhaustedAccount, choiceChangingSharing, choiceExhaustion, choiceGroups, choiceKey, currentChoice, findEntry, type AccountChoice, type ChoiceGroup } from "../accountChoices";
+import { accountOpenedOn, avoidUnavailableAccount, choiceChangingSharing, choiceDisabled, choiceExhaustion, choiceGroups, choiceKey, currentChoice, findEntry, type AccountChoice, type ChoiceGroup } from "../accountChoices";
 import { AGENT_LABEL, agentsInListingOrder, defaultAccountName, inheritedSessionLaunch, launchWithOverrides, pickableAgents, projectSessionAgent, selectableAgent } from "../agents";
 import { agentIconPickerOptions } from "../components/AgentIcon";
 import { isolate } from "../i18n/isolate";
@@ -13,7 +13,8 @@ import { accountOption } from "./accountOptions";
 
 type Overrides = { model?: string | null; effort?: string | null };
 
-/** Every agent's group of accounts as the pickers offer them, with the used-up quota and the running sharing change of each account marked. */
+/** Every agent's group of accounts as the pickers offer them, with the used-up quota, the running sharing change and the
+ * disabled state of each account marked. */
 export function useChoiceGroups(): ChoiceGroup[] {
   const t = useT();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
@@ -22,8 +23,9 @@ export function useChoiceGroups(): ChoiceGroup[] {
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const quotas = useDaemonStore((s) => s.accountQuotas);
   const sharing = useDaemonStore((s) => s.accountSharing);
+  const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
   const now = useNow();
-  return choiceGroups(accounts, agentAvailability, addedAgents, (agent) => defaultAccountName(t, defaultNames, agent), { quotas, now }, sharing);
+  return choiceGroups(accounts, agentAvailability, addedAgents, (agent) => defaultAccountName(t, defaultNames, agent), { quotas, now }, sharing, disabledDefaults);
 }
 
 /**
@@ -35,8 +37,8 @@ export function useChoiceGroups(): ChoiceGroup[] {
  * in place of the pickers' (ignored while that pair may not be picked). `overrides` holds only what the
  * user changed, for the request.
  *
- * An account whose quota is used up or whose sharing change runs cannot be chosen: it is listed disabled with
- * why, the choice opens on another account of the agent when the one it would inherit is unavailable, and
+ * An account that is turned off is not listed; one whose quota is used up or whose sharing change runs is listed disabled
+ * with why. The choice opens on another account of the agent when the one it would inherit is unavailable, and
  * `unavailable`, when even the account the choice ends on is (every account of the agent is, or it is the
  * agent's only one), says why it cannot be used, for the dialog to refuse its submit with.
  *
@@ -64,7 +66,7 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
   const picked = pickedAgent
     ? pickedEntry
       ? { agent: pickedAgent, account: pickedEntry.account }
-      : avoidExhaustedAccount({ agent: pickedAgent, account: openingAccount(pickedAgent) }, groups)
+      : avoidUnavailableAccount({ agent: pickedAgent, account: openingAccount(pickedAgent) }, groups)
     : undefined;
 
   const selectable = pickableAgents(agentAvailability, addedAgents).filter((agent) => agent !== exclude);
@@ -74,16 +76,19 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
     // With nothing to pick, the first other agent in listing order, so the picker shows a held,
     // marked value and never the excluded agent itself; submitting stays blocked.
     : selectable.includes(wanted) ? wanted : selectable[0] ?? agentsInListingOrder(addedAgents).find((other) => other !== exclude)!;
-  const initial = avoidExhaustedAccount({ agent: initialAgent, account: openingAccount(initialAgent) }, groups);
+  const initial = avoidUnavailableAccount({ agent: initialAgent, account: openingAccount(initialAgent) }, groups);
   const forcedEntry = forced && findEntry(groups, choiceKey(forced));
   const choice = forced && forcedEntry?.selectable ? forced : currentChoice(picked, initial, groups);
-  const accountEntries = groups.find((group) => group.agent === choice.agent)?.entries ?? [];
+  // A turned-off account is not offered; it stays listed, marked, only as the value the choice ends on (every account
+  // of the agent is off, or it is the agent's only one), so the field is not blank while `unavailable` says why.
+  const accountEntries = (groups.find((group) => group.agent === choice.agent)?.entries ?? []).filter((entry) => !entry.disabled || entry.key === choiceKey(choice));
   const overrides = launchSettings[choice.agent];
   const { model, effort } = launchWithOverrides(inheritedSessionLaunch(parentConsole, project, choice.agent), overrides);
   const blocked = selectable.length === 0;
   const exhaustedBy = choiceExhaustion(choice, groups);
   const chosenEntry = findEntry(groups, choiceKey(choice));
   const changingSharing = choiceChangingSharing(choice, groups);
+  const disabled = choiceDisabled(choice, groups);
 
   const changeLaunchSetting = (field: "model" | "effort") => (value: string | null) =>
     setLaunchSettings((current) => ({ ...current, [choice.agent]: { ...current[choice.agent], [field]: value } }));
@@ -92,12 +97,14 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
     choice,
     /** No agent that may be picked. */
     blocked,
-    /** Why the chosen account cannot run a session, when its quota is used up or its sharing change runs. */
-    unavailable: exhaustedBy && chosenEntry?.quota
-      ? quotaUsedUpCopy(t, chosenEntry.quota, chosenEntry.name, exhaustedBy, now)
-      : changingSharing && chosenEntry
-        ? { title: t("accountChoice.sharingChange.title"), description: t("accountChoice.sharingChange.description", { name: isolate(chosenEntry.name) }) }
-        : undefined,
+    /** Why the chosen account cannot run a session, when it is disabled, its quota is used up or its sharing change runs. */
+    unavailable: disabled && chosenEntry
+      ? { title: t("accountChoice.disabled.title"), description: t("accountChoice.disabled.description", { name: isolate(chosenEntry.name) }) }
+      : exhaustedBy && chosenEntry?.quota
+        ? quotaUsedUpCopy(t, chosenEntry.quota, chosenEntry.name, exhaustedBy, now)
+        : changingSharing && chosenEntry
+          ? { title: t("accountChoice.sharingChange.title"), description: t("accountChoice.sharingChange.description", { name: isolate(chosenEntry.name) }) }
+          : undefined,
     overrides,
     agentOptions: agentIconPickerOptions(t, agentAvailability, addedAgents, choice.agent).filter((option) => option.value !== exclude),
     setPickedAgent,

@@ -9,9 +9,9 @@ share still run side by side, each signed in as itself. That is why accounts do 
 only the credentials swapped: every running session would follow each swap, and one session rotating its refresh token
 would invalidate the copy stored for another account.
 
-The user changes the choice with **Share default configuration** on the account in Settings' Agent accounts section
-(see "Sharing the default configuration" in `docs/product/agent-accounts.md`). A client reads it on the account and
-sets it with the protocol request `set_account_sharing`.
+The user changes the choice with **Share default configuration** in the account's settings dialog in Settings' Agent
+accounts section (see "Sharing the default configuration" in `docs/product/agent-accounts.md`). A client reads it on the
+account and sets it with the protocol request `set_account_sharing`.
 
 ## The sharing choice
 
@@ -313,9 +313,10 @@ primary one, on which keyboard focus starts. Closing it — with the dialog's cl
 and sends nothing; when it stands over another dialog, Escape closes only the question, leaving that dialog open. **View
 in Settings** sends nothing either: it closes the question, and the dialog it was asked from when there is one (the
 session dialog, the handoff dialog, the switch confirmation), and opens Settings on its Agent accounts section, on the
-account's agent's tab, with the account's sharing switch scrolled into view and focused; the alert under the switch
-says what did not finish (see "Sharing the default configuration" in `docs/product/agent-accounts.md`). When the account
-is no longer found there, Settings opens on the section all the same. **Start anyway** closes the question at once and
+account's agent's tab, with the account's settings dialog open in front and its sharing switch scrolled into view and
+focused; the alert under the switch says what did not finish (see "Sharing the default configuration" in
+`docs/product/agent-accounts.md`). When the account is no longer found there, or its agent is not on the list,
+Settings opens on the section all the same, with no account settings dialog. **Start anyway** closes the question at once and
 sends the request as it would have gone without it; its refusal or failure is shown where it would have been.
 
 The account asked about is the one the session would run on. The question comes:

@@ -346,7 +346,8 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
         description: "The application-wide settings: `auto_pull_repositories`, \
                       `auto_delete_unresumable_archives`, `auto_select_account`, \
                       `sidebar_order_by_status`, `default_clone_dir`, the `accounts` (each agent \
-                      also has a default account, listed with the id `default`), and the \
+                      also has a default account, listed with the id `default`; `disabled` marks \
+                      one the user turned off for new sessions), and the \
                       `trusted_directories`. Accounts and trusted directories are read-only here.",
         schema: || object_schema(json!({}), &[]),
     },
@@ -712,7 +713,8 @@ const HANDOFF_SESSION: ToolDef = ToolDef {
                                     it is the account of `agent` whose weekly quota resets \
                                     soonest and that can still open a session. When none does, \
                                     or while it is off, it is your own account when `agent` is \
-                                    your own agent and that account's quota is not used up; \
+                                    your own agent and that account can still open a session (it \
+                                    is not disabled and its quota is not used up); \
                                     otherwise the account the session's project (else its \
                                     console) sets for `agent`.",
                 },
@@ -1001,9 +1003,10 @@ const REQUEST_SESSION: ToolDef = ToolDef {
                   none does, your own account is used in your own console only for your own agent \
                   when that account can still open a session; any other session takes the account \
                   its project, else its console, sets. Otherwise a session in your own console of \
-                  your own agent runs on your own account, unless that account's quota is used up, \
-                  and any other takes the account its project, else its console, sets. Pass an \
-                  account only when the user asked for one.",
+                  your own agent runs on your own account, unless that account can no longer \
+                  open a session (it is disabled or its quota is used up), and any other takes \
+                  the account its project, else its console, sets. Pass an account only when the \
+                  user asked for one.",
     schema: request_session_schema,
 };
 
@@ -1197,13 +1200,13 @@ fn request_session_schema() -> Value {
         "The account the session runs on: an account's id or name, or `default` for the agent's \
          default account. It must belong to the session's agent. While `auto_select_account` is \
          on, a left-out account is the one of the session's agent whose weekly quota resets \
-         soonest, among accounts that can still open a session: one a used-up quota keeps from \
-         opening is not chosen. Your own account, for a session in your own console of your own \
-         agent whose quota is not used up, or the account its project (else its console) sets, \
-         is used only when none does. Otherwise a session in your own console of your own \
-         agent runs on your own account, unless that account's quota is used up, and any other \
-         takes the account its project (else its console) sets for the agent. Pass one only when \
-         the user asked for it."
+         soonest, among accounts that can still open a session (not disabled, quota not used \
+         up). Your own account, for a session in your own console of your own agent that can \
+         still open a session, or the account its project (else its console) sets, is used \
+         only when none does. Otherwise a session in your own console of your own agent runs \
+         on your own account, unless that account can no longer open a session (it is disabled \
+         or its quota is used up), and any other takes the account its project (else its \
+         console) sets for the agent. Pass one only when the user asked for it."
     );
     schema["properties"]["branches"] = json!({
         "type": "array",
@@ -1313,12 +1316,13 @@ fn new_session_schema(with_project: bool) -> Value {
                  the agent's default account. It must belong to the session's agent. While \
                  `auto_select_account` is on, a left-out account is the one of the session's \
                  agent whose weekly quota resets soonest, among accounts that can still open a \
-                 session: one a used-up quota keeps from opening is not chosen. Your own \
-                 account, for a session of your own agent whose quota is not used up, or the \
-                 account its project (else its console) sets, is used only when none does. \
-                 Otherwise a session of your own agent runs on your own account, unless that \
-                 account's quota is used up, and any other takes the account its project (else \
-                 its console) sets for the agent. Pass one only when the user asked for it{}.",
+                 session (not disabled, quota not used up). Your own account, for a session of \
+                 your own agent that can still open a session, or the account its project (else \
+                 its console) sets, is used only when none does. Otherwise a session of your \
+                 own agent runs on your own account, unless that account can no longer open a \
+                 session (it is disabled or its quota is used up), and any other takes the \
+                 account its project (else its console) sets for the agent. Pass one only when \
+                 the user asked for it{}.",
                 if with_project { " (see `get_settings`)" } else { "" },
                 if with_project { "" } else { ", or when it is the way to reach another agent" }
             ),

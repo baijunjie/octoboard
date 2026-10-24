@@ -48,7 +48,7 @@ again.
   that reset time, giving the service a moment to roll the window over. A reset is acted on once: a reading taken for
   it that fails leaves the account on its interval and retries as above.
 - **A new account**, or an agent found available after the daemon started, is read within about 15 seconds.
-- **When an account's login ends** (see "Logging an account in" in `docs/product/agent-accounts.md`), its quota is
+- **When an account's login ends** (see `docs/product/logging-accounts-in.md`), its quota is
   read again whatever the interval: at once after a successful login, and within about 15 seconds after any other
   end.
 - **Opening the Agent accounts section** of Settings asks for a fresh reading. Such a request reads the accounts whose
@@ -103,26 +103,39 @@ these windows are shown: extra usage, spend, credit balances and pace estimates 
 ## How an account's quota is shown
 
 In Settings and in the rail's panel, the account's plan sits beside its name as a small badge, absent when the agent
-does not name one; in Settings a badge saying whether the account is logged in follows it (see "The accounts the user
-owns" in `docs/product/agent-accounts.md`). Beneath the account each window has:
+does not name one; in Settings a badge in the accounts table's Status column, and beside the name in the account's
+account settings dialog, says whether the account is logged in (see "The accounts table" in `docs/product/agent-accounts.md`).
+Each window shows:
 
-- a line reading "<window> N% remaining", where N is what remains of the window as a whole percent from 0 to 100 (a
-  window the agent reports as more than fully used shows 0%);
-- at the end of the same line, "resets in <countdown>": days and hours from a day away ("2d 3h"), hours and minutes
-  from an hour away ("1h 57m"), minutes below that ("12m"), always rounded up to the next minute. It counts down by
-  itself, moving at least every 30 seconds, and reads "resets now" once the reset time has passed and a newer reading
-  has not arrived yet. A window the agent gives no reset time for has no countdown;
+- what remains of the window, as a whole percent from 0 to 100 (a window the agent reports as more than fully used
+  shows 0%);
+- when it resets, "resets in <countdown>": days and hours from a day away ("2d 3h"), hours and minutes from an hour
+  away ("1h 57m"), minutes below that ("12m"), always rounded up to the next minute. It counts down by itself, moving
+  at least every 30 seconds, and reads "resets now" once the reset time has passed and a newer reading has not arrived
+  yet. A window the agent gives no reset time for has no countdown;
 - a bar of what remains, full when nothing is used. The bar has one colour per agent: an orange for Claude Code, a
   blue for Codex, and the text colour for Grok Build, each set off against the bar's track in both light and dark
   appearance. In the rail's panel a used-up account's bars are a neutral grey instead (see "A used-up account"
   below).
 
-How long ago the windows shown were read is shown in small muted text at the end of a line — the account's directory
-line in Settings, its name line in the rail's panel (which shows no directories), and its header in the menu bar
-icon's quota submenu: "Updated just now" under a minute, otherwise "Updated 3 minutes ago" (in hours or days once it
-is that old). It is shown whenever the account has windows to show, including windows kept after a newer reading
-failed, which a warning mark after it says are out of date (see "Quota states" below; the submenu says so in a note
-under its header instead).
+Settings shows an account's quota in two places (see "The accounts table" and "The account settings dialog" in
+`docs/product/agent-accounts.md`):
+
+- the accounts table's **Usage** cell holds the account's compact usage bar, the one an account picker shows (see "In
+  an account picker" below), with no numbers, and assistive technology reads what remains of its windows in words.
+  Without a current reading — none taken, not logged in, or a latest reading that failed — the cell holds a dash,
+  followed by the failure mark or the out-of-date mark when the reading failed (see "Quota states" below);
+- the account's settings dialog draws its quota as the rail's panel does, every window included.
+
+In the rail's panel, and in the account settings dialog, each window has a line reading "<window> N% remaining", with the
+countdown at the end of the same line, above its bar.
+
+How long ago the windows shown were read is shown in small muted text — at the end of the **Usage** heading in an
+account's settings dialog in Settings (the table does not show it), at the end of its name line in the rail's panel
+(which shows no directories), and at the end of its header in the menu bar icon's quota submenu: "Updated just now"
+under a minute, otherwise "Updated 3 minutes ago" (in hours or days once it is that old). It is shown whenever the
+account has windows to show, including windows kept after a newer reading failed, which a warning mark after it says are
+out of date (see "Quota states" below; the submenu says so in a note under its header instead).
 
 **A window whose reset time has passed** is shown as **100% remaining**, its bar full, until a newer reading arrives,
 while its countdown reads "resets now". This holds wherever a quota is drawn or stated: Settings, the rail's panel, the
@@ -132,15 +145,12 @@ Each notices the reset passing on its own clock: within 30 seconds in Settings, 
 at the reset time itself on the rail's button, as of its opening in the Switch account submenu, and in the menu bar
 as "The icon's menu" in `docs/product/menu-bar-icon.md` says.
 
-An account with both a five-hour and an account-wide weekly window shows the two as **one meter**: the five-hour
-window's line and its bar, directly beneath it a thinner bar for the weekly window, and beneath that the weekly
-window's line, in the muted text colour. Every other window — Grok Build's credit pool, a model-specific weekly limit,
-an account-wide weekly window with no five-hour window beside it — keeps a meter of its own.
-
-In Settings the meters sit two to a row, and one to a row in a window narrower than 640 px; in the rail's account
-quota panel they are always one to a row. For assistive technology each bar, the thin weekly one included,
-is named by its window and carries the remaining percent and the countdown as its value, and the drawn lines are not
-read separately.
+In the rail's panel and the account settings dialog, an account with both a five-hour and an account-wide weekly window shows
+the two as **one meter**: the five-hour window's line and its bar, directly beneath it a thinner bar for the weekly window, and beneath
+that the weekly window's line, in the muted text colour. Every other window — Grok Build's credit pool, a
+model-specific weekly limit, an account-wide weekly window with no five-hour window beside it — keeps a meter of its
+own, and the meters sit one to a row. For assistive technology each bar, the thin weekly one included, is named by its window and carries the remaining percent and the countdown as its value, and the
+drawn text is not read separately.
 
 ### In an account picker
 
@@ -149,9 +159,8 @@ In the account picker of the session dialog and the handoff dialog (see the **Ag
 colour: what remains of the five-hour window, with the account-wide weekly window's thin bar beneath it, or, for an
 account without a five-hour window, one bar for its account-wide weekly window or its credit pool. An account with
 nothing to draw — not read yet, not logged in, unavailable, or whose latest reading failed so that its windows are out
-of date — shows an empty track. Each track has a faint edge, so an empty one still shows on any surface; the thin
-weekly track's edge is drawn around its
-outside, and the track is inset so that this edge ends where the main track's ends do. The bar is not read by
+of date — shows an empty track. The tracks of a picker's or menu's bars have a hairline edge (a Settings table cell's have none), and the thin weekly bar is three quarters as tall as the main one, as everywhere a two-layer bar is drawn. The
+same bar fills the Usage cell of Settings' accounts table, wider. The bar is not read by
 assistive technology; the account's option states what remains of those windows in words instead, or, for a used-up
 account, why it cannot be chosen (see "A used-up account" below).
 
@@ -170,12 +179,12 @@ This is what Settings and the rail's panel show; the menu bar icon's menu differ
 
 | State | What the account shows |
 |---|---|
-| Its agent is not available, or not yet determined | Nothing about a quota, no plan either. |
-| Not read yet | "Reading quota…" in place of the windows. |
+| Its agent is not available, or not yet determined | Nothing about a quota, no plan either; in Settings, a dash in the table's Usage cell and in the account settings dialog's Usage. |
+| Not read yet | "Reading quota…" in place of the windows, in the table's Usage cell and in the account settings dialog. |
 | Read | The plan, the windows and how long ago they were read. |
-| Never read successfully, and the last reading failed | No windows, and a red failure mark on the account's name line, named "Quota unavailable"; it opens a popover with the reason (see "Why a quota is unavailable" below, and "Failures marked on a row" in `docs/product/error-alerts.md` for how the popover opens). |
-| Read before, but the latest reading failed | The last good plan and windows stay, and "Updated …" still says how long ago they were read, followed by an amber warning mark named as out of date and when they were last read ("Out of date: last read 12 minutes ago"); it opens a popover with the reason the newer reading failed. The next successful reading clears it. |
-| Not logged in: its directory does not exist, or the agent says it is not signed in there | Any windows read before are dropped, and the agent's own message is not shown. In the rail's panel, a single line saying the account is not logged in yet and pointing to logging in to use it stands in place of the windows. In Settings nothing stands beneath the account; its **Not logged in** badge says so (see "The accounts the user owns" in `docs/product/agent-accounts.md`). |
+| Never read successfully, and the last reading failed | No windows, and a red failure mark named "Quota unavailable" on the account's name line — in Settings, after the dash in the table's Usage cell and beside the name in the account settings dialog's heading; it opens a popover with the reason (see "Why a quota is unavailable" below, and "Failures marked on a row" in `docs/product/error-alerts.md` for how the popover opens). |
+| Read before, but the latest reading failed | The last good plan and windows stay, and "Updated …" still says how long ago they were read, followed by an amber warning mark named as out of date and when they were last read ("Out of date: last read 12 minutes ago"); it opens a popover with the reason the newer reading failed. The next successful reading clears it. In Settings the account settings dialog shows them so; the table's Usage cell shows a dash followed by the out-of-date mark instead of the windows. |
+| Not logged in: its directory does not exist, or the agent says it is not signed in there | Any windows read before are dropped, and the agent's own message is not shown. In the rail's panel, a single line saying the account is not logged in yet and pointing to logging in to use it stands in place of the windows. In Settings the table's Usage cell holds a dash and the account's **Not logged in** badge says why (see "The accounts table" in `docs/product/agent-accounts.md`); its account settings dialog says, in place of the windows, that it is not logged in yet and to log in to use it. |
 
 ## Why a quota is unavailable
 
@@ -258,6 +267,8 @@ by default and applies to every agent alike.
 An account is kicked after any reading of it (see "When quotas are read" above) when all of these hold:
 
 - the setting is on;
+- the account is not turned off (see "Turning an account off" in `docs/product/agent-accounts.md`), the default
+  account included;
 - the reading succeeded: an account that is not logged in, whose directory does not exist, whose latest reading failed
   (even one still showing out-of-date windows) or that has no quota to report is never kicked;
 - the reading shows a window with no reset time that is not a **model-specific weekly** limit, which is never kicked:
@@ -272,8 +283,9 @@ restarts, and an account removed or pointed at another directory loses its own.
 
 Turning the setting on, in Settings or by an import that applies it (see "Application settings are left alone unless
 they are asked for" in `docs/product/configuration-export-and-import.md`), looks over the readings already held at
-once and kicks every account they call for, without waiting for the next reading. Turning it off starts no further
-kick; one already running goes on to its end and to the reading after it.
+once and kicks every account they call for, without waiting for the next reading; so does turning an account back on
+while the setting is on. Turning the setting off starts no further kick; one already running goes on to its end and to
+the reading after it.
 
 ### How a kick runs
 
@@ -446,6 +458,15 @@ The panel opens by the input the device has, as a status mark's popover does (se
   panel, onto the selected agent's tab, or, with no tab, onto the panel's first button (Add agent…, or Manage
   accounts…). A panel opened this way is modal, as a menu is: the window's shortcuts and F6 wait until it closes,
   and a tap on a floating panel turns it into this form.
+
+**While the mouse is on the button** and the button shows the selected session's account (see "The selected
+session's quota indicator" above), the open panel makes that account stand out: every other account's row, on every
+agent's tab, is dimmed by a veil of the panel's own colour, the same veil the sidebar lays over inactive projects. The
+dimming lasts from then until the mouse enters the panel or the panel closes. Keyboard focus on the button does not
+bring it. It is a passing cue, separate from a used-up account's look (see "A used-up account" above): the button's
+account keeps its used-up look undimmed when it is used up, and another used-up account is dimmed on top of its own
+look. Dimmed text falls below the usual contrast minimum, by decision, since the cue is lifted as soon as the mouse
+enters the panel.
 
 ### Closing the panel
 

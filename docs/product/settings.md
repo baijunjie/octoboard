@@ -6,8 +6,9 @@ it saying what it does — a trusted folder's row has its path alone — and on 
 language the sides swap (see "Right-to-left layout" in `docs/product/window-layout.md`). A section that explains itself
 as a whole does so in a paragraph under its heading, and no section heading has a "?" help tip; help tips are on one
 row in "Git", and in Agent accounts on the **Start usage windows automatically** row (see "Start usage windows
-automatically" below), on each agent's default account, on each owned account's sharing switch and on the
-permission-approval headings (see "The default account", "Sharing the default configuration" and "Approval modes" in
+automatically" below), on each agent's Permission approval row, on the accounts table's Disable heading and, in an
+account's settings dialog, after the default account's directory and on the sharing row (see "Approval modes", "The
+accounts table", "The account settings dialog" and "Sharing the default configuration" in
 `docs/product/agent-accounts.md`, and "Explanations in help tips" in `docs/product/labels-and-tooltips.md`). The
 sections, in order, are **General**, **Git**, **Agent accounts**, **Trusted folders**, **Permissions**, **Agent
 permissions**, **Notifications** and **Configuration**; the dialog opens on General unless it was asked to open on
@@ -68,10 +69,10 @@ Settings opens from:
 
 When the Add agent dialog is put in front, that dialog holds keyboard focus rather than the selected section's tab. A
 request to open Settings on a section while it is already open moves it to that section and closes the account add,
-edit, rename and remove forms and the agent-removal form. It also closes the Add agent dialog unless the request is
+edit, rename and remove forms, an account's settings dialog and the agent-removal form. It also closes the Add agent dialog unless the request is
 for that dialog. When the destination is not behind a login dialog, focus goes to the requested section's tab, or,
 when Add agent is requested, to that dialog in front of the Agent accounts section. The login dialog keeps its
-lifecycle (see "Logging an account in" in `docs/product/agent-accounts.md`).
+lifecycle (see `docs/product/logging-accounts-in.md`).
 
 Settings closes on `Escape`, on its close button, and on a press on the dimmed area around it. Closing it puts
 keyboard focus back on the selected session's terminal, unless a dialog is open beneath it: focus then stays in that
@@ -195,8 +196,8 @@ never does and where the value is kept are in "Automatically pulling repositorie
 ## Agent accounts
 
 The agents the user has added and every account of each, grouped by agent, with the means to add, reorder and remove
-agents, to add, edit, rename and remove accounts, to sign an account in, and each account's approval mode and plan
-quota, and the two switches **Automatically select an account** and **Start usage windows automatically**. Where those
+agents, to add, edit, rename and remove accounts, to turn an account off and on, to sign an account in, each
+agent's permission approval, each account's plan quota and each account's details, and the two switches **Automatically select an account** and **Start usage windows automatically**. Where those
 switches sit, and what the rest of the section shows and offers, are in `docs/product/agent-accounts.md`.
 
 ### Automatically select an account

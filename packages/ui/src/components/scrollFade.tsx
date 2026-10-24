@@ -20,9 +20,14 @@ export function stickyScrollPaddingTop(headingHeight: number): number {
 
 /** The scroll padding that keeps whatever the browser or react-aria scrolls into view (a control
  * that takes focus) clear of the fade rather than under it; it goes on the axis that fades. */
-function scrollPadding(orientation: Orientation): CSSProperties {
-  return orientation === "horizontal" ? { scrollPaddingInline: FADE_SIZE } : { scrollPaddingBlock: FADE_SIZE };
+function scrollPadding(orientation: Orientation, endInset = 0): CSSProperties {
+  return orientation === "horizontal"
+    ? { scrollPaddingInlineStart: FADE_SIZE, scrollPaddingInlineEnd: FADE_SIZE + endInset }
+    : { scrollPaddingBlock: FADE_SIZE };
 }
+
+/** What draws no fade: the scroll-driven mask and its animation, off. */
+const NO_FADE: CSSProperties = { maskImage: "none", WebkitMaskImage: "none", animation: "none" };
 
 /** The room the scrollbars take at the box's end edges, measured: the scrollbar plus the end border,
  * since both the mask and the sticky overlays are placed from the border box's edge. An overlay
@@ -106,6 +111,8 @@ type RegionProps = React.DOMAttributes<Element> & {
 };
 
 export interface FadeRegion {
+  /** The scroller overflows, so it is the focusable region `props` make it (always, with `always`). */
+  overflows: boolean;
   /** The scroller has keyboard focus that should show a ring; the caller draws it on the element
    * around the scroller. */
   focused: boolean;
@@ -138,6 +145,7 @@ export function useFadeRegion(
   const focus = useFocusVisibleProps();
   const active = always || overflows;
   return {
+    overflows,
     focused: active && Boolean(focus["data-focus-visible"]),
     props: active
       ? {
@@ -160,6 +168,12 @@ type FadedScrollerProps = Omit<React.ComponentProps<typeof ScrollShadow>, "size"
   stickyHeadingHeight?: number;
   /** The surface the overlay fades fade into, with `stickyHeadingHeight`: the side panes' by default. */
   stickySurface?: StickySurface;
+  /** Draws no fade, keeping the rest: the scroll padding, the overflow watch and the focusable region. For a scroller
+   * with a control pinned at its end edge, which a mask would dim; the pinned control's own edge says there is more. */
+  fade?: boolean;
+  /** Room at the end edge that something pinned there takes, in pixels, added to the scroll padding there so that
+   * focus scrolled into view stops clear of it as well as of the fade. */
+  endInset?: number;
 };
 
 /**
@@ -180,7 +194,7 @@ type FadedScrollerProps = Omit<React.ComponentProps<typeof ScrollShadow>, "size"
  * scroller's edge while that one still sits further down, below it once it is pinned. The wrapper
  * supplies their shared stacking context; the measured gutter keeps the scrollbar uncovered.
  */
-export function FadedScroller({ orientation = "vertical", region, style, className, ref: forwarded, stickyHeadingHeight, stickySurface, ...props }: FadedScrollerProps): React.ReactElement {
+export function FadedScroller({ orientation = "vertical", region, style, className, ref: forwarded, stickyHeadingHeight, stickySurface, fade = true, endInset, ...props }: FadedScrollerProps): React.ReactElement {
   const ref = useObjectRef(forwarded);
   const strips = useScrollbarStrips(ref, orientation);
   const [visibility, setVisibility] = useState<ScrollShadowVisibility>("none");
@@ -218,7 +232,7 @@ export function FadedScroller({ orientation = "vertical", region, style, classNa
         region?.onVisibilityChange?.(value);
       }}
       {...region?.props}
-      style={{ ...scrollPadding(orientation), ...style, ...strips.style, ...(stickyHeadingHeight === undefined ? {} : {
+      style={{ ...scrollPadding(orientation, endInset), ...(fade ? {} : NO_FADE), ...style, ...strips.style, ...(stickyHeadingHeight === undefined ? {} : {
         maskImage: "none", WebkitMaskImage: "none", animation: "none",
         scrollPaddingTop: stickyScrollPaddingTop(stickyHeadingHeight),
       }) }}

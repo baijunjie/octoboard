@@ -229,7 +229,7 @@ export interface Scenario {
    * daemon finding a session mid-turn that the window still lists as idle). Unlisted sessions are
    * handed off normally. */
   sessionHandoffs?: Record<string, FixtureError | "pending">;
-  /** A refusal to save an account's approval mode, Codex's or Claude Code's; successful requests update settings. */
+  /** A refusal to save an agent's permission approval, Codex's reviewer or Claude Code's mode; successful requests update settings. */
   accountApprovalError?: FixtureError;
   /** How a `set_account_sharing` that is not turned away at once ends. An `account_sharing_failed` error is a change that
    * fails part-way: the choice is recorded, the account stays incomplete and the failure (its items and detail from the

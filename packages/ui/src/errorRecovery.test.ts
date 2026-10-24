@@ -17,7 +17,7 @@ it.each([
   ["agent_already_added", "addedAgents"], ["agent_order_invalid", "addedAgents"], ["agent_not_added", "agentNotAdded"],
   ["grok_sandbox_unsupported", "grokSandbox"],
   ["default_account_not_shareable", "accountNotShareable"], ["account_sharing_failed", "accountSharing"], ["account_still_sharing", "accountBusy"],
-  ["account_in_use", "accountBusy"], ["sharing_session_did_not_stop", "sharingStop"], ["account_sharing_in_progress", "accountChanging"],
+  ["account_in_use", "accountBusy"], ["sharing_session_did_not_stop", "sharingStop"], ["account_sharing_in_progress", "accountChanging"], ["account_disabled", "accountDisabled"],
 ])("classifies the known domain code %s with its specific remedy", (code, recovery) => {
   const error = new DaemonRequestError("localized text", code, { session: "s1" });
   expect(errorPresentation(error)).toBe(error);

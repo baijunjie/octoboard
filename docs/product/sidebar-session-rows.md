@@ -64,17 +64,20 @@ A session row's action menu offers:
 - **Switch account** — a submenu of the accounts of the session's agent, the default account first, with the one the
   session is on checked and doing nothing; picking another asks for confirmation, then moves the session to it (see
   `docs/product/switching-session-accounts.md`). A session whose account has since been removed still shows it,
-  checked and named by the directory the session recorded. The entry is present for a console session's row as well as a project session's,
-  and only when the session's agent has more than one account to be on; with just the default account it is left out
-  rather than shown disabled. A session in the archive has no such entry, and neither has one still starting. Each
+  checked and named by the directory the session recorded. The entry is present for a console session's row as well
+  as a project session's, and only when the session's agent has more than one account to be on; with just the default
+  account it is left out rather than shown disabled, and so it is when every account but the session's own is turned
+  off. A session in the archive has no such entry, and neither has one still starting. Each
   account shows its compact usage bar before its name, as in the account picker, and assistive technology reads what
   remains of its quota as the item's description (see "In an account picker" in `docs/product/account-quotas.md`). An
   account other than the session's own that is used up (see "A used-up account" in `docs/product/account-quotas.md`),
   as judged when the menu opens, is disabled, with the short reason under its name on two lines, saying it is used up
   and when it resets; it stays reachable with the arrow keys, its accessible name is just the account's name, and the
-  full reason is its description. An account other than the session's own whose sharing of the default configuration
-  is being changed, as judged when the menu opens, is disabled the same way, whatever its quota, with a short reason
-  saying so; while the session's own account is having its sharing changed, every other account is disabled with a
+  full reason is its description. An account other than the session's own that is turned off (see "Turning an
+  account off" in `docs/product/agent-accounts.md`), as judged when the menu opens, is not listed; the session's own
+  account is listed, checked, even when it is turned off. An account other than the session's own whose sharing of
+  the default configuration is being changed, as judged when the menu opens, is disabled like a used-up one, whatever its
+  quota, with a short reason saying so; while the session's own account is having its sharing changed, every other account is disabled with a
   reason saying that the session's account is changing, as the session cannot be switched away from it either (see
   "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`). While the session is shown as
   switching its account, every other account is disabled with a reason saying that the session is switching its

@@ -6,7 +6,7 @@ import { useShallow } from "zustand/react/shallow";
 
 import { ActionMenu } from "../components/ActionMenu";
 import type { NewSessionRequest } from "../dialogs/dialogRequest";
-import { quickCreateUsedUp } from "../dialogs/openSessionRequest";
+import { quickCreateUnavailable } from "../dialogs/openSessionRequest";
 import { useT } from "../i18n/react";
 import type { Project } from "../protocol";
 import { useDaemonStore } from "../store";
@@ -20,9 +20,9 @@ import { useNewSessionMode } from "./useNewSessionMode";
  * A "+" that is a menu of `projects`, for a view with no project of its own to open a session in.
  * Choosing a project opens the session dialog for `target(project)`; while the modifier is held and an
  * agent is available it turns into a bolt named `quickLabel` and choosing one calls `onQuickCreate` (with
- * `quickLabel`) instead. A project whose agent has every account used up is disabled then, with why under
- * its name and in its accessible name. With no project, or no agent that is added and installed, it is a
- * disabled "+".
+ * `quickLabel`) instead. A project whose agent has no account that can open a session (each used up or
+ * turned off) is disabled then, with why under its name and in its accessible name. With no project, or
+ * no agent that is added and installed, it is a disabled "+".
  */
 export function NewSessionMenu({
   label,
@@ -56,13 +56,14 @@ export function NewSessionMenu({
     triggerRef.current?.focus();
     triggerRef.current?.click();
   });
-  // In the quick form, the projects whose agent has no account left to run a session on cannot be chosen.
-  // The time is read as the store is: the modifier is held only for a moment.
-  const usedUp = useDaemonStore(useShallow((s) => {
+  // In the quick form, the projects whose agent has no account that can open a session (each used up or
+  // turned off) cannot be chosen. The time is read as the store is: the modifier is held only for a
+  // moment.
+  const unavailable = useDaemonStore(useShallow((s) => {
     const ids = new Set<string>();
     if (quick) {
       for (const project of projects) {
-        if (quickCreateUsedUp(target(project), s, Date.now())) ids.add(project.id);
+        if (quickCreateUnavailable(target(project), s, Date.now())) ids.add(project.id);
       }
     }
     return ids;
@@ -77,7 +78,7 @@ export function NewSessionMenu({
       onClosed={() => setShortcutMode(undefined)}
       trigger={quick ? <Zap aria-hidden="true" className="size-4" /> : <Plus aria-hidden="true" className="size-4" />}
       items={sortProjects(projects, () => []).map((project) => {
-        const reason = usedUp.has(project.id) ? { state: t("sidebar.project.openSessionQuickUsedUpShort") } : undefined;
+        const reason = unavailable.has(project.id) ? { state: t("sidebar.project.openSessionQuickUsedUpShort") } : undefined;
         return {
           label: project.name,
           reason,

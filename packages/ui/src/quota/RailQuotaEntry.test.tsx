@@ -892,3 +892,88 @@ it("drops a removed account at once, with no copy, while reduced motion is asked
   expect(motion.played()).toEqual([]);
   expect(panel()!.querySelector("[data-list-motion-exit]")).toBeNull();
 });
+
+/** Mounts the entry with a Claude Code session on `claude-work` selected, in a host of its own. */
+function mountWithSession(accountId: string | null = "claude-work") {
+  const { store, container } = mount();
+  const host = container.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  onTestFinished(() => act(() => root.unmount()));
+  const session: Session = {
+    id: "selected", agent: "claude", account_id: accountId, config_dir: null, console_id: "console", host_id: "local",
+    role: "console", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    pinned: false, locked: false, started_at: NOW,
+  };
+  act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
+  act(() => root.render(
+    <DaemonProvider value={{ store, request } as unknown as Daemon}>
+      <RailQuotaEntry selectedSessionId={session.id} onOpenSettingsAt={onOpenSettingsAt} />
+    </DaemonProvider>,
+  ));
+  return { button: host.querySelector("button")! };
+}
+
+/** The ids of the panel's account rows that are dimmed, across every agent's tab. */
+const dimmedRows = () => Array.from(document.querySelectorAll("[data-list-motion][data-dimmed]"), (row) => row.getAttribute("data-list-motion"));
+
+it("dims every account but the one the button shows while the mouse is on the button, and lifts it only once the mouse enters the panel", () => {
+  withFakeTimers();
+  const { button } = mountWithSession();
+  enter(button);
+  expect(panel()).toBeNull();
+  advance(OPEN_DELAY);
+  expect(dimmedRows()).toEqual(["default:claude", "default:codex", "codex-work"]);
+  // The cue is a veil: the rows stay exposed to assistive technology.
+  expect(panel()!.querySelectorAll("[data-list-motion][aria-hidden], [data-list-motion][inert]")).toHaveLength(0);
+
+  // The gap between the button and the panel keeps it, until the mouse is in the panel.
+  leave(button);
+  advance(CLOSE_DELAY - 10);
+  expect(dimmedRows()).toEqual(["default:claude", "default:codex", "codex-work"]);
+  // The mouse comes into the panel onto one of its rows, entering the panel and its contents at once.
+  act(() => void panel()!.querySelector("[data-list-motion]")!.dispatchEvent(pointer("pointerover")));
+  expect(dimmedRows()).toEqual([]);
+  advance(1000);
+  expect(panel()).not.toBeNull();
+});
+
+it("dims the other accounts for the default account too, and not at all when the button shows no account", () => {
+  withFakeTimers();
+  const { button } = mountWithSession(null);
+  enter(button);
+  advance(OPEN_DELAY);
+  expect(dimmedRows()).toEqual(["claude-work", "default:codex", "codex-work"]);
+
+  const bare = mount();
+  leave(button);
+  advance(CLOSE_DELAY);
+  expect(panel()).toBeNull();
+  enter(bare.button);
+  advance(OPEN_DELAY);
+  expect(panel()).not.toBeNull();
+  expect(dimmedRows()).toEqual([]);
+});
+
+it("leaves the accounts alone for keyboard focus and a keyboard pin", () => {
+  withFakeTimers();
+  const { button } = mountWithSession();
+  act(() => button.focus());
+  press(button, "Enter");
+  advance(OPEN_DELAY);
+  expect(panel()).not.toBeNull();
+  expect(dimmedRows()).toEqual([]);
+});
+
+it("leaves the accounts alone for a keyboard opening after the mouse crossed the button without opening the panel", () => {
+  withFakeTimers();
+  const { button } = mountWithSession();
+  enter(button);
+  advance(OPEN_DELAY - 10);
+  leave(button);
+  advance(1000);
+  expect(panel()).toBeNull();
+  act(() => button.focus());
+  press(button, "Enter");
+  expect(panel()).not.toBeNull();
+  expect(dimmedRows()).toEqual([]);
+});

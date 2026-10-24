@@ -260,6 +260,20 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
       message: `${name} has used up its ${AGENT_LABEL[agent]} quota (${windowName})`,
     });
   };
+  /** Refuses a session on, a handoff to, or a switch to an account the user turned off, as the daemon does before it
+   * looks at the quota: `account` is the account the launch resolves to, `undefined` the agent's default account. The
+   * name in the error is the account's, the default account's being the one the user gave it (else the reserved word). */
+  const refuseIfDisabled = (agent: Agent, account: Account | undefined) => {
+    const current = store.getState();
+    const disabled = account ? account.disabled === true : current.settings.disabled_default_accounts?.includes(agent) === true;
+    if (!disabled) return;
+    const name = account?.name ?? current.settings.default_account_names?.[agent] ?? DEFAULT_ACCOUNT_NAME;
+    return fail({
+      code: "account_disabled",
+      params: { agent: AGENT_LABEL[agent], account: name },
+      message: `${name} is disabled for ${AGENT_LABEL[agent]}. Choose another account, or turn it back on in Settings → Agent accounts.`,
+    });
+  };
   /** Refuses what the daemon turns away while a change of the sharing of `accountId` runs: a session opened on it, one
    * of its sessions resumed, a switch onto or away from it, a handoff from it. The default account (`null`) has no sharing. */
   const refuseIfSharingChanges = (accountId: string | null | undefined) => {
@@ -384,6 +398,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           if ((session.account_id ?? null) === body.account) return fail({ code: "session_already_on_account", params: { session: body.session }, message: "this session is on that account already" });
           refuseIfSharingChanges(session.account_id);
           refuseIfSharingChanges(account?.id);
+          refuseIfDisabled(session.agent, account);
           refuseIfQuotaExhausted(session.agent, account);
           // The daemon broadcasts the session as switching while the switch holds its claim, and the
           // session as it is once the switch ends. What the window adds for its own batch is not the daemon's to send.
@@ -418,6 +433,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           if (!owner) return fail({ code: "unknown_console", params: { console: session.console_id }, message: `unknown console ${session.console_id}` });
           const project = session.project_id ? current.projects.get(session.project_id) : undefined;
           const account = launchAccount(owner, project, body.agent, body.account);
+          refuseIfDisabled(body.agent, account);
           refuseIfQuotaExhausted(body.agent, account);
           const ordinal = nextConsoleOrdinals.get(owner.id) ?? 1;
           if (!project) nextConsoleOrdinals.set(owner.id, ordinal + 1);
@@ -524,6 +540,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           if (!isAgentAdded(current.settings.added_agents, agent)) return fail(agentNotAdded(agent));
           const account = launchAccount(owner, project, agent, body.account);
           refuseIfSharingChanges(account?.id);
+          refuseIfDisabled(agent, account);
           refuseIfQuotaExhausted(agent, account);
           const ordinal = nextConsoleOrdinals.get(owner.id) ?? 1;
           if (!project) nextConsoleOrdinals.set(owner.id, ordinal + 1);
@@ -563,26 +580,31 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           store.setState({ settings: { ...current.settings, auto_pull_repositories: body.auto_pull_repositories ?? current.settings.auto_pull_repositories, auto_delete_unresumable_archives: body.auto_delete_unresumable_archives ?? current.settings.auto_delete_unresumable_archives, ...(body.auto_approve_session_requests !== undefined && { auto_approve_session_requests: body.auto_approve_session_requests }), ...(body.auto_approve_resume_requests !== undefined && { auto_approve_resume_requests: body.auto_approve_resume_requests }), ...(body.auto_select_account !== undefined && { auto_select_account: body.auto_select_account }), ...(body.sidebar_order_by_status !== undefined && { sidebar_order_by_status: body.sidebar_order_by_status }), ...(body.auto_start_quota_windows !== undefined && { auto_start_quota_windows: body.auto_start_quota_windows }), default_clone_dir: cloneDir } });
           return { type: "ack" };
         }
-        case "set_account_approval_reviewer": {
-          const current = store.getState();
-          if (body.account !== null && !current.settings.accounts.some((account) => account.id === body.account && account.agent === "codex")) {
-            return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });
-          }
+        case "set_codex_approval_reviewer": {
           if (scenario.accountApprovalError) return fail(scenario.accountApprovalError);
-          store.setState({ settings: body.account === null
-            ? { ...current.settings, codex_default_approval_reviewer: body.reviewer }
-            : { ...current.settings, accounts: current.settings.accounts.map((account) => account.id === body.account ? { ...account, approval_reviewer: body.reviewer } : account) } });
+          store.setState({ settings: { ...store.getState().settings, codex_approval_reviewer: body.reviewer } });
           return { type: "ack" };
         }
-        case "set_account_approval_mode": {
-          const current = store.getState();
-          if (body.account !== null && !current.settings.accounts.some((account) => account.id === body.account && account.agent === "claude")) {
-            return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });
-          }
+        case "set_claude_approval_mode": {
           if (scenario.accountApprovalError) return fail(scenario.accountApprovalError);
-          store.setState({ settings: body.account === null
-            ? { ...current.settings, claude_default_approval_mode: body.mode }
-            : { ...current.settings, accounts: current.settings.accounts.map((account) => account.id === body.account ? { ...account, approval_mode: body.mode } : account) } });
+          store.setState({ settings: { ...store.getState().settings, claude_approval_mode: body.mode } });
+          return { type: "ack" };
+        }
+        case "set_account_disabled": {
+          // `null` is the agent's default account, kept by agent in `disabled_default_accounts`; an owned account carries
+          // the flag itself. Running sessions are not touched, and a request that changes nothing records nothing.
+          const current = store.getState();
+          if (body.account === null) {
+            const held = current.settings.disabled_default_accounts ?? [];
+            if (held.includes(body.agent) === body.disabled) return { type: "ack" };
+            const disabled_default_accounts = body.disabled ? [...held, body.agent] : held.filter((agent) => agent !== body.agent);
+            store.setState({ settings: { ...current.settings, disabled_default_accounts } });
+            return { type: "ack" };
+          }
+          const account = current.settings.accounts.find((item) => item.id === body.account && item.agent === body.agent);
+          if (!account) return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });
+          if ((account.disabled === true) === body.disabled) return { type: "ack" };
+          store.setState({ settings: { ...current.settings, accounts: current.settings.accounts.map((item) => item.id === account.id ? { ...item, disabled: body.disabled } : item) } });
           return { type: "ack" };
         }
         case "set_account_sharing": {

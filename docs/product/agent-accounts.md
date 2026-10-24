@@ -6,9 +6,10 @@ named config directory of an agent, where it keeps its login and conversation hi
 the user's `PATH` for its accounts to be usable. Below that paragraph sit **Automatically select an account** and,
 directly under it, **Start usage windows automatically** (see those sections in `docs/product/settings.md`), switches
 for the whole application, not controls on one agent's tab. They stay there while agents are listed, while the
-added-agent list is still undecided, and while no agent is added. Below the switches sits the **Add agent** button,
-then the agent strip with the selected agent's accounts. What an account is and how consoles, projects and sessions use
-one are in "Agent config directories" in `docs/product/consoles.md`.
+added-agent list is still undecided, and while no agent is added. Below the switches sits the agent strip, which ends
+in the **Add agent** and **Add account** buttons, with the selected agent's accounts under it. What an account is and how consoles, projects and sessions use
+one are in "Agent config directories" in `docs/product/consoles.md`; signing an account in from this section is in
+`docs/product/logging-accounts-in.md`.
 
 ## Added agents
 
@@ -34,8 +35,8 @@ user changes it; a list the user has emptied stays empty.
 
 **While the list is undecided** — before Octoboard has determined which agents are installed, and for the whole run
 when the user's login shell environment could not be read (until Octoboard next starts) — the section lists every
-agent, in the order Claude Code, Codex, Grok Build. The agents then have no menu and cannot be dragged, the strip has
-no more-actions button, and the Add agent list adds nothing. Meanwhile every other place that follows the list treats
+agent, in the order Claude Code, Codex, Grok Build. The agents then have no menu and no actions button and cannot be
+dragged, and the Add agent list adds nothing; the Add agent and Add account buttons are still there. Meanwhile every other place that follows the list treats
 every agent as added, in that same order.
 
 ## The agent strip
@@ -49,13 +50,21 @@ accounts scroll beneath it; the top fade then begins below the strip (see "The e
 `docs/product/scrolling-surfaces.md`). The section always opens on the first agent's tab, however it was opened; when
 the agent in view is removed, the first agent's tab is shown.
 
+Each tab carries, at its end, its own small actions button (⋮), named "Actions for" and the agent, which opens the
+agent's menu (see "Reordering and removing an agent" below). It is shown while its tab is wholly in view in the strip,
+and while it holds keyboard focus. After the strip's last tab, at the strip's end, stand two icon-only buttons,
+**Add agent** and **Add account**, each named by its tooltip (see "Adding an agent" and "Adding, editing and removing
+an account" below). While a tab is dragged, and while the tabs move into their new places after a drag or a reorder,
+every tab's actions button fades out, except the one holding keyboard focus, which goes with its tab; they fade back
+in at their new places once the tabs have settled. A press on a tab that does not move the pointer fades nothing.
+
 An agent that is not added has no tab, installed or not. An added agent that is not available has a warning icon after
-its name in its tab, and each account the user owns of that agent says, under its directory, that it is not usable
-until the agent is on `PATH`. The tab carries a tooltip, opened while the pointer is on the tab and while the tab has
-keyboard focus, that says the agent is not installed and that its accounts are not usable until it is on `PATH`; the
-tab's accessible name is the agent's name marked as not installed. How that tooltip opens and closes is in "Tooltips
-on indicators" in `docs/product/labels-and-tooltips.md`. An agent whose availability is not yet determined has no icon,
-no tooltip and no such line, and while the list is undecided no tab has the icon or the tooltip.
+its name in its tab, and each account the user owns of that agent says, under its directory in its account settings
+dialog, that it is not usable until the agent is on `PATH`. The tab carries a tooltip, opened while the pointer is on
+the tab and while the tab has keyboard focus, that says the agent is not installed and that its accounts are not usable
+until it is on `PATH`; the tab's accessible name is the agent's name marked as not installed. How that tooltip opens and
+closes is in "Tooltips on indicators" in `docs/product/labels-and-tooltips.md`. An agent whose availability is not yet
+determined has no icon, no tooltip and no such line, and while the list is undecided no tab has the icon or the tooltip.
 
 ## Adding an agent
 
@@ -77,7 +86,7 @@ The dialog also opens by itself, in front of Settings, when Settings is opened o
 **Add agent…** buttons (see "Opening and closing Settings" in `docs/product/settings.md`): Settings shows this section
 and the dialog opens over it, holding keyboard focus. It opens once per such request; switching to another section of
 Settings and back does not open it again. When the user closes a dialog opened this way, keyboard focus
-goes to the section's **Add agent** button. A later request for Settings to show a section without this dialog
+goes to the **Add agent** button at the end of the agent strip, when the strip is there. A later request for Settings to show a section without this dialog
 closes the dialog, however it was opened, and focus goes to that section's tab. A refused addition — the agent is not
 installed, is already added, or which agents are installed is not determined yet — is shown in an error alert (see
 `docs/product/error-alerts.md`).
@@ -85,8 +94,8 @@ installed, is already added, or which agents are installed is not determined yet
 ## Reordering and removing an agent
 
 Each added agent has a menu, opened by a right-click on its tab, by the Menu key or Shift+F10 while its tab has
-keyboard focus, or from the **More actions** button at the end of the strip, which acts on the agent of the tab in view
-and is named for that agent. The menu holds:
+keyboard focus, or from the actions button at the end of its tab (see "The agent strip" above), so no tab need be
+selected first. The menu holds:
 
 - **Move earlier** and **Move later**, which move the agent one place along the list. Earlier and later are in the
   reading direction, so they hold under a right-to-left language too. Move earlier is unavailable for the first agent,
@@ -97,7 +106,8 @@ A tab can also be **dragged** to a new place with a mouse or a pen, when there i
 the pointer, the tabs it passes make room for it, and releasing it drops it there. Escape, or a cancelled pointer,
 ends the drag with nothing moved. A touch on the strip scrolls it instead.
 
-A move or a drop shows the new order at once, and the moved tab keeps keyboard focus. If the move is refused, the order
+A move or a drop shows the new order at once, and keyboard focus stays where it was: on the moved tab, or on its
+actions button when the move was chosen from that button's menu. If the move is refused, the order
 goes back and the refusal is shown in an error alert.
 
 **Remove agent** asks first. The confirmation says that the agent is taken off the list of added agents and that its
@@ -115,18 +125,20 @@ accounts of the agent stay stored untouched. The consoles, projects and sessions
 ## With no agent added
 
 When the user has removed every agent, the strip is replaced by an empty state titled "No agent added", with a line
-saying to add an agent installed on this machine to manage its accounts here. **Add account** is absent; **Add agent**
-stays, and the two switches, **Automatically select an account** and **Start usage windows automatically**, stay above
+saying to add an agent installed on this machine to manage its accounts here, and an **Add agent** button. There is
+no Add account button. The two switches, **Automatically select an account** and **Start usage windows automatically**, stay above
 it.
 
 ## The default account
 
-Each agent's panel starts with the agent's **default account**, with the directory it currently resolves to. A "?"
-ends its name line, after the plan, and says in its tooltip, or in a popover opened by a touch or pen press or a
-screen reader's activation, that the default account is the setup a session runs under when no account is pinned. Its
-directory cannot be edited, and the default account cannot be removed. It has no sharing switch: its directory is the
-one other accounts share. Its actions menu holds **Rename**; where **Log in** appears follows "Logging an account in"
-below.
+Each agent's accounts table starts with the agent's **default account**; its account settings dialog shows the directory
+it currently resolves to. A "?" follows that directory there and says in its tooltip, or in a popover opened by a touch
+or pen press or a screen reader's activation, that this is the agent's own default configuration directory, which new
+sessions use when no account is chosen and whose configuration other accounts can share. Its directory cannot be edited,
+and the default account cannot be removed, but it can be turned off like any other account (see "Turning an account off"
+below). It has no sharing switch: its directory is the one other accounts share. Its actions menu holds **Settings**,
+**Rename** and **Log in**; where else **Log in** appears is in "Where Log in appears" in
+`docs/product/logging-accounts-in.md`.
 
 **Rename** opens a dialog, titled for the default account of that agent, with a single name field holding the name the
 user gave it, empty when there is none, and a note that leaving it empty uses the standard name. The name is stored
@@ -148,38 +160,134 @@ settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-
 ## The accounts the user owns
 
 The accounts the user owns follow the default account, each with its name, its directory and an actions menu holding
-**Edit** and, set apart, **Remove**; where **Log in** appears follows "Logging an account in" below. Both kinds of
-directory are shown as in "How paths are shown" in `docs/product/settings.md`.
+**Settings**, **Edit** and **Log in** and, set apart, **Remove**; where else **Log in** appears is in "Where Log in
+appears" in `docs/product/logging-accounts-in.md`. Both kinds of directory are shown as in "How paths are shown" in
+`docs/product/settings.md`.
 
-Every account of an available agent, the default account included, also shows its plan quota: the plan beside its
-name, and beneath the account's row, across its whole width, a line and bar per quota window, each named as in
-"Quota windows" in `docs/product/account-quotas.md`, the five-hour and account-wide weekly windows sharing one meter —
-or, in its place,
-that the quota is still being read; a quota that is unavailable or out of date is marked on the account's name line or
-beside when it was read. Opening the section asks for a fresh reading,
-covering the accounts of every agent and not only of the tab in view; the readings already held are shown at once. What is read, when, and how each state looks are in `docs/product/account-quotas.md`.
+## The accounts table
 
-**Login state.** After the account's name and its plan, a badge says whether the account is logged in, in words and
-with a dot, not in colour alone:
+Each agent's tab panel holds, for Claude Code and Codex, the agent's **Permission approval** row (see "Approval modes"
+below), then one table of the agent's accounts, named for the agent ("Claude Code accounts"): a row per account, the
+default account first, then the accounts the user owns in the order they are kept. Its columns:
 
-| Badge | When |
+| Column | What a row shows |
 |---|---|
-| **Logged in**, in the success colour | The latest reading of its quota succeeded with at least one quota window. |
-| **Not logged in**, in the warning colour | Its quota is in the not-logged-in state (see "Quota states" in `docs/product/account-quotas.md`). The row then shows no quota line beneath it. |
-| None | Anything else: the quota not read yet, a reading that failed for another reason, or windows kept from before a newer reading failed. |
+| **Account** | The account's name and, when the agent names one, its plan as a badge. A name too long for its space fades as in "Names too long for their space" in `docs/product/labels-and-tooltips.md`. |
+| **Status** | The account's login state (below) and, for an account known to be signed out, the **Log in** icon button (see `docs/product/logging-accounts-in.md`). |
+| **Usage** | The account's compact usage bar, the same as an account picker's, with no numbers: the five-hour window with the account-wide weekly window's thinner bar beneath it, or one bar for the account-wide weekly window or the credit pool (see "In an account picker" in `docs/product/account-quotas.md`); assistive technology reads what remains of those windows in words. While the first reading is on its way it says the quota is being read. With no current reading it holds a dash, followed by the "Quota unavailable" mark when the reading failed with nothing read before, or by the out-of-date mark when the windows held are the last good ones (see "Quota states" in `docs/product/account-quotas.md`); otherwise assistive technology reads the dash as "No usage reading". Model-specific windows are left to the account settings dialog. |
+| **Disable** | The account's Disable switch (see "Turning an account off" below). The column's heading carries a "?" help tip. |
+| No heading | The account's actions menu button (see "The default account" and "The accounts the user owns" above). |
+
+**Login state.** A badge in the Status column says whether the account is logged in, in words and with a dot, so the
+state is not carried by colour alone: **Logged in**, in the success colour, once a reading of its quota has been taken
+— the latest reading succeeded, or the windows of an earlier one are still held after a newer reading failed; **Not
+logged in**, in the warning colour, while its quota is in the not-logged-in state (see "Quota states" in
+`docs/product/account-quotas.md`). While neither is known — the quota not read yet, or a reading that failed with
+nothing read before — there is nothing.
+
+**In a narrow window** the table keeps its columns' widths: once the section is narrower than they need, the table
+scrolls sideways, and while it does it is a tab stop of its own, named for the agent's accounts as scrollable (see
+"Scrolling a surface from the keyboard" in `docs/product/scrolling-surfaces.md`). The actions column stays pinned at
+the table's end edge meanwhile, with a hairline at its start, and a control that keyboard focus moves to is scrolled
+clear of it. The table draws no fade at its sideways edges.
+
+Opening the section asks for a fresh reading of the quotas, covering the accounts of every agent and not only of the
+tab in view; the readings already held are shown at once.
+
+## The account settings dialog
+
+**Settings**, the first entry of an account's actions menu, with a gear icon, opens a modal dialog of everything about
+that one account.
+Its heading is the account's name, followed by its plan badge, its login state — the badge as in the table, or, while
+that is not known, "Checking…" while the first reading is on its way and "Unknown" otherwise — the "Quota unavailable"
+mark when its reading failed with nothing read before, and the **Log in** icon button for an account known to be signed
+out. Under the heading stands the account's directory; for the default account a "?" help tip follows it (see "The
+default account" above). For an account the user owns of an agent that is not available, the dialog's body opens with
+a line saying it is not usable until the agent is on `PATH`. Then, one under another:
+
+- **Usage** — the account's quota drawn as in the rail's account quota panel: the five-hour and account-wide weekly
+  windows as one meter, every other window, model-specific ones included, as a meter of its own, one to a row. How
+  long ago the windows were read, with the out-of-date mark when it applies, ends the heading. It says the quota is
+  being read while the first reading is on its way, says for an account that is not logged in that it is not logged
+  in yet and to log in to use it, and holds a dash when there is no reading to show otherwise. How windows are named
+  and drawn is in "How an account's quota is shown" in `docs/product/account-quotas.md`.
+- The account's settings, as rows like Settings' own, a name with a line under it and the control at the row's end;
+  each row's line says what its switch does in the position it is in, and changes with it: **Share default
+  configuration**, for an account the user owns (see "Sharing the default configuration" below), then, last,
+  **Disable account** (see "Turning an account off" below).
+
+The dialog has no footer: it closes on its close button, on Escape and on a press outside it, and keyboard focus then
+returns to the account's actions menu button in the table. It follows the account as it changes, from any window, and
+closes by itself when the account is removed.
+
+## Turning an account off
+
+Every account, the default account included, has a **Disable** switch, off to begin with, in the table's Disable column
+and, as the **Disable account** row, last in its account settings dialog. Turning the switch on turns the account off.
+Its accessible name is "Disable" (or "Disable account") and the account. The column heading's "?" help tip says,
+whatever the switches' positions, what being off means: the account is not shown in the account choices and new sessions
+will not use it, while running sessions are unaffected. The **Disable account** row's line follows its switch: while it
+is off, that once it is on the account is left out of account choices and new sessions won't use it; while it is on,
+that the account is turned off, with the same consequences; both add that running sessions are unaffected. The account
+stays out of use for new work until the user turns the switch off again: nothing turns an account back on by itself,
+after a time or otherwise.
+
+While an account is turned off:
+
+- **No session is opened on it, handed off to it or switched onto it**, by anyone, the user included: the daemon
+  refuses with `account_disabled` (see "Opening a session" in `docs/product/sessions.md`, "What can be handed off" in
+  `docs/product/handing-off-sessions.md` and "When a switch fails" in `docs/product/switching-session-accounts.md`).
+- **Automatic account selection passes over it** (see "Which account a session uses" in `docs/product/sessions.md`),
+  and so does a session started by another session where it would otherwise run on its caller's own account (see "The
+  agent and account of a session a session starts" in `docs/product/hub-orchestration.md`).
+- **The window's account choices leave it out**: the session and handoff dialogs' account pickers do not list it and
+  open on another account (see the **Agent** field in "Opening a session" in `docs/product/sessions.md`), a session
+  opened with defaults takes another account, or is unavailable when none is left (see "Opening a session with
+  defaults" in `docs/product/sessions.md`), and a session row's **Switch account** submenu does not list it (see
+  "Session rows" in `docs/product/sidebar-session-rows.md`). Where a choice already holds it, it stays listed:
+  - in the session and handoff dialogs, when the account the field ends on is turned off, it is listed, marked
+    **Disabled**, but cannot be picked, and the dialog cannot be submitted on it;
+  - in the Switch account submenu, a session's own account stays listed, checked, whether or not it is turned off;
+  - in the console and project dialogs' account pickers, the account the console or project named when the dialog
+    opened, and the one picked in it now, stay listed, marked **Disabled**, and can still be picked, since a console's
+    or a project's account is a lasting preference (see "Agent config directories" in `docs/product/consoles.md` and
+    "The project's account, model and reasoning effort" in `docs/product/projects.md`). A console or project whose
+    account it is keeps it; only opening a session on it is refused.
+- **No usage window is started on it automatically** (see "When an account is kicked" in
+  `docs/product/account-quotas.md`).
+
+The sessions already running on it are not affected, and resuming, restarting or reopening a session on it is never
+refused for this. Its quota goes on being read, and the rail's account quota panel and the menu bar icon's quota
+submenus list it as usual. Its row in the accounts table looks like any other, but for its switch.
+
+**The switch** saves at once, on its own, and shows the daemon's recorded choice, which every window shares, moving
+when it changes. A refusal is shown in an error alert, the switch keeping its position; a press while the previous one
+is still unanswered is ignored. A client turns an account off or on with the protocol request `set_account_disabled`.
+Turning an account back on while **Start usage windows automatically** is on starts at once any window its held reading
+shows has not begun counting, as turning that setting on does.
+
+Whether an account is turned off is kept by the daemon on this machine and is not part of a configuration export (see
+"What is not configuration and never travels" in `docs/product/configuration-export-and-import.md`). An agent can read
+it — `get_settings` marks each account that is turned off — but no tool turns an account off or on (see "Application
+settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`).
 
 ## Sharing the default configuration
 
-Every account the user owns has a **Share default configuration** switch within its row, across the row's full
-width. The default account has none. The switch's accessible name identifies the account. A change is carried out at
-once or not at all (see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`), so
-the switch is either free to use or unavailable, and says which. Unavailable, it looks disabled but stays focusable
-and is marked unavailable for assistive technology; a press on it is ignored, and what is shown under it says why.
+Every account the user owns has a **Share default configuration** row in its account settings dialog, above **Disable
+account** (see "The account settings dialog" above): the name with a "?" help tip, a line under it, and the switch at
+the row's end. The line follows the switch: while it is off, "Turning this on links the account's configuration and
+conversation history to the default account's directory."; while it is on, "The account's configuration and conversation
+history are linked to the default account's directory." The default account has none. The switch's accessible name
+identifies the account. A change is carried out at once or not at all (see "When a change is carried out" in
+`docs/product/sharing-the-default-configuration.md`), so the switch is either free to use or unavailable, and says
+which. Unavailable, it looks disabled but stays focusable and is marked unavailable for assistive technology; a press on
+it is ignored, and what is shown under the row's line says why.
 
-A help tip beside the switch says, one line each, that configuration (skills, plugins, settings and more) and
+A help tip beside the row's name says, one line each, that configuration (skills, plugins, settings and more) and
 conversation history are linked to the default account's directory, what is never shared for the selected agent, and
-what happens to conversations when sharing is turned off; the rules are in "What is shared" and "Turning sharing off"
-in `docs/product/sharing-the-default-configuration.md`.
+what happens to conversations when sharing is turned off; and, while the account has idle sessions, that changing it
+first ends that many idle sessions of the account and resumes them afterwards. The rules are in "What is shared" and "Turning sharing off" in
+`docs/product/sharing-the-default-configuration.md`.
 
 The switch saves independently of the account's name or directory. It shows the daemon's recorded choice, which changes
 as soon as a change starts, so during a change it shows the change's target. While the last change is incomplete — it
@@ -191,13 +299,11 @@ succeeds. The one exception is turning sharing on that failed because the defaul
 sharing was turned on (the cause `default_moved`), which asking again cannot mend: the switch then shows the recorded
 choice, on, and turning it off, then on again, shares the new directory. Every window shows the same state, from the
 account's sharing state (see "The account's sharing state" in `docs/product/sharing-the-default-configuration.md`). What
-stands under the switch is its description for assistive technology:
+stands under the row's line is the switch's description for assistive technology:
 
 | State | The switch | Under it |
 |---|---|---|
-| Free, off | Can be turned on | A caption of what turning it on does: the account's configuration and conversation history are linked to the default account's directory. |
-| Free, on | Can be turned off | A caption of what is the case now: they are linked to the default account's directory. |
-| Free, with idle sessions of the account | Can be turned | The caption, and a line saying that changing it first ends that many idle sessions of the account and resumes them afterwards. |
+| Free, off or on, with or without idle sessions of the account | Can be turned | Nothing beyond the row's line, which says what turning it on does or that the account shares; the idle sessions a change would end are in the help tip. |
 | Sessions of the account working | Unavailable | That sharing cannot be changed while that many of the account's sessions are working, and to wait for them to finish. Which sessions count as working is in "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`. |
 | The account being signed in | Unavailable | That sharing cannot be changed while the account is being signed in. With sessions running too, both lines are shown. |
 | A change running | Unavailable | A progress bar (below). |
@@ -207,11 +313,11 @@ Text typed into an idle session's terminal but not yet sent is not seen, and is 
 (see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`); the switch does not warn
 of it.
 
-The on and off captions are shown only when nothing else is: a progress bar or the alert takes their place. A
-reason the account is in use is shown as well as either of these. The switch is also unavailable while this window's
-own request for a change is still unanswered, and shows the recorded choice meanwhile.
+A reason the account is in use stays under the row's line alongside a progress bar or the alert. The progress bar and
+the alert stand under the row, across its width. The switch is also
+unavailable while this window's own request for a change is still unanswered, and shows the recorded choice meanwhile.
 
-**While a change runs**, a progress bar stands under the switch, labelled with the direction, turning sharing on or
+**While a change runs**, a progress bar stands under the row, labelled with the direction, turning sharing on or
 off, and following the change's phases (see "When a change is carried out" in
 `docs/product/sharing-the-default-configuration.md`). While it waits for another account's sharing change to finish,
 while it ends the idle sessions, and while it resumes them, the bar is indeterminate and says which in place of a
@@ -221,9 +327,9 @@ of the account finishes, it is indeterminate and says it is waiting to start. Th
 change starts, together with the phase when that is not the entries, and each later phase is announced as it begins,
 except entering the entries phase, which keeps what was last said.
 
-**When the change ends** the result is shown at the switch at once. A change that completed leaves the caption of the
-new state. One that did not complete — whether it failed just now or the daemon was stopped during it — is shown under
-the switch as one compact amber alert (see "Failures shown on the screen" in `docs/product/error-alerts.md`):
+**When the change ends** the result is shown at the switch at once. A change that completed leaves nothing under the
+row. One that did not complete — whether it failed just now or the daemon was stopped during it — is shown under
+the row as one compact amber alert (see "Failures shown on the screen" in `docs/product/error-alerts.md`):
 
 - a title saying that turning sharing on (or off) could not finish, or, after a daemon restart, when nothing is known
   of the failure, that the last attempt to turn it on (or off) did not finish;
@@ -254,53 +360,51 @@ user first (see "Starting a session on an account whose last change is incomplet
 
 ## Approval modes
 
-Claude Code and Codex show a permission-approval heading above the selectors. In a wide layout it shares a row with
-**Add account**; the heading and selectors start at the second of two equal columns, aligned with the quota layout,
-with the account actions at the row's end. In a narrow layout the heading repeats above each account's selector.
-Its help tip explains how the agent handles permission requests and, for Codex, that automatic review may use
-additional tokens. Grok Build has no approval heading or help tip.
+How Claude Code and Codex handle permission requests is **one setting per agent**, applied to every account of that
+agent, the default account included. It is set in the agent's tab, in the **Permission approval** row above the
+accounts table: the row's name with a "?" help tip, a line saying that it applies to every account of the agent, and a
+selector at the row's end. The help tip explains how the agent handles permission requests, that **Follow account
+configuration** leaves it to each account's own configuration and, for Codex, that automatic review may use
+additional tokens. Grok Build has no such row.
 
-Every Codex account row, including the default account, has an inline approval-mode selector:
+Codex's choices:
 
-- **Follow account configuration** leaves the reviewer to that account's Codex configuration. This is the initial
-  choice for both new and existing accounts; automatic review is never enabled just by adding an account.
+- **Follow account configuration** leaves the reviewer to each account's own Codex configuration. This is the initial
+  choice; automatic review is never enabled just by adding an account.
 - **Automatic review** asks Codex to review approval requests itself and may use additional tokens.
 - **Ask me** asks Codex to send approval requests to the user.
 
-The choice is saved when selected, separately from editing the account's name or directory. Choices are unavailable
-while saving; a failure is shown in an error alert. It applies when a session next starts or resumes, including an account switch;
-a running process keeps its current reviewer. A named account's choice is independent of the default account's:
-following configuration does not inherit the default account's selector. If a session's named account was deleted,
-or it holds a pinned directory without a stored account reference, it follows that original directory's Codex
-configuration instead of adopting the default account's choice. Grok Build has no such selector.
+Claude Code's choices:
 
-These choices are stored by Octoboard. An explicit reviewer overrides Codex's reviewer for that launch without
-writing its configuration files or changing its sandbox or approval policy. They remain local; see
-"What is not configuration and never travels" in `docs/product/configuration-export-and-import.md`.
-
-Every Claude Code account row, including the default account, has the same kind of selector with Claude Code's four
-choices:
-
-- **Follow account configuration** passes nothing, so the account's own `settings.json` decides. This is the initial
-  choice for new and existing accounts.
+- **Follow account configuration** passes nothing, so each account's own `settings.json` decides. This is the initial
+  choice.
 - **Automatic** launches Claude Code in its auto mode, where a classifier approves what it judges safe and blocks the
-  rest. Whether auto mode is available to the account, which depends on its plan among other things, is Claude Code's
+  rest. Whether auto mode is available to an account, which depends on its plan among other things, is Claude Code's
   own decision; Octoboard only asks for it.
 - **Ask me** launches Claude Code so that every tool call not already allowed asks the user.
 - **Approve everything** launches Claude Code so that every tool runs without asking.
 
-The choice is saved and applies exactly as Codex's does, a resume and an account switch included, and it stays local
-too. **Approve everything** is saved only once the user accepts a destructive confirmation that names the account (or
-the default account) and warns that Claude Code will run every tool in that account's sessions without asking,
-commands that change or delete files included; its confirm button carries the choice's own name. Cancelling, Escape
-included, leaves the choice as it was. If the save fails, the error is shown in the confirmation, which stays open, and
-the choice stays unchanged. Because the user has agreed there, Claude Code's own blocking warning for that mode never
-appears (see "Per-agent specifics a user will notice" in `docs/product/launching-agents.md`).
+The choice is saved when selected; the choices are unavailable while saving, and a failure is shown in an error alert.
+It applies when a session of any account of the agent next starts or resumes, including an account switch, and a
+legacy pinned directory with no account reference included; a running process keeps what it was started with. An
+explicit choice overrides the agent's own setting for that launch without writing its configuration files, and for
+Codex without changing its sandbox or approval policy.
+
+**Approve everything** is saved only once the user accepts a destructive confirmation that names the agent and warns
+that every tool will run without asking in every account of that agent, commands that change or delete files
+included; its confirm button carries the choice's own name. Cancelling, Escape included, leaves the choice as it was.
+If the save fails, the error is shown in the confirmation, which stays open, and the choice stays unchanged. Because the
+user has agreed there, Claude Code's own blocking warning for that mode never appears (see "Per-agent specifics a user
+will notice" in `docs/product/launching-agents.md`).
+
+The choices are stored by Octoboard and stay on this machine (see "What is not configuration and never travels" in
+`docs/product/configuration-export-and-import.md`). Versions of Octoboard that kept a choice per account are moved over
+once: each agent's setting takes the choice its default account had, and the other accounts' choices are dropped.
 
 ## Adding, editing and removing an account
 
-**Add account** sits at the start of the selected agent's tab panel, above its account list. Its form asks for the
-agent, starting on the agent of the tab in view —
+**Add account**, the icon button at the end of the agent strip, opens a form that asks for the agent, starting on the
+agent of the tab in view —
 every added agent is listed, in the list's order (every agent while the list is undecided), and can be picked, one that
 is not installed included and marked with a Not installed badge after its name, since an account may be set up before its agent is, unlike
 the agent pickers elsewhere (see "Which agents the agent pickers list" in `docs/product/consoles.md`) — then a name and a
@@ -330,74 +434,3 @@ as a change of the switch, its idle sessions ended and resumed around it: refuse
 working or it is being signed in, and while a
 change of its sharing runs (see "Removing or repointing a sharing account" in
 `docs/product/sharing-the-default-configuration.md`).
-
-## Logging an account in
-
-For an account known to be signed out, **Log in** appears as a small button directly after its login-state badge,
-before the default account's help tip, and is absent from its actions menu. For an account known to be signed in, or
-whose login state is not known, Log in appears in its actions menu instead. This applies to the default account and
-the accounts the user owns alike.
-
-Log in signs the account in with its agent's own CLI, run by the daemon in the background against the account's config
-directory (for the default account, the directory the user's login shell gives the agent), with no terminal and no
-window. Octoboard never reads or writes the credential itself. Each agent signs in its own way:
-
-| Agent | What the user sees |
-|---|---|
-| Claude Code | Octoboard opens the authorization page in the browser. Authorizing there completes the login. |
-| Codex | Octoboard creates the account's config directory first if it does not exist, then opens the authorization page in the browser. Only one Codex login runs at a time, across all accounts. |
-| Grok Build | Grok Build opens the authorization page in the browser itself, and Octoboard does not open it again. The login dialog shows the code to confirm on that page. |
-
-Octoboard opens the page once, as soon as the agent has given it, and only in the window where the login was started,
-whether or not Settings is still open there. Opening it in the browser failing is shown in an error alert with the
-address to open by hand.
-
-### The login dialog
-
-Log in opens a modal dialog titled for the agent and the account ("Log in to Codex account Work") and starts the
-login at once. While the login runs, the dialog shows a spinner and says that the account is logging in, then that it
-is waiting for the user to authorize in the browser — for Grok Build, with the code to confirm instead. Its buttons
-are **Open the page again**, while the page's address is known, and **Cancel login**. While the login runs, what the
-dialog says is announced to assistive technology as it changes. Its first announcement comes about 1.5 seconds after
-the dialog opens, or after **Log in again** (below) starts a new login, so that it follows the announcement of the
-dialog itself and of the button focus is on.
-
-**Closing the dialog cancels the login**: Cancel login, Escape and the dialog's close button all end a login that is
-still running. Only one login can be followed from Settings at a time, since the dialog is modal; the daemon itself
-runs at most one login per account, and one Codex login at a time across all accounts. Log in is unavailable for an
-account whose login is running.
-
-Where keyboard focus goes once the dialog has closed depends on what opened it. When the account row's own Log in
-button opened it, a login that succeeded puts focus on the row's actions menu button, since Log in goes away once the
-account reads as logged in. When the dialog closes any other way — Cancel login, Escape, the close button, Close after a
-failure — focus goes back to Log in once it is available again, which is after the daemon has answered the cancel, or
-to the row's actions menu button if Log in has gone by then or the login turns out to have succeeded after all. When
-Log in in the actions menu opened it, focus goes back to the actions menu button.
-
-When the Agent accounts section opens while a login is already running — after a reload, or started in another window
-— the dialog opens on that login (on one of them, when several are running), without starting another, so it can be
-followed or cancelled there.
-
-A login ends in one of these:
-
-- **Logged in**: the agent confirms the account is signed in. The dialog closes by itself, the account's quota is read
-  again at once, and the account's badge then shows the result (see "The accounts the user owns" above). Assistive
-  technology is told once, by the account's row and naming the account, that it is logged in, about 1.5 seconds after
-  the success; the dialog closes and focus returns to Settings right after the success, so by then both have
-  happened. While the user is away from the window — it is minimized or hidden, or another application, such as the
-  browser they authorized in, is in front — the announcement waits, and comes about 1.5 seconds after they are back in
-  it. A success that had already happened when the section or the agent's tab is shown again is not announced.
-- **Could not log in**: the dialog stays open, says the login to the account did not go through and gives the agent's
-  reason. When the CLI said it succeeded but the agent still reports the account not signed in, the reason says so.
-- **Timed out**, after 10 minutes of waiting for the user to authorize: the dialog stays open and says the login timed
-  out.
-- **Cancelled**, including from another window: the dialog closes.
-- **Lost**, when the daemon restarts or the connection is re-established while the login runs: the dialog closes.
-
-A login that cannot start is shown the same way as one that could not log in, in the dialog with the daemon's reason:
-for example while another Codex account is logging in. A start refused because this account's login is already
-running is not shown as a failure; the dialog takes up that login instead. After a failure, a timeout or a refusal,
-the dialog offers **Log in again**, which starts a new login in the same dialog, and **Close**.
-
-Whatever the outcome, the account's quota is read again within about 15 seconds (see "When quotas are read" in
-`docs/product/account-quotas.md`).

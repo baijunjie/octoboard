@@ -2,11 +2,12 @@
 
 A session can be moved to another account of its own agent from its row's **Switch account** submenu (see "Session
 rows" in `docs/product/sidebar-session-rows.md`); a console session is switched from its own row, among that session's
-own agent's accounts. The submenu is offered only when the agent has more than one account, and the user is asked to
-confirm. An owner moves a session of its own with the `switch_session_account` tool (see "Switching from an owner's
+own agent's accounts. The submenu is offered only when the agent has another account that is turned on, and the user
+is asked to confirm. An owner moves a session of its own with the `switch_session_account` tool (see "Switching from an owner's
 tool" below). Both run the same switch, described from "What a switch does" on. A switch is made only when the user or
 an owner asks for one: Octoboard never switches a session on its own, not even off an account whose quota is used up.
-A session cannot be switched onto a used-up account (see "A used-up account" in `docs/product/account-quotas.md`).
+A session cannot be switched onto a used-up account (see "A used-up account" in `docs/product/account-quotas.md`), nor
+onto a turned-off one (see "Turning an account off" in `docs/product/agent-accounts.md`).
 
 ## Confirming a switch
 
@@ -24,7 +25,10 @@ chosen option has none. Neither choice changes the console's or projects' accoun
 
 When the target account is used up (see "A used-up account" in `docs/product/account-quotas.md`), a danger callout at
 the top of the confirmation names the account, the quota it has used up and when it resets, and Confirm is disabled
-until the account is no longer used up. The submenu already disables such an account (see "Session rows" in
+until the account is no longer used up. When the target account is turned off — it can be turned off after the
+confirmation has opened — a danger callout there says instead that the account is turned off, so a session cannot use
+it, and to choose another account or turn it back on in Settings, and Confirm is disabled until it is turned back on.
+The submenu already disables a used-up account and leaves out a turned-off one (see "Session rows" in
 `docs/product/sidebar-session-rows.md`).
 
 When the target account's last change of sharing is incomplete, Confirm first asks the user whether to start on it,
@@ -228,7 +232,9 @@ came from:
 
 **A switch that cannot be made leaves the session on the account it had, and says why.** It is refused, with nothing
 recorded, when the session is being launched, resumed, handed off, switched already or having its owner changed at
-that moment, when it is archived, when it is on that account already, when the target account is used up by the
+that moment, when it is archived, when it is on that account already, when the target account is turned off
+(`account_disabled`, carrying what "Opening a session" in `docs/product/sessions.md` describes for it), when the
+target account is used up by the
 reading the daemon holds at that moment (`account_quota_exhausted`, carrying what "Opening a session" in
 `docs/product/sessions.md` describes for it), when the target is a Grok Build directory that is not an initialized Grok home, when the user's
 shell environment could not be captured — which is read whenever either side of the switch is the default account,

@@ -1,4 +1,5 @@
 import { choiceGroups, settledInitialChoice, type AccountChoice } from "../accountChoices";
+import { defaultAccountName } from "../agents";
 import type { Translate } from "../i18n/catalog";
 import type { AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Project, RequestBody, Settings } from "../protocol";
 import type { NewSessionBinding, NewSessionRequest } from "./dialogRequest";
@@ -34,7 +35,7 @@ export function openSessionRequest(t: Translate, { console: parentConsole, proje
 
 /** What a session-creating control reads from the store to settle the choice a session opens on. */
 export interface QuickCreateState {
-  settings: Pick<Settings, "accounts" | "added_agents" | "auto_select_account">;
+  settings: Pick<Settings, "accounts" | "added_agents" | "auto_select_account" | "disabled_default_accounts" | "default_account_names">;
   agentAvailability: Map<Agent, AgentAvailability>;
   accountQuotas: AccountQuota[];
   accountSharing?: Map<string, AccountSharing>;
@@ -45,7 +46,7 @@ export interface QuickCreateState {
  * `auto_select_account` is on, that account is the one whose weekly quota resets soonest. */
 function settledQuickChoice(parentConsole: Console, project: Project | undefined, state: QuickCreateState, now: number) {
   const { accounts, added_agents, auto_select_account } = state.settings;
-  const groups = choiceGroups(accounts, state.agentAvailability, added_agents, () => "", { quotas: state.accountQuotas, now }, state.accountSharing);
+  const groups = choiceGroups(accounts, state.agentAvailability, added_agents, () => "", { quotas: state.accountQuotas, now }, state.accountSharing, state.settings.disabled_default_accounts);
   return settledInitialChoice(
     parentConsole,
     project,
@@ -57,19 +58,21 @@ function settledQuickChoice(parentConsole: Console, project: Project | undefined
   );
 }
 
-/** Whether the agent a session created where `target` would be has all its accounts used up, so that
+/** Whether the agent a session created where `target` would be has all its accounts used up or turned off, so that
  * creating with the defaults has nothing to run on. The dialog still opens, as the user can pick
  * another agent there. */
-export function quickCreateUsedUp(target: NewSessionRequest, state: QuickCreateState, now: number): boolean {
-  return settledQuickChoice(target.console, target.kind === "new-session" ? target.project : undefined, state, now).exhaustedBy !== undefined;
+export function quickCreateUnavailable(target: NewSessionRequest, state: QuickCreateState, now: number): boolean {
+  const { exhaustedBy, disabled } = settledQuickChoice(target.console, target.kind === "new-session" ? target.project : undefined, state, now);
+  return exhaustedBy !== undefined || disabled;
 }
 
 /** The request the session dialog sends when submitted untouched: the localized default name, the agent and account it
  * opens on (`settledQuickChoice`), the model and effort left to follow the parent, and no owner unless
  * `binding` fixes one (a console session's focus mode). With that account's quota used up it
  * opens on another account of the agent; with every account of the agent used up there
- * is nothing to send, and `usedUp` says so instead (`quickCreateUsedUp`). The same for an account whose sharing
- * change runs, named by `changingSharing`. */
+ * is nothing to send, and `usedUp` says so instead (`quickCreateUnavailable`). The same for an account whose sharing
+ * change runs, named by `changingSharing`. The same for an account the user turned off, which the daemon would
+ * refuse, named by `disabled` (every account of the agent is off, or the inherited one is and nothing else is free). */
 export function defaultOpenSessionRequest(
   t: Translate,
   parentConsole: Console,
@@ -78,8 +81,14 @@ export function defaultOpenSessionRequest(
   state: QuickCreateState,
   now: number,
   appearance: "light" | "dark",
-): { request: OpenSessionRequest } | { usedUp: true } | { changingSharing: { account: string; name: string } } {
-  const { choice, exhaustedBy, changingSharing } = settledQuickChoice(parentConsole, project, state, now);
+): { request: OpenSessionRequest } | { usedUp: true } | { changingSharing: { account: string; name: string } } | { disabled: { agent: Agent; account: string | null; name: string } } {
+  const { choice, exhaustedBy, changingSharing, disabled } = settledQuickChoice(parentConsole, project, state, now);
+  if (disabled) {
+    const name = choice.account === null
+      ? defaultAccountName(t, state.settings.default_account_names, choice.agent)
+      : state.settings.accounts.find((item) => item.id === choice.account)?.name ?? choice.account;
+    return { disabled: { agent: choice.agent, account: choice.account, name } };
+  }
   if (exhaustedBy) return { usedUp: true };
   if (changingSharing && choice.account !== null) {
     return { changingSharing: { account: choice.account, name: state.settings.accounts.find((item) => item.id === choice.account)?.name ?? choice.account } };

@@ -1,39 +1,32 @@
 import { Button } from "../components/Button";
 import { Tabs } from "@heroui/react";
-import { Bot, LogIn, Pencil, Trash2, UserPlus } from "lucide-react";
+import { Bot, LogIn, Pencil, Settings, Trash2, UserPlus, type LucideIcon } from "lucide-react";
 import React, { useContext, useEffect, useRef, useState } from "react";
-import { ringForAutomaticFocus } from "../touchInput";
 
 import { AGENT_LABEL, defaultAccountName, isAgentUnavailable } from "../agents";
-import { ActionMenu, takeMenuFocusToRestore, type ActionMenuEntry } from "../components/ActionMenu";
+import { ICON_TRIGGER_CLASS, takeMenuFocusToRestore, type ActionMenuEntry } from "../components/ActionMenu";
 import { AgentTabList } from "../components/AgentTabList";
-import { ExternalLinkIcon } from "../components/ExternalLinkIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
-import { FadeOverflow } from "../components/FadeOverflow";
-import { HelpTip } from "../components/HelpTip";
+import { TitledControl } from "../components/TitledControl";
 import { InlineReference } from "../components/InlineReference";
 import { PATH_VAR_PARAMS } from "../components/literalParams";
-import { MarkedPath } from "../components/MarkedPath";
-import { useListMotion } from "../components/useListMotion";
 import { useStickyHeadingFocus } from "../components/stickyHeadingFocus";
 import { ConfirmDialog } from "../dialogs/ConfirmDialog";
-import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
-import type { Account, AccountLogin as Login, Agent } from "../protocol";
-import { AccountNameLine, AccountQuotaSummary, QuotaUpdated } from "../quota/AccountQuotaSummary";
-import { accountQuotaOf } from "../quota/accountQuotaOf";
-import { isNotLoggedIn } from "../quota/quotaFormat";
-import { useAccountQuota } from "../quota/useAccountQuota";
+import type { Account, Agent } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
-import { ApprovalReviewerSelect, ClaudeApprovalModeSelect } from "./AccountApprovalSelect";
+import { ringForAutomaticFocus } from "../touchInput";
+import { AccountDetailsDialog } from "./AccountDetailsDialog";
 import { AccountDialog } from "./AccountDialog";
 import { AutoSelectAccountSetting } from "./AutoSelectAccountSetting";
-import { AccountLoginAnnouncer, accountLoginOf, loginIsActive, useClearSucceededLogin } from "./AccountLogin";
-import { AccountSharingSwitch } from "./AccountSharingSwitch";
+import { accountLoginOf, loginIsActive } from "./AccountLogin";
+import { type ReturnLoginFocus } from "./AccountLoginButton";
 import { AccountLoginDialog } from "./AccountLoginDialog";
+import { AccountsTable, AccountTableRow, rowActionsTrigger } from "./AccountsTable";
 import { AddAgentDialog } from "./AddAgentDialog";
+import { AgentApprovalSetting } from "./AgentApprovalSetting";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
-import { AgentMoreMenu, AgentTabMenu, RemoveAgentDialog, useAgentList } from "./AgentListMenu";
+import { AgentTabActions, AgentTabMenu, RemoveAgentDialog, useAgentList } from "./AgentListMenu";
 import { StartQuotaWindowsSetting } from "./StartQuotaWindowsSetting";
 import { SettingsFocusContext, useSectionRefocus } from "./useSectionRefocus";
 
@@ -42,13 +35,35 @@ import { SettingsFocusContext, useSectionRefocus } from "./useSectionRefocus";
  * Settings dialog clears its fade and the scroll padding for focus moves for this much. */
 export const AGENT_STRIP_HEIGHT = 45;
 
-/** How many animation frames (about half a second) a request to focus an account's sharing switch waits for it to
- * appear. */
-const MAX_FRAMES_TO_WAIT_FOR_SWITCH = 30;
+/** Puts focus on the actions menu button of the table row of `row` (an account id, or `default:<agent>`), once the dialog
+ * that was open over it has gone and the menu's own restore of focus has run. */
+function returnToRowActions(row: string): void {
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const trigger = rowActionsTrigger(row);
+    if (!trigger) return;
+    // The user did not ask for this move, so the destination shows its ring.
+    ringForAutomaticFocus();
+    trigger.focus();
+  }));
+}
 
-/** Every added agent's accounts, with one tab for each in the order of the list (the first agent's open) and the
- * agent's default account first, each with its plan and quota, and the means to add, edit and remove the ones the
- * user owns, to rename the default account, and to add, remove and reorder the agents (see
+/** An icon-only button for the end of the agent strip, named by `label`, which is also its tooltip: the strip carries
+ * no room for words. */
+function IconAction({ label, icon: Icon, onPress, buttonRef }: { label: string; icon: LucideIcon; onPress: () => void; buttonRef?: React.Ref<HTMLButtonElement> }): React.ReactElement {
+  return (
+    <TitledControl title={label}>
+      <Button ref={buttonRef} variant="ghost" preventFocusOnPress aria-label={label} className={ICON_TRIGGER_CLASS} onPress={onPress}>
+        <Icon aria-hidden="true" className="size-4" />
+      </Button>
+    </TitledControl>
+  );
+}
+
+/** Every added agent's accounts, with one tab for each in the order of the list (the first agent's open). A tab holds
+ * the agent's Permission approval row (not for Grok), which applies to all its accounts, and a table with the agent's
+ * default account first, each a row (name and plan, status, usage, the Disable switch) with an actions menu whose
+ * first entry opens the account's details in a modal. The section also has the means to add, edit and remove the
+ * accounts the user owns, to rename the default account, and to add, remove and reorder the agents (see
  * `docs/product/agent-accounts.md`); a new account starts on the agent of the tab in view. The two switches, one
  * that picks an account by the weekly quota resetting soonest and one that starts a usage window that has not begun
  * counting, sit above that list, once: both apply to every agent, including when none is added. While the daemon has
@@ -68,8 +83,10 @@ export function AgentAccountsSection(): React.ReactElement {
   // The agent whose default account is being renamed.
   const [renamingDefault, setRenamingDefault] = useState<Agent>();
   const [removingAgent, setRemovingAgent] = useState<Agent>();
+  // The account whose details are in the modal; `focusSharing` puts focus on its sharing switch as it opens.
+  const [details, setDetails] = useState<{ agent: Agent; account: string | null; focusSharing?: boolean; fromRow?: boolean }>();
   // The account whose login is in the modal; `start` is whether opening it starts the login, which it does not for one
-  // found running when the section opened. `returnFocus` is the row's, when its own Log in button opened it.
+  // found running when the section opened. `returnFocus` is the Log in button's, when one opened it.
   const [loggingIn, setLoggingIn] = useState<{ agent: Agent; account: string | null; start: boolean; returnFocus?: ReturnLoginFocus }>();
   // The Add agent dialog is open when Settings was asked to put it in front, on opening or by a later request,
   // which the section takes up once; closing that one then puts focus on the button that opens it, as no
@@ -94,6 +111,7 @@ export function AgentAccountsSection(): React.ReactElement {
     setRemoving(undefined);
     setRenamingDefault(undefined);
     setRemovingAgent(undefined);
+    setDetails(undefined);
   }, [accountsNavigation.dismissForms, accountsNavigation.pending]);
   useEffect(() => {
     if (!accountsNavigation.pending) return;
@@ -117,49 +135,22 @@ export function AgentAccountsSection(): React.ReactElement {
   const [chosen, setChosen] = useState<Agent>(agents[0] ?? "claude");
   // The tab in view: the chosen one unless its agent has left the list.
   const selected = agents.includes(chosen) ? chosen : agents[0];
-  // An account Settings was asked to show: its agent's tab comes forward, and then its sharing switch takes focus.
-  const [showingSharingOf, setShowingSharingOf] = useState<string>();
+  // An account Settings was asked to show: its agent's tab comes forward and its details open with the sharing switch
+  // focused.
   useEffect(() => {
     const id = accountsNavigation.account;
     if (id === undefined) return;
     accountsNavigation.consumeAccount();
     const account = accounts.find((held) => held.id === id);
-    if (!account) {
+    if (!account || !agents.includes(account.agent)) {
       // Nothing to show, and the dialog skipped the section's tab for this request: the tab takes focus, as for any
       // other navigation, a frame on because the tab may not have reached the dialog's ref as the section mounts.
       requestAnimationFrame(() => focusSectionTab()?.focus());
       return;
     }
     setChosen(account.agent);
-    setShowingSharingOf(id);
+    setDetails({ agent: account.agent, account: account.id, focusSharing: true });
   }, [accountsNavigation.account]);
-  useEffect(() => {
-    if (showingSharingOf === undefined) return;
-    // The tab's panel is mounted a render after the tab is chosen, so the switch is looked for frame by frame.
-    let frames = 0;
-    let frame = 0;
-    const focusSwitch = () => {
-      const row = Array.from(document.querySelectorAll<HTMLElement>("[data-sharing-account]")).find((held) => held.dataset.sharingAccount === showingSharingOf);
-      const control = row?.querySelector<HTMLElement>('input[role="switch"]');
-      if (!control) {
-        if (frames++ < MAX_FRAMES_TO_WAIT_FOR_SWITCH) frame = requestAnimationFrame(focusSwitch);
-        else {
-          // Its agent has left the list, so the switch will not come: stop, or a later tab switch would start the
-          // hunt again and take focus from the user.
-          setShowingSharingOf(undefined);
-          focusSectionTab()?.focus();
-        }
-        return;
-      }
-      control.scrollIntoView?.({ block: "center" });
-      // Focus lands from a press in another dialog, so the destination shows its ring.
-      ringForAutomaticFocus();
-      control.focus();
-      setShowingSharingOf(undefined);
-    };
-    frame = requestAnimationFrame(focusSwitch);
-    return () => cancelAnimationFrame(frame);
-  }, [showingSharingOf, selected]);
   // Bumped when a removal has gone through: the menu item that was chosen goes with its account or agent and the
   // confirmation closes with it, so focus has to be sent back to the section's tab. Cancelling removes no control,
   // so it must not.
@@ -181,7 +172,6 @@ export function AgentAccountsSection(): React.ReactElement {
     void request({ type: "refresh_account_quotas" }).catch(() => {});
   }, [request]);
 
-  const selectedIndex = selected === undefined ? -1 : agents.indexOf(selected);
   return (
     <>
       <p className="pb-2 text-sm text-app-muted">
@@ -189,14 +179,13 @@ export function AgentAccountsSection(): React.ReactElement {
       </p>
       <AutoSelectAccountSetting />
       <StartQuotaWindowsSetting />
-      <div className="flex flex-wrap gap-2 pt-3">
-        <Button ref={addAgentButton} size="sm" variant="outline" preventFocusOnPress onPress={() => setAddingAgent(true)}>
-          <Bot aria-hidden="true" className="size-4" />
-          {t("settings.accounts.addAgent")}
-        </Button>
-      </div>
       {selected === undefined ? (
-        <EmptyPanel icon={Bot} message={t("settings.accounts.noAgents")} description={t("settings.accounts.noAgentsHint")} />
+        <EmptyPanel
+          icon={Bot}
+          message={t("settings.accounts.noAgents")}
+          description={t("settings.accounts.noAgentsHint")}
+          action={{ label: t("settings.accounts.addAgent"), icon: Bot, onPress: () => setAddingAgent(true) }}
+        />
       ) : (
         /* The secondary variant is an underline strip, unlike the filled tabs that switch the
             sections. Its list drops the padding the focus ring needs, so it is given back here, and its underline is
@@ -210,13 +199,20 @@ export function AgentAccountsSection(): React.ReactElement {
             label={t("settings.accounts.agents")}
             tabRef={added === null ? undefined : tabRef}
             onReorder={added === null ? undefined : reorder}
-            trailing={added !== null && (
-              <AgentMoreMenu
-                agent={selected}
-                index={selectedIndex}
+            trailingWidth="pe-[4.75rem]"
+            trailing={
+              <div className="flex items-center gap-1">
+                <IconAction label={t("settings.accounts.addAgent")} icon={Bot} buttonRef={addAgentButton} onPress={() => setAddingAgent(true)} />
+                <IconAction label={t("settings.accounts.add")} icon={UserPlus} onPress={() => setEditing(null)} />
+              </div>
+            }
+            tabActions={added === null ? undefined : (agent) => (
+              <AgentTabActions
+                agent={agent}
+                index={agents.indexOf(agent)}
                 count={agents.length}
-                onMove={(by) => move(selected, by)}
-                onRemove={() => setRemovingAgent(selected)}
+                onMove={(by) => move(agent, by)}
+                onRemove={() => setRemovingAgent(agent)}
               />
             )}
             notInstalledTip={(agent) => added !== null && isAgentUnavailable(availability, agent) && (
@@ -229,10 +225,10 @@ export function AgentAccountsSection(): React.ReactElement {
               key={agent}
               agent={agent}
               owned={accounts.filter((account) => account.agent === agent)}
-              onAdd={() => setEditing(null)}
               onEdit={setEditing}
               onRemove={setRemoving}
               onRenameDefault={setRenamingDefault}
+              onDetails={(account) => setDetails({ agent, account, fromRow: true })}
               onLogin={(agent, account, returnFocus) => setLoggingIn({ agent, account, start: true, returnFocus })}
             />
           ))}
@@ -251,6 +247,20 @@ export function AgentAccountsSection(): React.ReactElement {
       ))}
       {editing !== undefined && <AccountDialog account={editing ?? undefined} agent={selected ?? "claude"} onClose={() => setEditing(undefined)} />}
       {renamingDefault && <AccountDialog agent={renamingDefault} renameDefault onClose={() => setRenamingDefault(undefined)} />}
+      {details && (
+        <AccountDetailsDialog
+          key={details.account ?? `default:${details.agent}`}
+          agent={details.agent}
+          account={details.account}
+          focusSharing={details.focusSharing}
+          onLogin={(returnFocus) => setLoggingIn({ agent: details.agent, account: details.account, start: true, returnFocus })}
+          onClose={() => {
+            setDetails(undefined);
+            // Opened from a row's menu, the dialog closes onto that menu's button, whichever way the menu left focus.
+            if (details.fromRow) returnToRowActions(details.account === null ? `default:${details.agent}` : details.account);
+          }}
+        />
+      )}
       {loggingIn && (
         <AccountLoginDialog
           agent={loggingIn.agent}
@@ -292,240 +302,52 @@ export function AgentAccountsSection(): React.ReactElement {
   );
 }
 
-/** One agent's tab panel. It owns its list motion: a panel that mounts or unmounts as the tab changes is a replaced
- * page, which takes none, while rows added or removed within it still animate. */
-function AgentAccountsPanel({ agent, owned, onAdd, onEdit, onRemove, onRenameDefault, onLogin }: {
+/** One agent's tab panel: its Permission approval row (not for Grok), which applies to every account of the agent, and
+ * the table of the agent's accounts, the default account first. */
+function AgentAccountsPanel({ agent, owned, onEdit, onRemove, onRenameDefault, onDetails, onLogin }: {
   agent: Agent;
   owned: Account[];
-  onAdd: () => void;
   onEdit: (account: Account) => void;
   onRemove: (account: Account) => void;
   onRenameDefault: (agent: Agent) => void;
+  onDetails: (account: string | null) => void;
   onLogin: (agent: Agent, account: string | null, returnFocus?: ReturnLoginFocus) => void;
 }): React.ReactElement {
   const t = useT();
   const logins = useDaemonStore((s) => s.accountLogins);
-  const quotas = useDaemonStore((s) => s.accountQuotas);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const defaultName = defaultAccountName(t, defaultNames, agent);
-  const listRef = useListMotion<HTMLDivElement>({ descendants: true });
-  const defaultReviewer = useDaemonStore((s) => s.settings.codex_default_approval_reviewer);
-  const defaultMode = useDaemonStore((s) => s.settings.claude_default_approval_mode);
-  const agentAvailability = useDaemonStore((s) => s.agentAvailability);
-  const state = agentAvailability.get(agent);
-  const notUsable = isAgentUnavailable(agentAvailability, agent) && (
-    <div><Message id="settings.accounts.notUsable" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference>, ...PATH_VAR_PARAMS }} /></div>
-  );
-  const hasApproval = agent === "codex" || agent === "claude";
   // What an account's menu holds. The default account is not a record: it can be named, not edited or removed. A
   // further action is one more entry here.
   const accountMenu = (account: Account | null): ActionMenuEntry[] => {
-    const login = { label: t("settings.accounts.login"), icon: LogIn, disabled: loginIsActive(accountLoginOf(logins, agent, account?.id ?? null)), onClick: () => onLogin(agent, account?.id ?? null) };
-    const loginItems = isNotLoggedIn(accountQuotaOf(quotas, agent, account?.id ?? null)?.unavailable ?? null) ? [] : [login];
-    if (!account) return [{ label: t("settings.accounts.renameDefault"), icon: Pencil, onClick: () => onRenameDefault(agent) }, ...loginItems];
+    const row = account?.id ?? `default:${agent}`;
+    // Whatever the login state, so an account that is logged in can log in again; focus goes back to the menu's button.
+    const login = { label: t("settings.accounts.login"), icon: LogIn, disabled: loginIsActive(accountLoginOf(logins, agent, account?.id ?? null)), onClick: () => onLogin(agent, account?.id ?? null, () => returnToRowActions(row)) };
+    const details = { label: t("settings.accounts.settingsItem"), icon: Settings, onClick: () => onDetails(account?.id ?? null) };
+    if (!account) return [details, { label: t("settings.accounts.renameDefault"), icon: Pencil, onClick: () => onRenameDefault(agent) }, login];
     return [
+      details,
       { label: t("common.edit"), icon: Pencil, onClick: () => onEdit(account) },
-      ...loginItems,
+      login,
       "separator",
       { label: t("common.remove"), icon: Trash2, destructive: true, onClick: () => onRemove(account) },
     ];
   };
-  const loginProps = (account: Account | null) => {
-    const login = accountLoginOf(logins, agent, account?.id ?? null);
-    return {
-      login: login?.status === "succeeded" ? login : undefined,
-      loginName: account?.name ?? defaultName,
-      onLogin: (returnFocus: ReturnLoginFocus) => onLogin(agent, account?.id ?? null, returnFocus),
-      loginActive: loginIsActive(login),
-    };
-  };
-  const approvalSelect = (account: Account | null) => {
-    const name = account?.name ?? defaultName;
-    if (agent === "codex") {
-      return <ApprovalReviewerSelect account={account?.id ?? null} name={name} reviewer={account ? account.approval_reviewer : defaultReviewer} />;
-    }
-    if (agent === "claude") {
-      return <ClaudeApprovalModeSelect account={account?.id ?? null} name={name} mode={account ? account.approval_mode : defaultMode} />;
-    }
-    return null;
-  };
   return (
     <Tabs.Panel id={agent} className="px-0 pt-0">
-      <div ref={listRef} className="relative">
-        <div className={`grid grid-cols-1 gap-x-6 ${hasApproval ? "sm:grid-cols-2" : "sm:grid-cols-[minmax(0,1fr)_auto]"}`}>
-          <div className={`col-span-full grid grid-cols-subgrid items-center pb-2 ${hasApproval ? "sm:groove-b" : ""}`}>
-            <Button size="sm" variant="outline" className="justify-self-start" preventFocusOnPress onPress={onAdd}>
-              <UserPlus aria-hidden="true" className="size-4" />
-              {t("settings.accounts.add")}
-            </Button>
-            {hasApproval && <div className="col-start-2 hidden sm:block"><ApprovalHeading agent={agent} /></div>}
-          </div>
-          <AccountRow
-            motionKey={`default:${agent}`}
+      <AgentApprovalSetting agent={agent} />
+      <AccountsTable agent={agent}>
+        {[null, ...owned].map((account) => (
+          <AccountTableRow
+            key={account?.id ?? `default:${agent}`}
             agent={agent}
-            account={null}
-            label={<FadeOverflow dir="auto" titleWhenClipped={defaultName}>{defaultName}</FadeOverflow>}
-            help={<HelpTip label={t("settings.accounts.defaultHelp")}>{t("settings.accounts.defaultSetup")}</HelpTip>}
-            description={state?.default_account_dir && <MarkedPath path={state.default_account_dir} />}
-            approval={approvalSelect(null)}
-            {...loginProps(null)}
-          >
-            <ActionMenu
-              label={t("settings.accounts.actionsLabel", { name: isolate(defaultName), agent: AGENT_LABEL[agent] })}
-              items={accountMenu(null)}
-            />
-          </AccountRow>
-          {owned.map((account) => (
-            <AccountRow
-              key={account.id}
-              motionKey={account.id}
-              agent={agent}
-              account={account.id}
-              label={
-                <FadeOverflow dir="auto" titleWhenClipped={account.name}>
-                  {account.name}
-                </FadeOverflow>
-              }
-              description={
-                <>
-                  <MarkedPath path={account.config_dir} />
-                  {notUsable}
-                </>
-              }
-              approval={approvalSelect(account)}
-              sharing={<AccountSharingSwitch account={account} />}
-              {...loginProps(account)}
-            >
-              <ActionMenu
-                label={t("settings.accounts.actionsLabel", { name: isolate(account.name), agent: AGENT_LABEL[agent] })}
-                items={accountMenu(account)}
-              />
-            </AccountRow>
-          ))}
-        </div>
-      </div>
+            account={account}
+            name={account?.name ?? defaultName}
+            menu={accountMenu(account)}
+            onLogin={(returnFocus) => onLogin(agent, account?.id ?? null, returnFocus)}
+          />
+        ))}
+      </AccountsTable>
     </Tabs.Panel>
-  );
-}
-
-/** Told, as the login dialog a row's own Log in button opened closes, whether the login succeeded, and the cancel
- * closing it sent, if any. */
-type ReturnLoginFocus = (succeeded: boolean, cancelling?: Promise<void>) => void;
-
-/**
- * Where focus goes once the login dialog the row's own Log in button opened has closed, which React Aria's restore
- * alone does not settle: it puts focus back on that button, and the button is not always there to take it. A login
- * that succeeded takes the button away (it is shown only while the account reads as signed out), before or after the
- * restore, so focus goes to the row's actions instead; so it does when a cancelled login turns out to have succeeded
- * first. Closing the dialog otherwise cancels a login still running, and the button is disabled while the daemon has a
- * login running — including one it registers only after the dialog has gone — so the restore finds nothing to focus,
- * or focus drops off the button as it turns disabled. Focus goes to the button once the cancel has been answered and
- * the button is enabled again, or to the actions if it has gone. Either way focus would otherwise end on `<body>`,
- * where VoiceOver reads the whole web area and does not speak the row's status.
- *
- * The move waits a frame past the restore, which runs in the frame after the dialog unmounts, and acts only where the
- * restore left focus on `<body>` or on a button that is going: a restore that landed right, or on another control,
- * is left alone. A restore React Aria defers further for a screen reader's virtual cursor acts only while focus is
- * still on `<body>`, so it does not undo this move.
- */
-function useLoginFocusReturn(
-  button: React.RefObject<HTMLElement | null>,
-  actions: React.RefObject<HTMLElement | null>,
-  { active, succeeded }: { active: boolean; succeeded: boolean },
-): ReturnLoginFocus {
-  const [returning, setReturning] = useState<{ to: "button" | "actions"; cancelling: boolean }>();
-  useEffect(() => {
-    if (!returning || returning.cancelling || (returning.to === "button" && active)) return;
-    let frame = requestAnimationFrame(() => {
-      frame = requestAnimationFrame(() => {
-        setReturning(undefined);
-        const opener = button.current;
-        const target = returning.to === "button" && !succeeded && opener ? opener : actions.current?.querySelector<HTMLElement>("button");
-        const focused = document.activeElement;
-        if (!target || focused === target || (focused !== document.body && !opener?.contains(focused))) return;
-        // The user did not ask for this move, so the destination shows its ring.
-        ringForAutomaticFocus();
-        target.focus();
-      });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [returning, active, succeeded]);
-  return (closedOnSuccess, cancelling) => {
-    const next = { to: closedOnSuccess ? "actions" : "button", cancelling: cancelling !== undefined } as const;
-    setReturning(next);
-    void cancelling?.then(() => setReturning((current) => (current === next ? { ...next, cancelling: false } : current)));
-  };
-}
-
-function ApprovalHeading({ agent }: { agent: Agent }): React.ReactElement {
-  const t = useT();
-  return (
-    <div className="flex items-center gap-1 text-sm text-app-muted">
-      {t("settings.accounts.approval.heading")}
-      <HelpTip label={t("settings.accounts.approval.heading")}>
-        <Message id={agent === "codex" ? "settings.accounts.approval.codexReviewDescription" : "settings.accounts.approval.claudeReviewDescription"} />
-      </HelpTip>
-    </div>
-  );
-}
-
-/** Subgrid shares control widths across accounts.
- * The account's quota takes the row's full width beneath its controls. */
-function AccountRow({ agent, account, label, help, description, approval, sharing, children, motionKey, login, loginName, onLogin, loginActive }: {
-  agent: Agent;
-  account: string | null;
-  label: React.ReactNode;
-  /** A help tip that ends the name line, after the plan. */
-  help?: React.ReactNode;
-  description: React.ReactNode;
-  approval?: React.ReactNode;
-  /** The account's Share default configuration switch, under its controls; none for the default account. */
-  sharing?: React.ReactNode;
-  children?: React.ReactNode;
-  motionKey: string;
-  /** The account's login once it has succeeded, for the hidden status region to announce; `loginName` names the
-   * account in what it says. */
-  login?: Login;
-  loginName: string;
-  /** Starts the login from the row's own Log in button. */
-  onLogin: (returnFocus: ReturnLoginFocus) => void;
-  loginActive: boolean;
-}): React.ReactElement {
-  const t = useT();
-  const quota = useAccountQuota(agent, account);
-  const notLoggedIn = typeof quota === "object" && isNotLoggedIn(quota.unavailable);
-  useClearSucceededLogin(login);
-  const actionsRef = useRef<HTMLDivElement>(null);
-  const loginRef = useRef<HTMLButtonElement>(null);
-  const returnLoginFocus = useLoginFocusReturn(loginRef, actionsRef, { active: loginActive, succeeded: login !== undefined });
-  // The last row has no divider; a departing row's visual after it is not a row.
-  return (
-    <div data-list-motion={motionKey} className="col-span-full grid grid-cols-subgrid items-center gap-y-3 groove-b py-4 [&:not(:has(~[data-list-motion]))]:border-b-0">
-      <div className="min-w-0">
-        <AccountNameLine name={label} quota={quota} help={help} showLoginState showUpdated={false}>
-          {notLoggedIn && <Button ref={loginRef} size="xs" variant="secondary" preventFocusOnPress isDisabled={loginActive} onPress={() => onLogin(returnLoginFocus)}>
-            {t("settings.accounts.login")}
-            <ExternalLinkIcon />
-          </Button>}
-        </AccountNameLine>
-        {/* When the reading was taken shares the directory's line, keeping the name line to the name and its badges. */}
-        <div className="flex items-center gap-2 text-sm text-app-muted">
-          <div className="min-w-0">{description}</div>
-          <QuotaUpdated quota={quota} />
-        </div>
-      </div>
-      <div className="contents sm:flex sm:items-center sm:gap-4">
-        {approval && (
-          <div className="min-w-0 sm:flex-1">
-            <div className="mb-1 sm:hidden"><ApprovalHeading agent={agent} /></div>
-            {approval}
-          </div>
-        )}
-        <div ref={actionsRef} className="flex shrink-0 flex-wrap items-center gap-2">{children}</div>
-      </div>
-      {sharing}
-      {quota && !(typeof quota === "object" && isNotLoggedIn(quota.unavailable)) && <div className="col-span-full empty:hidden"><AccountQuotaSummary quota={quota} /></div>}
-      <AccountLoginAnnouncer login={login} name={loginName} />
-    </div>
   );
 }

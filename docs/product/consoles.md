@@ -148,7 +148,8 @@ sessions field is, its account picker where the Project sessions field is, spann
 narrower than 768 px each name sits above its picker.
 
 - Every agent's row has a picker of its accounts, the default account first. An agent with no account of its own still
-  has the picker, with the default account as its one option:
+  has the picker, with the default account as its one option, and so does one whose other accounts are all turned off
+  and not held (below):
   under the name the user gave the default account (see "The default account" in `docs/product/agent-accounts.md`),
   else as "Default account".
 - Beside the section's title, where a "?" help tip would sit, an icon-only **Manage accounts** button (a key) opens
@@ -160,7 +161,12 @@ narrower than 768 px each name sits above its picker.
   icon faded — with the Not installed or Not added badge after the name, until it is moved to the agent's default
   account. Its picker's accessible description says which of the two the agent is.
 
-No account is unpickable for its directory being missing.
+No account is unpickable for its directory being missing. A turned-off account (see "Turning an account off" in
+`docs/product/agent-accounts.md`) is left out of the picker, except the one the console named when the dialog opened
+and the one picked in it now: since the console's account is a lasting preference, that one stays listed and pickable,
+with a short note "Disabled" under its name and, as its description for assistive technology, that sessions cannot open
+on it until it is turned back on. Picking another account then still leaves it listed, so it can be picked back. A
+console that names it keeps it; the sessions that would run on it are refused until then.
 
 - **The default account**, which a new console starts on, is the state of pinning nothing: that agent's sessions use
   whatever the user's login shell exports for the agent's variable, and the agent's own default when it exports none.
@@ -209,8 +215,8 @@ keeps the conversation inside it. The user can move the session to another accou
 and an owner can move a session of its own with the `switch_session_account` tool; that copies the conversation into the
 target's directory and reads that account's configuration, while keeping explicit model and reasoning effort choices
 (see `docs/product/switching-session-accounts.md`). A session opened on the default account holds no directory and
-resumes under whatever the user's shell exports at that moment. The Codex or Claude Code account's approval mode is
-looked up again for each launch; keeping a directory does not freeze that choice (see "Approval modes" in
+resumes under whatever the user's shell exports at that moment. Codex's or Claude Code's permission approval setting
+is looked up again for each launch; keeping a directory does not freeze that choice (see "Approval modes" in
 `docs/product/agent-accounts.md`).
 
 If a session's directory no longer exists when it is launched or resumed, the launch is refused rather than

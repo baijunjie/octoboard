@@ -12,8 +12,9 @@ import { useNewSessionMode } from "./useNewSessionMode";
  * The "+" that opens the session dialog for `target`. While the platform's shortcut modifier is
  * held it turns into a bolt named `quickLabel`, and pressing it (or pressing with the modifier even
  * when the held state was missed) calls `onQuickCreate` instead of `onOpen`. With no agent that is
- * added and installed there is nothing to create with, so it is disabled. Its quick form, when every
- * account of the agent it would create with has used up its quota, only looks disabled: it keeps
+ * added and installed there is nothing to create with, so it is disabled. Its quick form, when no
+ * account of the agent it would create with can open a session (each is used up or turned off),
+ * only looks disabled: it keeps
  * its focus, its tooltip and its description give the short reason while its name stays the action,
  * and a press calls `onQuickCreate`, which refuses with the full sentence naming the action by
  * `quickLabel`. A `target` that is not there (`undefined`) makes a press do nothing.
@@ -42,7 +43,7 @@ export function NewSessionButton({
   ref?: React.Ref<HTMLDivElement>;
 }): React.ReactElement {
   const t = useT();
-  const { quick, blocked, usedUp } = useNewSessionMode(target);
+  const { quick, blocked, unavailable } = useNewSessionMode(target);
   useWindowShortcut((event) => {
     const action = matchCreateShortcut(event);
     return action === undefined ? undefined : { action, repeat: event.repeat };
@@ -53,7 +54,7 @@ export function NewSessionButton({
     if (action === "quickCreate") onQuickCreate(request, quickLabel);
     else onOpen(request);
   }, shortcut);
-  const quickUnavailable = quick && usedUp ? t("sidebar.project.openSessionQuickUsedUpShort") : undefined;
+  const quickUnavailable = quick && unavailable ? t("sidebar.project.openSessionQuickUsedUpShort") : undefined;
   const tooltip = quick ? (quickTitle ?? quickLabel) : (title ?? label);
   return (
     <RowIconButton

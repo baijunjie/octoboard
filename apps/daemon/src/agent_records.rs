@@ -1222,10 +1222,9 @@ mod tests {
             agent: Agent::Claude,
             name: "Sharing".to_owned(),
             config_dir: account.to_string_lossy().into_owned(),
-            approval_reviewer: None,
-            approval_mode: None,
             share_default_config: true,
             share_default_config_incomplete: false,
+            disabled: false,
         };
         let on_sharing = removable(&mut locator, std::slice::from_ref(&sharing), Some(&account));
         assert!(on_sharing.contains(&transcript(&default)), "{on_sharing:?}");
@@ -1261,10 +1260,9 @@ mod tests {
             agent: Agent::Claude,
             name: "Other".to_owned(),
             config_dir: other.to_string_lossy().into_owned(),
-            approval_reviewer: None,
-            approval_mode: None,
             share_default_config: false,
             share_default_config_incomplete: false,
+            disabled: false,
         };
 
         let projects = account.join("projects");

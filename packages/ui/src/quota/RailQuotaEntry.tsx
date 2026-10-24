@@ -15,6 +15,7 @@ import { useListMotion } from "../components/useListMotion";
 import { Message, useT } from "../i18n/react";
 import type { Account, Agent, QuotaWindow } from "../protocol";
 import type { SettingsSectionId } from "../settings/SettingsDialog";
+import { INACTIVE_VEIL_CLASS } from "../components/inactiveVeil";
 import { useDaemon, useDaemonStore } from "../store";
 import { useNow } from "../useNow";
 import { AccountNameLine, AccountQuotaSummary } from "./AccountQuotaSummary";
@@ -119,6 +120,10 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
   const account = accounts.find((account) => account.id === session?.account_id);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const now = useResetClock(bar);
+  // The mouse has come to the button and not yet into the panel, which is when the panel stands out the account
+  // the button shows; it ends on entering the panel, on the panel's closing, or on leaving the button before the
+  // panel has opened.
+  const [onButton, setOnButton] = useState(false);
   const label = session && bar ? accountQuotaLabel(t, session.agent, account?.name, bar, defaultNames, now) : t("rail.quota");
 
   return (
@@ -142,9 +147,21 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
       // keeps them current, so a failed request has nothing to report.
       onOpenChange={(open) => {
         if (open) void request({ type: "refresh_account_quotas" }).catch(() => {});
+        else setOnButton(false);
       }}
-      trigger={({ ref, onHoverStart: _start, onHoverEnd: _end, preventFocusOnPress: _prevent, ...wiring }) => (
-        <ChromeButton label={label} className="relative" buttonRef={ref} noTooltip {...wiring}>
+      trigger={({ ref, onHoverStart: _start, onHoverEnd: _end, preventFocusOnPress: _prevent, onMouseHoverChange, ...wiring }) => (
+        <ChromeButton
+          label={label}
+          className="relative"
+          buttonRef={ref}
+          noTooltip
+          {...wiring}
+          onMouseHoverChange={(hovered) => {
+            if (hovered) setOnButton(true);
+            else if (!wiring.expanded) setOnButton(false);
+            onMouseHoverChange(hovered);
+          }}
+        >
           <Gauge aria-hidden="true" className={!session || !bar ? "size-4" : bar.thin ? "size-4 -translate-y-1" : "size-4 -translate-y-0.5"} />
           {session && bar && <RailQuotaBars bar={bar} now={now} />}
         </ChromeButton>
@@ -161,6 +178,11 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
             // A press opens a panel that floats outside the rail's tab order, so focus is brought to its
             // first control; one a mouse rests on leaves focus where it was.
             focusSelectedTab={form === "press"}
+            // The account the button shows stands out and the others dim from when the mouse is on the button
+            // until it enters the panel or the panel closes; only a mouse does it, so keyboard focus on the
+            // button (which does not open the panel) leaves them alone.
+            emphasiseShown={onButton && session !== undefined && bar !== undefined}
+            onMouseEnter={() => setOnButton(false)}
             onOpenAccounts={() => {
               close();
               onOpenSettingsAt("accounts");
@@ -197,7 +219,7 @@ function CloseWhenCovered({ close, own }: { close: () => void; own: string }): n
 /** The panel's contents: one tab per agent that is added and installed, in the order they were added, each listing the agent's accounts, and the
  * way into Settings' accounts section. The panel mounts afresh on each opening, so the tab starts on `shownAgent`
  * (the first tab if it is not listed or none is given) and the user's own choice lasts only until it closes. */
-function QuotaPanel({ shownAgent, shownAccount, focusSelectedTab, onOpenAccounts, onAddAgent }: { shownAgent?: Agent; shownAccount: string | null; focusSelectedTab: boolean; onOpenAccounts: () => void; onAddAgent: () => void }): React.ReactElement {
+function QuotaPanel({ shownAgent, shownAccount, focusSelectedTab, emphasiseShown, onMouseEnter, onOpenAccounts, onAddAgent }: { shownAgent?: Agent; shownAccount: string | null; focusSelectedTab: boolean; emphasiseShown: boolean; onMouseEnter: () => void; onOpenAccounts: () => void; onAddAgent: () => void }): React.ReactElement {
   const t = useT();
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
@@ -221,7 +243,7 @@ function QuotaPanel({ shownAgent, shownAccount, focusSelectedTab, onOpenAccounts
   }, []);
   const noAgents = noAgentState(availability, addedAgents);
   return (
-    <div ref={root} className="flex flex-col">
+    <div ref={root} className="flex flex-col" onPointerEnter={(event) => event.pointerType === "mouse" && onMouseEnter()}>
       {selected === undefined ? (
         <div className="p-4">
           {noAgents === "add" ? (
@@ -247,7 +269,7 @@ function QuotaPanel({ shownAgent, shownAccount, focusSelectedTab, onOpenAccounts
               from each other's dividers. */}
           <div className="grid grid-cols-1">
             {listed.map(({ agent, accounts: owned }) => (
-              <AgentPanel key={agent} agent={agent} owned={owned} currentAccount={agent === shownAgent ? shownAccount : undefined} />
+              <AgentPanel key={agent} agent={agent} owned={owned} currentAccount={agent === shownAgent ? shownAccount : undefined} dimOthers={emphasiseShown} />
             ))}
           </div>
         </Tabs>
@@ -279,8 +301,10 @@ function QuotaPanel({ shownAgent, shownAccount, focusSelectedTab, onOpenAccounts
  *
  * With a `currentAccount` (`null` for the default account) the list opens scrolled so that account's row
  * is in view, as the selected session's account is the one the user came to read. The row is not marked
- * in any other way. Accounts added or removed while the panel is open move with the shared list motion. */
-function AgentPanel({ agent, owned, currentAccount }: { agent: Agent; owned: Account[]; currentAccount?: string | null }): React.ReactElement {
+ * in any other way, except that with `dimOthers` (from the mouse on the rail button until it enters the panel
+ * or the panel closes) every row but that one, on every agent's panel, is dimmed. Accounts added or removed
+ * while the panel is open move with the shared list motion. */
+function AgentPanel({ agent, owned, currentAccount, dimOthers }: { agent: Agent; owned: Account[]; currentAccount?: string | null; dimOthers: boolean }): React.ReactElement {
   const t = useT();
   const defaultName = defaultAccountName(t, useDaemonStore((s) => s.settings.default_account_names), agent);
   const region = useFadeRegion({ label: t("rail.quota.accounts") });
@@ -307,7 +331,7 @@ function AgentPanel({ agent, owned, currentAccount }: { agent: Agent; owned: Acc
       <div className={region.focused ? "ring-2 ring-inset ring-focus" : ""}>
         <FadedScroller ref={scroller} region={region} className="max-h-[min(24rem,60vh)]">
           <div ref={listRef} className="relative flex flex-col px-4">
-            <QuotaAccount agent={agent} account={null} name={defaultName} rowRef={currentAccount === null ? currentRow : undefined} />
+            <QuotaAccount agent={agent} account={null} name={defaultName} rowRef={currentAccount === null ? currentRow : undefined} dimmed={dimOthers && currentAccount !== null} />
             {owned.map((account) => (
               <QuotaAccount
                 key={account.id}
@@ -315,6 +339,7 @@ function AgentPanel({ agent, owned, currentAccount }: { agent: Agent; owned: Acc
                 account={account.id}
                 name={<FadeOverflow dir="auto" titleWhenClipped={account.name}>{account.name}</FadeOverflow>}
                 rowRef={currentAccount === account.id ? currentRow : undefined}
+                dimmed={dimOthers && currentAccount !== account.id}
               />
             ))}
           </div>
@@ -325,14 +350,18 @@ function AgentPanel({ agent, owned, currentAccount }: { agent: Agent; owned: Acc
 }
 
 /** One account of the panel: its name and plan, and its quota beneath. An account that is used up recedes, its
- * name and meters muted and a "Used up" badge saying so, so the accounts that can still be used stand out. */
-function QuotaAccount({ agent, account, name, rowRef }: { agent: Agent; account: string | null; name: React.ReactNode; rowRef?: React.Ref<HTMLDivElement> }): React.ReactElement {
+ * name and meters muted and a "Used up" badge saying so, so the accounts that can still be used stand out.
+ * `dimmed` is the other, passing cue: a veil of the panel's own colour laid over the row, not `opacity`: under a
+ * translucent ancestor WebKit paints descendants that fade or sit on a GPU layer as blank tiles. The veil is
+ * visual only and lets pointer events through. It takes the dimmed text below WCAG AA on purpose, by the user's
+ * decision: a de-emphasis cue, lifted when the mouse enters the panel or the panel closes. */
+function QuotaAccount({ agent, account, name, rowRef, dimmed }: { agent: Agent; account: string | null; name: React.ReactNode; rowRef?: React.Ref<HTMLDivElement>; dimmed: boolean }): React.ReactElement {
   const quota = useAccountQuota(agent, account);
   const now = useNow();
   const usedUp = exhaustedQuotaWindow(quota, now) !== undefined;
   // The last row has no divider; a departing row's visual after it is not a row.
   return (
-    <div ref={rowRef} data-list-motion={account ?? `default:${agent}`} className="flex flex-col gap-2 groove-b py-3 [&:not(:has(~[data-list-motion]))]:border-b-0">
+    <div ref={rowRef} data-list-motion={account ?? `default:${agent}`} data-dimmed={dimmed || undefined} className={`${INACTIVE_VEIL_CLASS} flex flex-col gap-2 groove-b py-3 data-dimmed:after:bg-overlay/55 [&:not(:has(~[data-list-motion]))]:border-b-0`}>
       <AccountNameLine name={name} quota={quota} usedUp={usedUp} />
       <AccountQuotaSummary quota={quota} single usedUp={usedUp} />
     </div>

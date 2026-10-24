@@ -5,11 +5,12 @@ import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 
+import { currentLanguage, setLanguage, t } from "../i18n/language";
 import type { Console, Project, Session } from "../protocol";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentAccountsSection } from "./AgentAccountsSection";
 import { account, availability, bus, consoles, projects, request, sectionEntry, sessions, settings, toastError } from "./agentAccountsSectionTestState";
-import { animate, buttonNamed, chooseItem, menuItem, mount, openTabMenu, selectTab } from "./agentAccountsSectionTestSupport";
+import { animate, buttonNamed, chooseItem, menuItem, mount, openDetailsOf, openTabMenu, rowOf, selectTab } from "./agentAccountsSectionTestSupport";
 
 vi.mock("../store", async (importOriginal) => (await import("./agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
 vi.mock("../components/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
@@ -21,106 +22,128 @@ vi.mock("../dialogs/OptionSelect", async () => ({ OptionSelect: (await import(".
 /** Waits out React Aria's focus restore after a dialog closes and what runs in the frames after it. */
 const frames = () => act(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 0)))));
 
-it("offers a mode for the Codex default and each Codex account, following configuration by default", () => {
-  const { selects } = mount("Codex");
-  expect(selects).toHaveLength(2);
-  expect(selects.map((select) => select.value)).toEqual(["inherit", "inherit"]);
-  expect(selects[1]!.getAttribute("aria-label")).toContain("codex-work");
+/** The approval selector of the agent's tab in view. */
+function approvalOf(container: HTMLElement): HTMLSelectElement {
+  return container.querySelector<HTMLSelectElement>('[role="tabpanel"] select')!;
+}
+
+it("offers one Codex mode above the table, following configuration by default", () => {
+  const { container } = mount("Codex");
+  const select = approvalOf(container);
+  expect(select.value).toBe("inherit");
+  expect(select.getAttribute("aria-label")).toBe("Permission approval for Codex");
+  expect([...select.options].map((option) => option.value)).toEqual(["inherit", "auto_review", "user"]);
+  expect(container.querySelectorAll("tbody select")).toHaveLength(0);
 });
 
-it("shows stored choices separately for default and named accounts", () => {
-  settings.codex_default_approval_reviewer = "user";
-  settings.accounts[1]!.approval_reviewer = "auto_review";
-  expect(mount("Codex").selects.map((select) => select.value)).toEqual(["user", "auto_review"]);
+it("says the permission approval once, as a row above the table with its help, not in a column or the details", async () => {
+  const { container } = mount("Codex");
+  const panel = container.querySelector('[role="tabpanel"]')!;
+  expect(panel.textContent?.match(/Permission approval/g)).toHaveLength(1);
+  expect(panel.textContent).toContain("Applies to every Codex account");
+  expect(panel.querySelectorAll('button[aria-label="About permission approval"]')).toHaveLength(1);
+  expect(panel.querySelector("select")!.compareDocumentPosition(panel.querySelector("table")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  const dialog = await openDetailsOf(container, "codex-work");
+  expect(dialog.querySelector("select")).toBeNull();
+  expect(dialog.textContent).not.toContain("Permission approval");
+});
+
+it("shows no permission approval row for Grok", () => {
+  const { container } = mount("Grok Build");
+  expect(container.querySelector("select")).toBeNull();
+  expect(container.textContent).not.toContain("Permission approval");
+});
+
+it("shows the stored Codex choice", () => {
+  settings.codex_approval_reviewer = "user";
+  const { container } = mount("Codex");
+  expect(approvalOf(container).value).toBe("user");
 });
 
 it.each([
-  [0, "auto_review", null, "auto_review"],
-  [1, "user", "codex-work", "user"],
-  [1, "inherit", "codex-work", null],
-] as const)("saves selector %i as %s without affecting other accounts", async (index, value, account, reviewer) => {
-  settings.accounts[1]!.approval_reviewer = "auto_review";
-  const { selects, change } = mount("Codex");
-  change(selects[index]!, value);
-  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_account_approval_reviewer", account, reviewer });
+  ["auto_review", "auto_review"],
+  ["user", "user"],
+  ["inherit", null],
+] as const)("saves the Codex selector as %s at once", async (value, reviewer) => {
+  settings.codex_approval_reviewer = value === "inherit" ? "user" : null;
+  const { container, change } = mount("Codex");
+  change(approvalOf(container), value);
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_codex_approval_reviewer", reviewer });
   await act(async () => {});
 });
 
 it("keeps the stored value and reports a failed save", async () => {
-  const { selects, change } = mount("Codex");
+  const { container, change } = mount("Codex");
+  const select = approvalOf(container);
   request.mockRejectedValueOnce(new Error("save refused"));
-  change(selects[0]!, "auto_review");
+  change(select, "auto_review");
   await act(async () => {});
-  expect(selects[0]!.value).toBe("inherit");
+  expect(select.value).toBe("inherit");
   expect(toastError).toHaveBeenCalledOnce();
-  expect(selects[0]!.disabled).toBe(false);
+  expect(select.disabled).toBe(false);
 });
 
 it("keeps the trigger available while saving and prevents another option selection until answered", async () => {
   let finish!: (value: object) => void;
-  const { selects, change } = mount("Codex");
+  const { container, change } = mount("Codex");
+  const select = approvalOf(container);
   request.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
-  change(selects[0]!, "auto_review");
-  expect(selects[0]!.disabled).toBe(false);
-  expect([...selects[0]!.options].every((option) => option.disabled)).toBe(true);
+  change(select, "auto_review");
+  expect(select.disabled).toBe(false);
+  expect([...select.options].every((option) => option.disabled)).toBe(true);
   await act(async () => finish({}));
-  expect([...selects[0]!.options].every((option) => !option.disabled)).toBe(true);
+  expect([...select.options].every((option) => !option.disabled)).toBe(true);
 });
 
-it("offers Claude Code's four choices for its default and each account, following configuration by default", () => {
-  const { selects } = mount("Claude Code");
-  expect(selects).toHaveLength(2);
-  expect(selects.map((select) => select.value)).toEqual(["inherit", "inherit"]);
-  expect([...selects[0]!.options].map((option) => option.value)).toEqual(["inherit", "auto", "manual", "bypass"]);
-  expect(selects[1]!.getAttribute("aria-label")).toContain("claude-work");
-});
-
-it("shows stored Claude Code modes separately for default and named accounts", () => {
-  settings.claude_default_approval_mode = "manual";
-  settings.accounts[0]!.approval_mode = "auto";
-  expect(mount("Claude Code").selects.map((select) => select.value)).toEqual(["manual", "auto"]);
+it("offers Claude Code's four choices, following configuration by default, and shows the stored one", () => {
+  const { container } = mount("Claude Code");
+  const select = approvalOf(container);
+  expect(select.value).toBe("inherit");
+  expect(select.getAttribute("aria-label")).toBe("Permission approval for Claude Code");
+  expect([...select.options].map((option) => option.value)).toEqual(["inherit", "auto", "manual", "bypass"]);
+  settings.claude_approval_mode = "manual";
+  expect(approvalOf(mount("Claude Code").container).value).toBe("manual");
 });
 
 it.each([
-  [0, "auto", null, "auto"],
-  [1, "manual", "claude-work", "manual"],
-  [1, "inherit", "claude-work", null],
-] as const)("saves Claude Code selector %i as %s at once", async (index, value, account, mode) => {
-  settings.accounts[0]!.approval_mode = "auto";
-  const { selects, change } = mount("Claude Code");
-  change(selects[index]!, value);
-  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_account_approval_mode", account, mode });
+  ["auto", "auto"],
+  ["manual", "manual"],
+  ["inherit", null],
+] as const)("saves the Claude Code selector as %s at once", async (value, mode) => {
+  settings.claude_approval_mode = value === "inherit" ? "auto" : null;
+  const { container, change } = mount("Claude Code");
+  change(approvalOf(container), value);
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_claude_approval_mode", mode });
   await act(async () => {});
 });
 
 it("keeps the confirmation open and the choice unchanged when saving Approve everything fails", async () => {
-  const { selects, change } = mount("Claude Code");
-  change(selects[1]!, "bypass");
+  const { container, change } = mount("Claude Code");
+  const select = approvalOf(container);
+  change(select, "bypass");
   request.mockRejectedValueOnce(new Error("save refused"));
   act(() => [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Approve everything")!.click());
   await act(async () => {});
-  expect(document.body.textContent).toContain("Approve everything for account claude-work?");
-  expect(selects[1]!.value).toBe("inherit");
+  expect(document.body.textContent).toContain("Approve everything in every Claude Code account?");
+  expect(select.value).toBe("inherit");
 });
 
-it("saves Approve everything only once the warning is confirmed", async () => {
-  const { container, selects, change } = mount("Claude Code");
-  change(selects[1]!, "bypass");
+it("saves Approve everything only once the warning, which names the agent, is confirmed", async () => {
+  const { container, change } = mount("Claude Code");
+  const select = approvalOf(container);
+  change(select, "bypass");
   expect(request).not.toHaveBeenCalled();
   const buttons = () => [...document.querySelectorAll<HTMLButtonElement>("button")];
   const press = (label: string) => act(() => buttons().find((b) => b.textContent === label)!.click());
-  expect(document.body.textContent).toContain("Approve everything for account claude-work?");
+  expect(document.body.textContent).toContain("Approve everything in every Claude Code account?");
+  expect(document.body.textContent).toContain("in every Claude Code account's sessions");
   press("Cancel");
   expect(request).not.toHaveBeenCalled();
-  expect(document.body.textContent).not.toContain("for account claude-work?");
-  change(selects[0]!, "bypass");
-  expect(document.body.textContent).toContain("Approve everything for the default account?");
-  press("Cancel");
-  change(selects[1]!, "bypass");
+  expect(document.body.textContent).not.toContain("Approve everything in every");
+  change(select, "bypass");
   press("Approve everything");
   await act(async () => {});
-  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_account_approval_mode", account: "claude-work", mode: "bypass" });
-  expect(container.querySelectorAll("select")).toHaveLength(2);
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_claude_approval_mode", mode: "bypass" });
 });
 
 it("shows one agent at a time, opening on the first and switching by tab", () => {
@@ -130,19 +153,9 @@ it("shows one agent at a time, opening on the first and switching by tab", () =>
   expect(tabs.map((tab) => tab.getAttribute("aria-selected"))).toEqual(["true", "false", "false"]);
   expect(container.textContent).toContain("claude-work");
   expect(container.textContent).not.toContain("codex-work");
-  expect(container.querySelectorAll("select")).toHaveLength(2);
   selectTab(container, "Grok Build");
   expect(container.textContent).toContain("grok-work");
   expect(container.textContent).not.toContain("claude-work");
-});
-
-it("starts a new account on the agent of the tab in view", () => {
-  const { container } = mount("Codex");
-  const add = [...container.querySelectorAll("button")].find((button) => button.textContent === "Add account")!;
-  expect(add.closest('[role="tabpanel"]')).toBe(container.querySelector('[role="tabpanel"]'));
-  expect(buttonNamed(container, "Add agent")!.closest('[role="tabpanel"]')).toBeNull();
-  act(() => add.click());
-  expect(document.body.querySelector<HTMLSelectElement>('select[aria-label="Agent"]')!.value).toBe("codex");
 });
 
 it("marks an agent that is not installed in its tab, not in its panel", () => {
@@ -161,7 +174,7 @@ it("marks no tab while an agent's availability is not determined", () => {
   expect(container.querySelector('[role="tab"][aria-label]')).toBeNull();
 });
 
-it("replaces a panel on a tab switch without the list motion of rows added or removed", async () => {
+it("replaces a panel on a tab switch without any list motion", async () => {
   const { container } = mount();
   await act(async () => {});
   selectTab(container, "Codex");
@@ -171,21 +184,17 @@ it("replaces a panel on a tab switch without the list motion of rows added or re
   expect(container.textContent).toContain("codex-work");
 });
 
-it("moves the rows of an account removed or added within the panel in view", async () => {
+it("drops the row of an account removed and adds the row of one added within the panel in view", async () => {
   const { container, render } = mount();
-  await act(async () => {});
+  const rows = () => [...container.querySelectorAll("tbody tr")].map((row) => row.getAttribute("data-account-row"));
+  expect(rows()).toEqual(["default:claude", "claude-work"]);
   const work = settings.accounts[0]!;
   settings.accounts = settings.accounts.filter((a) => a !== work);
   render();
-  await act(async () => {});
-  const ghosts = container.querySelectorAll("[data-list-motion-ghost]");
-  expect(ghosts).toHaveLength(1);
-  expect(ghosts[0]!.textContent).toContain("claude-work");
-  expect(animate).toHaveBeenCalledOnce();
+  expect(rows()).toEqual(["default:claude"]);
   settings.accounts = [...settings.accounts, account("claude-home", "claude")];
   render();
-  await act(async () => {});
-  expect(animate).toHaveBeenCalledTimes(2);
+  expect(rows()).toEqual(["default:claude", "claude-home"]);
 });
 
 function notInstalledTab(container: HTMLElement) {
@@ -426,43 +435,75 @@ it("closes its Add agent dialog when Settings asks for anything else", () => {
   expect(document.querySelector('[role="dialog"]')).toBeNull();
 });
 
-it("shows the agent tab of an account Settings was asked about and focuses its sharing switch", async () => {
+it("shows the agent tab of an account Settings was asked about and opens its details on the sharing switch", async () => {
   const { container, showSharingOf } = mount("Claude Code");
-  const switchOf = () => container.querySelector('[data-sharing-account="codex-work"] input[role="switch"]');
+  const switchOf = () => document.body.querySelector('[data-sharing-account="codex-work"] input[role="switch"]');
   expect(switchOf()).toBeNull();
   showSharingOf("codex-work");
   await act(async () => { await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined))); });
   expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Codex");
+  expect(document.querySelector('[role="dialog"]')).not.toBeNull();
   expect(switchOf()).not.toBeNull();
   expect(document.activeElement).toBe(switchOf());
 });
 
 it("shows the focus ring on the sharing switch even after a pointer press opened Settings", async () => {
-  const { container, showSharingOf } = mount("Claude Code");
+  const { showSharingOf } = mount("Claude Code");
   act(() => setInteractionModality("pointer"));
   showSharingOf("codex-work");
   await act(async () => { await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined))); });
-  expect(document.activeElement).toBe(container.querySelector('[data-sharing-account="codex-work"] input[role="switch"]'));
+  expect(document.activeElement).toBe(document.body.querySelector('[data-sharing-account="codex-work"] input[role="switch"]'));
   expect(getInteractionModality()).toBe("keyboard");
 });
 
-it("gives up on the sharing switch of an account whose agent is not in the list, focusing the section's tab and not hunting again", async () => {
+it("opens no details for an account whose agent is not in the list, focusing the section's tab", async () => {
   settings.added_agents = ["claude", "grok"];
   const { container, showSharingOf } = mount("Claude Code");
   const entry = document.body.lastElementChild as HTMLElement;
-  const waitFrames = async (count: number) => {
-    for (let waited = 0; waited < count; waited++) await act(async () => { await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined))); });
-  };
   showSharingOf("codex-work");
-  await waitFrames(35);
+  await act(async () => { await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined))); });
   expect(document.activeElement).toBe(entry);
-  // The agent comes back into the list afterwards: the switch exists now, and must not take focus.
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  // The agent comes back into the list afterwards: nothing opens by itself.
   settings.added_agents = ["claude", "codex", "grok"];
   act(() => bus.notify());
   selectTab(container, "Codex");
-  await waitFrames(3);
-  expect(container.querySelector('[data-sharing-account="codex-work"] input[role="switch"]')).not.toBeNull();
-  expect(document.activeElement).not.toBe(container.querySelector('[data-sharing-account="codex-work"] input[role="switch"]'));
+  await act(async () => { await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined))); });
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+});
+
+it("gives focus back to the row's actions button after its details close, in a language whose button name is not English", async () => {
+  const before = currentLanguage();
+  setLanguage("zh-Hans");
+  onTestFinished(() => { act(() => setLanguage(before)); });
+  const { container } = mount("Codex");
+  const trigger = rowOf(container, "codex-work").querySelector<HTMLElement>("[data-row-actions] button")!;
+  expect(trigger.getAttribute("aria-label")).not.toContain("Actions for");
+  const dialog = await openDetailsOf(container, "codex-work", t("settings.accounts.settingsItem"));
+  await act(async () => buttonNamed(dialog, t("common.close"))!.click());
+  await frames();
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.activeElement).toBe(trigger);
+});
+
+it("opens the details of an account from the first entry of its actions menu, gives focus back to the menu's button on closing, and closes with the account", async () => {
+  const { container, render } = mount("Codex");
+  const trigger = rowOf(container, "codex-work").querySelector<HTMLElement>('button[aria-label^="Actions for"]')!;
+  const dialog = await openDetailsOf(container, "codex-work");
+  expect(dialog.textContent).toContain("codex-work");
+  expect(dialog.textContent).not.toContain("Codex account");
+  expect(dialog.textContent).toContain("/home/dev/.codex-work");
+  // No footer: the header's close button closes it.
+  expect(buttonNamed(dialog, "Close")).toBe(dialog.querySelector('button[aria-label="Close"]'));
+  await act(async () => buttonNamed(dialog, "Close")!.click());
+  await frames();
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.activeElement).toBe(trigger);
+  await openDetailsOf(container, "codex-work");
+  expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  settings.accounts = settings.accounts.filter((held) => held.id !== "codex-work");
+  render();
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
 });
 
 it("focuses the section's tab when the account to show is unknown", async () => {
@@ -519,14 +560,13 @@ it("reports a refused reorder", async () => {
   expect(toastError).toHaveBeenCalledOnce();
 });
 
-it("offers the same entries in a visible more button for the agent of the tab in view", async () => {
+it("offers the same entries in an actions button of each tab, named for its agent", async () => {
   const { container } = mount();
-  const more = (agent: string) => container.querySelector<HTMLElement>(`button[aria-label="More actions for ${agent}"]`);
-  expect(more("Claude Code")).not.toBeNull();
-  selectTab(container, "Codex");
-  expect(more("Claude Code")).toBeNull();
+  // The tab's own button, in the wrapper the strip places it with; the tab's context menu has a hidden trigger of the same name.
+  const actions = (agent: string) => container.querySelector<HTMLElement>(`[data-tab-actions] button[aria-label="Actions for ${agent}"]`) ?? undefined;
+  for (const agent of ["Claude Code", "Codex", "Grok Build"]) expect(actions(agent)).toBeDefined();
   await act(async () => {
-    const trigger = more("Codex")!;
+    const trigger = actions("Codex")!;
     trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse", button: 0 }));
     trigger.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "mouse", button: 0 }));
     trigger.click();
@@ -536,9 +576,21 @@ it("offers the same entries in a visible more button for the agent of the tab in
   expect(request).toHaveBeenCalledExactlyOnceWith({ type: "reorder_agents", agents: ["claude", "grok", "codex"] });
 });
 
-it("offers no more button while the list is undecided", () => {
+it("offers no per-tab actions while the list is undecided", () => {
   settings.added_agents = null;
-  expect(mount().container.querySelector('button[aria-label^="More actions for"]')).toBeNull();
+  expect(mount().container.querySelectorAll("[data-tab-actions]")).toHaveLength(0);
+});
+
+it("puts Add agent and Add account at the end of the tab row as icon-only buttons, and Add account adds to the tab in view", () => {
+  const { container } = mount("Codex");
+  const strip = container.querySelector('[role="tablist"]')!.closest(".tabs__list-container")!;
+  const add = buttonNamed(strip, "Add account")!;
+  const addAgent = buttonNamed(strip, "Add agent")!;
+  expect(add.textContent).toBe("");
+  expect(addAgent.textContent).toBe("");
+  expect(container.querySelector('[role="tabpanel"]')!.textContent).not.toContain("Add account");
+  act(() => add.click());
+  expect(document.body.querySelector<HTMLSelectElement>('select[aria-label="Agent"]')!.value).toBe("codex");
 });
 
 it("keeps keyboard focus on the tab that was moved, not on the Settings section entry", async () => {
@@ -614,7 +666,7 @@ it.each(["agent", "account"] as const)("puts focus on the section's entry once a
     await openTabMenu(container, "Grok Build");
     await chooseItem("Remove agent");
   } else {
-    const trigger = container.querySelector('[data-list-motion="claude-work"]')!.querySelector<HTMLButtonElement>('button[aria-label^="Actions"]')!;
+    const trigger = rowOf(container, "claude-work").querySelector<HTMLButtonElement>('button[aria-label^="Actions"]')!;
     await act(async () => {
       trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse", button: 0 }));
       trigger.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "mouse", button: 0 }));

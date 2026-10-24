@@ -58,8 +58,9 @@ pub struct Handoff {
 /// original's place, with the original archived, and what it took over. Refused, with nothing
 /// changed, for a session that is missing, archived, locked or not at rest, a receiving agent that
 /// is the session's own, and what opening the receiving session would refuse (an agent that is not
-/// available or not added, an account of another agent, an account whose plan quota is used up, a
-/// model or effort the agent does not offer, an owner that can no longer be reported to).
+/// available or not added, an account of another agent, a disabled account, an account whose plan
+/// quota is used up, a model or effort the agent does not offer, an owner that can no longer be
+/// reported to).
 pub async fn hand_off(state: &Arc<AppState>, request: Handoff) -> Result<Moved> {
     hand_off_with(state, request, term::launch).await
 }

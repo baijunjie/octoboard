@@ -6,7 +6,7 @@ import type { AccountSharing } from "../protocol";
 import { DaemonRequestError } from "../daemon-client";
 import { detailsButton, openDetails } from "../components/detailsTestSupport";
 import { accountSharing, request, settings, toastError } from "./agentAccountsSectionTestState";
-import { buttonNamed, mount, sharingSwitches } from "./agentAccountsSectionTestSupport";
+import { buttonNamed, mount, mountDetails, openDetailsOf, sharingSwitches } from "./agentAccountsSectionTestSupport";
 
 vi.mock("../store", async (importOriginal) => (await import("./agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
 vi.mock("../components/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
@@ -17,33 +17,46 @@ vi.mock("../dialogs/OptionSelect", async () => ({ OptionSelect: (await import(".
 
 /** The text of the notes that describe `sharing`, as a screen reader reads them. */
 const captionOf = (container: HTMLElement, sharing: HTMLElement) =>
-  sharing.getAttribute("aria-describedby")!.split(" ").map((id) => container.querySelector(`[id="${id}"]`)?.textContent).join(" ");
+  (sharing.getAttribute("aria-describedby") ?? "").split(" ").filter(Boolean).map((id) => container.querySelector(`[id="${id}"]`)?.textContent).join(" ");
 
-it("offers the sharing switch on each owned account and none on the default account", () => {
-  const { container } = mount("Codex");
+/** The text of the sharing help tip, opened by keyboard focus. */
+function helpTipText(container: HTMLElement): string | undefined {
+  const tip = container.querySelector<HTMLButtonElement>('button[aria-label="About sharing the default configuration"]')!;
+  act(() => {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    tip.focus();
+  });
+  return document.querySelector('[role="tooltip"]')?.textContent ?? undefined;
+}
+
+it("offers the sharing switch on each owned account and none on the default account", async () => {
+  const { container } = await mountDetails("Codex");
   const switches = sharingSwitches(container);
   expect(switches).toHaveLength(1);
   expect(switches[0]!.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, "")).toBe("Share default configuration for codex-work");
   expect(switches[0]!.checked).toBe(false);
   expect(switches[0]!.hasAttribute("aria-disabled")).toBe(false);
-  expect(captionOf(container, switches[0]!)).toBe("Turning this on links the account’s configuration and conversation history to the default account’s directory.");
+  // Free, nothing stands under the switch; what turning it on does is its description, and the rest is in the help tip.
+  expect(captionOf(container, switches[0]!)).toBe("");
+  expect(container.textContent).toContain("Turning this on links the account’s configuration and conversation history to the default account’s directory.");
   expect(container.textContent).not.toContain("Applies at once");
   expect(container.textContent).not.toContain("has not been applied to the account’s directory yet");
   expect(container.querySelector('[role="progressbar"]')).toBeNull();
 });
 
-it("says what is the case now when the account shares", () => {
+it("says what is the case now when the account shares", async () => {
   settings.accounts[1]!.share_default_config = true;
-  const { container } = mount("Codex");
+  const { container } = await mountDetails("Codex");
   const [sharing] = sharingSwitches(container);
   expect(sharing!.checked).toBe(true);
-  expect(captionOf(container, sharing!)).toBe("The account’s configuration and conversation history are linked to the default account’s directory.");
+  expect(captionOf(container, sharing!)).toBe("");
+  expect(container.textContent).toContain("The account’s configuration and conversation history are linked to the default account’s directory.");
 });
 
 it.each([["Claude Code", [".claude.json", "plans/"]], ["Grok Build", ["trusted_folders.toml", "hooks-paths"]]])(
   "keeps each name in the %s sharing help tip in one box, so a line never ends on an empty start of it",
-  (tab, names) => {
-    const { container } = mount(tab);
+  async (tab, names) => {
+    const { container } = await mountDetails(tab);
     const tip = container.querySelector<HTMLButtonElement>('button[aria-label="About sharing the default configuration"]')!;
     act(() => {
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
@@ -61,35 +74,35 @@ describe("a switch that cannot be changed now", () => {
   it.each([
     [1, "Sharing cannot be changed while 1 of this account’s sessions is working. Wait for it to finish."],
     [3, "Sharing cannot be changed while 3 of this account’s sessions are working. Wait for them to finish."],
-  ])("is disabled and says how many sessions run (%i)", (sessions, text) => {
+  ])("is disabled and says how many sessions run (%i)", async (sessions, text) => {
     accountSharing.set("codex-work", { account: "codex-work", in_use: { sessions, signing_in: false } });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     const [sharing] = sharingSwitches(container);
     expect(sharing!.getAttribute("aria-disabled")).toBe("true");
     expect(captionOf(container, sharing!)).toBe(text);
   });
 
-  it("is disabled and says the account is being signed in", () => {
+  it("is disabled and says the account is being signed in", async () => {
     accountSharing.set("codex-work", { account: "codex-work", in_use: { sessions: 0, signing_in: true } });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     const [sharing] = sharingSwitches(container);
     expect(sharing!.getAttribute("aria-disabled")).toBe("true");
     expect(captionOf(container, sharing!)).toBe("Sharing cannot be changed while this account is being signed in.");
   });
 
-  it("says both reasons when sessions run and the account is being signed in", () => {
+  it("says both reasons when sessions run and the account is being signed in", async () => {
     accountSharing.set("codex-work", { account: "codex-work", in_use: { sessions: 2, signing_in: true } });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     const text = captionOf(container, sharingSwitches(container)[0]!);
     expect(text).toContain("2 of this account’s sessions are working");
     expect(text).toContain("being signed in");
   });
 
-  it("is free again with the caption once nothing keeps it", () => {
+  it("is free again, with nothing under it, once nothing keeps it", async () => {
     accountSharing.set("codex-work", { account: "codex-work", in_use: { sessions: 0, signing_in: false } });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     expect(sharingSwitches(container)[0]!.hasAttribute("aria-disabled")).toBe(false);
-    expect(captionOf(container, sharingSwitches(container)[0]!)).toContain("Turning this on links");
+    expect(captionOf(container, sharingSwitches(container)[0]!)).toBe("");
   });
 });
 
@@ -101,26 +114,27 @@ describe("idle sessions around a change", () => {
   it.each([
     [1, "Changing sharing ends this account’s 1 idle session and resumes it afterwards."],
     [4, "Changing sharing ends this account’s 4 idle sessions and resumes them afterwards."],
-  ])("keeps the switch free and says the %i idle sessions will be restarted", (idle_sessions, text) => {
+  ])("keeps the switch free and says in the help tip the %i idle sessions will be restarted", async (idle_sessions, text) => {
     accountSharing.set("codex-work", { account: "codex-work", idle_sessions });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     const [sharing] = sharingSwitches(container);
     expect(sharing!.hasAttribute("aria-disabled")).toBe(false);
-    expect(captionOf(container, sharing!)).toBe(`Turning this on links the account’s configuration and conversation history to the default account’s directory.${text}`);
+    expect(captionOf(container, sharing!)).toBe("");
+    expect(helpTipText(container)).toContain(text);
   });
 
-  it("says the idle sessions are restarted by a retry too, at the top of the unfinished warning's Details", () => {
+  it("says the idle sessions are restarted by a retry too, at the top of the unfinished warning's Details", async () => {
     settings.accounts[1]!.share_default_config = true;
     settings.accounts[1]!.share_default_config_incomplete = true;
     accountSharing.set("codex-work", { account: "codex-work", idle_sessions: 2 });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     expect(remedy(container).textContent).toBe("Turn the switch on again to try once more.");
     expect(openDetails(container).textContent).toBe("Changing sharing ends this account’s 2 idle sessions and resumes them afterwards.");
   });
 
-  it("says nothing of idle sessions when there are none, and puts working sessions first when both exist", () => {
+  it("says nothing of idle sessions when there are none, and puts working sessions first when both exist", async () => {
     accountSharing.set("codex-work", { account: "codex-work", idle_sessions: 2, in_use: { sessions: 1, signing_in: false } });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     const text = captionOf(container, sharingSwitches(container)[0]!);
     expect(text).toBe("Sharing cannot be changed while 1 of this account’s sessions is working. Wait for it to finish.");
   });
@@ -135,18 +149,18 @@ describe("the phases of a running change", () => {
     ["waiting", "Waiting for another account’s sharing change to finish…"],
     ["stopping", "Ending idle sessions…"],
     ["resuming", "Resuming sessions…"],
-  ] as const)("shows %s as an indeterminate bar that says what it waits for", (name, text) => {
+  ] as const)("shows %s as an indeterminate bar that says what it waits for", async (name, text) => {
     phase({ share: true, phase: name, done: name === "resuming" ? 5 : 0, total: 5 });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     expect(bar(container).hasAttribute("aria-valuenow")).toBe(false);
     expect(valueText(container)).toBe(text);
     expect(container.textContent).not.toContain("Now:");
     expect(sharingSwitches(container)[0]!.getAttribute("aria-disabled")).toBe("true");
   });
 
-  it("counts entries only while changing, and waits to start until the first one", () => {
+  it("counts entries only while changing, and waits to start until the first one", async () => {
     phase({ share: true, phase: "changing", done: 0, total: 5 });
-    const { container, render } = mount("Codex");
+    const { container, render } = await mountDetails("Codex");
     expect(valueText(container)).toBe("Waiting to start…");
     phase({ share: true, phase: "changing", done: 2, total: 5, item: "skills" });
     render();
@@ -157,12 +171,12 @@ describe("the phases of a running change", () => {
 });
 
 describe("the announcement of the phases", () => {
-  it("keeps what was said when the entries phase starts, and speaks again for the other phases", () => {
+  it("keeps what was said when the entries phase starts, and speaks again for the other phases", async () => {
     const set = (phase: "waiting" | "stopping" | "changing" | "resuming") => accountSharing.set("codex-work", { account: "codex-work", progress: { share: true, phase, done: 0, total: 3 } });
     vi.useFakeTimers();
     onTestFinished(() => { vi.useRealTimers(); });
     set("stopping");
-    const { container, render } = mount("Codex");
+    const { container, render } = await mountDetails("Codex");
     act(() => { vi.advanceTimersByTime(300); });
     const said = () => [...container.querySelectorAll('[role="status"]')].map((node) => node.textContent).find((text) => text?.startsWith("Turning sharing on"));
     expect(said()).toBe("Turning sharing on. Ending idle sessions…");
@@ -175,10 +189,10 @@ describe("the announcement of the phases", () => {
     expect(said()).toBe("Turning sharing on. Resuming sessions…");
   });
 
-  it("shows the progress and not the warning when an old failure is still held during the wait", () => {
+  it("shows the progress and not the warning when an old failure is still held during the wait", async () => {
     settings.accounts[1]!.share_default_config_incomplete = true;
     accountSharing.set("codex-work", { account: "codex-work", failure: { share: true, items: [], detail: "x" }, progress: { share: true, phase: "waiting", done: 0, total: 3 } });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     expect(container.querySelector('[data-slot="alert-root"]')).toBeNull();
     expect(container.querySelector('[role="progressbar"]')).not.toBeNull();
   });
@@ -187,10 +201,10 @@ describe("the announcement of the phases", () => {
 describe("a change that runs", () => {
   const running = (progress: NonNullable<AccountSharing["progress"]>) => accountSharing.set("codex-work", { account: "codex-work", progress });
 
-  it("disables the switch under a determinate progress bar with the count and the entry", () => {
+  it("disables the switch under a determinate progress bar with the count and the entry", async () => {
     settings.accounts[1]!.share_default_config = true;
     running({ share: true, phase: "changing", done: 3, total: 12, item: "skills" });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     const [sharing] = sharingSwitches(container);
     expect(sharing!.getAttribute("aria-disabled")).toBe("true");
     expect(sharing!.checked).toBe(true);
@@ -209,18 +223,18 @@ describe("a change that runs", () => {
     expect(captionOf(container, sharing!)).toBe("Turning sharing on 3 of 12 Now: skills");
   });
 
-  it("words the direction of turning sharing off", () => {
+  it("words the direction of turning sharing off", async () => {
     running({ share: false, phase: "changing", done: 0, total: 4, item: "019e3c2a-0000-7000-8000-000000000000" });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     const bar = container.querySelector('[role="progressbar"]')!;
     expect(container.querySelector(`[id="${bar.getAttribute("aria-labelledby")}"]`)?.textContent).toBe("Turning sharing off");
     expect(bar.getAttribute("aria-valuenow")).toBe("0");
     expect(container.textContent).toContain("019e3c2a-0000-7000-8000-000000000000");
   });
 
-  it("is indeterminate while it waits for short background reads", () => {
+  it("is indeterminate while it waits for short background reads", async () => {
     running({ share: true, phase: "changing", done: 0, total: 5 });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     const bar = container.querySelector('[role="progressbar"]')!;
     expect(bar.hasAttribute("aria-valuenow")).toBe(false);
     expect(captionOf(container, sharingSwitches(container)[0]!)).toBe("Turning sharing on Waiting to start…");
@@ -228,9 +242,9 @@ describe("a change that runs", () => {
     expect(sharingSwitches(container)[0]!.getAttribute("aria-disabled")).toBe("true");
   });
 
-  it("follows the progress as the daemon reports it", () => {
+  it("follows the progress as the daemon reports it", async () => {
     running({ share: true, phase: "changing", done: 1, total: 4, item: "skills" });
-    const { container, render } = mount("Codex");
+    const { container, render } = await mountDetails("Codex");
     expect(container.querySelector('[role="progressbar"]')!.getAttribute("aria-valuenow")).toBe("1");
     running({ share: true, phase: "changing", done: 2, total: 4, item: "plugins" });
     render();
@@ -244,7 +258,7 @@ describe("a change that runs", () => {
 });
 
 it("asks for sharing to be turned on and off for the account", async () => {
-  const { container, render } = mount("Codex");
+  const { container, render } = await mountDetails("Codex");
   act(() => sharingSwitches(container)[0]!.click());
   expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_account_sharing", account: "codex-work", share: true });
   await act(async () => {});
@@ -257,7 +271,7 @@ it("asks for sharing to be turned on and off for the account", async () => {
 });
 
 it("reports a refused sharing change and leaves the switch as the daemon records it", async () => {
-  const { container } = mount("Codex");
+  const { container } = await mountDetails("Codex");
   request.mockRejectedValueOnce(new DaemonRequestError("refused", "account_in_use", { account: "codex-work", name: "codex-work", sessions: "1", signing_in: "false" }));
   act(() => sharingSwitches(container)[0]!.click());
   await act(async () => {});
@@ -266,7 +280,7 @@ it("reports a refused sharing change and leaves the switch as the daemon records
 });
 
 it("leaves the failure of its own request to the switch and opens no error alert for it", async () => {
-  const { container } = mount("Codex");
+  const { container } = await mountDetails("Codex");
   request.mockRejectedValueOnce(new DaemonRequestError("failed", "account_sharing_failed", { account: "codex-work", name: "codex-work", items: "[]", detail: "x" }));
   act(() => sharingSwitches(container)[0]!.click());
   await act(async () => {});
@@ -292,10 +306,10 @@ describe("a change that did not finish", () => {
   /** Closes the open Details popover the way a keyboard user does. */
   const closeDetails = (dialog: HTMLElement) => act(() => void dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
 
-  it("shows one compact warning with what failed and why and a Details button, and the switch where it was before", () => {
+  it("shows one compact warning with what failed and why and a Details button, and the switch where it was before", async () => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure() });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     const warning = alert(container)!;
     // One cause: its own line and its fix are the two sentences.
     expect(warning.textContent).toBe("Could not finish turning sharing on.You do not have permission to change skills/.Check that the files and folders involved can be changed and are not locked.Details");
@@ -313,14 +327,14 @@ describe("a change that did not finish", () => {
     const [sharing] = sharingSwitches(container);
     expect(sharing!.checked).toBe(false);
     // The switch is described by the title, the description and the visible remedy.
-    expect(captionOf(container, sharing!)).toBe("Could not finish turning sharing on. You do not have permission to change skills/. Check that the files and folders involved can be changed and are not locked.");
     expect(container.textContent).not.toContain("Turning this on links");
+    expect(captionOf(container, sharing!)).toBe("Could not finish turning sharing on. You do not have permission to change skills/. Check that the files and folders involved can be changed and are not locked.");
   });
 
   it("asks for the recorded choice when the switch is turned, which is the retry", async () => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure() });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     await act(async () => sharingSwitches(container)[0]!.click());
     expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_account_sharing", account: "codex-work", share: true });
   });
@@ -328,7 +342,7 @@ describe("a change that did not finish", () => {
   it("retries turning sharing off the same way, in the closing wording", async () => {
     unfinished(false);
     accountSharing.set("codex-work", { account: "codex-work", failure: failure({ share: false }) });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     expect(alert(container)!.textContent).toContain("Could not finish turning sharing off.");
     expect(openDetails(container).textContent).toContain("Turn the switch off again to try once more.");
     expect(sharingSwitches(container)[0]!.checked).toBe(true);
@@ -336,7 +350,7 @@ describe("a change that did not finish", () => {
     expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_account_sharing", account: "codex-work", share: false });
   });
 
-  it("groups the entries by cause, one line each, naming the first and how many more", () => {
+  it("groups the entries by cause, one line each, naming the first and how many more", async () => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure({ cause: "other", items: [
       { item: "skills/", left: "unchanged", detail: "a", cause: "permission_denied" },
@@ -345,7 +359,7 @@ describe("a change that did not finish", () => {
       { item: "settings.json", left: "linked", detail: "d", cause: "busy" },
       { item: "hooks/", left: "unchanged", detail: "e" },
     ] }) });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     // Several causes: that some could not be changed and the way to try again; each cause is in Details.
     expect(announced(container).textContent).toBe("Could not finish turning sharing on.Some files or folders could not be changed.");
     expect(remedy(container).textContent).toBe("Turn the switch on again to try once more.");
@@ -365,10 +379,10 @@ describe("a change that did not finish", () => {
     ["conflict", "skills/ conflicts with what is already there.", "Move or rename the conflicting items."],
     ["not_found", "skills/ could not be found.", retry],
     ["other", "Could not change skills/.", "See Details."],
-  ] as const)("says a single %s cause as the two visible sentences, its own line and its fix", (cause, line, fix) => {
+  ] as const)("says a single %s cause as the two visible sentences, its own line and its fix", async (cause, line, fix) => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure({ cause, items: [{ item: "skills/", left: "unchanged", detail: "x", cause }] }) });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     expect(announced(container).textContent).toBe(`Could not finish turning sharing on.${line}`);
     expect(remedy(container).textContent).toBe(fix);
     // The line is not repeated in Details, and the way to try again is there where the fix took its place.
@@ -383,45 +397,45 @@ describe("a change that did not finish", () => {
     ["no_space", "There is not enough disk space.", "Free up disk space."],
     ["conflict", "The account’s directory conflicts with what sharing needs.", "Move or rename the conflicting items."],
     ["not_found", "A directory needed for sharing could not be found.", retry],
-  ] as const)("says a %s cause of a change that failed as a whole as its own line and its fix", (cause, line, fix) => {
+  ] as const)("says a %s cause of a change that failed as a whole as its own line and its fix", async (cause, line, fix) => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure({ items: [], cause }) });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     expect(announced(container).textContent).toBe(`Could not finish turning sharing on.${line}`);
     expect(remedy(container).textContent).toBe(fix);
   });
 
-  it("names the switch's description after the title, the sentence and the visible remedy", () => {
+  it("names the switch's description after the title, the sentence and the visible remedy", async () => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure({ items: [], cause: "no_space" }) });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     const sharing = sharingSwitches(container)[0]!;
     expect(captionOf(container, sharing)).toBe("Could not finish turning sharing on. There is not enough disk space. Free up disk space.");
     expect(sharing.getAttribute("aria-describedby")).toContain(remedy(container).querySelector("span")!.id);
   });
 
-  it("has only the raw reason in Details for a whole failure whose cause has no line of its own", () => {
+  it("has only the raw reason in Details for a whole failure whose cause has no line of its own", async () => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure({ items: [], cause: "other" }) });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     const dialog = openDetails(container);
     expect(dialog.querySelector("span.block")).toBeNull();
     expect(dialog.textContent).toBe("could not link skills");
   });
 
-  it("gives no Details for a whole failure with no cause line and no raw reason, only its sentence and the guidance in the alert", () => {
+  it("gives no Details for a whole failure with no cause line and no raw reason, only its sentence and the guidance in the alert", async () => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure({ items: [], cause: "other", detail: undefined }) });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     expect(alert(container)!.querySelector('[data-slot="alert-description"]')?.textContent).toBe("Some files or folders could not be changed.");
     expect(remedy(container).textContent).toBe("Turn the switch on again to try once more.");
     expect(disclosure(container)).toBeUndefined();
   });
 
-  it("keeps the raw diagnostics and what each entry was left as in the Details popover, outside the announcement", () => {
+  it("keeps the raw diagnostics and what each entry was left as in the Details popover, outside the announcement", async () => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure() });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     const button = disclosure(container)!;
     expect(button.getAttribute("aria-expanded")).toBe("false");
     expect(alert(container)!.textContent).not.toContain("left unchanged");
@@ -439,10 +453,10 @@ describe("a change that did not finish", () => {
     expect(button.getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("gives the cause, then the raw reason, in Details when the change could not start", () => {
+  it("gives the cause, then the raw reason, in Details when the change could not start", async () => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure({ items: [], cause: "not_found", detail: "the directory is not readable" }) });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     expect(announced(container).textContent).toBe("Could not finish turning sharing on.A directory needed for sharing could not be found.");
     expect(remedy(container).textContent).toBe("Turn the switch on again to try once more.");
     const dialog = openDetails(container);
@@ -451,9 +465,9 @@ describe("a change that did not finish", () => {
     expect(dialog.querySelector("code")?.textContent).toBe("the directory is not readable");
   });
 
-  it("shows the same warning without a reason after a restart, with the guidance under the title and no Details", () => {
+  it("shows the same warning without a reason after a restart, with the guidance under the title and no Details", async () => {
     unfinished();
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     const warning = alert(container)!;
     expect(warning.className).toContain("alert-fill-warning");
     expect(warning.textContent).toBe("The last attempt to turn sharing on did not finish.Turn the switch on again to try once more.");
@@ -466,17 +480,17 @@ describe("a change that did not finish", () => {
     expect(disclosure(container)).toBeUndefined();
   });
 
-  it("does not take a failure for an unfinished change when the daemon does not say it is incomplete", () => {
+  it("does not take a failure for an unfinished change when the daemon does not say it is incomplete", async () => {
     accountSharing.set("codex-work", { account: "codex-work", failure: failure() });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     expect(alert(container)).toBeNull();
-    expect(captionOf(container, sharingSwitches(container)[0]!)).toContain("Turning this on links");
+    expect(captionOf(container, sharingSwitches(container)[0]!)).toBe("");
   });
 
   it("shows the recorded position and asks to turn sharing off and on when the default directory has moved", async () => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure({ cause: "default_moved", items: [] }) });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     expect(announced(container).textContent).toBe("Could not finish turning sharing on.The default account’s directory has moved since sharing was turned on.");
     expect(remedy(container).textContent).toBe("Turn the switch off, then on again.");
     expect(openDetails(container).textContent).toBe("could not link skills");
@@ -485,10 +499,10 @@ describe("a change that did not finish", () => {
     expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_account_sharing", account: "codex-work", share: false });
   });
 
-  it("announces a failure that follows a change it saw run, and not one restated by an unrelated update", () => {
+  it("announces a failure that follows a change it saw run, and not one restated by an unrelated update", async () => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure() });
-    const { container, render } = mount("Codex");
+    const { container, render } = await mountDetails("Codex");
     expect(alert(container)!.querySelector('[role="alert"]')).toBeNull();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure(), in_use: { sessions: 1, signing_in: false } });
     render();
@@ -503,18 +517,18 @@ describe("a change that did not finish", () => {
     expect(live!.textContent).toBe("Could not finish turning sharing on.You do not have permission to change skills/.");
   });
 
-  it("shows the recorded position while the change runs again, and no warning", () => {
+  it("shows the recorded position while the change runs again, and no warning", async () => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", progress: { share: true, phase: "changing" as const, done: 0, total: 3 } });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     expect(alert(container)).toBeNull();
     expect(sharingSwitches(container)[0]!.checked).toBe(true);
   });
 
-  it("moves focus from Details to the switch when the warning goes", () => {
+  it("moves focus from Details to the switch when the warning goes", async () => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure() });
-    const { container, render } = mount("Codex");
+    const { container, render } = await mountDetails("Codex");
     act(() => disclosure(container)!.focus());
     accountSharing.delete("codex-work");
     settings.accounts[1] = { ...settings.accounts[1]!, share_default_config_incomplete: false };
@@ -525,16 +539,16 @@ describe("a change that did not finish", () => {
 
   it("reports a retry the daemon refuses", async () => {
     unfinished(false);
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     request.mockRejectedValueOnce(new DaemonRequestError("busy", "account_in_use", { account: "codex-work", name: "codex-work", sessions: "1", signing_in: "false" }));
     await act(async () => sharingSwitches(container)[0]!.click());
     expect(toastError).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ code: "account_in_use" }));
   });
 
-  it("holds the switch back while sessions of the account run, and says why", () => {
+  it("holds the switch back while sessions of the account run, and says why", async () => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure(), in_use: { sessions: 1, signing_in: false } });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     const [sharing] = sharingSwitches(container);
     expect(sharing!.getAttribute("aria-disabled")).toBe("true");
     act(() => sharing!.click());
@@ -544,9 +558,9 @@ describe("a change that did not finish", () => {
 });
 
 describe("an unavailable control keeps keyboard focus", () => {
-  it("leaves the switch focusable and focused when it is locked, and a press or Space changes nothing", () => {
+  it("leaves the switch focusable and focused when it is locked, and a press or Space changes nothing", async () => {
     accountSharing.set("codex-work", { account: "codex-work", in_use: { sessions: 1, signing_in: false } });
-    const { container } = mount("Codex");
+    const { container } = await mountDetails("Codex");
     const [sharing] = sharingSwitches(container);
     expect(sharing!.disabled).toBe(false);
     expect(sharing!.tabIndex).toBe(0);
@@ -558,7 +572,7 @@ describe("an unavailable control keeps keyboard focus", () => {
 
   it("keeps the switch focused while the request is under way and while a change runs", async () => {
     let finish!: (value: object) => void;
-    const { container, render } = mount("Codex");
+    const { container, render } = await mountDetails("Codex");
     request.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
     const [sharing] = sharingSwitches(container);
     sharing!.focus();
@@ -573,11 +587,18 @@ describe("an unavailable control keeps keyboard focus", () => {
   });
 });
 
-it("shows the switch off again for an account that was repointed and no longer shares", () => {
+it("shows the switch off again for an account that was repointed and no longer shares", async () => {
   settings.accounts[1]!.share_default_config = true;
-  const { container, render } = mount("Codex");
+  const { container, render } = await mountDetails("Codex");
   expect(sharingSwitches(container)[0]!.checked).toBe(true);
   settings.accounts[1] = { ...settings.accounts[1]!, config_dir: "/home/dev/.elsewhere", share_default_config: false, share_default_config_incomplete: false };
   render();
   expect(sharingSwitches(container)[0]!.checked).toBe(false);
+});
+
+it("offers no sharing switch in the details of the default account", async () => {
+  const { container } = mount("Codex");
+  const dialog = await openDetailsOf(container, "default:codex");
+  expect(dialog.querySelector("[data-sharing-account]")).toBeNull();
+  expect(sharingSwitches(dialog)).toHaveLength(0);
 });

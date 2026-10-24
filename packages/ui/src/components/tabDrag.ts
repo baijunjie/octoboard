@@ -2,7 +2,7 @@ import type { Agent } from "../protocol";
 import { onReducedMotion, prefersReducedMotion } from "../reducedMotion";
 
 /** How far the pointer has to move before a press on a tab is a drag rather than a press. */
-const DRAG_THRESHOLD = 5;
+export const DRAG_THRESHOLD = 5;
 
 /** The order `agents` take when `agent` is put at index `to` among the others. */
 export function movedAgent(agents: Agent[], agent: Agent, to: number): Agent[] {

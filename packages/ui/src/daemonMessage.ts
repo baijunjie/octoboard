@@ -113,6 +113,7 @@ export const NAME_PARAMS: Record<string, readonly string[]> = {
   sharing_session_did_not_stop: ["session", "name"],
   project_branches_not_determined: ["name"],
   switch_did_not_come_up: ["session"],
+  account_disabled: ["account"],
   account_quota_exhausted: ["account"],
   "account_quota_exhausted.resets": ["account"],
   account_sharing_failed: ["name"],
@@ -430,6 +431,7 @@ const DEFAULT_ACCOUNT_NAME_PARAMS: Record<string, string> = {
   account_name_taken: "name",
   config_dir_taken: "name",
   account_quota_exhausted: "account",
+  account_disabled: "account",
 };
 
 /** A param as plain text: a record id as that record's name, anything else as it came, isolated. */

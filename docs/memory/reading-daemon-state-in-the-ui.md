@@ -82,6 +82,10 @@ So write what follows an `await request(...)` to be correct under either order:
   still there to act on. When something has to happen exactly once after such a change, hold it as a debt — a ref set
   when the change is observed and cleared only once the work is actually done — so whichever side lands first, the
   other finishes the job.
+- A control that shows a value the daemon holds, such as a switch bound to a setting, shows the store's value. Do not
+  show a local value that is set on press and cleared when the request settles. When the reply arrives before the
+  broadcast, the control briefly shows the old value again, and then the new one. To stop a second press while the
+  first is unanswered, ignore that press; use a ref, not a value that is shown.
 
 ## Tell which of two events came first with a counter, never a clock
 

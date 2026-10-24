@@ -10,6 +10,7 @@ import { InlineReference } from "./InlineReference";
 export function recoveryAction(t: Translate, recovery: ErrorRecovery): { label: string; addAgent?: boolean } | undefined {
   switch (recovery) {
     case "account":
+    case "accountDisabled":
     case "addedAgents": return { label: t("sidebar.session.manageAccounts") };
     case "agentNotAdded": return { label: t("agents.addAction"), addAgent: true };
     default: return undefined;

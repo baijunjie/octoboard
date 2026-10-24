@@ -419,7 +419,7 @@ pub(super) fn account_when_unset(
 /// `caller`'s own, for a session of `caller`'s own agent, so that work a session hands out goes on
 /// in the same agent and account unless the user asked otherwise. `None` — the project's account
 /// for the agent, else the console's — for another agent, and when `caller`'s account could not
-/// open a session now: removed since, or with its quota used up.
+/// open a session now: removed since, turned off, or with its quota used up.
 pub(super) fn callers_account(
     state: &Arc<AppState>,
     caller: &Session,
@@ -2808,10 +2808,9 @@ pub(super) mod tests {
                 agent: Agent::Codex,
                 name: "Work".to_string(),
                 config_dir: "/secret/codex".to_string(),
-                approval_reviewer: None,
-                approval_mode: None,
                 share_default_config: false,
                 share_default_config_incomplete: false,
+                disabled: false,
             })
             .unwrap();
         git_remote::record_remote_url(
@@ -3223,6 +3222,51 @@ pub(super) mod tests {
         }
     }
 
+    /// `get_settings` marks each account the user turned off, the default account of an agent
+    /// included, so an agent can tell which ones a new session cannot take.
+    #[tokio::test]
+    async fn get_settings_marks_the_accounts_that_are_turned_off() {
+        let (state, _dir) = settings_state("app-settings-disabled-accounts");
+        let disabled_of = |listed: &Value| -> Vec<(String, String, bool)> {
+            listed["accounts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|account| {
+                    (
+                        account["agent"].as_str().unwrap().to_string(),
+                        account["id"].as_str().unwrap().to_string(),
+                        account["disabled"].as_bool().unwrap(),
+                    )
+                })
+                .collect()
+        };
+        let listed = call(&state, "a", "get_settings", &arguments(json!({})))
+            .await
+            .unwrap();
+        assert!(disabled_of(&listed)
+            .iter()
+            .all(|(_, _, disabled)| !disabled));
+
+        state
+            .store
+            .set_default_account_disabled(Agent::Codex, true)
+            .unwrap();
+        let first = state.store.list_accounts().unwrap().remove(0);
+        state.store.set_account_disabled(&first.id, true).unwrap();
+        let listed = call(&state, "a", "get_settings", &arguments(json!({})))
+            .await
+            .unwrap();
+        let on: Vec<_> = disabled_of(&listed)
+            .into_iter()
+            .filter(|(_, _, disabled)| *disabled)
+            .map(|(agent, id, _)| (agent, id))
+            .collect();
+        assert_eq!(on.len(), 2, "{on:?}");
+        assert!(on.contains(&("codex".to_string(), "default".to_string())));
+        assert!(on.contains(&(first.agent.wire_name().to_string(), first.id)));
+    }
+
     /// Starting quota windows spends the user's quota, so an agent can neither read the setting
     /// nor change it through the settings tools, whatever it passes.
     #[tokio::test]
@@ -3509,10 +3553,9 @@ pub(super) mod tests {
                 agent: Agent::Codex,
                 name: "Work".to_string(),
                 config_dir: "/tmp/codex-work".to_string(),
-                approval_reviewer: None,
-                approval_mode: None,
                 share_default_config: false,
                 share_default_config_incomplete: false,
+                disabled: false,
             })
             .unwrap();
         let caller = Session {
@@ -3623,8 +3666,8 @@ pub(super) mod tests {
     }
 
     /// The caller's account is left for what the project and console set when it could not run
-    /// the session: its quota used up, or the account removed. The caller's agent is left for
-    /// theirs when it could not either.
+    /// the session: turned off, its quota used up, or the account removed. The caller's agent is
+    /// left for theirs when it could not either.
     #[test]
     fn the_callers_account_or_agent_is_passed_over_when_it_could_not_open_a_session() {
         use crate::protocol::{AccountQuota, QuotaWindow, QuotaWindowKind};
@@ -3650,6 +3693,24 @@ pub(super) mod tests {
         assert_eq!(
             agent_and_account(&state, &caller, "console-1", "project-1", json!({})),
             (Some(Agent::Codex), None)
+        );
+
+        let (state, _dir, caller) = codex_caller_state("defaults-account-disabled");
+        state
+            .store
+            .set_account_disabled("codex-work", true)
+            .unwrap();
+        assert_eq!(
+            agent_and_account(&state, &caller, "console-1", "project-1", json!({})),
+            (Some(Agent::Codex), None)
+        );
+        state
+            .store
+            .set_account_disabled("codex-work", false)
+            .unwrap();
+        assert_eq!(
+            agent_and_account(&state, &caller, "console-1", "project-1", json!({})),
+            (Some(Agent::Codex), Some(Some("codex-work".to_string())))
         );
 
         let (state, _dir, caller) = codex_caller_state("defaults-account-removed");
@@ -3724,10 +3785,9 @@ pub(super) mod tests {
                 agent: Agent::Codex,
                 name: id.to_string(),
                 config_dir: dir.to_string(),
-                approval_reviewer: None,
-                approval_mode: None,
                 share_default_config: false,
                 share_default_config_incomplete: false,
+                disabled: false,
             })
             .unwrap();
     }
@@ -3905,10 +3965,9 @@ pub(super) mod tests {
                 agent: Agent::Claude,
                 name: "Soon".to_string(),
                 config_dir: "/tmp/claude-soon".to_string(),
-                approval_reviewer: None,
-                approval_mode: None,
                 share_default_config: false,
                 share_default_config_incomplete: false,
+                disabled: false,
             })
             .unwrap();
         hold(

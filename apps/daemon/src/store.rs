@@ -403,13 +403,44 @@ impl Store {
                 [],
             )?;
         }
+        // The approval choice was once kept per account, the default account's in `settings`
+        // under a name that said so. It is one choice per agent now, and the default account's
+        // is the one that stays; the other accounts' are dropped.
+        for (old, new) in [
+            ("codex_default_approval_reviewer", "codex_approval_reviewer"),
+            ("claude_default_approval_mode", "claude_approval_mode"),
+        ] {
+            if !column_exists(&conn, "settings", old)? {
+                continue;
+            }
+            // Every build shares one database file, so an older build may have added the old
+            // column back beside the new one: its value fills the new column only while that
+            // holds none, and the old column goes.
+            if column_exists(&conn, "settings", new)? {
+                conn.execute(
+                    &format!("UPDATE settings SET {new} = COALESCE({new}, {old})"),
+                    [],
+                )?;
+                conn.execute(&format!("ALTER TABLE settings DROP COLUMN {old}"), [])?;
+            } else {
+                conn.execute(
+                    &format!("ALTER TABLE settings RENAME COLUMN {old} TO {new}"),
+                    [],
+                )?;
+            }
+        }
+        for column in ["approval_reviewer", "approval_mode"] {
+            if column_exists(&conn, "accounts", column)? {
+                conn.execute(&format!("ALTER TABLE accounts DROP COLUMN {column}"), [])?;
+            }
+        }
         for (table, column) in [
-            ("accounts", "approval_reviewer"),
-            ("settings", "codex_default_approval_reviewer"),
-            ("accounts", "approval_mode"),
-            ("settings", "claude_default_approval_mode"),
+            ("settings", "codex_approval_reviewer"),
+            ("settings", "claude_approval_mode"),
             ("accounts", "share_default_config_backup"),
             ("accounts", "share_default_config_dir"),
+            // NULL until a default account is turned off; see `Store::disabled_default_accounts`.
+            ("settings", "disabled_default_accounts"),
         ] {
             if !column_exists(&conn, table, column)? {
                 conn.execute(&format!("ALTER TABLE {table} ADD COLUMN {column} TEXT"), [])?;
@@ -428,6 +459,7 @@ impl Store {
             "share_default_config",
             "share_default_config_incomplete",
             "share_default_config_completed",
+            "disabled",
         ] {
             if !column_exists(&conn, "accounts", column)? {
                 conn.execute(
@@ -770,17 +802,16 @@ impl Store {
     pub fn insert_account(&self, account: &Account) -> Result<()> {
         self.lock()
             .execute(
-                "INSERT INTO accounts (id, agent, name, config_dir, created_at, approval_reviewer, approval_mode, share_default_config, share_default_config_incomplete) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                "INSERT INTO accounts (id, agent, name, config_dir, created_at, share_default_config, share_default_config_incomplete, disabled) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                 params![
                     account.id,
                     enum_to_text(&account.agent),
                     account.name,
                     account.config_dir,
                     now_millis(),
-                    account.approval_reviewer.as_ref().map(enum_to_text),
-                    account.approval_mode.as_ref().map(enum_to_text),
                     account.share_default_config,
                     account.share_default_config_incomplete,
+                    account.disabled,
                 ],
             )
             .map_err(|err| account_write_error(err, account))?;
@@ -828,28 +859,13 @@ impl Store {
         Ok(())
     }
 
-    pub fn set_account_approval_reviewer(
-        &self,
-        id: &str,
-        reviewer: Option<ApprovalReviewer>,
-    ) -> Result<()> {
-        self.lock().execute(
-            "UPDATE accounts SET approval_reviewer = ?2 WHERE id = ?1",
-            params![id, reviewer.as_ref().map(enum_to_text)],
+    /// Turns the account off for new work, or back on. Whether the stored flag changed.
+    pub fn set_account_disabled(&self, id: &str, disabled: bool) -> Result<bool> {
+        let changed = self.lock().execute(
+            "UPDATE accounts SET disabled = ?2 WHERE id = ?1 AND disabled != ?2",
+            params![id, disabled],
         )?;
-        Ok(())
-    }
-
-    pub fn set_account_approval_mode(
-        &self,
-        id: &str,
-        mode: Option<ClaudeApprovalMode>,
-    ) -> Result<()> {
-        self.lock().execute(
-            "UPDATE accounts SET approval_mode = ?2 WHERE id = ?1",
-            params![id, mode.as_ref().map(enum_to_text)],
-        )?;
-        Ok(())
+        Ok(changed > 0)
     }
 
     /// Records the account's sharing choice and whether the last change toward it is incomplete.
@@ -929,7 +945,7 @@ impl Store {
         let account = self
             .lock()
             .query_row(
-                "SELECT id, agent, name, config_dir, approval_reviewer, approval_mode, share_default_config, share_default_config_incomplete FROM accounts WHERE id = ?1",
+                "SELECT id, agent, name, config_dir, share_default_config, share_default_config_incomplete, disabled FROM accounts WHERE id = ?1",
                 params![id],
                 read_account,
             )
@@ -950,7 +966,7 @@ impl Store {
     pub fn list_accounts(&self) -> Result<Vec<Account>> {
         let conn = self.lock();
         let mut stmt =
-            conn.prepare("SELECT id, agent, name, config_dir, approval_reviewer, approval_mode, share_default_config, share_default_config_incomplete FROM accounts ORDER BY created_at")?;
+            conn.prepare("SELECT id, agent, name, config_dir, share_default_config, share_default_config_incomplete, disabled FROM accounts ORDER BY created_at")?;
         let rows = stmt
             .query_map([], read_account)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -1169,9 +1185,10 @@ impl Store {
             default_clone_dir: self.default_clone_dir()?,
             accounts: self.list_accounts()?,
             added_agents: self.added_agents()?,
-            codex_default_approval_reviewer: self.codex_default_approval_reviewer()?,
-            claude_default_approval_mode: self.claude_default_approval_mode()?,
+            codex_approval_reviewer: self.codex_approval_reviewer()?,
+            claude_approval_mode: self.claude_approval_mode()?,
             default_account_names: self.default_account_names()?,
+            disabled_default_accounts: self.disabled_default_accounts()?,
         })
     }
 
@@ -1179,6 +1196,47 @@ impl Store {
     /// is not a JSON object of strings reads as no names.
     pub fn default_account_names(&self) -> Result<std::collections::BTreeMap<String, String>> {
         read_default_account_names(&self.lock())
+    }
+
+    /// The agents, by wire name, whose default account is turned off for new work. A value that is
+    /// not a JSON array of strings reads as none.
+    pub fn disabled_default_accounts(&self) -> Result<std::collections::BTreeSet<String>> {
+        read_disabled_default_accounts(&self.lock())
+    }
+
+    /// Turns `agent`'s default account off for new work, or back on. The read and the write are
+    /// one step under the store's lock. Whether the stored set changed.
+    pub fn set_default_account_disabled(&self, agent: Agent, disabled: bool) -> Result<bool> {
+        let conn = self.lock();
+        let mut agents = read_disabled_default_accounts(&conn)?;
+        let changed = if disabled {
+            agents.insert(agent.wire_name().to_string())
+        } else {
+            agents.remove(agent.wire_name())
+        };
+        if !changed {
+            return Ok(false);
+        }
+        let stored = (!agents.is_empty())
+            .then(|| serde_json::to_string(&agents).expect("a set of strings serializes to JSON"));
+        conn.execute(
+            "UPDATE settings SET disabled_default_accounts = ?2 WHERE id = ?1",
+            params![SETTINGS_ID, stored],
+        )?;
+        Ok(true)
+    }
+
+    /// Whether the user turned `account_id` (`None` the default account) of `agent` off for new
+    /// work. An id that is no account of `agent`, or no longer on record, is not disabled.
+    pub fn account_disabled(&self, agent: Agent, account_id: Option<&str>) -> Result<bool> {
+        match account_id {
+            None => Ok(self
+                .disabled_default_accounts()?
+                .contains(agent.wire_name())),
+            Some(id) => Ok(self
+                .get_account(id)?
+                .is_some_and(|account| account.agent == agent && account.disabled)),
+        }
     }
 
     /// The name of `agent`'s default account: the user's own, else the daemon's word for it.
@@ -1222,36 +1280,33 @@ impl Store {
         Ok(true)
     }
 
-    pub fn codex_default_approval_reviewer(&self) -> Result<Option<ApprovalReviewer>> {
+    pub fn codex_approval_reviewer(&self) -> Result<Option<ApprovalReviewer>> {
         Ok(self.lock().query_row(
-            "SELECT codex_default_approval_reviewer FROM settings WHERE id = ?1",
+            "SELECT codex_approval_reviewer FROM settings WHERE id = ?1",
             params![SETTINGS_ID],
             |row| enum_from_row_opt(row, 0),
         )?)
     }
 
-    pub fn set_codex_default_approval_reviewer(
-        &self,
-        reviewer: Option<ApprovalReviewer>,
-    ) -> Result<()> {
+    pub fn set_codex_approval_reviewer(&self, reviewer: Option<ApprovalReviewer>) -> Result<()> {
         self.lock().execute(
-            "UPDATE settings SET codex_default_approval_reviewer = ?2 WHERE id = ?1",
+            "UPDATE settings SET codex_approval_reviewer = ?2 WHERE id = ?1",
             params![SETTINGS_ID, reviewer.as_ref().map(enum_to_text)],
         )?;
         Ok(())
     }
 
-    pub fn claude_default_approval_mode(&self) -> Result<Option<ClaudeApprovalMode>> {
+    pub fn claude_approval_mode(&self) -> Result<Option<ClaudeApprovalMode>> {
         Ok(self.lock().query_row(
-            "SELECT claude_default_approval_mode FROM settings WHERE id = ?1",
+            "SELECT claude_approval_mode FROM settings WHERE id = ?1",
             params![SETTINGS_ID],
             |row| enum_from_row_opt(row, 0),
         )?)
     }
 
-    pub fn set_claude_default_approval_mode(&self, mode: Option<ClaudeApprovalMode>) -> Result<()> {
+    pub fn set_claude_approval_mode(&self, mode: Option<ClaudeApprovalMode>) -> Result<()> {
         self.lock().execute(
-            "UPDATE settings SET claude_default_approval_mode = ?2 WHERE id = ?1",
+            "UPDATE settings SET claude_approval_mode = ?2 WHERE id = ?1",
             params![SETTINGS_ID, mode.as_ref().map(enum_to_text)],
         )?;
         Ok(())
@@ -2663,10 +2718,9 @@ fn read_account(row: &Row<'_>) -> rusqlite::Result<Account> {
         agent: enum_from_row(row, 1)?,
         name: row.get(2)?,
         config_dir: row.get(3)?,
-        approval_reviewer: enum_from_row_opt(row, 4)?,
-        approval_mode: enum_from_row_opt(row, 5)?,
-        share_default_config: row.get(6)?,
-        share_default_config_incomplete: row.get(7)?,
+        share_default_config: row.get(4)?,
+        share_default_config_incomplete: row.get(5)?,
+        disabled: row.get(6)?,
     })
 }
 
@@ -2786,6 +2840,19 @@ fn read_default_account_names(
         .unwrap_or_default())
 }
 
+/// The stored agents whose default account is disabled; a value that is not a JSON array of strings
+/// reads as none.
+fn read_disabled_default_accounts(conn: &Connection) -> Result<std::collections::BTreeSet<String>> {
+    let text: Option<String> = conn.query_row(
+        "SELECT disabled_default_accounts FROM settings WHERE id = ?1",
+        params![SETTINGS_ID],
+        |row| row.get(0),
+    )?;
+    Ok(text
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default())
+}
+
 /// A malformed value reads as an undecided list, with a warning, so the next fill replaces it. The
 /// daemon is the only writer, so this can only mean a hand-edited database, or one written by a later version.
 fn read_added_agents(conn: &Connection) -> Result<Option<Vec<Agent>>> {
@@ -2896,10 +2963,9 @@ mod tests {
             agent,
             name: format!("{id}-name"),
             config_dir: config_dir.to_string(),
-            approval_reviewer: None,
-            approval_mode: None,
             share_default_config: false,
             share_default_config_incomplete: false,
+            disabled: false,
         }
     }
 
@@ -4151,98 +4217,146 @@ mod tests {
         assert_eq!(store.added_agents().unwrap(), Some(vec![Agent::Codex]));
     }
 
-    /// The approval columns of accounts and settings are added to a database from before they
-    /// existed, read as unset there, and round-trip.
+    /// The approval settings are added to a database from before they existed, read as unset
+    /// there, and round-trip.
     #[test]
-    fn approval_columns_migrate_and_settings_round_trip() {
+    fn approval_settings_migrate_and_round_trip() {
         let path = temp_db("approval-columns-migration");
         let store = Store::open(&path).unwrap();
-        store
-            .insert_account(&account("acct-codex", Agent::Codex, "/tmp/codex"))
+        {
+            let conn = store.lock();
+            conn.execute(
+                "ALTER TABLE settings DROP COLUMN codex_approval_reviewer",
+                [],
+            )
             .unwrap();
+            conn.execute("ALTER TABLE settings DROP COLUMN claude_approval_mode", [])
+                .unwrap();
+        }
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        assert_eq!(store.codex_approval_reviewer().unwrap(), None);
+        assert_eq!(store.claude_approval_mode().unwrap(), None);
+
+        store
+            .set_codex_approval_reviewer(Some(ApprovalReviewer::AutoReview))
+            .unwrap();
+        store
+            .set_claude_approval_mode(Some(ClaudeApprovalMode::Bypass))
+            .unwrap();
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        let settings = store.get_settings().unwrap();
+        assert_eq!(
+            settings.codex_approval_reviewer,
+            Some(ApprovalReviewer::AutoReview)
+        );
+        assert_eq!(
+            settings.claude_approval_mode,
+            Some(ClaudeApprovalMode::Bypass)
+        );
+        store.set_codex_approval_reviewer(None).unwrap();
+        assert_eq!(store.codex_approval_reviewer().unwrap(), None);
+        store.set_claude_approval_mode(None).unwrap();
+        assert_eq!(store.claude_approval_mode().unwrap(), None);
+    }
+
+    /// A database that kept the choice per account keeps the default account's choice as the
+    /// agent's, and the accounts lose their own columns.
+    #[test]
+    fn per_account_approval_choices_collapse_into_the_default_accounts() {
+        let path = temp_db("approval-per-account-migration");
+        let store = Store::open(&path).unwrap();
         store
             .insert_account(&account("acct-claude", Agent::Claude, "/tmp/claude"))
             .unwrap();
         {
             let conn = store.lock();
-            conn.execute("ALTER TABLE accounts DROP COLUMN approval_reviewer", [])
+            conn.execute("ALTER TABLE accounts ADD COLUMN approval_reviewer TEXT", [])
+                .unwrap();
+            conn.execute("ALTER TABLE accounts ADD COLUMN approval_mode TEXT", [])
+                .unwrap();
+            conn.execute("UPDATE accounts SET approval_mode = 'manual'", [])
                 .unwrap();
             conn.execute(
-                "ALTER TABLE settings DROP COLUMN codex_default_approval_reviewer",
+                "ALTER TABLE settings RENAME COLUMN claude_approval_mode \
+                 TO claude_default_approval_mode",
                 [],
             )
             .unwrap();
-            conn.execute("ALTER TABLE accounts DROP COLUMN approval_mode", [])
-                .unwrap();
             conn.execute(
-                "ALTER TABLE settings DROP COLUMN claude_default_approval_mode",
+                "UPDATE settings SET claude_default_approval_mode = 'bypass'",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "ALTER TABLE settings RENAME COLUMN codex_approval_reviewer \
+                 TO codex_default_approval_reviewer",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "UPDATE settings SET codex_default_approval_reviewer = 'auto_review'",
                 [],
             )
             .unwrap();
         }
         drop(store);
         let store = Store::open(&path).unwrap();
-        let mut codex = store.get_account("acct-codex").unwrap().unwrap();
-        assert_eq!(codex.approval_reviewer, None);
-        assert_eq!(store.codex_default_approval_reviewer().unwrap(), None);
-        let mut claude = store.get_account("acct-claude").unwrap().unwrap();
-        assert_eq!(claude.approval_mode, None);
-        assert_eq!(store.claude_default_approval_mode().unwrap(), None);
-
-        codex.approval_reviewer = Some(ApprovalReviewer::User);
-        store
-            .set_account_approval_reviewer(&codex.id, codex.approval_reviewer)
-            .unwrap();
-        store
-            .set_codex_default_approval_reviewer(Some(ApprovalReviewer::AutoReview))
-            .unwrap();
-        claude.approval_mode = Some(ClaudeApprovalMode::Manual);
-        store
-            .set_account_approval_mode(&claude.id, claude.approval_mode)
-            .unwrap();
-        store
-            .set_claude_default_approval_mode(Some(ClaudeApprovalMode::Bypass))
-            .unwrap();
-        drop(store);
-        let store = Store::open(&path).unwrap();
-        assert_eq!(store.get_account("acct-codex").unwrap().unwrap(), codex);
-        assert_eq!(store.get_account("acct-claude").unwrap().unwrap(), claude);
-        let settings = store.get_settings().unwrap();
         assert_eq!(
-            settings.codex_default_approval_reviewer,
-            Some(ApprovalReviewer::AutoReview)
-        );
-        assert_eq!(
-            settings.claude_default_approval_mode,
+            store.claude_approval_mode().unwrap(),
             Some(ClaudeApprovalMode::Bypass)
         );
-        store.set_codex_default_approval_reviewer(None).unwrap();
-        assert_eq!(store.codex_default_approval_reviewer().unwrap(), None);
-        store.set_claude_default_approval_mode(None).unwrap();
-        assert_eq!(store.claude_default_approval_mode().unwrap(), None);
+        assert_eq!(
+            store.codex_approval_reviewer().unwrap(),
+            Some(ApprovalReviewer::AutoReview)
+        );
+        assert!(store.get_account("acct-claude").unwrap().is_some());
+        let conn = store.lock();
+        assert!(!column_exists(&conn, "accounts", "approval_mode").unwrap());
+        assert!(!column_exists(&conn, "accounts", "approval_reviewer").unwrap());
+        assert!(!column_exists(&conn, "settings", "claude_default_approval_mode").unwrap());
     }
 
+    /// An older build sharing the database file adds the old columns back beside the new ones: the
+    /// next start fills the new column only where it holds nothing, and drops the old one.
     #[test]
-    fn reviewer_changes_and_account_edits_do_not_overwrite_each_other() {
-        let path = temp_db("account-reviewer-independent");
+    fn a_database_holding_both_approval_columns_opens_and_keeps_the_new_value() {
+        let path = temp_db("approval-both-columns");
         let store = Store::open(&path).unwrap();
-        let mut stale = account("acct-1", Agent::Codex, "/tmp/codex");
-        store.insert_account(&stale).unwrap();
-        store
-            .set_account_approval_reviewer(&stale.id, Some(ApprovalReviewer::AutoReview))
+        {
+            let conn = store.lock();
+            for column in [
+                "codex_default_approval_reviewer",
+                "claude_default_approval_mode",
+            ] {
+                conn.execute(
+                    &format!("ALTER TABLE settings ADD COLUMN {column} TEXT"),
+                    [],
+                )
+                .unwrap();
+            }
+            conn.execute(
+                "UPDATE settings SET claude_approval_mode = 'auto', \
+                 claude_default_approval_mode = 'bypass', \
+                 codex_default_approval_reviewer = 'user'",
+                [],
+            )
             .unwrap();
-        stale.name = "Renamed".into();
-        stale.config_dir = "/tmp/codex-moved".into();
-        store.update_account(&stale).unwrap();
-        let saved = store.get_account(&stale.id).unwrap().unwrap();
-        assert_eq!(saved.approval_reviewer, Some(ApprovalReviewer::AutoReview));
-        store
-            .set_account_approval_reviewer(&stale.id, Some(ApprovalReviewer::User))
-            .unwrap();
-        let saved = store.get_account(&stale.id).unwrap().unwrap();
-        assert_eq!(saved.name, stale.name);
-        assert_eq!(saved.config_dir, stale.config_dir);
-        assert_eq!(saved.approval_reviewer, Some(ApprovalReviewer::User));
+        }
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        assert_eq!(
+            store.claude_approval_mode().unwrap(),
+            Some(ClaudeApprovalMode::Auto)
+        );
+        assert_eq!(
+            store.codex_approval_reviewer().unwrap(),
+            Some(ApprovalReviewer::User)
+        );
+        let conn = store.lock();
+        assert!(!column_exists(&conn, "settings", "codex_default_approval_reviewer").unwrap());
+        assert!(!column_exists(&conn, "settings", "claude_default_approval_mode").unwrap());
     }
 
     /// An account's name and directory round-trip, and `update_account` can change either
@@ -4581,6 +4695,82 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Turning a default account off and on records it per agent, a repeat write reports no change,
+    /// and the last one back on clears the column to NULL, as a database that never had one reads.
+    #[test]
+    fn the_disabled_default_accounts_round_trip_and_clear_to_null() {
+        let path = temp_db("disabled-default-accounts");
+        let store = Store::open(&path).expect("store");
+        let stored = |store: &Store| -> Option<String> {
+            store
+                .lock()
+                .query_row(
+                    "SELECT disabled_default_accounts FROM settings WHERE id = ?1",
+                    params![SETTINGS_ID],
+                    |row| row.get(0),
+                )
+                .unwrap()
+        };
+        assert!(store.disabled_default_accounts().unwrap().is_empty());
+        assert!(!store.account_disabled(Agent::Codex, None).unwrap());
+        assert!(!store
+            .set_default_account_disabled(Agent::Codex, false)
+            .unwrap());
+
+        assert!(store
+            .set_default_account_disabled(Agent::Codex, true)
+            .unwrap());
+        assert!(!store
+            .set_default_account_disabled(Agent::Codex, true)
+            .unwrap());
+        assert!(store
+            .set_default_account_disabled(Agent::Claude, true)
+            .unwrap());
+        assert_eq!(stored(&store).as_deref(), Some(r#"["claude","codex"]"#));
+        assert!(store.account_disabled(Agent::Codex, None).unwrap());
+        assert!(!store.account_disabled(Agent::Grok, None).unwrap());
+        assert_eq!(
+            store.get_settings().unwrap().disabled_default_accounts,
+            ["claude".to_string(), "codex".to_string()].into()
+        );
+
+        assert!(store
+            .set_default_account_disabled(Agent::Codex, false)
+            .unwrap());
+        assert!(store
+            .set_default_account_disabled(Agent::Claude, false)
+            .unwrap());
+        assert_eq!(stored(&store), None);
+        assert!(store.disabled_default_accounts().unwrap().is_empty());
+    }
+
+    /// An account row's flag is written alone, a repeat write reports no change, and an id of
+    /// another agent is not disabled for the agent asked about.
+    #[test]
+    fn an_accounts_disabled_flag_is_written_alone() {
+        let path = temp_db("account-disabled-flag");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_account(&Account {
+                id: "work".to_string(),
+                agent: Agent::Claude,
+                name: "Work".to_string(),
+                config_dir: "/home/u/.claude-work".to_string(),
+                share_default_config: false,
+                share_default_config_incomplete: false,
+                disabled: false,
+            })
+            .unwrap();
+        assert!(store.set_account_disabled("work", true).unwrap());
+        assert!(!store.set_account_disabled("work", true).unwrap());
+        assert!(!store.set_account_disabled("nope", true).unwrap());
+        assert!(store.get_account("work").unwrap().unwrap().disabled);
+        assert!(store.account_disabled(Agent::Claude, Some("work")).unwrap());
+        assert!(!store.account_disabled(Agent::Codex, Some("work")).unwrap());
+        assert!(store.set_account_disabled("work", false).unwrap());
+        assert!(!store.account_disabled(Agent::Claude, Some("work")).unwrap());
     }
 
     /// The default clone directory is the built-in one until set, a blank value goes back to it,

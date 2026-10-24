@@ -119,6 +119,26 @@ it("lists inheriting the console's, the default account, then the named accounts
   ]);
 });
 
+it("hides a turned-off account from the list", async () => {
+  const pending = render(undefined, [work, { ...personal, disabled: true }]);
+  await fillDirectory(pending);
+  await click(accountPicker());
+  expect(Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent)).toEqual([
+    "Same as console, Work",
+    "Default",
+    "Work",
+  ]);
+});
+
+it("keeps the turned-off account a project still pins in the list, marked Disabled", async () => {
+  render(stateOf({ kind: "account", id: "a-personal" }), [work, { ...personal, disabled: true }]);
+  await click(accountPicker());
+  const options = Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]'));
+  const off = options.find((o) => o.textContent?.includes("Personal"))!;
+  expect(off.textContent).toContain("Disabled");
+  expect(off.getAttribute("aria-disabled")).not.toBe("true");
+});
+
 it.each([
   ["inheriting", undefined, "Same as console, Work"],
   ["inheriting, written out", { kind: "inherit" } as const, "Same as console, Work"],

@@ -107,7 +107,12 @@ A used-up account in the rail's quota panel, which is not a control, recedes the
 name and its meters' headlines take the secondary text colour (6.0:1 light, 6.7:1 dark on the panel's popover), a
 neutral "Used up" badge on its name line says why in words, and its bars are drawn in a neutral grey
 (`.quota-meter--used-up` in `packages/ui/src/style.css`) that keeps 3:1 against the meter's track while sitting
-fainter on it than the agent colours. A veil over the row is not used: it would take its text below AA.
+fainter on it than the agent colours. A veil over the row is not used for that state: it would take its text below AA.
+
+A kept shortfall of that panel: while the mouse is on the rail's **Account quota** button, every account row but the button's own is
+covered by the sidebar's inactive-project veil (`INACTIVE_VEIL_CLASS` in `packages/ui/src/components/inactiveVeil.ts`),
+until the mouse enters the panel or the panel closes. The veiled text falls below AA by the user's decision, as a
+passing cue that is mouse-only and visual only; it looks unlike the used-up state, which recedes without a veil.
 
 A notice toast (HeroUI's accent variant) tints its indicator with the title's `--accent-soft-foreground`, as HeroUI
 does itself for its success, warning and danger toasts, instead of leaving it in the plain foreground under an accent
@@ -472,6 +477,11 @@ keyboard focus, as specified under "Visible focus", so the revealed tab and its 
 Where a sticky heading occupies the top of a faded list, the top scroll padding includes both the heading's height
 and the fade's size, so a focused row is visible below them. The heading itself stays clear of the fade.
 
+The same holds sideways for a table with a pinned column: the Settings accounts table pins its Actions column to the
+end of a horizontal scroller, so the scroller's end scroll padding is the fade's size plus the pinned column's measured
+width (`FadedScroller`'s `endInset`), or a focused switch would scroll to just under the pinned column. That scroller
+draws no fade mask (`fade={false}`), since a mask would dim the pinned column itself.
+
 A control inside such a heading sits within that padding while it is pinned, so focusing it would scroll the list by
 the padding's depth on every focus move — seen on the Projects heading's Funnel X and Collapse all, the list jumping
 as Tab moved through them. The heading's controls are exempted: their scroll area is moved down by the padding's
@@ -676,8 +686,13 @@ warning among them, stays visible text.
 
 The permission-approval explanation in Settings' Agent accounts section is an exception: the explanation of how
 requests are handled, when the choice takes effect and Codex's possible extra token cost sits in a `HelpTip` beside
-the approval heading. The heading stays visible above the selector column in wide layouts and above each account's
-selector in narrow layouts.
+the Permission approval label of the agent's own setting row, above its accounts table; the row's visible description
+says only that the choice applies to every account of the agent.
+
+So is the share-default-config explanation in an owned account's settings dialog: what sharing links, and that idle
+sessions are ended and resumed by a change, sit in a `HelpTip` beside the row's visible label, under which a one-line
+description stays visible. The reason the switch is locked is a status, so it stays visible text under the row while
+the lock lasts.
 
 Another deliberate exception: an added agent that is not installed is marked in the Settings agent strip by a warning glyph
 after its tab's name, and the explanation sits in a tooltip anchored to the tab rather than in a line of text. The
@@ -1225,9 +1240,10 @@ element, an error from `role="alert"`.
 - A status region inside a laid-out row (a grid or flex row) stays mounted while empty by being `sr-only`, never
   `display:none` or `hidden`, which takes it out of the accessibility tree and so loses the first text it receives. An
   account row's login announcement is the instance (`AccountLoginAnnouncer` in
-  `packages/ui/src/settings/AccountLogin.tsx`, mounted by `AccountRow` in
-  `packages/ui/src/settings/AgentAccountsSection.tsx`): a `StatusAnnouncer` that lives as long as the row and says once
-  that the account is logged in, while the row's login badge shows the same result visibly; it names the account, since
+  `packages/ui/src/settings/AccountLogin.tsx`, mounted by `AccountTableRow` in
+  `packages/ui/src/settings/AccountsTable.tsx`): a `StatusAnnouncer` that lives as long as the row and says once
+  that the account is logged in, while the row shows the same result visibly in its "Logged in" badge; it names the
+  account, since
   nothing around it does. It follows the modal rule and the unattended-window rule above: it is written
   `AFTER_FOCUS_MOVE_DELAY_MS` after the success, a wait that outlasts the dialog closing and focus returning to the row,
   and only while the window is attended. A region that was written under the closing modal, or while the window was

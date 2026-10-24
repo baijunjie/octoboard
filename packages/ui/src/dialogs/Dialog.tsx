@@ -171,6 +171,7 @@ let openDialogs = 0;
 export function Dialog({
   title,
   headerLeading,
+  headerTrailing,
   subtitle,
   onClose,
   children,
@@ -189,6 +190,9 @@ export function Dialog({
   title: string | React.ReactElement;
   /** Controls beside the title, outside the heading's accessible name. */
   headerLeading?: React.ReactNode;
+  /** Controls and badges after the title on its line, outside the heading's accessible name (the plan and login state,
+   * a Log in button); the subtitle takes the line under them. */
+  headerTrailing?: React.ReactNode;
   /** A line under the title that belongs to it (where a compared change is from): in the header, so
    * it reads after the title and is never clipped by the body's scroller. It brings its own height. */
   subtitle?: React.ReactElement;
@@ -293,6 +297,7 @@ export function Dialog({
     </>
   );
 
+  const heading = <Frame.Heading className="min-w-0 [overflow-wrap:anywhere]">{title as BodyChildren}</Frame.Heading>;
   // Keep the modal parts together: HeroUI spaces them through adjacent-sibling selectors.
   const content = (
     <>
@@ -301,7 +306,12 @@ export function Dialog({
           anywhere, since a name with no place to break would run out of the dialog. */}
       <Frame.Header className={`${size === "viewer" ? "mx-6 mt-6 " : ""}${headerLeading ? "grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-1 pe-6" : subtitle ? "gap-1 pe-6" : "pe-6"}`}>
         {headerLeading}
-        <Frame.Heading className="min-w-0 [overflow-wrap:anywhere]">{title as BodyChildren}</Frame.Heading>
+        {headerTrailing ? (
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            {heading}
+            {headerTrailing}
+          </div>
+        ) : heading}
         {subtitle}
       </Frame.Header>
       {body}

@@ -170,9 +170,11 @@ Sessions and their records, the pages console sessions pushed to the report pane
 and folder trust — a project's trust permission and the trusted folders alike — are the state of one machine rather than
 configuration, and are in no document. Neither is the default clone directory: that one is the importing machine's own
 to choose, and an import places what it clones under it (see "Default clone directory" in `docs/product/settings.md`).
-No console and no project carries its stored id. Codex and Claude Code account approval modes, including the default
-accounts', also stay local: exports omit them and imports leave the importing machine's choices unchanged. So do the
-list of added agents and the names the user gave the default accounts (see "Added agents" and "The default account" in
+No console and no project carries its stored id. Codex's and Claude Code's permission approval settings also stay
+local: exports omit them and imports leave the importing machine's choices unchanged, since importing them could
+silently turn on **Approve everything**, which on its own machine is saved only after a confirmation (see "Approval
+modes" in `docs/product/agent-accounts.md`). So do the list of added agents, the names the user gave the default
+accounts and which accounts are turned off (see "Added agents", "The default account" and "Turning an account off" in
 `docs/product/agent-accounts.md`). Account quota readings are not stored at all and are in no document either (see
 "How a quota is read" in `docs/product/account-quotas.md`).
 

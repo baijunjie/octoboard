@@ -1,10 +1,12 @@
 import { Description, Label, Radio, RadioGroup } from "@heroui/react";
 import React, { useState } from "react";
 
+import { accountDisabled } from "../accountChoices";
 import { canSwitchTo } from "../accountSwitchBatch";
 import { AGENT_LABEL } from "../agents";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { InlineReference } from "../components/InlineReference";
+import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { Session } from "../protocol";
 import { accountQuotaOf } from "../quota/accountQuotaOf";
@@ -40,8 +42,12 @@ export function SwitchAccountDialog({
   const { store } = useDaemon();
   const sessions = useDaemonStore((s) => s.sessions);
   const quotas = useDaemonStore((s) => s.accountQuotas);
+  const accounts = useDaemonStore((s) => s.settings.accounts);
+  const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
   const now = useNow();
-  // The account being switched to may have no quota left: the daemon refuses the switch, so Confirm is held.
+  // The account being switched to may have been turned off, or have no quota left, since the dialog opened: the
+  // daemon refuses the switch either way, so Confirm is held.
+  const disabled = accountDisabled(accounts, disabledDefaults, session.agent, account);
   const quota = accountQuotaOf(quotas, session.agent, account);
   const exhaustedBy = exhaustedQuotaWindow(quota, now);
   const [scope, setScope] = useState<Scope>("session");
@@ -55,19 +61,20 @@ export function SwitchAccountDialog({
   );
   const counts = { session: targetsIn(sessions, "session").length, console: targetsIn(sessions, "console").length };
   const { confirmLaunch, confirmation } = useConfirmIncompleteLaunch(onClose);
-  const usedUp = exhaustedBy && quota && quotaUsedUpCopy(t, quota, accountName, exhaustedBy, now);
+  const usedUp = !disabled && exhaustedBy && quota && quotaUsedUpCopy(t, quota, accountName, exhaustedBy, now);
   const agent = <InlineReference dir="auto" wrap>{AGENT_LABEL[session.agent]}</InlineReference>;
   const several = scope === "console" || counts.session > 1;
   return (
     <ConfirmDialog
       title={<Message id="dialog.switchAccount.title" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference>, account: <InlineReference dir="auto" wrap>{accountName}</InlineReference> }} />}
       message={<>
+        {disabled && <ErrorAlert title={t("accountChoice.disabled.title")} announce>{t("accountChoice.disabled.description", { name: isolate(accountName) })}</ErrorAlert>}
         {usedUp && <ErrorAlert title={usedUp.title} announce>{usedUp.description}</ErrorAlert>}
         <p>{t(several ? "dialog.switchAccount.messageAll" : session.has_conversation ? "dialog.switchAccount.message" : "dialog.switchAccount.messageFresh")}</p>
       </>}
       confirmLabel={t("dialog.switchAccount.confirm")}
       // Nothing left to switch in the chosen scope (its sessions began switching after the dialog opened).
-      confirmDisabled={exhaustedBy !== undefined || counts[scope] === 0}
+      confirmDisabled={disabled || exhaustedBy !== undefined || counts[scope] === 0}
       onCancel={onClose}
       // The set is read once Confirm is pressed, and fixed from then on: sessions opened later never join it.
       onConfirm={() => confirmLaunch(account, () => {

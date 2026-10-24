@@ -1,4 +1,4 @@
-import { consoleAccount } from "../accountChoices";
+import { accountDisabled, consoleAccount } from "../accountChoices";
 import { AGENT_SHORT_NAME, accountsByAgent, defaultAccountName, listedAgents } from "../agents";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
@@ -36,6 +36,8 @@ export interface StatusItemQuotaSource {
   addedAgents: Agent[] | null;
   /** The names the user gave the default accounts, by agent. */
   defaultAccountNames?: Settings["default_account_names"];
+  /** The agents whose default account is turned off, which the submenus leave out like an owned account that is off. */
+  disabledDefaultAccounts?: Settings["disabled_default_accounts"];
   agentAvailability: Map<Agent, AgentAvailability>;
   accountQuotas: AccountQuota[];
 }
@@ -103,14 +105,16 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
 }
 
 /** One submenu per added agent that is available, in the order they were added — "Claude quota ▸" —
- * listing its default account, then the accounts the user owns, each set off by a separator. Nothing
- * for an agent that is not added, not available or not yet determined: unlike the rail's panel, which
- * lists an undetermined agent, a submenu without readings to fill it would be empty. */
+ * listing its default account, then the accounts the user owns, each set off by a separator, leaving out an
+ * account that is turned off. Nothing for an agent that is not added, not available or not yet determined, or
+ * whose accounts are all turned off: unlike the rail's panel, which lists an undetermined agent, a submenu
+ * without readings to fill it would be empty. */
 export function buildQuotaSubmenus(t: Translate, source: StatusItemQuotaSource, currentConsole?: Console): StatusItemSubmenu[] {
   const owned = new Map(accountsByAgent(source.accounts).map(({ agent, accounts }) => [agent, accounts]));
   return listedAgents(source.addedAgents).flatMap((agent): StatusItemSubmenu[] => {
     if (source.agentAvailability.get(agent)?.availability !== "available") return [];
-    const accounts: Array<Account | null> = [null, ...(owned.get(agent) ?? [])];
+    const accounts = [null, ...(owned.get(agent) ?? [])].filter((account) => !accountDisabled(source.accounts, source.disabledDefaultAccounts, agent, account?.id ?? null));
+    if (accounts.length === 0) return [];
     const items = accounts.flatMap((account, index): StatusItemSubmenuItem[] => [
       ...(index > 0 ? [{ kind: "separator" as const }] : []),
       ...accountLines(t, source, agent, account),

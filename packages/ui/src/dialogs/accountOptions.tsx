@@ -1,4 +1,4 @@
-import { sharingChangeUnavailable, type ChoiceEntry } from "../accountChoices";
+import { accountDisabledPickable, accountDisabledUnavailable, sharingChangeUnavailable, type ChoiceEntry } from "../accountChoices";
 import type { Translate } from "../i18n/catalog";
 import { accountUsage } from "../quota/accountUsage";
 import type { Option } from "./OptionSelect";
@@ -10,7 +10,13 @@ export function accountOption(t: Translate, entry: ChoiceEntry, now: number, isD
   return {
     value: entry.key,
     label: entry.name,
-    ...(entry.changingSharing ? { icon: usage.icon, ...sharingChangeUnavailable(t) } : usage),
-    isDisabled: isDisabled || entry.exhaustedBy !== undefined || entry.changingSharing,
+    ...(entry.disabled ? { icon: usage.icon, ...accountDisabledUnavailable(t) } : entry.changingSharing ? { icon: usage.icon, ...sharingChangeUnavailable(t) } : usage),
+    isDisabled: isDisabled || entry.exhaustedBy !== undefined || entry.changingSharing || entry.disabled,
   };
+}
+
+/** `option` of a picker that keeps a turned-off account selectable (a console's or a project's account), marked
+ * "Disabled" when `disabled` (see `accountDisabledPickable`). */
+export function markDisabledPickable<O extends { value: string; label: string }>(t: Translate, option: O, disabled: boolean): O | (O & ReturnType<typeof accountDisabledPickable>) {
+  return disabled ? { ...option, ...accountDisabledPickable(t) } : option;
 }

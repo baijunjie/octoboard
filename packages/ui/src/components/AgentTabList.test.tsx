@@ -64,3 +64,35 @@ it("moves a dropped tab into its new place from where the drag left it, and the 
   expect(motion.played().map(({ element, frames }) => [element, presence(frames) ?? frames[0]])).toEqual([[claude, { translate: "20px 0px" }]]);
   expect(claude.style.transform).toBe("");
 });
+
+it("gives focus back to an agent's actions button when reordering the tabs dropped it", async () => {
+  stubListMotion();
+  let order: Agent[] = ["claude", "codex"];
+  layOut(() => order);
+  let reorder!: (order: Agent[]) => void;
+  function Strip() {
+    const [agents, setAgents] = useState<Agent[]>(order);
+    reorder = setAgents;
+    order = agents;
+    return (
+      <Tabs selectedKey="claude">
+        <AgentTabList agents={agents} label="Agents" tabActions={(agent) => <button type="button" aria-label={`Actions for ${agent}`} />} />
+      </Tabs>
+    );
+  }
+  const host = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  onTestFinished(() => { act(() => root.unmount()); host.remove(); });
+  act(() => root.render(<Strip />));
+  await act(async () => {});
+  // The controls are placed once list motion has ended.
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 400)); });
+  const actions = () => host.querySelector<HTMLElement>('[data-tab-actions="claude"] button')!;
+  act(() => actions().focus());
+  expect(document.activeElement).toBe(actions());
+  // Moving a focused element in the document drops its focus, as the reorder does.
+  act(() => actions().blur());
+  expect(document.activeElement).toBe(document.body);
+  act(() => reorder(["codex", "claude"]));
+  expect(document.activeElement).toBe(actions());
+});

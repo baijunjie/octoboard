@@ -103,8 +103,11 @@ From top to bottom:
    quota**, in the order of the added agents (see "Added agents" in `docs/product/agent-accounts.md`), the agents'
    names never translated — each opening to that agent's accounts and showing what Settings and the rail's panel
    show, including window order (see "Quota windows" and "How an account's quota is shown" in
-   `docs/product/account-quotas.md`). An agent that is not added, not available, or whose availability is not yet
-   determined has none. The submenus are set off from the sessions and from Open Octoboard by separators. Inside a submenu,
+   `docs/product/account-quotas.md`). An account that is turned off (see "Turning an account off" in
+   `docs/product/agent-accounts.md`) is not listed, and the menu follows the switch as it flips; the submenu's own
+   bars still show the current console's account, as the icon does, even while that account is turned off. An agent
+   that is not added, not available, whose availability is not yet determined, or whose accounts are all turned off
+   has none. The submenus are set off from the sessions and from Open Octoboard by separators. Inside a submenu,
    nothing can be chosen:
    - each account is a header line, at the small size of a section header, regular weight, in the secondary text
      colour, with its name — for the agent's default account the name the user gave it, else **Default** (see "The

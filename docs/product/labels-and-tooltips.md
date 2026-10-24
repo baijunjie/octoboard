@@ -67,8 +67,8 @@ application buttons below. These are:
   one, Turn on notifications and Settings (the rail's Account quota button has none, as said below this list);
 - the ⋮ button that opens an action menu — a sidebar row's, the console's in the sidebar's header, the project's in
   focus mode, a file or folder's in the Files mode's tree or a file's in the Git mode's change list (see "A
-  row's actions" in `docs/product/project-pane.md`), and, in Settings' Agent accounts section, an account's and the
-  More actions button at the end of the agent strip (see `docs/product/agent-accounts.md`). Its tooltip is a short
+  row's actions" in `docs/product/project-pane.md`), and, in Settings' Agent accounts section, an account's and each
+  agent tab's (see "The agent strip" in `docs/product/agent-accounts.md`). Its tooltip is a short
   "More actions", while the name announced for it also names what it belongs to ("Actions for session …", "Actions
   for file …" and the like), so that each ⋮ can be told apart;
 - the sidebar's other icon buttons — a project's **+** (New session), wherever it appears, the Projects heading's
@@ -144,12 +144,19 @@ field or a setting row, the note at the foot of a form, a section's lead paragra
 consequences and timing of an action.
 
 The permission-approval explanation in Settings' Agent accounts section is an exception: its handling, timing and
-Codex's possible extra token cost sit in a help tip beside the approval heading (see "Approval modes" in
-`docs/product/agent-accounts.md`).
+Codex's possible extra token cost sit in a help tip beside the name of an agent's **Permission approval** row, whose
+visible line says only that it applies to every account of the agent (see "Approval modes" in
+`docs/product/agent-accounts.md`). So, in part, is the **Share default configuration** row: what is shared and never
+shared, what turning sharing off does to conversations and the idle sessions a change would end sit in the help tip
+beside the row's name, while the row's line says what turning the switch on does, or what is the case while it is on,
+and why the switch cannot be turned now stays under that line (see "Sharing the default configuration" in
+`docs/product/agent-accounts.md`). So is what turning an account off means, in the help tip on the accounts table's
+**Disable** heading; the **Disable account** row of an account's settings dialog says it in its own line instead (see
+"Turning an account off" in `docs/product/agent-accounts.md`).
 
 One status is a deliberate exception: an added agent that is not installed, in Settings' Agent accounts section. The
 status itself stays visible, as a warning glyph after the agent's name on its tab, and each account the user owns of
-that agent still says visibly that it is not usable; only the glyph's explanation — that the agent is not installed and
+that agent still says visibly, in its account settings dialog, that it is not usable; only the glyph's explanation — that the agent is not installed and
 its accounts are not usable until it is on `PATH` — sits in a tooltip on the tab, which opens on hover and on keyboard
 focus (see "Tooltips on indicators" below, and "The agent strip" in `docs/product/agent-accounts.md`). An agent that is
 not added has no tab and so no such status. That tooltip is not a "?" help tip.
@@ -158,7 +165,7 @@ An explanation can be split: the part of either kind above goes into the help ti
 tip sits at the end of the line it explains, beside the label rather than inside it, so the name announced for that
 label or field does not include it. A section heading carries no help tip.
 
-Help tips are used in six places:
+Help tips are used in these places:
 
 - Settings' **Automatically pull repositories** row, at the end of the row's name: that the remote is checked every few
   minutes whichever way the switch is set (see "Git" in `docs/product/settings.md`);
@@ -168,13 +175,15 @@ Help tips are used in six places:
 - the project dialog's **Default agent** field while associating a parent directory, beside the field's label: what
   "Detect from files" looks for in each repository and what happens to one it cannot decide on (see "The project's
   default agent" in `docs/product/projects.md`);
-- each agent's **default account** in Settings' Agent accounts section, at the end of its name line: that it is the
-  setup a session runs under when no account is pinned (see "The default account" in
-  `docs/product/agent-accounts.md`);
-- the **Share default configuration** switch of each account the user owns in Settings' Agent accounts section,
-  beside the switch's label: what is linked to the default account's directory, what is never shared and what
-  happens when sharing is turned off (see "Sharing the default configuration" in `docs/product/agent-accounts.md`);
-- the permission-approval headings in Settings' Agent accounts section (see "Approval modes" in
+- each agent's **default account** in Settings' Agent accounts section, right after its directory in its account
+  settings dialog: that it is the agent's own default configuration directory, which new sessions use when no account is chosen
+  and whose configuration other accounts can share (see "The default account" in `docs/product/agent-accounts.md`);
+- the name of Claude Code's and Codex's **Permission approval** row in Settings' Agent accounts section (see "Approval
+  modes" in `docs/product/agent-accounts.md`);
+- the **Share default configuration** row of an account's settings dialog: what is linked to the default account's
+  directory, what is never shared and what happens when sharing is turned off (see "Sharing the default configuration"
+  in `docs/product/agent-accounts.md`);
+- the **Disable** heading of Settings' accounts table (see "Turning an account off" in
   `docs/product/agent-accounts.md`).
 
 ## Two-state icon toggles
@@ -290,8 +299,8 @@ placed against the tab rather than the glyph. It opens while the pointer is anyw
 keyboard focus, but not when a mouse press is what focuses the tab. On keyboard focus it shows once the strip and the section have stopped scrolling
 the tab into view, since a scroll under an open tooltip closes it; a press or a key before then cancels it. For how a
 press or a key closes it see "How a tooltip behaves" above. Nothing links the tooltip to the tab for assistive
-technology: the tab's accessible name says the agent is not installed, and the line under each of the agent's own
-accounts says they are not usable (see "The agent strip" in `docs/product/agent-accounts.md`).
+technology: the tab's accessible name says the agent is not installed, and a line in the settings dialog of each of
+the agent's own accounts says it is not usable (see "The agent strip" in `docs/product/agent-accounts.md`).
 
 ## Names too long for their space
 

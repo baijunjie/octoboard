@@ -389,10 +389,9 @@ async fn a_handoff_that_is_refused_changes_nothing() {
             agent: Agent::Claude,
             name: "Work".to_string(),
             config_dir: fixture.dir.join("account").to_string_lossy().into_owned(),
-            approval_reviewer: None,
-            approval_mode: None,
             share_default_config: false,
             share_default_config_incomplete: false,
+            disabled: false,
         })
         .unwrap();
     let before = fixture.snapshot();

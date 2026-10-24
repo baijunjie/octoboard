@@ -55,6 +55,7 @@ import { NESTED_RAIL_CLASS, NESTED_ROW_CLASS, NestedBranch, LockButton, PinButto
 import { focusTargetId } from "./focus";
 import type { FocusTarget, SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
+import { INACTIVE_VEIL_CLASS } from "../components/inactiveVeil";
 import { useArchivedOwnerSessions, useConsoleSessions, useHasBoundSessions, useOwnerSessions, useProjectSessions, useSession, useSessionProjectId } from "../sessions/useSessions";
 
 /** The clip the docked column sits in. `min-w-0` lets the flex item reach 0 while the sidebar
@@ -597,7 +598,7 @@ function ConsoleBody({
                 // plain paint and lets every pointer event through. It takes the dimmed names below
                 // WCAG AA (about 2.9:1, muted text about 1.9:1) on purpose, by the user's decision: a
                 // de-emphasis cue, lifted as soon as the group is pointed at, focused or has a menu open.
-                className="relative after:pointer-events-none after:absolute after:inset-0 after:transition-colors after:duration-200 motion-reduce:after:transition-none data-inactive:after:bg-panel-sidebar/55"
+                className={`${INACTIVE_VEIL_CLASS} data-inactive:after:bg-panel-sidebar/55`}
               >
                 <ProjectNode
                   handlers={handlers}

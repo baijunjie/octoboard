@@ -1,7 +1,7 @@
 import React, { useId, useMemo, useState } from "react";
 
 import { Button } from "../components/Button";
-import { consoleAccount, resolveProjectAccount, settledProjectAccount } from "../accountChoices";
+import { accountDisabled, consoleAccount, resolveProjectAccount, settledProjectAccount } from "../accountChoices";
 import { changedAgentFields, changedProjectAccounts, readAgentFields, readProjectAccounts } from "../agentFields";
 import {
   AGENT_ACCOUNT_FIELD,
@@ -22,6 +22,7 @@ import { Message, useT } from "../i18n/react";
 import { tagVocabulary } from "../projectFiltering";
 import type { Agent, Project, ProjectAccount, ProjectSource } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
+import { markDisabledPickable } from "./accountOptions";
 import { AgentAccountField } from "./AgentAccountField";
 import { Dialog, useDialogAction, useSubmitValidation } from "./Dialog";
 import { DirectoryPicker } from "./DirectoryPicker";
@@ -81,6 +82,7 @@ export function ProjectDialog({
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
+  const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
   const [source, setSource] = useState<ProjectSource>(editing?.source ?? "local");
   const defaultCloneDir = useDaemonStore((s) => s.settings.default_clone_dir);
   const home = useDaemonStore((s) => s.homeDir);
@@ -174,6 +176,7 @@ export function ProjectDialog({
   const ownAccounts = agent ? accounts.filter((account) => account.agent === agent) : [];
   const consoleAccountId = owner && agent ? consoleAccount(owner, agent, accounts) : null;
   const picked = accountField && agent ? settledProjectAccount(accountFields[accountField], agent, accounts) : INHERIT;
+  const saved = accountField && agent ? settledProjectAccount(initialAccounts[accountField], agent, accounts) : INHERIT;
   // The account the project's sessions of `agent` run under, whose models the launch settings offer.
   const launchAccount = resolveProjectAccount(picked, consoleAccountId);
 
@@ -354,8 +357,14 @@ export function ProjectDialog({
                     badge: ownAccounts.find((account) => account.id === consoleAccountId)?.name ?? defaultAccountName(t, defaultNames, agent),
                     badgeInLabel: true,
                   },
-                  { value: accountValue({ kind: "default" }), label: defaultAccountName(t, defaultNames, agent) },
-                  ...ownAccounts.map((account) => ({ value: accountValue({ kind: "account", id: account.id }), label: account.name })),
+                  // A turned-off account is hidden, but for the one the project pinned when the dialog opened (or
+                  // pins now), which stays, marked.
+                  ...[
+                    { choice: { kind: "default" } as const, label: defaultAccountName(t, defaultNames, agent), off: accountDisabled(accounts, disabledDefaults, agent, null) },
+                    ...ownAccounts.map((account) => ({ choice: { kind: "account", id: account.id } as const, label: account.name, off: account.disabled === true })),
+                  ]
+                    .filter(({ choice, off }) => !off || accountValue(choice) === accountValue(picked) || accountValue(choice) === accountValue(saved))
+                    .map(({ choice, label, off }) => markDisabledPickable(t, { value: accountValue(choice), label }, off)),
                 ],
                 value: accountValue(picked),
                 onChange: (value) => setAccountFields({ ...accountFields, [accountField]: accountOfValue(value) }),

@@ -227,6 +227,7 @@ acknowledgement button, instead of the step naming where to go:
 |---|---|---|
 | The agent is not added (`agent_not_added`) | **Add agent…** | Settings on Agent accounts, with the Add agent dialog in front (see "Adding an agent" in `docs/product/agent-accounts.md`) |
 | An account problem (`unknown_account`, `grok_home_not_initialized`) | **Manage accounts…** | Settings on Agent accounts |
+| An account that is turned off (`account_disabled`) | **Manage accounts…** | Settings on Agent accounts, where it can be turned back on (see "Turning an account off" in `docs/product/agent-accounts.md`) |
 | The added agents not being as the change expected (`agent_already_added`, `agent_order_invalid`) | **Manage accounts…** | Settings on Agent accounts |
 
 Pressing the button acknowledges the alert and opens Settings there, above whatever dialog was open; when Settings is

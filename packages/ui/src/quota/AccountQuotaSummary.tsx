@@ -9,7 +9,7 @@ import type { QuotaUnavailable } from "../protocol";
 import { formatRelativeTime, isJustNow } from "../relativeTime";
 import { useNow } from "../useNow";
 import { QuotaMeter, QuotaMeterPair } from "./QuotaMeter";
-import { isLoggedIn, isNotLoggedIn, orderedQuotaWindows, planLabel, twoLayerWindows } from "./quotaFormat";
+import { isNotLoggedIn, loginStateOf, orderedQuotaWindows, planLabel, twoLayerWindows } from "./quotaFormat";
 import type { QuotaReading } from "./useAccountQuota";
 
 const NO_RECORDS = { consoles: new Map(), projects: new Map(), sessions: new Map() };
@@ -30,69 +30,109 @@ export function QuotaPlan({ quota }: { quota: QuotaReading }): React.ReactElemen
   return <StatusBadge>{planLabel(quota.plan)}</StatusBadge>;
 }
 
-/** The badge of an account's login: logged in, or not logged in yet; nothing while the state is not known (a reading
- * still to come, or one that failed for another reason). It carries its state in words and a dot, not in colour alone. */
-function LoginStateBadge({ quota }: { quota: QuotaReading }): React.ReactElement | null {
+/** The badge of an account's login state: "Logged in" or "Not logged in" as its reading says (`loginStateOf`); nothing
+ * while that is not known. It carries its state in words and a dot, not in colour alone. */
+export function LoginStateBadge({ quota }: { quota: QuotaReading }): React.ReactElement | null {
   const t = useT();
-  const loggedIn = isLoggedIn(quota);
-  if (!loggedIn && !(typeof quota === "object" && isNotLoggedIn(quota.unavailable))) return null;
+  const state = loginStateOf(quota);
+  if (!state) return null;
   return (
-    <StatusBadge variant="soft" color={loggedIn ? "success" : "warning"} className="inline-flex items-center gap-1.5">
+    <StatusBadge variant="soft" color={state === "in" ? "success" : "warning"} className="inline-flex items-center gap-1.5">
       <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
-      {t(loggedIn ? "settings.accounts.loggedIn" : "settings.accounts.notLoggedIn")}
+      {t(state === "in" ? "settings.accounts.loggedIn" : "settings.accounts.notLoggedIn")}
     </StatusBadge>
   );
 }
 
-/** The mark of a reading that failed with no windows to show, beside the account's name: its name says
- * so and its popover holds why. Nothing for an account with windows (an out-of-date one is marked beside
- * when it was read, by `QuotaUpdated`), one not yet known, or one that is simply not logged in. */
-function QuotaFailureMark({ quota }: { quota: QuotaReading }): React.ReactElement | null {
+/** How a reading failed, when it did: `"failed"` with no windows to show, `"stale"` with the last good windows still
+ * held. Neither for a reading still to come, a good one, or an account that is simply not logged in. */
+function readingFailure(quota: QuotaReading | undefined): "failed" | "stale" | undefined {
+  if (typeof quota !== "object" || !quota.unavailable || isNotLoggedIn(quota.unavailable)) return undefined;
+  return quota.windows.length > 0 ? "stale" : "failed";
+}
+
+/** The mark of a reading that failed with no windows to show, placed beside the account's name or, in a table row, in
+ * its usage cell: its name says so and its popover holds why. Nothing for an account with windows (an out-of-date
+ * one is marked by `QuotaStaleMark`), one not yet known, or one that is simply not logged in. */
+export function QuotaFailureMark({ quota }: { quota: QuotaReading }): React.ReactElement | null {
   const t = useT();
-  if (typeof quota !== "object" || !quota.unavailable || isNotLoggedIn(quota.unavailable) || quota.windows.length > 0) return null;
+  if (typeof quota !== "object" || !quota.unavailable || readingFailure(quota) !== "failed") return null;
   return <StatusMark label={t("quota.unavailable")}><QuotaFailure inMark unavailable={quota.unavailable} /></StatusMark>;
 }
 
-/** When the reading with windows was taken ("Updated 3 minutes ago"). When the latest read failed and those
- * windows are the last good ones, the time stays and a warning mark follows it, naming them out of date and
- * holding why in its popover. Nothing for an account with no windows. */
+/** The warning mark of a reading whose windows are the last good ones because the latest read failed, naming them out
+ * of date with when they were read and holding why in its popover. Nothing for any other reading. */
+export function QuotaStaleMark({ quota }: { quota: QuotaReading }): React.ReactElement | null {
+  const t = useT();
+  const language = useCurrentLanguage();
+  const now = useNow();
+  if (typeof quota !== "object" || !quota.unavailable || readingFailure(quota) !== "stale") return null;
+  return (
+    <StatusMark tone="warning" label={t("quota.stale", { age: formatRelativeTime(language, quota.fetched_at, now) })}>
+      <QuotaFailure inMark unavailable={quota.unavailable} />
+    </StatusMark>
+  );
+}
+
+/** When the reading with windows was taken ("Updated 3 minutes ago"), followed by the out-of-date mark when the latest
+ * read failed (`QuotaStaleMark`). Nothing for an account with no windows. */
 export function QuotaUpdated({ quota }: { quota: QuotaReading }): React.ReactElement | null {
   const t = useT();
   const language = useCurrentLanguage();
   const now = useNow();
   if (typeof quota !== "object" || quota.windows.length === 0) return null;
   const age = formatRelativeTime(language, quota.fetched_at, now);
-  const stale = quota.unavailable && !isNotLoggedIn(quota.unavailable) ? quota.unavailable : undefined;
   return (
     <span className="ms-auto flex shrink-0 items-center gap-1 text-xs font-normal text-app-muted">
       <span>{isJustNow(quota.fetched_at, now) ? t("quota.updatedNow") : t("quota.updated", { age })}</span>
-      {stale && (
-        <StatusMark tone="warning" label={t("quota.stale", { age })}>
-          <QuotaFailure inMark unavailable={stale} />
-        </StatusMark>
-      )}
+      <QuotaStaleMark quota={quota} />
+    </span>
+  );
+}
+
+/** A muted dash for an account with no usage to draw, that assistive technology reads as "No usage reading". With
+ * `quota` and a failed reading it is followed by the failure mark, or by the out-of-date mark when the windows held are
+ * the last good ones; the mark's name ("Quota unavailable", "Out of date: last read …") then says what the dash stands
+ * for in place of that sentence. */
+export function NoUsageReading({ quota }: { quota?: QuotaReading }): React.ReactElement {
+  const t = useT();
+  const failure = readingFailure(quota);
+  return (
+    <span className="inline-flex items-center gap-1 text-app-muted">
+      <span aria-hidden="true">—</span>
+      {failure === "failed" ? <QuotaFailureMark quota={quota!} /> : failure === "stale" ? <QuotaStaleMark quota={quota!} /> : <span className="sr-only">{t("quota.noReading")}</span>}
     </span>
   );
 }
 
 /** The line naming an account: its `name`, its plan badge when the agent names one, with `usedUp` a "Used up"
- * badge and the name in the muted colour, with `showLoginState` a badge for an account known to be logged in or not,
- * the mark of a reading with nothing to show, a `help` tip, and at its end, unless `showUpdated` is off for a
- * surface that places it elsewhere, when the reading was taken and whether it is out of date. */
-export function AccountNameLine({ name, quota, help, usedUp = false, showLoginState = false, showUpdated = true, children }: { children?: React.ReactNode; name: React.ReactNode; quota: QuotaReading; help?: React.ReactNode; usedUp?: boolean; showLoginState?: boolean; showUpdated?: boolean }): React.ReactElement {
+ * badge and the name in the muted colour, the mark of a reading with nothing to show, and at its end,
+ * unless `showUpdated` is off for a surface that places it elsewhere, when the reading was taken and whether it is out
+ * of date. `showFailure` is off for a surface that places the failure mark elsewhere (the table's usage cell). */
+export function AccountNameLine({ name, quota, usedUp = false, showUpdated = true, showFailure = true }: { name: React.ReactNode; quota: QuotaReading; usedUp?: boolean; showUpdated?: boolean; showFailure?: boolean }): React.ReactElement {
   const t = useT();
   return (
     <div className="flex items-center gap-2 text-sm font-medium">
       <div className={`min-w-0 ${usedUp ? "text-app-muted" : ""}`}>{name}</div>
       <QuotaPlan quota={quota} />
       {usedUp && <StatusBadge variant="soft">{t("quota.usedUp")}</StatusBadge>}
-      {showLoginState && <LoginStateBadge quota={quota} />}
-      {children}
-      <QuotaFailureMark quota={quota} />
-      {help}
+      {showFailure && <QuotaFailureMark quota={quota} />}
       {showUpdated && <QuotaUpdated quota={quota} />}
     </div>
   );
+}
+
+/** What stands in place of an account's quota windows when there is nothing current to show: the line that the first
+ * reading is still on its way, or, for an account that is not logged in, the line saying what to do. Nothing otherwise. */
+export function AccountQuotaNotice({ quota }: { quota: QuotaReading }): React.ReactElement | null {
+  const t = useT();
+  if (quota === "loading") return <div className="text-sm text-app-muted">{t("quota.loading")}</div>;
+  // An account that is not logged in is a state, not a failure: the line says what to do and nothing else. Any other
+  // failure with no windows is the mark on the account's name line (`AccountNameLine`).
+  if (quota && quota.windows.length === 0 && isNotLoggedIn(quota.unavailable)) {
+    return <div className="text-sm text-app-muted"><QuotaFailure unavailable={quota.unavailable} /></div>;
+  }
+  return null;
 }
 
 /** One account's quota windows as meters, and what stands in their place when there is nothing
@@ -114,17 +154,8 @@ export function AccountQuotaSummary({ quota, single, usedUp }: {
   /** The account is used up: its meters recede (`QuotaMeter`). */
   usedUp?: boolean;
 }): React.ReactElement | null {
-  const t = useT();
-  if (quota === "loading") return <div className="text-sm text-app-muted">{t("quota.loading")}</div>;
-  if (!quota) return null;
-  const { windows, unavailable } = quota;
-  if (windows.length === 0) {
-    // An account that is not logged in is a state, not a failure: the line says what to do and nothing else.
-    if (isNotLoggedIn(unavailable)) {
-      return <div className="text-sm text-app-muted"><QuotaFailure unavailable={unavailable} /></div>;
-    }
-    return null;
-  }
+  if (quota === "loading" || !quota || quota.windows.length === 0) return <AccountQuotaNotice quota={quota} />;
+  const { windows } = quota;
   // An account with a 5-hour window shows it with the weekly window as one two-layer meter; the
   // other windows (a model's weekly limit) keep a meter of their own.
   const layers = twoLayerWindows(windows);

@@ -13,7 +13,7 @@ import { windowAttention } from "../components/windowTestSupport";
 import { SettingsDialog } from "./SettingsDialog";
 import { registerSettingsLauncher } from "./settingsLauncher";
 import { accountLogins, bus, dismissAccountLogin, request, settings, toastError, trackAccountLogin } from "./agentAccountsSectionTestState";
-import { buttonNamed, chooseItem, mount, openTabMenu } from "./agentAccountsSectionTestSupport";
+import { buttonNamed, chooseItem, mount, openTabMenu, rowOf } from "./agentAccountsSectionTestSupport";
 
 vi.mock("../store", async (importOriginal) => (await import("./agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
 vi.mock("../components/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
@@ -37,7 +37,7 @@ function fakeTimers() {
 
 describe("an account's actions menu", () => {
   // The account's name is isolated in the label, and the tabs' own hidden menus are named alike.
-  const triggers = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('button[aria-label^="Actions for"]:not([hidden])')];
+  const triggers = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('button[aria-label^="Actions for"]:not([hidden])')].filter((button) => button.getAttribute("aria-label")!.includes("("));
   async function openAccountMenu(container: HTMLElement, at = 1) {
     const trigger = triggers(container)[at]!;
     await act(async () => {
@@ -49,17 +49,17 @@ describe("an account's actions menu", () => {
 
   const items = () => [...document.querySelectorAll("[role=menuitem]")].map((entry) => entry.textContent);
 
-  it("holds Edit, Log in and Remove for an owned account, in place of buttons of their own", async () => {
+  it("holds Settings, Edit, Log in and Remove for an owned account, in place of buttons of their own", async () => {
     const { container } = mount();
     expect(buttonNamed(container, "Edit")).toBeUndefined();
     await openAccountMenu(container, 1);
-    expect(items()).toEqual(["Edit", "Log in", "Remove"]);
+    expect(items()).toEqual(["Settings", "Edit", "Log in", "Remove"]);
   });
 
-  it("holds Rename and Log in for the default account, which has no directory or removal to offer", async () => {
+  it("holds Settings, Rename and Log in for the default account, which has no directory or removal to offer", async () => {
     const { container } = mount();
     await openAccountMenu(container, 0);
-    expect(items()).toEqual(["Rename", "Log in"]);
+    expect(items()).toEqual(["Settings", "Rename", "Log in"]);
   });
 
   it("is offered by the default account and each owned account", () => {
@@ -213,7 +213,7 @@ describe("an account's actions menu", () => {
     windowAttention();
     accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
     const { container, render } = mount();
-    const row = container.querySelector('[data-list-motion="claude-work"]')!;
+    const row = rowOf(container, "claude-work");
     const region = row.querySelector<HTMLElement>('[role="status"]')!;
     // The open modal hides the row from assistive technology.
     expect(region.closest('[aria-hidden="true"], [inert]')).not.toBeNull();
@@ -238,7 +238,7 @@ describe("an account's actions menu", () => {
     const attend = windowAttention();
     accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
     const { container, render } = mount();
-    const region = container.querySelector('[data-list-motion="claude-work"] [role="status"]')!;
+    const region = rowOf(container, "claude-work").querySelector('[role="status"]')!;
     attend(false);
     accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "succeeded", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
     render();
@@ -420,7 +420,7 @@ it.each([
     await openTabMenu(container, "Claude Code");
     await chooseItem("Remove agent");
   } else {
-    const row = container.querySelector(`[data-list-motion="${form === "rename" ? "default:claude" : "claude-work"}"]`)!;
+    const row = rowOf(container, form === "rename" ? "default:claude" : "claude-work");
     const trigger = row.querySelector<HTMLButtonElement>('button[aria-label^="Actions"]')!;
     await act(async () => {
       trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse", button: 0 }));
@@ -479,7 +479,7 @@ it("lets Manage accounts recovery dismiss a stale editor and focus the real Sett
   });
   render();
   await trackMountRefocus()();
-  const row = document.querySelector('[data-list-motion="claude-work"]')!;
+  const row = rowOf(document, "claude-work");
   await act(async () => {
     const trigger = row.querySelector<HTMLButtonElement>('button[aria-label^="Actions"]')!;
     trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse", button: 0 }));

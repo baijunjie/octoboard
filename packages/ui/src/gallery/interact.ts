@@ -144,6 +144,9 @@ export interface Ui {
    * on the sidebar's heading row (earlier in the DOM) and in the filter picker, so pressing it
    * again to unpick it would hit the sidebar row. */
   press: (matcher: Matcher) => Promise<void>;
+  /** Presses the menu item named `matcher`, for a name an open menu shares with a control elsewhere on the page (the
+   * Settings item of an account's menu, and the rail's Settings button). */
+  pressMenuItem: (matcher: Matcher) => Promise<void>;
   /** Presses the control named `matcher` with a finger: the touch pointer events a touch screen sends, then the
    * click that follows. For a control that opens its text in a popover on a touch, pen or virtual press and
    * shows it as a tooltip on mouse hover and keyboard focus, such as a help tip's "?": a real mouse press opens
@@ -954,6 +957,9 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     },
     async press(matcher) {
       await clickWhenFound(() => find(matcher), `Nothing to press matching ${String(matcher)}`);
+    },
+    async pressMenuItem(matcher) {
+      await clickWhenFound(() => findAll(matcher).find((element) => element.matches('[role="menuitem"]')), `No menu item matching ${String(matcher)}`);
     },
     async touchPress(matcher) {
       await touchAndWait(() => find(matcher), `Nothing to press matching ${String(matcher)}`, `A touch press of ${String(matcher)} opened no popover`);

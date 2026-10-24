@@ -241,10 +241,9 @@ mod tests {
                 agent,
                 name: format!("{agent:?} login"),
                 config_dir: format!("/accounts/{agent:?}"),
-                approval_reviewer: None,
-                approval_mode: None,
                 share_default_config: false,
                 share_default_config_incomplete: false,
+                disabled: false,
             })
             .collect();
         for account in &seeded {
@@ -284,10 +283,9 @@ mod tests {
                 agent,
                 name: format!("{agent:?} login"),
                 config_dir: format!("/accounts/{agent:?}"),
-                approval_reviewer: None,
-                approval_mode: None,
                 share_default_config: false,
                 share_default_config_incomplete: false,
+                disabled: false,
             })
             .unwrap();
     }

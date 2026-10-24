@@ -7,7 +7,7 @@ export type ErrorRecovery =
   | "configuration" | "image" | "clipboard" | "file" | "git" | "gitHistory" | "branch"
   | "refresh" | "scope" | "limit" | "openExternal" | "issueLink"
   | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
-  | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "quotaUsedUpAgent" | "grokSandbox"
+  | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "quotaUsedUpAgent" | "accountDisabled" | "grokSandbox"
   | "fileBusy" | "codexConfig" | "sqliteHome" | "symlink" | "notRestored"
   | "accountNotShareable" | "accountSharing" | "accountBusy" | "accountChanging" | "sharingStop"
   | "none";
@@ -44,6 +44,7 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   addedAgents: ["agent_already_added", "agent_order_invalid"],
   agentNotAdded: ["agent_not_added"],
   quotaUsedUp: ["account_quota_exhausted"],
+  accountDisabled: ["account_disabled"],
   shell: ["shell_environment_timeout"],
   account: ["unknown_account", "grok_home_not_initialized"],
   grokSandbox: ["grok_sandbox_unsupported"],

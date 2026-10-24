@@ -5,30 +5,36 @@ import React, { useEffect, useRef } from "react";
  * at the end, with a thin divider under every row but the last. At phone widths the control moves
  * under the text instead, since beside it a wide control (a select) squeezes the description to a
  * few words per line. `help` is a help tip that ends the name's line (see "Explanations in help
- * tips" in `docs/product/labels-and-tooltips.md`). */
+ * tips" in `docs/product/labels-and-tooltips.md`). `below` is what the row has to say under itself across its whole
+ * width (a warning, a progress bar), inside its divider. */
 export function SettingRow({
   label,
   help,
   description,
   children,
+  below,
   motionKey,
 }: {
   label: React.ReactNode;
   help?: React.ReactNode;
   description?: React.ReactNode;
   children?: React.ReactNode;
+  below?: React.ReactNode;
   motionKey?: string;
 }): React.ReactElement {
   return (
-    <div data-list-motion={motionKey} className="flex flex-col items-start gap-3 groove-b py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <div className="min-w-0">{label}</div>
-          {help}
+    <div data-list-motion={motionKey} className="flex flex-col gap-3 groove-b py-4 last:border-b-0">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <div className="min-w-0">{label}</div>
+            {help}
+          </div>
+          {description && <div className="text-sm text-app-muted">{description}</div>}
         </div>
-        {description && <div className="text-sm text-app-muted">{description}</div>}
+        {children && <div className="shrink-0">{children}</div>}
       </div>
-      {children && <div className="shrink-0">{children}</div>}
+      {below}
     </div>
   );
 }

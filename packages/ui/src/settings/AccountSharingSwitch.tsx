@@ -12,26 +12,30 @@ import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { Account, AccountSharing } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
-import { SettingSwitch } from "./SettingRow";
+import { SettingRow, SettingSwitch } from "./SettingRow";
 
 /** An account's Share default configuration switch (see "The sharing choice" in
- * `docs/product/sharing-the-default-configuration.md`), shown for every account but the agent's default one. A
- * change is carried out at once, so the switch is either free or unavailable, and says which. Unavailable, it stays
- * focusable and describes itself, so a keyboard user hears why (see "Buttons" in `docs/ui-accessibility.md`):
- * - free: a caption of what turning it on does, or of what is the case now;
- * - unavailable while sessions of the account run or start under its directory, or it is being signed in
- *   (`in_use`), saying so;
- * - unavailable while the change runs (`progress`), under a progress bar that every window shows from the
- *   daemon's `account_sharing` event;
+ * `docs/product/sharing-the-default-configuration.md`), shown for every account but the agent's default one, in the
+ * account's details dialog, as a `SettingRow` (label with its help tip and a description, the switch at the end): the
+ * progress bar and the warning take the row's full width under it. What the switch does now is the row's description,
+ * following its position (and left out while a change runs or did not finish); what turning it off does is behind the
+ * label's help tip, with the idle sessions it would end; and under the description, why the switch is locked. A change is
+ * carried out at once, so the switch is either free or unavailable, and says which. Unavailable, it stays focusable and
+ * describes itself, so a keyboard user hears why (see "Buttons" in `docs/ui-accessibility.md`):
+ * - free: nothing under it;
+ * - unavailable while sessions of the account run or start under its directory, or it is being signed in (`in_use`),
+ *   saying so;
+ * - unavailable while the change runs (`progress`), under a progress bar that every window shows from the daemon's
+ *   `account_sharing` event;
  * - after a failure, or a change the daemon restarted in the middle of (`share_default_config_incomplete`), one compact
  *   warning saying what did not finish and, for a failure, two sentences: with a single cause, that cause's own line
  *   and its fix; with several, that some files or folders could not be changed and the way to try again (turning the
  *   switch). Behind its Details button are the line of each cause with its fix (when there are several), the way to try
  *   again (when the fix took its place), the note on idle sessions and the raw diagnostics.
  *   The switch then shows the position it had before the change, so turning it is asking for the recorded choice once
- *   more, which the daemon treats as the retry (but for a default directory that moved, which only turning sharing
- *   off and on again mends; the switch then shows the recorded choice). The warning describes the switch in place of
- *   its caption. Focus inside it goes to the switch when it goes. */
+ *   more, which the daemon treats as the retry (but for a default directory that moved, which only turning sharing off
+ *   and on again mends; the switch then shows the recorded choice). The warning describes the switch in place of its
+ *   caption. Focus inside it goes to the switch when it goes. */
 export function AccountSharingSwitch({ account }: { account: Account }): React.ReactElement {
   const t = useT();
   const { request, toastError } = useDaemon();
@@ -80,17 +84,13 @@ export function AccountSharingSwitch({ account }: { account: Account }): React.R
       })
       .finally(() => setBusy(false));
   };
+  // The only line kept under the switch: why it cannot be turned now. What it does is in the help tip.
   const caption = inUse
     ? <>
       {inUse.sessions > 0 && <span className="block">{t("settings.accounts.sharing.inUseSessions", { count: inUse.sessions })}</span>}
       {inUse.signing_in && <span className="block">{t("settings.accounts.sharing.inUseSigningIn")}</span>}
     </>
-    : unfinished || progress ? undefined : (
-      <>
-        {t(shared ? "settings.accounts.sharing.describeOn" : "settings.accounts.sharing.describeOff")}
-        {idle > 0 && <span className="block">{t("settings.accounts.sharing.idleSessions", { count: idle })}</span>}
-      </>
-    );
+    : undefined;
   const describedBy = [
     caption !== undefined && `${id}-caption`,
     progress && `${id}-label`,
@@ -101,9 +101,9 @@ export function AccountSharingSwitch({ account }: { account: Account }): React.R
     unfinished && `${id}-remedy`,
   ].filter(Boolean).join(" ") || undefined;
   return (
-    <div ref={root} data-sharing-account={account.id} className="col-span-full">
-      <div className="flex items-center gap-2 text-sm">
-        <span className="font-medium">{t("settings.accounts.sharing.label")}</span>
+    <SettingRow
+      label={t("settings.accounts.sharing.label")}
+      help={
         <HelpTip label={t("settings.accounts.sharing.helpLabel")}>
           <div className="flex flex-col gap-2">
             <p>{t("settings.accounts.sharing.helpShared")}</p>
@@ -121,20 +121,31 @@ export function AccountSharingSwitch({ account }: { account: Account }): React.R
                   : t("settings.accounts.sharing.helpNever")}
             </p>
             <p><Message id="settings.accounts.sharing.helpOff" /></p>
+            {idle > 0 && <p>{t("settings.accounts.sharing.idleSessions", { count: idle })}</p>}
           </div>
         </HelpTip>
-        <div className="ms-auto">
-          <SettingSwitch label={label} isSelected={shown} onChange={ask} isUnavailable={locked} describedBy={describedBy} />
-        </div>
+      }
+      description={
+        <>
+          {!progress && !unfinished && t(shared ? "settings.accounts.sharing.describeOn" : "settings.accounts.sharing.describeOff")}
+          {caption !== undefined && <p id={`${id}-caption`} className="text-xs">{caption}</p>}
+        </>
+      }
+      below={
+        <>
+          {progress && <SharingProgress id={id} progress={progress} />}
+          {unfinished && (
+            <div onFocus={() => { focusInWarning.current = true; }} onBlur={(event) => { if (event.relatedTarget) focusInWarning.current = false; }}>
+              <SharingIncomplete id={id} failure={failure} share={shared} guidance={guidance} announce={announce} idle={idle} />
+            </div>
+          )}
+        </>
+      }
+    >
+      <div ref={root} data-sharing-account={account.id}>
+        <SettingSwitch label={label} isSelected={shown} onChange={ask} isUnavailable={locked} describedBy={describedBy} />
       </div>
-      {caption !== undefined && <p id={`${id}-caption`} className="text-sm text-app-muted">{caption}</p>}
-      {progress && <SharingProgress id={id} progress={progress} />}
-      {unfinished && (
-        <div onFocus={() => { focusInWarning.current = true; }} onBlur={(event) => { if (event.relatedTarget) focusInWarning.current = false; }}>
-          <SharingIncomplete id={id} failure={failure} share={shared} guidance={guidance} announce={announce} idle={idle} />
-        </div>
-      )}
-    </div>
+    </SettingRow>
   );
 }
 

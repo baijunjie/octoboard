@@ -3,7 +3,8 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { onReducedMotion, prefersReducedMotion } from "../reducedMotion";
 
 const SELECTOR = "[data-list-motion], [data-flip]";
-const DURATION = 300;
+/** How long list motion takes, in milliseconds. */
+export const DURATION = 300;
 const PRESENCE_EASING = "cubic-bezier(0.4, 0, 0.2, 1)";
 const EASING = "cubic-bezier(0.2, 0, 0, 1)";
 

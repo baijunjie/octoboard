@@ -7,7 +7,7 @@ import { accountOption } from "./accountOptions";
 
 const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as never, args[0] as never)) as Translate;
 const entry = (extra: Partial<ChoiceEntry> = {}): ChoiceEntry => ({
-  key: "claude:w", agent: "claude", account: "w", name: "Work", quota: undefined, exhaustedBy: undefined, changingSharing: false, ...extra,
+  key: "claude:w", agent: "claude", account: "w", name: "Work", quota: undefined, exhaustedBy: undefined, changingSharing: false, disabled: false, ...extra,
 });
 
 describe("accountOption", () => {
@@ -22,6 +22,13 @@ describe("accountOption", () => {
     expect(option.isDisabled).toBe(true);
     expect(option.reason).toEqual({ state: "Changing sharing" });
     expect(option.detail).toBe("Unavailable while its sharing is being changed");
+  });
+
+  it("lists a disabled account as unavailable, with why in short and in full, ahead of a running sharing change", () => {
+    const option = accountOption(t, entry({ disabled: true, changingSharing: true }), 0, false);
+    expect(option.isDisabled).toBe(true);
+    expect(option.reason).toEqual({ state: "Disabled" });
+    expect(option.detail).toBe("Unavailable while this account is disabled");
   });
 
   it("gives the running change as the reason when the quota is used up as well", () => {

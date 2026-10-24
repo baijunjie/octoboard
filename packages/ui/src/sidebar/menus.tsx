@@ -10,7 +10,7 @@ import { ArchivedSessionTime } from "../components/SessionMetadata";
 import { AgentIcon } from "../components/AgentIcon";
 import { PathText } from "../components/PathText";
 import type { Translate } from "../i18n/catalog";
-import type { Account, AccountSharing, Console, Project, Session, Settings } from "../protocol";
+import type { Account, AccountSharing, Agent, Console, Project, Session, Settings } from "../protocol";
 import { accountUsage } from "../quota/accountUsage";
 import { sessionChoiceTitle, sessionDisplayTitle } from "../sessionLabel";
 import { SessionShortcutKbd } from "./sessionShortcuts";
@@ -150,11 +150,11 @@ export function projectMenu(
 }
 
 /** "Switch account": the session's agent's accounts, the one the session is on marked as current
- * and doing nothing. An account whose quota is used up, or whose sharing change runs, is disabled,
- * with why under its name; so is every account while the
- * session's own account is changing, and every account but the current one while an account switch holds the
- * session. Absent when the agent has no other account to go to — hidden rather than disabled, as there is nothing the
- * user could do with it. */
+ * and doing nothing. An account whose quota is used up or whose sharing change runs is unavailable, with why under
+ * its name; so is every account while the session's own account is changing, and every account but the current one
+ * while an account switch holds the session. A turned-off account is not listed, but the session's own stays. Absent
+ * when the agent has no other account to go to that is turned on — hidden rather than disabled, as there is nothing
+ * the user could do with it. */
 function switchAccountSubmenu(
   t: Translate,
   handlers: SidebarHandlers,
@@ -163,8 +163,10 @@ function switchAccountSubmenu(
   defaultNames: Settings["default_account_names"],
   readings: QuotaReadings | undefined,
   sharing: Map<string, AccountSharing> | undefined,
+  disabledDefaults: Agent[] | undefined,
 ): ActionMenuSubmenu | undefined {
-  const entries = switchEntries(session, accounts, t, defaultNames, readings, sharing);
+  const entries = switchEntries(session, accounts, t, defaultNames, readings, sharing, disabledDefaults)
+    .filter((entry) => entry.current || !entry.disabled);
   if (entries.length < 2) return undefined;
   const ownChanging = entries.some((entry) => entry.current && entry.changingSharing);
   const switching = session.switching_account === true;
@@ -251,25 +253,26 @@ function colourSubmenu(t: Translate, handlers: SidebarHandlers, session: Session
  * offered for a console session alone; its own card in its focus mode (`placement` `focused`)
  * leaves out Focus mode and Pin / Unpin. `canHandOff` is whether another agent could take a session over.
  * `quota` is what the Switch account entries are judged against, for the accounts used up, and `sharing` for the
- * accounts whose sharing change runs. */
+ * accounts whose sharing change runs, and `disabledDefaults` the agents whose default account is turned off. */
 export function sessionMenu(
   t: Translate,
   handlers: SidebarHandlers,
   session: Session,
   accounts: Account[],
   defaultNames: Settings["default_account_names"],
-  { placement = "list", hasBoundSessions = false, canHandOff = true, quota, sharing }: {
+  { placement = "list", hasBoundSessions = false, canHandOff = true, quota, sharing, disabledDefaults }: {
     placement?: MenuPlacement;
     hasBoundSessions?: boolean;
     canHandOff?: boolean;
     quota?: QuotaReadings;
     sharing?: Map<string, AccountSharing>;
+    disabledDefaults?: Agent[];
   } = {},
 ): ActionMenuEntry[] {
   const focused = placement === "focused";
   const archived = session.status === "archived";
   // The daemon refuses to switch the account of a session that is still starting.
-  const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts, defaultNames, quota, sharing);
+  const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts, defaultNames, quota, sharing, disabledDefaults);
   const focusable = session.role === "console" && !archived && !focused;
   return [
     ...(!archived ? [{ label: t(session.locked ? "sidebar.session.unlock" : "sidebar.session.lock"), icon: session.locked ? LockOpen : Lock, end: <SessionShortcutKbd action="lock" />, onClick: () => handlers.onSetLocked(session, !session.locked) }] : []),

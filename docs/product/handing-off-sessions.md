@@ -29,9 +29,9 @@ background" in `docs/product/sessions.md`). A handoff is refused, with nothing c
 - the receiving agent is the session's own (`handoff_to_same_agent`, which points to switching its account);
 - the receiving agent is not available (`agent_not_available`), is not added (`agent_not_added`; see "Opening a
   session" in `docs/product/sessions.md` for when that applies), the account named is not one of that agent's
-  (`unknown_account`), the receiving session's account, once resolved, is used up (`account_quota_exhausted`; see
-  "Opening a session" in `docs/product/sessions.md`), or the model or reasoning effort is not one the agent offers
-  (`invalid_launch_setting`);
+  (`unknown_account`), the receiving session's account, once resolved, is turned off (`account_disabled`) or used up
+  (`account_quota_exhausted`; see "Opening a session" in `docs/product/sessions.md` for both), or the model or
+  reasoning effort is not one the agent offers (`invalid_launch_setting`);
 - a change of the sharing of the default configuration runs for the session's account or for the receiving session's
   (`account_sharing_in_progress`; see "When a change is carried out" in
   `docs/product/sharing-the-default-configuration.md`);
@@ -92,7 +92,7 @@ Then come the fields:
   as in the session dialog's field: listed with a usage bar but not pickable, passed over when the field opens, and,
   when the chosen account is used up all the same, a danger callout at the top of the dialog says why and **Hand off**
   cannot be pressed. An account whose sharing of the default configuration is being changed is treated the same way
-  while the change runs, as in the session dialog.
+  while the change runs, and a turned-off account is left out unless the field ends on it, as in the session dialog.
 - The collapsed **Advanced** section — the receiving session's model and reasoning effort, showing what a new session of
   the chosen agent and account would inherit, as in the session dialog (see "The Advanced section" in
   `docs/product/model-and-reasoning-effort.md`). Only values the user changed are sent with the request; the rest are

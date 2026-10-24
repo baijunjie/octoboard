@@ -66,7 +66,7 @@ agent records the trust in its own configuration, as it does when a person answe
 Claude Code's folder trust and Codex's approval reviewer affect what Octoboard can promise for a session (see "Per-agent
 specifics a user will notice" below and "The raised hand" in `docs/product/sessions.md`). Their configuration files are
 read at launch and never rewritten. Claude Code's trust is given by answering its trust confirmation. Codex's reviewer
-and Claude Code's approval mode can be overridden for an account in Settings; see "Approval modes" in
+and Claude Code's approval mode can be overridden for every account of the agent in Settings; see "Approval modes" in
 `docs/product/agent-accounts.md`.
 
 Everything Octoboard adds is injected **per launch** and disappears with the process. In consequence, a project's own
@@ -137,7 +137,7 @@ arguments every time and a resume that omitted them would leave a session nobody
 with.
 
 The model and reasoning effort resolved for the session are passed on the launch as well (see "The model and reasoning
-effort" below), as is an explicit Codex account approval reviewer or Claude Code account approval mode (see "Approval
+effort" below), as is an explicit Codex approval reviewer or Claude Code approval mode chosen for the agent (see "Approval
 modes" in `docs/product/agent-accounts.md`). These are the user's choices carried to the agent, separate from the injected
 capabilities.
 
@@ -347,12 +347,12 @@ will itself read: `.claude.json` inside the Claude Code config directory in effe
 `CLAUDE_CONFIG_DIR` the user's shell exports — and `~/.claude.json` when there is none. A config directory without
 that file yet produces no warning; `~/.claude.json` is not consulted in its place.
 
-An explicit approval mode chosen for the account in Settings is passed on every launch, a resume included, as the
-permission mode Claude Code starts in; an account that follows its configuration passes none, so that account's
-`settings.json` decides. Under **Approve everything**, every launch also tells Claude Code that its own warning for that
+An explicit approval mode chosen for Claude Code in Settings is passed on every launch of any of its accounts, a resume
+included, as the permission mode Claude Code starts in; following each account's configuration passes none, so the
+account's `settings.json` decides. Under **Approve everything**, every launch also tells Claude Code that its own warning for that
 mode has been accepted, so the blocking screen it would otherwise raise on a config directory's first use of the mode
 never appears; this holds for that launch alone, and nothing is written into the account's configuration files. The
-account choices are in "Approval modes" in `docs/product/agent-accounts.md`.
+choices are in "Approval modes" in `docs/product/agent-accounts.md`.
 
 **Codex.** Codex cannot be given a session id in advance, and its conversation is created lazily on the first prompt
 submission — so a session opened without a task has no agent-side id until the user types something, unless it was
@@ -392,11 +392,11 @@ conditions that are visible:
   that waits for the user, such as a session request, can return its result. This is the limit on Octoboard's tools
   alone; no other tool's limit changes.
 
-An explicit Codex approval reviewer chosen for the account in Settings takes precedence on every launch, a resume
-included. When the account follows its configuration, whether Codex resolves approval requests by itself is read
+An explicit Codex approval reviewer chosen for Codex in Settings takes precedence on every launch of any of its
+accounts, a resume included. When the setting follows each account's configuration, whether Codex resolves approval requests by itself is read
 from `config.toml` in the Codex home that launch uses: the session's Codex config directory, else a `CODEX_HOME` the
 user's shell exports, else `~/.codex`. A trusted project's own `.codex/config.toml`, which Codex itself layers over
-that file, is not consulted for this. The account choices and their lifetime rules are in "Approval modes" in
+that file, is not consulted for this. The choices and their lifetime rules are in "Approval modes" in
 `docs/product/agent-accounts.md`.
 
 **Grok Build.** A Grok session runs against a per-session Grok home that Octoboard builds afresh on every launch from a

@@ -51,6 +51,19 @@ describe("the Switch account entry", () => {
     expect(handlers.onOpenDialog).toHaveBeenCalledWith(expect.objectContaining({ kind: "switch-account", account: "w", accountName: "w" }));
   });
 
+  it("lists no turned-off account but the session's own, and is absent when every other one is off", () => {
+    const labels = (session: Session, accounts: Account[], disabledDefaults?: ("claude" | "codex" | "grok")[]) => {
+      const entry = sessionMenu(t, {} as SidebarHandlers, session, accounts, undefined, { disabledDefaults })
+        .find((candidate) => typeof candidate === "object" && "items" in candidate) as ActionMenuSubmenu | undefined;
+      return entry?.items.map((item) => (typeof item === "object" ? item.label : item));
+    };
+    const off = { ...account("w", "claude"), disabled: true };
+    expect(labels(project(), [off, account("v", "claude")])).toEqual(["Default", "v"]);
+    expect(labels(project({ account_id: "w", config_dir: "/home/w" }), [off, account("v", "claude")], ["claude"])).toEqual(["w", "v"]);
+    expect(labels(project({ account_id: "w", config_dir: "/home/w" }), [off], ["claude"])).toBeUndefined();
+    expect(labels(project(), [off])).toBeUndefined();
+  });
+
   it("disables an account whose quota is used up at the time given, with why, and never the current one", () => {
     const spent = (accountId: string | null) => ({
       agent: "claude" as const, account: accountId, fetched_at: 0, plan: null, unavailable: null,

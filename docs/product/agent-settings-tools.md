@@ -18,7 +18,7 @@ below list is exposed under that rule. What must be done by the user personally 
 to any session: changing a project's directory, source, host or remote URL; giving or taking away a project's trust
 permission; removing a project; creating or deleting a console; setting or removing a console's avatar; reading, setting
 or clearing a console's console session instructions (see "Console session instructions" in `docs/product/consoles.md`);
-adding, editing or removing an account; adding or removing a trusted folder; reading or changing whether session
+adding, editing or removing an account, or turning one off or back on; adding or removing a trusted folder; reading or changing whether session
 requests or resume requests are approved automatically (see "Approving requests automatically" in
 `docs/product/session-requests.md`), since a session could otherwise approve its own requests; reading or changing
 whether usage windows are started automatically (see "Start usage windows automatically" in
@@ -154,7 +154,7 @@ working directory. Neither the avatar itself nor the console's console session i
 | `auto_select_account` | Whether a new session whose account was not named uses the account of its agent whose weekly quota resets soonest (see "Automatically select an account" in `docs/product/settings.md` and "Which account a session uses" in `docs/product/sessions.md`). |
 | `sidebar_order_by_status` | Whether the user's sidebar ranks sessions and projects by status (see "Order the sidebar by status" in `docs/product/settings.md` and "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`). |
 | `default_clone_dir` | The default clone directory (see "Default clone directory" in `docs/product/settings.md`). |
-| `accounts` | Every account, each with `id`, `agent`, `name` and `default`. Each agent's default account is listed first among that agent's, with the id `default` and, as its `name`, the name the user gave it, else `Default` (see "The default account" in `docs/product/agent-accounts.md`). An account's directory is never given. |
+| `accounts` | Every account, each with `id`, `agent`, `name`, `default` and `disabled`, which is true for an account the user turned off, so that no new session can be opened on it (see "Turning an account off" in `docs/product/agent-accounts.md`). Each agent's default account is listed first among that agent's, with the id `default` and, as its `name`, the name the user gave it, else `Default` (see "The default account" in `docs/product/agent-accounts.md`). An account's directory is never given. |
 | `trusted_directories` | The trusted folders (see "Trusted folders" in `docs/product/folder-trust.md`). Read-only. |
 
 `update_settings` takes `auto_pull_repositories`, `auto_delete_unresumable_archives`, `auto_select_account`,

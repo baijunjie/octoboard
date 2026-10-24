@@ -23,7 +23,7 @@ function QuotaHeadline({ naming, window, resets, percent, muted }: { naming: Quo
 /** The bar of what remains of a window, in the agent's colour, or in a neutral grey when `muted`, named by
  * the window and valued by the remaining percent and the countdown. `thin` is the slim bar of a window that
  * sits beneath another. */
-function QuotaBar({ naming, window, resets, percent, thin, muted, className }: {
+function MeterBar({ naming, window, resets, percent, thin, muted, className }: {
   naming: QuotaNaming;
   window: QuotaWindow;
   resets: string | null;
@@ -38,10 +38,9 @@ function QuotaBar({ naming, window, resets, percent, thin, muted, className }: {
       aria-label={quotaWindowLabel(t, naming, window)}
       value={percent}
       valueLabel={resets ? t("quota.meterValueResets", { percent, resets }) : t("quota.meterValue", { percent })}
-      size={thin ? "sm" : undefined}
       className={`gap-0 ${muted ? "quota-meter--used-up" : `quota-meter--${naming.agent}`} ${className}`}
     >
-      <Meter.Track>
+      <Meter.Track className={thin ? "h-1.5" : undefined}>
         <Meter.Fill />
       </Meter.Track>
     </Meter>
@@ -60,7 +59,7 @@ export function QuotaMeter({ naming, window, usedUp }: { naming: QuotaNaming; wi
   return (
     <div className="min-w-0">
       <QuotaHeadline naming={naming} window={window} resets={resets} percent={percent} muted={usedUp} />
-      <QuotaBar naming={naming} window={window} resets={resets} percent={percent} muted={usedUp} className="mt-1.5" />
+      <MeterBar naming={naming} window={window} resets={resets} percent={percent} muted={usedUp} className="mt-1.5" />
     </div>
   );
 }
@@ -79,8 +78,8 @@ export function QuotaMeterPair({ naming, session, weekly, usedUp }: { naming: Qu
   return (
     <div className="min-w-0">
       <QuotaHeadline naming={naming} window={session} resets={sessionResets} percent={sessionPercent} muted={usedUp} />
-      <QuotaBar naming={naming} window={session} resets={sessionResets} percent={sessionPercent} muted={usedUp} className="mt-1.5" />
-      <QuotaBar naming={naming} window={weekly} resets={weeklyResets} percent={weeklyPercent} thin muted={usedUp} className="mt-1" />
+      <MeterBar naming={naming} window={session} resets={sessionResets} percent={sessionPercent} muted={usedUp} className="mt-1.5" />
+      <MeterBar naming={naming} window={weekly} resets={weeklyResets} percent={weeklyPercent} thin muted={usedUp} className="mt-1" />
       <div className="mt-1 text-app-muted">
         <QuotaHeadline naming={naming} window={weekly} resets={weeklyResets} percent={weeklyPercent} />
       </div>

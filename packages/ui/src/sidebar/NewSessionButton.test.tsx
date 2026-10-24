@@ -122,7 +122,7 @@ it("keeps the quick form focusable, named for the action and described by why it
   expect(button().getAttribute("aria-disabled")).toBe("true");
   expect(button().getAttribute("aria-label")).toBe("New session with defaults");
   const reason = document.getElementById(button().getAttribute("aria-describedby")!);
-  expect(reason?.textContent).toBe("Default agent's quota used up");
+  expect(reason?.textContent).toBe("Default agent's accounts unavailable");
   // The press goes to the quick create, which refuses with the reason; it does not open a session.
   click();
   expect(onQuickCreate).toHaveBeenCalledWith(request, "New session with defaults");

@@ -384,10 +384,11 @@ impl AccountQuotas {
     }
 
     /// The claim for a kick of the account `key`, when its held reading calls for one: the setting
-    /// is on, nothing is running for the account, the reading is a successful one and shows a
-    /// window with no reset time, other than a model's own weekly one, that has not been kicked in
-    /// its episode. Every such window then counts as kicked, as the one request is meant to start
-    /// them all. None once the daemon is shutting down, with no window counted as kicked.
+    /// is on, the account is not disabled, nothing is running for the account, the reading is a
+    /// successful one and shows a window with no reset time, other than a model's own weekly one,
+    /// that has not been kicked in its episode. Every such window then counts as kicked, as the one
+    /// request is meant to start them all. None once the daemon is shutting down, with no window
+    /// counted as kicked.
     fn claim_kick(&self, state: &AppState, key: &Key) -> Option<Claim> {
         if self.stopping.load(Ordering::Relaxed) {
             return None;
@@ -397,6 +398,18 @@ impl AccountQuotas {
             Ok(false) => return None,
             Err(err) => {
                 tracing::warn!(%err, "reading the setting that starts quota windows failed");
+                return None;
+            }
+        }
+        // A disabled account is left alone: no window is started on it.
+        match state
+            .store
+            .account_disabled(key.agent, key.account.as_deref())
+        {
+            Ok(false) => {}
+            Ok(true) => return None,
+            Err(err) => {
+                tracing::warn!(%err, "reading whether the account is disabled failed");
                 return None;
             }
         }
@@ -874,8 +887,8 @@ async fn refresh_with(state: &Arc<AppState>, scope: &Scope, trigger: Trigger, sh
 
 /// Kicks the accounts whose held readings call for it, as many at a time as the daemon-wide limit
 /// allows, and reads each again once its kick has ended. Starts the work in the background and
-/// returns at once. Run when the setting that starts quota windows is turned on, so that the
-/// readings already held count without waiting for the next one.
+/// returns at once. Run when the setting that starts quota windows is turned on, or when an account
+/// is turned back on, so that the readings already held count without waiting for the next one.
 pub fn kick_held(state: &Arc<AppState>) {
     let state = state.clone();
     tokio::spawn(async move { kick_held_with(&state, held_shell()).await });
@@ -1513,10 +1526,9 @@ mod tests {
             agent: Agent::Codex,
             name: "Work".to_string(),
             config_dir: config_dir.to_string_lossy().into_owned(),
-            approval_reviewer: None,
-            approval_mode: None,
             share_default_config: false,
             share_default_config_incomplete: false,
+            disabled: false,
         };
         state.store.insert_account(&account).unwrap();
         let scope = Scope {
@@ -1612,10 +1624,9 @@ mod tests {
             agent: Agent::Codex,
             name: "Work".to_string(),
             config_dir: codex_work.to_string_lossy().into_owned(),
-            approval_reviewer: None,
-            approval_mode: None,
             share_default_config: false,
             share_default_config_incomplete: false,
+            disabled: false,
         };
         state.store.insert_account(&account).unwrap();
         let mut events = state.subscribe();
@@ -1847,6 +1858,32 @@ mod tests {
         fixture.serve(&codex_reply(false));
         fixture.refresh().await;
         assert_eq!((fixture.count("runs"), fixture.count("kicks")), (5, 2));
+    }
+
+    /// A disabled account, the default one included, has no window started on it, and one that is
+    /// turned back on is kicked again.
+    #[tokio::test]
+    async fn a_disabled_account_has_no_window_kicked() {
+        let fixture = KickFixture::new("quota-kick-disabled", true);
+        fixture
+            .state
+            .store
+            .set_default_account_disabled(Agent::Codex, true)
+            .unwrap();
+        fixture.refresh().await;
+        assert_eq!((fixture.count("runs"), fixture.count("kicks")), (1, 0));
+        assert!(!fixture
+            .state
+            .account_quotas
+            .is_kicked_for_test(Agent::Codex, None));
+
+        fixture
+            .state
+            .store
+            .set_default_account_disabled(Agent::Codex, false)
+            .unwrap();
+        fixture.refresh().await;
+        assert_eq!((fixture.count("runs"), fixture.count("kicks")), (3, 1));
     }
 
     #[tokio::test]

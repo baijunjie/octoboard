@@ -98,9 +98,18 @@ it("refuses with every account of the agent used up, naming the action that was 
   await run({ kind: "new-console-session", console: parent });
   expect(daemon.request).not.toHaveBeenCalled();
   const [error] = vi.mocked(daemon.toastError).mock.calls[0];
-  expect((error as Error).message).toBe("\u2068New session with defaults\u2069 is unavailable because the default agent's accounts have all used up their quota.");
+  expect((error as Error).message).toBe("\u2068New session with defaults\u2069 is unavailable because none of the default agent's accounts can open a session right now: each is used up or turned off.");
   expect((error as { recovery?: string }).recovery).toBe("quotaUsedUpAgent");
   expect(error).toMatchObject({ code: "quick_create_quota_refused", params: { action: "New session with defaults" } });
+});
+
+it("refuses with the daemon's own disabled-account refusal when the account it would open on is turned off, and sends nothing", async () => {
+  const { daemon, run } = mount({ settings: { ...createStateStore({}).getState().settings, disabled_default_accounts: [parent.default_agent] } });
+  await run({ kind: "new-console-session", console: parent });
+  expect(daemon.request).not.toHaveBeenCalled();
+  expect(daemon.toastError).toHaveBeenCalledTimes(1);
+  const [error] = vi.mocked(daemon.toastError).mock.calls[0];
+  expect(error).toMatchObject({ code: "account_disabled", params: { agent: "Claude Code" } });
 });
 
 it("refuses an owner that is no longer live, as the dialog does, and sends nothing", async () => {

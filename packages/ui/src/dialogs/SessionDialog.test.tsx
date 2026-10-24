@@ -222,6 +222,28 @@ it("opens on the account whose weekly quota resets soonest when automatic select
   container.remove();
 });
 
+it("hides a turned-off account from the account picker, and keeps the one it ends on, marked, when every account is off", async () => {
+  const settings = {
+    auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", disabled_default_accounts: ["codex" as const],
+    accounts: [
+      { id: "a-1", agent: "codex" as const, name: "Work", config_dir: "/home/me/.codex-work", disabled: true },
+      { id: "a-2", agent: "codex" as const, name: "Spare", config_dir: "/home/me/.codex-spare" },
+    ],
+  };
+  const first = renderDialog([], { settings }, { default_agent: "codex" });
+  expect(pickerNamed("Codex account").textContent).toContain("Spare");
+  await act(async () => pickerNamed("Codex account").click());
+  expect(optionElements().map((option) => option.textContent)).toEqual(["Spare"]);
+  act(() => first.root.unmount());
+  first.container.remove();
+
+  const second = renderDialog([], { settings: { ...settings, accounts: settings.accounts.map((account) => ({ ...account, disabled: true })) } }, { default_agent: "codex" });
+  await act(async () => pickerNamed("Codex account").click());
+  expect(optionElements().map((option) => option.textContent)).toEqual([expect.stringContaining("Disabled")]);
+  act(() => second.root.unmount());
+  second.container.remove();
+});
+
 it("opens a project session on the console's project session agent when the project names none", () => {
   const { container, root } = renderDialog([], {}, { default_agent: "claude", project_session_agent: "grok" });
   expect(pickerNamed("Agent").textContent).toContain("Grok Build");

@@ -113,10 +113,9 @@ mod tests {
                     agent,
                     name: format!("{id} name"),
                     config_dir: dir.join(id).to_string_lossy().into_owned(),
-                    approval_reviewer: None,
-                    approval_mode: None,
                     share_default_config: false,
                     share_default_config_incomplete: false,
+                    disabled: false,
                 })
                 .unwrap();
         }

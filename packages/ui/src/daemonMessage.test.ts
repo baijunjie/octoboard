@@ -131,6 +131,14 @@ it.each([
   expect(daemonMessage("zh-Hans", "field_too_long", { field, limit }, "x", records)).toBe(chinese);
 });
 
+it("words a refusal of a disabled account in the UI's language", () => {
+  const params = { agent: "Codex", account: "Work" };
+  expect(daemonMessage("en", "account_disabled", params, "x", records)).toBe(
+    `${isolate("Work")} (${isolate("Codex")}) is disabled, so a session cannot be opened on it.`,
+  );
+  expect(daemonMessage("zh-Hans", "account_disabled", params, "x", records)).toContain("已停用");
+});
+
 it("words an exhausted account's quota, with the time left when the reset is known and the window in the UI's language", () => {
   const params = { agent: "Codex", account: "Work", window: "5-hour", window_kind: "session" };
   expect(daemonMessage("en", "account_quota_exhausted", params, "x", records)).toBe(

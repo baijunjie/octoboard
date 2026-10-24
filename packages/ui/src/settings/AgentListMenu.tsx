@@ -79,7 +79,7 @@ function agentMenu(t: Translate, index: number, count: number, onMove: (by: -1 |
 }
 
 /** An agent tab's menu, opened from the tab by a right-click or, from the keyboard, by the Menu key or Shift+F10 on the
- * focused tab. The strip's `AgentMoreMenu` holds the same entries for whoever does not find this one. */
+ * focused tab. Each tab's `AgentTabActions` button holds the same entries for whoever does not find this one. */
 export function AgentTabMenu({ agent, target, index, count, onMove, onRemove }: {
   agent: Agent;
   target: HTMLElement;
@@ -102,9 +102,10 @@ export function AgentTabMenu({ agent, target, index, count, onMove, onRemove }: 
   );
 }
 
-/** The strip's visible "more" button, for the agent of the tab in view: the same entries as that tab's context menu,
- * for the pointer, the keyboard and a screen reader to find without knowing about the right-click. */
-export function AgentMoreMenu({ agent, index, count, onMove, onRemove }: {
+/** An agent tab's own actions button, for the strip to place at the end of that tab (`AgentTabList`'s `tabActions`): the
+ * same entries as the tab's context menu, for the pointer, the keyboard and a screen reader to find without knowing about
+ * the right-click. It is named for its agent, as each account row's menu is for its account. */
+export function AgentTabActions({ agent, index, count, onMove, onRemove }: {
   agent: Agent;
   index: number;
   count: number;
@@ -112,7 +113,7 @@ export function AgentMoreMenu({ agent, index, count, onMove, onRemove }: {
   onRemove: () => void;
 }): React.ReactElement {
   const t = useT();
-  return <ActionMenu label={t("settings.accounts.agentMoreActions", { agent: AGENT_LABEL[agent] })} items={agentMenu(t, index, count, onMove, onRemove)} />;
+  return <ActionMenu label={t("settings.accounts.agentActions", { agent: AGENT_LABEL[agent] })} items={agentMenu(t, index, count, onMove, onRemove)} />;
 }
 
 /** The confirmation of taking an agent off the added list. It says the agent's accounts are kept and, when consoles,

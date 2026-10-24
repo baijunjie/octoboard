@@ -2,7 +2,7 @@ import { DaemonRequestError } from "../daemon-client";
 import { ActionableError } from "../errorRecovery";
 import { useRef } from "react";
 
-import { noAgentState } from "../agents";
+import { AGENT_LABEL, noAgentState } from "../agents";
 import { useLatest } from "../components/useLatest";
 import { errorPresentation } from "../errorPresentation";
 import { isolate } from "../i18n/isolate";
@@ -21,7 +21,8 @@ import type { ConfirmLaunch } from "./useConfirmIncompleteLaunch";
  * `onOpened`, unless the window moved to another console (`currentConsoleId`) while the daemon was
  * answering: there is no dialog holding the window still, and the session is not on that screen.
  * With every account of the agent it would open on used up it opens nothing and says so, naming the
- * `action` of the control that asked. A refusal has no dialog to show it in, so it uses the shared
+ * `action` of the control that asked; with the account it would open on turned off, and no other free,
+ * it opens nothing and shows the daemon's own refusal. A refusal has no dialog to show it in, so it uses the shared
  * error alert. An account whose last sharing change did not finish is asked about first
  * (`confirmLaunch`), cancelling sending nothing. A press while the previous one is still being
  * answered is ignored, so one gesture cannot open two sessions.
@@ -54,6 +55,11 @@ export function useQuickCreateSession(
     const opening = defaultOpenSessionRequest(t, target.console, project, binding, state, Date.now(), appearance);
     if ("usedUp" in opening) {
       toastError(new ActionableError(t("sidebar.project.openSessionQuickUsedUp", { action: isolate(action) }), "quotaUsedUpAgent", { code: "quick_create_quota_refused", params: { action } }));
+      return;
+    }
+    if ("disabled" in opening) {
+      const { agent, name } = opening.disabled;
+      toastError(new DaemonRequestError(t("daemon.account_disabled", { account: isolate(name), agent: AGENT_LABEL[agent] }), "account_disabled", { agent: AGENT_LABEL[agent], account: name }));
       return;
     }
     if ("changingSharing" in opening) {

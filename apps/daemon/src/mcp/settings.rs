@@ -77,6 +77,7 @@ pub(super) async fn update_console(
 pub(super) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
     let accounts = state.store.list_accounts()?;
     let default_names = state.store.default_account_names()?;
+    let disabled_defaults = state.store.disabled_default_accounts()?;
     // The default account of each agent is no row, so it is added in front of that agent's others,
     // under the id the tools' `accounts` arguments take for it.
     let listed: Vec<Value> = Agent::ALL
@@ -87,6 +88,7 @@ pub(super) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
                 "agent": agent,
                 "name": default_account_name_in(&default_names, *agent),
                 "default": true,
+                "disabled": disabled_defaults.contains(agent.wire_name()),
             });
             let others = accounts
                 .iter()
@@ -97,6 +99,7 @@ pub(super) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
                         "agent": account.agent,
                         "name": account.name,
                         "default": false,
+                        "disabled": account.disabled,
                     })
                 });
             std::iter::once(default).chain(others)

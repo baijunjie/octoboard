@@ -166,6 +166,18 @@ describe("buildStatusItemMenu quota submenus", () => {
     expect(menuOf([]).submenus).toEqual([]);
   });
 
+  it("leaves out an account that is turned off, the default one by its agent, and the submenu of an agent with none left", () => {
+    const work = { id: "work", agent: "claude", name: "Work", config_dir: "/w", disabled: true } as Account;
+    const home = { id: "home", agent: "claude", name: "Home", config_dir: "/h" } as Account;
+    const titles = (submenus: ReturnType<typeof buildQuotaSubmenus>) => submenus.flatMap((submenu) => submenu.items.filter((item) => item.kind === "header").map((item) => (item as { title: string }).title.replace(/[\u2068\u2069]/g, "")));
+    const base = source({ accounts: [work, home], agentAvailability: available("claude") });
+    expect(titles(buildQuotaSubmenus(t, base))).toEqual(expect.arrayContaining(["Default", "Home"]));
+    expect(titles(buildQuotaSubmenus(t, base))).not.toContain("Work");
+    expect(titles(buildQuotaSubmenus(t, { ...base, disabledDefaultAccounts: ["claude"] }))).not.toContain("Default");
+    const none = buildQuotaSubmenus(t, source({ accounts: [{ ...home, disabled: true }], disabledDefaultAccounts: ["claude"], agentAvailability: available("claude") }));
+    expect(none).toEqual([]);
+  });
+
   it("has one submenu per available agent, in the agents' usual order", () => {
     const menu = menuOf([], source({ agentAvailability: available("grok", "claude") }));
     expect(menu.submenus.map((submenu) => submenu.title)).toEqual(["Claude quota", "Grok quota"]);

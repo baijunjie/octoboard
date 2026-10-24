@@ -160,7 +160,7 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Rail quota button and panel, selected session's named account",
-    description: "Hub uses Codex's Personal account: the compact indicator on the quota button is two outlined capsules, the 5h window's (88% remaining) over a slightly thinner one for the week (60%), and the button's accessible name identifies Codex, Personal and both remainders. The button has no tooltip. The panel floated in beside it opens on Codex's tab, the second tab, because the button shows Codex's quota; Personal's bar in the panel matches the button's. Select a Claude Code session to see the indicator and the open tab follow that session's agent instead.",
+    description: "Hub uses Codex's Personal account: the compact indicator on the quota button is two outlined capsules, the 5h window's (88% remaining) over a slightly thinner one for the week (60%), and the button's accessible name identifies Codex, Personal and both remainders. The button has no tooltip. The panel floated in beside it opens on Codex's tab, the second tab, because the button shows Codex's quota; Personal's bar in the panel matches the button's. While the pointer is on the button every other account's row, Default and Automation, is dimmed by the same veil the sidebar puts over inactive projects, so Personal stands out as the button's account; moving the pointer into the panel takes the veil off. Select a Claude Code session to see the indicator and the open tab follow that session's agent instead.",
     state: {
       ...readState,
       sessions: new Map(sessions.map((session) => [session.id, session.id === "s-console" ? { ...session, agent: "codex", account_id: "a-codex" } : session])),
@@ -168,6 +168,21 @@ export const railQuotaScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.session("Hub")),
       // With a session's bar showing, the button's name starts with the plain one and goes on to the reading.
+      (ui) => ui.hoverPanel(describing("quota button with a session's bar", (name) => name.startsWith(ui.t("rail.quota"))), ui.t("rail.quota")),
+    ],
+  },
+  {
+    id: "rail-quota-selected-used-up",
+    group: GROUP,
+    category: "normal",
+    title: "Rail quota panel, the selected session's account is used up",
+    description: "Hub uses Work, whose session window is spent, and the pointer is on the quota button, so the panel floated in beside it is on Claude Code's tab with the button's account marked by the veil: Default and Side project are dimmed, while Work is not: it keeps its \"Used up\" badge and grey bars, but its name and headlines are at full strength, unlike Side project's, which is used up and dimmed both.",
+    state: {
+      ...usedUpState,
+      sessions: new Map(sessions.map((session) => [session.id, session.id === "s-console" ? { ...session, account_id: "a-work" } : session])),
+    },
+    steps: [
+      (ui) => ui.press(ui.session("Hub")),
       (ui) => ui.hoverPanel(describing("quota button with a session's bar", (name) => name.startsWith(ui.t("rail.quota"))), ui.t("rail.quota")),
     ],
   },

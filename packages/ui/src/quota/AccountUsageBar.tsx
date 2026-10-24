@@ -8,13 +8,13 @@ import { remainingPercentAt, usageBarWindows } from "./quotaFormat";
  * sits inside a list option, where a `role="meter"` or `progressbar` with a name and a value would be a
  * second, nested control inside the option, whose own description already states the numbers
  * (`usageBarSummary`); this one is purely decorative and carries no role or name. The track is
- * `.quota-bar-track`, a step darker than `--default` so it shows on a select trigger filled with that
- * colour (see its measures and its edges in `style.css`; the thin bar's edge lies outside it, so it is
- * inset a pixel on each side to end where the main bar's does); the fill measures at least 3.07:1 against it, in light and
- * in dark. */
-function Track({ percent, thin }: { percent?: number; thin?: boolean }): React.ReactElement {
+ * `.quota-bar-track`, the rail's own track; with `edge` it has a hairline edge (see `style.css`), drawn inside the
+ * main bar and outside the thin one, which is inset a pixel on each side to end where the main bar does. The thin bar is 3px against the main bar's 4px, the
+ * rail button's capsules; the rail panel's and the details' meters are 6px against 8px, the same 4:3. */
+function Track({ percent, thin, edge }: { percent?: number; thin?: boolean; edge: boolean }): React.ReactElement {
+  const shape = thin ? `h-[3px] ${edge ? "quota-bar-track--outer-edge mx-px" : ""}` : `h-1 ${edge ? "quota-bar-track--edge" : ""}`;
   return (
-    <span className={`block overflow-hidden rounded-full quota-bar-track ${thin ? "quota-bar-track--outer-edge mx-px h-0.5" : "quota-bar-track--edge h-1.5"}`}>
+    <span className={`block overflow-hidden rounded-full quota-bar-track ${shape}`}>
       {percent !== undefined && <span className="block h-full rounded-full bg-(--meter-fill)" style={{ width: `${percent}%` }} />}
     </span>
   );
@@ -24,13 +24,15 @@ function Track({ percent, thin }: { percent?: number; thin?: boolean }): React.R
  * window's thin one directly beneath it, or one bar for an account without a 5-hour window. An
  * account with nothing to draw (no reading yet, or one out of date, as on the rail) shows one empty
  * track, so names line up. It is decorative: the list's option states the same numbers in words
- * (`usageBarSummary`). */
-export function AccountUsageBar({ agent, quota, now }: { agent: Agent; quota: AccountQuota | undefined; now: number }): React.ReactElement {
+ * (`usageBarSummary`). `className` sets its width, 2rem by default. `edge` (on by default) draws the tracks' hairline edges, which a
+ * popover, a menu and a select trigger need to show an empty track and a bar on the page's own surface (a table
+ * cell) does not. */
+export function AccountUsageBar({ agent, quota, now, className = "w-8", edge = true }: { agent: Agent; quota: AccountQuota | undefined; now: number; className?: string; edge?: boolean }): React.ReactElement {
   const bar = quota && !quota.unavailable ? usageBarWindows(quota) : undefined;
   return (
-    <span aria-hidden="true" className={`flex w-8 shrink-0 flex-col gap-0.5 quota-meter--${agent}`}>
-      <Track percent={bar && remainingPercentAt(bar.main, now)} />
-      {bar?.thin && <Track thin percent={remainingPercentAt(bar.thin, now)} />}
+    <span aria-hidden="true" className={`flex ${className} shrink-0 flex-col gap-0.5 quota-meter--${agent}`}>
+      <Track edge={edge} percent={bar && remainingPercentAt(bar.main, now)} />
+      {bar?.thin && <Track thin edge={edge} percent={remainingPercentAt(bar.thin, now)} />}
     </span>
   );
 }

@@ -1,5 +1,5 @@
 import { AGENT_LABEL } from "../../agents";
-import { describing } from "../interact";
+import { describing, type Ui } from "../interact";
 import type { AccountLogin, AccountSharing, Agent, AgentAvailability } from "../../protocol";
 import type { Scenario, Step } from "../scenario";
 import { ALL_AGENTS, SAMPLE, accountSharingOf, minutesAgo, snapshotState } from "./builders";
@@ -64,8 +64,8 @@ const approvalState: Scenario["state"] = {
     ...browserState.settings!,
     accounts: [
       ...browserState.settings!.accounts,
-      { id: "a-codex-auto", agent: "codex", name: "Automation", config_dir: "/Users/dev/.codex-automation", approval_reviewer: "auto_review" },
-      { id: "a-codex-user", agent: "codex", name: "Production", config_dir: "/Users/dev/.codex-production", approval_reviewer: "user" },
+      { id: "a-codex-auto", agent: "codex", name: "Automation", config_dir: "/Users/dev/.codex-automation" },
+      { id: "a-codex-user", agent: "codex", name: "Production", config_dir: "/Users/dev/.codex-production" },
     ],
   },
   agentAvailability: new Map(browserState.agentAvailability).set("codex", { agent: "codex", availability: "available", default_account_dir: "/Users/dev/.codex" }),
@@ -75,15 +75,15 @@ const approvalState: Scenario["state"] = {
  * and windows (Work's spent), Client has no reading yet while its agent is available, Codex's accounts have a plan
  * and two windows each but Automation's, which has no plan and whose 5h window, spent when it was read, has
  * since reset, and Grok has one credit pool. The readings are of different ages (Work's seven minutes, Personal's
- * three, Automation's sixteen, the rest's one). Claude Code's default account is set to automatic, Work to approve
- * everything and Client follows its configuration. */
+ * three, Automation's sixteen, the rest's one). Claude Code's permission approval is set to automatic and Codex's to
+ * automatic review. */
 const quotaState: Scenario["state"] = {
   ...approvalState,
   settings: {
     ...approvalState.settings!,
     added_agents: ALL_AGENTS,
-    claude_default_approval_mode: "auto",
-    accounts: approvalState.settings!.accounts.map((account) => account.id === "a-work" ? { ...account, approval_mode: "bypass" as const } : account),
+    claude_approval_mode: "auto",
+    codex_approval_reviewer: "auto_review",
   },
   agentAvailability: new Map(approvalState.agentAvailability).set("grok", { agent: "grok", availability: "available", default_account_dir: "/Users/dev/.grok" }),
   accountQuotas: [
@@ -135,19 +135,43 @@ const unavailableQuotaState: Scenario["state"] = {
 /** One window wide enough to wrap: a model's display name as long as one can be. */
 const NARROW_MODEL = "Claude Opus Extended Context Research Preview";
 
-/** For the narrow layout: Claude Code's default account with a long model name, and Codex's default account and
- * Personal. */
+/** For the narrow layout: Claude Code's default account with a long model name, and Work, an owned account whose
+ * settings dialog has a second, shorter reading to compare with. */
 const narrowQuotaState: Scenario["state"] = {
   ...quotaState,
-  settings: { ...approvalState.settings!, added_agents: ALL_AGENTS, accounts: approvalState.settings!.accounts.filter((account) => account.id === "a-codex") },
+  settings: { ...approvalState.settings!, added_agents: ALL_AGENTS, accounts: approvalState.settings!.accounts.filter((account) => account.id === "a-work") },
   accountQuotas: [
     quotaOf("claude", null, "max", [
       quotaWindow("session", 18, 117),
       quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60),
       quotaWindow("weekly_model", 27, 3 * 24 * 60 + 4 * 60, NARROW_MODEL),
     ]),
-    quotaOf("codex", null, "plus", [quotaWindow("session", 64, 140), quotaWindow("weekly", 31, 5 * 24 * 60 + 2 * 60)]),
-    quotaOf("codex", "a-codex", "pro", [quotaWindow("session", 12, 285), quotaWindow("weekly", 40, 24 * 60 + 90)]),
+    quotaOf("claude", "a-work", "pro", [quotaWindow("session", 62, 42), quotaWindow("weekly", 34, 2 * 24 * 60 + 5 * 60)]),
+  ],
+};
+
+/** Claude Code's default account and Work turned off for new sessions; Client, with no reading yet, stays on. Work keeps
+ * its reading, which its row keeps showing while it is off. */
+const disabledState: Scenario["state"] = {
+  ...quotaState,
+  settings: {
+    ...quotaState.settings!,
+    disabled_default_accounts: ["claude"],
+    accounts: quotaState.settings!.accounts.map((account) => account.id === "a-work" ? { ...account, disabled: true } : account),
+  },
+};
+
+/** Work with a reading that has all three kinds of window, a model's own weekly one among them, for the details dialog's
+ * grid: nothing used up, so its bars have something to show. */
+const detailsWorkState: Scenario["state"] = {
+  ...quotaState,
+  accountQuotas: [
+    ...quotaState.accountQuotas!.filter((quota) => quota.account !== "a-work" || quota.agent !== "claude"),
+    quotaOf("claude", "a-work", "pro", [
+      quotaWindow("session", 38, 150),
+      quotaWindow("weekly", 66, 2 * 24 * 60 + 5 * 60),
+      quotaWindow("weekly_model", 20, 2 * 24 * 60 + 5 * 60, "Fable"),
+    ], { fetched_at: minutesAgo(7) }),
   ],
 };
 
@@ -223,25 +247,42 @@ const SCROLLED_UNDER_STRIP = 420;
 /** Longer than the fixture daemon takes to walk a login from starting through waiting to its outcome. */
 const LOGIN_ENDS_WITHIN_MS = 700;
 
-/** Past any section's end, which the scroller clamps to. */
-const SCROLLED_TO_END = 10_000;
-
-/** Settings → Agent accounts on Claude Code's tab, Work's inline Log in button (the first signed-out account), then
+/** Settings → Agent accounts on Claude Code's tab, Work's Log in icon button in the Status column (the first signed-out account), then
  * the moment the login takes to reach waiting and end inside its modal. */
 function loginFromInline(): Scenario["steps"] {
   return [
     (ui) => ui.press(ui.t("rail.settings")),
     (ui) => ui.press(ui.t("settings.section.accounts")),
-    (ui) => ui.press(ui.t("settings.accounts.login")),
+    (ui) => ui.press(ui.t("settings.accounts.login.open", { name: "Work" })),
     (ui) => ui.wait(LOGIN_ENDS_WITHIN_MS),
   ];
 }
 
-/** Claude Code's tab, Client's approval selector set to Approve everything: the confirmation dialog it opens. */
-const bypassSteps: Scenario["steps"] = [
+const openAccounts: Step[] = [
   (ui) => ui.press(ui.t("rail.settings")),
   (ui) => ui.press(ui.t("settings.section.accounts")),
-  (ui) => ui.press(ui.t("settings.accounts.approval.label", { name: "Client", agent: AGENT_LABEL.claude })),
+];
+
+/** The Settings item of the actions menu of the account `name` of `agent` on the tab in view (the default account's name is the
+ * language's own); a menu item, since the rail has a Settings button of its name. */
+const openDetails = (name: string | ((ui: Ui) => string), agent: Agent = "claude"): Step => async (ui) => {
+  await ui.press(ui.t("settings.accounts.actionsLabel", { name: typeof name === "string" ? name : name(ui), agent: AGENT_LABEL[agent] }));
+  await ui.pressMenuItem(ui.t("settings.accounts.settingsItem"));
+};
+const defaultAccount = (ui: Ui) => ui.t("settings.accounts.defaultName");
+
+/** Settings → Agent accounts with the details of the account `name` in front. */
+const accountDetails = (name: string | ((ui: Ui) => string), agent: Agent = "claude"): Step[] => [...openAccounts, openDetails(name, agent)];
+
+const openSharingHelp = (name: string, agent: Agent = "claude"): Step[] => [
+  ...accountDetails(name, agent),
+  (ui) => ui.touchPress(ui.t("settings.accounts.sharing.helpLabel")),
+];
+
+/** Claude Code's tab, its permission approval set to Approve everything: the confirmation dialog it opens. */
+const bypassSteps: Step[] = [
+  ...openAccounts,
+  (ui) => ui.press(ui.t("settings.accounts.approval.label", { agent: AGENT_LABEL.claude })),
   (ui) => ui.press(ui.t("settings.accounts.approval.claudeBypass")),
 ];
 
@@ -265,39 +306,23 @@ function sharingAccounts(work: { share: boolean; incomplete?: boolean }, client:
 /** Work does not share and Client does, with no working session or sign-in in the way. */
 const sharingState = sharingAccounts({ share: false }, { share: true });
 
-/** Like `sharingState`, but Work has 2 idle sessions, which a change would end first and resume after. */
-const sharingIdleState: Scenario["state"] = {
-  ...sharingState,
-  accountSharing: accountSharingOf([{ account: "a-work", idle_sessions: 2 }]),
-};
-
-/** Work has two sessions working and Client is being signed in, so neither switch can be used. */
+/** Work has two sessions working and is being signed in as well, so its switch cannot be used and says both why. */
 const sharingInUseState: Scenario["state"] = {
   ...sharingAccounts({ share: false }, { share: true }),
-  accountSharing: accountSharingOf([
-    { account: "a-work", in_use: { sessions: 2, signing_in: false } },
-    { account: "a-client", in_use: { sessions: 0, signing_in: true } },
-  ]),
+  accountSharing: accountSharingOf([{ account: "a-work", in_use: { sessions: 2, signing_in: true } }]),
 };
 
-/** Work is changing entries, turning sharing on, 3 of 9 done; Client is turning it off but waits for another account of
- * the agent to finish its own change. A change under way has its choice recorded and is incomplete until it ends. */
+/** Work is changing entries, turning sharing on, 3 of 9 done. A change under way has its choice recorded and is
+ * incomplete until it ends. */
 const sharingProgressState: Scenario["state"] = {
-  ...sharingAccounts({ share: true, incomplete: true }, { share: false, incomplete: true }),
-  accountSharing: accountSharingOf([
-    { account: "a-work", progress: { share: true, phase: "changing", done: 3, total: 9, item: "plugins/" } },
-    { account: "a-client", progress: { share: false, phase: "waiting", done: 0, total: 9 } },
-  ]),
+  ...sharingAccounts({ share: true, incomplete: true }, { share: false }),
+  accountSharing: accountSharingOf([{ account: "a-work", progress: { share: true, phase: "changing", done: 3, total: 9, item: "plugins/" } }]),
 };
 
-/** The phases around the entries: Work is ending its idle sessions before turning sharing on, and Client has changed all
- * 9 entries of turning it off and is resuming its sessions. */
+/** A phase around the entries: Work is ending its idle sessions before turning sharing on. */
 const sharingRestartState: Scenario["state"] = {
-  ...sharingAccounts({ share: true, incomplete: true }, { share: false, incomplete: true }),
-  accountSharing: accountSharingOf([
-    { account: "a-work", progress: { share: true, phase: "stopping", done: 0, total: 9 } },
-    { account: "a-client", progress: { share: false, phase: "resuming", done: 9, total: 9 } },
-  ]),
+  ...sharingAccounts({ share: true, incomplete: true }, { share: false }),
+  accountSharing: accountSharingOf([{ account: "a-work", progress: { share: true, phase: "stopping", done: 0, total: 9 } }]),
 };
 
 /** A change the daemon was restarted in the middle of: Work's choice is recorded as on and incomplete (the switch shows
@@ -316,19 +341,10 @@ function sharingHelpState(agent: Agent): Scenario["state"] {
       accounts: [{ id: `a-${agent}-share`, agent, name: agent === "codex" ? "Personal" : "Work", config_dir: `/Users/dev/.${agent}-work`, share_default_config: false }],
     },
     agentAvailability: new Map(base.agentAvailability).set(agent, { agent, availability: "available", default_account_dir: `/Users/dev/.${agent}` }),
+    // Claude Code's account has 2 idle sessions, which a change would end first and resume after: the last line of its explanation.
+    ...(agent === "claude" && { accountSharing: accountSharingOf([{ account: `a-${agent}-share`, idle_sessions: 2 }]) }),
   };
 }
-
-const openAccounts: Scenario["steps"] = [
-  (ui) => ui.press(ui.t("rail.settings")),
-  (ui) => ui.press(ui.t("settings.section.accounts")),
-];
-
-const openSharingHelp: Scenario["steps"] = [
-  (ui) => ui.press(ui.t("rail.settings")),
-  (ui) => ui.press(ui.t("settings.section.accounts")),
-  (ui) => ui.touchPress(ui.t("settings.accounts.sharing.helpLabel")),
-];
 
 /** What turning sharing off for Work left unfinished: a directory entry, and a conversation two
  * sessions of this scenario record, so the alert can show their titles. */
@@ -341,15 +357,13 @@ const SHARING_FAILURE_ITEMS: NonNullable<AccountSharing["failure"]>["items"] = [
 const SHARING_FAILURE_DETAIL = "`skills/` left unchanged (permission denied); the conversation `abc` of session s-web-1, s-web-2 left in the default directory (permission denied); `plugins/` left unchanged (resource busy)";
 
 /** Turning sharing off for Work failed: the choice is recorded as off and incomplete, and the daemon still holds the
- * failure. Client is above it so the section overflows: scrolled to the end, Work's switch and the failure under it
- * are in view. */
+ * failure. */
 const sharingFailedState: Scenario["state"] = {
   ...browserState,
   settings: {
     ...browserState.settings!,
     added_agents: ["claude"],
     accounts: [
-      { id: "a-client", agent: "claude", name: "Client", config_dir: "/Users/dev/.claude-client", share_default_config: false },
       { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work", share_default_config: false, share_default_config_incomplete: true },
     ],
   },
@@ -534,7 +548,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Claude Code tab",
-    description: "The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each as wide as its icon and name and the strip starting at the left edge, and Claude Code is open. The default account's name line ends with a small muted \"?\" after Default and its plan badge, with only its config directory beneath. Each account's plan sits beside its name, with its quota beneath: the session window's headline (\"Session\" on Claude Code, \"5h\" on Codex) with what remains and the countdown at the end of its line, a thick bar of that remainder in the agent's colour, and the weekly window's thin bar directly under it with its own headline, so the two read as one two-layer bar; the default account lists that pair first, its week headlined \"Weekly · all models\" because the reading also has Fable's own weekly window, and Fable last, in a row of its own with no countdown; Work's week, with no model window, is plain \"Weekly\". Work is spent: 0% remaining, also where use went past 100%. A small muted \"Updated N ago\" ends the directory line, under the name, of each account that has a reading, at the far right (Work's says 7 minutes, the default account's 1). Client has no quota yet and says it is being read. Above Add agent, the account-selection switch is followed directly by the \"Start usage windows automatically\" switch, both off, each description starting with \"Once this is on\"; the usage-window one is a single short sentence on what the switch does and its quota cost, with a small muted \"?\" at the end of its label. Add agent stays above the tab strip; Add account begins the selected tab on the same row as the vertically centered Permission approval column heading, with a help button for its explanation: the default account is set to Automatic, Work to Approve everything and Client follows its account configuration. The heading and selectors align with the start of the right-hand quota column, and account actions stay at the far right. Remove Work or Client: the account fades out while sliding to the right while the remaining accounts slide into place. \"Codex uninstalled\" among the \"Live changes\" buttons is the machine finding Codex missing while the strip is shown: its tab gains the warning mark and the tooltip that says why, widening in place while the tab after it slides along; \"Codex installed\" takes the mark away again. With reduced motion the strip changes at once.",
+    description: "Claude Code's tab. The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each with its own small ⋮ button at its end and the strip ending in two icon buttons, Add agent and Add account. Under it, one Permission approval row for the whole agent: its label with a help button, \"Applies to every Claude Code account\" under it and the selector at the end, on Automatic. Then one table lists the agent's accounts, the default account first, under the headers Account, Status, Usage and Disable (with a small \"?\") and an unlabelled last column holding only the account's ⋮ menu. Each row has the name with its plan badge; a soft success \"Logged in\" badge; a two-layer usage bar like the one the account pickers show, the session window's over the weekly one, with no numbers and, unlike the pickers' bars, no hairline edge (Work is spent, so its bar is empty, also where use went past 100%); and the Disable switch, off. Client has no reading yet, so it has no plan or badge and its Usage cell says it is being read. Above the tab strip, the account-selection switch is followed directly by the \"Start usage windows automatically\" switch, both off, each description starting with \"Once this is on\"; the usage-window one is a single short sentence on what the switch does and its quota cost, with a small muted \"?\" at the end of its label. Remove Work or Client: the row fades out while sliding to the right while the remaining rows slide into place. \"Codex uninstalled\" among the \"Live changes\" buttons is the machine finding Codex missing while the strip is shown: its tab gains the warning mark and the tooltip that says why, widening in place while the tab after it slides along; \"Codex installed\" takes the mark away again. With reduced motion the strip changes at once.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -546,11 +560,75 @@ export const settingsScenarios: Scenario[] = [
     ],
   },
   {
+    id: "settings-accounts-disabled",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, accounts turned off",
+    description: "The default account and Work are turned off: their Disable switches are on, and nothing else about their rows changes, since a turned-off account keeps its name, plan, status and usage bar as they were; Client's switch is off. The header's \"?\" next to Disable explains what disabling means. Turn Disable off for either and the switch moves back; turn it on for Client and it does.",
+    state: disabledState,
+    steps: openAccounts,
+  },
+  {
+    id: "settings-account-details",
+    group: GROUP,
+    category: "normal",
+    title: "Account details, an account the user owns",
+    description: "Work's settings dialog, opened from its ⋮ menu, in a modal with no footer button. The heading is the name alone; the Pro plan badge and the \"Logged in\" badge sit beside it, and the config directory is the line under it. The Usage section has \"Updated 7 minutes ago\" at the end of its heading and the rail's meters: Session, as the two-layer bar with Weekly · all models under it, each line saying what remains and when it resets, then Fable weekly with its own bar. Below, two rows with a description under each label and the control at the end: Share default configuration, with its help button and its switch, off, whose description says turning it on links the account's configuration and history to the default account's directory, and Disable account, with its switch, off, whose description says that once on, the account is left out of the account choices.",
+    state: detailsWorkState,
+    steps: accountDetails("Work"),
+  },
+  {
+    id: "settings-account-details-default",
+    group: GROUP,
+    category: "normal",
+    title: "Account details, the default account",
+    description: "The default account's settings dialog: the heading is Default, with the Max badge and \"Logged in\" beside it, and the config directory is the line under it, ending right after the path with the small \"?\" that explains the default account. Usage shows all three windows. The only row is Disable account: the default account has no Share default configuration row, and the permission approval is set on the tab, not here.",
+    state: quotaState,
+    steps: accountDetails(defaultAccount),
+  },
+  {
+    id: "settings-account-details-not-logged-in",
+    group: GROUP,
+    category: "normal",
+    title: "Account details, an account not logged in",
+    description: "Work's settings dialog, which has never been logged in: beside the name the soft warning \"Not logged in\" badge and the Log in icon button, and the Usage section has no meters but says \"Not logged in yet.\" with \"Log in to use this account.\" under it. The Share default configuration and Disable account rows are as usual.",
+    state: notSignedInState,
+    steps: accountDetails("Work"),
+  },
+  {
+    id: "settings-account-details-agent-not-installed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Account details, the agent is not installed",
+    description: "Personal's settings dialog on the Codex tab, whose agent is not installed: beside the name the login state reads \"Unknown\", and under the line with the config directory a line says it is not usable until Codex is on PATH, both as chips. The Usage section is a dash, the account having no reading.",
+    state: unavailableQuotaState,
+    steps: [...openAccounts, (ui) => ui.press(ui.t("agents.notInstalled", { agent: AGENT_LABEL.codex })), openDetails("Personal", "codex")],
+  },
+  {
+    id: "settings-account-details-narrow",
+    group: GROUP,
+    category: "normal",
+    title: "Account details in a narrow window",
+    description: "Below 640px the details stack: a model's name as long as one can be wraps beside its reset time on the same line, with its bar under it. The default account's settings dialog is shown, with its Session, Weekly · all models and long-named weekly lines, and the Disable account row.",
+    width: 560,
+    state: narrowQuotaState,
+    steps: accountDetails(defaultAccount),
+  },
+  {
+    id: "settings-accounts-tab-row-tooltip",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, the icon buttons at the end of the tab row",
+    description: "Add account, the right-hand icon button at the end of the tab row (the other, Add agent, is beside it), has the pointer on it, so its tooltip, \"Add account\", is open above it. The two buttons are plain icons in the same style as the ⋮ buttons, with no words.",
+    state: quotaState,
+    steps: [...openAccounts, (ui) => ui.hoverTitledControl(ui.t("settings.accounts.add"))],
+  },
+  {
     id: "settings-accounts-switches-on",
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, both account switches on",
-    description: "Above Add agent, and above the open Claude Code tab, the account-selection switch and the \"Start usage windows automatically\" switch below it are both on. Each description states the behaviour and does not start with \"Once this is on\"; the usage-window one is a single short sentence with its \"?\" after the label. Switch either off and on again to read both of its descriptions; neither moves the other.",
+    description: "Above the agent tabs, the account-selection switch and the \"Start usage windows automatically\" switch below it are both on. Each description states the behaviour and does not start with \"Once this is on\"; the usage-window one is a single short sentence with its \"?\" after the label. Switch either off and on again to read both of its descriptions; neither moves the other.",
     state: { ...quotaState, settings: { ...quotaState.settings!, auto_select_account: true, auto_start_quota_windows: true } },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -575,33 +653,25 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, default account help tip open",
-    description: "Keyboard focus is on the \"?\" at the end of the default account's name line, so its tooltip is open above it, explaining what the default account is. Without the tip open, the \"?\" sits at rest in the Claude Code scenario.",
+    description: "Keyboard focus is on the \"?\" at the end of the config directory line in the default account's settings dialog, so its tooltip is open, saying this is the agent's own default configuration directory, which new sessions use when no account is chosen and other accounts can share. The table behind the dialog carries no such \"?\".",
     state: quotaState,
-    steps: [
-      (ui) => ui.press(ui.t("rail.settings")),
-      (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.focusControl(ui.t("settings.accounts.defaultHelp")),
-    ],
+    steps: [...accountDetails(defaultAccount), (ui) => ui.focusControl(ui.t("settings.accounts.defaultHelp"))],
   },
   {
     id: "settings-accounts-default-help-popover",
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, default account help popover open on touch",
-    description: "The \"?\" at the end of the default account's name line has been touched with a finger, so the explanation stays open in a popover above it, drawn like the tooltip and with no tooltip on top of it; unlike the tooltip, it stays until Escape or an outside tap.",
+    description: "The \"?\" at the end of the config directory line in the default account's settings dialog has been touched with a finger, so the explanation stays open in a popover, drawn like the tooltip and with no tooltip on top of it; unlike the tooltip, it stays until Escape or an outside tap.",
     state: quotaState,
-    steps: [
-      (ui) => ui.press(ui.t("rail.settings")),
-      (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.touchPress(ui.t("settings.accounts.defaultHelp")),
-    ],
+    steps: [...accountDetails(defaultAccount), (ui) => ui.touchPress(ui.t("settings.accounts.defaultHelp"))],
   },
   {
     id: "settings-accounts-many",
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Claude Code tab scrolled with many accounts",
-    description: "The section is scrolled down, so the agent tab strip is pinned at the top of it with its bottom rule and the Claude Code indicator showing, on the dialog's own surface and not dimmed by the fade below it; account rows scroll away underneath it and are cut off cleanly against its rule.",
+    description: "The section is scrolled down, so the agent tab strip with its ⋮ buttons and the two icon buttons is pinned at the top of it with its bottom rule and the Claude Code indicator showing, on the dialog's own surface; the table's header and the first rows have scrolled away underneath it and are cut off cleanly against its rule.",
     state: manyAccountsState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -614,7 +684,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Codex tab",
-    description: "Add account and the vertically centered Permission approval column heading share one row, with its explanation behind the adjacent help button. The heading and selectors align with the start of the right-hand quota column, and account actions stay at the far right. Each account has a plan, a two-layer quota bar (5h over weekly) and an approval selector; Automation has no plan, so no plan label, and its 5h window, read as spent 16 minutes ago, reset a minute ago: it reads 100% remaining with \"resets now\" and a full bar; Production, further down, is nearly spent: its bars are almost empty. The default account and Personal follow their account configuration, Automation uses automatic review and Production asks you; change any approval mode to save it independently.",
+    description: "Codex's tab has its own Permission approval row, \"Applies to every Codex account\", on Automatic review, the reviewers' wording. Codex has no model-specific window: each Usage cell is the two-layer bar, the 5h window over the weekly one. Automation has no plan, so no plan badge, and its 5h window, read as spent 16 minutes ago, reset a minute ago: its top layer is full; Production, further down, is nearly spent: both layers are almost empty.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -627,13 +697,13 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: `Settings: accounts, ${AGENT_LABEL[agent]} permission approval explanation`,
-    description: "The help button beside the Permission approval column heading is touched with a finger. Its popover, drawn like the tooltip, keeps the agent-specific explanation next to the selectors it describes, without a tooltip on top.",
+    description: "The help button beside the Permission approval label above the table is touched with a finger. Its popover, drawn like the tooltip, keeps the agent-specific explanation next to the selector it describes, without a tooltip on top.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
       ...(agent === "codex" ? [((ui) => ui.press(AGENT_LABEL.codex)) satisfies Step] : []),
-      (ui) => ui.touchPress(ui.t("settings.accounts.approval.heading")),
+      (ui) => ui.touchPress(ui.t("settings.accounts.approval.helpLabel")),
     ],
   })),
   {
@@ -641,7 +711,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Grok Build tab",
-    description: "Add account begins the Grok Build tab, above the account list. Grok's one credit pool is a weekly window and keeps a single bar, not the two-layer pair, with no approval selector or Permission approval heading.",
+    description: "Grok Build has no permission approval choice, so its tab has no Permission approval row above the table: the tab strip is followed directly by the table, with its one default account, a single weekly layer in its Usage cell and the columns Account, Status, Usage and Disable.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -653,21 +723,18 @@ export const settingsScenarios: Scenario[] = [
     id: "settings-accounts-quota-narrow",
     group: GROUP,
     category: "normal",
-    title: "Settings: accounts, Claude Code tab in a narrow window",
-    description: "Below 640px the windows stack in one column and a long model name wraps under its own headline, the countdown staying at the end of the first line. Each approval selector drops beneath its account name, with its own Permission approval heading and help button directly above. The shared column heading is hidden. The tab strip fits the width.",
+    title: "Settings: accounts, Claude Code table in a narrow window",
+    description: "Below about 640px the Permission approval row above the table stays within the section, and the table is wider than the section, so it scrolls sideways: its columns keep their widths, the later columns are cut at the edge and the ⋮ column stays pinned at the end, with a hairline at its start while there is more beside it. The tab strip, the two switches above it and the tab buttons fit the width. The scroller is a focusable region while it overflows.",
     width: 560,
     state: narrowQuotaState,
-    steps: [
-      (ui) => ui.press(ui.t("rail.settings")),
-      (ui) => ui.press(ui.t("settings.section.accounts")),
-    ],
+    steps: openAccounts,
   },
   {
     id: "settings-accounts-many-narrow",
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Claude Code tab scrolled with many accounts in a narrow window",
-    description: "Below 640px the sections scroll too: with the section scrolled down, the agent tab strip is pinned at the top of it and account rows pass beneath, as in the wide window. The Settings sections are tabs in a row above, which stays put.",
+    description: "Below 640px the sections scroll too: with the section scrolled down, the agent tab strip is pinned at the top of it, the table rows pass beneath it, and the table itself still scrolls sideways with its actions column pinned. The Settings sections are tabs in a row above, which stays put.",
     width: 560,
     state: manyAccountsState,
     steps: [
@@ -677,26 +744,11 @@ export const settingsScenarios: Scenario[] = [
     ],
   },
   {
-    id: "settings-accounts-codex-narrow",
-    group: GROUP,
-    category: "normal",
-    title: "Settings: accounts, Codex tab in a narrow window",
-    description: "Below 640px Codex's approval selector and the account's actions button drop beneath the name. Each selector has its own Permission approval heading and help button; the shared column heading is hidden. The section is scrolled to the end, so Personal's selector and actions button are in view under the pinned tab strip.",
-    width: 560,
-    state: narrowQuotaState,
-    steps: [
-      (ui) => ui.press(ui.t("rail.settings")),
-      (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.press(AGENT_LABEL.codex),
-      (ui) => ui.scrollPanel(ui.t("settings.section.accounts"), SCROLLED_TO_END),
-    ],
-  },
-  {
     id: "settings-accounts-agents-undecided",
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, list of added agents not yet decided",
-    description: "The daemon has not yet found out which agents are installed, so every agent has a tab, in the standard order. The tabs carry no warning icon, cannot be dragged and open no menu on a right-click; Add account and Add agent are offered.",
+    description: "The daemon has not yet found out which agents are installed, so every agent has a tab, in the standard order. The tabs carry no warning icon and no ⋮ button, cannot be dragged and open no menu on a right-click; the Add agent and Add account icon buttons are offered at the end of the strip.",
     state: undecidedState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -732,7 +784,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, agent tab menu open",
-    description: "The menu a right-click on the Codex tab opens (the Menu key or Shift+F10 on a focused tab does the same): Move earlier and Move later, both available for the middle tab, and Remove agent in the danger tone after a separator. The same entries are behind the \"More actions\" button at the end of the tab strip, in the scenario after this one.",
+    description: "The menu a right-click on the Codex tab opens (the Menu key or Shift+F10 on a focused tab does the same): Move earlier and Move later, both available for the middle tab, and Remove agent in the danger tone after a separator. The same entries are behind the tab's own ⋮ button, in the scenario after this one.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -744,14 +796,12 @@ export const settingsScenarios: Scenario[] = [
     id: "settings-accounts-agent-more-menu",
     group: GROUP,
     category: "normal",
-    title: "Settings: accounts, tab strip More actions menu open",
-    description: "Grok Build's tab is selected and the \"More actions\" button at the end of the strip, which acts on the selected agent, is open: Move earlier, Move later disabled because Grok Build is last, and Remove agent in the danger tone. The tabs keep clear of the button.",
+    title: "Settings: accounts, tab actions button menu open",
+    description: "The ⋮ button at the end of Grok Build's tab, named \"Actions for Grok Build\", is open: Move earlier, Move later disabled because Grok Build is the last tab, and Remove agent in the danger tone. Every tab has its own button, so no tab needs to be selected first.",
     state: quotaState,
     steps: [
-      (ui) => ui.press(ui.t("rail.settings")),
-      (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.press(AGENT_LABEL.grok),
-      (ui) => ui.press(ui.t("settings.accounts.agentMoreActions", { agent: AGENT_LABEL.grok })),
+      ...openAccounts,
+      (ui) => ui.press(ui.t("settings.accounts.agentActions", { agent: AGENT_LABEL.grok })),
     ],
   },
   {
@@ -825,7 +875,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Account actions menu, owned account",
-    description: "Work's actions button is open: Edit and Log in, then Remove in the danger tone after a separator.",
+    description: "Work's ⋮ button, the only thing in the last column, is open: Settings first, then Edit and Log in, then Remove in the danger tone after a separator.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -838,7 +888,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Account actions menu, default account",
-    description: "The default account's menu holds only what applies to it: Rename and Log in, with no Edit and no Remove.",
+    description: "The default account's menu holds only what applies to it: Settings, Rename and Log in, with no Edit and no Remove.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -851,7 +901,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, default account under a custom name",
-    description: "Claude Code's default account is called \"Studio laptop\" in place of Default; it keeps its help tip, its config directory and its plan. On the Codex tab the default account is still Default.",
+    description: "Claude Code's default account is called \"Studio laptop\" in place of Default; it keeps its plan badge, its \"Logged in\" badge and its usage bar, and its ⋮ menu and settings dialog open under that name. On the Codex tab the default account is still Default.",
     state: renamedDefaultState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -907,7 +957,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, accounts not logged in yet",
-    description: "Work (never logged in) and Client (whose config directory does not exist yet) both carry the soft warning \"Not logged in\" badge after the name, immediately followed by a compact Log in button with an outbound arrow on the same line, with no quota line and no raw CLI error beneath; the default account above them carries the soft success \"Logged in\" badge beside its plan and reads its quota as usual, so the two badges sit side by side.",
+    description: "Work (never logged in) and Client (whose config directory does not exist yet) both show the soft warning \"Not logged in\" badge in the Status column with a small Log in icon button beside it, and a dash in the Usage cell, which assistive technology reads as no usage reading; they have no plan badge, and their Disable switches are off as usual. The default account above them is logged in: its plan, its \"Logged in\" badge and its usage bar.",
     state: notSignedInState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -1002,7 +1052,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Approve everything confirmation",
-    description: "Choosing Approve everything for Client opens a destructive confirmation instead of saving: the account name is a chip in the title, and the danger-coloured button repeats the choice. Cancelling leaves Client on Follow account configuration.",
+    description: "Choosing Approve everything in the Permission approval row opens a destructive confirmation instead of saving: its title asks whether to approve everything in every Claude Code account, with the agent's name as a chip, the message says every tool will run without asking in every account's sessions, and the danger-coloured button repeats the choice. Cancelling leaves the row on Automatic.",
     state: quotaState,
     steps: bypassSteps,
   },
@@ -1011,45 +1061,45 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, sharing the default configuration",
-    description: "On the Claude Code tab the default account has no Share default configuration switch. Work's switch is off, with a line saying what turning it on does and, under it, that changing it first ends the account's 2 idle sessions and resumes them afterwards. Client's switch is on, with a line saying the account's configuration and conversation history are linked to the default account's directory, and nothing else. Both switches can be used.",
-    state: sharingIdleState,
-    steps: openAccounts,
+    description: "Work's settings dialog, with Share default configuration as the row above Disable account: the label with its help button, the description under it, which says turning it on links the account's configuration and history to the default account's directory (it reads as already linked once the switch is on), and the switch at the end, off and usable, with nothing else under it. The help button holds what is shared and never shared, what turning sharing off does and what changing it does to idle sessions. The default account's settings dialog has no such row.",
+    state: sharingState,
+    steps: accountDetails("Work"),
   },
   {
     id: "settings-accounts-sharing-in-use",
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, sharing cannot be changed while the account is in use",
-    description: "Work's switch is faded but still focusable, and the line under it, which replaces the usual caption, says sharing cannot be changed while 2 of the account's sessions are working and to wait for them to finish. Client's switch is faded the same way, with a line saying sharing cannot be changed while the account is being signed in.",
+    description: "Work's sharing switch is faded but still focusable, and the lines under the row's description, which say why, read that sharing cannot be changed while 2 of the account's sessions are working and to wait for them to finish, and that it cannot be changed while the account is being signed in.",
     state: sharingInUseState,
-    steps: openAccounts,
+    steps: accountDetails("Work"),
   },
   {
     id: "settings-accounts-sharing-progress",
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, sharing change running",
-    description: "Both switches are faded but still focusable while their change runs, and the usual caption is hidden. Work is turning sharing on and changing entries: a determinate progress bar reads 3 of 9, with the entry being processed, plugins/, as a chip under it. Client is turning sharing off but waits for another account's sharing change to finish: an indeterminate bar with \"Waiting for another account's sharing change to finish…\" in place of the count, and no entry.",
+    description: "Work is turning sharing on and changing entries, so its switch is faded but still focusable, with no lock line and no state description under the label. A determinate progress bar under the row reads 3 of 9, with the entry being processed, plugins/, as a chip under it.",
     state: sharingProgressState,
-    steps: openAccounts,
+    steps: accountDetails("Work"),
   },
   {
     id: "settings-accounts-sharing-progress-restart",
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, sharing change ending and resuming sessions",
-    description: "Both switches are faded but still focusable, with the usual caption hidden. Work is turning sharing on and is ending the account's idle sessions: an indeterminate bar with \"Ending idle sessions…\" in place of the count and no entry. Client has finished changing its entries and is resuming its sessions: an indeterminate bar with \"Resuming sessions…\".",
+    description: "Work is turning sharing on and is ending the account's idle sessions first: its switch is faded but still focusable, with no lock line and no state description under the label, and an indeterminate bar under the row reads \"Ending idle sessions…\" in place of the count, with no entry.",
     state: sharingRestartState,
-    steps: openAccounts,
+    steps: accountDetails("Work"),
   },
   {
     id: "settings-accounts-sharing-help-claude",
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Claude Code sharing explanation",
-    description: "The help button beside Share default configuration is touched with a finger, so the explanation stays open in a popover. It says what is shared, configuration and conversation history, then what is never shared: login credentials, .claude.json (noting it holds user-scope MCP servers) and plans/, the two paths as chips. The popover keeps the same narrow width whatever the window, so a chip that does not fit at the end of a line moves to the next one whole, and no empty chip fragment is left behind at the end of the line above. The last sentence is what turning sharing off does.",
+    description: "In Work's settings dialog the help button beside Share default configuration is touched with a finger, so the explanation stays open in a popover. It says what is shared, configuration and conversation history, then what is never shared: login credentials, .claude.json (noting it holds user-scope MCP servers) and plans/, the two paths as chips. The popover keeps the same narrow width whatever the window, so a chip that does not fit at the end of a line moves to the next one whole, and no empty chip fragment is left behind at the end of the line above. The next paragraph is what turning sharing off does, and the last that changing sharing ends the account's 2 idle sessions and resumes them afterwards; what turning sharing on does is the row's own description, not in the tip.",
     state: sharingHelpState("claude"),
-    steps: openSharingHelp,
+    steps: openSharingHelp("Work"),
   },
   {
     id: "settings-accounts-sharing-help-grok",
@@ -1058,30 +1108,29 @@ export const settingsScenarios: Scenario[] = [
     title: "Settings: accounts, Grok Build sharing explanation",
     description: "The same explanation for a Grok Build account. What is never shared is login credentials, trusted_folders.toml and hooks-paths, the two files as chips. The popover keeps a narrow width, so a chip that does not fit at the end of a line moves to the next one whole, and no empty chip fragment is left at the end of the line above. What is shared, and what turning sharing off does, reads the same as for Claude Code.",
     state: sharingHelpState("grok"),
-    steps: openSharingHelp,
+    steps: openSharingHelp("Work", "grok"),
   },
   {
     id: "settings-accounts-sharing-help-codex",
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Codex sharing explanation",
-    description: "The same explanation for a Codex account. What is never shared is one sentence, that login credentials are never shared, and no file is named. Personal's switch is off, with the line saying what turning it on does under it.",
+    description: "The same explanation for a Codex account. What is never shared is one sentence, that login credentials are never shared, and no file is named. Personal's switch is off, with nothing under it.",
     state: sharingHelpState("codex"),
-    steps: openSharingHelp,
+    steps: openSharingHelp("Personal", "codex"),
   },
   {
     id: "settings-account-approval-error",
     group: GROUP,
     category: "exceptional",
-    title: "Account approval mode could not be saved",
-    description: "The error alert separates the failed-save summary from the selectable Permission denied diagnostic beneath it. Codex's default account keeps Follow account configuration behind the alert; acknowledging the error leaves that saved selection intact.",
+    title: "Permission approval could not be saved",
+    description: "The error alert separates the failed-save summary from the selectable Permission denied diagnostic beneath it. Codex's Permission approval row keeps Follow account configuration behind the alert; acknowledging the error leaves that saved selection intact.",
     state: approvalState,
     accountApprovalError: { code: "store_io_failed", params: { detail: "Permission denied (os error 13)" }, message: "The account settings could not be saved: Permission denied (os error 13)" },
     steps: [
-      (ui) => ui.press(ui.t("rail.settings")),
-      (ui) => ui.press(ui.t("settings.section.accounts")),
+      ...openAccounts,
       (ui) => ui.press(AGENT_LABEL.codex),
-      (ui) => ui.press(ui.t("settings.accounts.approval.label", { name: ui.t("settings.accounts.defaultName"), agent: AGENT_LABEL.codex })),
+      (ui) => ui.press(ui.t("settings.accounts.approval.label", { agent: AGENT_LABEL.codex })),
       (ui) => ui.press(ui.t("settings.accounts.approval.auto")),
     ],
   },
@@ -1090,7 +1139,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Approve everything could not be saved",
-    description: "Confirming Approve everything for Client was refused. The error alert shows the failed-save summary above a selectable Permission denied diagnostic, with the confirmation dialog still open beneath it; Client still follows its account configuration.",
+    description: "Confirming Approve everything was refused. The error alert shows the failed-save summary above a selectable Permission denied diagnostic, with the confirmation dialog still open beneath it; the Permission approval row still reads Automatic.",
     state: quotaState,
     accountApprovalError: { code: "store_io_failed", params: { detail: "Permission denied (os error 13)" }, message: "The account settings could not be saved: Permission denied (os error 13)" },
     steps: [
@@ -1103,9 +1152,9 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Sharing change could not be finished",
-    description: "Turning sharing off for Work did not finish, so its switch sits at its position before the change, on, and the usual caption is hidden. Under it one warning alert (not danger-coloured) holds everything about the failure; nothing of it sits outside the warning box. The visible copy is at most two sentences: the title, \"Could not finish turning sharing off\", then \"Some files or folders could not be changed.\", and the one main thing to do, to turn the switch off again to try once more. At the end of the box is a Details button for the rest; there is no Try again button and no separate error alert. Client, which has nothing to show, is listed before Work so that the section overflows and, scrolled to its end, Work's failure is what fills the view.",
+    description: "In Work's settings dialog, turning sharing off did not finish, so the switch sits at its position before the change, on, and the row shows no state description. Under the row one warning alert (not danger-coloured) holds everything about the failure; nothing of it sits outside the warning box. The visible copy is at most two sentences: the title, \"Could not finish turning sharing off\", then \"Some files or folders could not be changed.\", and the one main thing to do, to turn the switch off again to try once more. At the end of the box is a Details button for the rest; there is no Try again button and no separate error alert.",
     state: sharingFailedState,
-    steps: [...openAccounts, (ui) => ui.scrollPanel(ui.t("settings.section.accounts"), SCROLLED_TO_END)],
+    steps: accountDetails("Work"),
   },
   {
     id: "settings-accounts-sharing-failed-details",
@@ -1114,55 +1163,55 @@ export const settingsScenarios: Scenario[] = [
     title: "Sharing change could not be finished, details open",
     description: "The same failure as above with the Details popover open, holding first the further explanation, the reasons grouped by cause (no permission to change skills/ and 1 more, followed by \"Check that the files and folders involved can be changed and are not locked.\", and plugins/ in use, followed by \"Close other programs using the files involved, such as an agent in a terminal, an editor or a sync tool.\", each one compact line with its fix run on after it), then the raw side: each unfinished entry is one tight row, its chip and what it was left as in words (skills/ and plugins/ left unchanged; the conversation abc, with the titles of the sessions that recorded it, Fix the summary layout and Update the dependencies, joined as a list, left in the default directory) followed by the system's original reason (permission denied, resource busy) as small inline code on the same row, not a separate diagnostic block.",
     state: sharingFailedState,
-    steps: [...openAccounts, (ui) => ui.scrollPanel(ui.t("settings.section.accounts"), SCROLLED_TO_END), (ui) => ui.press(ui.t("error.details")), (ui) => ui.scrollPanel(ui.t("settings.section.accounts"), SCROLLED_TO_END)],
+    steps: [...accountDetails("Work"), (ui) => ui.press(ui.t("error.details"))],
   },
   {
     id: "settings-accounts-sharing-default-moved",
     group: GROUP,
     category: "exceptional",
     title: "Sharing change failed, the default directory has moved",
-    description: "Work's switch sits at its recorded position, on, with its caption hidden. Under it one warning alert holds the title \"Could not finish turning sharing on\", the single reason that the default account's directory has moved since sharing was turned on (no entry is named) and the advice to turn the switch off, then on again, and a Details button. Opened, it holds only the raw reason as small inline code.",
+    description: "In Work's settings dialog the switch sits at its recorded position, on, and the row shows no state description. Under the row one warning alert holds the title \"Could not finish turning sharing on\", the single reason that the default account's directory has moved since sharing was turned on (no entry is named) and the advice to turn the switch off, then on again, and a Details button. Opened, it holds only the raw reason as small inline code.",
     state: sharingDefaultMovedState,
-    steps: openAccounts,
+    steps: accountDetails("Work"),
   },
   {
     id: "settings-accounts-sharing-no-space",
     group: GROUP,
     category: "exceptional",
     title: "Sharing change failed, not enough disk space",
-    description: "Turning sharing on for Work did not finish, so its switch sits at its position before the change, off, with its caption hidden. The warning alert holds the title \"Could not finish turning sharing on\", the single cause \"There is not enough disk space.\" and its fix \"Free up disk space.\" as its two visible sentences (no entry is named), and a Details button. Opened, it holds the advice to turn the switch on again to try once more, then the raw reason.",
+    description: "In Work's settings dialog, turning sharing on did not finish, so the switch sits at its position before the change, off, and the row shows no state description. Under the row the warning alert holds the title \"Could not finish turning sharing on\", the single cause \"There is not enough disk space.\" and its fix \"Free up disk space.\" as its two visible sentences (no entry is named), and a Details button. Opened, it holds the advice to turn the switch on again to try once more, then the raw reason.",
     state: sharingNoSpaceState,
-    steps: openAccounts,
+    steps: accountDetails("Work"),
   },
   {
     id: "settings-accounts-sharing-incomplete",
     group: GROUP,
     category: "exceptional",
     title: "Sharing change left unfinished by a restart",
-    description: "Work's choice is recorded as on, but the daemon was restarted in the middle of the change, so its switch sits at its position before the change, off, and the usual caption is hidden. Under it a warning alert holds the title, \"The last attempt to turn sharing on did not finish\", with the advice to turn the switch on again on a line below it, inside the box. There is no Try again button and no Details button, since no entries are known after a restart. Client's switch is off and looks as usual, with its caption.",
+    description: "In Work's settings dialog the choice is recorded as on, but the daemon was restarted in the middle of the change, so the switch sits at its position before the change, off, and the row shows no state description. Under the row a warning alert holds the title, \"The last attempt to turn sharing on did not finish\", with the advice to turn the switch on again on a line below it, inside the box. There is no Try again button and no Details button, since no entries are known after a restart.",
     state: sharingIncompleteState,
-    steps: openAccounts,
+    steps: accountDetails("Work"),
   },
   {
     id: "settings-accounts-sharing-refused",
     group: GROUP,
     category: "exceptional",
     title: "Sharing change refused, the account is in use",
-    description: "Work's switch looked free, but pressing it was refused because a session on the account has started working since: an error alert says sharing for Work cannot be changed while 1 of its sessions is working, and advises waiting for the working sessions to finish, then trying again. Work's switch is still off.",
+    description: "In Work's settings dialog the switch looked free, but pressing it was refused because a session on the account has started working since: an error alert says sharing for Work cannot be changed while 1 of its sessions is working, and advises waiting for the working sessions to finish, then trying again. The switch is still off.",
     state: sharingState,
     accountSharingError: {
       code: "account_in_use",
       params: { account: "a-work", name: "Work", sessions: "1", signing_in: "false" },
       message: "account `Work` is in use: 1 of its sessions is working",
     },
-    steps: [...openAccounts, (ui) => ui.press(ui.t("settings.accounts.sharing.switchLabel", { name: "Work" }))],
+    steps: [...accountDetails("Work"), (ui) => ui.press(ui.t("settings.accounts.sharing.switchLabel", { name: "Work" }))],
   },
   {
     id: "settings-accounts-quota-unavailable",
     group: GROUP,
     category: "exceptional",
     title: "Settings: accounts, Claude Code quota unavailable or out of date",
-    description: "Claude Code's default account and Work have nothing to show: no bars, and a danger-coloured circled \"!\" after the name, for the failure of the reading, one a timeout and one a failed command. Client keeps its last windows and its \"Updated 12 minutes ago\" text, followed by a warning-coloured triangle that marks them as out of date. No sentence of error text sits in the rows; hover a mark for its name.",
+    description: "Claude Code's default account and Work have nothing to show: their Usage cells are a dash followed by a danger-coloured circled \"!\" (\"Quota unavailable\"), one a timeout and one a failed command; neither has a plan or a status, and their names carry no mark of their own. Client has a plan and reads \"Logged in\", but its Usage cell is a dash followed by a warning-coloured triangle, \"Out of date\", its last reading being too old to show (the scenario after this one opens why). No sentence of error text sits in the table; hovering a mark, or tapping it with a finger, opens one small popover with its name and its reason.",
     state: unavailableQuotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -1174,20 +1223,16 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Settings: accounts, the reason an out-of-date quota carries",
-    description: "The warning-coloured triangle after Client's \"Updated 12 minutes ago\" is tapped with a finger: its popover holds why the newer reading failed, while the last windows stay under the name.",
+    description: "The warning-coloured triangle after the dash in Client's Usage cell is tapped with a finger: its popover holds why the newer reading failed. Client's settings dialog shows the last windows with the same triangle after \"Updated 12 minutes ago\".",
     state: unavailableQuotaState,
-    steps: [
-      (ui) => ui.press(ui.t("rail.settings")),
-      (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.touchPressStatusMark(describing("the out-of-date mark", (name) => name.startsWith(ui.t("quota.stale", { age: "\u0000" }).split("\u0000")[0]))),
-    ],
+    steps: [...openAccounts, (ui) => ui.touchPressStatusMark(describing("the out-of-date mark", (name) => name.startsWith(ui.t("quota.stale", { age: "\u0000" }).split("\u0000")[0])))],
   },
   {
     id: "settings-accounts-grok-quota-unavailable",
     group: GROUP,
     category: "exceptional",
     title: "Settings: accounts, Grok Build binary not found",
-    description: "Grok's reason names the missing binary and PATH as code.",
+    description: "Grok Build's default account has a dash in its Usage cell followed by a danger-coloured circled \"!\", and no plan or status; the mark's reason names the missing binary and PATH as code.",
     state: unavailableQuotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -1200,7 +1245,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Settings: accounts, Codex not installed",
-    description: "The Codex tab is selected and carries a warning icon after its name. Neither the default account nor Personal has a quota or a plan, and Personal says it is not usable.",
+    description: "The Codex tab is selected and carries a warning icon after its name; its Permission approval row is there as usual. Neither the default account nor Personal has a plan, a status or a usage reading: their Status cells are empty and their Usage cells dashes.",
     state: unavailableQuotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),

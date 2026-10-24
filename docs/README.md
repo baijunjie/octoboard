@@ -264,8 +264,11 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Agent accounts](product/agent-accounts.md) — Settings' Agent accounts section: the added agents list (how it is
   first filled, the undecided state, where it applies), the agent strip and its not-installed warning, Add agent,
   reordering and removing an agent, the empty state, the default account and renaming it, owned accounts and their
-  actions menu, sharing the default configuration, approval modes, adding, editing and removing an account, and
-  logging an account in.
+  actions menu, the accounts table and the account settings dialog, turning an account off with its Disable switch,
+  sharing the default configuration, the per-agent permission approval, and adding, editing and removing an account.
+- [Logging accounts in](product/logging-accounts-in.md) — signing an agent account in from Settings → Agent accounts:
+  where Log in appears, how each agent signs in, the login dialog and its focus behaviour, how a login ends, and the
+  quota re-read afterwards.
 - [Sharing the default configuration](product/sharing-the-default-configuration.md) — a non-default account sharing the
   agent's default directory through links: the per-account choice, what each agent shares and what is never shared,
   turning it on (backups, history moved or merged, Codex rows carried) and off (backups restored, the account's own
@@ -524,6 +527,12 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Adding a user setting](memory/adding-a-user-setting.md) — the checklist for adding a user setting: exposing it in
   the agents' settings tools unless only the user may change it, and carrying every application setting that is not
   valid only on this machine through a full configuration export and import.
+- [Adding a daemon error code](memory/adding-a-daemon-error-code.md) — what the UI needs in the same change when the
+  daemon starts returning a new error code (message text, params, recovery group, Settings button), so the refusal is
+  not shown as an unexpected bug.
+- [Adding a reason an account cannot be used](memory/adding-a-reason-an-account-cannot-be-used.md) — every daemon and
+  UI place that must check a new reason an account cannot take new work, the console and project dialog pickers
+  included.
 - [Writing text into a session](memory/writing-text-into-a-session.md) — why any new notice, brief or opening prompt the
   daemon writes into a session's input needs a fixed opening constant listed in `session_history.rs`'s
   `OCTOBOARD_OPENINGS`, or the archived history shows it as the user's own words.

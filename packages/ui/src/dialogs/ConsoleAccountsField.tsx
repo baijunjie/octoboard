@@ -1,5 +1,5 @@
 import { KeyRound } from "lucide-react";
-import React, { useId, useRef } from "react";
+import React, { useId, useRef, useState } from "react";
 
 import { Button } from "../components/Button";
 import { choiceGroups, choiceKey, findEntry, storedAccount } from "../accountChoices";
@@ -12,6 +12,7 @@ import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useT } from "../i18n/react";
 import type { AccountField, Agent } from "../protocol";
 import { useDaemonStore } from "../store";
+import { markDisabledPickable } from "./accountOptions";
 import { LabelledGroup } from "./LabelledGroup";
 import { OptionSelect } from "./OptionSelect";
 
@@ -46,7 +47,11 @@ export function ConsoleAccountsField({
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
-  const groups = choiceGroups(accounts, agentAvailability, addedAgents, (agent) => defaultAccountName(t, defaultNames, agent));
+  const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
+  // What the console pinned when the field opened: a turned-off account kept in the list from then on, so the user can
+  // pick it back after choosing another.
+  const [saved] = useState(values);
+  const groups = choiceGroups(accounts, agentAvailability, addedAgents, (agent) => defaultAccountName(t, defaultNames, agent), undefined, undefined, disabledDefaults);
   const pinned = (agent: Agent) => storedAccount(values[AGENT_ACCOUNT_FIELD[agent]], agent, accounts);
   const rows = listedPickerAgents(agentAvailability, addedAgents, (agent) => pinned(agent) !== null).map((agent) => ({
     agent,
@@ -86,6 +91,8 @@ export function ConsoleAccountsField({
       <div ref={rowsRef} {...focusHandoff} className="flex flex-col gap-3">
         {rows.map(({ agent, entries, picked }) => {
           const marked = !isAgentPickable(agentAvailability, addedAgents, agent);
+          const kept = storedAccount(saved[AGENT_ACCOUNT_FIELD[agent]], agent, accounts);
+          const offered = entries.filter((entry) => !entry.disabled || entry.account === picked || entry.account === kept);
           const nameId = `${idPrefix}-${agent}`;
           return (
           // The same two columns as the Default agent pickers above: the agent's name where the first
@@ -103,10 +110,12 @@ export function ConsoleAccountsField({
                   describedBy={marked ? nameId : undefined}
                   // An agent with only its default account offers just that one: under the name the user gave
                   // it, else as "Default account".
-                  options={entries.map((entry) => ({
-                    value: entry.key,
-                    label: entries.length === 1 && !isDefaultAccountRenamed(defaultNames, agent) ? t("dialog.console.defaultAccountOnly") : entry.name,
-                  }))}
+                  // A turned-off account is hidden, but for the one the console pinned when the field opened (or pins
+                  // now), which stays, marked.
+                  options={offered.map((entry) => {
+                    const label = offered.length === 1 && !isDefaultAccountRenamed(defaultNames, agent) ? t("dialog.console.defaultAccountOnly") : entry.name;
+                    return markDisabledPickable(t, { value: entry.key, label }, entry.disabled);
+                  })}
                   value={choiceKey({ agent, account: picked })}
                   onChange={(key) => {
                     const entry = findEntry(groups, key);

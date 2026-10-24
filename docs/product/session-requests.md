@@ -54,13 +54,13 @@ still controls whether a `request_session` call starts anything.
 | `branches` | no | For `project`: local branches, by name, to hand over to the new session (see "Handing branches over" below). Left out, or an empty list, the request hands nothing over and behaves as one without it. |
 
 **A request that could never be carried out is refused before the user is asked**, with the reason in prose and no
-dialog shown: whatever `new_session` would refuse for the same brief and overrides — a missing brief or a blank
-goal, an unknown agent or account, an account of another agent, an agent determined unavailable on this machine (never
-while that determination is still pending), an agent that is not added or an account whose quota is used up (see
-"Opening a session" in `docs/product/sessions.md`), a model or effort the agent does not offer — and a `kind` that is neither
-value, a `project` or `console` given for the other kind, a project or console that does not exist, a name that names
-more than one, a console session asking for a project session without naming the project, and `branches` the request
-cannot hand over (see "Handing branches over" below).
+dialog shown: whatever `new_session` would refuse for the same brief and overrides — a missing brief or a blank goal, an
+unknown agent or account, an account of another agent, an agent determined unavailable on this machine (never while that
+determination is still pending), an agent that is not added, an account that is turned off or whose quota is used up
+(see "Opening a session" in `docs/product/sessions.md`), a model or effort the agent does not offer — and a `kind` that
+is neither value, a `project` or `console` given for the other kind, a project or console that does not exist, a name
+that names more than one, a console session asking for a project session without naming the project, and `branches` the
+request cannot hand over (see "Handing branches over" below).
 
 ## Approving requests automatically
 
@@ -308,8 +308,8 @@ in "When an approval cannot be carried out" in `docs/product/requests-to-resume-
 - the caller's process ended before the session could be started, which gives the same error as an approval after a
   withdrawal (see "The confirmation dialog" below);
 - the session could not be launched — including any refusal opening it meets at that moment, such as an agent that has
-  become unavailable, or been removed from the added agents, meanwhile, or an account whose quota has been used up
-  meanwhile.
+  become unavailable, or been removed from the added agents, meanwhile, or an account that has been turned off or
+  whose quota has been used up meanwhile.
 
 ## The confirmation dialog
 

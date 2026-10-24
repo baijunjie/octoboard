@@ -152,6 +152,7 @@ it.each([
 it.each([
   ["account", "Manage accounts…", undefined],
   ["addedAgents", "Manage accounts…", undefined],
+  ["accountDisabled", "Manage accounts…", undefined],
   ["agentNotAdded", "Add agent…", true],
 ] as const)("offers a button for %s recovery that opens Settings' Agent accounts", (recovery, label, addAgent) => {
   mount();

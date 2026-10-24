@@ -183,7 +183,13 @@ the inherited entry, "Same as console", with a badge naming the account the cons
 agent's default account when the console pins none); the agent's default account, named as it is everywhere
 else; and then that agent's own accounts. It is offered only when that agent has an account of its own. A project whose
 named account is no longer stored shows the inherited entry, and keeps what it has stored until another entry is
-picked.
+picked. A turned-off account — the default account or one of the agent's own (see "Turning an account off" in
+`docs/product/agent-accounts.md`) — is left out of the picker, except the one the project named when the dialog opened
+and the one picked in it now: as in the console dialog, since a project's account is a lasting preference, that one
+stays listed and pickable, with a short note "Disabled" under its name and, as its description for assistive
+technology, that sessions cannot open on it until it is turned back on. "Same as console" carries no such mark, its
+badge naming the console's account as usual. A project that names a turned-off account keeps it; the sessions that
+would run on it are refused until then.
 
 While a new project on a **parent directory** is set to "Detect from files" neither the account picker nor the Advanced
 section is shown, since no agent is settled — each repository found is detected on its own — and anything set in

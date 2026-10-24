@@ -22,15 +22,18 @@ export function orderedQuotaWindows(windows: readonly QuotaWindow[]): QuotaWindo
 /** The quota codes that say the account is not logged in yet, rather than that reading it failed. */
 const ACCOUNT_STATE_CODES = new Set(["quota_not_signed_in", "quota_config_dir_missing"]);
 
-/** Whether the reading shows the account is logged in: a current reading with quota windows. A reading that
- * failed for another reason, a re-read that failed after a good one, and one not yet taken say nothing either way. */
-export function isLoggedIn(quota: AccountQuota | "loading" | undefined): boolean {
-  return typeof quota === "object" && quota.unavailable === null && quota.windows.length > 0;
-}
-
 /** Whether the reading is unavailable because the account is not logged in yet: a state, not a failure. */
 export function isNotLoggedIn(unavailable: QuotaUnavailable | null): unavailable is QuotaUnavailable {
   return unavailable !== null && ACCOUNT_STATE_CODES.has(unavailable.code);
+}
+
+/** Whether the account is logged in as far as its reading says: `"out"` when the reading says it is not,
+ * `"in"` when a reading was taken (the last good windows of a failed one count), and `undefined` while that is not
+ * known: a reading still to come, or one that failed for another reason with nothing read before. */
+export function loginStateOf(quota: AccountQuota | "loading" | undefined): "in" | "out" | undefined {
+  if (typeof quota !== "object") return undefined;
+  if (isNotLoggedIn(quota.unavailable)) return "out";
+  return quota.unavailable === null || quota.windows.length > 0 ? "in" : undefined;
 }
 
 /** How much of `window` is left, as a whole percent from 0 to 100. The daemon passes a used

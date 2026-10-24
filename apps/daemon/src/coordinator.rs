@@ -1199,13 +1199,22 @@ async fn handle_inner(
             Ok(None)
         }
 
-        RequestBody::SetAccountApprovalReviewer { account, reviewer } => {
-            CODEX_REVIEWER.set(state, account.as_deref(), reviewer)?;
+        RequestBody::SetCodexApprovalReviewer { reviewer } => {
+            CODEX_REVIEWER.set(state, reviewer)?;
             Ok(None)
         }
 
-        RequestBody::SetAccountApprovalMode { account, mode } => {
-            CLAUDE_MODE.set(state, account.as_deref(), mode)?;
+        RequestBody::SetClaudeApprovalMode { mode } => {
+            CLAUDE_MODE.set(state, mode)?;
+            Ok(None)
+        }
+
+        RequestBody::SetAccountDisabled {
+            agent,
+            account,
+            disabled,
+        } => {
+            set_account_disabled(state, agent, account.as_deref(), disabled)?;
             Ok(None)
         }
 
@@ -2566,8 +2575,8 @@ struct ResolvedOpen {
 }
 
 /// Resolves what [`open_session`] opens from `request`, refusing an unknown console, project or
-/// owner, an agent that is not available or not added, an account of another agent, and an account
-/// whose plan quota is used up.
+/// owner, an agent that is not available or not added, an account of another agent, a disabled
+/// account, and an account whose plan quota is used up.
 fn resolve_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<ResolvedOpen> {
     let console = state
         .store
@@ -2619,6 +2628,7 @@ fn resolve_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<Resolved
         project.as_ref(),
         request.account.clone(),
     )?;
+    refuse_if_account_disabled(state, agent, account_id.as_deref())?;
     refuse_if_account_quota_exhausted(state, agent, account_id.as_deref(), config_dir.as_deref())?;
     // Asked again by the launch under its claim; asked here so that nothing is recorded.
     crate::shared_config::refuse_if_changing(state, account_id.as_deref())?;
@@ -2926,10 +2936,10 @@ async fn check_launch_settings(
 
 /// Refuses a session that [`open_session`] would refuse for what `request` asks, a console session
 /// included, before anything is launched or recorded: an unknown console, project or owner, an
-/// agent that is not available or not added, an account of another agent, an account whose plan
-/// quota is used up, a model or effort the agent does not offer. For a session whose opening waits
-/// on the user's answer, so that a request which could never be carried out is refused to the
-/// asker rather than put to the user. Returns the agent the session would be of.
+/// agent that is not available or not added, an account of another agent, a disabled account, an
+/// account whose plan quota is used up, a model or effort the agent does not offer. For a session
+/// whose opening waits on the user's answer, so that a request which could never be carried out is
+/// refused to the asker rather than put to the user. Returns the agent the session would be of.
 pub async fn check_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<Agent> {
     let ResolvedOpen {
         project,
@@ -4251,12 +4261,12 @@ fn prepare_switch(
 /// `account` is the target by id, `None` for the default account. Refused, with nothing recorded
 /// and (where it can be told beforehand) the process left running: a launch, resume or switch of
 /// the session under way, an archived session, the account it is on already, an account that is
-/// not one of the session's agent, an account whose plan quota is used up, a Grok target that is
-/// not an initialized home, a conversation record that is not where it is expected, and a
-/// source or target whose sharing is being changed (`account_sharing_in_progress`). Once the
-/// process has been ended, a relocation that does not complete or a relaunch that is refused or
-/// does not come up leaves the session interrupted on the account it had, with the conversation
-/// still in both directories.
+/// not one of the session's agent, a disabled account, an account whose plan quota is used up, a
+/// Grok target that is not an initialized home, a conversation record that is not where it is
+/// expected, and a source or target whose sharing is being changed
+/// (`account_sharing_in_progress`). Once the process has been ended, a relocation that does not
+/// complete or a relaunch that is refused or does not come up leaves the session interrupted on
+/// the account it had, with the conversation still in both directories.
 ///
 /// Two windows break "always back on the account it had", neither harmful. A daemon that dies
 /// between recording the new account and the relaunch leaves the session on the new account, which
@@ -4322,6 +4332,7 @@ pub(crate) async fn switch_session_account_with(
         ));
     }
     let target_dir = state.store.account_dir(&target_account)?;
+    refuse_if_account_disabled(state, before.agent, target_account.as_deref())?;
     refuse_if_account_quota_exhausted(
         state,
         before.agent,
@@ -4914,14 +4925,18 @@ pub(crate) fn agent_can_open(state: &Arc<AppState>, agent: Agent) -> Result<bool
 }
 
 /// Whether a new session of `agent` could run on `account_id` (`None` the default account) as
-/// things stand: the account is still one of that agent's ([`checked_account_reference`]), and its
-/// quota is not used up ([`refuse_if_account_quota_exhausted`]). For a caller choosing a default
+/// things stand: the account is still one of that agent's ([`checked_account_reference`]), it is
+/// not turned off ([`refuse_if_account_disabled`]), and its quota is not used up
+/// ([`refuse_if_account_quota_exhausted`]). For a caller choosing a default
 /// it can fall back from, rather than a refusal.
 pub(crate) fn account_can_open(
     state: &Arc<AppState>,
     agent: Agent,
     account_id: Option<&str>,
 ) -> Result<bool> {
+    if state.store.account_disabled(agent, account_id)? {
+        return Ok(false);
+    }
     let config_dir = match account_id {
         None => None,
         Some(id) => match account_of_agent(state, agent, id)? {
@@ -4942,11 +4957,12 @@ pub(crate) fn account_can_open(
 /// The account of `agent` to use when a new session leaves its account out and
 /// `auto_select_account` is on. `Some(Some(id))` is a stored account, `Some(None)` the default
 /// account, and `None` when no account has a weekly window that still has quota and resets
-/// ahead, skipping an account whose sharing change is running (a launch on it would be refused
-/// as `account_sharing_in_progress`). The soonest reset wins; a larger remainder breaks a tie,
-/// and an earlier candidate wins one that is still tied — the default account, then the stored
-/// accounts in the order they are kept. Rank from the reading held for the account's current directory. The list of
-/// readings carries no directory, so one still stored under another directory would be chosen.
+/// ahead, skipping a disabled account and an account whose sharing change is running (a launch
+/// on it would be refused as `account_sharing_in_progress`). The soonest reset wins; a larger
+/// remainder breaks a tie, and an earlier candidate wins one that is still tied — the default
+/// account, then the stored accounts in the order they are kept. Rank from the reading held for
+/// the account's current directory. The list of readings carries no directory, so one still
+/// stored under another directory would be chosen.
 pub(crate) fn preferred_weekly_account(
     state: &Arc<AppState>,
     agent: Agent,
@@ -5191,6 +5207,60 @@ fn set_default_account_name(state: &Arc<AppState>, agent: Agent, name: &str) -> 
     Ok(())
 }
 
+/// Turns an account off for new work, or back on, and broadcasts the settings when the flag
+/// changed. `None` is `agent`'s default account. A running session is not looked at: it keeps its
+/// account. Turning an account back on starts the usage window its held reading shows unstarted,
+/// when the setting that does that is on ([`account_quotas::kick_held`]).
+fn set_account_disabled(
+    state: &Arc<AppState>,
+    agent: Agent,
+    account: Option<&str>,
+    disabled: bool,
+) -> Result<()> {
+    let _writes = state.lock_account_writes();
+    let changed = match account {
+        None => state.store.set_default_account_disabled(agent, disabled)?,
+        Some(id) => {
+            if account_of_agent(state, agent, id)?.is_none() {
+                return Err(CodedError::unknown_account(id));
+            }
+            state.store.set_account_disabled(id, disabled)?
+        }
+    };
+    if changed {
+        broadcast_settings(state)?;
+        // The held readings are looked over again, as when the setting that starts quota windows
+        // is turned on, so a window the re-enabled account shows unstarted is not left waiting.
+        if !disabled {
+            account_quotas::kick_held(state);
+        }
+    }
+    Ok(())
+}
+
+/// Refuses to put a new session on an account the user turned off, going by the flag as it stands.
+/// Applies to every origin, the user's own request included; a session already on the account is
+/// never asked about.
+fn refuse_if_account_disabled(
+    state: &Arc<AppState>,
+    agent: Agent,
+    account_id: Option<&str>,
+) -> Result<()> {
+    if !state.store.account_disabled(agent, account_id)? {
+        return Ok(());
+    }
+    let account = state.store.account_display_name(agent, account_id)?;
+    Err(CodedError::raised(
+        error_code::ACCOUNT_DISABLED,
+        format!(
+            "{account} is disabled for {}. Choose another account, or turn it back on in Settings \
+             → Agent accounts.",
+            agent.label()
+        ),
+        &[("agent", agent.label()), ("account", account.as_str())],
+    ))
+}
+
 /// Refuses a name that collides within its agent, naming the account it collides with.
 fn check_account_name_unique(
     state: &Arc<AppState>,
@@ -5286,68 +5356,43 @@ pub(crate) fn broadcast_settings(state: &AppState) -> Result<()> {
     Ok(())
 }
 
-/// Where one agent's launch override is kept: the account's own column and the default account's
-/// setting. Codex's approval reviewer and Claude Code's approval mode are handled alike through it.
+/// Where one agent's launch override is kept: one setting for the agent, applied to a session of
+/// any of its accounts. Codex's approval reviewer and Claude Code's approval mode are handled
+/// alike through it.
 struct LaunchOverride<T> {
     agent: Agent,
-    of_account: fn(&Account) -> Option<T>,
-    set_account: fn(&Store, &str, Option<T>) -> Result<()>,
-    get_default: fn(&Store) -> Result<Option<T>>,
-    set_default: fn(&Store, Option<T>) -> Result<()>,
+    get: fn(&Store) -> Result<Option<T>>,
+    set: fn(&Store, Option<T>) -> Result<()>,
 }
 
 const CODEX_REVIEWER: LaunchOverride<ApprovalReviewer> = LaunchOverride {
     agent: Agent::Codex,
-    of_account: |account| account.approval_reviewer,
-    set_account: Store::set_account_approval_reviewer,
-    get_default: Store::codex_default_approval_reviewer,
-    set_default: Store::set_codex_default_approval_reviewer,
+    get: Store::codex_approval_reviewer,
+    set: Store::set_codex_approval_reviewer,
 };
 
 const CLAUDE_MODE: LaunchOverride<ClaudeApprovalMode> = LaunchOverride {
     agent: Agent::Claude,
-    of_account: |account| account.approval_mode,
-    set_account: Store::set_account_approval_mode,
-    get_default: Store::claude_default_approval_mode,
-    set_default: Store::set_claude_default_approval_mode,
+    get: Store::claude_approval_mode,
+    set: Store::set_claude_approval_mode,
 };
 
 impl<T: PartialEq + Copy> LaunchOverride<T> {
-    /// Resolves the current account override at every launch. Deleted pinned accounts keep their
-    /// original configuration rather than adopting the default account's override.
+    /// Resolves the override at every launch: the agent's setting, whichever account the session
+    /// uses, and nothing for a session of another agent.
     fn for_session(&self, state: &Arc<AppState>, session: &Session) -> Result<Option<T>> {
         if session.agent != self.agent {
             return Ok(None);
         }
-        match session.account_id.as_deref() {
-            Some(id) => Ok(state
-                .store
-                .get_account(id)?
-                .and_then(|account| (self.of_account)(&account))),
-            None if session.config_dir.is_none() => (self.get_default)(&state.store),
-            None => Ok(None),
-        }
+        (self.get)(&state.store)
     }
 
-    /// Sets the override of the agent's account `id`, or of its default account when `id` is
-    /// `None`, and broadcasts the settings unless it already holds that value.
-    fn set(&self, state: &Arc<AppState>, id: Option<&str>, value: Option<T>) -> Result<()> {
-        if let Some(id) = id {
-            checked_account_reference(state, self.agent, Some(id.to_string()))?;
-            let account = state
-                .store
-                .get_account(id)?
-                .ok_or_else(|| CodedError::unknown_account(id))?;
-            if (self.of_account)(&account) == value {
-                return Ok(());
-            }
-            (self.set_account)(&state.store, id, value)?;
-        } else {
-            if (self.get_default)(&state.store)? == value {
-                return Ok(());
-            }
-            (self.set_default)(&state.store, value)?;
+    /// Sets the agent's override and broadcasts the settings unless it already holds that value.
+    fn set(&self, state: &Arc<AppState>, value: Option<T>) -> Result<()> {
+        if (self.get)(&state.store)? == value {
+            return Ok(());
         }
+        (self.set)(&state.store, value)?;
         broadcast_settings(state)?;
         Ok(())
     }
@@ -5366,10 +5411,9 @@ fn create_account(
         agent,
         name,
         config_dir,
-        approval_reviewer: None,
-        approval_mode: None,
         share_default_config: false,
         share_default_config_incomplete: false,
+        disabled: false,
     };
     {
         // The checks and the insert are one step: another create or update cannot slip between.
@@ -6717,10 +6761,9 @@ mod tests {
                 agent: Agent::Claude,
                 name: "Claude work".to_string(),
                 config_dir: "/home/u/.claude-alt".to_string(),
-                approval_reviewer: None,
-                approval_mode: None,
                 share_default_config: false,
                 share_default_config_incomplete: false,
+                disabled: false,
             })
             .unwrap();
         let reset = now_millis() + 60_000;
@@ -6785,6 +6828,245 @@ mod tests {
         assert_eq!(code, error_code::ACCOUNT_QUOTA_EXHAUSTED);
         assert_eq!(params["account"], crate::protocol::DEFAULT_ACCOUNT_NAME);
         assert!(!params.contains_key("resets_at"));
+    }
+
+    /// A disabled account, the default one included, is refused for a new session whether the
+    /// request names it or the console inherits it, is passed over by automatic selection and by
+    /// `account_can_open`, and turning it back on undoes all of that. A session already on the
+    /// account keeps it.
+    #[tokio::test]
+    async fn a_disabled_account_is_skipped_and_refused_for_new_sessions_but_not_for_running_ones() {
+        let (state, _dir) = console_with_project_and_accounts("coordinator-account-disabled");
+        let alt_dir = state
+            .store
+            .account_dir(&Some("claude-a".to_string()))
+            .unwrap()
+            .unwrap();
+        state
+            .store
+            .insert_session(&project_session("s", Agent::Claude, SessionStatus::Working))
+            .unwrap();
+        state
+            .store
+            .set_session_account("s", Some("claude-a"), Some(&alt_dir))
+            .unwrap();
+        let request = |account: Option<Option<String>>| OpenRequest {
+            console_id: "console-1".to_string(),
+            project_id: None,
+            agent: None,
+            account,
+            task: None,
+            title: None,
+            model: None,
+            effort: None,
+            origin: Origin::User,
+            bound_to: None,
+            resume_agent_session_id: None,
+            session_id: None,
+            terminal_appearance: None,
+        };
+        let refused = |account: Option<Option<String>>| {
+            resolve_open(&state, &request(account)).err().map(|err| {
+                let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+                (coded.code, coded.params.clone())
+            })
+        };
+        assert!(refused(Some(Some("claude-a".to_string()))).is_none());
+
+        // An id that is no account of the agent cannot be turned off.
+        let err = set_account_disabled(&state, Agent::Codex, Some("claude-a"), true)
+            .expect_err("another agent's account");
+        assert_eq!(code_of(&err), error_code::UNKNOWN_ACCOUNT);
+
+        set_account_disabled(&state, Agent::Claude, Some("claude-a"), true).unwrap();
+        set_account_disabled(&state, Agent::Claude, None, true).unwrap();
+        let settings = state.store.get_settings().unwrap();
+        assert!(settings.accounts[0].disabled);
+        assert!(settings.disabled_default_accounts.contains("claude"));
+
+        for account in [Some(Some("claude-a".to_string())), Some(None)] {
+            let (code, params) = refused(account).expect("refused");
+            assert_eq!(code, error_code::ACCOUNT_DISABLED);
+            assert_eq!(params["agent"], Agent::Claude.label());
+        }
+        // Inherited from the console as well as named.
+        assert_eq!(refused(None).unwrap().0, error_code::ACCOUNT_DISABLED);
+        assert!(!account_can_open(&state, Agent::Claude, Some("claude-a")).unwrap());
+        assert!(!account_can_open(&state, Agent::Claude, None).unwrap());
+        // Another agent's default account is unaffected.
+        assert!(account_can_open(&state, Agent::Codex, None).unwrap());
+
+        // Automatic selection passes over both, even with a reading that ranks them.
+        let weekly = |account: Option<&str>| crate::protocol::AccountQuota {
+            agent: Agent::Claude,
+            account: account.map(str::to_string),
+            fetched_at: 1,
+            plan: None,
+            windows: vec![crate::protocol::QuotaWindow {
+                kind: crate::protocol::QuotaWindowKind::Weekly,
+                label: None,
+                used_percent: 10.0,
+                resets_at: Some(now_millis() + 3_600_000),
+                window_minutes: None,
+            }],
+            unavailable: None,
+        };
+        state
+            .account_quotas
+            .hold_in_dir_for_test(&weekly(Some("claude-a")), &alt_dir);
+        state.account_quotas.hold_for_test(&weekly(None));
+        assert_eq!(
+            preferred_weekly_account(&state, Agent::Claude).unwrap(),
+            None
+        );
+
+        // The running session keeps its account.
+        let running = state.store.get_session("s").unwrap().unwrap();
+        assert_eq!(running.account_id.as_deref(), Some("claude-a"));
+        assert_eq!(running.status, SessionStatus::Working);
+
+        // Turning one back on lets it be picked again; the other stays off.
+        set_account_disabled(&state, Agent::Claude, Some("claude-a"), false).unwrap();
+        assert!(refused(Some(Some("claude-a".to_string()))).is_none());
+        assert_eq!(
+            preferred_weekly_account(&state, Agent::Claude).unwrap(),
+            Some(Some("claude-a".to_string()))
+        );
+        set_account_disabled(&state, Agent::Claude, None, false).unwrap();
+        assert!(state
+            .store
+            .get_settings()
+            .unwrap()
+            .disabled_default_accounts
+            .is_empty());
+    }
+
+    /// Turning an account off or on broadcasts the settings only when the flag really changed, and
+    /// an id that is no account of the agent is refused.
+    #[tokio::test]
+    async fn turning_an_account_off_broadcasts_only_a_real_change() {
+        let (state, _dir) = console_with_project_and_accounts("coordinator-disabled-broadcast");
+        let mut events = state.subscribe();
+        let toggle = |agent, account: Option<&str>, disabled| RequestBody::SetAccountDisabled {
+            agent,
+            account: account.map(str::to_string),
+            disabled,
+        };
+        let flags = |event: Event| match event {
+            Event::SettingsUpdated { settings } => (
+                settings.accounts.iter().any(|account| account.disabled),
+                settings.disabled_default_accounts.len(),
+            ),
+            other => panic!("unexpected {other:?}"),
+        };
+
+        handle(&state, None, toggle(Agent::Claude, Some("claude-a"), true))
+            .await
+            .unwrap();
+        assert_eq!(flags(events.try_recv().unwrap()), (true, 0));
+        handle(&state, None, toggle(Agent::Claude, Some("claude-a"), true))
+            .await
+            .unwrap();
+        assert!(events.try_recv().is_err(), "a repeat changes nothing");
+
+        handle(&state, None, toggle(Agent::Claude, None, true))
+            .await
+            .unwrap();
+        assert_eq!(flags(events.try_recv().unwrap()), (true, 1));
+        handle(&state, None, toggle(Agent::Claude, None, true))
+            .await
+            .unwrap();
+        assert!(events.try_recv().is_err());
+
+        for (agent, account) in [(Agent::Claude, "nope"), (Agent::Codex, "claude-a")] {
+            let err = handle(&state, None, toggle(agent, Some(account), true))
+                .await
+                .expect_err("not an account of the agent");
+            assert_eq!(code_of(&err), error_code::UNKNOWN_ACCOUNT);
+        }
+        assert!(events.try_recv().is_err());
+        assert!(
+            state
+                .store
+                .get_account("claude-a")
+                .unwrap()
+                .unwrap()
+                .disabled
+        );
+    }
+
+    /// Turning an account back on starts the usage window its held reading shows unstarted, when
+    /// the setting for that is on; turning it off starts nothing.
+    #[tokio::test]
+    async fn turning_an_account_back_on_kicks_its_held_window() {
+        use crate::protocol::{AccountQuota, QuotaWindow, QuotaWindowKind};
+
+        let (state, _dir) = console_with_project_and_accounts("coordinator-disabled-kick");
+        let unstarted = AccountQuota {
+            agent: Agent::Claude,
+            account: Some("claude-a".to_string()),
+            fetched_at: 1,
+            plan: None,
+            windows: vec![QuotaWindow {
+                kind: QuotaWindowKind::Session,
+                label: None,
+                used_percent: 0.0,
+                resets_at: None,
+                window_minutes: Some(300),
+            }],
+            unavailable: None,
+        };
+        let dir = state
+            .store
+            .account_dir(&Some("claude-a".to_string()))
+            .unwrap()
+            .unwrap();
+        state.account_quotas.hold_in_dir_for_test(&unstarted, &dir);
+        state.store.set_auto_start_quota_windows(true).unwrap();
+        let kicked = || {
+            state
+                .account_quotas
+                .is_kicked_for_test(Agent::Claude, Some("claude-a"))
+        };
+
+        set_account_disabled(&state, Agent::Claude, Some("claude-a"), true).unwrap();
+        assert!(!kicked(), "turning it off starts nothing");
+
+        set_account_disabled(&state, Agent::Claude, Some("claude-a"), false).unwrap();
+        let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
+        while !kicked() && std::time::Instant::now() < deadline {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        assert!(kicked(), "turning it back on counts its unstarted window");
+    }
+
+    /// A switch onto a disabled account is refused before anything is recorded or stopped.
+    #[tokio::test]
+    async fn a_switch_onto_a_disabled_account_is_refused() {
+        let (state, dir) = console_with_project_and_accounts("coordinator-switch-disabled");
+        state
+            .store
+            .insert_session(&project_session(
+                "s",
+                Agent::Claude,
+                SessionStatus::Interrupted,
+            ))
+            .unwrap();
+        set_account_disabled(&state, Agent::Claude, Some("claude-a"), true).unwrap();
+
+        let err = switch_session_account(
+            &state,
+            "s",
+            Some(Some("claude-a".to_string())),
+            None,
+            shell_env(&dir),
+        )
+        .await
+        .expect_err("refused");
+        assert_eq!(code_of(&err), error_code::ACCOUNT_DISABLED);
+        let after = state.store.get_session("s").unwrap().unwrap();
+        assert_eq!(after.account_id, None);
+        assert_eq!(after.status, SessionStatus::Interrupted);
     }
 
     /// A session is opened only on an added agent, wherever the agent comes from: the request's
@@ -6945,10 +7227,9 @@ mod tests {
                     agent,
                     name: name.to_string(),
                     config_dir: dir.to_string(),
-                    approval_reviewer: None,
-                    approval_mode: None,
                     share_default_config: false,
                     share_default_config_incomplete: false,
+                    disabled: false,
                 })
                 .unwrap();
         }
@@ -7312,8 +7593,8 @@ mod tests {
     // -- accounts --------------------------------------------------------------
 
     #[tokio::test]
-    async fn account_approval_reviewers_apply_on_the_next_launch_and_survive_account_edits() {
-        let (state, _dir) = crate::test_support::app_state("account-approval-reviewer");
+    async fn the_codex_approval_reviewer_applies_to_every_codex_account_and_only_to_codex() {
+        let (state, _dir) = crate::test_support::app_state("codex-approval-reviewer");
         create_account(
             &state,
             Agent::Codex,
@@ -7329,118 +7610,63 @@ mod tests {
         handle(
             &state,
             None,
-            RequestBody::SetAccountApprovalReviewer {
-                account: None,
+            RequestBody::SetCodexApprovalReviewer {
                 reviewer: Some(ApprovalReviewer::AutoReview),
             },
         )
         .await
         .unwrap();
         assert_eq!(
+            state.store.get_settings().unwrap().codex_approval_reviewer,
+            Some(ApprovalReviewer::AutoReview)
+        );
+        // The default account, a pinned one and a legacy pinned directory with no account id all
+        // resolve the same value.
+        assert_eq!(
             CODEX_REVIEWER.for_session(&state, &session).unwrap(),
             Some(ApprovalReviewer::AutoReview)
         );
+        session.config_dir = Some("/tmp/codex-legacy".into());
         assert_eq!(
-            state
-                .store
-                .get_settings()
-                .unwrap()
-                .codex_default_approval_reviewer,
+            CODEX_REVIEWER.for_session(&state, &session).unwrap(),
             Some(ApprovalReviewer::AutoReview)
         );
-
         session.account_id = Some(account.id.clone());
         session.config_dir = Some(account.config_dir.clone());
-        assert_eq!(CODEX_REVIEWER.for_session(&state, &session).unwrap(), None);
+        assert_eq!(
+            CODEX_REVIEWER.for_session(&state, &session).unwrap(),
+            Some(ApprovalReviewer::AutoReview)
+        );
+        // Setting the same value again broadcasts nothing.
+        let mut events = state.subscribe();
         handle(
             &state,
             None,
-            RequestBody::SetAccountApprovalReviewer {
-                account: Some(account.id.clone()),
-                reviewer: Some(ApprovalReviewer::User),
+            RequestBody::SetCodexApprovalReviewer {
+                reviewer: Some(ApprovalReviewer::AutoReview),
             },
         )
         .await
         .unwrap();
-        assert_eq!(
-            CODEX_REVIEWER.for_session(&state, &session).unwrap(),
-            Some(ApprovalReviewer::User)
-        );
-        update_account(
-            &state,
-            &account.id,
-            Some("Renamed".into()),
-            Some("/tmp/codex-renamed".into()),
-        )
-        .unwrap();
-        assert_eq!(
-            CODEX_REVIEWER.for_session(&state, &session).unwrap(),
-            Some(ApprovalReviewer::User)
-        );
-        assert_eq!(session.config_dir.as_deref(), Some("/tmp/codex-work"));
-
-        handle(
-            &state,
-            None,
-            RequestBody::SetAccountApprovalReviewer {
-                account: Some(account.id.clone()),
-                reviewer: None,
-            },
-        )
-        .await
-        .unwrap();
-        assert_eq!(CODEX_REVIEWER.for_session(&state, &session).unwrap(), None);
-        CODEX_REVIEWER
-            .set(
-                &state,
-                Some(&account.id),
-                Some(ApprovalReviewer::AutoReview),
-            )
-            .unwrap();
-        state.store.delete_account(&account.id).unwrap();
-        assert_eq!(CODEX_REVIEWER.for_session(&state, &session).unwrap(), None);
-        // Legacy pinned sessions without an account id also keep their own configuration.
-        session.account_id = None;
-        assert_eq!(CODEX_REVIEWER.for_session(&state, &session).unwrap(), None);
-        session.config_dir = None;
+        assert!(events.try_recv().is_err());
+        // A session of another agent reads nothing.
         session.agent = Agent::Claude;
         assert_eq!(CODEX_REVIEWER.for_session(&state, &session).unwrap(), None);
 
-        create_account(
+        handle(
             &state,
-            Agent::Claude,
-            "Other".into(),
-            "/tmp/claude-other".into(),
+            None,
+            RequestBody::SetCodexApprovalReviewer { reviewer: None },
         )
+        .await
         .unwrap();
-        let other = only_account(&state);
-        for id in [&other.id, "missing"] {
-            let err = handle(
-                &state,
-                None,
-                RequestBody::SetAccountApprovalReviewer {
-                    account: Some(id.to_string()),
-                    reviewer: Some(ApprovalReviewer::AutoReview),
-                },
-            )
-            .await
-            .unwrap_err();
-            assert_eq!(error_parts(&err).0, error_code::UNKNOWN_ACCOUNT);
-        }
-        assert_eq!(
-            state
-                .store
-                .get_account(&other.id)
-                .unwrap()
-                .unwrap()
-                .approval_reviewer,
-            None
-        );
+        session.agent = Agent::Codex;
+        assert_eq!(CODEX_REVIEWER.for_session(&state, &session).unwrap(), None);
     }
 
     #[tokio::test]
-    async fn claude_account_approval_modes_apply_on_the_next_launch_and_are_claude_only() {
-        let (state, _dir) = crate::test_support::app_state("account-approval-mode");
+    async fn the_claude_approval_mode_applies_to_every_claude_account_and_only_to_claude() {
+        let (state, _dir) = crate::test_support::app_state("claude-approval-mode");
         create_account(
             &state,
             Agent::Claude,
@@ -7456,97 +7682,43 @@ mod tests {
         handle(
             &state,
             None,
-            RequestBody::SetAccountApprovalMode {
-                account: None,
-                mode: Some(ClaudeApprovalMode::Auto),
+            RequestBody::SetClaudeApprovalMode {
+                mode: Some(ClaudeApprovalMode::Manual),
             },
         )
         .await
         .unwrap();
         assert_eq!(
-            CLAUDE_MODE.for_session(&state, &session).unwrap(),
-            Some(ClaudeApprovalMode::Auto)
+            state.store.get_settings().unwrap().claude_approval_mode,
+            Some(ClaudeApprovalMode::Manual)
         );
         assert_eq!(
-            state
-                .store
-                .get_settings()
-                .unwrap()
-                .claude_default_approval_mode,
-            Some(ClaudeApprovalMode::Auto)
+            CLAUDE_MODE.for_session(&state, &session).unwrap(),
+            Some(ClaudeApprovalMode::Manual)
         );
-
-        // A pinned account is independent of the default account's choice.
+        session.config_dir = Some("/tmp/claude-legacy".into());
+        assert_eq!(
+            CLAUDE_MODE.for_session(&state, &session).unwrap(),
+            Some(ClaudeApprovalMode::Manual)
+        );
         session.account_id = Some(account.id.clone());
         session.config_dir = Some(account.config_dir.clone());
-        assert_eq!(CLAUDE_MODE.for_session(&state, &session).unwrap(), None);
-        handle(
-            &state,
-            None,
-            RequestBody::SetAccountApprovalMode {
-                account: Some(account.id.clone()),
-                mode: Some(ClaudeApprovalMode::Bypass),
-            },
-        )
-        .await
-        .unwrap();
         assert_eq!(
             CLAUDE_MODE.for_session(&state, &session).unwrap(),
-            Some(ClaudeApprovalMode::Bypass)
+            Some(ClaudeApprovalMode::Manual)
         );
+        session.agent = Agent::Codex;
+        assert_eq!(CLAUDE_MODE.for_session(&state, &session).unwrap(), None);
+
         handle(
             &state,
             None,
-            RequestBody::SetAccountApprovalMode {
-                account: Some(account.id.clone()),
-                mode: None,
-            },
+            RequestBody::SetClaudeApprovalMode { mode: None },
         )
         .await
         .unwrap();
-        assert_eq!(CLAUDE_MODE.for_session(&state, &session).unwrap(), None);
-
-        // Only a Claude Code session reads it, and a deleted account falls back to nothing.
-        CLAUDE_MODE
-            .set(&state, Some(&account.id), Some(ClaudeApprovalMode::Manual))
-            .unwrap();
-        session.agent = Agent::Codex;
-        assert_eq!(CLAUDE_MODE.for_session(&state, &session).unwrap(), None);
         session.agent = Agent::Claude;
-        state.store.delete_account(&account.id).unwrap();
         assert_eq!(CLAUDE_MODE.for_session(&state, &session).unwrap(), None);
-
-        // A Codex account or an unknown one is refused.
-        create_account(
-            &state,
-            Agent::Codex,
-            "Other".into(),
-            "/tmp/codex-other".into(),
-        )
-        .unwrap();
-        let other = only_account(&state);
-        for id in [&other.id, "missing"] {
-            let err = handle(
-                &state,
-                None,
-                RequestBody::SetAccountApprovalMode {
-                    account: Some(id.to_string()),
-                    mode: Some(ClaudeApprovalMode::Auto),
-                },
-            )
-            .await
-            .unwrap_err();
-            assert_eq!(error_parts(&err).0, error_code::UNKNOWN_ACCOUNT);
-        }
-        assert_eq!(
-            state
-                .store
-                .get_account(&other.id)
-                .unwrap()
-                .unwrap()
-                .approval_mode,
-            None
-        );
     }
 
     fn create_account_request(agent: Agent, name: &str, config_dir: &str) -> RequestBody {
@@ -9508,10 +9680,9 @@ mod tests {
                     agent,
                     name: id.to_string(),
                     config_dir: format!("/home/u/.{id}"),
-                    approval_reviewer: None,
-                    approval_mode: None,
                     share_default_config: false,
                     share_default_config_incomplete: false,
+                    disabled: false,
                 })
                 .unwrap();
         }
@@ -9660,10 +9831,9 @@ mod tests {
                 agent: Agent::Codex,
                 name: "Codex".to_string(),
                 config_dir: "/home/u/.codex-alt".to_string(),
-                approval_reviewer: None,
-                approval_mode: None,
                 share_default_config: false,
                 share_default_config_incomplete: false,
+                disabled: false,
             })
             .unwrap();
         let repo = dir.join("repo");
@@ -9917,10 +10087,9 @@ mod tests {
             agent,
             name: id.to_string(),
             config_dir: dir.to_string_lossy().into_owned(),
-            approval_reviewer: None,
-            approval_mode: None,
             share_default_config: false,
             share_default_config_incomplete: false,
+            disabled: false,
         };
         let (work, other) = (dir.join("work"), dir.join("other"));
         let accounts = [
@@ -10367,10 +10536,9 @@ mod tests {
                 agent: Agent::Codex,
                 name: "codex-b".to_string(),
                 config_dir: broken.to_string_lossy().into_owned(),
-                approval_reviewer: None,
-                approval_mode: None,
                 share_default_config: false,
                 share_default_config_incomplete: false,
+                disabled: false,
             })
             .unwrap();
         let id = "019a0000-0000-7000-8000-000000000001";

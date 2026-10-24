@@ -846,53 +846,26 @@ describe("the fixture daemon's settings and rail removals", () => {
   });
 });
 
-describe("the fixture daemon's account approval modes", () => {
-  const accounts = [
-    { id: "codex", agent: "codex" as const, name: "Build", config_dir: "/Users/dev/.codex-build" },
-    { id: "claude", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" },
-  ];
-  const scenario = { id: "account-approval", group: "Settings" as const, category: "normal" as const, title: "", state: snapshotState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts } }) };
+describe("the fixture daemon's permission approval", () => {
+  const scenario = { id: "agent-approval", group: "Settings" as const, category: "normal" as const, title: "", state: snapshotState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts: [] } }) };
 
-  it("saves and clears default and custom modes independently without changing other settings", async () => {
+  it("saves and clears Codex's reviewer and Claude Code's mode, one for the agent, without changing other settings", async () => {
     const daemon = createFixtureDaemon(scenario);
-    await daemon.request({ type: "set_account_approval_reviewer", account: null, reviewer: "auto_review" });
-    await daemon.request({ type: "set_account_approval_reviewer", account: "codex", reviewer: "user" });
-    expect(daemon.store.getState().settings).toEqual({ ...scenario.state.settings, codex_default_approval_reviewer: "auto_review", accounts: [{ ...accounts[0], approval_reviewer: "user" }, accounts[1]] });
-    await daemon.request({ type: "set_account_approval_reviewer", account: null, reviewer: null });
-    await daemon.request({ type: "set_account_approval_reviewer", account: "codex", reviewer: null });
-    expect(daemon.store.getState().settings.codex_default_approval_reviewer).toBeNull();
-    expect(daemon.store.getState().settings.accounts[0]?.approval_reviewer).toBeNull();
-    for (const account of ["missing", "claude"]) {
-      await expect(daemon.request({ type: "set_account_approval_reviewer", account, reviewer: "auto_review" })).rejects.toMatchObject({ code: "unknown_account", params: { account } });
-    }
-  });
-
-  it("saves and clears Claude Code's default and custom modes, refusing an account of another agent", async () => {
-    const daemon = createFixtureDaemon(scenario);
-    await daemon.request({ type: "set_account_approval_mode", account: null, mode: "auto" });
-    await daemon.request({ type: "set_account_approval_mode", account: "claude", mode: "bypass" });
-    expect(daemon.store.getState().settings).toEqual({ ...scenario.state.settings, claude_default_approval_mode: "auto", accounts: [accounts[0], { ...accounts[1], approval_mode: "bypass" }] });
-    await daemon.request({ type: "set_account_approval_mode", account: null, mode: null });
-    await daemon.request({ type: "set_account_approval_mode", account: "claude", mode: null });
-    expect(daemon.store.getState().settings.claude_default_approval_mode).toBeNull();
-    expect(daemon.store.getState().settings.accounts[1]?.approval_mode).toBeNull();
-    for (const account of ["missing", "codex"]) {
-      await expect(daemon.request({ type: "set_account_approval_mode", account, mode: "manual" })).rejects.toMatchObject({ code: "unknown_account", params: { account } });
-    }
+    await daemon.request({ type: "set_codex_approval_reviewer", reviewer: "auto_review" });
+    await daemon.request({ type: "set_claude_approval_mode", mode: "bypass" });
+    expect(daemon.store.getState().settings).toEqual({ ...scenario.state.settings, codex_approval_reviewer: "auto_review", claude_approval_mode: "bypass" });
+    await daemon.request({ type: "set_codex_approval_reviewer", reviewer: null });
+    await daemon.request({ type: "set_claude_approval_mode", mode: null });
+    expect(daemon.store.getState().settings).toEqual({ ...scenario.state.settings, codex_approval_reviewer: null, claude_approval_mode: null });
   });
 
   it("retains every selection when saving fails", async () => {
     const error = { code: "store_io_failed", params: { detail: "Permission denied" }, message: "Permission denied" };
     const daemon = createFixtureDaemon({ ...scenario, accountApprovalError: error });
     const before = daemon.store.getState().settings;
-    for (const account of [null, "codex"]) {
-      await expect(daemon.request({ type: "set_account_approval_reviewer", account, reviewer: "auto_review" })).rejects.toMatchObject(error);
-      expect(daemon.store.getState().settings).toEqual(before);
-    }
-    for (const account of [null, "claude"]) {
-      await expect(daemon.request({ type: "set_account_approval_mode", account, mode: "bypass" })).rejects.toMatchObject(error);
-      expect(daemon.store.getState().settings).toEqual(before);
-    }
+    await expect(daemon.request({ type: "set_codex_approval_reviewer", reviewer: "auto_review" })).rejects.toMatchObject(error);
+    await expect(daemon.request({ type: "set_claude_approval_mode", mode: "bypass" })).rejects.toMatchObject(error);
+    expect(daemon.store.getState().settings).toEqual(before);
   });
 });
 
@@ -1380,6 +1353,57 @@ describe("the fixture daemon's quota gate", () => {
     await expect(daemon().request({ type: "switch_session_account", session: "s", account: "a-free" })).resolves.toEqual({ type: "ack" });
     const grok = [quotaOf("grok", null, "SuperGrok", [quotaWindow("credit_period", 100, 60)])];
     await expect(daemon([], grok).request({ type: "hand_off_session", session: "s", agent: "grok" })).rejects.toMatchObject({ code: "account_quota_exhausted", params: { window: "Weekly", window_kind: "credit_period", window_minutes: "10080" } });
+  });
+});
+
+describe("the fixture daemon's disabled accounts", () => {
+  const accounts = [
+    { id: "a-off", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work", disabled: true },
+    { id: "a-on", agent: "claude" as const, name: "Personal", config_dir: "/Users/dev/.claude-personal" },
+    { id: "a-codex", agent: "codex" as const, name: "Team", config_dir: "/Users/dev/.codex-team" },
+  ];
+  const daemon = (disabledDefaults?: Agent[]) => createFixtureDaemon({
+    id: "account-disabled", group: "Settings", category: "normal", title: "",
+    state: snapshotState({
+      consoles: [consoleOf("c", "Main")],
+      projects: [projectOf("p", "c", "Website")],
+      sessions: [sessionOf("s", "c", "p", "Work", "idle", { account_id: "a-off", config_dir: "/Users/dev/.claude-work" })],
+      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", accounts, ...(disabledDefaults && { disabled_default_accounts: disabledDefaults }) },
+    }),
+  });
+
+  it("refuses a session on an account that is off, and on the default account when it is, naming the account", async () => {
+    await expect(daemon().request({ type: "open_session", console_id: "c", project_id: "p", account: "a-off" })).rejects.toMatchObject({
+      code: "account_disabled",
+      params: { agent: "Claude Code", account: "Work" },
+    });
+    await expect(daemon().request({ type: "open_session", console_id: "c", project_id: "p", account: null })).resolves.toMatchObject({ type: "session_opened" });
+    await expect(daemon(["claude"]).request({ type: "open_session", console_id: "c", project_id: "p", account: null })).rejects.toMatchObject({
+      code: "account_disabled",
+      params: { agent: "Claude Code", account: "Default" },
+    });
+    await expect(daemon().request({ type: "open_session", console_id: "c", project_id: "p", account: "a-on" })).resolves.toMatchObject({ type: "session_opened" });
+  });
+
+  it("refuses a switch to an account that is off and a handoff onto one, and lets the running session's own account be left", async () => {
+    await expect(daemon(["codex"]).request({ type: "hand_off_session", session: "s", agent: "codex", account: null })).rejects.toMatchObject({ code: "account_disabled", params: { agent: "Codex" } });
+    await expect(daemon().request({ type: "switch_session_account", session: "s", account: "a-on" })).resolves.toEqual({ type: "ack" });
+    await expect(daemon(["claude"]).request({ type: "switch_session_account", session: "s", account: null })).rejects.toMatchObject({ code: "account_disabled" });
+  });
+
+  it("turns an account, or an agent's default account, off and on, and refuses an id that is no account of the agent", async () => {
+    const fixture = daemon();
+    await fixture.request({ type: "set_account_disabled", agent: "claude", account: "a-on", disabled: true });
+    await fixture.request({ type: "set_account_disabled", agent: "claude", account: "a-off", disabled: false });
+    await fixture.request({ type: "set_account_disabled", agent: "claude", account: null, disabled: true });
+    await fixture.request({ type: "set_account_disabled", agent: "codex", account: null, disabled: true });
+    await fixture.request({ type: "set_account_disabled", agent: "claude", account: null, disabled: true });
+    const { settings } = fixture.store.getState();
+    expect(settings.accounts.map((account) => account.disabled === true)).toEqual([false, true, false]);
+    expect(settings.disabled_default_accounts).toEqual(["claude", "codex"]);
+    await fixture.request({ type: "set_account_disabled", agent: "claude", account: null, disabled: false });
+    expect(fixture.store.getState().settings.disabled_default_accounts).toEqual(["codex"]);
+    await expect(fixture.request({ type: "set_account_disabled", agent: "claude", account: "a-codex", disabled: true })).rejects.toMatchObject({ code: "unknown_account" });
   });
 });
 

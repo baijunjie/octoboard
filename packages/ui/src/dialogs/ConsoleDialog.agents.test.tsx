@@ -111,7 +111,7 @@ it("keeps the console dialog open and unsaved while an account is added in the S
   });
   const request = render(consoleOf("c-1", "Main"));
   await clickButton((b) => b.getAttribute("aria-label") === "Manage accounts");
-  await clickButton("Add account");
+  await clickButton((b) => b.getAttribute("aria-label") === "Add account");
   const fill = (label: string, value: string) => {
     const input = Array.from(document.body.querySelectorAll<HTMLInputElement>("input")).filter((el) => el.labels?.[0]?.textContent === label).at(-1)!;
     act(() => {

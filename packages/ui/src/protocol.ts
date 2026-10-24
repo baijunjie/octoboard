@@ -182,11 +182,12 @@ export type ConsoleProjectEffortField =
 export type ProjectModelField = "claude_session_model" | "codex_session_model" | "grok_session_model";
 export type ProjectEffortField = "claude_session_effort" | "codex_session_effort" | "grok_session_effort";
 
-/** How Codex reviews permission requests when an account overrides its own configuration. */
+/** How Codex reviews permission requests, for every Codex account, when the user overrides the accounts' own
+ * configuration. */
 export type ApprovalReviewer = "user" | "auto_review";
 
-/** How Claude Code is asked to handle permission requests when an account overrides its own configuration:
- * `auto` lets its classifier decide, `manual` asks the user, `bypass` approves everything. */
+/** How Claude Code is asked to handle permission requests, for every Claude Code account, when the user overrides the
+ * accounts' own configuration: `auto` lets its classifier decide, `manual` asks the user, `bypass` approves everything. */
 export type ClaudeApprovalMode = "auto" | "manual" | "bypass";
 
 /** A named config directory of one agent, kept once for the whole application. The default
@@ -200,10 +201,6 @@ export interface Account {
   name: string;
   /** Absolute, lexically normalised. Existence is not checked when this is set. */
   config_dir: string;
-  /** Codex only; absent or null follows the account configuration. */
-  approval_reviewer?: ApprovalReviewer | null;
-  /** Claude Code only; absent or null follows the account configuration. */
-  approval_mode?: ClaudeApprovalMode | null;
   /** Whether the account shares the agent's default configuration (`set_account_sharing`). */
   share_default_config?: boolean;
   /** The last change toward `share_default_config` did not finish (the daemon always sends it): the account's
@@ -211,6 +208,9 @@ export interface Account {
    * retry) or for the opposite one. The `account_sharing` failure, when the daemon still holds one, says
    * what was left. */
   share_default_config_incomplete?: boolean;
+  /** The user turned the account off for new work (`set_account_disabled`): automatic selection skips it and no
+   * session can be opened on, handed off to or switched to it. Sessions already on it keep running. Absent is on. */
+  disabled?: boolean;
 }
 
 /** What a failed sharing change left one entry as. */
@@ -624,13 +624,16 @@ export interface Settings {
    * yet decided the list (it waits for the agents' availability, and a failed shell snapshot
    * leaves it so for the run); an empty array is a user who removed them all. */
   added_agents: Agent[] | null;
-  /** The Codex default account; absent or null follows its own configuration. */
-  codex_default_approval_reviewer?: ApprovalReviewer | null;
-  /** The Claude Code default account; absent or null follows its own configuration. */
-  claude_default_approval_mode?: ClaudeApprovalMode | null;
+  /** Every Codex account's approval reviewer; absent or null follows each account's own configuration. */
+  codex_approval_reviewer?: ApprovalReviewer | null;
+  /** Every Claude Code account's approval mode; absent or null follows each account's own configuration. */
+  claude_approval_mode?: ClaudeApprovalMode | null;
   /** The name the user gave an agent's default account, by agent; an agent without an entry shows the client's own
    * word for it. Absent from a daemon that predates it. */
   default_account_names?: Partial<Record<Agent, string>>;
+  /** The agents whose default account is turned off for new work, as `Account.disabled` does for an account row.
+   * Absent from a daemon that predates it. */
+  disabled_default_accounts?: Agent[];
 }
 
 /** An account reference of a configuration document: the account's name alone, since the agent is
@@ -1396,8 +1399,11 @@ export type RequestBody =
    * client's own word. Refused with `account_name_taken` when another account of the agent has the
    * name. */
   | { type: "set_default_account_name"; agent: Agent; name: string }
-  | { type: "set_account_approval_reviewer"; account: string | null; reviewer: ApprovalReviewer | null }
-  | { type: "set_account_approval_mode"; account: string | null; mode: ClaudeApprovalMode | null }
+  | { type: "set_codex_approval_reviewer"; reviewer: ApprovalReviewer | null }
+  | { type: "set_claude_approval_mode"; mode: ClaudeApprovalMode | null }
+  /** Turns an account (`null`, the agent's default account) off for new work, or back on. Running sessions are not
+   * affected; a refused start on it is `account_disabled`. */
+  | { type: "set_account_disabled"; agent: Agent; account: string | null; disabled: boolean }
   | { type: "set_account_sharing"; account: string | null; share: boolean }
   /** The browse requests (see "Browsing a project" in `apps/daemon/PROTOCOL.md`), answered with
    * `project_source`, `project_dir`, `project_file_matches`, `project_file`, `project_changes`, `project_change`,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { avoidExhaustedAccount, choiceChangingSharing, choiceExhaustion, choiceGroups, choiceKey, consoleAccount, currentChoice, expiringWeekly, incompleteAccount, inheritedAccount, preferExpiringWeekly, projectAccount, settledInitialChoice, switchEntries, type QuotaReadings } from "./accountChoices";
+import { avoidUnavailableAccount, choiceChangingSharing, choiceDisabled, choiceExhaustion, choiceGroups, choiceKey, consoleAccount, currentChoice, expiringWeekly, incompleteAccount, inheritedAccount, preferExpiringWeekly, projectAccount, settledInitialChoice, switchEntries, type QuotaReadings } from "./accountChoices";
 import { consoleOf, projectOf, sessionOf } from "./gallery/fixtures/builders";
 import { format } from "./i18n/catalog";
 import type { Translate } from "./i18n/catalog";
@@ -66,8 +66,8 @@ describe("an account whose sharing change runs", () => {
   const owner = consoleOf("c-1", "Main", { claude_account_id: "w" });
 
   it("is avoided like a used-up one: the choice moves to the first other account of the agent", () => {
-    expect(avoidExhaustedAccount({ agent: "claude", account: "w" }, groups)).toEqual({ agent: "claude", account: null });
-    expect(avoidExhaustedAccount({ agent: "claude", account: null }, groups)).toEqual({ agent: "claude", account: null });
+    expect(avoidUnavailableAccount({ agent: "claude", account: "w" }, groups)).toEqual({ agent: "claude", account: null });
+    expect(avoidUnavailableAccount({ agent: "claude", account: null }, groups)).toEqual({ agent: "claude", account: null });
   });
 
   it("stays the choice, flagged, when it is the agent's only account", () => {
@@ -82,6 +82,48 @@ describe("an account whose sharing change runs", () => {
     expect(settled.changingSharing).toBe(false);
     const entries = groups[0]!.entries;
     expect(preferExpiringWeekly(entries, 0)).toBeUndefined();
+  });
+});
+
+describe("a disabled account", () => {
+  const stored = [{ ...account("w", "claude", "Work"), disabled: true }, account("v", "claude", "Other")];
+  const groups = choiceGroups(stored, availability({}), null, () => "Default", undefined, undefined, ["codex"]);
+  const owner = consoleOf("c-1", "Main", { claude_account_id: "w" });
+
+  it("is marked on its entry, the default account of an agent by that agent", () => {
+    expect(groups.map((group) => [group.agent, group.entries.map((entry) => entry.disabled)])).toEqual([
+      ["claude", [false, true, false]],
+      ["codex", [true]],
+      ["grok", [false]],
+    ]);
+    expect(choiceDisabled({ agent: "claude", account: "w" }, groups)).toBe(true);
+    expect(choiceDisabled({ agent: "claude", account: "v" }, groups)).toBe(false);
+    expect(choiceDisabled({ agent: "codex", account: null }, groups)).toBe(true);
+  });
+
+  it("marks nothing without the disabled state", () => {
+    expect(choiceGroups(stored.map((item) => ({ ...item, disabled: undefined })), availability({}), null, () => "Default")[0]!.entries.every((entry) => !entry.disabled)).toBe(true);
+  });
+
+  it("is avoided like a used-up one: the choice moves to the first other account of the agent", () => {
+    expect(avoidUnavailableAccount({ agent: "claude", account: "w" }, groups)).toEqual({ agent: "claude", account: null });
+    expect(settledInitialChoice(owner, undefined, stored, availability({}), null, groups).choice).toEqual({ agent: "claude", account: null });
+  });
+
+  it("stays the choice, flagged, when every account of the agent is disabled", () => {
+    expect(avoidUnavailableAccount({ agent: "codex", account: null }, groups)).toEqual({ agent: "codex", account: null });
+  });
+
+  it("is never preferred by the weekly quota, even when it resets soonest", () => {
+    const quotas = [reading("w", [windowOf({ used_percent: 10, resets_at: NOW + HOUR })]), reading("v", [windowOf({ used_percent: 10, resets_at: NOW + DAY })])];
+    const ranked = choiceGroups(stored, availability({}), null, () => "Default", { quotas, now: NOW })[0]!.entries;
+    expect(preferExpiringWeekly(ranked, NOW)?.account).toBe("v");
+    expect(preferExpiringWeekly(ranked.map((entry) => ({ ...entry, disabled: entry.account === "v" ? true : entry.disabled })), NOW)).toBeUndefined();
+  });
+
+  it("is flagged on the Switch account entries, a disabled default account too, each other account still counted", () => {
+    const on = sessionOf("s", "c-1", "p-1", "Title", "idle", { agent: "claude", account_id: "v", config_dir: "/home/v" });
+    expect(switchEntries(on, stored, t, undefined, undefined, undefined, ["claude"]).map((entry) => [entry.account, entry.disabled])).toEqual([[null, true], ["w", true], ["v", false]]);
   });
 });
 
@@ -159,7 +201,7 @@ describe("an account whose quota is used up", () => {
   });
 
   it("moves the opening choice to the first other account of the agent, the default account first", () => {
-    expect(open([usedUp("claude", "w")])).toEqual({ choice: { agent: "claude", account: null }, exhaustedBy: undefined, changingSharing: false });
+    expect(open([usedUp("claude", "w")])).toEqual({ choice: { agent: "claude", account: null }, exhaustedBy: undefined, changingSharing: false, disabled: false });
     expect(open([usedUp("claude", "w"), usedUp("claude", null)]).choice).toEqual({ agent: "claude", account: "w2" });
   });
 
@@ -171,12 +213,12 @@ describe("an account whose quota is used up", () => {
 
   it("never moves to another agent", () => {
     const groups = choiceGroups(stored, availability({}), null, () => "Default", { quotas: [usedUp("claude", "w"), usedUp("claude", null), usedUp("claude", "w2")], now: NOW });
-    expect(avoidExhaustedAccount({ agent: "claude", account: "w" }, groups).agent).toBe("claude");
+    expect(avoidUnavailableAccount({ agent: "claude", account: "w" }, groups).agent).toBe("claude");
   });
 
   it("does not move a choice whose agent may not be picked", () => {
     const groups = choiceGroups(stored, availability({ claude: "unavailable" }), null, () => "Default", { quotas: [usedUp("claude", "w")], now: NOW });
-    expect(avoidExhaustedAccount({ agent: "claude", account: "w" }, groups)).toEqual({ agent: "claude", account: "w" });
+    expect(avoidUnavailableAccount({ agent: "claude", account: "w" }, groups)).toEqual({ agent: "claude", account: "w" });
   });
 
   it("is not avoided once the window has reset", () => {

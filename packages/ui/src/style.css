@@ -350,32 +350,31 @@ html {
   background-color: var(--session-colour-dark);
 }
 
-/* The track of the compact `AccountUsageBar`, a step darker than `--default`: the bar sits on a select
-   trigger filled with `--default` itself, where a track of that colour would be invisible. Measured
-   fill against track, light / dark, on the trigger: Claude 3.07 / 5.87, Codex 3.16 / 6.25, Grok
-   12.10 / 15.72; in the popover: Claude 3.25 / 6.54, Codex 3.35 / 6.94, Grok 12.86 / 17.45. Claude's
-   fill against the trigger is 3.55:1 in light and 4.46:1 in dark, and the track against the trigger
-   1.15:1 and 1.31:1 (the track is darker still in dark). */
+/* The track of the compact `AccountUsageBar`, the same `--default` as the rail's and the details' meters. The table cell
+   and the details dialog draw it bare; a popover, a menu and a select trigger add a hairline edge of the foreground
+   (`--edge` / `--outer-edge`, the bar's `edge` prop), since the track there is hardly off its surface. Measured in the
+   gallery, track against the surface and fill (Codex's blue) against the track, light / dark: the table cell 1.27 and
+   3.64 / 2.17 and 3.16; the details dialog 1.27 and 3.55 / 2.17 and 2.98; a popover or menu 1.19 and 3.78 / 1.77 and
+   3.66; a trigger 1.00 and 3.55 / 1.50 and 2.98. The edge itself against the surface under it, main bar's (25% of the foreground) / thin bar's (30%),
+   light then dark: picker popover 1.69 / 1.90 and 2.16 / 2.50; Switch account menu 1.72 / 1.95 and 2.24 / 2.67. They stay
+   under 3:1: the edge is a hint at a track that is already there, not a control boundary. In dark a popover's own
+   surface is nearly `--default`, so the dark track is a step lighter. The fill-to-track values under 3:1 (dark
+   details and trigger, 2.98) are kept by the user's decision. */
 .quota-bar-track {
-  background-color: color-mix(in oklab, var(--default) 95%, black);
+  background-color: var(--default);
 }
 
-.dark .quota-bar-track,
-[data-theme="dark"] .quota-bar-track {
-  background-color: color-mix(in oklab, var(--default) 75%, black);
-}
-
-/* The main bar's track also has a hairline edge of the foreground: in dark a popover's own surface is as
-   dark as the track, which would leave an account with no reading as no mark at all. The thin bar is
-   only 2px tall, so an inset edge would be all of it and the fill would cover it; its edge is drawn
-   outside the track instead, where it leaves the fill's contrast against the track as measured above, and
-   a step stronger (30%), since a 1px ring around a 2px bar reads fainter than the same ring inside a 6px one. */
 .quota-bar-track--edge {
   box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 25%, transparent);
 }
 
 .quota-bar-track--outer-edge {
   box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 30%, transparent);
+}
+
+.dark .quota-bar-track,
+[data-theme="dark"] .quota-bar-track {
+  background-color: color-mix(in oklab, var(--default) 85%, var(--foreground));
 }
 
 /* The session context mark's ring (`ContextRing`) and its card's meter, in the tone of how full the

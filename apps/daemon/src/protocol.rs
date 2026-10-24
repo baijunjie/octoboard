@@ -407,15 +407,9 @@ pub struct Account {
     /// directory they are about to create should not be stopped — this may therefore name a
     /// directory that does not exist yet.
     pub config_dir: String,
-    /// Codex-only launch override; never written into the agent's own configuration.
-    #[serde(default)]
-    pub approval_reviewer: Option<ApprovalReviewer>,
-    /// Claude Code-only launch override; never written into the agent's own configuration.
-    #[serde(default)]
-    pub approval_mode: Option<ClaudeApprovalMode>,
     /// Whether the account shares what its directory can share with the agent's default account's
     /// directory, by linking each item of `crate::shared_items` into it. The user's choice, set by
-    /// `set_account_sharing`; kept local like the launch overrides above.
+    /// `set_account_sharing`; kept local.
     #[serde(default)]
     pub share_default_config: bool,
     /// The last change toward `share_default_config` did not finish: it failed part-way, or the
@@ -424,6 +418,12 @@ pub struct Account {
     /// by itself.
     #[serde(default)]
     pub share_default_config_incomplete: bool,
+    /// The user turned the account off for new work: automatic account selection skips it and no
+    /// session can be opened on, handed off to or switched to it (`account_disabled`). Sessions
+    /// already on it are untouched, and no usage window is started on it automatically. Set by
+    /// `set_account_disabled`, until the user turns it back on.
+    #[serde(default)]
+    pub disabled: bool,
 }
 
 /// Whether an agent's binary resolves on the user's login shell `PATH`, the only test an agent is
@@ -897,13 +897,18 @@ pub struct Settings {
     /// decided the list (it waits for the agents' availability), which is not the same as the
     /// empty list of a user who removed them all.
     pub added_agents: Option<Vec<Agent>>,
-    /// Launch override for Codex sessions that use the default account.
-    pub codex_default_approval_reviewer: Option<ApprovalReviewer>,
-    /// Launch override for Claude Code sessions that use the default account.
-    pub claude_default_approval_mode: Option<ClaudeApprovalMode>,
+    /// Launch override for every Codex session, whichever account it uses; never written into
+    /// Codex's own configuration. Null follows each account's configuration. Kept local.
+    pub codex_approval_reviewer: Option<ApprovalReviewer>,
+    /// Launch override for every Claude Code session, whichever account it uses; never written
+    /// into Claude Code's own configuration. Null follows each account's configuration. Kept local.
+    pub claude_approval_mode: Option<ClaudeApprovalMode>,
     /// The name the user gave an agent's default account, by agent; an agent without an entry shows
     /// the client's own word for it. Not an account row and not carried by an export.
     pub default_account_names: std::collections::BTreeMap<String, String>,
+    /// The agents, by wire name, whose default account the user turned off for new work, as
+    /// `Account::disabled` does for an account row. Not carried by an export.
+    pub disabled_default_accounts: std::collections::BTreeSet<String>,
 }
 
 impl Default for Settings {
@@ -920,9 +925,10 @@ impl Default for Settings {
             default_clone_dir: String::new(),
             accounts: Vec::new(),
             added_agents: None,
-            codex_default_approval_reviewer: None,
-            claude_default_approval_mode: None,
+            codex_approval_reviewer: None,
+            claude_approval_mode: None,
             default_account_names: Default::default(),
+            disabled_default_accounts: Default::default(),
         }
     }
 }
@@ -2018,16 +2024,22 @@ pub enum RequestBody {
         agent: Agent,
         name: String,
     },
-    /// Sets a Codex account's approval reviewer. A null account names the default account; a null
-    /// reviewer follows its configuration. Takes effect on the next launch or resume.
-    SetAccountApprovalReviewer {
+    /// Turns an account off for new work, or back on. A null account names `agent`'s default
+    /// account. Broadcasts `settings_updated` when the stored flag changed; sessions already on the
+    /// account are not affected.
+    SetAccountDisabled {
+        agent: Agent,
         account: Option<String>,
+        disabled: bool,
+    },
+    /// Sets the approval reviewer of every Codex account. A null reviewer follows each account's
+    /// configuration. Takes effect on the next launch or resume.
+    SetCodexApprovalReviewer {
         reviewer: Option<ApprovalReviewer>,
     },
-    /// Sets a Claude Code account's approval mode. A null account names the default account; a
-    /// null mode follows its configuration. Takes effect on the next launch or resume.
-    SetAccountApprovalMode {
-        account: Option<String>,
+    /// Sets the approval mode of every Claude Code account. A null mode follows each account's
+    /// configuration. Takes effect on the next launch or resume.
+    SetClaudeApprovalMode {
         mode: Option<ClaudeApprovalMode>,
     },
     /// Sets whether an account shares the agent's default configuration. A null account names
@@ -3400,6 +3412,9 @@ pub mod error_code {
     /// reset yet. `params` names the `agent`, the `account` (by name) and the `window` (as the
     /// quota shows it), and `resets_at` (milliseconds since the epoch) when the agent said when.
     pub const ACCOUNT_QUOTA_EXHAUSTED: &str = "account_quota_exhausted";
+    /// A session cannot be opened on, handed off to, or switched to an account the user turned off
+    /// (`set_account_disabled`). `params` names the `agent` and the `account` (by name).
+    pub const ACCOUNT_DISABLED: &str = "account_disabled";
     /// A session's resolved agent is not on `Settings.added_agents`, so a new session or a handoff
     /// to it is refused; never raised while that list is undecided. `params` names `agent`.
     pub const AGENT_NOT_ADDED: &str = "agent_not_added";

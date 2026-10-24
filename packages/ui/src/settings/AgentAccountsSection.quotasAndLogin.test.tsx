@@ -5,7 +5,7 @@ import { expect, it, vi } from "vitest";
 import type { Account, AccountQuota, AgentAvailability } from "../protocol";
 import { trackMountRefocus } from "../dialogs/dialogTestSupport";
 import { accountLogins, accountQuotas, availability, request, toastError } from "./agentAccountsSectionTestState";
-import { buttonNamed, mount } from "./agentAccountsSectionTestSupport";
+import { buttonNamed, mount, openDetailsOf, rowLogin, rowOf } from "./agentAccountsSectionTestSupport";
 
 vi.mock("../store", async (importOriginal) => (await import("./agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
 vi.mock("../components/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
@@ -38,94 +38,117 @@ it("still opens when the refresh request fails", async () => {
   expect(toastError).not.toHaveBeenCalled();
 });
 
-it("shows the plan and the quota of the default account and of an owned one, each under its own row", () => {
+it("shows the plan and the usage of the default account and of an owned one, each in its own row", () => {
   accountQuotas.push(quotaOf("codex", null, { plan: "plus" }), quotaOf("codex", "codex-work", { plan: "pro_lite" }));
   const { container } = mount("Codex");
-  const rows = [...container.querySelectorAll("[data-list-motion]")].filter((row) => row.querySelector('[data-slot="meter"]'));
-  expect(rows).toHaveLength(2);
-  expect(rows[0]!.textContent).toContain("Plus");
-  expect(rows[1]!.textContent).toContain("Pro Lite");
-  expect(rows[1]!.textContent).toContain("5h 82% remaining");
+  expect(rowOf(container, "default:codex").textContent).toContain("Plus");
+  expect(rowOf(container, "codex-work").textContent).toContain("Pro Lite");
+  expect(rowOf(container, "codex-work").textContent).toContain("5h");
+  expect(rowOf(container, "codex-work").textContent).toContain("82%");
 });
 
-it("explains the default account in a help tip beside its name rather than in a line of its own", () => {
+it("explains the default account in a help tip after its path in the details header, once, and not in its row", async () => {
   availability.set("claude", { availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  accountQuotas.push(quotaOf("claude", null, { plan: "plus" }));
   const { container } = mount();
-  const row = container.querySelector("[data-list-motion]:not([role=tab])")!;
-  const tip = row.querySelector("button")!;
-  expect(tip.getAttribute("aria-label")).toBe("About the default account");
-  expect(row.textContent).not.toContain("The setup a session runs under");
-  expect(row.textContent).toContain("/home/dev/.claude");
-  // It ends the name line: after the plan when there is one, straight after the name when there is not.
-  const nameLine = tip.parentElement!;
-  expect(nameLine.lastElementChild).toBe(tip);
-  expect(nameLine.textContent).toBe("Default");
+  expect(rowOf(container, "default:claude").querySelector('button[aria-label="About the default account"]')).toBeNull();
+  const dialog = await openDetailsOf(container, "default:claude");
+  const tip = dialog.querySelector<HTMLButtonElement>('button[aria-label="About the default account"]')!;
+  expect(dialog.textContent).not.toContain("The agent's own default configuration directory");
+  expect(dialog.textContent).toContain("/home/dev/.claude");
+  // It follows the path under the title, outside the heading, whose name is the account's name alone.
+  expect(tip.previousElementSibling!.textContent).toContain("/home/dev/.claude");
+  expect(dialog.textContent).not.toContain("Claude Code account");
+  expect(dialog.querySelector("h2, [role=heading]")!.textContent).toBe("Default");
+  expect(dialog.textContent).toContain("Plus");
+  expect(dialog.textContent).toContain("Logged in");
   act(() => {
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
     tip.focus();
   });
-  expect(document.querySelector('[role="tooltip"]')?.textContent).toBe("The setup a session runs under when no account is pinned.");
+  expect(document.querySelector('[role="tooltip"]')?.textContent).toBe("The agent's own default configuration directory. New sessions use it when no account is chosen, and other accounts can share its configuration.");
 });
 
-it("puts the help tip after the plan on the default account's name line when it has one", () => {
-  availability.set("claude", { availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
-  accountQuotas.push(quotaOf("claude", null, { plan: "plus" }));
-  const { container } = mount();
-  const tip = container.querySelector("[data-list-motion] button")!;
-  const nameLine = tip.parentElement!;
-  expect(nameLine.lastElementChild).toBe(tip);
-  expect(nameLine.textContent).toBe("Default, Plus, Logged in");
-  // When the reading was taken shares the directory's line instead.
-  expect(nameLine.nextElementSibling?.textContent).toMatch(/^\/home\/dev\/\.claude.*Updated /);
-  expect(tip.previousElementSibling?.textContent).toBe("Logged in");
-});
-
-it("badges an account known to be logged in, one not logged in yet, and none whose state is not known", () => {
+it("shows the login state of each account: logged in once read, not logged in as the reading says, nothing while unknown", () => {
   availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
   accountQuotas.push(quotaOf("claude", null));
   accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }));
   const { container } = mount();
-  const badges = [...container.querySelectorAll("span[data-variant]")].map((chip) => chip.textContent);
-  expect(badges).toContain("Logged in");
-  expect(badges).toContain("Not logged in");
+  const badge = (id: string) => [...rowOf(container, id).querySelectorAll("span[data-variant]")].map((chip) => chip.textContent);
+  expect(badge("default:claude")).toContain("Logged in");
+  expect(badge("claude-work")).toContain("Not logged in");
+  expect(badge("claude-work")).not.toContain("Logged in");
   expect(container.textContent).not.toContain("Not logged in yet");
   accountQuotas.length = 0;
-  accountQuotas.push(quotaOf("claude", null, { unavailable: { code: "quota_timed_out", params: {}, message: "x" } }));
+  accountQuotas.push(quotaOf("claude", null, { windows: [], unavailable: { code: "quota_timed_out", params: {}, message: "x" } }));
   const failed = mount();
-  expect([...failed.container.querySelectorAll("span[data-variant]")].map((chip) => chip.textContent)).not.toContain("Logged in");
+  expect([...rowOf(failed.container, "default:claude").querySelectorAll("span[data-variant]")].map((chip) => chip.textContent)).not.toContain("Logged in");
+  expect([...rowOf(failed.container, "default:claude").querySelectorAll("span[data-variant]")].map((chip) => chip.textContent)).not.toContain("Not logged in");
+});
+
+it("keeps the Log in icon for a signed-out account only, in its Status cell and in its details header", async () => {
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  accountQuotas.push(quotaOf("claude", null));
+  accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }));
+  const { container } = mount();
+  expect(rowLogin(rowOf(container, "default:claude"))).toBeUndefined();
+  expect(rowLogin(await openDetailsOf(container, "default:claude"))).toBeUndefined();
+  const dialog = await openDetailsOf(container, "claude-work");
+  expect(dialog.textContent).toContain("Not logged in");
+  await act(async () => rowLogin(dialog)!.click());
+  expect(request).toHaveBeenLastCalledWith({ type: "start_account_login", agent: "claude", account: "claude-work" });
+});
+
+it("shows the full quota, the model windows and when it was read in the details, and the compact bars only in the row", async () => {
+  accountQuotas.push(quotaOf("claude", "claude-work", { windows: [
+    { kind: "session", label: null, used_percent: 18, resets_at: Date.now() + 60 * 60_000, window_minutes: 300 },
+    { kind: "weekly", label: null, used_percent: 5, resets_at: Date.now() + 3 * 24 * 60 * 60_000, window_minutes: 10_080 },
+    { kind: "weekly_model", label: "Fable", used_percent: 0, resets_at: null, window_minutes: 10_080 },
+  ] }));
+  const { container } = mount();
+  expect(rowOf(container, "claude-work").querySelectorAll(".quota-bar-track")).toHaveLength(2);
+  expect(rowOf(container, "claude-work").querySelector('[data-slot="meter"]')).toBeNull();
+  const dialog = await openDetailsOf(container, "claude-work");
+  expect(dialog.querySelectorAll('[data-slot="meter"]')).toHaveLength(3);
+  expect(dialog.textContent).toContain("Updated just now");
+  expect(dialog.textContent).toContain("resets in");
 });
 
 it("marks a failed reading on the account's name line instead of writing the failure into the row", () => {
   availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
   accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_timed_out", params: { agent: "Claude Code" }, message: "x" } }));
   const { container } = mount();
-  const mark = container.querySelector<HTMLElement>('[data-list-motion] button[aria-label="Quota unavailable"]')!;
+  const mark = container.querySelector<HTMLElement>('tr button[aria-label="Quota unavailable"]')!;
   expect(mark).not.toBeNull();
   expect(mark.parentElement?.textContent).not.toContain("took too long");
   expect(container.textContent).not.toContain("took too long");
 });
 
-it("logs in a signed-out account from the button after its badge", async () => {
+it("logs in a signed-out account from the icon button after its badge in the Status cell, named for the account, and offers Log in in the menu whatever the state", async () => {
   availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
   accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }));
   const { container } = mount();
-  const badge = [...container.querySelectorAll("span[data-variant]")].find((chip) => chip.textContent === "Not logged in")!;
-  const login = badge.nextElementSibling as HTMLButtonElement;
-  expect(login.textContent).toBe("Log in");
-  expect(login.dataset.size).toBe("xs");
+  const row = rowOf(container, "claude-work");
+  expect([...row.querySelectorAll("span[data-variant]")].map((chip) => chip.textContent)).toContain("Not logged in");
+  const login = rowLogin(row)!;
+  expect(login.textContent).toBe("");
+  expect(login.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, "")).toBe("Log in to claude-work");
+  // It follows the badge, in the Status cell.
+  expect(login.closest("td")).toBe(rowOf(container, "claude-work").querySelectorAll("td")[0]);
+  expect(login.previousElementSibling?.textContent).toBe("Not logged in");
   await act(async () => login.click());
   expect(request).toHaveBeenLastCalledWith({ type: "start_account_login", agent: "claude", account: "claude-work" });
 });
 
 it.each([
   ["before", true], ["after", false],
-] as const)("puts focus on the account's actions once a login from its own button succeeds, the button going %s the dialog closes", async (_when, quotaFirst) => {
+] as const)("puts focus on the row's actions button once a login from its own button succeeds, the button going %s the dialog closes", async (_when, quotaFirst) => {
   availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
   const signedOut = quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } });
   accountQuotas.push(signedOut);
   const { container, render } = mount();
-  const row = container.querySelector('[data-list-motion="claude-work"]')!;
-  const login = buttonNamed(row, "Log in")!;
+  const row = rowOf(container, "claude-work");
+  const login = rowLogin(row)!;
   act(() => login.focus());
   await act(async () => login.click());
   const settled = trackMountRefocus();
@@ -146,7 +169,7 @@ it.each([
     await frames();
   }
   expect(document.querySelector('[role="dialog"]')).toBeNull();
-  expect(buttonNamed(row, "Log in")).toBeUndefined();
+  expect(rowLogin(row)).toBeUndefined();
   expect(document.activeElement?.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, "")).toBe("Actions for claude-work (Claude Code)");
   // The success is said after that focus move, not with it.
   expect(row.querySelector('[role="status"]')!.textContent).toBe("");
@@ -159,7 +182,7 @@ it("leaves focus where React Aria puts it back after a login its own button open
   const { container, render } = mount();
   const before = buttonNamed(container, "Add account")!;
   act(() => before.focus());
-  await act(async () => buttonNamed(container.querySelector('[data-list-motion="claude-work"]')!, "Log in")!.click());
+  await act(async () => rowLogin(rowOf(container, "claude-work"))!.click());
   const settled = trackMountRefocus();
   accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
   render();
@@ -173,14 +196,14 @@ it("leaves focus where React Aria puts it back after a login its own button open
 });
 
 it.each([
-  ["its own Log in button", false], ["its actions, the button having gone", true],
+  ["its own Log in button", false], ["the row's Details button, the button having gone", true],
 ] as const)("puts focus on %s once a login the button opened has been cancelled", async (_where, buttonGoes) => {
   availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
   const signedOut = quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } });
   accountQuotas.push(signedOut);
   const { container, render } = mount();
-  const row = container.querySelector('[data-list-motion="claude-work"]')!;
-  const login = buttonNamed(row, "Log in")!;
+  const row = rowOf(container, "claude-work");
+  const login = rowLogin(row)!;
   act(() => login.focus());
   await act(async () => login.click());
   const settled = trackMountRefocus();
@@ -191,7 +214,7 @@ it.each([
   await act(async () => buttonNamed(document.querySelector('[role="dialog"]')!, "Cancel login")!.click());
   await frames();
   expect(document.querySelector('[role="dialog"]')).toBeNull();
-  expect(login.disabled).toBe(true);
+  expect(login.getAttribute("aria-disabled")).toBe("true");
   if (buttonGoes) accountQuotas.splice(accountQuotas.indexOf(signedOut), 1, quotaOf("claude", "claude-work", { unavailable: { code: "quota_timed_out", params: {}, message: "x" } }));
   accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "cancelled", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
   render();
@@ -208,7 +231,7 @@ it("gives focus back to the row's own Log in button once a login cancelled befor
     ? new Promise((resolve) => { registered = () => resolve({}); })
     : Promise.resolve({})) as never);
   const { container, render } = mount();
-  const login = buttonNamed(container.querySelector('[data-list-motion="claude-work"]')!, "Log in")!;
+  const login = rowLogin(rowOf(container, "claude-work"))!;
   act(() => login.focus());
   await act(async () => login.click());
   const settled = trackMountRefocus();
@@ -221,7 +244,7 @@ it("gives focus back to the row's own Log in button once a login cancelled befor
   act(() => login.blur());
   accountLogins.push({ agent: "claude", account: "claude-work", status: "starting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
   render();
-  expect(login.disabled).toBe(true);
+  expect(login.getAttribute("aria-disabled")).toBe("true");
   await act(async () => registered());
   expect(request).toHaveBeenLastCalledWith({ type: "cancel_account_login", agent: "claude", account: "claude-work" });
   accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "cancelled", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
@@ -230,11 +253,11 @@ it("gives focus back to the row's own Log in button once a login cancelled befor
   expect(document.activeElement).toBe(login);
 });
 
-it("puts focus on the account's actions when a login its own button opened succeeds after all once cancelled", async () => {
+it("puts focus on the row's actions button when a login its own button opened succeeds after all once cancelled", async () => {
   availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
   accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }));
   const { container, render } = mount();
-  const login = buttonNamed(container.querySelector('[data-list-motion="claude-work"]')!, "Log in")!;
+  const login = rowLogin(rowOf(container, "claude-work"))!;
   act(() => login.focus());
   await act(async () => login.click());
   const settled = trackMountRefocus();
@@ -253,7 +276,7 @@ it("gives focus back to the row's own Log in button when the login it opened is 
   availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
   accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }));
   const { container, render } = mount();
-  const login = buttonNamed(container.querySelector('[data-list-motion="claude-work"]')!, "Log in")!;
+  const login = rowLogin(rowOf(container, "claude-work"))!;
   act(() => login.focus());
   await act(async () => login.click());
   const settled = trackMountRefocus();

@@ -80,11 +80,13 @@ Once it holds more than it can show, each of these fades at its edge:
   daemon address being known (see "Starting up" in `docs/product/application-lifecycle.md`), and on the screen for a
   UI that failed both that column and the stack trace in it.
 
-Two kinds of scrolling show no fade:
+Three kinds of scrolling show no fade:
 
 - **What scrolls as a document of its own**: the terminal's scrollback (see "Output, scrollback and size" in
   `docs/product/session-terminal.md`) and a report page, which the console session's model wrote (see
   `docs/product/report-panel.md`).
+- **Settings' accounts table**, which scrolls sideways in a narrow window with its actions column pinned at its end
+  edge, where a fade would dim that column (see "The accounts table" in `docs/product/agent-accounts.md`).
 - **A menu's or a selector's own list of choices** — an action menu, the account and option selects — which scrolls
   with its scrollbar alone. The Git mode's branch selector is the exception: the list of branches inside it fades, as
   above.
