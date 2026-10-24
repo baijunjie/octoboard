@@ -30,6 +30,14 @@ record dated it, the date and time, written for the app's language:
   is rendered as Markdown, its headings ranking below the history's own title; a web address in it opens in the
   user's own browser.
 
+User messages and agent replies share rounded message surfaces with a soft shadow, distinct from the page.
+User messages have a neutral background; agent replies have a soft accent-coloured background that follows the
+app's light or dark appearance. Both use the app's UI font at 14 px with a 24 px line height. Replies keep compact Markdown spacing;
+their headings use the body text's size and line height with semibold weight, and tables keep the body text's size.
+Inline code and fenced code retain a monospace face; fenced code keeps its code theme. The Markdown style preference
+for documents in the file viewer does not change the history's typography (see "Markdown style" in
+`docs/product/settings.md`).
+
 **Messages Octoboard wrote into the session are hidden**: the brief a session was started with, a report from a
 session under it, a report panel form submission, information shared with the session (or the copy of what it
 shared), a notice that begins "Message from Octoboard", and the opening prompt of a session started at another

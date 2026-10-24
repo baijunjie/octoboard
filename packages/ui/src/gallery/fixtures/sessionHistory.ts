@@ -66,7 +66,7 @@ const MESSAGES: HistoryMessage[] = [
       "1. `public/hero.jpg` is 3.4 MB and is shown at most 1440 px wide.",
       "2. `/assets/` is served with `Cache-Control: no-store`, so nothing is ever reused.",
       "",
-      "I will start with the image, then look at the headers.",
+      "I will start with the image, then look at the [cache headers](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control).",
     ].join("\n"),
   },
   {
@@ -169,7 +169,8 @@ export const sessionHistoryScenarios: Scenario[] = [
     id: "history-loaded",
     title: "Archived session history",
     description:
-      "The pane shows user messages and agent replies together in place of a terminal. Octoboard briefs, notices and reports are hidden, while the agent's replies to them remain. Agent replies render Markdown headings, lists, inline code, fenced code blocks, bold text and a table on a code-coloured surface; scroll for the code blocks and table. User messages are labelled You, with a Chinese message at the end. The long message wraps and the long path breaks inside the column. The header holds the context badge, 130K with a warning ring for 65% used, followed by the labelled archive and creation times on two lines; no reply switch is present. Hover the badge for the Context window card. The floating bar says the session is archived and offers Reopen; the last message scrolls clear of it.",
+      "The pane shows user messages and agent replies together in place of a terminal. Octoboard briefs, notices and reports are hidden, while the agent's replies to them remain. User messages have a neutral bubble and agent replies have a softly accent-tinted bubble; both keep the standard short shadow and the same body font. Reply headings stay at the body size in semibold; lists, inline code and tables keep the conversation scale, while fenced code keeps its monospace font and code palette. Scroll for the code blocks and table. The GitHub document preference does not change the reply styling. User messages are labelled You, with a Chinese message at the end. The long message wraps and the long path breaks inside the column. The header holds the context badge, 130K with a warning ring for 65% used, followed by the labelled archive and creation times on two lines; no reply switch is present. Hover the badge for the Context window card. The floating bar says the session is archived and offers Reopen; the last message scrolls clear of it.",
+    preferences: { ...preferences, markdownStyle: "github" },
     sessionHistory: { [archived.id]: MESSAGES },
     steps: openHistory,
   },

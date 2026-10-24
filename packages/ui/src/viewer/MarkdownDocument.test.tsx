@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, onTestFinished } from "vitest";
 
 import { MarkdownDocument } from "./MarkdownDocument";
+import { MARKDOWN_STYLES, markdownStyle } from "./markdownStyle";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -33,6 +34,16 @@ it("demotes an embedded document's headings two levels, clamped at h6, and gives
   const container = await render("# a\n\n## b\n\n### c\n\n#### d\n\n##### e\n\n###### f", true);
   expect(levels(container)).toEqual(["H3", "H4", "H5", "H6", "H6", "H6"]);
   expect(container.querySelector("[id]")).toBeNull();
+});
+
+it.each(MARKDOWN_STYLES)("keeps replies compact while standalone documents use %s", async (style) => {
+  const before = markdownStyle.get();
+  onTestFinished(() => markdownStyle.set(before));
+  act(() => markdownStyle.set(style));
+  const reply = await render("# A reply\n\nBody text", true);
+  const document = await render("# A document\n\nBody text", false);
+  expect(reply.querySelector("[data-markdown-style]")?.getAttribute("data-markdown-style")).toBe("tailwind");
+  expect(document.querySelector("[data-markdown-style]")?.getAttribute("data-markdown-style")).toBe(style);
 });
 
 it("gives two embedded documents' footnotes ids that do not clash", async () => {

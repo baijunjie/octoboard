@@ -17,7 +17,6 @@ import { usePlatform } from "../platform/react";
 import type { HistoryMessage, Session } from "../protocol";
 import { useOctoboardTheme } from "../theme";
 import { RendererBoundary } from "../viewer/codeRenderer";
-import { CODE_THEMES } from "../viewer/codeTheme";
 import { FencedCode } from "../viewer/FencedCode";
 import { useSessionHistory } from "./useSessionHistory";
 
@@ -135,8 +134,7 @@ function Message({ message }: { message: ConversationMessage }): React.ReactElem
   );
   const speaker = t(`history.speaker.${message.speaker}`);
   const speakerId = useId();
-  const colours = CODE_THEMES[theme];
-  const plain = <p className="break-words whitespace-pre-wrap">{message.text}</p>;
+  const plain = <p dir="auto" className="break-words whitespace-pre-wrap">{message.text}</p>;
   return (
     <article aria-labelledby={speakerId} className="flex flex-col gap-1">
       <div className="flex items-baseline gap-2 text-xs text-app-muted">
@@ -147,25 +145,15 @@ function Message({ message }: { message: ConversationMessage }): React.ReactElem
           <time dateTime={new Date(message.at).toISOString()}>{isolate(new Date(message.at).toLocaleString(language))}</time>
         )}
       </div>
-      {message.speaker === "agent" ? (
-        <div
-          className="rounded-xl p-3 text-sm leading-6"
-          style={{ backgroundColor: colours.background, color: colours.foreground }}
-        >
+      <div data-speaker={message.speaker} className="history-message rounded-xl bg-default px-3 py-2 text-sm leading-6 shadow-(--panel-shadow)">
+        {message.speaker === "agent" ? (
           <RendererBoundary resetKey={message.text} fallback={plain}>
             <Suspense fallback={plain}>
               <MarkdownDocument embedded text={message.text} path="" theme={theme} renderCode={renderCode} onOpenLink={links && onOpenLink} />
             </Suspense>
           </RendererBoundary>
-        </div>
-      ) : (
-        <p
-          dir="auto"
-          className="rounded-xl bg-default px-3 py-2 text-sm leading-6 break-words whitespace-pre-wrap"
-        >
-          {message.text}
-        </p>
-      )}
+        ) : plain}
+      </div>
     </article>
   );
 }

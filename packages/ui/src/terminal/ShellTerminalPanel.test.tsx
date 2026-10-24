@@ -428,11 +428,13 @@ it("leaves focus where the confirmation put it back, with no ring, when the daem
   await vi.waitFor(() => expect(document.querySelector("[role=alertdialog]")).not.toBeNull());
   act(() => dialogButton("Close terminal").focus());
   pointerModality();
-  await act(async () => dialogButton("Close terminal").click());
+  act(() => dialogButton("Close terminal").click());
   expect(document.querySelector("[role=alertdialog]")).toBeNull();
   act(() => view.focus());
-  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-  await new Promise((resolve) => requestAnimationFrame(resolve));
+  await act(async () => {
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  });
   expect(panel.request).toHaveBeenCalledWith({ type: "close_shell_terminal", shell_terminal: "a" });
   expect(document.activeElement).toBe(view);
   expect(getInteractionModality()).not.toBe("keyboard");

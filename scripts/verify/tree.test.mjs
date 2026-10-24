@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -56,5 +56,29 @@ test("deleting a tracked path changes its id", () => {
     rmSync(path.join(root, "other"), { recursive: true });
     assert.deepEqual(ids(), [""]);
     assert.notDeepEqual(ids(), before);
+  });
+});
+
+test("same-size edits inside the index timestamp are read without changing the real index", () => {
+  repository((root) => {
+    const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+    git("config", "core.trustctime", "false");
+    git("config", "core.checkStat", "minimal");
+    const file = path.join(root, "pkg/a.txt");
+    const index = path.join(root, ".git/index");
+    const stamp = Math.floor(Date.now() / 1000) - 60;
+    utimesSync(file, stamp, stamp);
+    git("add", "pkg/a.txt");
+    utimesSync(index, stamp, stamp);
+    const originalIndex = readFileSync(index);
+    const originalMtime = statSync(index).mtimeMs;
+
+    writeFileSync(file, "b");
+    utimesSync(file, stamp, stamp);
+    const tree = workingTree(root);
+
+    assert.equal(git("show", `${tree}:pkg/a.txt`), "b");
+    assert.deepEqual(readFileSync(index), originalIndex);
+    assert.equal(statSync(index).mtimeMs, originalMtime);
   });
 });

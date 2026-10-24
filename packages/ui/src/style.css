@@ -73,6 +73,7 @@
 @import "./viewer/markdown-github.css";
 @import "./viewer/markdown-newsprint.css";
 @import "./viewer/markdown-latex.css";
+@import "./terminal/sessionHistory.css";
 
 /* WebKit insets a focused input's outline by 2px. Keep HeroUI's invalid outline against its
    focus ring so the two draw as one edge. */

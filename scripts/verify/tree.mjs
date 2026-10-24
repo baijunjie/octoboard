@@ -2,7 +2,7 @@
 // files as they are now, plus the untracked ones that are not ignored
 // (and the ignored ones asked for).
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, rmSync, statSync, utimesSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -21,10 +21,16 @@ export function workingTree(root, { paths, forced = [] } = {}) {
   try {
     const indexFile = path.join(scratch, "index");
     const realIndex = path.resolve(root, git(["rev-parse", "--git-path", "index"], process.env, root));
-    try {
-      copyFileSync(realIndex, indexFile);
-    } catch {
-      // No index yet: the scratch one starts empty.
+    if (existsSync(realIndex)) {
+      try {
+        const stamp = statSync(realIndex);
+        copyFileSync(realIndex, indexFile);
+        // Git's racy-clean check compares cached file times with the index's own mtime. A newer
+        // copy can hide same-size edits; rounding down keeps that check conservative.
+        utimesSync(indexFile, stamp.atime, Math.floor(stamp.mtimeMs / 1000));
+      } catch {
+        return null;
+      }
     }
     const env = { ...process.env, GIT_INDEX_FILE: indexFile };
     // A path on neither the disk nor the index makes `git add` fail; one only in the index is a deletion to take.

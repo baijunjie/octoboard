@@ -50,7 +50,8 @@ export interface MarkdownDocumentProps {
   anchor?: string;
   /** The document is one of several inside a view with headings of its own: its headings are
    * demoted two levels (`h1` to `h3`, none below `h6`) so none outranks the view's, and it gives
-   * no heading an id and its footnotes ids of their own, so documents side by side cannot clash. */
+   * no heading an id and its footnotes ids of their own, so documents side by side cannot clash.
+   * It uses compact Tailwind typography rather than the standalone document's style preference. */
   embedded?: boolean;
 }
 
@@ -276,7 +277,8 @@ export const MarkdownDocument = memo(function MarkdownDocument({
 }: MarkdownDocumentProps): React.ReactElement {
   const t = useT();
   const appDirection = textDirection(useCurrentLanguage());
-  const style = markdownStyle.useValue();
+  const preferredStyle = markdownStyle.useValue();
+  const style = embedded ? "tailwind" : preferredStyle;
   const frameRef = useRef<HTMLDivElement>(null);
   const idScope = useId();
   useEffect(() => {

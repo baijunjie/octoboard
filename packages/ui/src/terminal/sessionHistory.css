@@ -1,0 +1,45 @@
+@layer utilities {
+  .history-message[data-speaker="agent"] {
+    background-color: var(--accent-soft);
+  }
+
+  /* Replies are conversation text; document themes must not change the chat's type scale. */
+  .history-message .markdown-prose.prose {
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+  }
+
+  .history-message .markdown-prose.prose h3:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .history-message .markdown-prose.prose h4:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .history-message .markdown-prose.prose h5:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .history-message .markdown-prose.prose h6:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    margin-block: 1em 0.5em;
+    font-size: inherit;
+    font-weight: 600;
+    line-height: inherit;
+  }
+
+  .history-message .markdown-prose.prose h3:first-child:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .history-message .markdown-prose.prose h4:first-child:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .history-message .markdown-prose.prose h5:first-child:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .history-message .markdown-prose.prose h6:first-child:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    margin-block-start: 0;
+  }
+
+  .history-message .markdown-prose.prose h3:last-child:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .history-message .markdown-prose.prose h4:last-child:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .history-message .markdown-prose.prose h5:last-child:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .history-message .markdown-prose.prose h6:last-child:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    margin-block-end: 0;
+  }
+
+  .history-message .markdown-prose.prose table:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    font-size: inherit;
+    line-height: inherit;
+  }
+
+  .history-message .markdown-prose.prose code:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    font-weight: inherit;
+  }
+}
