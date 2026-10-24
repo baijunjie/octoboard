@@ -148,6 +148,12 @@ function genericListing(path: string): { path: string; entries: DirEntry[] } {
   return { path: resolved, entries };
 }
 
+/** Whether Git ignores `path`: the fixture marks it, or a folder above it, `ignored`. */
+function isIgnored(files: FixtureFiles, path: string): boolean {
+  const segments = path.split("/");
+  return segments.some((_, i) => files[segments.slice(0, i + 1).join("/")]?.ignored === true);
+}
+
 /** The entries directly under `dir` among `files`, as `list_project_dir` sends them. */
 function entriesUnder(files: FixtureFiles, dir: string): BrowseEntry[] {
   const prefix = dir === "" ? "" : `${dir}/`;
@@ -159,6 +165,7 @@ function entriesUnder(files: FixtureFiles, dir: string): BrowseEntry[] {
       size: "text" in file ? new TextEncoder().encode(file.text).length : "image" in file ? Math.floor((file.image.data.length * 3) / 4) : "binary" in file ? file.binary.size : null,
       version: "dir" in file ? null : "1",
       target: null,
+      ...(isIgnored(files, path) && { ignored: true }),
     }))
     .sort((a, b) => (a.name < b.name ? -1 : 1));
 }
@@ -804,11 +811,14 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
         }
         case "search_project_files": {
           const query = body.query.trim().toLowerCase();
-          const paths = Object.entries(projectFiles(body.project))
+          const files = projectFiles(body.project);
+          const paths = Object.entries(files)
             .filter(([path, file]) => !("dir" in file) && !path.split("/").some(isLeftOut) && path.slice(path.lastIndexOf("/") + 1).toLowerCase().includes(query))
             .map(([path]) => path)
+            .filter((path) => body.include_ignored === true || !isIgnored(files, path))
             .sort();
-          return { type: "project_file_matches", project: body.project, query: body.query, paths, complete: true };
+          const ignored = body.include_ignored === true ? paths.filter((path) => isIgnored(files, path)) : [];
+          return { type: "project_file_matches", project: body.project, query: body.query, paths, ...(ignored.length > 0 && { ignored }), complete: true };
         }
         case "read_project_file": {
           const files = body.worktree === undefined ? projectFiles(body.project) : scenario.worktreeFiles?.[body.worktree] ?? {};

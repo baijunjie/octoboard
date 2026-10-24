@@ -887,6 +887,9 @@ export interface BrowseEntry {
    * null for anything else. */
   version: string | null;
   target: "file" | "directory" | "other" | "missing" | "outside" | null;
+  /** Git ignores the entry (so does it anything inside an ignored folder); absent when it does
+   * not, and for every entry of a project outside a repository. */
+  ignored?: boolean;
 }
 
 /** Which content `read_project_file` reads; absent means `live`. A branch is the name below
@@ -1425,7 +1428,7 @@ export type RequestBody =
    * outstanding, which is answered `request_superseded`; one that finished first still gets its
    * real reply, so a reply is also discarded by its `id`. */
   | { type: "get_project_source"; project: string; slot?: string }
-  | { type: "search_project_files"; project: string; query: string; slot?: string }
+  | { type: "search_project_files"; project: string; query: string; include_ignored?: boolean; slot?: string }
   | { type: "list_project_dir"; project: string; path: string; worktree?: string; slot?: string }
   | {
     type: "read_project_file";
@@ -1712,6 +1715,8 @@ export type Event =
     project: string;
     query: string;
     paths: string[];
+    /** The `paths` Git ignores; only a search with `include_ignored` has any. */
+    ignored?: string[];
     complete: boolean;
   }
   | {

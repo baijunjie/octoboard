@@ -19,7 +19,7 @@ import { RowActions } from "./RowActions";
 import { FileIcon } from "./FileIcon";
 import type { TreeNode } from "./tree";
 import { BrowserListMotion, useBrowserListMotion } from "./useBrowserListMotion";
-import { DirectoryRow, ROW_CLASS, ROW_HEIGHT, RowContent, RowName } from "./treeRow";
+import { DirectoryRow, IGNORED_ROW_CLASS, ROW_CLASS, ROW_HEIGHT, RowContent, RowName } from "./treeRow";
 
 /** The rows of the tree with their rendering kept for every row whose content did not change: the
  * tree caches a row's rendering by its object, so handing back the same object for an unchanged row
@@ -48,7 +48,7 @@ export function useStableNodes(nodes: TreeNode[]): TreeNode[] {
 }
 
 function sameEntry(a: BrowseEntry | undefined, b: BrowseEntry | undefined): boolean {
-  return a === b || (a !== undefined && b !== undefined && a.kind === b.kind && a.size === b.size && a.target === b.target);
+  return a === b || (a !== undefined && b !== undefined && a.kind === b.kind && a.size === b.size && a.target === b.target && a.ignored === b.ignored);
 }
 
 function sameMessage(before: ErrorPresentation | undefined, next: ErrorPresentation | undefined): boolean {
@@ -262,8 +262,9 @@ function FileNodeRow({ node, onRetry, children }: {
   }, [failed]);
   if (node.type === "directory") {
     const link = node.entry.kind === "symlink";
+    const ignored = node.entry.ignored === true;
     return (
-      <TreeItem data-list-motion={node.key} id={node.key} textValue={name} hasChildItems data-listing-failed={node.failure !== undefined || undefined} className={ROW_CLASS} ref={rowRef}>
+      <TreeItem data-list-motion={node.key} id={node.key} textValue={name} aria-label={ignored ? t("browser.tree.row.ignored", { name: isolate(name) }) : undefined} hasChildItems data-ignored={ignored || undefined} data-listing-failed={node.failure !== undefined || undefined} className={`${ROW_CLASS} ${IGNORED_ROW_CLASS}`} ref={rowRef}>
         <TreeItemContent>
           {({ isExpanded }) => (
             <DirectoryRow name={name} isExpanded={isExpanded} link={link} nameGrows={node.failure === undefined}>
@@ -283,18 +284,22 @@ function FileNodeRow({ node, onRetry, children }: {
   }
   const isSelected = node.selected;
   const missing = node.missing === "removed" ? t("browser.tree.removed") : node.missing === "unlisted" ? t("browser.tree.unlisted") : undefined;
+  // An ignored file is dimmed, which nothing but the name tells assistive technology.
+  const ignored = node.entry?.ignored === true;
   const ariaLabel =
     node.missing === "removed"
       ? t("browser.tree.row.removed", { name: isolate(name) })
       : node.missing === "unlisted"
         ? t("browser.tree.row.unlisted", { name: isolate(name) })
-        : isSelected
-          ? t("browser.tree.row.selected", { name: isolate(name) })
-          : name;
+        : ignored
+          ? t(isSelected ? "browser.tree.row.selectedIgnored" : "browser.tree.row.ignored", { name: isolate(name) })
+          : isSelected
+            ? t("browser.tree.row.selected", { name: isolate(name) })
+            : name;
   // Marked `data-current`, not `data-selected`: react-aria-components writes the row's
   // `data-selected` itself, from a selection the tree does not have.
   return (
-    <TreeItem data-list-motion={node.key} id={node.key} textValue={name} aria-label={ariaLabel} data-current={isSelected || undefined} className={ROW_CLASS} ref={rowRef}>
+    <TreeItem data-list-motion={node.key} id={node.key} textValue={name} aria-label={ariaLabel} data-current={isSelected || undefined} data-ignored={ignored || undefined} className={`${ROW_CLASS} ${IGNORED_ROW_CLASS}`} ref={rowRef}>
       <TreeItemContent>
         <RowContent>
           <FileIcon entry={node.entry} path={node.path} />

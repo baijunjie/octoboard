@@ -3,6 +3,7 @@ import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import { isolate } from "../i18n/isolate";
 import { DaemonRequestError } from "../daemon-client";
 import { PlatformProvider } from "../platform/react";
 import type { Event, GitStatus, Project, RequestBody } from "../protocol";
@@ -466,4 +467,133 @@ it("announces a files failure that appears after the panel painted, but not one 
   await act(async () => tab("files").click());
   expect(document.querySelector('[data-slot="empty-state"]')?.textContent).toContain("Something unexpected went wrong.");
   expect(document.querySelector("[role=alert]")).toBeNull();
+});
+
+const labelled = (label: string) => document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
+const typeKeyword = (value: string) => act(async () => {
+  const input = document.querySelector<HTMLInputElement>('input[aria-label="File name contains"]')!;
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+  input.dispatchEvent(new window.Event("input", { bubbles: true }));
+});
+const rowKeys = () => [...document.querySelectorAll('[role="row"][data-key]')].map((row) => row.getAttribute("data-key"));
+const folder = (name: string) => ({ name, kind: "directory", size: null, version: null, target: null });
+
+it("folds every expanded folder from the header, and is disabled while none is open", async () => {
+  await mount("collapse-all", "files");
+  await answer("list_project_dir", { ...dir("collapse-all"), entries: [folder("src"), folder("docs")] } as Event);
+  expect(labelled("Collapse all folders").disabled).toBe(true);
+  await act(async () => document.querySelector<HTMLElement>('[data-key="path:src"]')!.click());
+  await answer("list_project_dir", { ...dir("collapse-all"), path: "src", entries: [folder("nested")] } as Event);
+  await act(async () => document.querySelector<HTMLElement>('[data-key="path:src/nested"]')!.click());
+  await answer("list_project_dir", { ...dir("collapse-all"), path: "src/nested", entries: [{ name: "a.ts", kind: "file", size: 1, version: "v", target: null }] } as Event);
+  expect(rowKeys()).toEqual(["path:docs", "path:src", "path:src/nested", "path:src/nested/a.ts"]);
+  expect(labelled("Collapse all folders").disabled).toBe(false);
+  // Focus on a row that goes with the folding moves to the top-level folder it was under.
+  await act(async () => document.querySelector<HTMLElement>('[data-key="path:src/nested/a.ts"]')!.focus());
+  await act(async () => labelled("Collapse all folders").click());
+  await act(async () => void vi.advanceTimersByTime(100));
+  expect(rowKeys()).toEqual(["path:docs", "path:src"]);
+  expect(document.activeElement).toBe(document.querySelector('[data-key="path:src"]'));
+  expect(labelled("Collapse all folders").disabled).toBe(true);
+});
+
+it("keeps the Collapse all button disabled when only folders hidden under a folded one stay expanded", async () => {
+  await mount("collapse-hidden", "files");
+  await answer("list_project_dir", { ...dir("collapse-hidden"), entries: [folder("src")] } as Event);
+  await act(async () => document.querySelector<HTMLElement>('[data-key="path:src"]')!.click());
+  await answer("list_project_dir", { ...dir("collapse-hidden"), path: "src", entries: [folder("nested")] } as Event);
+  await act(async () => document.querySelector<HTMLElement>('[data-key="path:src/nested"]')!.click());
+  await answer("list_project_dir", { ...dir("collapse-hidden"), path: "src/nested", entries: [{ name: "a.ts", kind: "file", size: 1, version: "v", target: null }] } as Event);
+  expect(labelled("Collapse all folders").disabled).toBe(false);
+  // Folding the parent leaves `src/nested` expanded in the state, but nothing on screen is open.
+  await act(async () => document.querySelector<HTMLElement>('[data-key="path:src"]')!.click());
+  expect(rowKeys()).toEqual(["path:src"]);
+  expect(labelled("Collapse all folders").disabled).toBe(true);
+});
+
+it("hands focus to Refresh when Collapse all disables itself under a keyboard press", async () => {
+  await mount("collapse-focus", "files");
+  await answer("list_project_dir", { ...dir("collapse-focus"), entries: [folder("src")] } as Event);
+  await act(async () => document.querySelector<HTMLElement>('[data-key="path:src"]')!.click());
+  await answer("list_project_dir", { ...dir("collapse-focus"), path: "src", entries: [{ name: "a.ts", kind: "file", size: 1, version: "v", target: null }] } as Event);
+  const button = labelled("Collapse all folders");
+  await act(async () => button.focus());
+  // WebKit blurs a control as it is disabled, before the render's effect: the `focusout` arrives
+  // with the button already disabled and focus on `<body>`. jsdom never blurs a disabled element,
+  // so both are reported by hand, the `focusout` as the attribute lands.
+  const active = vi.spyOn(document, "activeElement", "get").mockReturnValue(document.body);
+  const blur = new MutationObserver(() => button.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: null })));
+  blur.observe(button, { attributeFilter: ["disabled"] });
+  try {
+    await act(async () => button.click());
+  } finally {
+    blur.disconnect();
+    active.mockRestore();
+  }
+  expect(button.disabled).toBe(true);
+  expect(document.activeElement).toBe(labelled("Refresh"));
+});
+
+it("folds every folder of the filter's results, and keeps the button out of the Changes tab", async () => {
+  await mount("collapse-results", "files");
+  await answer("list_project_dir", dir("collapse-results"));
+  await act(async () => labelled("Filter by file name").click());
+  await typeKeyword("target");
+  await wait(250);
+  await answer("search_project_files", { type: "project_file_matches", project: "collapse-results", query: "target", paths: ["src/nested/target.txt", "docs/target.md"], complete: true });
+  expect(rowKeys()).toEqual(["path:docs", "path:docs/target.md", "path:src", "path:src/nested", "path:src/nested/target.txt"]);
+  await act(async () => labelled("Collapse all folders").click());
+  expect(rowKeys()).toEqual(["path:docs", "path:src"]);
+  expect(labelled("Collapse all folders").disabled).toBe(true);
+  await act(async () => document.querySelector<HTMLElement>('[data-key="path:src"]')!.click());
+  expect(labelled("Collapse all folders").disabled).toBe(false);
+  await act(async () => document.querySelector<HTMLElement>('[role="tab"][data-key="changes"]')!.click());
+  expect(labelled("Collapse all folders")).toBeNull();
+});
+
+it("keeps Collapse all disabled over the filter's results when only a folder under a folded one is expanded", async () => {
+  await mount("collapse-results-hidden", "files");
+  await answer("list_project_dir", dir("collapse-results-hidden"));
+  await act(async () => labelled("Filter by file name").click());
+  await typeKeyword("target");
+  await wait(250);
+  await answer("search_project_files", { type: "project_file_matches", project: "collapse-results-hidden", query: "target", paths: ["src/nested/target.txt"], complete: true });
+  expect(labelled("Collapse all folders").disabled).toBe(false);
+  await act(async () => document.querySelector<HTMLElement>('[data-key="path:src"]')!.click());
+  expect(rowKeys()).toEqual(["path:src"]);
+  expect(labelled("Collapse all folders").disabled).toBe(true);
+});
+
+it("leaves ignored files out of the search until the toggle beside the field includes them", async () => {
+  await mount("include-ignored", "files");
+  await answer("list_project_dir", dir("include-ignored"));
+  expect(labelled("Include ignored files")).toBeNull();
+  await act(async () => labelled("Filter by file name").click());
+  const toggle = () => labelled("Include ignored files") ?? labelled("Exclude ignored files");
+  expect(toggle().getAttribute("aria-label")).toBe("Include ignored files");
+  expect(toggle().getAttribute("aria-pressed")).toBe("false");
+  await typeKeyword("app");
+  await wait(250);
+  expect(pending.find((request) => request.body.type === "search_project_files")?.body).not.toHaveProperty("include_ignored");
+  await answer("search_project_files", { type: "project_file_matches", project: "include-ignored", query: "app", paths: ["src/app.ts"], complete: true });
+  // The toggle repeats the search at once, with no debounce to wait out.
+  await act(async () => toggle().click());
+  await wait(0);
+  expect(toggle().getAttribute("aria-label")).toBe("Exclude ignored files");
+  expect(toggle().getAttribute("aria-pressed")).toBe("true");
+  expect(pending.find((request) => request.body.type === "search_project_files")?.body).toMatchObject({ query: "app", include_ignored: true });
+  await answer("search_project_files", { type: "project_file_matches", project: "include-ignored", query: "app", paths: ["dist/app.js", "src/app.ts"], ignored: ["dist/app.js"], complete: true });
+  const row = (path: string) => document.querySelector<HTMLElement>(`[data-key="path:${path}"]`)!;
+  expect(row("dist/app.js").getAttribute("aria-label")).toBe(`${isolate("app.js")}, ignored`);
+  expect(row("dist").getAttribute("aria-label")).toBe(`${isolate("dist")}, ignored`);
+  expect(row("src/app.ts").getAttribute("aria-label")).toBe("app.ts");
+  // The veil that dims a row is keyed off `data-ignored`, on the folder whose every result is ignored too and not on a row with any other.
+  expect(row("dist/app.js").hasAttribute("data-ignored")).toBe(true);
+  expect(row("dist").hasAttribute("data-ignored")).toBe(true);
+  expect(row("src/app.ts").hasAttribute("data-ignored")).toBe(false);
+  expect(row("src").hasAttribute("data-ignored")).toBe(false);
+  // Closing the field drops the choice with the keyword.
+  await act(async () => labelled("Hide the filter").click());
+  await act(async () => labelled("Filter by file name").click());
+  expect(toggle().getAttribute("aria-pressed")).toBe("false");
 });

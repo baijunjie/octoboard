@@ -32,6 +32,18 @@ The deadline stays the call site's own: run the command through `subprocess::run
 `Command::output`. It kills the whole process group rather than the direct child, which is what also reaps the
 `ssh` that `git` forked.
 
+## A `git` that only adds to a browse reply gets a short deadline and a budget of its own, and failing leaves it out
+
+Applies to a `git` run that decorates a browse reply the daemon has already read — which of a listing's entries are
+ignored, a change listing's line counts — and above all to one behind a reply the client asks for again while it is on
+screen (a folder in view in the Files tab is relisted every few seconds). Give it a deadline of a few seconds defined in
+`apps/daemon/src/browse/budget.rs`, as `LINE_COUNT_TIMEOUT` and `IGNORE_CHECK_TIMEOUT` are, never `GIT_READ_TIMEOUT`'s
+30 seconds, and take a run that fails, overruns or prints past its ceiling as "no addition" rather than as a failed
+reply; where the same answer is asked for again and again, remember it while what decides it is unchanged rather than
+start a `git` each time. Every buffer the run holds — its stdout ceiling, what is built from it — is a constant in that
+file and is added into the reply's reservation there, or the per-connection retained-bytes bound no longer covers the
+reply (`apps/daemon/PROTOCOL.md`, "Browse budgets").
+
 ## A `git` that compares with the worktree passes `--ignore-submodules`
 
 Applies to a daemon `git status`, or a `git diff` without `--cached`, especially on a path that repeats — the Git
@@ -53,6 +65,16 @@ out as the object ids. Those attributes are the user's, and losing them silently
 The `--` matters because an operand of that form is also a valid path, so a worktree file happening to be named like
 one makes `git` refuse the whole command as an ambiguous argument — a condition that depends on what the user has on
 disk, which no fixture without such a file reproduces.
+
+## Compare the paths `git` prints with names read from disk only in one Unicode form
+
+Applies to daemon code on macOS that matches paths a `git` prints against names it read from the filesystem itself — a
+listing's entries, a search's traversal. There `git` normally runs with `core.precomposeUnicode` on and prints a name
+stored decomposed (as macOS applications commonly write an accented name) precomposed, while the directory read returns
+the bytes as stored, so a byte comparison of the two misses exactly those names. Settle the form before writing the
+comparison: run that `git` with `-c core.precomposeUnicode=false`, so it prints names as stored — what the Files tab's
+ignored lookups do, at the cost `apps/daemon/PROTOCOL.md`'s "Ignored entries" gives — or normalise both sides. Linux
+never shows the mismatch, and on macOS only a fixture holding a name stored decomposed does.
 
 ## A test that a `git` read leaves the repository alone needs a fixture whose stat information is stale
 

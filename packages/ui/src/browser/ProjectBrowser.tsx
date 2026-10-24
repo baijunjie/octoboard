@@ -28,13 +28,25 @@ import { FileTree } from "./FileTree";
 import { focusRow } from "./focusRow";
 import { GitView } from "./GitView";
 import { PaneNote } from "./paneNote";
-import { buildTree, fileEvidence, listingSaysDirectory, neighbours, parentPath, rereadFor, rowKey, type DirListing, type FileEvidence } from "./tree";
+import { buildTree, fileEvidence, hasOpenFolder, listingSaysDirectory, neighbours, parentPath, rereadFor, rowKey, type DirListing, type FileEvidence } from "./tree";
 import { RowPathScope } from "./RowActions";
 import { ROW_HEIGHT } from "./treeRow";
 import { useDirectoryListings } from "./useDirectoryListings";
 import { useFileSearch } from "./useFileSearch";
 import { useFileReader } from "./useFileReader";
 import { useGitReview } from "./useGitReview";
+
+/** The key of the top-level folder a row of the tree is under, the row that stays on screen when
+ * every folder folds; none for a row that is itself at the top level. Rows are keyed by path
+ * (`rowKey`), or, for a status row (loading, empty, cut short), by the folder it speaks of. */
+function topLevelFolderKey(key: string): string | undefined {
+  const isPath = key.startsWith(rowKey(""));
+  const path = isPath ? key.slice(rowKey("").length) : /^status:[a-z]+:(.*)$/.exec(key)?.[1];
+  if (path === undefined || path === "") return undefined;
+  const slash = path.indexOf("/");
+  if (slash === -1) return isPath ? undefined : rowKey(path);
+  return rowKey(path.slice(0, slash));
+}
 
 /** The vertical padding the tree's scroller adds above its first row (`py-1`). */
 const TREE_PADDING = 4;
@@ -105,15 +117,18 @@ export function ProjectBrowser({
   useEffect(() => setGitModeWorktree(project.id, mode === "git" ? git.worktree : undefined), [project.id, mode, git.worktree]);
   const treeRef = useRef<HTMLDivElement>(null);
   const refreshRef = useRef<HTMLButtonElement>(null);
+  // The hand-off covers the header's controls too: Collapse all disables itself as it is pressed,
+  // which blurs it to `<body>`, and it hands focus to Refresh beside it.
   const filesFocus = useFocusHandoff(() => refreshRef.current?.focus());
 
   const query = fileFilter.filter.trim();
   const searching = query !== "";
   const dirs = useDirectoryListings(project.id, active && mode === "files" && (!searching || reader.subject !== undefined));
-  const search = useFileSearch(project.id, query, active && mode === "files" && searching);
+  const search = useFileSearch(project.id, query, active && mode === "files" && searching, fileFilter.includeIgnored);
   const directoryTree = useMemo(() => buildTree(dirs.listings, browser.expanded, browser.selected), [dirs.listings, browser.expanded, browser.selected]);
   const resultPaths = search.result.state === "loaded" ? search.result.paths : [];
-  const resultModel = useMemo(() => buildFileResults(resultPaths, browser.selected, collapsedFiles), [resultPaths, browser.selected, collapsedFiles]);
+  const resultIgnored = search.result.state === "loaded" ? search.result.ignored : undefined;
+  const resultModel = useMemo(() => buildFileResults(resultPaths, browser.selected, collapsedFiles, resultIgnored), [resultPaths, browser.selected, collapsedFiles, resultIgnored]);
   const tree = searching ? resultModel.tree : directoryTree;
   const searchParents = reader.subject?.path.split("/").slice(0, -1) ?? [];
   const wantedDirectories = !searching
@@ -149,6 +164,16 @@ export function ProjectBrowser({
     setCollapsedFiles(next);
     browser.setExpanded(paths);
     dirs.refresh(opened);
+  };
+
+  // Folds every folder: the expanded ones of the tree, or every folder of the filter's results. A
+  // focused row that goes with them hands focus to the top-level folder it was under, the nearest
+  // row that stays.
+  const collapseAll = () => {
+    const focused = document.activeElement instanceof Element ? document.activeElement.closest<HTMLElement>("[role=row][data-key]") : null;
+    const stays = focused && treeRef.current?.contains(focused) ? topLevelFolderKey(focused.dataset.key ?? "") : undefined;
+    onExpandedChange(new Set());
+    if (stays !== undefined) focusRow(treeRef.current, stays);
   };
 
   // A heading a document link asked to show, kept until another file is opened. Previous and Next
@@ -254,9 +279,10 @@ export function ProjectBrowser({
             prioritizeChildren
             title={project.name}
             actions={
-              <>
+              <div className="contents" onFocus={filesFocus.onFocus} onBlur={filesFocus.onBlur}>
                 <BrowserViewControls
                   filter={activeFilter}
+                  collapseAll={mode === "files" ? { disabled: !hasOpenFolder(tree.nodes, expandedKeys), onPress: collapseAll } : undefined}
                   layout={mode === "git" ? { value: browser.layout, onChange: browser.setLayout } : undefined}
                   byCommit={mode === "git" ? { value: browser.byCommit, onChange: browser.setByCommit } : undefined}
                 />
@@ -265,7 +291,7 @@ export function ProjectBrowser({
                     <RefreshCw aria-hidden="true" className={spinning > 0 ? "size-4 motion-safe:animate-spin-slow" : "size-4"} />
                   </Button>
                 </TitledControl>
-              </>
+              </div>
             }
           >
             <Tabs.ListContainer className="shrink-0 rounded-none bg-transparent" render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
@@ -276,7 +302,7 @@ export function ProjectBrowser({
               </Tabs.List>
             </Tabs.ListContainer>
           </PanelHeader>
-          <FileFilterField contextKey={tab} state={activeFilter} label={t("browser.filter.label")} placeholder={t(mode === "files" ? "browser.filter.placeholder" : "git.filter.placeholder")} />
+          <FileFilterField contextKey={tab} state={activeFilter} ignoredToggle={mode === "files"} label={t("browser.filter.label")} placeholder={t(mode === "files" ? "browser.filter.placeholder" : "git.filter.placeholder")} />
           {mode === "files" ? <Tabs.Panel key="files" id="files" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
             <WhenPainted>
               {(painted) => (

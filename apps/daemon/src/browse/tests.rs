@@ -54,6 +54,7 @@ fn search_request_resolves_the_stored_project_and_echoes_the_query() {
         .serve(BrowseBody::SearchProjectFiles {
             project: "unknown".into(),
             query: "needle".into(),
+            include_ignored: false,
         })
         .unwrap_err();
     assert_eq!(
@@ -136,7 +137,13 @@ impl Fixture {
     }
 
     pub(super) fn serve(&self, body: BrowseBody) -> anyhow::Result<Event> {
-        serve(&self.state, None, body, &git_env, &AtomicBool::new(false))
+        self.serve_in(&[], body)
+    }
+
+    /// [`Fixture::serve`] with `extra` added to the environment `git` runs in.
+    fn serve_in(&self, extra: &[(&str, &str)], body: BrowseBody) -> anyhow::Result<Event> {
+        let make = || Ok(test_env(extra));
+        serve(&self.state, None, body, &make, &AtomicBool::new(false))
     }
 
     fn source_result(&self, project: &str) -> anyhow::Result<Event> {
@@ -1137,5 +1144,631 @@ fn host_path_actions_validate_wire_paths_and_recheck_worktree_scopes() {
     assert_eq!(
         error.downcast_ref::<CodedError>().unwrap().code,
         error_code::WORKTREE_UNAVAILABLE
+    );
+}
+
+/// A repository whose files exercise every way Git ignores one: a root pattern, a nested
+/// `.gitignore`, a whole ignored folder, and a tracked file that still matches a pattern.
+fn ignoring_repo(label: &str) -> ScratchDir {
+    let repo = repo_with(
+        label,
+        &[
+            (b".gitignore", b"build/\n*.log\n"),
+            (b"sub/.gitignore", b"*.tmp\n"),
+            (b"keep/tracked.log", b"tracked\n"),
+            (b"keep/plain.txt", b"plain\n"),
+            (b"sub/plain.txt", b"plain\n"),
+        ],
+    );
+    git(&repo, &["add", "-f", "keep/tracked.log"]);
+    git(
+        &repo,
+        &["commit", "-q", "-m", "track a file that matches a pattern"],
+    );
+    for (name, body) in [
+        ("build/inner/output.txt", &b"out"[..]),
+        ("build/top.txt", b"out"),
+        ("debug.log", b"log"),
+        ("keep/other.log", b"log"),
+        ("sub/scratch.tmp", b"tmp"),
+        ("odd \"name\"\n.log", b"log"),
+        (":(glob)magic.log", b"log"),
+        ("star*.txt", b"not ignored"),
+        ("root.tmp", b"not ignored here"),
+    ] {
+        let path = repo.join(name);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, body).unwrap();
+    }
+    repo
+}
+
+impl Fixture {
+    fn ignored_in(&self, project: &str, path: &str) -> Vec<String> {
+        let (entries, _) = self.list(project, None, path).unwrap();
+        entries
+            .into_iter()
+            .filter(|entry| entry.ignored)
+            .map(|entry| entry.name)
+            .collect()
+    }
+
+    fn search(&self, project: &str, query: &str, include_ignored: bool) -> Vec<String> {
+        self.search_marked(project, query, include_ignored).0
+    }
+
+    /// The matches and, of them, the ones the reply says Git ignores.
+    fn search_marked(
+        &self,
+        project: &str,
+        query: &str,
+        include_ignored: bool,
+    ) -> (Vec<String>, Vec<String>) {
+        match self
+            .serve(BrowseBody::SearchProjectFiles {
+                project: project.to_string(),
+                query: query.to_string(),
+                include_ignored,
+            })
+            .unwrap()
+        {
+            Event::ProjectFileMatches { paths, ignored, .. } => (paths, ignored),
+            other => panic!("not matches: {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn a_listing_marks_what_git_ignores() {
+    let fixture = Fixture::new();
+    let repo = ignoring_repo("browse-ignored-list");
+    let project = fixture.project("p", &repo);
+    assert_eq!(
+        fixture.ignored_in(&project, ""),
+        [
+            ":(glob)magic.log",
+            "build",
+            "debug.log",
+            "odd \"name\"\n.log"
+        ],
+        "a folder and files named by the root .gitignore, however odd their names"
+    );
+    assert_eq!(
+        fixture.ignored_in(&project, "sub"),
+        ["scratch.tmp"],
+        "a nested .gitignore applies below its folder only"
+    );
+    assert_eq!(
+        fixture.ignored_in(&project, "keep"),
+        ["other.log"],
+        "a tracked file is not ignored however it matches a pattern"
+    );
+    assert_eq!(
+        fixture.ignored_in(&project, "build"),
+        ["inner", "top.txt"],
+        "everything inside an ignored folder is ignored"
+    );
+    assert_eq!(fixture.ignored_in(&project, "build/inner"), ["output.txt"]);
+}
+
+#[test]
+fn the_exclude_file_makes_an_entry_ignored_too() {
+    let fixture = Fixture::new();
+    let repo = repo_with("browse-ignored-exclude", &[(b"a.txt", b"a\n")]);
+    std::fs::write(repo.join("secret.txt"), b"s").unwrap();
+    std::fs::write(repo.join(".git/info/exclude"), b"secret.txt\n").unwrap();
+    let project = fixture.project("p", &repo);
+    assert_eq!(fixture.ignored_in(&project, ""), ["secret.txt"]);
+}
+
+#[test]
+fn nothing_is_ignored_outside_a_repository() {
+    let fixture = Fixture::new();
+    let directory = ScratchDir::new("browse-ignored-none");
+    std::fs::write(directory.join(".gitignore"), b"*.log\n").unwrap();
+    std::fs::write(directory.join("debug.log"), b"log").unwrap();
+    let project = fixture.project("p", &directory);
+    let (entries, complete) = fixture.list(&project, None, "").unwrap();
+    assert!(complete);
+    assert_eq!(entries.len(), 2);
+    assert!(entries.iter().all(|entry| !entry.ignored));
+    assert_eq!(fixture.search(&project, "log", false), ["debug.log"]);
+}
+
+#[test]
+fn a_git_that_fails_leaves_the_listing_and_the_search_unfiltered() {
+    let fixture = Fixture::new();
+    let repo = ignoring_repo("browse-ignored-failing");
+    let project = fixture.project("p", &repo);
+    // A repository whose metadata `git` cannot read fails every `git` run in it.
+    std::fs::write(repo.join(".git/HEAD"), b"garbage\n").unwrap();
+    let (entries, complete) = fixture.list(&project, None, "").unwrap();
+    assert!(complete);
+    assert!(entries.iter().all(|entry| !entry.ignored));
+    assert!(fixture
+        .search(&project, "debug", false)
+        .contains(&"debug.log".to_string()));
+}
+
+#[test]
+fn a_search_leaves_out_ignored_files_and_folders_unless_asked() {
+    let fixture = Fixture::new();
+    let repo = ignoring_repo("browse-ignored-search");
+    let project = fixture.project("p", &repo);
+    assert_eq!(
+        fixture.search(&project, ".txt", false),
+        ["keep/plain.txt", "star*.txt", "sub/plain.txt"]
+    );
+    assert_eq!(
+        fixture.search(&project, ".log", false),
+        ["keep/tracked.log"],
+        "a tracked file that matches a pattern is still searched"
+    );
+    assert_eq!(
+        fixture.search(&project, ".tmp", false),
+        ["root.tmp"],
+        "a nested .gitignore does not reach outside its folder"
+    );
+    assert_eq!(
+        fixture.search(&project, ".txt", true),
+        [
+            "build/inner/output.txt",
+            "build/top.txt",
+            "keep/plain.txt",
+            "star*.txt",
+            "sub/plain.txt"
+        ]
+    );
+    assert_eq!(
+        fixture.search_marked(&project, ".txt", true).1,
+        ["build/inner/output.txt", "build/top.txt"],
+        "a search including ignored files says which matches Git ignores, folders' contents too"
+    );
+    assert!(fixture.search_marked(&project, ".txt", false).1.is_empty());
+    assert_eq!(
+        fixture.search(&project, ".log", true),
+        [
+            ":(glob)magic.log",
+            "debug.log",
+            "keep/other.log",
+            "keep/tracked.log",
+            "odd \"name\"\n.log"
+        ]
+    );
+}
+
+/// A listing's entries that Git ignores, and a search's matches, in `fixture` over `extra` added to
+/// the environment `git` runs in.
+fn ignored_with(
+    fixture: &Fixture,
+    extra: &[(&str, &str)],
+    project: &str,
+) -> (Vec<String>, Vec<String>) {
+    let listing = match fixture
+        .serve_in(
+            extra,
+            BrowseBody::ListProjectDir {
+                project: project.to_string(),
+                worktree: None,
+                path: String::new(),
+            },
+        )
+        .unwrap()
+    {
+        Event::ProjectDir { entries, .. } => entries,
+        other => panic!("not a listing: {other:?}"),
+    };
+    let found = match fixture
+        .serve_in(
+            extra,
+            BrowseBody::SearchProjectFiles {
+                project: project.to_string(),
+                query: String::new(),
+                include_ignored: false,
+            },
+        )
+        .unwrap()
+    {
+        Event::ProjectFileMatches { paths, .. } => paths,
+        other => panic!("not matches: {other:?}"),
+    };
+    let ignored = listing
+        .into_iter()
+        .filter(|entry| entry.ignored)
+        .map(|entry| entry.name)
+        .collect();
+    (ignored, found)
+}
+
+#[test]
+fn the_global_excludes_file_makes_an_entry_ignored_too() {
+    let fixture = Fixture::new();
+    let repo = repo_with("browse-ignored-global", &[(b"a.txt", b"a\n")]);
+    std::fs::write(repo.join("token.secret"), b"s").unwrap();
+    let home = ScratchDir::new("browse-ignored-global-config");
+    std::fs::write(home.join("ignore"), b"*.secret\n").unwrap();
+    let config = home.join("config");
+    std::fs::write(
+        &config,
+        format!(
+            "[core]\n\texcludesFile = {}\n",
+            home.join("ignore").display()
+        ),
+    )
+    .unwrap();
+    let project = fixture.project("p", &repo);
+    let (ignored, found) = ignored_with(
+        &fixture,
+        &[("GIT_CONFIG_GLOBAL", config.to_str().unwrap())],
+        &project,
+    );
+    assert_eq!(ignored, ["token.secret"]);
+    assert_eq!(found, ["a.txt"]);
+    // The positive control, in a folder of its own (a folder's entries are remembered, whatever
+    // the global configuration says): without the configuration nothing is ignored.
+    let control = repo_with("browse-ignored-global-control", &[(b"a.txt", b"a\n")]);
+    std::fs::write(control.join("token.secret"), b"s").unwrap();
+    let control = fixture.project("control", &control);
+    let (ignored, found) = ignored_with(&fixture, &[], &control);
+    assert!(ignored.is_empty());
+    assert_eq!(found, ["a.txt", "token.secret"]);
+}
+
+#[test]
+fn a_listing_longer_than_one_check_ignore_batch_is_marked_throughout() {
+    let fixture = Fixture::new();
+    let repo = repo_with("browse-ignored-batches", &[(b".gitignore", b"*.log\n")]);
+    // Seven hundred names of two hundred bytes come to well over one batch of names.
+    for index in 0..700 {
+        let extension = if index % 2 == 0 { "log" } else { "txt" };
+        let name = format!("{index:0>196}.{extension}");
+        std::fs::write(repo.join(name), b"x").unwrap();
+    }
+    let project = fixture.project("p", &repo);
+    let (entries, complete) = fixture.list(&project, None, "").unwrap();
+    assert!(complete);
+    assert_eq!(entries.len(), 702, "the files, .gitignore and .git");
+    for entry in &entries {
+        assert_eq!(
+            entry.ignored,
+            entry.name.ends_with(".log"),
+            "{}",
+            entry.name
+        );
+    }
+    assert_eq!(entries.iter().filter(|entry| entry.ignored).count(), 350);
+}
+
+#[test]
+fn a_cancel_during_each_git_run_ends_the_read() {
+    fn cancelled(err: anyhow::Error) -> bool {
+        err.downcast_ref::<Cancelled>().is_some()
+    }
+    // `git` stands in with a script that fails the runs `fails` names and stalls on the rest.
+    let stalling = |label: &str, fails: &str| {
+        let bin = ScratchDir::new(label);
+        let env = crate::test_support::fake_agent(
+            &bin,
+            "git",
+            &format!("case \"$*\" in *{fails}*) exit 128;; esac\n/bin/sleep 30\n"),
+        );
+        (bin.join("git").to_string_lossy().into_owned(), env, bin)
+    };
+    // The cancel comes a moment after the read has started.
+    let cancel_soon = |read: &dyn Fn(&AtomicBool) -> anyhow::Result<()>| {
+        let cancel = AtomicBool::new(false);
+        let started = std::time::Instant::now();
+        let result = std::thread::scope(|scope| {
+            scope.spawn(|| {
+                std::thread::sleep(std::time::Duration::from_millis(400));
+                cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+            });
+            read(&cancel)
+        });
+        assert!(started.elapsed() < std::time::Duration::from_secs(20));
+        result.map(|()| false).unwrap_or_else(cancelled)
+    };
+
+    let repository = ScratchDir::new("browse-ignored-cancel-repo");
+    std::fs::create_dir(repository.join(".git")).unwrap();
+    std::fs::write(repository.join("a.txt"), b"a").unwrap();
+    let nesting = ScratchDir::new("browse-ignored-cancel-nesting");
+    std::fs::create_dir_all(nesting.join("inner/.git")).unwrap();
+
+    // The listing's `check-ignore`.
+    let (program, env, _bin) = stalling("browse-ignored-cancel-listing", "nothing-fails");
+    let make = || Ok(GitEnv::new(program.clone(), env.clone()));
+    let git = Git::new(&make).with_ceiling(None);
+    let canonical = std::fs::canonicalize(&*repository).unwrap();
+    assert!(cancel_soon(&|cancel| {
+        let root = wire_path::RelPath::parse("").unwrap();
+        live::list_dir(&canonical, &root, &git, cancel).map(|_| ())
+    }));
+    // The search's `ls-files` of the project's repository.
+    assert!(cancel_soon(&|cancel| {
+        live::search_files(&canonical, "a", false, &git, cancel).map(|_| ())
+    }));
+    // The `ls-files` of a repository nested in a project that is in none.
+    let nested = std::fs::canonicalize(&*nesting).unwrap();
+    assert!(cancel_soon(&|cancel| {
+        live::search_files(&nested, "a", false, &git, cancel).map(|_| ())
+    }));
+    // The `check-ignore` of the project folder itself, after its `ls-files` refused to run.
+    let (program, env, _bin) = stalling("browse-ignored-cancel-fallback", "ls-files");
+    let make = || Ok(GitEnv::new(program.clone(), env.clone()));
+    let git = Git::new(&make).with_ceiling(None);
+    assert!(cancel_soon(&|cancel| {
+        live::search_files(&canonical, "a", false, &git, cancel).map(|_| ())
+    }));
+}
+
+#[test]
+fn a_project_below_the_repository_root_is_judged_by_the_whole_repository() {
+    let fixture = Fixture::new();
+    let repo = repo_with(
+        "browse-ignored-below-root",
+        &[
+            (b".gitignore", b"*.log\n"),
+            (b"pkg/.gitignore", b"*.tmp\n"),
+            (b"pkg/plain.txt", b"plain\n"),
+        ],
+    );
+    for name in [
+        "pkg/a.log",
+        "pkg/a.tmp",
+        "pkg/gen/b.log",
+        "pkg/gen/b.txt",
+        "outside.log",
+    ] {
+        let path = repo.join(name);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, b"x").unwrap();
+    }
+    let project = fixture.project("p", &repo.join("pkg"));
+    assert_eq!(fixture.ignored_in(&project, ""), ["a.log", "a.tmp"]);
+    assert_eq!(fixture.ignored_in(&project, "gen"), ["b.log"]);
+    assert_eq!(
+        fixture.search(&project, "", false),
+        [".gitignore", "gen/b.txt", "plain.txt"]
+    );
+    assert_eq!(
+        fixture.search_marked(&project, "", true).1,
+        ["a.log", "a.tmp", "gen/b.log"]
+    );
+}
+
+#[test]
+fn a_nested_repository_is_judged_by_its_own_rules_in_the_listing_and_in_the_search() {
+    let fixture = Fixture::new();
+    let repo = repo_with(
+        "browse-ignored-nested",
+        &[(b".gitignore", b"*.log\n"), (b"top.txt", b"t\n")],
+    );
+    std::fs::write(repo.join("top.log"), b"x").unwrap();
+    // A clone of its own inside the project, which ignores something the outer one does not and
+    // keeps what the outer one ignores.
+    let inner = repo.join("inner");
+    std::fs::create_dir_all(inner.join("cache")).unwrap();
+    git(&inner, &["init", "-q"]);
+    std::fs::write(inner.join(".gitignore"), b"cache/\n").unwrap();
+    std::fs::write(inner.join("cache/data.txt"), b"x").unwrap();
+    std::fs::write(inner.join("inner.log"), b"x").unwrap();
+    std::fs::write(inner.join("inner.txt"), b"x").unwrap();
+    let project = fixture.project("p", &repo);
+    assert_eq!(fixture.ignored_in(&project, "inner"), ["cache"]);
+    assert_eq!(
+        fixture.search(&project, "", false),
+        [
+            ".gitignore",
+            "inner/.gitignore",
+            "inner/inner.log",
+            "inner/inner.txt",
+            "top.txt"
+        ],
+        "the outer rules do not reach into it and the inner ones do"
+    );
+    assert_eq!(
+        fixture.search_marked(&project, "data", true).1,
+        ["inner/cache/data.txt"]
+    );
+}
+
+#[test]
+fn a_submodule_is_judged_by_its_own_rules_in_the_search_too() {
+    let fixture = Fixture::new();
+    let library = repo_with(
+        "browse-ignored-library",
+        &[(b".gitignore", b"generated/\n"), (b"lib.txt", b"l\n")],
+    );
+    std::fs::create_dir(library.join("generated")).unwrap();
+    let repo = repo_with("browse-ignored-submodule", &[(b"top.txt", b"t\n")]);
+    git(
+        &repo,
+        &[
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "add",
+            "-q",
+            library.to_str().unwrap(),
+            "vendor",
+        ],
+    );
+    git(&repo, &["commit", "-q", "-m", "add the submodule"]);
+    std::fs::create_dir_all(repo.join("vendor/generated")).unwrap();
+    std::fs::write(repo.join("vendor/generated/out.txt"), b"x").unwrap();
+    let project = fixture.project("p", &repo);
+    assert_eq!(fixture.ignored_in(&project, "vendor"), ["generated"]);
+    assert_eq!(
+        fixture.search(&project, ".txt", false),
+        ["top.txt", "vendor/lib.txt"]
+    );
+    assert_eq!(
+        fixture.search_marked(&project, ".txt", true).1,
+        ["vendor/generated/out.txt"]
+    );
+}
+
+#[test]
+fn a_name_that_looks_like_a_pattern_is_asked_about_as_the_file_it_is() {
+    let fixture = Fixture::new();
+    let repo = repo_with(
+        "browse-ignored-glob-names",
+        &[
+            (b".gitignore", b"*.txt\n!keep.txt\n"),
+            (b"x.txt", b"tracked\n"),
+        ],
+    );
+    git(&repo, &["add", "-f", "x.txt"]);
+    git(&repo, &["commit", "-q", "-m", "track a file that matches"]);
+    for name in ["*.txt", "[a].txt", "a?b.txt", "back\\slash.txt", "keep.txt"] {
+        std::fs::write(repo.join(name), b"x").unwrap();
+    }
+    let project = fixture.project("p", &repo);
+    assert_eq!(
+        fixture.ignored_in(&project, ""),
+        ["*.txt", "[a].txt", "a?b.txt", "back\\slash.txt"],
+        "an untracked file named like a pattern is not answered for by the tracked x.txt, and a \
+         pattern that un-ignores a file leaves it not ignored"
+    );
+}
+
+#[test]
+fn a_name_in_either_unicode_form_is_found_among_the_ignored() {
+    let fixture = Fixture::new();
+    let repo = repo_with("browse-ignored-unicode", &[(b".gitignore", b"*.log\n")]);
+    // A decomposed name, as macOS applications write them, and a precomposed one.
+    let decomposed = "cafe\u{301}.log";
+    let precomposed = "caf\u{e9}-2.log";
+    std::fs::write(repo.join(decomposed), b"x").unwrap();
+    std::fs::write(repo.join(precomposed), b"x").unwrap();
+    std::fs::write(repo.join("cafe\u{301}.txt"), b"x").unwrap();
+    let project = fixture.project("p", &repo);
+    let mut ignored = fixture.ignored_in(&project, "");
+    ignored.sort();
+    let mut expected = vec![decomposed.to_string(), precomposed.to_string()];
+    expected.sort();
+    assert_eq!(ignored, expected);
+    assert_eq!(
+        fixture.search(&project, "caf", false),
+        ["cafe\u{301}.txt".to_string()]
+    );
+}
+
+#[test]
+fn a_project_that_is_itself_ignored_is_ignored_throughout() {
+    let fixture = Fixture::new();
+    let repo = repo_with(
+        "browse-ignored-itself",
+        &[(b".gitignore", b"build/\n"), (b"top.txt", b"t\n")],
+    );
+    for name in ["build/one.txt", "build/deep/two.txt"] {
+        let path = repo.join(name);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, b"x").unwrap();
+    }
+    // At the ignored folder and below it, `git ls-files` prints `./` and refuses to run.
+    for (root, listed, found) in [
+        (
+            "build",
+            vec!["deep", "one.txt"],
+            vec!["deep/two.txt", "one.txt"],
+        ),
+        ("build/deep", vec!["two.txt"], vec!["two.txt"]),
+    ] {
+        let project = fixture.project(&root.replace('/', "-"), &repo.join(root));
+        assert_eq!(fixture.ignored_in(&project, ""), listed, "{root}");
+        assert!(fixture.search(&project, "", false).is_empty(), "{root}");
+        let found: Vec<String> = found.into_iter().map(str::to_string).collect();
+        assert_eq!(
+            fixture.search_marked(&project, "", true),
+            (found.clone(), found)
+        );
+    }
+}
+
+#[test]
+fn the_ignored_entries_of_a_folder_are_remembered_until_something_that_decides_them_changes() {
+    let fixture = Fixture::new();
+    let repo = repo_with(
+        "browse-ignored-remembered",
+        &[(b".gitignore", b"*.log\n"), (b"a.txt", b"a\n")],
+    );
+    std::fs::write(repo.join("a.log"), b"x").unwrap();
+    std::fs::write(repo.join("c.txt"), b"x").unwrap();
+    let project = fixture.project("p", &repo);
+    assert_eq!(fixture.ignored_in(&project, ""), ["a.log"]);
+
+    // A `git` that can no longer read the repository would leave everything unmarked, so a
+    // listing that still marks the entry did not ask it.
+    let head = std::fs::read(repo.join(".git/HEAD")).unwrap();
+    std::fs::write(repo.join(".git/HEAD"), b"garbage\n").unwrap();
+    assert_eq!(fixture.ignored_in(&project, ""), ["a.log"], "remembered");
+
+    // Changing the `.gitignore` is noticed, so `git` is asked again, and fails.
+    std::fs::write(repo.join(".gitignore"), b"*.log\n*.txt\n").unwrap();
+    assert!(fixture.ignored_in(&project, "").is_empty(), "asked again");
+
+    // With `git` working again, the new rules are the ones found.
+    std::fs::write(repo.join(".git/HEAD"), head).unwrap();
+    assert_eq!(fixture.ignored_in(&project, ""), ["a.log", "c.txt"]);
+    // A new entry is asked about even though no source changed.
+    std::fs::write(repo.join("b.log"), b"x").unwrap();
+    assert_eq!(
+        fixture.ignored_in(&project, ""),
+        ["a.log", "b.log", "c.txt"]
+    );
+}
+
+#[test]
+fn names_that_look_like_patterns_are_judged_by_the_rules_as_the_files_they_are() {
+    let fixture = Fixture::new();
+    let repo = repo_with(
+        "browse-ignored-literal-rules",
+        &[
+            (b".gitignore", b"a?b.md\n\\*.md\nlit\\\\b\n*.keep\n"),
+            (b"plain.md", b"p\n"),
+        ],
+    );
+    // The rules name these files literally: `\*.md` is a star, `lit\\b` a backslash. `*.keep` is
+    // tracked below, so it is not ignored however the rules read it.
+    for name in ["a?b.md", "*.md", "lit\\b", "*.keep", "axb.md"] {
+        std::fs::write(repo.join(name), b"x").unwrap();
+    }
+    git(&repo, &["add", "-f", "--", "*.keep"]);
+    git(
+        &repo,
+        &["commit", "-q", "-m", "track a file named like a pattern"],
+    );
+    let project = fixture.project("p", &repo);
+    assert_eq!(
+        fixture.ignored_in(&project, ""),
+        ["*.md", "a?b.md", "axb.md", "lit\\b"],
+        "axb.md is ignored too, as the rule a?b.md reads"
+    );
+}
+
+#[test]
+fn a_pattern_named_folder_holding_a_tracked_file_is_not_ignored() {
+    let fixture = Fixture::new();
+    let repo = repo_with(
+        "browse-ignored-tracked-in-glob-folder",
+        &[(b".gitignore", b"[[]id]/\n"), (b"top.txt", b"t\n")],
+    );
+    std::fs::create_dir_all(repo.join("[id]")).unwrap();
+    std::fs::write(repo.join("[id]/page.js"), b"x").unwrap();
+    std::fs::create_dir_all(repo.join("[slug]")).unwrap();
+    std::fs::write(repo.join("[slug]/page.js"), b"x").unwrap();
+    std::fs::write(repo.join(".gitignore"), b"[[]id]/\n[[]slug]/\n").unwrap();
+    git(&repo, &["add", "-f", "--", "[[]id]/page.js"]);
+    git(
+        &repo,
+        &["commit", "-q", "-m", "track a file in an ignored folder"],
+    );
+    let project = fixture.project("p", &repo);
+    assert_eq!(
+        fixture.ignored_in(&project, ""),
+        ["[slug]"],
+        "[id] holds a tracked file, [slug] does not"
     );
 }

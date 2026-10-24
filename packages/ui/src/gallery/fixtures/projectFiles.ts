@@ -18,12 +18,14 @@ export interface FixtureError {
 
 /** One path of a fixture project: a directory (cut short when `complete` is false), a file's text,
  * an image's bytes or a binary of no known type and the size it reports; with `error`, what reading
- * it (listing it, for a directory) is answered with. */
-export type FixtureFile =
+ * it (listing it, for a directory) is answered with. With `ignored`, Git ignores it, and so
+ * everything beneath it, as the daemon marks it. */
+export type FixtureFile = (
   | { dir: true; complete?: boolean; error?: FixtureError }
   | { text: string; error?: FixtureError }
   | { image: { mediaType: string; data: string }; error?: FixtureError }
-  | { binary: { size: number }; error?: FixtureError };
+  | { binary: { size: number }; error?: FixtureError }
+) & { ignored?: true };
 
 /** A project's files by wire path; a directory lists the paths directly under it. */
 export type FixtureFiles = Record<string, FixtureFile>;
@@ -92,6 +94,26 @@ const filterFiles: FixtureFiles = {
   "src/services": { dir: true },
   "src/services/search": { dir: true },
   "src/services/search/server.ts": { text: "export const searchPort = 8081;\n" },
+  // What Git ignores: a generated sibling of a tracked file, and two folders holding nothing else.
+  "src/server.gen.ts": { text: "export {};\n", ignored: true },
+  dist: { dir: true, ignored: true },
+  "dist/server.js": { text: "export {};\n" },
+  node_modules: { dir: true, ignored: true },
+  "node_modules/serverless": { dir: true },
+  "node_modules/serverless/server.js": { text: "module.exports = {};\n" },
+};
+/** A project with ignored entries among the tracked ones, folders and a file at its top level. */
+const ignoredTreeFiles: FixtureFiles = {
+  ...SAMPLE_FILES,
+  ".gitignore": { text: "node_modules\ndist\ntarget\n.env\n" },
+  ".env": { text: "PORT=8080\n", ignored: true },
+  dist: { dir: true, ignored: true },
+  "dist/main.js": { text: "export {};\n" },
+  node_modules: { dir: true, ignored: true },
+  "node_modules/left-pad": { dir: true },
+  "node_modules/left-pad/index.js": { text: "module.exports = {};\n" },
+  target: { dir: true, ignored: true },
+  "target/debug": { dir: true },
 };
 const fileTypeFiles: FixtureFiles = {
   "": { dir: true },
@@ -128,7 +150,7 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "A project session's files",
-    description: "The Files panel docked in a wide window is one rounded card with a hairline edge and the shadow of the sidebar's floating card, 16px from the terminal (the width handle's gap) and 8px from the window's end, the bottom and the top bar, the gaps showing the terminal's own background rather than a sidebar-coloured column. Its 40px header runs the project name, the Files and Changes tabs, the filter and refresh buttons, then Close panel, with no icon before the name; Files has no maximize, even beside the Terminal panel. The top bar has the Terminal toggle, not pressed, before the Files toggle, pressed, and no toggle for the pane itself. Folders come first in natural order, with .git and the system files .DS_Store and ._server.ts left out. src is expanded and main.ts is selected, its rounded highlight keeping space on all four sides, as Git rows do. Expand or collapse a folder to watch its children slide and fade in or out with the same timing as the session menu, while following rows slide into place. Press a file for the viewer, then Left/Right to visit visible files. Switch between the Website and Search API sessions to see the pane fade in place, without sliding, onto Search API's own tree. Switching between the two Website sessions keeps the tree steady. A project's actions offer Browse files when its pane is hidden or belongs to another project.",
+    description: "The Files panel docked in a wide window is one rounded card with a hairline edge and the shadow of the sidebar's floating card, 16px from the terminal (the width handle's gap) and 8px from the window's end, the bottom and the top bar, the gaps showing the terminal's own background rather than a sidebar-coloured column. Its 40px header runs the project name, the Files and Changes tabs, the filter, Collapse all folders (enabled, with src open) and refresh buttons, then Close panel, with no icon before the name; Files has no maximize, even beside the Terminal panel. The top bar has the Terminal toggle, not pressed, before the Files toggle, pressed, and no toggle for the pane itself. Folders come first in natural order, with .git and the system files .DS_Store and ._server.ts left out. src is expanded and main.ts is selected, its rounded highlight keeping space on all four sides, as Git rows do. Expand or collapse a folder to watch its children slide and fade in or out with the same timing as the session menu, while following rows slide into place. Press a file for the viewer, then Left/Right to visit visible files. Switch between the Website and Search API sessions to see the pane fade in place, without sliding, onto Search API's own tree. Switching between the two Website sessions keeps the tree steady. A project's actions offer Browse files when its pane is hidden or belongs to another project.",
     state,
     filesByProject: {
       [api.id]: {
@@ -141,6 +163,26 @@ export const projectFilesScenarios: Scenario[] = [
       },
     },
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600), (ui) => ui.key("Escape")],
+  },
+  {
+    id: "files-tree-ignored",
+    group: GROUP,
+    category: "normal",
+    title: "Files that Git ignores in the tree",
+    description: "dist, node_modules, target and .env are Git-ignored: each row is dimmed under a translucent veil of the pane's surface, name and icon together, as the sidebar dims its inactive projects, and so is everything inside the opened ignored folder (node_modules / left-pad), while src and the other tracked entries stay at full strength. .env is the selected row, so its veil is lifted; each ignored row lifts its own veil the same way while the pointer is on it, it holds keyboard focus or its actions menu is open. With src and node_modules open, Collapse all folders in the header, between the filter and Refresh buttons, is enabled; press it to fold both.",
+    state,
+    files: ignoredTreeFiles,
+    steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press(ui.t("browser.tree.row.ignored", { name: "node_modules" })), (ui) => ui.press(ui.t("browser.tree.row.ignored", { name: "left-pad" })), (ui) => ui.press(ui.t("browser.tree.row.ignored", { name: ".env" })), (ui) => ui.wait(600), (ui) => ui.key("Escape")],
+  },
+  {
+    id: "files-tree-ignored-collapsed",
+    group: GROUP,
+    category: "normal",
+    title: "Ignored folders with nothing open",
+    description: "No folder is open, so Collapse all folders in the header is disabled. The ignored folders (dist, node_modules, target) and .env are all under the dimming veil, none lifted, among the tracked entries at full strength.",
+    state,
+    files: ignoredTreeFiles,
+    steps: [...openFiles, (ui) => ui.wait(400)],
   },
   {
     id: "files-pane-handle",
@@ -156,13 +198,30 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Matching files throughout the project",
-    description: "The filter sits above the matching files, which stay in the folder tree: both server.ts files match the trimmed, case-insensitive filename query without opening any folders first, each under its folders, which start open and can be folded. The header reads the project title, then the Files and Changes tabs, then the filter and Refresh buttons and Close panel at the end; Files has no layout choice. Each tab keeps its own query and folded folders.",
+    description: "The filter sits above the matching files, which stay in the folder tree: both server.ts files match the trimmed, case-insensitive filename query without opening any folders first, each under its folders, which start open and can be folded. The Include ignored files toggle, not pressed (a file with a cross), ends the field's row: the Git-ignored matches (dist, node_modules and a generated server.gen.ts) are left out, so no row is dimmed. The header reads the project title, then the Files and Changes tabs, then the filter, Collapse all folders and Refresh buttons and Close panel at the end; Files has no layout choice. Each tab keeps its own query and folded folders.",
     state,
     files: filterFiles,
     steps: [
       ...openFiles,
       (ui) => ui.press(ui.t("browser.filter.show")),
       (ui) => ui.type(" SERVER "),
+      (ui) => ui.wait(400),
+    ],
+  },
+  {
+    id: "files-filter-ignored",
+    group: GROUP,
+    category: "normal",
+    title: "Matching files including the ones Git ignores",
+    description: "The same query with the Include ignored files toggle pressed (its icon a file with a magnifier, where the unpressed one shows a file with a cross): the ignored matches join the results under the dimming veil — server.gen.ts beside the tracked server.ts files, and the dist and node_modules folders above their ignored matches, veiled as folders because every result beneath them is ignored, while src, which also holds a tracked match, stays at full strength.",
+    state,
+    files: filterFiles,
+    steps: [
+      ...openFiles,
+      (ui) => ui.press(ui.t("browser.filter.show")),
+      (ui) => ui.type(" SERVER "),
+      (ui) => ui.wait(400),
+      (ui) => ui.press(ui.t("browser.filter.includeIgnored")),
       (ui) => ui.wait(400),
     ],
   },

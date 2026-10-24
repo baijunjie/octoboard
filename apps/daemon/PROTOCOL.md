@@ -65,7 +65,7 @@ the request id as if it were a record id.
 | `import_configuration` | `document`, `resolutions?`, `apply_settings?` | Answered with `configuration_imported`: creates a new console for each console of `document` and associates each project with the directory its entry in `resolutions` chooses (see "Configuration import" below). A project with no entry is left out. The document is refused as `inspect_configuration` refuses it, and a resolution that names a console or project the document does not have, names one twice, or chooses a `directory` that is neither an absolute path nor starts with `~/`, is refused with `import_resolution_invalid`; all of that before anything is created, as is anything `create_console` would refuse of a console of the document (an avatar that is not an image, say). `apply_settings` (absent means false) also applies the document's application settings; asking for them of a document that carries none is refused with `import_settings_missing`, before anything is created. A project that cannot be placed after that is not an error of the request (see "Configuration import") |
 | `get_project_source` | `project`, `slot?` | Where the project's files are read from: its resolved directory and, when it is inside a Git repository, the repository, the worktree holding it, its place in that worktree and every worktree of the repository, that one included. Answered with `project_source`. A browse request: see "Browsing a project" below for the rules every browse request shares (`slot`, budgets, its own outbound queue) |
 | `list_project_dir` | `project`, `path`, `worktree?`, `slot?` | Lists one directory of the project's files on disk, `path` being a wire path relative to the project's directory (empty for the directory itself). With `worktree`, the same place in that worktree of the project's repository is listed instead. Answered with `project_dir`. A browse request |
-| `search_project_files` | `project`, `query`, `slot?` | Searches file names recursively beneath the project's directory, including unopened subdirectories. A trimmed, case-insensitive basename substring, not a path expression. Answered with `project_file_matches`. A browse request |
+| `search_project_files` | `project`, `query`, `include_ignored?`, `slot?` | Searches file names recursively beneath the project's directory, including unopened subdirectories. A trimmed, case-insensitive basename substring, not a path expression. Files Git ignores, and ignored folders with all beneath them, are left out unless `include_ignored` (absent means false) is true — see "Searching file names". Answered with `project_file_matches`. A browse request |
 | `read_project_file` | `project`, `path`, `worktree?`, `from?`, `slot?` | Reads one file of the project, `path` being a wire path relative to the project's directory. `from` picks the content: `{"kind":"live"}` (the default) the file on disk, `{"kind":"index"}` the blob staged for it, `{"kind":"branch","branch":…}` the blob at a local branch's tip, `{"kind":"commit","commit":…}` the blob in a commit given by its full id. With `worktree`, the disk and the index read are that worktree's. Answered with `project_file`. A browse request |
 | `list_project_changes` | `project`, `worktree?`, `slot?` | Lists the uncommitted changes of the worktree holding the project's directory — or, with `worktree`, of that worktree of its repository — that touch the project: staged, unstaged, untracked and in conflict. Answered with `project_changes`. A browse request |
 | `read_project_change` | `project`, `worktree?`, `change`, `slot?` | Reads one of those changes for its diff: `change` is `{group, old, new}`, `group` being `staged`, `unstaged` or `untracked` and each side `{"state":"present","path":…}`, `{"state":"absent"}` or `{"state":"out_of_scope"}` as the listing gave it. Answered with `project_change`. A browse request |
@@ -160,7 +160,7 @@ the request id as if it were a record id.
 | `dir_listing` | `id`, `path`, `entries`: `[{name, path, is_git_repo}]` — only directories are listed |
 | `project_source` | `id`, `source` — the reply to `get_project_source`; `source` is a `ProjectSourceInfo` (see "Browsing a project") |
 | `project_dir` | `id`, `project`, `worktree`, `path`, `root_id`, `entries`, `complete` — the reply to `list_project_dir`. `project`, `worktree` and `path` echo the request; `root_id` is the identity of the directory the listing was scoped to; `entries` are `BrowseEntry` records in byte order of their names' wire forms; `complete` is false when the listing was cut at a budget or an entry could not be read |
-| `project_file_matches` | `id`, `project`, `query`, `paths`, `complete` — the reply to `search_project_files`. `project` and `query` echo the request; `paths` are canonical wire paths relative to the project, sorted in byte order. `complete` is false when traversal was cut short or an entry or subtree could not be read |
+| `project_file_matches` | `id`, `project`, `query`, `paths`, `ignored?`, `complete` — the reply to `search_project_files`. `project` and `query` echo the request; `paths` are canonical wire paths relative to the project, sorted in byte order; `ignored` (present only when not empty) are the `paths` Git ignores, which only a search with `include_ignored` can have. `complete` is false when traversal was cut short or an entry or subtree could not be read |
 | `project_file` | `id`, `project`, `worktree`, `path`, `source`, `file` — the reply to `read_project_file`. `project`, `worktree` and `path` echo the request; `source` is the `ContentSource` the body was read from and `file` the `FileContent` |
 | `project_changes` | `id`, `project`, `worktree`, `head`, `changes`, `complete` — the reply to `list_project_changes`. `project` and `worktree` echo the request; `head` is the commit the staged changes are against, null before the first commit; `changes` are `ChangeEntry` records in the order `git status` gives them; `complete` is false when the list was cut at a budget |
 | `project_change` | `id`, `project`, `worktree`, `group`, `head`, `old`, `new`, `patch` — the reply to `read_project_change`. `project`, `worktree` and `group` echo the request; `head` is the commit a staged change was read against (null before the first commit, and for the other groups); `old` and `new` are `SideRead` records; `patch` is a `FileContent` holding the change's unified patch as `git` writes it, null when none is made |
@@ -1459,7 +1459,8 @@ ProjectSourceInfo { project, root, resolved_root, root_id, git: GitSourceInfo?, 
 GitSourceInfo     { repository, common_dir, worktree, scope, worktrees: WorktreeInfo[] }
 WorktreeInfo      { id, root, main, head?, branch?, scope_present }
 BrowseEntry       { name, kind: "file"|"directory"|"symlink"|"other", size?, version?,
-                    target?: "file"|"directory"|"other"|"missing"|"outside" }
+                    target?: "file"|"directory"|"other"|"missing"|"outside",
+                    ignored?: true }  // present only when Git ignores the entry
 ContentSource     = { kind: "live", root_id, version }
                   | { kind: "index", worktree, blob }
                   | { kind: "commit", commit, branch?, blob }
@@ -1580,15 +1581,42 @@ scope (`outside`, not looked at further). `complete` is false when the listing s
 budget, and the entries then are those read before it stopped, not a chosen subset; it is false too when an entry
 could not be read, which is then left out.
 
+#### Ignored entries
+
+An entry is ignored when Git would ignore it for the repository the entry is in: every `.gitignore` level,
+`.git/info/exclude` and the user's global excludes, as `git check-ignore` and `git ls-files --ignored` apply them,
+so a tracked file is never ignored and everything inside an ignored folder is. A `project_dir` entry carries
+`ignored: true` when it is, and a project outside a repository has none. A project below the repository's root is
+judged by the whole repository, and one that is itself ignored (or inside an ignored folder) has every untracked
+entry ignored (a tracked file in it is not marked).
+A folder that is a repository of its own (a submodule, a clone inside the project) is judged by that repository's
+rules, in a listing and in a search alike.
+
+A listing asks `git check-ignore` about its entries, once (more only for over a thousand names, or about 96 KiB of
+them), within 5 s for all of its runs. A folder's answer is remembered (32 folders, at most 30 s) and reused while
+its entries' names and kinds, the index, `info/exclude` and the `.gitignore` files from the repository's root down to
+the folder are as they were; a change to the global excludes file is therefore seen within 30 s. A search asks
+`git ls-files --others --ignored --directory` for the project's repository, and once more for each repository
+nested in it that its traversal enters, together within 2 s counted from the start of the search (inside its 5 s),
+at most 4 MiB of output and 100,000 paths.
+
+Both are advisory: a `git` that cannot be run, fails, or runs past its deadline or budget leaves everything not
+ignored instead of failing the read, and a search that way does not say `complete: false`, since it holds more
+paths than it should rather than fewer. Only a cancel ends the read. Known limitations: `git` is run with
+`core.precomposeUnicode` off so that its names can be compared with the directory's own, so a pattern with
+non-ASCII text matches only a name in the same Unicode form as the pattern; and a search that finds a nested
+repository only after its 2 s are spent judges it by the repository around it.
+
 #### Searching file names
 
-`search_project_files` searches the project's own directory and all real subdirectories, including hidden and
-ignored entries, excluding every entry, with all beneath it, whose name is one of those `docs/product/project-pane.md`'s
-"What is listed" section leaves out (`.git` and the files an operating system leaves in folders, such as `.DS_Store`).
-It matches only the basename, read as UTF-8 with replacement characters, against the trimmed query using Unicode
-lowercase on both. An empty or whitespace-only query matches
-all files, with the same traversal and result budgets. Returned paths retain their canonical wire encoding; their
-byte order is the result order.
+`search_project_files` searches the project's own directory and all real subdirectories, including hidden entries,
+and ignored ones when `include_ignored` is true (otherwise ignored files, and ignored folders with all beneath them,
+are not matched or entered; see "Ignored entries"), excluding every entry, with all beneath it, whose name is one of
+those `docs/product/project-pane.md`'s "What is listed" section leaves out (`.git` and the files an operating system
+leaves in folders, such as `.DS_Store`). It matches only the basename, read as UTF-8 with replacement characters,
+against the trimmed query using Unicode lowercase on both. An empty or whitespace-only query matches all files, with
+the same traversal and result budgets. Returned paths retain their canonical wire encoding; their byte order is the
+result order.
 
 Directory symbolic links are not traversed, preventing cycles and duplicate subtrees. A symbolic link to a regular
 file is a result only when its target stays inside the project. Files are named without reading their bodies.
@@ -1598,8 +1626,8 @@ The traversal uses the same no-follow directory opens as ordinary live reads. An
 The scan stops with `complete: false` at the traversal, depth, result, path-byte or elapsed-time budgets below.
 Results are the matches reached before stopping, sorted afterwards, rather than the first matches of a complete
 sorted traversal. Cancellation is checked between entries. Elapsed time is also checked between entries, so an
-individual filesystem operation on a stalled volume can outlast the time budget. A search reserves the same
-reply memory as one directory listing.
+individual filesystem operation on a stalled volume can outlast the time budget. A search reserves the reply
+memory of one directory listing and that of its ignored paths (see "Browse budgets").
 
 #### Telling a stale reply from a current one
 
@@ -1959,6 +1987,9 @@ born yet, and its staged changes are compared with the empty tree.
 | Search paths | 2 MiB, as sent | Bounds escaped path bytes in a recursive result |
 | Search directory depth | 128 open directory levels | Bounds descriptors and traversal stack; deeper subtrees are skipped and the search marked incomplete |
 | Search elapsed time | 5 s, checked between entries | Bounds traversal work while allowing the current filesystem operation to finish |
+| Ignored check, per listing | 5 s | The `git check-ignore` runs behind a listing, all together: which entries are ignored is an addition to a listing already read, and a folder in view is relisted every few seconds. Past it nothing is marked |
+| Ignored folders remembered | 32 folders, 30 s | A folder's ignored entries are reused while its names and the files that decide them are unchanged; the least recently stored goes first |
+| Ignored paths, per search | 2 s, 4 MiB, 100,000 paths | The `git ls-files` runs of one search together, counted inside the search's 5 s. A run past any of them is dropped and the search goes on without those exclusions |
 | Change entries | 10,000 | The largest measured commit changed 704 files and 99 % changed under 170; a worktree's pending changes are smaller still. A change list past it is cut |
 | Change paths | 2 MiB, as sent | Bounds a change list whose entries are few but whose paths are long, counted as JSON writes them, the repository paths of sides outside the project included. A change list past it is cut |
 | Untracked files counted, per change list | 32 MiB | The bytes of untracked files a change list reads to count their lines, together; a file over the file body budget is never counted. Reached only by something like an untracked dependency directory nobody ignored, where reading every file would be the listing's slowest part. The files past it are listed without a count |
@@ -1982,7 +2013,7 @@ born yet, and its staged changes are compared with the empty tree.
 | `git` deadline | 30 s | Browse reads are local, so this only catches a wedged repository (a dead network volume, a held lock) |
 | Reads at once, daemon-wide | 4 | A viewer, its neighbour and a couple of directory expansions in parallel; more waits its turn. A read from disk has no deadline, so a volume that stops answering can hold these |
 | Outstanding requests, per connection | 16 | Waiting, being read, or queued until their reply is written. One more is refused with `limit_exceeded` at once, so a flooding client cannot grow the daemon's backlog |
-| Reserved per request | about 12 MiB for a file or a project source, about 7.8 MiB for a listing, about 11.8 MiB for a branch list, about 35 MiB for a change list or a comparison, about 35.3 MiB for a commit list, about 24.3 MiB for a change of either, or for the bodies of one | Each request reserves its worst case before it starts. For a file that is three times the file body (a text body held as read and serialized, JSON escaping at most doubling it; a binary body held base64-encoded and serialized again) and room for the rest of the frame; for a listing, its names and the rest of its entries, each held as read and serialized; for a branch list, the `git for-each-ref` output while it is read, its branches at 128 bytes each beside their names and the origins attached to at most 1,000 of them at 768 bytes each, held as built and serialized, and the upstream lookup's names and output; for a change list, the `git status` output while it is read and its entries, at 768 bytes each beside their paths, held as built and serialized, and for a comparison the same with its `git diff-tree` output, and for a commit list the same with its `git log` output and its commits at 1,536 bytes each beside their changes, each with the line counts' output (2 MiB) and the paths and records they are matched with, at 128 bytes each beside their paths; for a change of either kind, two bodies as a file reserves them beside a patch of at most 64 KiB, a body coming with a patch only when the patch carries no content (a text patch alone, at most 4 MiB, needs no more than one body). The reservation shrinks to the serialized reply and is given back once the reply is written to the socket. A reply that would be larger than its reservation is refused (`reply_bytes`) |
+| Reserved per request | about 12 MiB for a file or a project source, about 7.8 MiB for a listing, about 21.9 MiB for a search, about 11.8 MiB for a branch list, about 35 MiB for a change list or a comparison, about 35.3 MiB for a commit list, about 24.3 MiB for a change of either, or for the bodies of one | Each request reserves its worst case before it starts. For a file that is three times the file body (a text body held as read and serialized, JSON escaping at most doubling it; a binary body held base64-encoded and serialized again) and room for the rest of the frame; for a listing, its names and the rest of its entries, each held as read and serialized, and for a search the same with its ignored paths (the `git ls-files` output while it is read and the paths as a set holds them, at 64 bytes each beside their bytes); for a branch list, the `git for-each-ref` output while it is read, its branches at 128 bytes each beside their names and the origins attached to at most 1,000 of them at 768 bytes each, held as built and serialized, and the upstream lookup's names and output; for a change list, the `git status` output while it is read and its entries, at 768 bytes each beside their paths, held as built and serialized, and for a comparison the same with its `git diff-tree` output, and for a commit list the same with its `git log` output and its commits at 1,536 bytes each beside their changes, each with the line counts' output (2 MiB) and the paths and records they are matched with, at 128 bytes each beside their paths; for a change of either kind, two bodies as a file reserves them beside a patch of at most 64 KiB, a body coming with a patch only when the patch carries no content (a text patch alone, at most 4 MiB, needs no more than one body). The reservation shrinks to the serialized reply and is given back once the reply is written to the socket. A reply that would be larger than its reservation is refused (`reply_bytes`) |
 | Bytes held for replies, per connection | about 48 MiB | Four file reads at their worst, so one window gets every read the daemon runs at a time |
 | Bytes held for replies, daemon-wide | about 96 MiB | Twice one connection's share, so a client that stops reading cannot hold every other connection's reads up |
 | Writing one frame | 30 s | Any frame on the control socket, not only a browse reply. On a loopback connection a client that takes no bytes for this long has stopped reading; its connection is closed, giving back what its queued replies held, and it reconnects to a fresh `snapshot` and asks again |

@@ -1,6 +1,8 @@
 import { SearchField } from "@heroui/react";
+import { FileSearch, FileX } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
+import { IconToggle } from "../components/IconToggle";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useT } from "../i18n/react";
 import { isImeKey } from "../imeKey";
@@ -10,12 +12,16 @@ export interface FileFilterState {
   filterOpen: boolean;
   onFilterChange: (filter: string) => void;
   onFilterOpenChange: (open: boolean) => void;
+  /** Whether the file-name search also looks at the files Git ignores (the Files tab's alone). */
+  includeIgnored: boolean;
+  onIncludeIgnoredChange: (include: boolean) => void;
   filterToggleRef: React.RefObject<HTMLButtonElement | null>;
 }
 
 export function useFileFilterState(): FileFilterState {
   const [filter, onFilterChange] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
+  const [includeIgnored, onIncludeIgnoredChange] = useState(false);
   const filterToggleRef = useRef<HTMLButtonElement>(null);
   return {
     filter,
@@ -23,15 +29,22 @@ export function useFileFilterState(): FileFilterState {
     onFilterChange,
     onFilterOpenChange: (open) => {
       setFilterOpen(open);
-      if (!open) onFilterChange("");
+      if (!open) {
+        onFilterChange("");
+        onIncludeIgnoredChange(false);
+      }
     },
+    includeIgnored,
+    onIncludeIgnoredChange,
     filterToggleRef,
   };
 }
 
-/** Opening the field takes focus; closing it hands focus back to its toggle. An empty field
- * closes on blur, while a field holding a filter stays visible. */
-export function FileFilterField({ state, label, placeholder, contextKey }: { state: FileFilterState; label: string; placeholder: string; contextKey?: string }): React.ReactElement {
+/** Opening the field takes focus; closing it hands focus back to its toggle and drops the keyword and
+ * the choice to include ignored files. An empty field closes on blur, while a field holding a filter
+ * stays visible. With `ignoredToggle`, the field is followed by the toggle that includes the
+ * files Git ignores in the search. */
+export function FileFilterField({ state, label, placeholder, contextKey, ignoredToggle = false }: { state: FileFilterState; label: string; placeholder: string; contextKey?: string; ignoredToggle?: boolean }): React.ReactElement {
   const t = useT();
   // The field is taken away while it may still hold keyboard focus — the toggle closing it is
   // pressed without taking focus itself — and a removal fires no blur, so focus would fall to
@@ -54,9 +67,9 @@ export function FileFilterField({ state, label, placeholder, contextKey }: { sta
   const guardComposition = (event: React.KeyboardEvent) => {
     if (isImeKey(event.nativeEvent)) event.stopPropagation();
   };
-  // Focus moving within the field is not leaving it — nothing in it can take focus today, its
-  // Clear button being kept out of the tab order and handing focus back to the input, so that part
-  // of the guard is there for whatever the field grows. A `focusout` with nothing to go to is also
+  // Focus moving within the field is not leaving it — the only thing besides the input that takes
+  // focus is the include-ignored toggle (with `ignoredToggle` on), the Clear button being kept out
+  // of the tab order and handing focus back to the input. A `focusout` with nothing to go to is also
   // the window itself losing focus, which leaves the field where it is: the user is coming back to
   // it, and taking it away then would move keyboard focus behind their back as well.
   const onBlur = (event: React.FocusEvent<HTMLDivElement>) => {
@@ -66,8 +79,8 @@ export function FileFilterField({ state, label, placeholder, contextKey }: { sta
   return (
     <div className="contents" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
       {state.filterOpen && (
-        <div className="shrink-0 groove-b px-(--pane-inset) py-2" onKeyDownCapture={guardComposition} onBlur={onBlur}>
-          <SearchField aria-label={label} value={state.filter} onChange={state.onFilterChange} fullWidth variant="secondary">
+        <div className="flex shrink-0 items-center gap-2 groove-b px-(--pane-inset) py-2" onKeyDownCapture={guardComposition} onBlur={onBlur}>
+          <SearchField aria-label={label} value={state.filter} onChange={state.onFilterChange} fullWidth variant="secondary" className="min-w-0 flex-1">
             <SearchField.Group>
               <SearchField.SearchIcon />
               <SearchField.Input ref={input} placeholder={placeholder} />
@@ -77,6 +90,11 @@ export function FileFilterField({ state, label, placeholder, contextKey }: { sta
               <SearchField.ClearButton aria-label={t("common.clear")} />
             </SearchField.Group>
           </SearchField>
+          {ignoredToggle && (
+            <IconToggle label={t(state.includeIgnored ? "browser.filter.excludeIgnored" : "browser.filter.includeIgnored")} isSelected={state.includeIgnored} onChange={state.onIncludeIgnoredChange}>
+              {state.includeIgnored ? <FileSearch aria-hidden="true" className="size-4" /> : <FileX aria-hidden="true" className="size-4" />}
+            </IconToggle>
+          )}
         </div>
       )}
     </div>

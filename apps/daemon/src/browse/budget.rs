@@ -35,6 +35,37 @@ pub const SEARCH_TIMEOUT: Duration = Duration::from_secs(5);
 /// than read further.
 pub const GIT_METADATA_STDOUT: usize = 1024 * 1024;
 
+/// The deadline of the `git check-ignore` runs behind a listing, all of them together. Which
+/// entries are ignored is an addition to a listing already read, and a client relists a folder in
+/// view every few seconds, so a slow run is dropped quickly and the listing returns with nothing
+/// marked, rather than waiting out [`GIT_READ_TIMEOUT`].
+pub const IGNORE_CHECK_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// The deadline of the `git ls-files` runs that tell a search which paths Git ignores, all of them
+/// together, counted from the start of the search and so inside [`SEARCH_TIMEOUT`]. A run that
+/// takes longer is dropped and the search goes on with nothing excluded.
+pub const IGNORED_PATHS_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// The most stdout the `git ls-files` runs of one search may print, together. Ignored folders are
+/// reported as one path each, so this is reached only by an enormous number of separately ignored
+/// files; a run past it is dropped like one past its deadline.
+pub const IGNORED_PATHS_STDOUT: usize = 4 * 1024 * 1024;
+
+/// The most ignored paths one search holds. A run that would take it past this is dropped.
+pub const MAX_IGNORED_PATHS: usize = 100_000;
+
+/// What one held ignored path takes beyond its bytes: the vector and its slot in the set, counted
+/// generously.
+pub const IGNORED_PATH_ENTRY_BYTES: usize = 64;
+
+/// How many folders' ignored entries the daemon remembers between listings, so that the
+/// relisting of a folder in view does not start a `git` each time nothing changed.
+pub const IGNORE_CACHE_FOLDERS: usize = 32;
+
+/// How long a remembered folder is trusted at most. What the daemon cannot see change cheaply (the
+/// global excludes file, named by a configuration anywhere) is picked up at the latest by then.
+pub const IGNORE_CACHE_TTL: Duration = Duration::from_secs(30);
+
 /// The most stderr kept from any `git` command. A `git` error message is a few hundred bytes; the
 /// rest of a longer one is read and discarded.
 pub const GIT_STDERR: usize = 64 * 1024;
@@ -207,9 +238,20 @@ pub const READ_RESERVATION: usize = 3 * MAX_FILE_BYTES + 64 * 1024;
 
 /// What a directory listing reserves: its names at [`MAX_LISTING_NAME_BYTES`] held as read and as
 /// serialized, and the rest of each of [`MAX_DIR_ENTRIES`] entries (kind, size, link target and
-/// the JSON around them, under 200 bytes) likewise. Recursive filename search uses the same
-/// reservation: its smaller match count leaves room for the bounded directory-reader stack.
+/// the JSON around them, under 200 bytes) likewise. A recursive filename search starts from the
+/// same reservation and adds that of its ignored paths ([`SEARCH_RESERVATION`]).
 pub const LISTING_RESERVATION: usize = 2 * (MAX_LISTING_NAME_BYTES + MAX_DIR_ENTRIES * 200);
+
+/// What the ignored paths of a search reserve beyond the search itself: the stdout of a
+/// `git ls-files` run while it is parsed, and the paths at [`MAX_IGNORED_PATHS`] as the set holds
+/// them. (The folders remembered between listings are a few kilobytes each and not part of a
+/// request.)
+pub const IGNORED_PATHS_RESERVATION: usize =
+    2 * IGNORED_PATHS_STDOUT + MAX_IGNORED_PATHS * IGNORED_PATH_ENTRY_BYTES;
+
+/// What a recursive filename search reserves: a listing's reservation, whose smaller match count
+/// leaves room for the bounded directory-reader stack, and its ignored paths.
+pub const SEARCH_RESERVATION: usize = LISTING_RESERVATION + IGNORED_PATHS_RESERVATION;
 
 /// What a change listing reserves: the `git status` output while it is parsed, and its entries at
 /// [`MAX_CHANGE_ENTRIES`] with [`MAX_CHANGE_PATH_BYTES`] of paths, held as built and as serialized,
@@ -265,6 +307,8 @@ const _: () = assert!(MAX_SEARCH_PATH_BYTES <= MAX_LISTING_NAME_BYTES);
 const _: () = assert!(MAX_SEARCH_MATCHES <= MAX_DIR_ENTRIES);
 const _: () = assert!(LISTING_RESERVATION <= READ_RESERVATION);
 const _: () = assert!(READ_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
+const _: () = assert!(SEARCH_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
+const _: () = assert!(IGNORED_PATHS_TIMEOUT.as_secs() < SEARCH_TIMEOUT.as_secs());
 const _: () = assert!(CHANGE_LIST_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
 const _: () = assert!(DIFF_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
 const _: () = assert!(COMPARISON_RESERVATION <= MAX_RETAINED_PER_CONNECTION);

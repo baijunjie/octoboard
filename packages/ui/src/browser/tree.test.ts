@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { BrowseEntry } from "../protocol";
-import { buildTree, compareFilePaths, fileEvidence, listingSaysDirectory, neighbours, rereadFor, treeEntries, type DirListing, type FileEvidence } from "./tree";
+import { buildTree, compareFilePaths, fileEvidence, hasOpenFolder, listingSaysDirectory, neighbours, rereadFor, treeEntries, type DirListing, type FileEvidence } from "./tree";
 
 const file = (name: string, version = "v1"): BrowseEntry => ({ name, kind: "file", size: 1, version, target: null });
 const dir = (name: string): BrowseEntry => ({ name, kind: "directory", size: null, version: null, target: null });
@@ -135,5 +135,26 @@ describe("rereadFor", () => {
 
   it("reads a file that kept changing again only at a new listing of its own directory", () => {
     expect(rereadFor({ state: "error", changing: true }, listed("v2"), listed("v2"), false)).toBe(false);
+  });
+});
+
+describe("hasOpenFolder", () => {
+  const listings = new Map<string, DirListing>([
+    ["", loaded([dir("src"), dir("locked")])],
+    ["src", loaded([dir("lib")])],
+    ["src/lib", loaded([file("a.ts")])],
+    ["locked", { state: "error", message: "denied" }],
+  ]);
+  const open = (...paths: string[]) => hasOpenFolder(buildTree(listings, new Set(paths), undefined).nodes, new Set(paths.map((path) => `path:${path}`)));
+
+  it("is true while a top-level folder is drawn open, and false with none expanded", () => {
+    expect(open("src")).toBe(true);
+    expect(open()).toBe(false);
+  });
+
+  it("does not count a folder expanded beneath a folded one, nor one whose listing failed", () => {
+    expect(open("src/lib")).toBe(false);
+    expect(open("locked")).toBe(false);
+    expect(open("locked", "src")).toBe(true);
   });
 });

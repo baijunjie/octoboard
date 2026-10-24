@@ -86,7 +86,7 @@ application buttons below. These are:
 - the report panel's previous-page and next-page buttons;
 - a right pane panel's Close panel button and the Terminal panel's Maximize panel / Restore panel size (see "A
   panel's header" in `docs/product/right-pane-panels.md`);
-- the project pane's Refresh button, a folder's arrow button in its file tree and in the Git mode's change list, and a
+- the project pane's Refresh and Collapse all folders buttons, a folder's arrow button in its file tree and in the Git mode's change list, and a
   commit row's arrow button there ("Expand" / "Collapse") (see `docs/product/project-pane.md`), and the file viewer's
   Previous file and Next file buttons (see `docs/product/file-viewer.md`);
 - the copy buttons — the file viewer's Copy path and the Git mode's Copy worktree path, on the change list's line
@@ -96,8 +96,9 @@ application buttons below. These are:
   "Default application" that names the action in a project pane row's menu, while the name announced for each says
   what pressing it does, "Open in file manager" or "Open in default application" (see "The header" in
   `docs/product/file-viewer.md`);
-- the file viewer's three view controls and the Git mode's three view toggles — the one that shows and hides the
-  change filter field, Group by folder and Group by commit — whose tooltip is the name they announce and alternates with their state (see
+- the file viewer's three view controls, the Files mode's two — its file-name filter toggle and the include-ignored
+  toggle in its filter field — and the Git mode's three view toggles — the one that shows and hides the change filter
+  field, Group by folder and Group by commit — whose tooltip is the name they announce and alternates with their state (see
   "Two-state icon toggles" below);
 - the two controls of the console dialog's Avatar field (see "Avatar" in
   `docs/product/consoles.md`) — the round control itself, named for choosing an image while it is empty
@@ -190,8 +191,9 @@ Help tips are used in these places:
 
 A control that switches a view between two states is **one icon button**, not a set of choices side by side. These are
 the sidebar toggle (see "The sidebar toggle and the panel toggles" in `docs/product/window-layout.md`), the file viewer's three view
-controls (see "The header" in `docs/product/file-viewer.md`), the Files mode's file-name filter toggle
-(see "Filtering by file name" in that doc), and the Git mode's three — the toggle of its change
+controls (see "The header" in `docs/product/file-viewer.md`), the Files mode's two — its file-name filter toggle and
+the toggle in its filter field that includes ignored files (see "Filtering by file name" in
+`docs/product/project-pane.md`) — and the Git mode's three — the toggle of its change
 filter field (see "Filtering by file name" in `docs/product/project-pane-git-change-list.md`), Group by folder (see "Flat
 or grouped by folder" in the same doc) and Group by commit (see "Grouped by commit" in the same doc). For all of them:
 

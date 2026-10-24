@@ -238,6 +238,32 @@ describe("the fixture daemon's project file trees", () => {
     });
   });
 
+  it("marks what Git ignores, and everything beneath it, in listings and in a search that includes it", async () => {
+    const daemon = createFixtureDaemon({
+      id: "project-ignored", group: "Project pane: files", category: "normal", title: "",
+      files: {
+        "": { dir: true },
+        "server.ts": { text: "" },
+        dist: { dir: true, ignored: true },
+        "dist/server.js": { text: "" },
+        "dist/lib": { dir: true },
+        "dist/lib/server.map": { text: "" },
+        ".env": { text: "", ignored: true },
+      },
+    });
+    const listing = await daemon.request({ type: "list_project_dir", project: "web", path: "dist" });
+    expect(listing).toMatchObject({ entries: [{ name: "lib", ignored: true }, { name: "server.js", ignored: true }] });
+    const root = await daemon.request({ type: "list_project_dir", project: "web", path: "" });
+    expect(root.type === "project_dir" && root.entries.map((entry) => [entry.name, entry.ignored === true])).toEqual([[".env", true], ["dist", true], ["server.ts", false]]);
+    await expect(daemon.request({ type: "search_project_files", project: "web", query: "server" })).resolves.toEqual({
+      type: "project_file_matches", project: "web", query: "server", paths: ["server.ts"], complete: true,
+    });
+    await expect(daemon.request({ type: "search_project_files", project: "web", query: "server", include_ignored: true })).resolves.toEqual({
+      type: "project_file_matches", project: "web", query: "server", paths: ["dist/lib/server.map", "dist/server.js", "server.ts"],
+      ignored: ["dist/lib/server.map", "dist/server.js"], complete: true,
+    });
+  });
+
   it("leaves the system files, in any ASCII case, and everything beneath a left-out directory out of a search", async () => {
     const daemon = createFixtureDaemon({
       id: "project-search-left-out", group: "Project pane: files", category: "normal", title: "",

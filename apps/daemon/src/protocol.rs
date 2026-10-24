@@ -989,6 +989,9 @@ pub struct BrowseEntry {
     pub version: Option<String>,
     /// What a symbolic link resolves to; `null` for anything else.
     pub target: Option<LinkTarget>,
+    /// Whether Git ignores the entry; sent only when true. See `browse::ignored`.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub ignored: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -1349,6 +1352,9 @@ pub enum BrowseBody {
     SearchProjectFiles {
         project: String,
         query: String,
+        /// Whether files Git ignores, and what is inside ignored folders, can match.
+        #[serde(default)]
+        include_ignored: bool,
     },
     ReadProjectFile {
         project: String,
@@ -2621,6 +2627,9 @@ pub enum Event {
         project: String,
         query: String,
         paths: Vec<String>,
+        /// The `paths` Git ignores, sent only when there are any; see `browse::ignored`.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        ignored: Vec<String>,
         complete: bool,
     },
     /// The reply to `read_project_file`; `project`, `worktree` and `path` echo the request.

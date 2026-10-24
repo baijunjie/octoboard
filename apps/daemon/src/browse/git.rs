@@ -168,6 +168,18 @@ impl GitEnv {
 
     /// The command `git <subcommand> <args>` in `dir`, isolated as the module doc describes.
     pub fn command(&self, dir: &Path, subcommand: &str, args: &[&[u8]]) -> Command {
+        self.command_configured(dir, &[], subcommand, args)
+    }
+
+    /// [`GitEnv::command`] with each of `config` (`key=value`) set by a `-c` of its own, for the
+    /// one command that needs a setting the others must not have.
+    pub fn command_configured(
+        &self,
+        dir: &Path,
+        config: &[&str],
+        subcommand: &str,
+        args: &[&[u8]],
+    ) -> Command {
         use std::os::unix::ffi::OsStrExt;
 
         let mut command = crate::git_env::non_interactive(
@@ -189,6 +201,9 @@ impl GitEnv {
             "core.quotePath=false",
         ]);
         crate::git_env::read_only(&mut command);
+        for item in config {
+            command.args(["-c", item]);
+        }
         command.arg(subcommand);
         if is_diff_family(subcommand) {
             command.args(DIFF_SAFETY);

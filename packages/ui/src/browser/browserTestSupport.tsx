@@ -62,6 +62,8 @@ export function changeViewFixture(view: Partial<ChangeViewState> = {}): ChangeVi
     onFilterOpenChange: () => {},
     filter: "",
     onFilterChange: () => {},
+    includeIgnored: false,
+    onIncludeIgnoredChange: () => {},
     filterToggleRef: { current: toggle },
     ...view,
   };

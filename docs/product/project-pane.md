@@ -49,10 +49,10 @@ buttons alone: the controls for the chosen tab, then **Refresh**, then the panel
 stays between the tabs and those buttons. The tabs are compact, with a pill behind the selected tab and muted labels
 on the others, and no filled track behind them. The tabs and Close panel have priority over the project title and
 other icon buttons; their behavior in a narrow header is in "A panel's header" in
-`docs/product/right-pane-panels.md`. Files offers one control, the file-name filter toggle (see "Filtering by file
-name" below); Changes offers its filter toggle, Group by folder and Group by commit (see "The Changes view" in
+`docs/product/right-pane-panels.md`. Files offers the file-name filter toggle (see "Filtering by file name" below)
+and then **Collapse all folders** (see "Collapse all folders" below); Changes offers its filter toggle, Group by folder and Group by commit (see "The Changes view" in
 `docs/product/project-pane-git-mode.md`). The buttons keep that place in loading, empty and error states too. Pressing
-Refresh with the mouse leaves keyboard focus where it was.
+Refresh or Collapse all folders with the mouse leaves keyboard focus where it was.
 
 ## Files and Git
 
@@ -84,8 +84,8 @@ successful project-menu branch switch (see "Switching the local branch" in `docs
 
 ### What is listed
 
-Everything in the project's directory is listed — dot files, and files a `.gitignore` names (an agent's build output
-and installed dependencies included) — except the following names, which are left out at any depth, a folder with
+Everything in the project's directory is listed — dot files, and files Git ignores (an agent's build output and
+installed dependencies included), which are shown dimmed (see "Ignored entries" below) — except the following names, which are left out at any depth, a folder with
 everything in it:
 
 - Git's own metadata: `.git`;
@@ -103,6 +103,32 @@ expanded.
 A symbolic link is listed under its own name. One that leads to a folder inside the project opens as a folder; one that
 leads to a file inside the project opens as that file; one that leads outside the project is listed, but nothing
 behind it is shown (see "Errors" below).
+
+### Ignored entries
+
+An entry is **ignored** when Git ignores it in the repository it is in: by any `.gitignore` level, the repository's
+`.git/info/exclude` or the user's global excludes file, as Git itself applies them. Everything inside an ignored folder
+is ignored too, while a file Git tracks never is, even where a pattern names it. Nor is a folder holding a file Git
+tracks, whatever pattern names it: it is listed at full strength and the entries in it are judged each on its own. A
+folder that is a repository of its own — a submodule, or a clone inside the project — is judged by that repository's own rules. A project whose own
+folder Git ignores has every entry ignored except the files Git tracks. A project outside a Git repository has nothing
+ignored.
+
+An ignored entry is still listed and does everything any other row does — it opens, expands, shows its actions and is
+moved through from the keyboard alike. It is only drawn **dimmed**, the way the sidebar dims its inactive projects (see
+"Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`): a veil of the pane's own surface lies over the
+whole row, name and icon together. Unlike the sidebar's group, each ignored row lifts its own veil, back to full
+strength, while it is pointed at, is the selected file, holds keyboard focus (on the row or on a control in it), or has
+its actions menu open. Assistive technology hears its name followed by "ignored" ("ignored, selected" for the
+selected file). File-name filter results hold ignored files only while the search includes them (see "Filtering by
+file name" below); there a folder is dimmed only when every result beneath it is ignored.
+
+Which entries are ignored is looked up each time a folder is listed. A change to a `.gitignore`, to
+`.git/info/exclude` or to what Git tracks shows at the next listing; a change to the global excludes file can take up
+to **30 seconds** to show. When it cannot be determined — Git cannot be run, fails, or takes longer than 5 seconds for
+one listing — the folder's entries count as not ignored, and the listing never fails for it. An ignore pattern holding
+non-ASCII text matches only a name written in the same Unicode normalization form as the pattern, here and in the
+file-name search alike.
 
 ### Order
 
@@ -170,12 +196,22 @@ which folders were folded separately while that project's pane stays mounted. Fo
 also marks it folded for filter results, and expanding it clears that mark. Clearing a filter returns to the ordinary
 tree. The viewer navigates only through the displayed file rows, skipping folded folders.
 
+### Collapse all folders
+
+**Collapse all folders**, the header's icon button after the filter toggle in Files, folds every folder at once. In the
+unfiltered tree it closes every expanded folder, including those inside folders already closed, so each opens again
+with its subfolders closed, and each counts as folded for filter results as folding it by hand would. With a nonempty
+filter it folds every folder of the results instead. It is disabled while no folder is drawn open; a folder that could not
+be listed is drawn closed and does not count. When keyboard focus was on a row that the folding takes away, it moves to the top-level folder
+that row was under; when it was on the button itself, which is then disabled, it moves to Refresh.
+
 ## Filtering by file name
 
-In Files, the **filter toggle**, the one control before Refresh, shows and hides a field directly below the
+In Files, the **filter toggle**, the first of the header's controls, shows and hides a field directly below the
 header. It starts hidden. Opening it puts keyboard focus in the field; closing it clears its text and returns focus
 to the toggle if the field held it. An empty field closes when focus leaves it, with whitespace alone counting as
-empty; the window itself losing focus leaves it in place. A field with text stays visible. The toggle follows the
+empty; focus moving to the include-ignored toggle beside it (see below) is not leaving it, and the window itself losing
+focus leaves it in place. A field with text stays visible. The toggle follows the
 convention in "Two-state icon toggles" in `docs/product/labels-and-tooltips.md`.
 
 A nonempty filter **searches the entire project directory**, including folders never expanded in the tree, and
@@ -184,23 +220,34 @@ restores the unfiltered tree.
 
 - Only the **file name**, the last part of its path, is matched, by containment, ignoring case and whitespace around
   the query. Folder names and file contents are not searched. An empty query is no filter: the ordinary tree is shown.
-- Dot files and ignored files are included. The names "What is listed" above leaves out are excluded at every depth,
-  with everything beneath them. Symbolic links to files
+- Dot files are included. **Ignored entries** (see "Ignored entries" above) **are left out by default**: an ignored
+  file is not matched and an ignored folder is not searched. The names "What is listed" above leaves out are excluded
+  at every depth, with everything beneath them. Symbolic links to files
   inside the project can match under the link's own name; symbolic links to directories are not traversed, and links
   outside the project are excluded.
+- **Include ignored files**, an icon toggle at the end of the field's row, after the field, includes them: an ignored
+  file then matches as any other, and ignored results are drawn dimmed (see "Ignored entries" above). It shows a file
+  with a cross while ignored files are left out, named "Include ignored files", and a file with a magnifying glass
+  while they are included, named "Exclude ignored files", following "Two-state icon toggles" in
+  `docs/product/labels-and-tooltips.md`. It starts off, and goes back to off whenever the field closes. Pressing it
+  with a nonempty filter repeats the search at once, without the 250 ms wait.
 - Results follow the tree's path order: directory branches before files at each level, with names compared
   case-insensitively and in natural order (see "Order" above). Their rows open the file viewer and offer the
   same actions as tree rows do (see "A row's actions" below). The viewer's Previous/Next controls follow the
   visible result rows in this order, skipping folded folders.
-- Typing waits **250 ms** before searching. A changed query shows a searching state until its own results arrive;
-  a reply to an earlier query never replaces them. A failure shows, in place of the results, an empty-state failure
+- Typing waits **250 ms** before searching. A changed query or include-ignored choice shows a searching state until its own results
+  arrive; a reply to an earlier one never replaces them. A failure shows, in place of the results, an empty-state failure
   headed that the search failed, with its reason and **Try again**. No matches has a distinct empty state, leaving the
   field available to change or clear.
 - A search is bounded to **250,000 visited entries**, **2,000 matching files**, **2 MiB of encoded result paths**,
   **128 directory levels** and **5 seconds**. An unreadable subdirectory or entry also makes the result incomplete.
   Incomplete results carry a notice that not every matching file may be shown, even when no matches were found;
   an unreadable project root instead fails the search.
-- Searches repeat when the query changes, Files becomes active again, the daemon reconnects, Refresh is pressed,
+- Reading which entries are ignored takes at most **2 seconds** of a search's 5. Where it cannot be read in that time
+  or within its size limits, or Git cannot be run or fails, the search goes on with nothing left out for that repository: it may then
+  show ignored files, and it is not marked incomplete for that. A nested repository the search reaches only after
+  those 2 seconds is judged by the rules of the repository around it.
+- Searches repeat when the query changes, the include-ignored toggle is pressed, Files becomes active again, the daemon reconnects, Refresh is pressed,
   or the project's reported branch or detached state changes. **A nonempty filter has no periodic refresh**, and
   neither the window coming back to the front nor its becoming visible again repeats it. While a filter is active,
   the tree's folder listings pause except for the folder containing an open file and its ancestors through the project root: these continue to be listed to keep the viewer's content current, without repeating the search.
@@ -209,9 +256,10 @@ The field's clear button and **Escape** clear its text while leaving focus in th
 Escape with text clears it; Escape once empty can close the pane. Input-method composition owns its keys,
 including Escape, so those keys do not clear the field. Typing in the field does not trigger the list's name navigation.
 
-Each of **Files and Changes has its own keyword and filter-field open state**. Switching tabs restores
-that tab's choices without taking keyboard focus into a restored field. Clearing or closing the field affects only
-the current tab; closing it drops its keyword. These choices last while the project's pane stays in the right pane,
+Each of **Files and Changes has its own keyword and filter-field open state**, and Files its include-ignored choice
+with them. Switching tabs restores that tab's choices without taking keyboard focus into a restored field. Clearing or
+closing the field affects only the current tab; closing it drops its keyword, and in Files the include-ignored
+choice. These choices last while the project's pane stays in the right pane,
 including tab switches and hiding the pane; replacing it with another owner, reloading the window or restarting the
 application discards them. They are not shared across projects.
 
@@ -326,8 +374,8 @@ dropped first. A removed project's state is dropped.
 The selected file is kept only while the window is open: reloading it, or restarting the application, starts every
 project with no file selected. So are the Git mode's chosen branch, its selected change and the sections and folders it has
 folded away (see "What is remembered" in `docs/product/project-pane-git-mode.md`).
-Listings, search results, change lists and file contents are never stored. Each tab's filter text and visibility, and the Files filter results' folded folders,
-last only while the project's pane stays in the right pane (see "Filtering by file name" above).
+Listings, search results, change lists and file contents are never stored. Each tab's filter text and visibility, the Files filter's include-ignored choice and the Files filter results'
+folded folders, last only while the project's pane stays in the right pane (see "Filtering by file name" above).
 
 ## Errors
 

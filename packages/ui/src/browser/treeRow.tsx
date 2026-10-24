@@ -50,6 +50,19 @@ export const ROW_CLASS = [
   "data-[focus-visible]:ring-2 data-[focus-visible]:ring-focus data-[focus-visible]:ring-inset",
 ].join(" ");
 
+/** What an ignored row (`data-ignored`) adds to `ROW_CLASS`: dimmed the way the sidebar dims its inactive
+ * projects, by a veil of the pane's own surface (`--panel-sidebar`) over the whole row, fill included, not by
+ * `opacity` or a muted colour (the veil is plain paint; see the sidebar's note on WebKit compositing a fading
+ * child inside a translucent ancestor). It takes the names below WCAG AA (about 2.9:1) on purpose, by the
+ * user's decision, as the sidebar's does. Each row lifts its own veil while it is pointed at, has keyboard
+ * focus (`data-focus-visible`, on the row or on a control in it), is the selected row or has its actions menu
+ * open (matched on `aria-haspopup`, since a folder row is itself `aria-expanded`). */
+export const IGNORED_ROW_CLASS = [
+  "relative after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:transition-colors after:duration-200 motion-reduce:after:transition-none",
+  "data-ignored:after:bg-panel-sidebar/55 data-ignored:hover:after:bg-transparent data-ignored:data-[current]:after:bg-transparent data-ignored:data-[focus-visible]:after:bg-transparent",
+  "data-ignored:has-[[data-focus-visible]]:after:bg-transparent data-ignored:has-[[aria-haspopup][aria-expanded=true]]:after:bg-transparent",
+].join(" ");
+
 // A flat row below the first level adds a chevron slot and its gap (1.375rem) once, whatever its depth.
 const NESTED = "ps-[calc((var(--tree-item-level)-1)*0.875rem+var(--row-content-inset))]";
 const FLAT_NESTED = "ps-[calc((var(--tree-item-level)-1)*0.875rem+min(1,var(--tree-item-level)-1)*1.375rem+var(--row-content-inset))]";

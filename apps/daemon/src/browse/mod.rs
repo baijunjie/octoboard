@@ -4,8 +4,9 @@
 //! worktree's uncommitted changes and one change's diff (`changes`), the repository's local
 //! branches and the changes between two of their tips (`compare`), the commits a branch made since
 //! it forked and the changes of each (`commits`), the tree-diff output both read their changes from
-//! (`tree_diff`), how a path travels on the wire (`wire_path`), the limits all of it is held to
-//! (`budget`), and the per-connection lane its replies take back to the client (`lane`).
+//! (`tree_diff`), which entries Git ignores (`ignored`), how a path travels on the wire
+//! (`wire_path`), the limits all of it is held to (`budget`), and the per-connection lane its
+//! replies take back to the client (`lane`).
 //!
 //! Every request re-resolves its project from the store and its worktree from the repository; a
 //! reply is never built from a directory a client named.
@@ -16,6 +17,7 @@ pub mod changes;
 pub mod commits;
 pub mod compare;
 pub mod git;
+pub mod ignored;
 pub mod lane;
 pub mod line_counts;
 pub mod live;
@@ -149,7 +151,7 @@ pub fn serve(
             let rel = parse_path(&path)?;
             let record = stored_project(state, &project)?;
             let scope = scope_for(&record, worktree.as_deref(), &git, cancel)?;
-            let listing = live::list_dir(&scope.canonical, &rel, cancel)?;
+            let listing = live::list_dir(&scope.canonical, &rel, &git, cancel)?;
             Ok(Event::ProjectDir {
                 id,
                 project,
@@ -160,15 +162,21 @@ pub fn serve(
                 complete: listing.complete,
             })
         }
-        BrowseBody::SearchProjectFiles { project, query } => {
+        BrowseBody::SearchProjectFiles {
+            project,
+            query,
+            include_ignored,
+        } => {
             let record = stored_project(state, &project)?;
             let scope = scope_for(&record, None, &git, cancel)?;
-            let matches = live::search_files(&scope.canonical, &query, cancel)?;
+            let matches =
+                live::search_files(&scope.canonical, &query, include_ignored, &git, cancel)?;
             Ok(Event::ProjectFileMatches {
                 id,
                 project,
                 query,
                 paths: matches.paths,
+                ignored: matches.ignored,
                 complete: matches.complete,
             })
         }

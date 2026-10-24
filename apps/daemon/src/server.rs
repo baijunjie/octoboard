@@ -253,9 +253,8 @@ async fn submit_browse(state: &Arc<AppState>, lane: &Arc<Lane>, request: BrowseR
     let state = state.clone();
     let id = request.id.clone();
     let reservation = match request.body {
-        BrowseBody::ListProjectDir { .. } | BrowseBody::SearchProjectFiles { .. } => {
-            budget::LISTING_RESERVATION
-        }
+        BrowseBody::ListProjectDir { .. } => budget::LISTING_RESERVATION,
+        BrowseBody::SearchProjectFiles { .. } => budget::SEARCH_RESERVATION,
         BrowseBody::GetProjectSource { .. } | BrowseBody::ReadProjectFile { .. } => {
             budget::READ_RESERVATION
         }

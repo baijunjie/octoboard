@@ -32,7 +32,7 @@ use anyhow::Result;
 
 use crate::browse::source::file_id;
 use crate::browse::wire_path::{self, RelPath};
-use crate::browse::{budget, json_escaped_len, Cancelled};
+use crate::browse::{budget, ignored, json_escaped_len, Cancelled, Git};
 use crate::protocol::{error_code, BrowseEntry, CodedError, EntryKind, LinkTarget};
 
 /// Resolves `path` inside the scope directory `scope` (already canonical) to the canonical path
@@ -249,17 +249,20 @@ pub struct Listing {
 /// Lists the directory `path` names inside `scope`, sorted by the entries' wire names. Stops,
 /// marking the listing incomplete, at [`budget::MAX_DIR_ENTRIES`] entries or
 /// [`budget::MAX_LISTING_NAME_BYTES`] of names as they will be sent, without reading the rest of
-/// the directory; an entry that cannot be read is left out and marks it incomplete too.
-pub fn list_dir(scope: &Path, path: &RelPath, cancel: &AtomicBool) -> Result<Listing> {
+/// the directory; an entry that cannot be read is left out and marks it incomplete too. The
+/// entries Git ignores are marked as [`ignored`] says.
+pub fn list_dir(scope: &Path, path: &RelPath, git: &Git, cancel: &AtomicBool) -> Result<Listing> {
     let canonical = resolve(scope, path)?;
-    list_resolved(
+    let mut listing = list_resolved(
         scope,
         &canonical,
         path,
         budget::MAX_DIR_ENTRIES,
         budget::MAX_LISTING_NAME_BYTES,
         cancel,
-    )
+    )?;
+    ignored::mark_listing(git, &canonical, &mut listing.entries, cancel)?;
+    Ok(listing)
 }
 
 /// [`list_dir`] from the point `path` has been resolved to `canonical`, a path with no link in it,
@@ -344,6 +347,7 @@ pub(super) fn list_resolved(
             size,
             version,
             target,
+            ignored: false,
         });
     }
     entries.sort_by(|a, b| a.name.cmp(&b.name));
@@ -354,21 +358,36 @@ pub(super) fn list_resolved(
 #[derive(Debug)]
 pub struct FileMatches {
     pub paths: Vec<String>,
+    /// The matches Git ignores, which only a search including ignored files can have.
+    pub ignored: Vec<String>,
     pub complete: bool,
 }
 
-/// Searches every real subdirectory, including ignored and hidden entries, apart from the names
-/// [`is_left_out`] leaves out. Directory symlinks are never traversed; file symlinks are included
-/// only when their targets stay in the scope.
-pub fn search_files(scope: &Path, query: &str, cancel: &AtomicBool) -> Result<FileMatches> {
+/// Searches every real subdirectory, including hidden entries, apart from the names
+/// [`is_left_out`] leaves out. Files Git ignores, and ignored folders with all beneath them, are
+/// searched only with `include_ignored`. Directory symlinks are never traversed; file symlinks are
+/// included only when their targets stay in the scope.
+pub fn search_files(
+    scope: &Path,
+    query: &str,
+    include_ignored: bool,
+    git: &Git,
+    cancel: &AtomicBool,
+) -> Result<FileMatches> {
+    let started = std::time::Instant::now();
+    let mut ignored = ignored::IgnoredPaths::new(git, started + budget::IGNORED_PATHS_TIMEOUT);
+    ignored.read_scope(scope, cancel)?;
     search_bounded(
         scope,
         query,
+        &mut ignored,
+        include_ignored,
         budget::MAX_SEARCH_VISITED,
         budget::MAX_SEARCH_MATCHES,
         budget::MAX_SEARCH_PATH_BYTES,
         budget::MAX_SEARCH_DEPTH,
         budget::SEARCH_TIMEOUT,
+        started,
         cancel,
     )
 }
@@ -377,22 +396,25 @@ pub fn search_files(scope: &Path, query: &str, cancel: &AtomicBool) -> Result<Fi
 fn search_bounded(
     scope: &Path,
     query: &str,
+    ignored: &mut ignored::IgnoredPaths,
+    include_ignored: bool,
     max_visited: usize,
     max_matches: usize,
     max_path_bytes: usize,
     max_depth: usize,
     timeout: std::time::Duration,
+    started: std::time::Instant,
     cancel: &AtomicBool,
 ) -> Result<FileMatches> {
     let mut result = FileMatches {
         paths: Vec::new(),
+        ignored: Vec::new(),
         complete: true,
     };
     let query = query.trim().to_lowercase();
     if cancel.load(Ordering::Relaxed) {
         return Err(anyhow::Error::new(Cancelled));
     }
-    let started = std::time::Instant::now();
     let root = RelPath::parse("").expect("the root is a valid path");
     let directory = open_without_links(scope, libc::O_DIRECTORY | libc::O_NOCTTY)
         .map_err(|err| open_failure(&root, &err))?;
@@ -433,6 +455,12 @@ fn search_bounded(
         };
         let path =
             parent.join(&RelPath::from_bytes(raw.clone()).expect("a directory entry is a name"));
+        // An ignored folder is ignored itself, so a search leaving ignored entries out never goes
+        // into it.
+        let is_ignored = ignored.covers(path.as_bytes());
+        if is_ignored && !include_ignored {
+            continue;
+        }
         let canonical = scope.join(path.as_path());
         let kind = stat.st_mode as libc::mode_t & libc::S_IFMT;
         if kind == libc::S_IFDIR {
@@ -445,7 +473,13 @@ fn search_bounded(
             match open_without_links(&canonical, libc::O_DIRECTORY | libc::O_NOCTTY)
                 .and_then(DirReader::new)
             {
-                Ok(reader) => stack.push((path, reader)),
+                Ok(reader) => {
+                    // A repository of its own answers for what is below it.
+                    if std::fs::symlink_metadata(canonical.join(".git")).is_ok() {
+                        ignored.enter_repository(&canonical, path.as_bytes(), cancel)?;
+                    }
+                    stack.push((path, reader));
+                }
                 Err(_) => result.complete = false,
             }
             continue;
@@ -469,9 +503,13 @@ fn search_bounded(
             break;
         }
         path_bytes += bytes;
+        if include_ignored && is_ignored {
+            result.ignored.push(wire.clone());
+        }
         result.paths.push(wire);
     }
     result.paths.sort();
+    result.ignored.sort();
     Ok(result)
 }
 
@@ -713,6 +751,13 @@ mod tests {
         AtomicBool::new(false)
     }
 
+    /// A search over a `git` that cannot be run, in scopes that hold no repository: nothing is
+    /// ignored, and including ignored files only keeps the search from leaving anything out.
+    fn search_files(scope: &Path, query: &str, cancel: &AtomicBool) -> Result<FileMatches> {
+        let git = Git::new(&|| anyhow::bail!("no git in this test"));
+        super::search_files(scope, query, true, &git, cancel)
+    }
+
     fn code(err: anyhow::Error) -> &'static str {
         err.downcast_ref::<CodedError>()
             .expect("a coded refusal")
@@ -796,6 +841,7 @@ mod tests {
         fs::create_dir_all(scope.join("nested")).unwrap();
         fs::write(scope.join("needle.txt"), b"match").unwrap();
         fs::write(scope.join("nested/needle.txt"), b"match").unwrap();
+        let git = Git::new(&|| anyhow::bail!("no git in this test"));
         for (visited, matches, bytes, depth, timeout) in [
             (0, 10, 1024, 10, std::time::Duration::from_secs(5)),
             (100, 1, 1024, 10, std::time::Duration::from_secs(5)),
@@ -806,11 +852,14 @@ mod tests {
             let found = search_bounded(
                 &scope,
                 "needle",
+                &mut ignored::IgnoredPaths::new(&git, std::time::Instant::now()),
+                true,
                 visited,
                 matches,
                 bytes,
                 depth,
                 timeout,
+                std::time::Instant::now(),
                 &never(),
             )
             .unwrap();
@@ -827,11 +876,14 @@ mod tests {
         let limited = search_bounded(
             &scope,
             "",
+            &mut ignored::IgnoredPaths::new(&git, std::time::Instant::now()),
+            true,
             100,
             1,
             1024,
             10,
             std::time::Duration::from_secs(5),
+            std::time::Instant::now(),
             &never(),
         )
         .unwrap();

@@ -183,8 +183,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Project pane](product/project-pane.md) — a project's files and Git review (one branch's uncommitted and committed
   changes) in the right pane: its Files and Changes tabs and what is remembered of the mode, opening it with Browse
   files or by selecting a project session without starting or resuming anything, the file tree, always by folder (what
-  is listed, its order, rows and the keyboard, the selected file and a removed one), recursive file-name filtering with
-  results shown as a tree, the button and right-click menus of file and change rows (opening live paths with the system,
+  is listed, Git-ignored entries shown dimmed, its order, rows and the keyboard, the selected file and a removed one),
+  Collapse all folders, recursive file-name filtering with results shown as a tree and ignored files left out unless the
+  include-ignored toggle is on, the button and right-click menus of file and change rows (opening live paths with the system,
   revealing them in the file manager and copying paths; change rows use the branch's worktree or fall back to the
   project directory), when the tree is listed again, what is remembered per project, its errors (the file viewer's
   included), and a pane that fails to load.

@@ -28,4 +28,16 @@ describe("file results as a tree", () => {
     expect(closed.expanded.size).toBe(0);
     expect(buildFileResults(paths, undefined, new Set(["src"])).expanded.has(rowKey("src/deep"))).toBe(true);
   });
+
+  it("marks the result files Git ignores, and a folder only when everything shown in it is ignored", () => {
+    const { tree } = buildFileResults(["dist/a.js", "dist/b.js", "src/c.ts", "src/d.js", "e.js"], undefined, new Set(), new Set(["dist/a.js", "dist/b.js", "src/d.js"]));
+    expect(tree.nodes).toMatchObject([
+      { type: "directory", path: "dist", entry: { ignored: true }, children: [{ entry: { ignored: true } }, { entry: { ignored: true } }] },
+      { type: "directory", path: "src", children: [{ path: "src/c.ts" }, { path: "src/d.js", entry: { ignored: true } }] },
+      { type: "file", path: "e.js" },
+    ]);
+    const src = tree.nodes[1];
+    expect(src.type === "directory" && src.entry.ignored).toBeUndefined();
+    expect(tree.nodes[2].type === "file" && tree.nodes[2].entry?.ignored).toBeUndefined();
+  });
 });

@@ -113,6 +113,13 @@ export type TreeNode =
   | { type: "file"; key: string; path: string; entry?: BrowseEntry; missing?: "removed" | "unlisted"; selected: boolean }
   | { type: "status"; key: string; dir: string; status: StatusRow };
 
+/** Whether the top-level `nodes` hold a folder drawn open: expanded and not failed to list. A folder
+ * deeper down is shown only under open parents, so it needs no look of its own; what `expanded`
+ * holds beneath a folded folder, or on a failed one, is not on screen. */
+export function hasOpenFolder(nodes: readonly TreeNode[], expanded: ReadonlySet<string>): boolean {
+  return nodes.some((node) => node.type === "directory" && expanded.has(node.key) && node.failure === undefined);
+}
+
 export interface TreeModel {
   /** The rows under the project's directory; empty until its listing has loaded. */
   nodes: TreeNode[];
