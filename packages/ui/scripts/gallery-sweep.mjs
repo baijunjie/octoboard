@@ -12,13 +12,24 @@
 // whose browser cache matches a different version. It installs no browser: `pnpm exec playwright install
 // chromium`, run from this package (the workspace root resolves another `playwright` or none), fetches
 // the one this version expects, and `--chromium` names any other already on the machine.
+//
+// Two things keep a sweep from costing more than it must, both shared with `pnpm verify`
+// (`scripts/verify/`). The page loads take a heavy-step slot of the machine-wide lock, so that sweeps
+// in several worktrees queue instead of together loading the machine. And a page that came out clean
+// is recorded against the content the sweep depends on (`STAMP_INPUTS`), so a later sweep of the same
+// content skips it; `--fresh` ignores the records. A gallery served by `--url` is another checkout's
+// content, which this one's key does not describe, so nothing is read or recorded then.
 
+import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
+import { acquireSlot } from "../../../scripts/verify/lock.mjs";
+import { contentKey, readStamp, recordPasses, stampDirectory, stepKey } from "../../../scripts/verify/stamp.mjs";
+import { idsAt, workingTree } from "../../../scripts/verify/tree.mjs";
 
 const packageDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -36,6 +47,9 @@ With no scenario given, every scenario is swept.
   --jobs <n>            Pages loaded at once (default: ${defaultJobs()}).
   --url <origin>        Use the gallery served at this origin (a running \`pnpm gallery\`) instead of
                         starting a dev server of this checkout.
+  --fresh               Load every selected page, even one that already came out clean on this content
+                        (the records are kept in the git directory shared by all worktrees, and are not
+                        read or written with --url, whose gallery is another checkout's).
   --list                Print the scenario ids that would be swept and exit.
   --playwright <dir>    A Playwright other than this package's own: a directory holding
                         node_modules/playwright (or playwright-core), or the package itself. Also
@@ -43,6 +57,8 @@ With no scenario given, every scenario is swept.
   --chromium <path>     The Chromium executable to launch. Also OCTOBOARD_CHROMIUM. Without it Playwright's
                         own is used, and failing that the newest headless shell in its browser cache.
   -h, --help            This text.
+
+Page loads wait for a free heavy-step slot (the one \`pnpm verify\` takes; OCTOBOARD_VERIFY_SLOTS sets how many).
 
 Exit status: 0 when every swept scenario is clean, 1 when any failed (a failure that shows only while pages
 are loaded together counts), 2 when the sweep could not run, 128 plus the signal's number when interrupted.`;
@@ -90,6 +106,7 @@ function parse() {
         theme: { type: "string" },
         jobs: { type: "string" },
         url: { type: "string" },
+        fresh: { type: "boolean" },
         list: { type: "boolean" },
         playwright: { type: "string" },
         chromium: { type: "string" },
@@ -117,6 +134,7 @@ function parse() {
     themes: theme === "both" ? ["light", "dark"] : [theme],
     jobs,
     url: values.url?.replace(/\/+$/, ""),
+    fresh: values.fresh ?? false,
     list: values.list ?? false,
     playwright: values.playwright ?? process.env.OCTOBOARD_PLAYWRIGHT,
     chromium: values.chromium ?? process.env.OCTOBOARD_CHROMIUM,
@@ -270,6 +288,85 @@ async function startServer() {
   const address = server.httpServer?.address();
   if (!address || typeof address === "string") throw new SetupError("The dev server did not report a port");
   return { origin: `http://localhost:${address.port}`, close: () => server.close() };
+}
+
+// ---- records of clean pages ----------------------------------------------------------------------
+
+/** What a page's result depends on, relative to the repository root: this package (the app, the gallery,
+ * the fixtures, the configuration of Vite and TypeScript), what it imports from outside it (`config/app.json`,
+ * `scripts/env.mjs`), and what decides the dependency versions (the manifests, the lockfile, the patches).
+ * The whole package is one key, not one per scenario: which scenarios a source file reaches is not known
+ * without tracing imports, and a key that missed an input would pass a page that no longer renders. */
+const STAMP_INPUTS = [
+  "packages/ui",
+  "config",
+  "scripts/env.mjs",
+  "scripts/env.d.mts",
+  "package.json",
+  "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
+  ".npmrc",
+  "patches",
+];
+/** Git-ignored, yet part of the swept gallery: the checkout's own extra scenarios. */
+const STAMP_FORCED = ["packages/ui/src/gallery/preview"];
+
+/** The env files the dev server reads: `vite.config.ts` loads the root's `.env` and `.env.local`, and Vite its
+ * own package's. Not `.env.secret`, which holds credentials nothing here reads. */
+const ENV_FILES = [".env", ".env.local", ...[".env", ".env.local", ".env.development", ".env.development.local"].map((name) => `packages/ui/${name}`)];
+
+const git = (cwd, ...args) => {
+  const result = spawnSync("git", args, { cwd, encoding: "utf8" });
+  return result.status === 0 ? result.stdout.trim() : undefined;
+};
+
+/** `OCTOBOARD_SWEEP_STATE_DIR` moves the slots and the records out of the machine-wide places: the
+ * script's own tests use it, so that they neither wait on a slot held by the test run that started them
+ * nor leave records behind. */
+const stateDir = process.env.OCTOBOARD_SWEEP_STATE_DIR;
+
+/** The content the sweep depends on as it is now, or undefined when git cannot say, which sweeps without
+ * records. Taken before the dev server starts and again when the run ends, so that an edit made during the
+ * run is seen (the server reads a module when it is first requested). The env files Vite reads set the
+ * daemon port the app is built with, so they count, the git-ignored ones too. */
+function snapshotContent() {
+  const root = git(packageDir, "rev-parse", "--show-toplevel");
+  const common = root && git(root, "rev-parse", "--git-common-dir");
+  const forced = [...STAMP_FORCED, ...ENV_FILES];
+  const inputs = [...STAMP_INPUTS, ...forced];
+  const tree = common && workingTree(root, { paths: inputs, forced });
+  if (!tree) {
+    console.error("Could not take the content the sweep depends on, so no records of clean pages are read or written");
+    return undefined;
+  }
+  return { root, common, ids: idsAt(root, tree, inputs).join("\n") };
+}
+
+/** Reads the records of clean pages for `content`, and records new ones against it. */
+function openRecords(content, browserVersion) {
+  // What is not in the files: the versions the pages ran on and the environment Vite reads.
+  const toolchain = [
+    "gallery sweep",
+    `node ${process.version}`,
+    `browser ${browserVersion}`,
+    ...Object.keys(process.env).filter((name) => name === "OCTOBOARD_DAEMON_PORT" || name.startsWith("VITE_")).sort().map((name) => `${name}=${process.env[name]}`),
+  ];
+  const key = contentKey(content.ids, toolchain);
+  const dir = stateDir ? path.join(stateDir, "stamps") : stampDirectory(content.root, content.common);
+  const step = ({ scenario, language, theme }) => ({ cmd: [scenario.id, language, theme], label: `gallery sweep: ${language}/${theme} ${scenario.id}` });
+  const recorded = readStamp(dir, key);
+  return {
+    isRecorded: (job) => stepKey(step(job)) in recorded,
+    /** Records the pages that came out clean, unless the content is no longer what they ran on. */
+    record(passed) {
+      if (passed.length === 0) return;
+      if (snapshotContent()?.ids !== content.ids) {
+        console.error("The content changed while the sweep ran (or could not be read again), so its clean pages are not recorded");
+        return;
+      }
+      recordPasses(dir, key, passed.map(step));
+    },
+  };
 }
 
 // ---- scenarios -----------------------------------------------------------------------------------
@@ -473,6 +570,9 @@ async function main() {
   const options = parse();
   const { chromium, own } = await loadChromium(options.playwright);
   const started = Date.now();
+  const content = options.url ? undefined : snapshotContent();
+  // Held until the browser and the server are closed, so the next holder does not start while they still run.
+  let release = () => {};
   try {
     if (!options.url) running.server = await startServer();
     const origin = options.url ?? running.server.origin;
@@ -491,51 +591,70 @@ async function main() {
       return 0;
     }
     const jobs = options.themes.flatMap((theme) => options.languages.flatMap((language) => scenarios.map((scenario) => ({ scenario, language, theme }))));
-    const concurrency = Math.min(options.jobs, jobs.length);
+    const records = content && openRecords(content, browser.version());
+    const skipped = options.fresh || !records ? [] : jobs.filter((job) => records.isRecorded(job));
+    const pending = jobs.filter((job) => !skipped.includes(job));
+    const concurrency = Math.min(options.jobs, pending.length);
     console.error(
-      `Sweeping ${plural(scenarios.length, "scenario")} x ${options.languages.join(", ")} x ${options.themes.join(", ")} = ${plural(jobs.length, "load")}, ${concurrency} at a time`,
+      `Sweeping ${plural(scenarios.length, "scenario")} x ${options.languages.join(", ")} x ${options.themes.join(", ")} = ${plural(jobs.length, "load")}` +
+        (skipped.length > 0 ? `, skipping ${skipped.length} that came out clean on this content (--fresh loads them again)` : "") +
+        (pending.length > 0 ? `; loading ${pending.length}, ${concurrency} at a time` : ""),
     );
-
-    let done = 0;
-    const interactive = process.stderr.isTTY;
-    const results = await runAll(browser, origin, jobs, concurrency, (r) => {
-      if (running.interrupted) return;
-      done++;
-      if (r.failure) {
-        if (interactive) process.stderr.write("\r\x1b[K");
-        console.log(`FAIL  ${label(r)}\n      ${r.failure}`);
-      }
-      if (interactive) process.stderr.write(`\r${done}/${jobs.length}`);
+    if (pending.length === 0) {
+      console.log(`\nNothing to load: all ${plural(jobs.length, "load")} came out clean on this content`);
+      return 0;
+    }
+    release = await acquireSlot(`${path.basename(path.resolve(packageDir, "../.."))}: gallery sweep`, {
+      root: stateDir && path.join(stateDir, "slots"),
+      onWait: (holders) => console.error(`Waiting for a free heavy-step slot; running now: ${holders.join("; ")}`),
     });
-    if (interactive) process.stderr.write("\r\x1b[K");
-    if (running.interrupted) return process.exitCode;
-
-    // A failure seen under load is checked again alone. That is a diagnosis, not a pardon: one that
-    // reproduces is a scenario that no longer runs; one that does not is a step that races an animation or
-    // a fixture reply that races a render, which only a busy machine shows, and that is a defect of the
-    // scenario all the same. Both fail the sweep; the second is named, with what to try.
-    const failed = results.filter((r) => r.failure);
-    const loadOnly = [];
-    if (failed.length > 0 && concurrency > 1) {
-      console.error(`Re-running ${plural(failed.length, "failure")} alone to see whether they reproduce...`);
-      const again = await runAll(browser, origin, failed, 1, () => {});
-      if (running.interrupted) return process.exitCode;
-      again.forEach((r, i) => {
-        if (!r.failure) loadOnly.push(failed[i]);
-      });
-    }
-    if (loadOnly.length > 0) {
-      console.log(`\nFailed while pages loaded together, passed alone (${loadOnly.length}); a failure that needs a busy machine is still one:`);
-      for (const r of loadOnly) console.log(`  ${label(r)}\n      ${r.failure}`);
-    }
-    const seconds = ((Date.now() - started) / 1000).toFixed(1);
-    console.log(
-      `\n${plural(jobs.length, "load")} in ${seconds}s (${concurrency} at a time): ${jobs.length - failed.length} clean, ${failed.length} failed${loadOnly.length ? ` (${loadOnly.length} only under load)` : ""}`,
-    );
-    return failed.length > 0 ? 1 : 0;
+    return await sweepPages(browser, origin, pending, concurrency, skipped.length, records, started);
   } finally {
     await closeResources();
+    release();
   }
+}
+
+/** Loads `jobs` and reports; returns the exit status. */
+async function sweepPages(browser, origin, jobs, concurrency, skipped, records, started) {
+  let done = 0;
+  const interactive = process.stderr.isTTY;
+  const results = await runAll(browser, origin, jobs, concurrency, (r) => {
+    if (running.interrupted) return;
+    done++;
+    if (r.failure) {
+      if (interactive) process.stderr.write("\r\x1b[K");
+      console.log(`FAIL  ${label(r)}\n      ${r.failure}`);
+    }
+    if (interactive) process.stderr.write(`\r${done}/${jobs.length}`);
+  });
+  if (interactive) process.stderr.write("\r\x1b[K");
+  if (running.interrupted) return process.exitCode;
+
+  // A failure seen under load is checked again alone. That is a diagnosis, not a pardon: one that
+  // reproduces is a scenario that no longer runs; one that does not is a step that races an animation or
+  // a fixture reply that races a render, which only a busy machine shows, and that is a defect of the
+  // scenario all the same. Both fail the sweep; the second is named, with what to try.
+  const failed = results.filter((r) => r.failure);
+  const loadOnly = [];
+  if (failed.length > 0 && concurrency > 1) {
+    console.error(`Re-running ${plural(failed.length, "failure")} alone to see whether they reproduce...`);
+    const again = await runAll(browser, origin, failed, 1, () => {});
+    if (running.interrupted) return process.exitCode;
+    again.forEach((r, i) => {
+      if (!r.failure) loadOnly.push(failed[i]);
+    });
+  }
+  if (loadOnly.length > 0) {
+    console.log(`\nFailed while pages loaded together, passed alone (${loadOnly.length}); a failure that needs a busy machine is still one:`);
+    for (const r of loadOnly) console.log(`  ${label(r)}\n      ${r.failure}`);
+  }
+  records?.record(results.filter((r) => !r.failure));
+  const seconds = ((Date.now() - started) / 1000).toFixed(1);
+  console.log(
+    `\n${plural(jobs.length, "load")} in ${seconds}s (${concurrency} at a time): ${jobs.length - failed.length} clean, ${failed.length} failed${loadOnly.length ? ` (${loadOnly.length} only under load)` : ""}${skipped > 0 ? `; ${skipped} skipped, clean on this content` : ""}`,
+  );
+  return failed.length > 0 ? 1 : 0;
 }
 
 try {

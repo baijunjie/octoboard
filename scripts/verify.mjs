@@ -20,13 +20,12 @@
 // machine-wide slot (`scripts/verify/lock.mjs`); light ones never wait. The UI gallery's quick check
 // is not run here: `agent-gallery` decides it from the scenarios touched.
 import { spawn, spawnSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, rmSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { acquireSlot } from "./verify/lock.mjs";
 import { MENU_KEYS_FILE, planScope } from "./verify/scope.mjs";
-import { contentKey, readStamp, recordPass, stepKey } from "./verify/stamp.mjs";
+import { contentKey, readStamp, recordPass, stampDirectory, stepKey } from "./verify/stamp.mjs";
 import { checkSteps, formatSteps } from "./verify/steps.mjs";
+import { workingTree } from "./verify/tree.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
@@ -38,8 +37,8 @@ if (unknown.length > 0 || (flag("--base") && !baseArg)) {
   process.exit(2);
 }
 
-function run(command, commandArgs, env = process.env) {
-  const result = spawnSync(command, commandArgs, { encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"] });
+function run(command, commandArgs) {
+  const result = spawnSync(command, commandArgs, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   return result.status === 0 ? result.stdout.trim() : null;
 }
 const git = (...gitArgs) => run("git", gitArgs);
@@ -50,31 +49,12 @@ if (!root) {
   process.exit(2);
 }
 process.chdir(root);
-const stampDir = path.join(path.resolve(git("rev-parse", "--git-common-dir")), "verify-stamps");
+const stampDir = stampDirectory(root, git("rev-parse", "--git-common-dir"));
 const toolchain = [
   `node ${process.version}`,
   `pnpm ${run("pnpm", ["--version"]) ?? "?"}`,
   `rustc ${run("rustc", ["--version"]) ?? "none"}`,
 ];
-
-// The tree of the working copy as it is now, uncommitted and untracked (not ignored) files
-// included, taken through a scratch copy of the index so the real one is left alone.
-function workingTree() {
-  const scratch = mkdtempSync(path.join(os.tmpdir(), "verify-index-"));
-  try {
-    const indexFile = path.join(scratch, "index");
-    const realIndex = path.resolve(root, git("rev-parse", "--git-path", "index"));
-    try {
-      copyFileSync(realIndex, indexFile);
-    } catch {
-      // No index yet: the scratch one starts empty.
-    }
-    const env = { ...process.env, GIT_INDEX_FILE: indexFile };
-    return run("git", ["add", "-A"], env) === null ? null : run("git", ["write-tree"], env);
-  } finally {
-    rmSync(scratch, { recursive: true, force: true });
-  }
-}
 
 function resolveBase() {
   const branch = git("symbolic-ref", "--quiet", "--short", "HEAD");
@@ -94,7 +74,7 @@ function changesMenuKeys(base, tree) {
 }
 
 function plan(base) {
-  const tree = workingTree();
+  const tree = workingTree(root);
   if (!tree) throw new Error("could not take the tree of the working copy");
   let files = [];
   let scope;
@@ -153,7 +133,7 @@ async function runStep(step, key, tree) {
   }
   // A pass is recorded only for the content it ran on: a step that rewrote files, or an edit made
   // meanwhile, leaves the content different from the one the stamp is keyed by.
-  if (workingTree() === tree) recordPass(stampDir, key, step);
+  if (workingTree(root) === tree) recordPass(stampDir, key, step);
   else {
     recorded = false;
     console.log(`verify: the content changed while "${step.label}" ran; its pass is not recorded`);

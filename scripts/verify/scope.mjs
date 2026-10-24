@@ -12,7 +12,9 @@
 //     `packages/ui/src/protocol.ts`, kept in step by hand and consumed by the UI and the desktop shell;
 //   - the contract between `apps/desktop` and `packages/ui`: the Tauri commands and events, the
 //     window URL's parameters, the menu message keys and the status item icons. `apps/desktop` itself
-//     has no package entry, so every change to it is already `full`.
+//     has no package entry, so every change to it is already `full`;
+//   - the modules `packages/ui/scripts/gallery-sweep.mjs` imports from `scripts/verify/`, which its
+//     tests (a UI test file) run.
 
 // What `apps/web` imports from `packages/ui/src`: `i18n/matchLanguage.ts` and what it imports.
 export const WEB_IMPORTS_FROM_UI = [
@@ -54,13 +56,16 @@ export const DESKTOP_CONTRACT = [
 ];
 export const MENU_KEYS_FILE = "packages/ui/src/i18n/messages/en.ts";
 
+// The modules of `scripts/verify/` that the gallery sweep also uses.
+export const SWEEP_SHARED = ["scripts/verify/lock.mjs", "scripts/verify/stamp.mjs", "scripts/verify/tree.mjs"];
+
 export const WIRE_PROTOCOL = ["apps/daemon/PROTOCOL.md", "apps/daemon/src/protocol.rs", "packages/ui/src/protocol.ts"];
 
 const UNREAD_PREFIXES = ["docs/", ".claude/", ".agents/", ".codex/", ".githooks/"];
 const UNREAD_FILES = ["CLAUDE.md", "AGENTS.md", "LICENSE"];
 
 // The packages that have checks of their own, by the paths they own. `verify` is this command's own
-// code, which nothing else depends on; its checks are its tests and lint.
+// code, which only the gallery sweep depends on (`SWEEP_SHARED`); its checks are its tests and lint.
 export const PACKAGE_ROOTS = {
   verify: ["scripts/verify/", "scripts/verify.mjs"],
   ui: ["packages/ui/"],
@@ -77,7 +82,7 @@ const CONFIGURATION = /(^|\/)(package\.json|Cargo\.toml|build\.rs|tsconfig[^/]*\
 
 export function classify(file) {
   if (WIRE_PROTOCOL.includes(file) || DESKTOP_CONTRACT.includes(file)) return "full";
-  if (WEB_IMPORTS_FROM_UI.includes(file)) return "full";
+  if (WEB_IMPORTS_FROM_UI.includes(file) || SWEEP_SHARED.includes(file)) return "full";
   if (WEB_PREVIEW_INPUTS.some((input) => file.startsWith(input))) return "full";
   if (CONFIGURATION.test(file)) return "full";
   if (UNREAD_FILES.includes(file) || UNREAD_PREFIXES.some((prefix) => file.startsWith(prefix))) return "unread";

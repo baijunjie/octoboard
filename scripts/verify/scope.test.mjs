@@ -23,6 +23,7 @@ test("a change inside one package runs that package's checks", () => {
 
 test("several packages, shared layers and unrecognised paths run the full set", () => {
   assert.equal(mode(["packages/ui/src/App.tsx", "apps/daemon/src/main.rs"]), "full");
+  assert.equal(mode(["scripts/verify/lock.mjs"]), "full");
   for (const file of ["Cargo.lock", "pnpm-lock.yaml", "rust-toolchain.toml", "config/app.json", "eslint.config.mjs", "apps/desktop/src-tauri/src/lib.rs", "scripts/test-rust.mjs", ".github/workflows/quality.yml", "something/new.txt"]) {
     assert.equal(mode([file]), "full", file);
   }

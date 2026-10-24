@@ -157,9 +157,23 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
 #### Sweeping the gallery
 
 `pnpm gallery:sweep [ids or patterns]` loads the selected scenarios (all by default) in a headless browser and fails on
-any gallery failure; `pnpm gallery:sweep --help` lists the flags (`--group`, `--lang`, `--theme`, `--list`, `--url`, ...).
+any gallery failure; `pnpm gallery:sweep --help` lists the flags (`--group`, `--lang`, `--theme`, `--fresh`, `--list`,
+`--url`, ...).
 Playwright installs no browser: run `pnpm exec playwright install chromium` from `packages/ui` once, or point
 `--chromium <path>` / `OCTOBOARD_CHROMIUM` (or `--playwright <dir>` / `OCTOBOARD_PLAYWRIGHT`) at an existing one.
+
+The page loads wait for a free heavy-step slot, the machine-wide lock `pnpm verify` also takes (`OCTOBOARD_VERIFY_SLOTS`
+sets how many), and say who holds it while they wait, so sweeps in several worktrees queue rather than overload the
+machine. A page that came out clean (scenario, language and theme) is recorded against a key of everything the result
+depends on: this package including the git-ignored `src/gallery/preview/`, `config/`, `scripts/env.mjs` and
+`scripts/env.d.mts`, the env files the dev server reads (`.env`, `.env.local`), the manifests, the lockfile and the
+dependency patches, the Node version, the browser's version and the `OCTOBOARD_DAEMON_PORT` and `VITE_*` environment
+variables. The key covers the whole package at once, so any edit under `packages/ui` loads everything again. A later sweep of the same content skips the recorded
+pages and reports how many it skipped; `--fresh` loads them anyway. Only clean pages are recorded, and not when the
+content changed during the run. The records are kept with `pnpm verify`'s stamps, in `verify-stamps/` of the repository's
+common git directory, so every worktree shares them; with `--url`, whose gallery is another checkout's content, none are
+read or written. A clean page also counts as clean for a later sweep that loads more pages at once, though a failure
+that shows only under load is what that sweep would have looked for.
 
 ## Layout
 
@@ -175,7 +189,7 @@ Imports run one way between the feature directories: `src/panels/` imports `src/
 | `website-preview.html`, `vite.preview.config.ts` | The entry and build config of the fixture-backed React build embedded by the public website |
 | `src/website-preview/` | The preview's bootstrap and fixtures: `main.tsx` mounts the real `App` over `createPreviewDaemon` (`daemon.ts`), with sample repositories (`repositories/`), `createPreviewScenario` (`scenarios.ts`) for its three scenes, with the sample agent availability and quota readings, and a scroll bridge to the embedding page; the iframe and scene buttons belong to [`apps/web/`](../../apps/web/README.md) |
 | `gallery.html`, `gallery-frame.html`, `src/gallery/` | The dev-only UI state gallery (see "The UI state gallery"): `shell.tsx` and `frame.tsx` (the shell page and the page one scenario renders in), `scenario.ts` (the scenario type), `interact.ts` (step helpers), `fixtureDaemon.ts` with `fixtureGit.ts` and `fixtureConfiguration.ts` (the fixture daemon), `fixtures/` (the scenarios, `builders.ts`, `groups.ts`, sample projects and repositories, change factories), and the untracked, per-checkout `preview/` (extra scenarios appended to `SCENARIOS`) |
-| `scripts/gallery-sweep.mjs` | `pnpm gallery:sweep` |
+| `scripts/gallery-sweep.mjs` | `pnpm gallery:sweep` (takes a heavy-step slot and skips pages recorded as clean; see "Sweeping the gallery") |
 | `scripts/gallery-chip-geometry.mjs` | A standalone Playwright check of chip geometry over gallery scenarios, run by hand against a served gallery |
 | `scripts/wkbench/` | `pnpm bench:wkwebview`: the WKWebView latency benchmark (see [its README](scripts/wkbench/README.md)) |
 | `src/main.tsx` | Startup: picks the platform, locates the daemon, creates the connection, pushes the theme, reveals the native window, registers global runtime-error handlers, and mounts the app or `StartupScreen` with the error-alert host |

@@ -12,6 +12,9 @@ const MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 
 const hash = (text) => createHash("sha256").update(text).digest("hex").slice(0, 32);
 
+// Where the stamps live, given the repository's `git rev-parse --git-common-dir` read from `root`.
+export const stampDirectory = (root, commonDir) => path.join(path.resolve(root, commonDir), "verify-stamps");
+
 export const contentKey = (tree, toolchain) => hash(`${tree}\n${toolchain.join("\n")}`);
 export const stepKey = (step) => hash(step.cmd.join("\0"));
 
@@ -23,10 +26,12 @@ export function readStamp(dir, key) {
   }
 }
 
-export function recordPass(dir, key, step) {
+export const recordPass = (dir, key, step) => recordPasses(dir, key, [step]);
+
+export function recordPasses(dir, key, steps) {
   mkdirSync(dir, { recursive: true });
   const stamp = readStamp(dir, key);
-  stamp[stepKey(step)] = step.label;
+  for (const step of steps) stamp[stepKey(step)] = step.label;
   writeFileSync(path.join(dir, `${key}.json`), JSON.stringify(stamp));
   prune(dir);
 }
