@@ -658,13 +658,13 @@ export const configurationScenarios: Scenario[] = [
     title: "Import result, the reason a failed row carries",
     state: state,
     configuration: reviewing(),
-    description: "The first failed row's danger-coloured mark and word \"Failed\" (the button named \"Website failed\") is pressed: its popover holds why that project could not be created, while the row keeps only the mark and the word.",
+    description: "The first failed row's danger-coloured mark and word \"Failed\" (the button named \"Website failed\") is tapped with a finger: its popover holds why that project could not be created, while the row keeps only the mark and the word.",
     steps: [
       ...importFromSettings,
       chooseFile,
       applySettings,
       importNow,
-      (ui) => ui.press(ui.t("configuration.import.result.failedFor", { subject: "Website" })),
+      (ui) => ui.touchPressStatusMark(ui.t("configuration.import.result.failedFor", { subject: "Website" })),
     ],
   },
   {

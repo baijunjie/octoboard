@@ -3,7 +3,7 @@ import { CircleCheck } from "lucide-react";
 import React from "react";
 
 import { CodeBlock } from "../components/CodeBlock";
-import { FailureMark } from "../components/FailureMark";
+import { StatusMark } from "../components/StatusMark";
 import { InlineReference, type InlineReferenceSize } from "../components/InlineReference";
 import { StatusBadge, type StatusBadgeColor, type StatusBadgeSize, type StatusBadgeVariant } from "../components/StatusBadge";
 import { TintedAlert } from "../components/TintedAlert";
@@ -29,12 +29,12 @@ const LONG_PATHS = ["/Users/dev/Projects/octoboard/packages/ui/src/components/In
 
 /** One settled comparison of the shared inline references and code blocks, both outside and inside alert contexts. */
 export function CodeGallery(): React.ReactElement {
-  const region = useFadeRegion({ label: "Inline references, status badges, failure marks and alert tones" });
+  const region = useFadeRegion({ label: "Inline references, status badges, status marks and alert tones" });
   return (
     <main className={`flex h-full min-h-0 flex-col ${region.focused ? "ring-2 ring-focus ring-inset" : ""}`}>
       <FadedScroller region={region} className="min-h-0 flex-1 p-6">
         <div className="mx-auto flex max-w-5xl flex-col gap-6">
-          <h1 className="text-lg font-semibold">Inline references, status badges, failure marks and alert tones</h1>
+          <h1 className="text-lg font-semibold">Inline references, status badges, status marks and alert tones</h1>
           <section className="flex flex-col gap-3" aria-labelledby="chip-prose-title">
             <h2 id="chip-prose-title" className="font-semibold">Prose: the chip takes the text’s font, with equal height and baseline</h2>
             {[12, 14, 16].map((size) => (
@@ -97,20 +97,28 @@ export function CodeGallery(): React.ReactElement {
               ))}
             </div>
           </section>
-          <section className="flex flex-col gap-3" aria-labelledby="failure-marks-title">
-            <h2 id="failure-marks-title" className="font-semibold">Failure marks: danger and warning</h2>
+          <section className="flex flex-col gap-3" aria-labelledby="status-marks-title">
+            <h2 id="status-marks-title" className="font-semibold">Status marks: danger, warning and note</h2>
             <div className="grid gap-3 sm:grid-cols-3">
-              <div data-failure-mark-sample="danger" className="flex min-w-0 flex-col gap-2 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
+              <div data-status-mark-sample="danger" className="flex min-w-0 flex-col gap-2 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
                 <h3 className="text-sm font-medium">danger: the row has nothing to show</h3>
-                <p className="flex items-center gap-1.5 text-sm">Default <FailureMark label="Quota unavailable">Claude Code took too long to report its quota.</FailureMark></p>
+                <p className="flex items-center gap-1.5 text-sm">Default <StatusMark label="Quota unavailable">Claude Code took too long to report its quota.</StatusMark></p>
               </div>
-              <div data-failure-mark-sample="warning" className="flex min-w-0 flex-col gap-2 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
+              <div data-status-mark-sample="warning" className="flex min-w-0 flex-col gap-2 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
                 <h3 className="text-sm font-medium">warning: the row is usable but stale</h3>
-                <p className="flex items-center gap-1.5 text-sm">Work <FailureMark status="warning" label="Out of date: last read 12 minutes ago">Claude Code took too long to report its quota.</FailureMark></p>
+                <p className="flex items-center gap-1.5 text-sm">Work <StatusMark tone="warning" label="Out of date: last read 12 minutes ago">Claude Code took too long to report its quota.</StatusMark></p>
               </div>
-              <div data-failure-mark-sample="bare" className="flex min-w-0 flex-col gap-2 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
-                <h3 className="text-sm font-medium">without a reason: the glyph alone, still named</h3>
-                <p className="flex items-center gap-1.5 text-sm">Notes <FailureMark label="Failed" /></p>
+              <div data-status-mark-sample="bare" className="flex min-w-0 flex-col gap-2 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
+                <h3 className="text-sm font-medium">without a reason: the popover holds the name</h3>
+                <p className="flex items-center gap-1.5 text-sm">Notes <StatusMark label="Failed" /></p>
+              </div>
+              <div data-status-mark-sample="word" className="flex min-w-0 flex-col gap-2 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
+                <h3 className="text-sm font-medium">a word and no reason: plain glyph and word</h3>
+                <p className="flex items-center gap-1.5 text-sm">Website <StatusMark label="Website failed" text="Failed" /></p>
+              </div>
+              <div data-status-mark-sample="note" className="flex min-w-0 flex-col gap-2 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
+                <h3 className="text-sm font-medium">note: neither failed nor stale, a tooltip</h3>
+                <p className="flex items-center gap-1.5 text-sm">Shared <StatusMark tone="note" label="Shared by two accounts">Both accounts read from this folder.</StatusMark></p>
               </div>
             </div>
           </section>

@@ -2,7 +2,7 @@ import React from "react";
 
 import { StatusBadge } from "../components/StatusBadge";
 import { codedMessageNode, CodedFailureBody } from "../components/DaemonErrorMessage";
-import { FailureMark } from "../components/FailureMark";
+import { StatusMark } from "../components/StatusMark";
 import { daemonMessage } from "../daemonMessage";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { QuotaUnavailable } from "../protocol";
@@ -50,7 +50,7 @@ function LoginStateBadge({ quota }: { quota: QuotaReading }): React.ReactElement
 function QuotaFailureMark({ quota }: { quota: QuotaReading }): React.ReactElement | null {
   const t = useT();
   if (typeof quota !== "object" || !quota.unavailable || isNotLoggedIn(quota.unavailable) || quota.windows.length > 0) return null;
-  return <FailureMark label={t("quota.unavailable")}><QuotaFailure inMark unavailable={quota.unavailable} /></FailureMark>;
+  return <StatusMark label={t("quota.unavailable")}><QuotaFailure inMark unavailable={quota.unavailable} /></StatusMark>;
 }
 
 /** When the reading with windows was taken ("Updated 3 minutes ago"). When the latest read failed and those
@@ -67,9 +67,9 @@ export function QuotaUpdated({ quota }: { quota: QuotaReading }): React.ReactEle
     <span className="ms-auto flex shrink-0 items-center gap-1 text-xs font-normal text-app-muted">
       <span>{isJustNow(quota.fetched_at, now) ? t("quota.updatedNow") : t("quota.updated", { age })}</span>
       {stale && (
-        <FailureMark status="warning" label={t("quota.stale", { age })}>
+        <StatusMark tone="warning" label={t("quota.stale", { age })}>
           <QuotaFailure inMark unavailable={stale} />
-        </FailureMark>
+        </StatusMark>
       )}
     </span>
   );

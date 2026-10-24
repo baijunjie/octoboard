@@ -16,6 +16,7 @@ import { HelpTip } from "../components/HelpTip";
 import { SessionAgentTooltip } from "../components/SessionAgentIcon";
 import { SessionContextLabel } from "../components/SessionMetadata";
 import { StatusIcon } from "../components/StatusIcon";
+import { StatusMark } from "../components/StatusMark";
 import { TitledControl } from "../components/TitledControl";
 import { leave, mountForTooltip, openPopover, openTooltip } from "../components/tooltipTestSupport";
 import { gitBadgeAriaLabel } from "../gitStatusLabel";
@@ -393,6 +394,93 @@ it("hoverPanel fails for a control that is not there", async () => {
   mountQuotaEntry();
   const done = expect(createUi(document, "en").hoverPanel("Nothing", "Account quota")).rejects.toThrow(/Nothing to hover/);
   await vi.advanceTimersByTimeAsync(6000);
+  await done;
+});
+
+/** A status mark with a reason, as a row of the file tree draws it. */
+function mountStatusMark(): void {
+  // jsdom has no Web Animations, which the popover's exit waits for.
+  HTMLElement.prototype.animate = vi.fn(() => ({ cancel: vi.fn(), finished: Promise.resolve(), onfinish: null })) as unknown as typeof HTMLElement.prototype.animate;
+  onTestFinished(() => void delete (HTMLElement.prototype as Partial<HTMLElement>).animate);
+  mountForTooltip(<StatusMark label="Could not list this folder">Permission denied.</StatusMark>);
+}
+
+it("hoverStatusMark opens the popover of the mark it names without moving focus", async () => {
+  mountStatusMark();
+  const mark = document.querySelector<HTMLElement>('[aria-label="Could not list this folder"]')!;
+  await settledLive(createUi(document, "en").hoverStatusMark("Could not list this folder"));
+  const popover = document.querySelector("[data-status-mark-popover]");
+  expect(popover?.textContent).toBe("Permission denied.");
+  expect(popover?.querySelector("[role=dialog]")?.getAttribute("aria-modal")).toBe("false");
+  expect(document.activeElement).not.toBe(mark);
+  expect(popover?.contains(document.activeElement)).toBe(false);
+  release(mark);
+});
+
+it("hoverStatusMark fails for a mark that is not there", async () => {
+  mountStatusMark();
+  const done = expect(createUi(document, "en").hoverStatusMark("Nothing")).rejects.toThrow(/Nothing to hover/);
+  await vi.advanceTimersByTimeAsync(6000);
+  await done;
+});
+
+it("hoverStatusMark waits for the popover of the mark it names, not for one that is already up", async () => {
+  HTMLElement.prototype.animate = vi.fn(() => ({ cancel: vi.fn(), finished: Promise.resolve(), onfinish: null })) as unknown as typeof HTMLElement.prototype.animate;
+  onTestFinished(() => void delete (HTMLElement.prototype as Partial<HTMLElement>).animate);
+  mountForTooltip(
+    <>
+      <StatusMark label="First">One.</StatusMark>
+      <StatusMark label="Second">Two.</StatusMark>
+    </>,
+  );
+  const ui = createUi(document, "en");
+  await settledLive(ui.hoverStatusMark("First"));
+  await settledLive(ui.hoverStatusMark("Second"));
+  const second = document.querySelector<HTMLElement>('[aria-label="Second"]')!;
+  const popovers = [...document.querySelectorAll("[data-status-mark-popover]")];
+  expect(popovers.map((popover) => popover.textContent)).toContain("Two.");
+  expect(popovers.find((popover) => popover.getAttribute("aria-labelledby") === second.id)?.textContent).toBe("Two.");
+  release(second);
+  release(document.querySelector('[aria-label="First"]')!);
+});
+
+it("hoverStatusMark fails for a control that opens nothing while another mark's popover is up", async () => {
+  HTMLElement.prototype.animate = vi.fn(() => ({ cancel: vi.fn(), finished: Promise.resolve(), onfinish: null })) as unknown as typeof HTMLElement.prototype.animate;
+  onTestFinished(() => void delete (HTMLElement.prototype as Partial<HTMLElement>).animate);
+  mountForTooltip(
+    <>
+      <StatusMark label="First">One.</StatusMark>
+      <button type="button">Plain</button>
+    </>,
+  );
+  const ui = createUi(document, "en");
+  await settledLive(ui.hoverStatusMark("First"));
+  const done = expect(ui.hoverStatusMark("Plain")).rejects.toThrow(/opened no popover/);
+  await vi.advanceTimersByTimeAsync(8000);
+  await done;
+  release(document.querySelector('[aria-label="First"]')!);
+});
+
+it("touchPressStatusMark opens the press form of the mark it names", async () => {
+  mountStatusMark();
+  await settledLive(createUi(document, "en").touchPressStatusMark("Could not list this folder"));
+  const popover = document.querySelector("[data-status-mark-popover]");
+  expect(popover?.textContent).toBe("Permission denied.");
+  expect(popover?.querySelector("[aria-modal=false]")).toBeNull();
+  expect(popover?.contains(document.activeElement)).toBe(true);
+});
+
+it("touchPressStatusMark fails for a control that opens no popover", async () => {
+  mountForTooltip(<button type="button">Plain</button>);
+  const done = expect(createUi(document, "en").touchPressStatusMark("Plain")).rejects.toThrow(/opened no popover/);
+  await vi.advanceTimersByTimeAsync(8000);
+  await done;
+});
+
+it("hoverStatusMark fails for a control whose hover opens no status mark popover", async () => {
+  mountForTooltip(<button type="button">Plain</button>);
+  const done = expect(createUi(document, "en").hoverStatusMark("Plain")).rejects.toThrow(/opened no popover/);
+  await vi.advanceTimersByTimeAsync(8000);
   await done;
 });
 

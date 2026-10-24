@@ -28,13 +28,15 @@ export function ExpandChevron({ isExpanded }: { isExpanded: boolean }): React.Re
   );
 }
 
-/** A directory row; a symlinked folder retains its link marker in either expanded state. */
-export function DirectoryRow({ name, isExpanded, link = false, children }: { name: string; isExpanded: boolean; link?: boolean; children?: React.ReactNode }): React.ReactElement {
+/** A directory row; a symlinked folder retains its link marker in either expanded state. The name takes the
+ * row's spare room, unless `nameGrows` is off for a mark that follows it right after (the name still shrinks
+ * and fades when it is long); `children` then supply the spacer before the end-of-row actions. */
+export function DirectoryRow({ name, isExpanded, link = false, nameGrows = true, children }: { name: string; isExpanded: boolean; link?: boolean; nameGrows?: boolean; children?: React.ReactNode }): React.ReactElement {
   const Icon = link ? FolderSymlink : isExpanded ? FolderOpen : Folder;
   return (
     <RowContent chevron={<ExpandChevron isExpanded={isExpanded} />}>
       <Icon aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
-      <RowName name={name} />
+      <RowName name={name} grow={nameGrows} />
       {children}
     </RowContent>
   );
@@ -66,9 +68,9 @@ export function RowContent({ children, flat = false, chevron }: { children: Reac
   );
 }
 
-export function RowName({ name, className = "" }: { name: string; className?: string }): React.ReactElement {
+export function RowName({ name, className = "", grow = true }: { name: string; className?: string; grow?: boolean }): React.ReactElement {
   return (
-    <FadeOverflow as="span" dir="auto" className={`min-w-0 flex-1 ${className}`} titleWhenClipped={name}>
+    <FadeOverflow as="span" dir="auto" className={`min-w-0 ${grow ? "flex-1" : "flex-initial"} ${className}`} titleWhenClipped={name}>
       {name}
     </FadeOverflow>
   );

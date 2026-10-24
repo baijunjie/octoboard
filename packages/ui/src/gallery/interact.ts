@@ -248,6 +248,18 @@ export interface Ui {
    * press. The pointer's events are those of a mouse, so the panel is the hovered one and no press
    * pins it. */
   hoverPanel: (host: Matcher, panel: Matcher) => Promise<void>;
+  /** Moves the mouse pointer onto the status mark (a `StatusMark`'s button) named `matcher` and leaves it
+   * there, for the popover that opens after the pointer has rested on it, with no focus moved. It returns
+   * once that mark's own popover is up and fails if none opens, or if what opens is the press form (`aria-modal` not
+   * `"false"`): a press, which `press` makes, is the other way to open it. Inside a floating panel, hover
+   * the panel first, as the pointer then goes from one to the other without leaving. */
+  hoverStatusMark: (matcher: Matcher) => Promise<void>;
+  /** Taps the status mark named `matcher` with a finger, as a touch screen sends it, and returns once that mark's
+   * popover is up in its press form (modal, focus inside). A mouse click opens nothing on a mark, so this is how a
+   * person who cannot hover opens it (the keyboard's Enter is the other: `focusControl`, then `key`); `press` is a
+   * virtual press and opens it too, but is no input a person has. Fails if none opens, or if what opens is the
+   * hover form. */
+  touchPressStatusMark: (matcher: Matcher) => Promise<void>;
   /** Moves the pointer onto the first control named `toggle`, the toggle of a pane that is closed or
    * hidden (the sidebar's with the docked sidebar hidden, or a panel kind's with no panel open),
    * which floats the pane in over the content, then on to the pane (the right pane's first card), which
@@ -525,6 +537,16 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     await wait(TOOLTIP_SHOW_MS);
   };
 
+  /** The popover of the status mark `mark`, once it is open: react-aria labels a trigger's popover by the
+   * trigger's id, so another mark's popover, or a stale one, is not taken for it. The mark says it is open while it is. */
+  const markPopover = (mark: HTMLElement, missing: string): Promise<HTMLElement> =>
+    waitFor(
+      () => mark.getAttribute("aria-expanded") === "true"
+        ? Array.from(doc.querySelectorAll<HTMLElement>("[data-status-mark-popover]")).find((candidate) => candidate.getAttribute("aria-labelledby") === mark.id)
+        : undefined,
+      missing,
+    );
+
   /** The row of the confirmation dialog's callout list for the session titled `title`: the title is
    * its last element child, after the status glyph, the agent icon and the screen-reader-only name. */
   const calloutRow = (title: string): HTMLElement | undefined =>
@@ -732,6 +754,23 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
         () => Array.from(doc.querySelectorAll<HTMLElement>("[role=dialog]")).find((dialog) => matches(panel, labelledNameOf(doc, dialog) ?? "")),
         `The control matching ${String(host)} floated in no dialog matching ${String(panel)} under the pointer`,
       );
+    },
+    async hoverStatusMark(matcher) {
+      const mark = await waitFor(() => find(matcher), `Nothing to hover matching ${String(matcher)}`);
+      pointAt(mark);
+      const popover = await markPopover(mark, `The mark matching ${String(matcher)} opened no popover under the pointer`);
+      if (popover.querySelector("[role=dialog]")?.getAttribute("aria-modal") !== "false") {
+        throw new Error(`The popover of the mark matching ${String(matcher)} is not the hover form (it is modal)`);
+      }
+    },
+    async touchPressStatusMark(matcher) {
+      const mark = await waitFor(() => find(matcher), `Nothing to press matching ${String(matcher)}`);
+      touch(mark);
+      const popover = await markPopover(mark, `A touch press of the mark matching ${String(matcher)} opened no popover`);
+      if (popover.querySelector("[role=dialog][aria-modal=false]")) {
+        throw new Error(`The popover of the mark matching ${String(matcher)} is the hover form, not the press form`);
+      }
+      await wait(TOOLTIP_SHOW_MS);
     },
     async hoverAnchored(host, tooltip) {
       await hover(() => find(host), `Nothing to hover matching ${String(host)}`);

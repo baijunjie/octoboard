@@ -5,7 +5,7 @@ import { AGENT_LABEL } from "../agents";
 import { CodedFailureBody } from "../components/DaemonErrorMessage";
 import { InlineReference } from "../components/InlineReference";
 import { ErrorAlert } from "../components/ErrorAlert";
-import { FailureMark } from "../components/FailureMark";
+import { StatusMark } from "../components/StatusMark";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
@@ -33,7 +33,7 @@ const COLUMNS: { key: PlainMessageKey; width: string }[] = [
 type Status = ImportedProject["status"];
 
 /** What each outcome that is not a failure is called, drawn and coloured. The colour only strengthens
- * the word and the shape, which differ between the outcomes; a failure is a `FailureMark`. */
+ * the word and the shape, which differ between the outcomes; a failure is a `StatusMark`. */
 const STATUS: Record<Exclude<Status, "failed">, { label: PlainMessageKey; icon: LucideIcon; tone: string }> = {
   created: { label: "configuration.import.result.created", icon: CircleCheck, tone: "text-success-soft-foreground" },
   left_out: { label: "configuration.import.result.leftOut", icon: CircleMinus, tone: "text-app-muted" },
@@ -229,12 +229,12 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
                     <Cell label={t(COLUMNS[2].key)}>
                       {settled === undefined ? (
                         // A failed line is a glyph and the word like the others; the pair opens the reason in a popover.
-                        <FailureMark
+                        <StatusMark
                           label={t("configuration.import.result.failedFor", { subject: isolate(line.project ?? line.console) })}
                           text={t("configuration.import.result.failed")}
                         >
                           {line.detail === "" ? undefined : line.detail}
-                        </FailureMark>
+                        </StatusMark>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                           <settled.icon aria-hidden="true" className={`size-4 shrink-0 ${settled.tone}`} />

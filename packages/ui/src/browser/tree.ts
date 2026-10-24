@@ -102,14 +102,16 @@ export function compareFilePaths(a: string, b: string): number {
   return left.length - right.length;
 }
 
-export type StatusRow = "loading" | "empty" | "error" | "partial";
+export type StatusRow = "loading" | "empty" | "partial";
 
 /** One row of the tree. A `file` without an `entry` is the selected file where its directory no
- * longer lists it: `removed` when the listing is complete, `unlisted` when it was cut short. */
+ * longer lists it: `removed` when the listing is complete, `unlisted` when it was cut short. An
+ * expanded `directory` whose listing failed has no children and carries the failure, which its own
+ * row marks. */
 export type TreeNode =
-  | { type: "directory"; key: string; path: string; entry: BrowseEntry; children: TreeNode[] }
+  | { type: "directory"; key: string; path: string; entry: BrowseEntry; children: TreeNode[]; failure?: ErrorPresentation }
   | { type: "file"; key: string; path: string; entry?: BrowseEntry; missing?: "removed" | "unlisted"; selected: boolean }
-  | { type: "status"; key: string; dir: string; status: StatusRow; message?: ErrorPresentation };
+  | { type: "status"; key: string; dir: string; status: StatusRow };
 
 export interface TreeModel {
   /** The rows under the project's directory; empty until its listing has loaded. */
@@ -128,7 +130,8 @@ const statusKey = (dir: string, status: StatusRow): string => `status:${status}:
 
 /**
  * The rows on screen for the listings held and the directories expanded. A directory's rows follow
- * its own, after its status while it is loading, empty, unreadable or cut short; a collapsed
+ * its own, after its status while it is loading, empty or cut short (an unreadable one has no rows, and
+ * its own row carries the failure); a collapsed
  * directory's descendants are not rows at all. `selected` is shown where its directory is on screen
  * even when that directory's listing no longer has it, so a selection that went away stays visible
  * as such.
@@ -142,16 +145,16 @@ export function buildTree(
   const rows: string[] = [];
   const wanted: string[] = [];
 
-  const status = (dir: string, row: StatusRow, message?: ErrorPresentation): TreeNode => {
+  const status = (dir: string, row: StatusRow): TreeNode => {
     rows.push(statusKey(dir, row));
-    return { type: "status", key: statusKey(dir, row), dir, status: row, message };
+    return { type: "status", key: statusKey(dir, row), dir, status: row };
   };
 
   const childrenOf = (dir: string): TreeNode[] => {
     wanted.push(dir);
     const listing = listings.get(dir);
     if (!listing || listing.state === "loading") return dir === "" ? [] : [status(dir, "loading")];
-    if (listing.state === "error") return dir === "" ? [] : [status(dir, "error", listing.message)];
+    if (listing.state === "error") return [];
     const entries: (BrowseEntry | string)[] = [...listing.entries];
     const missing = selected !== undefined && parentPath(selected) === dir && !listing.entries.some((e) => childPath(dir, e.name) === selected);
     if (missing) {
@@ -170,7 +173,9 @@ export function buildTree(
       const path = childPath(dir, item.name);
       rows.push(rowKey(path));
       if (isDirectory(item)) {
-        nodes.push({ type: "directory", key: rowKey(path), path, entry: item, children: expanded.has(path) ? childrenOf(path) : [] });
+        const children = expanded.has(path) ? childrenOf(path) : [];
+        const listed = expanded.has(path) ? listings.get(path) : undefined;
+        nodes.push({ type: "directory", key: rowKey(path), path, entry: item, children, ...(listed?.state === "error" && { failure: listed.message }) });
       } else {
         files.push(path);
         nodes.push({ type: "file", key: rowKey(path), path, entry: item, selected: path === selected });

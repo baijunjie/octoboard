@@ -1,8 +1,9 @@
 import { CircleAlert, Info, TriangleAlert } from "lucide-react";
-import React from "react";
+import React, { useMemo } from "react";
 
-import { FailureMark } from "../components/FailureMark";
+import { StatusMark } from "../components/StatusMark";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
+import { useMarkBesideLink } from "./linkMarks";
 import { FIRST_ANNOUNCEMENT_DELAY_MS, type NoticeTone } from "./viewerStates";
 
 const ICONS = { explained: Info, warned: TriangleAlert, failed: CircleAlert } as const;
@@ -18,9 +19,11 @@ const ICONS = { explained: Info, warned: TriangleAlert, failed: CircleAlert } as
  * already sits where a `div` cannot.
  *
  * A `failed` notice is no sentence in the paragraph: it is the minimal mark of a failure that
- * belongs to one spot, the glyph alone, named by the sentence and carrying it in a tooltip
- * (`docs/ui-accessibility.md`, "A failure that belongs to one row"). The sentence is `speak`, or
- * `children` when that is a string; `speak` is announced as for the other tones.
+ * belongs to one spot, the glyph alone, named by the sentence and opening it in a popover that a
+ * press or a resting mouse opens (`docs/ui-accessibility.md`, "A failure that belongs to one row").
+ * The sentence is `speak`, or `children` when that is a string; `speak` is announced as for the
+ * other tones. The mark is a button, so it is a tab stop in the running text; inside a link it is
+ * drawn right after the link rather than in it.
  */
 export function InlineNotice({
   tone = "explained",
@@ -33,10 +36,13 @@ export function InlineNotice({
 }): React.ReactElement {
   const failure = tone === "failed" ? speak ?? (typeof children === "string" ? children : undefined) : undefined;
   const announcer = speak !== undefined && <StatusAnnouncer text={speak} firstWriteDelayMs={FIRST_ANNOUNCEMENT_DELAY_MS} element="span" />;
-  if (tone === "failed" && failure !== undefined) {
+  const mark = useMemo(() => (failure === undefined ? undefined : <span className="mx-1"><StatusMark inline label={failure} /></span>), [failure]);
+  // Inside a link the mark is drawn beside it, outside the anchor (see `LinkWithMarks`).
+  const besideLink = useMarkBesideLink(mark);
+  if (mark !== undefined) {
     return (
       <>
-        <span className="mx-1"><FailureMark inline label={failure} /></span>
+        {!besideLink && mark}
         {announcer}
       </>
     );

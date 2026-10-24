@@ -16,6 +16,7 @@ import { useCurrentLanguage, useT } from "../i18n/react";
 import { type Direction, type DirectionNode, firstStrongDirection } from "./blockDirection";
 import { DocumentImage } from "./DocumentImage";
 import { FormulaView } from "./FormulaView";
+import { LinkWithMarks } from "./linkMarks";
 import { headingIds, limitFences, prepareMarkdown } from "./markdownPlugins";
 import { markdownStyle, type MarkdownStyle } from "./markdownStyle";
 import { MermaidBlock } from "./MermaidBlock";
@@ -336,38 +337,37 @@ export const MarkdownDocument = memo(function MarkdownDocument({
       a: ({ node, href, children, ...rest }) => {
         // The links `remark-gfm` makes for a footnote and back from it. They stay in the document.
         const props = rest as Record<string, unknown>;
+        const address = resolveProjectAddress(path, href);
+        const unnamed = node ? node.children.map(textOf).join("").trim() === "" : false;
+        let link: React.ReactElement | undefined;
         if (href?.startsWith("#") && (props["data-footnote-ref"] !== undefined || props["data-footnote-backref"] !== undefined)) {
-          return (
+          link = (
             <DocumentLink {...rest} href={href} onActivate={(event) => revealInDocument(event.currentTarget.closest("[data-markdown-document]") ?? event.currentTarget, href.slice(1))}>
               {children}
             </DocumentLink>
           );
-        }
-        const address = resolveProjectAddress(path, href);
-        const unnamed = node ? node.children.map(textOf).join("").trim() === "" : false;
-        if (address.kind === "anchor") {
-          return (
+        } else if (address.kind === "anchor") {
+          link = (
             <DocumentLink {...rest} href={href ?? "#"} onActivate={(event) => revealInDocument(event.currentTarget.closest("[data-markdown-document]") ?? event.currentTarget, address.id)}>
               {children}
             </DocumentLink>
           );
-        }
-        if (address.kind === "external" && onOpenLink) {
-          return (
+        } else if (address.kind === "external" && onOpenLink) {
+          link = (
             <ExternalLink href={address.href} title={address.href} style={{ color: "var(--tint-accent-fg)" }} onOpen={() => onOpenLink(address.href)}>
               {unnamed ? address.href : children}
             </ExternalLink>
           );
-        }
-        if (address.kind === "file" && onOpenFile && !isDirectory?.(address.path)) {
+        } else if (address.kind === "file" && onOpenFile && !isDirectory?.(address.path)) {
           const where = address.fragment ? `${address.path}#${address.fragment}` : address.path;
-          return (
+          link = (
             <DocumentLink href={href ?? where} title={where} onActivate={() => onOpenFile(address.path, address.fragment)}>
               {unnamed ? where : children}
             </DocumentLink>
           );
         }
-        return <>{children}</>;
+        // A failed image or formula inside the link draws its mark after the anchor, not in it.
+        return link ? <LinkWithMarks>{link}</LinkWithMarks> : <>{children}</>;
       },
     }),
     [renderCode, onOpenLink, onOpenFile, isDirectory, path, project, theme, embedded],

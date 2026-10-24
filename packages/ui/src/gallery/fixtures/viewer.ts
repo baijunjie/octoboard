@@ -971,6 +971,8 @@ x = y
 
 ![The missing figure](missing.png)
 
+A linked figure that is missing: [![The linked figure](missing-linked.png)](./other.md) is a link to the other note.
+
 See [the other note](./other.md#kept) and [the heading below](#kept-aside).
 
 ## Another diagram
@@ -982,6 +984,18 @@ ${diagramPastBudget()}
 ## Kept aside
 
 What the link in this note scrolls to.
+`;
+
+const INLINE_FAILURE = `# Trip notes
+
+We left early and the road was quiet for the first hour, with fields on both sides and very little traffic.
+
+The route we took is drawn here ![The route](route.png) and the stops are listed below it, in the order we made them.
+
+## Stops
+
+- The first stop was for coffee.
+- The second was for the view.
 `;
 
 const OTHER_LEAD = Array.from({ length: 50 }, (_, index) => `Line ${index + 1} of the other note, above its heading.`).join("\n\n");
@@ -1149,9 +1163,16 @@ export const viewerScenarios: Scenario[] = [
   {
     id: "viewer-document-errors", group: GROUP, category: "exceptional",
     title: "Document rendering failures and limits",
-    description: "A document with an invalid diagram, unfinished formulas, a missing image and a diagram past the render budget. Scroll to compare the failures and retained source: a block that failed (the diagram, a formula on its own line) keeps a sentence above its source, while one inside a line of text (the unfinished inline formula, the missing image) is a danger-coloured circled \"!\" glyph in the sentence, whose tooltip holds the sentence on hover; successful content provides context for each failure.",
+    description: "A document with an invalid diagram, unfinished formulas, a missing image, a missing image that is also a link and a diagram past the render budget. Scroll to compare the failures and retained source: a block that failed (the diagram, a formula on its own line) keeps a sentence above its source, while one inside a line of text (the unfinished inline formula, the missing images) is a danger-coloured circled \"!\" glyph in the sentence (right after the link where the image is a link), a button (a tab stop) that opens the sentence in a popover when tapped, activated from the keyboard or rested on with the mouse, and does nothing for a mouse click; successful content provides context for each failure.",
     files: { "docs/picture.png": { image: IMAGES.before_png } },
     viewer: { subjects: async () => [file("docs/notes.md", text("docs/notes.md", NOTES)), file("docs/other.md", text("docs/other.md", OTHER))] },
+  },
+  {
+    id: "viewer-inline-failure-reason", group: GROUP, category: "exceptional",
+    title: "The reason an image in a sentence failed",
+    description: "The danger-coloured circled \"!\" where the image should be, in the middle of a paragraph, is tapped with a finger: its small popover above it, drawn like a tooltip, holds the sentence naming the failure and takes focus.",
+    viewer: { subjects: async () => [file("docs/trip.md", text("docs/trip.md", INLINE_FAILURE))] },
+    steps: [(ui) => ui.touchPressStatusMark(ui.t("viewer.markdown.imageFailed"))],
   },
   ...failureScenarios,
   ...bodiesFailureScenarios,

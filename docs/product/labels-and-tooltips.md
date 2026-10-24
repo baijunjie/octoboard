@@ -6,7 +6,11 @@ explanations are kept out of the visible text.
 ## How a tooltip behaves
 
 Every tooltip in the window is the application's own, drawn in its own styling and under one set of rules, whatever
-carries it — a control, an indicator or a label too long for its space:
+carries it — a control, an indicator or a label too long for its space. The floating surfaces that hold more than a
+label — a failure mark's popover, the rail's account quota panel (see "Failures marked on a row" in
+`docs/product/error-alerts.md` and "The account quota panel on the rail" in `docs/product/account-quotas.md`) — are
+drawn the same way, on the same surface, with the same shadow and corners (a failure mark's popover has the
+tooltip's padding and text size too; the quota panel keeps its own width, padding and text sizes, being a panel):
 
 - It opens once the pointer has rested on what carries it for 500 ms. Within half a second of
   another tooltip closing it opens at once instead, so moving from one to the next does not wait again at each one,
@@ -110,7 +114,7 @@ application buttons below. These are:
 - the close button of every dismissable dialog, of Settings and of each toast ("Close").
 
 The rail's **Account quota** button is an exception: it has **no tooltip**, on hover or on keyboard focus. Resting
-the mouse on it floats its panel in instead (see "Opening and pinning the panel" in `docs/product/account-quotas.md`),
+the mouse on it floats its panel in instead (see "Opening the panel" in `docs/product/account-quotas.md`),
 and its accessible name, which states the selected session's quota when the button shows one, is described in "The
 selected session's quota indicator" in `docs/product/account-quotas.md`.
 

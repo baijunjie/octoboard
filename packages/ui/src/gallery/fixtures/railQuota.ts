@@ -244,8 +244,8 @@ export const railQuotaScenarios: Scenario[] = [
     id: "rail-quota-pinned-codex",
     group: GROUP,
     category: "normal",
-    title: "Rail quota panel, pinned from the keyboard on Codex's tab",
-    description: "Pressing the button with the keyboard pins the panel and puts focus on its tabs, and the arrow key has moved on to Codex: its tab is selected and carries the focus ring. Automation has no plan badge.",
+    title: "Rail quota panel, opened from the keyboard on Codex's tab",
+    description: "Pressing the button with the keyboard opens the panel with focus on its tabs, and the arrow key has moved on to Codex: its tab is selected and carries the focus ring. Automation has no plan badge.",
     state: readState,
     steps: [
       (ui) => ui.focusControl(ui.t("rail.quota")),
@@ -259,7 +259,7 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Rail quota panel, accounts and agents changing while it is open",
-    description: "The panel is pinned open on Claude Code's tab and stays open while the \"Live changes\" buttons make what another window or the machine would: Side project is added between the default account and Work, or removed again, and Codex is found uninstalled, or installed again, taking its tab away from the middle of the strip or giving it back. Added and removed rows and tabs fade while the ones after them slide into place; with reduced motion they appear and disappear at once. Nothing moves when the panel first opens, when its list scrolls or when the window is resized.",
+    description: "The panel is opened from the keyboard on Claude Code's tab and stays open while the \"Live changes\" buttons make what another window or the machine would: Side project is added between the default account and Work, or removed again, and Codex is found uninstalled, or installed again, taking its tab away from the middle of the strip or giving it back. Added and removed rows and tabs fade while the ones after them slide into place; with reduced motion they appear and disappear at once. Nothing moves when the panel first opens, when its list scrolls or when the window is resized.",
     state: liveState,
     steps: [
       (ui) => ui.focusControl(ui.t("rail.quota")),
@@ -360,12 +360,24 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Rail quota panel, the reason an account's reading failed",
-    description: "The panel is pinned open from the keyboard and the default account's danger mark (Quota unavailable) is pressed: its popover, holding why Claude Code's reading could not be had, is open beside the mark, and the panel stays open under it.",
+    description: "The panel is opened from the keyboard and the default account's danger mark (Quota unavailable) is tapped with a finger: its small tooltip-like popover, holding why Claude Code's reading could not be had, is open above the mark with focus inside it, and the panel stays open under it.",
     state: unreadState,
     steps: [
       (ui) => ui.focusControl(ui.t("rail.quota")),
       (ui) => ui.key("Enter"),
-      (ui) => ui.press(ui.t("quota.unavailable")),
+      (ui) => ui.touchPressStatusMark(ui.t("quota.unavailable")),
+    ],
+  },
+  {
+    id: "rail-quota-failure-hover",
+    group: GROUP,
+    category: "exceptional",
+    title: "Rail quota panel, the reason shown by resting on an account's mark",
+    description: "The panel floats in under a resting pointer and the pointer then rests on the default account's danger mark (Quota unavailable): its small tooltip-like popover, holding why Claude Code's reading could not be had, opens above the mark with no focus moved, and the panel stays open under it.",
+    state: unreadState,
+    steps: [
+      (ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota")),
+      (ui) => ui.hoverStatusMark(ui.t("quota.unavailable")),
     ],
   },
   {

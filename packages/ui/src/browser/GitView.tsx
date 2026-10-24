@@ -5,7 +5,7 @@ import { CopyButton } from "../components/CopyButton";
 import { Button } from "../components/Button";
 import { errorDetails, failureParam, FailureBody } from "../components/DaemonErrorMessage";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
-import { FailureMark } from "../components/FailureMark";
+import { StatusMark } from "../components/StatusMark";
 import { PaneFailure } from "../components/PaneFailure";
 import { useHasPainted } from "../components/useHasPainted";
 import { DaemonRequestError } from "../daemon-client";
@@ -162,11 +162,11 @@ function Notice({ notice, projectRoots }: { notice: ChangesNotice; projectRoots:
  * failed, whose popover holds the reason, its remedy, the raw text of the failure and Try again,
  * which a failure that is the state of the repository (no common commit) has none of, a retry
  * giving the same answer. `inHeader` is for the mark a section's heading carries, which the list's
- * own walk does not reach (see `FailureMark`). */
+ * own walk does not reach (see `StatusMark`). */
 function PartFailureMark({ label, line, message, inHeader = false, onRetry }: { label: string; line: ChangesFailure["line"] | "git.branch.branchesError"; message: ErrorPresentation; inHeader?: boolean; onRetry: () => void }): React.ReactElement {
   const t = useT();
   return (
-    <FailureMark
+    <StatusMark
       label={label}
       inHeader={inHeader}
       actions={retryCanHelp(message) ? (close) => (
@@ -176,7 +176,7 @@ function PartFailureMark({ label, line, message, inHeader = false, onRetry }: { 
       ) : undefined}
     >
       <FailureBody error={message} summary={<Message id={line} params={{ message: failureParam(message) }} />} />
-    </FailureMark>
+    </StatusMark>
   );
 }
 

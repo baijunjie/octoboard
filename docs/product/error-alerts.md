@@ -132,22 +132,47 @@ A failure that belongs to one item of a list, one table cell or one spot in a re
 pane that still shows the rest, does not turn that row, part or sentence into an error message. The item shows a small
 **mark** where its status or trailing content sits — beside the heading or the control of a part, inline with the text
 in a document: a red circled `!` for a failure, or an amber warning triangle where what the row shows is still there
-but out of date. The mark has an accessible name saying what failed. The reason opens from it: in a popover when the
-mark is pressed, where it is a button; as its tooltip where the reason is short and has nothing more to it, in which
-case the mark is no tab stop and its tooltip shows on pointer hover. The popover holds what happened, the one main
+but out of date. The mark is a button with an accessible name saying what failed, and it has no tooltip: the reason
+opens from it in one **popover**, the only floating thing it shows. The popover holds what happened, the one main
 thing to do about it, any further explanation, then any raw text (see "Failures shown on the screen" above), and,
-where the failure can be retried from there, **Try again** at its trailing end. The places:
+where the failure can be retried from there, **Try again** at its trailing end. A reason that is one short line and
+has nothing more to it (an image or a formula in a document that could not be shown) is that popover with the one
+line in it. The exception is a mark followed by a word that has nothing more to say (a failed import line with no
+reason given): it is the glyph and the word as plain text, no button and no popover.
+
+The popover opens by the input the device has:
+
+- **Resting the mouse on the mark** for 250 ms opens it **without moving keyboard focus**, so the terminal or a text
+  field keeps receiving keystrokes; a pointer that only crosses the mark opens nothing, and touch and pen never open
+  it this way. It stays while the mouse is on the mark or inside the popover, and goes 150 ms after the mouse has left
+  both; the popover's buttons and text are reached by moving the mouse into it. A press outside closes it, and so does
+  **Escape**, which then goes no further (it reaches neither a terminal nor a drawer or floating pane under it) —
+  except while keyboard focus is in a terminal (the agent's or a shell's) or in a text field holding text, or while an
+  input method is composing, where the key stays with them and the popover stays open.
+- **A mouse click on the mark opens nothing**: where there is a mouse there is the hover, and the popover is its.
+- **A tap** (touch or pen), **assistive technology** and **Enter or Space** open it with keyboard focus inside, so Try
+  again and the raw text can be reached. Escape, a press outside or another press of the mark closes it, and keyboard
+  focus goes back where it was when the popover opened; where that would be the mark on a section's heading, the
+  heading takes it. A tap on a popover the mouse opened turns it into this form.
+
+After the popover is closed in any way but the mouse leaving — Escape, a press, Try again — a mouse still resting on
+the mark does not open it again until it has left the mark and come back.
+
+The places:
 
 - a folder in the Files tree that could not be listed (see "Rows and the keyboard" in `docs/product/project-pane.md`);
 - a project or console of a configuration import that failed, in the import's result, where the word **Failed**
-  follows the mark, as the other results have their words, and the mark and word open the popover as one (see "In the
-  window" in `docs/product/configuration-export-and-import.md`);
-- a project's branch badge whose last check failed, where the mark stands in for the badge's branch glyph and the
-  reason is part of the badge's own tooltip and name (see "The branch badge" in `docs/product/project-git-status.md`);
+  follows the mark, as the other results have their words, and where a reason was given the mark and word open the
+  popover as one (see "In the window" in `docs/product/configuration-export-and-import.md`);
+- a project's branch badge whose last check failed, where the mark stands in for the badge's branch glyph; there it is
+  no button and opens no popover, the reason being part of the badge's own tooltip and name (see "The branch badge" in
+  `docs/product/project-git-status.md`);
 - an account whose quota could not be read, in Settings and the rail's quota panel (see "Quota states" in
   `docs/product/account-quotas.md`);
-- a project image or a formula inside a paragraph of a Markdown document that could not be shown (see "A Markdown file
-  as a document" in `docs/product/file-viewer.md`);
+- a project image or a formula inside a paragraph of a Markdown document that could not be shown, where the mark takes
+  the text's size and is a tab stop in the document like a link, and one inside a link is drawn right after the link
+  rather than in it, so pressing it does not follow the link (see "A Markdown file as a document" in
+  `docs/product/file-viewer.md`);
 - in the Git mode, a part of the change list that could not be read, on its section's heading, and a list of branches
   that could not be read again, beside the branch selector (see "What the list says instead" in
   `docs/product/project-pane-git-change-list.md` and "The branch selector" in `docs/product/project-pane-git-mode.md`).

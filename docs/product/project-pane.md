@@ -131,13 +131,20 @@ icons instead.
 - A name too long for its row fades out, with the full name as its tooltip (see "Names too long for their space" in
   `docs/product/labels-and-tooltips.md`).
 
-A folder that is not simply listed says so in a row of its own under it:
+A folder that is not simply listed says so:
 
-- **loading** while it is being read;
-- **empty** when it has nothing in it;
-- **unreadable**: a red failure mark, named as the folder that could not be listed, then a line offering to try
-  again. Pressing the mark opens a popover with the reason (see "Errors" below); pressing the row elsewhere reads the
-  folder again. The mark is a stop of its own for Tab and for the row's arrow keys (Right from the row);
+- **loading** while it is being read, in a row of its own under it;
+- **empty** when it has nothing in it, in a row of its own under it;
+- **unreadable**: a red failure mark on the folder's own row, right after its name (not at the row's end), named as the folder that could not be
+  listed, and nothing under the folder, which is drawn closed. The mark opens a popover with the reason, and **Try
+  again** where asking again can help, with the mouse resting on it or with a tap, Enter or Space (a mouse click on
+  it does nothing; see "Errors" below and "Failures marked on a row" in `docs/product/error-alerts.md`). Opening the
+  closed folder again — pressing the row, Enter, or its arrow — lists it again, as Try again does, and pressing the
+  mark does not. Right (Left under a right-to-left language) on the row moves keyboard focus to the mark instead of
+  opening the folder, Enter or Space on the mark opens its popover, a further Right reaches the row's own actions
+  button, and the opposite key goes back. A failure that arrives while the folder is open closes it
+  and keyboard focus goes to its row, and so does Try again; the folder stays open in what the user chose, so it
+  opens once it lists;
 - **cut short** — "not every entry is shown" — after the entries read before a limit stopped the listing: at most
   10,000 entries of one folder, or 2 MiB of names, are listed. These are the entries read first, not a chosen subset.
 

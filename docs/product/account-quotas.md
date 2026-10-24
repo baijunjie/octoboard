@@ -62,9 +62,8 @@ again.
   way.
 - **Opening the menu bar icon's menu**, in the macOS application, asks for the same, each time the menu begins to
   open (see "The icon's menu" in `docs/product/menu-bar-icon.md`).
-- **Opening the rail's account quota panel** asks for the same, each time the panel opens, whether it floats in or
-  is pinned; pinning a panel that is already floating in is not a new opening (see "The account quota panel on the
-  rail" below).
+- **Opening the rail's account quota panel** asks for the same, each time the panel opens, whether the mouse floats it in or a tap or the keyboard opens it; a
+  tap on a panel the mouse floated in is not a new opening (see "The account quota panel on the rail" below).
 - **After a kick** (see "Starting a window that has not begun counting" below), the account is read again once the
   kick has ended, whether or not it succeeded.
 - At most **four** readings and kicks, together, run at once across the whole daemon, and one account is never read
@@ -174,8 +173,8 @@ This is what Settings and the rail's panel show; the menu bar icon's menu differ
 | Its agent is not available, or not yet determined | Nothing about a quota, no plan either. |
 | Not read yet | "Reading quota…" in place of the windows. |
 | Read | The plan, the windows and how long ago they were read. |
-| Never read successfully, and the last reading failed | No windows, and a red failure mark on the account's name line, named "Quota unavailable"; pressing it opens a popover with the reason (see "Why a quota is unavailable" below). |
-| Read before, but the latest reading failed | The last good plan and windows stay, and "Updated …" still says how long ago they were read, followed by an amber warning mark named as out of date and when they were last read ("Out of date: last read 12 minutes ago"); pressing it opens a popover with the reason the newer reading failed. The next successful reading clears it. |
+| Never read successfully, and the last reading failed | No windows, and a red failure mark on the account's name line, named "Quota unavailable"; it opens a popover with the reason (see "Why a quota is unavailable" below, and "Failures marked on a row" in `docs/product/error-alerts.md` for how the popover opens). |
+| Read before, but the latest reading failed | The last good plan and windows stay, and "Updated …" still says how long ago they were read, followed by an amber warning mark named as out of date and when they were last read ("Out of date: last read 12 minutes ago"); it opens a popover with the reason the newer reading failed. The next successful reading clears it. |
 | Not logged in: its directory does not exist, or the agent says it is not signed in there | Any windows read before are dropped, and the agent's own message is not shown. In the rail's panel, a single line saying the account is not logged in yet and pointing to logging in to use it stands in place of the windows. In Settings nothing stands beneath the account; its **Not logged in** badge says so (see "The accounts the user owns" in `docs/product/agent-accounts.md`). |
 
 ## Why a quota is unavailable
@@ -395,7 +394,8 @@ It answers from the readings already held and never waits for a new one, so an e
 
 The rail's **Account quota** button, a gauge directly above Settings (see "The rail" in
 `docs/product/window-layout.md`), opens a floating panel beside the button, on the content panel's side, that shows
-the accounts' quotas without opening Settings.
+the accounts' quotas without opening Settings. The panel is drawn on the same surface as a tooltip (see "How a tooltip
+behaves" in `docs/product/labels-and-tooltips.md`), at its own width, with its content laid out to its edges.
 
 ### What the panel shows
 
@@ -431,45 +431,55 @@ the accounts' quotas without opening Settings.
   "Opening and closing Settings" in `docs/product/settings.md`). It is left out while the panel shows "No agent
   added", whose Add agent… button already leads there.
 
-### Opening and pinning the panel
+### Opening the panel
 
-The panel opens in one of two ways:
+The panel opens by the input the device has, as a status mark's popover does (see "Failures marked on a row" in
+`docs/product/error-alerts.md`):
 
 - **Resting the mouse on the button** for 250 ms floats the panel in; a pointer that only crosses the button shows
   nothing. The panel stays while the mouse is on the button or on the panel, and goes 150 ms after the mouse has left
   both, so crossing the gap between them does not close it. Touch and pen do not open it this way. Floating in moves
-  no keyboard focus.
-- **Pressing the button** — a click, a tap, Enter or Space — pins the panel open, whether or not it was already
-  floating in, and the mouse leaving no longer closes it. Pinned from the keyboard or by assistive technology,
-  keyboard focus moves into the panel, onto the selected agent's tab, or, with no tab, onto the panel's first button
-  (Add agent…, or Manage accounts…); pinned with a pointer, focus stays where it was, so after a mouse press the
-  terminal keeps receiving keystrokes.
+  no keyboard focus, and the window's shortcuts go on working beside it.
+- **A mouse click on the button opens nothing and pins nothing**: where there is a mouse there is the hover. A click on
+  the button of a panel the mouse floated in leaves it as it is.
+- **A tap** (touch or pen), **assistive technology** and **Enter or Space** open it with keyboard focus moved into the
+  panel, onto the selected agent's tab, or, with no tab, onto the panel's first button (Add agent…, or Manage
+  accounts…). A panel opened this way is modal, as a menu is: the window's shortcuts and F6 wait until it closes,
+  and a tap on a floating panel turns it into this form.
 
 ### Closing the panel
 
-The panel closes, floating or pinned:
+The panel closes:
 
-- on **Escape**, which is the panel's own while it is open: it reaches neither the agent in the terminal nor a
-  drawer or a floating pane under the panel, which stay open;
-- on a **press outside** the button and the panel, which also does whatever it does where it lands;
-- when a **modal dialog or a menu opens** by any other way, such as Settings from the application menu;
-- when **keyboard focus moves out of it** — Tab past its last control, Shift+Tab before its first, or F6.
+- on **Escape**, which then goes no further: it reaches neither the agent in the terminal nor a drawer or a floating
+  pane under the panel, which stay open. A panel the mouse floated in holds no focus, so it leaves the key alone
+  while focus is in a terminal (the agent's or a shell's) or in a text field holding text, where the key does what it
+  does there and the panel stays, and while an input method is composing. A panel opened by a tap or the keyboard
+  holds focus and takes the key. With a mark's popover open inside the panel (see below), the key is that popover's
+  where the popover would take it — keyboard focus is in it, or the mouse opened it and focus is not in a terminal or
+  a text field holding text — which closes the popover alone, the panel staying open;
+- on a **press outside** the button and the panel, which also does whatever it does where it lands (for a panel
+  opened by a tap or the keyboard, the press is swallowed, as a menu's);
+- when a **modal dialog or a menu opens** by any other way, such as Settings from the application menu.
 
-A pinned panel also closes on **another press of the button**.
+After it closes by Escape or a press outside, a mouse still resting on the button does not open it again until it has
+left the button and come back.
 
-An account's failure mark (see "Quota states" above) opens its popover from inside the panel, and that popover counts
-as part of the panel: a press inside it, and its own opening, do not close the panel, and Escape there closes the
-popover alone, the panel staying open.
+An account's failure or warning mark (see "Quota states" above) opens its popover from inside the panel, by the mouse
+resting on it or a tap, and that popover counts as part of the panel: a press inside it, its own opening, and
+the mouse crossing from the panel into it do not close the panel. How it opens and closes is in "Failures marked on a
+row" in `docs/product/error-alerts.md`; which of it and the panel Escape closes is in the Escape item above.
 
-On closing, keyboard focus goes back to what held it when the panel opened — the button, after a keyboard pin —
-unless the close itself put focus somewhere else: a press on something that takes focus leaves it there, Tab and
-Shift+Tab out of the panel go on to the control after or before the one that held focus when it opened, and F6 goes
-on as described in "Moving focus between regions with F6" in `docs/product/moving-focus-between-regions.md`.
+On closing, keyboard focus goes back to what held it when the panel opened — the button, after a keyboard opening —
+unless the close itself put focus somewhere else. A panel floated in by the mouse moved no focus, so closing it moves
+none.
 
-### The panel is not modal
+### The panel is not modal while the mouse has floated it in
 
-The panel does not take the window around it the way a menu or popover does (see "What an open dialog, menu or
-popover covers" in `docs/product/window-layout.md`): while it is open the rest of the window stays usable, and the
-window's keyboard shortcuts, Back and Forward, `F6` and the floating panes go on working. It is no stop of its own in
-the `F6` cycle. Assistive technology is told it is a non-modal dialog named "Account quota", and the button says
-whether the panel is expanded and which panel it controls.
+A panel the mouse floated in does not take the window around it the way a menu or popover does (see "What an open
+dialog, menu or popover covers" in `docs/product/window-layout.md`): while it is open the rest of the window stays
+usable, and the window's keyboard shortcuts, Back and Forward, `F6` and the floating panes go on working. It is no
+stop of its own in the `F6` cycle. Assistive technology is told it is a non-modal dialog named "Account quota", and
+the button says whether the panel is expanded and which panel it controls. A panel opened by a tap or the keyboard is
+modal, as a menu is: focus is inside it, an outside press is swallowed, and the window's shortcuts and `F6` wait until
+it closes.

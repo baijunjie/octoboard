@@ -1,11 +1,11 @@
 import { Spinner } from "@heroui/react";
-import { RotateCw } from "lucide-react";
-import React, { useMemo, useRef } from "react";
+import React, { useEffect, useId, useMemo, useRef } from "react";
 import { Collection, ListLayout, Tree, TreeItem, TreeItemContent, Virtualizer, type Key } from "react-aria-components";
 
+import { Button } from "../components/Button";
 import { failureParam, FailureBody } from "../components/DaemonErrorMessage";
 import { FadeOverflow } from "../components/FadeOverflow";
-import { FailureMark } from "../components/FailureMark";
+import { StatusMark } from "../components/StatusMark";
 import { useCollectionOptionTab } from "../components/collectionOptionTab";
 import { useScrollFade } from "../components/scrollFade";
 import type { ErrorPresentation } from "../errorPresentation";
@@ -58,12 +58,12 @@ function sameMessage(before: ErrorPresentation | undefined, next: ErrorPresentat
 function sameNode(before: TreeNode, next: TreeNode): boolean {
   if (before.type === "directory" && next.type === "directory") {
     const sameChildren = before.children.length === next.children.length && before.children.every((child, i) => child === next.children[i]);
-    return sameEntry(before.entry, next.entry) && sameChildren;
+    return sameEntry(before.entry, next.entry) && sameChildren && sameMessage(before.failure, next.failure);
   }
   if (before.type === "file" && next.type === "file") {
     return sameEntry(before.entry, next.entry) && before.missing === next.missing && before.selected === next.selected;
   }
-  if (before.type === "status" && next.type === "status") return before.status === next.status && sameMessage(before.message, next.message);
+  if (before.type === "status" && next.type === "status") return before.status === next.status;
   return false;
 }
 
@@ -71,10 +71,14 @@ function sameNode(before: TreeNode, next: TreeNode): boolean {
  * A project's files as a tree: react-aria-components' `Tree`, virtualized. HeroUI 3 has no tree, so
  * this is built on the react-aria component HeroUI itself builds on, which brings the treegrid
  * keyboard model (arrows, Home / End, type-ahead, Left / Right to collapse and expand). A row's
- * action is the one thing it does: a directory opens or closes, a file opens in the viewer, an error
- * row tries again; each file or directory row carries at its end the button of the others (`RowActions`), the same
- * menu a change's row carries in the Git mode. Nothing is selectable in react-aria's sense; the file the viewer last showed is
- * tinted and named as selected in its row's label instead.
+ * action is the one thing it does: a directory opens or closes, a file opens in the viewer; each file
+ * or directory row carries at its end the button of the others (`RowActions`), the same menu a change's
+ * row carries in the Git mode. Nothing is selectable in react-aria's sense; the file the viewer last
+ * showed is tinted and named as selected in its row's label instead.
+ *
+ * A directory whose listing failed is drawn collapsed, with its mark on the row, and expanding it
+ * (press, Right, the arrow) asks for the listing again, as Try again does. It stays in `expanded`, so
+ * once it lists it is open again: the collapse is the failure's, not the user's choice.
  *
  * A press focuses the row, as a click into a report page focuses the page: the tree is content to
  * read and move through from the keyboard, not a control beside the terminal.
@@ -94,11 +98,12 @@ export function FileTree({
   label: string;
   onExpandedChange: (keys: Set<Key>) => void;
   onOpenFile: (path: string) => void;
-  /** An unreadable directory's row was pressed: list it again. */
+  /** Try again was pressed in the mark of a directory that could not be listed: list it again. */
   onRetry: (dir: string) => void;
   treeRef: React.Ref<HTMLDivElement>;
 }): React.ReactElement {
   const language = useCurrentLanguage();
+  const treeId = useId();
   const items = useStableNodes(nodes);
   const { visibleKeys, folds } = useMemo(() => {
     const keys = new Set<string>();
@@ -110,8 +115,8 @@ export function FileTree({
       for (const node of rows) {
         keys.add(node.key);
         if (parent !== undefined) parents.set(node.key, parent);
-        if (node.type === "directory" && expanded.has(node.key)) {
-          if (node.children.some((child) => child.type !== "status" || (child.status !== "loading" && child.status !== "error"))) open.add(node.key);
+        if (node.type === "directory" && expanded.has(node.key) && node.failure === undefined) {
+          if (node.children.some((child) => child.type !== "status" || child.status !== "loading")) open.add(node.key);
           if (node.children.length > 0) walk(node.children, node.key);
           else {
             keys.add(`collapsed:${node.path}`);
@@ -154,11 +159,47 @@ export function FileTree({
     return map;
   }, [items]);
 
+  // The directories whose listing failed, drawn collapsed whatever `expanded` says.
+  const failed = useMemo(() => new Set([...byKey].filter(([, node]) => node.type === "directory" && node.failure !== undefined).map(([key]) => key)), [byKey]);
+  const shownExpanded = useMemo(() => new Set([...expanded].filter((key) => !failed.has(key))), [expanded, failed]);
+  // Opening a failed directory asks for its listing again; nothing else about `expanded` changes.
+  const retryOpened = (keys: Iterable<Key>) => {
+    for (const key of keys) {
+      const node = byKey.get(key);
+      if (node?.type === "directory" && retryCanHelp(node.failure)) onRetry(node.path);
+    }
+  };
+  const changeExpanded = (keys: Set<Key>) => {
+    retryOpened([...keys].filter((key) => failed.has(key)));
+    // The failed ones were left out of what the tree was given and stay expanded in `expanded`.
+    onExpandedChange(new Set([...keys, ...[...failed].filter((key) => expanded.has(String(key)))]));
+  };
+
+  // ArrowRight (Left, right to left) on a failed folder's row walks to its mark. React-aria's row
+  // handler would take the key to expand the collapsed row, and it is reached through React's root
+  // listener, so the key is taken first, on the document in the capture phase.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const row = event.target instanceof Element ? event.target.closest<HTMLElement>("[role=row][data-listing-failed]") : null;
+      // Only a row of this tree, not of another one on the page.
+      if (!row || event.target !== row || row.closest("[data-file-tree]")?.getAttribute("data-file-tree") !== treeId) return;
+      const toward = getComputedStyle(row).direction === "rtl" ? "ArrowLeft" : "ArrowRight";
+      if (event.key !== toward || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      const mark = row.querySelector<HTMLElement>("[data-status-mark]");
+      if (!mark) return;
+      event.preventDefault();
+      event.stopPropagation();
+      mark.focus();
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, []);
+
   const onAction = (key: Key) => {
     const node = byKey.get(key);
     if (!node) return;
     if (node.type === "file") onOpenFile(node.path);
-    else if (node.type === "status" && node.status === "error" && retryCanHelp(node.message)) onRetry(node.dir);
+    else if (node.type === "directory" && failed.has(key)) retryOpened([key]);
     else if (node.type === "directory") {
       const next = new Set<Key>(expanded);
       if (next.has(key)) next.delete(key);
@@ -170,7 +211,7 @@ export function FileTree({
   const renderNode = (node: TreeNode): React.ReactElement => {
     if (node.type === "status") return <StatusItem node={node} />;
     return (
-      <FileNodeRow node={node}>
+      <FileNodeRow node={node} onRetry={onRetry}>
         {node.type === "directory" && <Collection items={childrenOf(node)} dependencies={[language]}>{renderNode}</Collection>}
       </FileNodeRow>
     );
@@ -182,9 +223,10 @@ export function FileTree({
         <Tree
           {...fade}
           aria-label={label}
+          data-file-tree={treeId}
           items={items}
-          expandedKeys={expanded}
-          onExpandedChange={onExpandedChange}
+          expandedKeys={shownExpanded}
+          onExpandedChange={changeExpanded}
           onAction={onAction}
           dependencies={[language]}
         >
@@ -195,20 +237,42 @@ export function FileTree({
   );
 }
 
-function FileNodeRow({ node, children }: {
+function FileNodeRow({ node, onRetry, children }: {
   node: Exclude<TreeNode, { type: "status" }>;
+  onRetry: (dir: string) => void;
   children?: React.ReactNode;
 }): React.ReactElement {
   const t = useT();
   const rowRef = useRef<HTMLDivElement>(null);
   const name = wireBaseName(node.path);
+  // A failure arriving takes the rows beneath the folder with it, and Try again takes the mark away:
+  // focus that fell to the page with either goes to the folder's row instead.
+  const failed = node.type === "directory" && node.failure !== undefined;
+  const wasFailed = useRef(failed);
+  useEffect(() => {
+    if (wasFailed.current === failed) return;
+    wasFailed.current = failed;
+    const row = rowRef.current;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const active = document.activeElement;
+      // Focus that fell to the page, or to the tree itself, which react-aria falls back to.
+      const lost = !active || active === document.body || active.getAttribute("role") === "treegrid";
+      if (lost && row?.isConnected) row.focus();
+    }));
+  }, [failed]);
   if (node.type === "directory") {
     const link = node.entry.kind === "symlink";
     return (
-      <TreeItem data-list-motion={node.key} id={node.key} textValue={name} hasChildItems className={ROW_CLASS} ref={rowRef}>
+      <TreeItem data-list-motion={node.key} id={node.key} textValue={name} hasChildItems data-listing-failed={node.failure !== undefined || undefined} className={ROW_CLASS} ref={rowRef}>
         <TreeItemContent>
           {({ isExpanded }) => (
-            <DirectoryRow name={name} isExpanded={isExpanded} link={link}>
+            <DirectoryRow name={name} isExpanded={isExpanded} link={link} nameGrows={node.failure === undefined}>
+              {node.failure !== undefined && (
+                <>
+                  <ListingFailureMark message={node.failure} onRetry={() => onRetry(node.path)} />
+                  <span className="min-w-0 flex-1" />
+                </>
+              )}
               <RowActions contextTargetRef={rowRef} path={node.path} name={name} directory />
             </DirectoryRow>
           )}
@@ -243,37 +307,38 @@ function FileNodeRow({ node, children }: {
   );
 }
 
-/** A row that says what a directory's listing is: still loading, empty, unreadable (pressing it
- * tries again) or cut short. */
+/** The mark the row of a directory whose listing failed carries (drawn collapsed), after its name: the
+ * glyph names the failure and its popover holds the reason and the raw text, and Try again where asking
+ * again can help (a failure that is the state of the folder, outside the project, has none). Nothing
+ * is listed beneath the row. */
+function ListingFailureMark({ message, onRetry }: { message: ErrorPresentation; onRetry: () => void }): React.ReactElement {
+  const t = useT();
+  const label = t("browser.tree.errorLabel");
+  return (
+    <StatusMark
+      label={label}
+      actions={retryCanHelp(message) ? (close) => (
+        <Button
+          size="sm"
+          variant="secondary"
+          preventFocusOnPress
+          onPress={() => {
+            close();
+            onRetry();
+          }}
+        >
+          {t("error.tryAgain")}
+        </Button>
+      ) : undefined}
+    >
+      <FailureBody error={message} summary={<Message id="browser.tree.error" params={{ message: failureParam(message) }} />} />
+    </StatusMark>
+  );
+}
+
+/** A row that says what a directory's listing is: still loading, empty or cut short. */
 function StatusItem({ node }: { node: Extract<TreeNode, { type: "status" }> }): React.ReactElement {
   const t = useT();
-  if (node.status === "error") {
-    // A failed listing is a mark, not a sentence: the glyph names the failure and its popover holds the
-    // reason. Where asking again can help the row is also a press that lists the folder again, and says
-    // so; where it cannot, the row is only the mark and its trailing space.
-    const label = t("browser.tree.errorLabel");
-    // A failure that is the state of the folder (outside the project) is no use asking again.
-    const retriable = retryCanHelp(node.message);
-    return (
-      <TreeItem data-list-motion={node.key} id={node.key} textValue={label} className={ROW_CLASS}>
-        <TreeItemContent>
-          <RowContent>
-            <FailureMark label={label}>
-              {node.message !== undefined && <FailureBody error={node.message} summary={<Message id="browser.tree.error" params={{ message: failureParam(node.message) }} />} />}
-            </FailureMark>
-            {retriable ? (
-              <>
-                <FadeOverflow as="span" className="min-w-0 flex-1 text-app-muted italic" titleWhenClipped={t("error.tryAgain")}>
-                  {t("error.tryAgain")}
-                </FadeOverflow>
-                <RotateCw aria-hidden="true" className="size-3.5 shrink-0 text-app-muted" />
-              </>
-            ) : <span className="min-w-0 flex-1" />}
-          </RowContent>
-        </TreeItemContent>
-      </TreeItem>
-    );
-  }
   const text = node.status === "loading" ? t("browser.tree.loading") : node.status === "empty" ? t("browser.tree.empty") : t("browser.tree.partial");
   return (
     <TreeItem data-list-motion={node.key} id={node.key} textValue={text} className={ROW_CLASS}>

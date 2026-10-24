@@ -303,18 +303,47 @@ needs an equivalent reachable another way; Close terminal in the panel's header 
 
 ### A floating panel that does not take the window
 
-A panel that floats in from a button and leaves the rest of the window usable (the rail's account quota panel) is not
-a region: it is reached through its button, the way a menu is.
+A panel that floats in from a button and leaves the rest of the window usable (the rail's account quota panel, and the
+popover of an error or warning mark) is a large tooltip with a body: one component (`Hint`, kind `popover`) gives both the same
+input logic. It is not a region: it is reached through its button, the way a menu is.
 
-- Its `role="dialog"` element carries `aria-modal="false"`. The window's check for an open modal matches every dialog
-  without it, and would hold F6, window shortcuts, Back / Forward and floating panes while the panel is merely open.
-- Opening it on hover never moves focus, so it is not a dialog that focuses itself on mount; only a press from the
-  keyboard or assistive technology moves focus into it, and closing with focus still inside it returns focus to
-  whatever held it when it opened.
-- Escape closes the topmost floating thing first: while open, the panel marks itself `data-escape-topmost`, and the
-  drawer and floating-pane Escape handling stands aside while such an element exists.
-- Its button has no tooltip: hovering it opens the panel, which shows everything a tooltip would, so the button
-  carries only its accessible name (the selected session's remaining quota, every window it draws included).
+**The input matrix**, by what the input can do:
+
+| Input | Result |
+| --- | --- |
+| Mouse resting on the trigger (a mouse pointer only; touch and pen never hover) | Opens it after a short delay **without moving focus**: the hover form. It stays open while the pointer is on the trigger or inside it and closes a short grace after the pointer has left both |
+| Mouse click | **Opens nothing and pins nothing**: where a pointer can hover, the surface is the hover's. A click on a hover-opened surface leaves it as it is, and a click on a closed trigger does not cancel a pending hover-open. Its buttons and text are reached by moving the pointer into it |
+| Touch or pen tap, assistive technology's activation (virtual press) | Opens it with focus moved in: the press form |
+| Keyboard Enter or Space | Opens it with focus moved in: the press form |
+
+No press takes focus on its own (`preventFocusOnPress`): a click does nothing, and a tap must not pull focus off the
+terminal or an editor before the surface decides where focus goes.
+
+- **The hover form** is `role="dialog"` with `aria-modal="false"`. The window's check for an open modal matches every
+  dialog without it, and would hold F6, window shortcuts, Back / Forward and floating panes while the panel is merely
+  open. It is not a dialog that focuses itself on mount.
+- **The press form** is a modal popover: focus is inside, an outside press or Escape closes it, focus goes back to what
+  held it, and the window's shortcuts and F6 wait as for a menu. A press of this kind on a hover-opened surface turns it
+  into the press form, remounted so that it behaves as if press-opened from scratch (focus returns to the trigger).
+- **Escape.** While hover-opened the surface marks itself `data-escape-topmost`, so the drawer and floating-pane Escape
+  handling stands aside while it exists, and its Escape and outside press are watched on the document, since
+  react-aria's non-modal popover does neither. It holds no focus, so the key belongs to where focus is: Escape is left
+  alone when focus is in a terminal (the agent's, whose program takes Escape as an interrupt, or a shell's) or a text
+  field holding text, and while an input method is composing. A press-opened surface took focus, so it takes Escape
+  (react-aria's own).
+- **Closing.** After a close that is not the grace's own (Escape, an outside press, an action such as Try again) a
+  pointer still resting on the trigger does not open it again: the hover is armed again once the pointer has moved off
+  the trigger and the surface and comes back.
+- **A surface that holds another.** The rail's panel holds status marks, whose popovers are portalled out of it but
+  belong to it: an outside press inside such a popover is not outside, the panel stays open while the pointer crosses
+  into it (React raises pointer enter and leave along the component tree, portals included), and Escape goes to the
+  popover first where the popover would take it (focus in it, or its hover form with focus somewhere that does not keep
+  Escape); otherwise the panel's own rule applies.
+
+The rail's quota panel adds that its button has no tooltip: hovering it opens the panel, which shows everything a
+tooltip would, so the button carries only its accessible name (the selected session's remaining quota, every window it
+draws included). A modal opened by something other than a press on the entry (Settings from the native menu)
+closes the panel in either form, rather than leaving it up under the modal.
 
 ## Input placeholders
 
@@ -555,10 +584,27 @@ keyboard focus as well. So whatever a tooltip says must reach a screen reader by
 label's full text is in the document whether it fits or not, a row or a tab carries its own accessible name, and an
 indicator that means something on its own is a named `role="img"`.
 
-**One wrapper, and the input chooses the surface.** Every tooltip in the window goes through one of three shapes over one
-shared core (`components/tooltipCore.tsx`), none through HeroUI's `Tooltip` directly: the control shape
-(`TitledControl`, a react-aria control as the child), the mark shape (`IndicatorTooltip`, a non-control indicator) and
-the anchored shape (`AnchoredTooltip`, the caller's hover). What shows follows the input of the interaction, not the
+**One component, one look.** Every floating hint of the application is `Hint` (`components/Hint.tsx`), whatever it
+carries: a plain tooltip, the touch popover, a status mark's popover with or without a body, the rail's quota panel.
+`kind` says what carries the trigger — `control` (a react-aria control as the child), `indicator` (a non-control mark),
+`anchored` (the caller's hover) or `popover` (the caller draws the trigger from the wiring `Hint` hands it) — and
+all four are drawn with one definition, HeroUI's `tooltip` class plus `control-fills` (`TOOLTIP_SURFACE`): the same
+surface, shadow, radius and offset, and for text hints (a tooltip, a mark's popover) its padding and text size too
+(measured 8 px, 12 px, 12 px radius). Width is what the content needs, up to the class's 320 px cap. The quota panel
+is a panel, not a hint: it shares the surface, shadow and radius, and keeps its own width, edge-to-edge padding and
+text sizes.
+The element underneath is chosen by whether the content is interactive, which the caller says with `kind` and which is
+never sniffed from the content: the first three are tooltips (`role="tooltip"`, react-aria's `Tooltip`, described to
+the trigger, opened by hover and keyboard focus, nothing on a mouse click), and `popover` is a dialog popover, because a
+tooltip can hold neither focus nor a button, so content with a Try again or raw text to select cannot be one. It opens
+by a mouse resting on the trigger (non-modal, no focus moved) and by a tap, a pen, assistive technology or the
+keyboard (modal, focus inside), never by a mouse click. `TitledControl`, `IndicatorTooltip` and `AnchoredTooltip` are
+`Hint` of the first three kinds under shorter names; "one wrapper" below is `Hint`'s three tooltip kinds.
+
+**One wrapper, and the input chooses the surface.** Every tooltip in the window goes through `Hint` (none through
+HeroUI's `Tooltip` directly), in one of three kinds: the control kind (`TitledControl`, a react-aria control as the
+child), the indicator kind (`IndicatorTooltip`, a non-control indicator) and the anchored kind (`AnchoredTooltip`,
+the caller's hover). What shows follows the input of the interaction, not the
 device, so a touch-screen laptop or a tablet with a trackpad gets what the input it used answers:
 
 - a mouse hover and keyboard focus open the tooltip, as always; a mouse press opens nothing extra;
@@ -718,7 +764,8 @@ wrapper that is nothing to assistive technology. An indicator whose meaning alre
 the trigger unnamed instead, adding nothing to the name of the row or trail around it.
 
 What is left over is a shortfall kept on purpose, marked at its code: a sighted user who works from the keyboard
-reaches no tooltip, so a name that lives only there is a name they do not get.
+reaches no tooltip, so a name that lives only there is a name they do not get. (An error or warning mark is not one
+of these: it is a popover on a button, which the keyboard reaches; see "A failure that belongs to one row".)
 
 On touch, a mark opens its tooltip's content in a popover when tapped (the mark shape's `touchPopover`, on by default;
 see "A tooltip is the application's own"). It is turned off for every mark that sits inside something answering the
@@ -892,15 +939,64 @@ the error alert dialog is: its heading, instructions and diagnostic block may st
 
 A failure belonging to one item of a collection, one part of a compact layout (a section of a side pane, such as the
 Git pane's uncommitted changes or its branch list, with the rest of the pane still shown), or one spot in rendered
-content does not break that row, section or sentence into an error block. The item shows a minimal mark: a danger or warning status glyph with an accessible name, placed
-where the row's status or trailing content would sit, beside the section's heading for a part of a compact layout
-(inline with the text in a document). The reason in the application's own words, then any raw text, then the
-recovery action (Try again, at the popover's trailing edge) open from that glyph in a popover, or the reason alone in
-a tooltip when it is one short line with no raw text or action. No sentence of
-error text is written into the row. Where the row's other outcomes are each a glyph and a word in a status column
-(an import result's Created, Left out, Not attempted), the failed outcome is the same shape — its glyph and the word
-Failed — and that pair is the control that opens the reason. The glyph follows "A tooltip on a mark that is not a control" when it is not
-otherwise a control.
+content does not break that row, section or sentence into an error block. The item shows a minimal mark
+(`StatusMark`): a danger or warning status glyph with an accessible name, placed **right after the name on a row
+that has one** (a tree folder's, the account name line's), not at the row's trailing edge: the name keeps its clipping
+and fade, so a long name clips and the mark stays visible after its visible text, and a hover marquee, if the name has
+one, stays the name's alone ("Hover marquees belong to one text label"). Elsewhere it takes the place of its own
+layout: the status column of a table (an import result), beside the section's heading for a part of a compact layout,
+inline with the text in a document.
+No sentence of error text is written into the row.
+
+**An error or a warning mark is always a popover, and never also a tooltip.** What it carries can hold a button (Try
+again) and raw text to select, which a tooltip cannot, and one mark wiring both surfaces would put two floating things
+on one glyph; a mark whose content is one short line is the same popover with that line as its content, named by it,
+drawn on the **tooltip's surface** like every floating surface of the application. A mark with a body, a button or
+raw text is drawn on it too, its content laid out inside.
+The exception is a mark that draws a word beside its glyph and has nothing more to say: the word already says it on
+screen, so it stays the glyph and the word as plain text, with no button and no popover.
+The popover holds the reason in the application's own words, then the main remedy, any further explanation, then the
+raw text, then the recovery action (Try again, at the popover's trailing edge). The glyph is a button named for what
+failed, with no tooltip (the popover says everything one would). A note (an informational mark, circled `i`) is the
+other tone and uses the tooltip wrapper instead (`IndicatorTooltip`, with its touch popover; see "A tooltip on a mark
+that is not a control"); it has no action, so it needs no popover of its own. Glyphs per tone: circled `!` for danger,
+a triangle for a warning, circled `i` for a note.
+
+The popover is `Hint` of kind `popover` ("A floating panel that does not take the window" has the input matrix): a
+mouse resting on the mark opens it without moving focus; **a mouse click opens nothing**; a touch or pen tap,
+assistive technology and the keyboard (Enter, Space) open it with focus moved in. The popover's buttons and text are
+reached with the mouse by moving the pointer into the hover-opened popover, which stays open. After any close
+(Escape, an outside press, Try again) a pointer still resting on the mark does not open it again until it has left and
+come back.
+
+Where the row's other outcomes are each a glyph and a word in a status column (an import result's Created, Left
+out, Not attempted), the failed outcome is the same shape (its glyph and the word Failed) and that pair, where there is
+detail to show, is the one trigger of the popover, named by the row's own label. In a section's heading (the Git
+change list) the trigger takes no tab stop of its own; the application's own walk reaches it (Right from the heading's
+band), and when a press-opened popover (touch, keyboard, assistive technology) closes, focus goes to the heading's band,
+which takes it only when focus was on the mark or the page body, as for a press from scratch. A hover-opened one moved
+no focus, so closing it moves none.
+
+In a tree, a folder whose listing failed carries the mark on **the folder's own row**, after its name, and is drawn
+**collapsed** (`aria-expanded="false"`, the arrow closed) with nothing beneath it: react-aria decides a row's
+expanded state from the children it holds, so an expanded row with none would be a leaf, without `aria-expanded` or
+Left to collapse, and nothing is ever drawn that way. Opening it again (a press or Enter on the row, the arrow) asks for
+the listing again, as Try again in the mark's popover does, and a press on the mark does not. Right (Left, right to
+left) on the row walks to the mark instead of expanding, taken before react-aria's row handler (a capture listener
+on the document, since React's root listener runs ahead of anything on the row), then on to the row's actions button,
+and the opposite key goes back, as along any row; Tab leaves the tree, as it does for every tree row. The folder stays among what the user expanded, so it
+is open again once it lists. A failure arriving while the folder is open, and Try again, take rows or the mark away,
+so focus that fell to the page or the tree goes to the folder's row.
+
+**The inline form** is the mark inside running text (a Markdown image that could not load, a formula that could not
+be drawn): the glyph takes the text's size, the trigger is a button whose box is square (sized from the glyph, so its
+round shape is a circle as everywhere else) with negative block margins that leave the line's height as it was, and a
+button is phrasing content, so valid inside a paragraph. It is a tab stop like any other mark, so a sighted keyboard user reaches the
+reason, which the tooltip it replaced never gave them; the document's links and text are untouched, the mark is one
+more stop, named by the sentence. Inside a link (a linked image that failed) the mark is drawn right after the anchor,
+not in it, so no button nests in a link and a press on the mark is not a press on the link. Its target is exempt
+from "Pointer target size" as inline text is. Only the danger and warning tones have this form: the note's trigger is
+the tooltip wrapper's `div`, so a note inside a paragraph is not built yet.
 
 ### References in copy use `InlineReference`
 
@@ -1323,6 +1419,10 @@ its horizontal centre with the status and agent glyphs. All three lines use `Row
 `RowControls` keeps persistent pins and markers outside the hidden actions' clip and collapses
 the actions' leading gap with them. Do not space individual trailing icons with the text row's gap or add local
 offsets. Verify the shared columns with actions hidden, hovered, focused and open, including right-to-left layout.
+
+WCAG 2.2 SC 2.5.8 also excepts an **Inline** target: one "in a sentence, or its size is otherwise constrained by the
+line-height of non-target text". A status mark standing in running text (the inline form of "A failure that belongs to
+one row") is such a target: it is drawn at the text's size and cannot be larger without growing its line.
 
 The criterion is about controls, so a mark that only opens a tooltip with a mouse is not held to it: a tooltip is not an
 action, and a mark too small to aim at reliably costs a hover that can be tried again, not an activation. Several such

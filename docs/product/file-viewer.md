@@ -120,8 +120,9 @@ is the failure's only presentation. A notice that appears after the content is d
 announced once as a status, including what a diff says about collapsed lines (see "Expanding the collapsed lines" in
 `docs/product/project-pane-git-change-viewer.md`). Inside a rendered document, a notice for an image or for a formula
 inside a paragraph sits in the paragraph rather than as the block above; it uses the same tones, except that a failure
-there is only a red circled `!` mark in the text, named by the sentence it stands for and carrying that sentence as its
-tooltip on pointer hover (see "Failures marked on a row" in `docs/product/error-alerts.md`).
+there is only a red circled `!` mark in the text, named by the sentence it stands for and opening a popover that holds
+that sentence (see "Failures marked on a row" in `docs/product/error-alerts.md`). Inside a link the mark is drawn right
+after the link rather than in it.
 
 **A stand-in** fills the body when there is nothing to draw at all: the empty state's own panel, centred in the body — a
 glyph saying what kind of nothing this is, a heading naming it, and, where there is more to say than the heading
@@ -304,7 +305,7 @@ The budget is per document:
   its own. A reply larger than 4 MiB is not shown: the alt text and a neutral notice that the image is large, announced
   once, because it appears after the read. A read that fails — which is also what a file larger than 4 MiB does, since
   the read does not deliver it — or a file that is not an image: the alt text and a failure mark beside it, whose
-  tooltip says the image could not be shown, announced once.
+  popover says the image could not be shown, announced once.
 
 **The document always wraps** and offers no wrap control (see "Wrapping long lines" below).
 
@@ -348,8 +349,8 @@ text is two code regions, and the key selects the one with keyboard focus.
 
 A **rendered Markdown document** (see "A Markdown file as a document" above) is a region of the same kind, named for
 the file as the code region is: Tab or a click puts keyboard focus on it so it can be scrolled from the keyboard, and
-Tab from there goes on, in the document's order, through each link, each diagram and each block formula, before
-leaving it. An inline formula is a stop only while it is wider than the line (see "A Markdown file as a document"
+Tab from there goes on, in the document's order, through each link, each diagram, each block formula and each failure
+mark in the text, before leaving it. An inline formula is a stop only while it is wider than the line (see "A Markdown file as a document"
 above). ⌘A with keyboard focus on the document selects the document and not the viewer's title, path and size.
 Copying a selection that is the whole document puts the file's **Markdown source** on the clipboard, the source inside
 its fenced blocks included, which a selection of the drawn document cannot reach; a selection of part of the document

@@ -71,9 +71,10 @@ when they could not be applied, a red alert saying so with the reason. Under it 
 under its console, with its result (created, left out, not tried, each in words with a glyph) and a detail: how a
 created project was placed (at its exported path, in the default clone directory, cloned, in the directory chosen), or
 that a project was not tried because its console could not be created. A line that failed has no detail: its result
-is a red circled `!` followed by the word **Failed**, like the other results, and the two together are one control,
-named for that project — or console — having failed, which opens a popover with why, any raw diagnostic included (see
-"Failures marked on a row" in `docs/product/error-alerts.md`). A console that could not be created, or that came out
+is a red circled `!` followed by the word **Failed**, like the other results. Where the failure came with a reason,
+the two together are one control, named for that project — or console — having failed, which opens a popover with
+why, any raw diagnostic included (see "Failures marked on a row" in `docs/product/error-alerts.md`); where it came with
+none, they are the glyph and the word alone, with nothing to open. A console that could not be created, or that came out
 with no projects, has a line of its own. In a narrow dialog each line becomes a block that names every value. Each
 account that fell back to a default account is listed under its own heading below. The result is the only place the import's failures are shown: no error alert opens for them.
 

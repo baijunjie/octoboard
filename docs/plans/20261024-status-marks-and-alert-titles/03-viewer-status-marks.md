@@ -1,6 +1,6 @@
 # 03 File viewer notices become status marks
 
-> Goal: the file viewer shows no Alert; each notice is a status mark from 02.
+> Goal: the file viewer shows no Alert; each notice is a status mark (`StatusMark`).
 > Completion criteria: whole-file notices are marks after the file path in the viewer header; notices about one spot in
 > a Markdown document or a diff are marks at that spot; the viewer's Alert-based `Notice` is gone; a notice appearing
 > after first paint is still spoken once, and one present from first paint is not; viewer tests and the viewer gallery
@@ -29,6 +29,19 @@
   through the docs workflow.
 - [ ] Have the gallery's viewer scenarios updated (gallery-writer) to show marks with each tone, several marks on one
   file, and a mark appearing after paint.
+
+## Handoff
+
+- `StatusMark` (components/StatusMark.tsx) and the one hint component `Hint` (components/Hint.tsx, kinds `control`,
+  `indicator`, `anchored`, `popover`) are in place. Error and warning marks are `Hint` of kind `popover`: a resting
+  mouse opens them (no focus moved), a mouse click opens nothing, a tap / pen / keyboard / assistive technology opens
+  them with focus inside; every surface has the tooltip's look. The `note` tone exists in `StatusMark` but no caller
+  uses it yet.
+- The `note` tone's trigger is a `div` (the `indicator` kind), so a note cannot sit inside a paragraph yet: the spot
+  notices in a Markdown document need a phrasing-content trigger for the note tone before they can use it.
+- A mark on a named row follows the name (docs/ui-accessibility.md "A failure that belongs to one row"); the viewer
+  header's marks after the file path follow the same reading. A mark inside a Markdown link is drawn after the link
+  (viewer/linkMarks.tsx).
 
 ## Notes for the developer
 

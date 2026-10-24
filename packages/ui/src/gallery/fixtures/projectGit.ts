@@ -1099,6 +1099,17 @@ const reviewScenarios: Scenario[] = [
     steps: selecting(rankingSession),
   },
   {
+    id: "git-changes-listing-failed-reason",
+    group: GROUP,
+    category: "exceptional",
+    title: "The reason a section's changes could not be read",
+    description: "The danger glyph on the side worktree's section heading is tapped with a finger: its popover holds the reason, then Git's diagnostic, then Try again at its trailing edge, with focus inside it.",
+    state,
+    preferences,
+    git: { ...SAMPLE_GIT, changes: { ...SAMPLE_GIT.changes, "wt-side": failedRead } },
+    steps: [...selecting(rankingSession), (ui) => ui.touchPressStatusMark(ui.t("git.error.list"))],
+  },
+  {
     id: "git-changes-failed",
     group: GROUP,
     category: "exceptional",

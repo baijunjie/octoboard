@@ -2,6 +2,8 @@
 import { act, useState } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { DaemonRequestError } from "../daemon-client";
+import type { ErrorPresentation } from "../errorPresentation";
 import { isolate } from "../i18n/isolate";
 import type { PlatformAdapter } from "../platform";
 import { FileTree } from "./FileTree";
@@ -257,41 +259,163 @@ it("folds a directory's rows in and out without presence, and animates rows a li
   expect(container.querySelector("[data-list-motion-ghost]")?.textContent ?? "").not.toContain("added.ts");
 });
 
-it("marks a folder that could not be listed with a named glyph and keeps the reason in its popover", () => {
-  const failed: TreeNode = { type: "status", key: "status:error:src", dir: "src", status: "error", message: "permission denied" };
-  const container = render([failed]);
-  const row = container.querySelector("[role=row]")!;
-  const mark = row.querySelector("button[aria-label]")!;
-  expect(mark.getAttribute("aria-label")).toBe("Could not list this folder");
-  // No sentence of error text in the row: the reason is not drawn until the mark is pressed.
-  expect(row.textContent).not.toContain("permission denied");
-  act(() => {
-    for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) mark.dispatchEvent(new MouseEvent(type, { bubbles: true, button: 0 }));
-  });
-  expect(document.querySelector('[role="dialog"]')?.textContent).toContain("permission denied");
+const failedFolder = (failure?: ErrorPresentation, children: TreeNode[] = []): TreeNode => ({
+  type: "directory",
+  key: rowKey("src"),
+  path: "src",
+  entry: { name: "src", kind: "directory", size: 0, version: "v1", target: null },
+  children,
+  failure,
 });
-
-it("opens a failed folder's reason from the mark without listing the folder again, and reaches the mark with ArrowRight", () => {
-  const failed: TreeNode = { type: "status", key: "status:error:src", dir: "src", status: "error", message: "permission denied" };
-  const onRetry = vi.fn();
-  const container = render([failed], { onRetry });
-  const row = container.querySelector<HTMLElement>("[role=row]")!;
-  const mark = row.querySelector<HTMLButtonElement>("button[aria-label]")!;
+const openFailed = { expanded: new Set([rowKey("src")]) };
+/** A tap: where a pointer can hover, a mouse click on a mark does nothing. */
+const pressMark = (mark: HTMLElement) =>
   act(() => {
     for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup"]) {
       const event = new MouseEvent(type, { bubbles: true, button: 0 });
-      if (type.startsWith("pointer")) Object.defineProperty(event, "pointerType", { value: "mouse" });
+      if (type.startsWith("pointer")) Object.defineProperty(event, "pointerType", { value: "touch" });
       mark.dispatchEvent(event);
     }
     mark.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0, detail: 1 }));
   });
+
+it("marks a folder that could not be listed on the folder's own row, after its name, and keeps the reason in its popover", () => {
+  const container = render([failedFolder("permission denied")], openFailed);
+  const rows = container.querySelectorAll("[role=row]:not([data-key^=\"collapsed:\"])");
+  // The one row on screen is the folder's: no child status row under it, and no stand-in row either.
+  expect(rows).toHaveLength(1);
+  expect(container.querySelectorAll("[role=row]")).toHaveLength(1);
+  expect(container.textContent).not.toContain("Loading");
+  const row = rows[0]!;
+  const mark = row.querySelector("button[aria-label='Could not list this folder']")!;
+  expect(mark).not.toBeNull();
+  expect(row.textContent).toContain("src");
+  // After the name, before the end-of-row actions.
+  const name = [...row.querySelectorAll("span")].find((span) => span.textContent === "src")!;
+  expect(name.compareDocumentPosition(mark) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(row.textContent).not.toContain("permission denied");
+  pressMark(mark as HTMLElement);
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain("permission denied");
+});
+
+it("opens a failed folder's reason from the mark without toggling the folder or listing it again", () => {
+  const onRetry = vi.fn();
+  const onExpandedChange = vi.fn();
+  const container = render([failedFolder("permission denied")], { ...openFailed, onRetry, onExpandedChange });
+  const mark = container.querySelector<HTMLButtonElement>("button[aria-label='Could not list this folder']")!;
+  pressMark(mark);
   expect(document.querySelector('[role="dialog"]')).not.toBeNull();
   expect(onRetry).not.toHaveBeenCalled();
-  // A tab stop inside the tree row as well as a stop of the row's arrow-key walk.
-  expect(mark.getAttribute("tabindex")).toBe("0");
+  expect(onExpandedChange).not.toHaveBeenCalled();
+});
+
+it("walks from a failed folder's row to its mark with ArrowRight, to the row's actions with another, and back with Left, without listing again", () => {
+  const onRetry = vi.fn();
+  const container = render([failedFolder("permission denied")], { ...openFailed, onRetry });
+  const row = container.querySelector<HTMLElement>(`[role=row][data-key="${rowKey("src")}"]`)!;
+  const mark = row.querySelector<HTMLButtonElement>("button[aria-label='Could not list this folder']")!;
+  const actions = row.querySelector<HTMLButtonElement>("button[aria-haspopup]")!;
   act(() => row.focus());
   press(row, "ArrowRight");
   expect(document.activeElement).toBe(mark);
+  expect(onRetry).not.toHaveBeenCalled();
+  press(mark, "ArrowRight");
+  expect(document.activeElement).toBe(actions);
+  press(actions, "ArrowLeft");
+  expect(document.activeElement).toBe(mark);
+  press(mark, "ArrowLeft");
+  expect(document.activeElement).toBe(row);
+  expect(onRetry).not.toHaveBeenCalled();
+});
+
+it("opens a failed folder's popover from the mark with Enter, focus inside", async () => {
+  const container = render([failedFolder("permission denied")], openFailed);
+  const row = container.querySelector<HTMLElement>(`[role=row][data-key="${rowKey("src")}"]`)!;
+  act(() => row.focus());
+  press(row, "ArrowRight");
+  const mark = document.activeElement as HTMLElement;
+  press(mark, "Enter");
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain("permission denied");
+  expect(document.querySelector('[role="dialog"]')?.contains(document.activeElement)).toBe(true);
+});
+
+it("lists a failed folder again from Try again, opened with Right then Enter, and hands focus to the row once the mark goes", async () => {
+  const retried = vi.fn();
+  function Folder() {
+    const [failed, setFailed] = useState(true);
+    return <FileTree nodes={[failed ? failedFolder("timed out") : failedFolder(undefined, [{ type: "status", key: "status:loading:src", dir: "src", status: "loading" }])]} expanded={openFailed.expanded} label="Files" onExpandedChange={() => {}} onOpenFile={() => {}} onRetry={() => { retried(); setFailed(false); }} treeRef={() => {}} />;
+  }
+  const container = mountRows(<Folder />);
+  const row = container.querySelector<HTMLElement>(`[role=row][data-key="${rowKey("src")}"]`)!;
+  act(() => row.focus());
+  press(row, "ArrowRight");
+  press(document.activeElement as HTMLElement, "Enter");
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+  const retry = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find((button) => button.textContent === "Try again")!;
+  expect(retry).not.toBeUndefined();
+  press(retry, "Enter");
+  expect(retried).toHaveBeenCalledTimes(1);
+  await vi.waitFor(() => expect(document.activeElement).toBe(container.querySelector(`[role=row][data-key="${rowKey("src")}"]`)));
+  expect(container.querySelector("button[aria-label='Could not list this folder']")).toBeNull();
+});
+
+it("walks to a failed folder's mark with ArrowLeft in a right-to-left tree, and lets Shift+ArrowRight fall through", () => {
+  const container = render([failedFolder("permission denied")], openFailed);
+  const row = container.querySelector<HTMLElement>(`[role=row][data-key="${rowKey("src")}"]`)!;
+  const mark = row.querySelector<HTMLButtonElement>("button[aria-label='Could not list this folder']")!;
+  // Shift+ArrowRight is not the walk, whichever the direction.
+  act(() => row.focus());
+  act(() => void row.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", shiftKey: true, bubbles: true, cancelable: true })));
+  expect(document.activeElement).not.toBe(mark);
+  container.dir = "rtl";
+  act(() => row.focus());
+  press(row, "ArrowLeft");
+  expect(document.activeElement).toBe(mark);
+});
+
+it("draws a failed folder collapsed, with aria-expanded false and the mark on its row", () => {
+  const container = render([failedFolder("permission denied")], openFailed);
+  const row = container.querySelector<HTMLElement>(`[role=row][data-key="${rowKey("src")}"]`)!;
+  expect(row.getAttribute("aria-expanded")).toBe("false");
+  expect(row.querySelector("[slot=chevron]")?.getAttribute("aria-label")).toBe("Expand");
+  expect(row.querySelector("button[aria-label='Could not list this folder']")).not.toBeNull();
+});
+
+it.each(["Enter", "chevron"])("lists a failed folder again on %s, keeping it expanded for when it lists", (how) => {
+  const onRetry = vi.fn();
+  const onExpandedChange = vi.fn();
+  const container = render([failedFolder("permission denied")], { ...openFailed, onRetry, onExpandedChange });
+  const row = container.querySelector<HTMLElement>(`[role=row][data-key="${rowKey("src")}"]`)!;
+  act(() => row.focus());
+  if (how === "chevron") act(() => row.querySelector<HTMLElement>("[slot=chevron]")!.click());
+  else press(row, how);
+  expect(onRetry).toHaveBeenCalledExactlyOnceWith("src");
+  // What the user opened is never forgotten: the folder is still among the expanded keys.
+  for (const [keys] of onExpandedChange.mock.calls) expect([...keys]).toContain(rowKey("src"));
+});
+
+it("keeps focus on the folder's row when a failure arrives while a row beneath it holds focus", async () => {
+  function Folder() {
+    const [failed, setFailed] = useState(false);
+    failNow = () => act(() => setFailed(true));
+    const children = [fileNode("src/child.ts", false)];
+    return <FileTree nodes={[failed ? failedFolder("timed out") : { ...failedFolder(undefined, children) }]} expanded={openFailed.expanded} label="Files" onExpandedChange={() => {}} onOpenFile={() => {}} onRetry={() => {}} treeRef={() => {}} />;
+  }
+  let failNow = () => {};
+  const container = mountRows(<Folder />);
+  const child = container.querySelector<HTMLElement>(`[role=row][data-key="${rowKey("src/child.ts")}"]`)!;
+  act(() => child.focus());
+  expect(document.activeElement).toBe(child);
+  failNow();
+  expect(container.querySelector(`[data-key="${rowKey("src/child.ts")}"]`)).toBeNull();
+  await vi.waitFor(() => expect(document.activeElement).toBe(container.querySelector(`[role=row][data-key="${rowKey("src")}"]`)));
+});
+
+it("offers no Try again for a failure that asking again cannot change", () => {
+  const container = render([failedFolder(new DaemonRequestError("outside", "invalid_path", {}))], openFailed);
+  pressMark(container.querySelector<HTMLButtonElement>("button[aria-label='Could not list this folder']")!);
+  expect([...document.querySelectorAll('[role="dialog"] button')].some((button) => button.textContent === "Try again")).toBe(false);
 });
 
 /** Opens the Actions menu of `row` from the keyboard (Right to its button, then Enter) and returns

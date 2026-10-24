@@ -6,8 +6,10 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
 import { errorAlerts } from "../errorAlerts";
+import { press, tap } from "../components/tooltipTestSupport";
 import { DocumentImage } from "./DocumentImage";
 import { FormulaView } from "./FormulaView";
+import { MarkdownDocument } from "./MarkdownDocument";
 import { ViewerHost } from "./viewerTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -39,7 +41,7 @@ it.each([false, true])("says a KaTeX parse error where the formula stands, with 
   await mount(<p id="paragraph"><FormulaView source="\\frac{" inline={inline} display={!inline} overBudget={false} /></p>);
   const paragraph = document.getElementById("paragraph")!;
   const sentence = "This formula could not be drawn, so its source is shown.";
-  if (inline) expect(paragraph.querySelector('[role="img"]')?.getAttribute("aria-label")).toBe(sentence);
+  if (inline) expect(paragraph.querySelector("button")?.getAttribute("aria-label")).toBe(sentence);
   else expect(document.body.textContent).toContain(sentence);
   expect(document.body.textContent).toContain("\\frac{");
   expect(queued()).toEqual([]);
@@ -59,7 +61,7 @@ it.each(["file_not_found", "permission_denied", "unexpected_error"])("marks a pr
       <p id="paragraph"><DaemonImageFixture /></p>
     </ViewerHost>,
   );
-  expect(document.querySelector('#paragraph [role="img"]')?.getAttribute("aria-label")).toBe("This image could not be shown.");
+  expect(document.querySelector("#paragraph button")?.getAttribute("aria-label")).toBe("This image could not be shown.");
   expect(queued()).toEqual([]);
 });
 
@@ -70,7 +72,7 @@ it("marks a document image whose data cannot be decoded, with no error alert dia
     </ViewerHost>,
   );
   act(() => document.querySelector("img")!.dispatchEvent(new Event("error")));
-  expect(document.querySelector('#paragraph [role="img"]')?.getAttribute("aria-label")).toBe("This image could not be shown.");
+  expect(document.querySelector("#paragraph button")?.getAttribute("aria-label")).toBe("This image could not be shown.");
   expect(queued()).toEqual([]);
 });
 
@@ -85,10 +87,67 @@ it("stands a failed image in the paragraph as a named glyph, with no sentence of
     </ViewerHost>,
   );
   const paragraph = document.getElementById("paragraph")!;
-  const mark = paragraph.querySelector('[role="img"]')!;
+  const mark = paragraph.querySelector("button")!;
   expect(mark.getAttribute("aria-label")).toBe("This image could not be shown.");
   expect(mark.textContent).toBe("");
   expect(paragraph.textContent).toBe("Diagram");
   expect(paragraph.querySelector("div")).toBeNull();
   expect(queued()).toEqual([]);
+});
+
+async function mountLinkedFailedImage() {
+  const opened: string[] = [];
+  await mount(
+    <ViewerHost request={async () => ({ type: "project_file", project: "project", worktree: null, source: { kind: "live", root_id: "root", version: "version" }, path: "image.png", file: { kind: "text", text: "not an image", size: 12, media_type: null, data: null } })}>
+      <MarkdownDocument
+        text="[![Diagram](image.png)](other.md)"
+        path="README.md"
+        project="project"
+        theme="light"
+        renderCode={() => null}
+        onOpenFile={(path) => void opened.push(path)}
+        isDirectory={() => false}
+      />
+    </ViewerHost>,
+  );
+  for (let i = 0; i < 100 && !document.querySelector("button"); i += 1) await act(async () => new Promise((resolve) => setTimeout(resolve, 5)));
+  return { opened, link: document.querySelector("a")!, mark: document.querySelector<HTMLButtonElement>("button")! };
+}
+
+it("draws a failed linked image's mark right after the link, never inside it", async () => {
+  const { link, mark } = await mountLinkedFailedImage();
+  expect(mark).not.toBeNull();
+  expect(link.querySelector("button")).toBeNull();
+  expect(link.contains(mark)).toBe(false);
+  expect(link.nextElementSibling?.contains(mark)).toBe(true);
+});
+
+it("opens a failed linked image's popover on a touch press without activating the link", async () => {
+  const { opened, mark } = await mountLinkedFailedImage();
+  expect(mark).not.toBeNull();
+  press(mark, "touch");
+  expect(document.querySelector('[role="dialog"]')?.textContent).toBe("This image could not be shown.");
+  expect(opened).toEqual([]);
+});
+
+it("does nothing on a mouse click on a failed linked image's mark, and does not activate the link", async () => {
+  const { opened, mark } = await mountLinkedFailedImage();
+  press(mark, "mouse");
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(opened).toEqual([]);
+});
+
+it("opens a failed linked image's popover on Enter without activating the link", async () => {
+  const { opened, mark } = await mountLinkedFailedImage();
+  act(() => mark.focus());
+  tap(mark, "Enter");
+  expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  expect(opened).toEqual([]);
+});
+
+it("still activates the link on a press elsewhere on it", async () => {
+  const { opened, link } = await mountLinkedFailedImage();
+  const description = [...link.querySelectorAll("span")].find((span) => span.textContent === "Diagram")!;
+  act(() => void description.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 })));
+  expect(opened).toEqual(["other.md"]);
 });

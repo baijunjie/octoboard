@@ -1174,12 +1174,12 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Settings: accounts, the reason an out-of-date quota carries",
-    description: "The warning-coloured triangle after Client's \"Updated 12 minutes ago\" is pressed: its popover holds why the newer reading failed, while the last windows stay under the name.",
+    description: "The warning-coloured triangle after Client's \"Updated 12 minutes ago\" is tapped with a finger: its popover holds why the newer reading failed, while the last windows stay under the name.",
     state: unavailableQuotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.press(describing("the out-of-date mark", (name) => name.startsWith(ui.t("quota.stale", { age: "\u0000" }).split("\u0000")[0]))),
+      (ui) => ui.touchPressStatusMark(describing("the out-of-date mark", (name) => name.startsWith(ui.t("quota.stale", { age: "\u0000" }).split("\u0000")[0]))),
     ],
   },
   {

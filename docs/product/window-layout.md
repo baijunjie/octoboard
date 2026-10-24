@@ -170,9 +170,12 @@ nothing behind it is dimmed; what it shares with a dialog is that the rest of th
 gone.
 
 **The rail's account quota panel is the exception**: it floats over the content without taking the window around
-it. While it is open the rest of the window stays usable, a press outside it closes it and still does what it does
-where it lands, and it closes by itself when a dialog or a menu opens (see "The panel is not modal" in
-`docs/product/account-quotas.md`).
+it while the mouse has floated it in (opened by a tap or the keyboard it is modal, as a menu is). While it is floated in the rest of the window stays usable, a press outside it closes it and still does what it does
+where it lands, and it closes by itself when a dialog or a menu opens (see "The panel is not modal while the mouse has floated it in" in
+`docs/product/account-quotas.md`). So is a failure or warning mark's popover while the mouse resting on the mark has
+opened it: the rest of the window stays usable, and a press outside closes it and still does what it does where it
+lands. Once the mark is pressed its popover is an ordinary popover (see "Failures marked on a row" in
+`docs/product/error-alerts.md`).
 
 **The connection banner's strip is the one part of the window that stays usable.** While the daemon connection is down
 the strip is drawn above a dialog's overlay and above an open menu or popover, so it is not dimmed along with
@@ -301,7 +304,7 @@ below 782 px beside a panel floating over the terminal. Neither dims it, and it 
 Every control in the top bar and on the rail has a tooltip, except the rail's Account quota button (see "Tooltips on
 icon-only controls" in `docs/product/labels-and-tooltips.md`); the rail's open toward the content panel. Pressing any of them leaves keyboard
 focus where it was, so after a mouse press the terminal keeps receiving keystrokes. Account quota pressed from the
-keyboard is the exception: it moves focus into the panel it pins (see "Opening and pinning the panel" in
+keyboard is the exception: it moves focus into the panel it opens (see "Opening the panel" in
 `docs/product/account-quotas.md`). Turn on notifications pressed from
 the keyboard keeps focus on itself while the browser's prompt is up, so no keystrokes reach the session meanwhile; once
 the browser answers and the bell goes away, focus moves to the terminal, or to the top bar's first enabled control when

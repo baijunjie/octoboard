@@ -55,9 +55,9 @@
 - **Error and warning marks are always a popover** (user decision), because their content can hold a Try again button
   and raw text, which a tooltip cannot. With a mouse, hovering the mark opens the popover too. A hover-opened popover
   does not move focus; it stays open while the pointer is on the mark or inside the popover and closes shortly after
-  the pointer leaves both, so its buttons can be reached. A press (mouse, touch, Enter or Space) opens it with focus
-  moved into it, as `FailureMark` does now. The rail quota panel already follows these rules ("A floating panel that
-  does not take the window" in `docs/ui-accessibility.md`).
+  the pointer leaves both, so its buttons can be reached. A mouse click opens nothing (user decision: where the pointer
+  can hover, the hover is what opens it); a tap, a pen, the keyboard or assistive technology opens it with focus moved
+  into it. The rail quota panel follows the same rules and is the same component.
 - **A note mark (informational tone) uses the tooltip wrapper** (proposal), since its content is one sentence with
   nothing to press. Each tone keeps its own glyph shape — circled `i`, triangle, circled `!` — so tones differ by shape,
   not only colour.
@@ -78,10 +78,10 @@
 ## Milestones
 
 1. 01 Tooltip wrapper that works on touch (closed)
-2. [02 Error and warning status marks](02-status-marks.md)
+2. 02 Error and warning status marks (closed)
 3. [03 File viewer notices become status marks](03-viewer-status-marks.md)
 4. [04 Every Alert has a title and holds its own details](04-alert-titles.md)
 5. [05 Final confirmation](05-final-confirmation.md)
 
-Milestones 02 and 03 depend on each other in that order; 04 depends on none of them but runs after 03, which removes the
+Milestone 04 depends on none of the others but runs after 03, which removes the
 viewer's Alert-based notices so 04 need not convert them.

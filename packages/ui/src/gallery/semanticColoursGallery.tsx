@@ -7,7 +7,7 @@ import { ActivityMarker } from "../components/ActivityMarker";
 import { Button } from "../components/Button";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { ExternalLink } from "../components/ExternalLink";
-import { FailureMark } from "../components/FailureMark";
+import { StatusMark } from "../components/StatusMark";
 import { InlineReference } from "../components/InlineReference";
 import { StatusBadge, type StatusBadgeColor } from "../components/StatusBadge";
 import { TintedAlert } from "../components/TintedAlert";
@@ -84,9 +84,9 @@ function Mark({ color }: { color: StatusBadgeColor }): React.ReactElement | null
     case "success":
       return <ActivityMarker activity="running" />;
     case "danger":
-      return <FailureMark label="Quota unavailable">Claude Code took too long to report its quota.</FailureMark>;
+      return <StatusMark label="Quota unavailable">Claude Code took too long to report its quota.</StatusMark>;
     case "warning":
-      return <FailureMark status="warning" label="Out of date: last read 12 minutes ago">Claude Code took too long to report its quota.</FailureMark>;
+      return <StatusMark tone="warning" label="Out of date: last read 12 minutes ago">Claude Code took too long to report its quota.</StatusMark>;
     case "default":
       return <Info aria-hidden="true" className="size-4" style={{ color: use("--default-soft-foreground") }} />;
     case "help":

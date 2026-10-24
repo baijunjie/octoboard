@@ -26,9 +26,9 @@ It works wherever focus is, the terminal included: there `Tab` and `Shift+Tab` s
 `docs/product/report-panel.md`). With focus in none of the regions, `F6` goes to the first region shown and
 `Shift+F6` to the last.
 
-The rail's account quota panel is not a region and does not change the cycle: both keys work as usual while it is
-open, and from focus inside it they go as from focus in none of the regions, closing the panel as focus leaves it
-(see "Closing the panel" in `docs/product/account-quotas.md`).
+The rail's account quota panel is not a region and does not change the cycle: both keys work as usual while the mouse
+has floated it in. A panel opened by a tap or the keyboard is modal, as a menu is, so the keys wait until it closes
+(see "Opening the panel" in `docs/product/account-quotas.md`).
 
 **A region not on screen is skipped**: a docked sidebar the user has hidden, the sidebar's drawer while it is closed,
 a pane that is only floating in, the right pane's panels when nothing owns the pane or none of its panels is open, a
