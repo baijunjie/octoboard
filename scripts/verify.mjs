@@ -4,26 +4,30 @@
 // `scripts/verify/scope.mjs` implements that rule so no one applies it by hand, and `steps.mjs` lists
 // the checks.
 //
-//   pnpm verify                 the checks for the changes since the branch's fork point
+//   pnpm verify                 the checks for the branch's changes since its merge base with its
+//                               target branch
 //   pnpm verify --full          the full set, whatever changed
 //   pnpm verify --fresh         ignore earlier passes of the same content
 //   pnpm verify --dry-run       print the plan and run nothing
-//   pnpm verify --base <ref>    take the changes since <ref> (a branch with no recorded fork point)
+//   pnpm verify --base <ref>    take the changes since <ref> (a branch with no recorded target branch)
 //
-// The changes are those since the branch's recorded fork point (`branch.<name>.forkPoint`), which is
-// also what a rebase or merge brought in: a plain rebase leaves the fork point where it was, so what
-// the target branch gained since counts as changed. (`flow-restack.sh` moves it to the new merge
-// base, which drops that range from the scope.) A branch with no fork point, or one that is not an
-// ancestor of HEAD, cannot be judged and runs the full set.
+// The changes are those since the current merge base of HEAD and the branch's recorded target branch
+// (`branch.<name>.targetBranch`): the target branch is taken as already checked, so what a rebase or
+// merge brought in from it is not in the scope, while the branch's own changes and its conflict
+// resolutions are. A branch with no recorded target branch cannot be judged and runs the full set.
 //
-// Steps that passed on the same content (tree and toolchain) are skipped. Heavy steps wait for a
-// machine-wide slot (`scripts/verify/lock.mjs`), and consecutive ones hold it together; light ones
-// never wait. The UI gallery's quick check is not run here: `agent-gallery` decides it from the
-// scenarios touched.
+// Steps that passed on the same content (tree and toolchain) are skipped, and a UI test step that
+// failed is re-run on its failed and changed test files alone while nothing else changed but test
+// files nothing imports (`scripts/verify/rerun.mjs`). Heavy steps wait for a machine-wide slot
+// (`scripts/verify/lock.mjs`), and consecutive ones hold it together; light ones never wait. The UI
+// gallery's quick check is not run here: `agent-gallery` decides it from the scenarios touched.
 import { spawn, spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { changedFiles, resolveBase } from "./verify/changes.mjs";
 import { acquireSlot, describeWait } from "./verify/lock.mjs";
+import { clearFailure, failedFiles, narrowedFiles, readFailure, recordFailure, REPORT_ENV } from "./verify/rerun.mjs";
 import { MENU_KEYS_FILE, planScope } from "./verify/scope.mjs";
 import { contentKey, readStamp, recordPass, stampDirectory, stepKey } from "./verify/stamp.mjs";
 import { checkSteps, formatSteps } from "./verify/steps.mjs";
@@ -74,7 +78,7 @@ function plan(base) {
     scope = { mode: "full", reason: "--full", packages: [], advice: [] };
   } else if (!base.commit) {
     // Only this command takes --base, so the hint is added here.
-    const reason = base.noForkPoint ? `${base.reason} (pass --base <ref>)` : base.reason;
+    const reason = base.noTarget ? `${base.reason} (pass --base <ref>)` : base.reason;
     scope = { mode: "full", reason, packages: [], advice: [] };
   } else {
     files = changedFiles(git, base.commit, tree) ?? [];
@@ -84,9 +88,9 @@ function plan(base) {
   return { tree, files, scope, checks: checkSteps(scope, files), formats: formatSteps(scope, files) };
 }
 
-function exec(step) {
+function exec(cmd, env = process.env) {
   return new Promise((resolve) => {
-    const child = spawn(step.cmd[0], step.cmd.slice(1), { stdio: "inherit" });
+    const child = spawn(cmd[0], cmd.slice(1), { stdio: "inherit", env });
     // A signal goes to the child and the run ends once it has closed, so the slot is not released
     // while the step's own processes are still running.
     let signaled = null;
@@ -109,10 +113,32 @@ function exec(step) {
 // Whether every pass so far could be recorded against the content the run started on.
 let recorded = true;
 
+// A step that can be narrowed (`rerun`) and failed last time on content that differs from `tree` only
+// in isolated test files runs on the failed and changed files alone (`scripts/verify/rerun.mjs`); its
+// failed files are recorded when it fails, for the next run to narrow to.
 async function runStep(step, key, tree) {
-  console.log(`verify: ${step.label}: ${step.cmd.join(" ")}`);
+  const files = step.rerun && !flag("--fresh") ? narrowedFiles(git, readFailure(stampDir, root, step), tree, toolchain) : null;
+  const commands = files ? step.rerun(files) : [step.cmd];
+  if (files) {
+    const which = files.length === 0 ? "no UI test file" : files.join(", ");
+    console.log(`verify: ${step.label}: only test files nothing else imports changed since it failed, so of the UI's tests it re-runs ${which}`);
+  }
+  const reportDir = step.rerun ? mkdtempSync(path.join(os.tmpdir(), "verify-report-")) : null;
+  const env = reportDir ? { ...process.env, [REPORT_ENV]: path.join(reportDir, "report.json") } : process.env;
   const started = Date.now();
-  const code = await exec(step);
+  let code = 0;
+  for (const cmd of commands) {
+    console.log(`verify: ${step.label}: ${cmd.join(" ")}`);
+    code = await exec(cmd, env);
+    if (code !== 0) break;
+  }
+  if (step.rerun) {
+    // Like a pass, a failure is recorded only for the content it ran on.
+    const failed = code === 0 || workingTree(root) !== tree ? null : failedFiles(env[REPORT_ENV], root);
+    if (failed) recordFailure(stampDir, root, step, { tree, toolchain: toolchain.join("\n"), files: failed });
+    else clearFailure(stampDir, root, step);
+    rmSync(reportDir, { recursive: true, force: true });
+  }
   if (code !== 0) {
     console.error(`verify: FAILED ${step.label} (exit ${code}); later steps were not run`);
     process.exit(code);
@@ -149,7 +175,7 @@ if (current.checks.every((step) => passedOn(current.tree, step))) {
 
 for (const step of current.formats) {
   console.log(`verify: ${step.label}: ${step.cmd.join(" ")}`);
-  const code = await exec(step);
+  const code = await exec(step.cmd);
   if (code !== 0) {
     console.error(`verify: FAILED ${step.label} (exit ${code})`);
     process.exit(code);

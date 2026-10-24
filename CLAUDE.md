@@ -145,14 +145,17 @@ own change do not count).
   belonging to it. Skip it when this round's changes touch nothing it states.
 - "Formatting and checks", and anywhere else a step asks for the checks by the scope of the change (the pre-merge
   verification, the change-check loop's re-runs, the gallery writer's baseline): run `pnpm verify` instead of choosing
-  the checks by hand. It applies the scope rule above to the changes since the branch's recorded fork point (the
-  brought-in range of a rebase included, since a plain rebase leaves the fork point where it was), rewrites the formatting first, runs
-  format check, lint and type checks before the tests, stops at the first failure, skips steps that already passed on
-  the same content and toolchain, and makes heavy steps (UI tests, Rust tests) queue for a machine-wide slot across
-  worktrees. `pnpm verify --full` runs the full set whatever changed; `--dry-run` prints the plan; `--base <ref>` names
-  the base on a branch with no recorded fork point (without one it runs the full set). What it does not run:
-  `pnpm build`, which a change to build configuration or build scripts, or to the inputs of the preview build `apps/web` takes
-  from `packages/ui`, also calls for (it prints a note); and the gallery quick check, which stays with `agent-gallery`.
-  The full set, the per-package checks and the cross-package relations it encodes are in `scripts/verify/`.
+  the checks by hand. It applies the scope rule above to the changes since the branch's current merge base with its
+  target branch, so code a rebase or merge brought in from the target branch is out of the scope (the target branch
+  counts as already checked) while the branch's own changes and conflict resolutions are in it; rewrites the formatting
+  first, runs format check, lint and type checks before the tests, stops at the first failure, skips steps that already
+  passed on the same content and toolchain, re-runs a failed UI test step on just its failed and changed test files
+  while nothing but test files nothing imports changed since (that pass counts for the whole step), and makes heavy
+  steps (UI tests, Rust tests) queue for a machine-wide slot across worktrees. `pnpm verify --full` runs the full set
+  whatever changed; `--dry-run` prints the plan; `--base <ref>` names the base on a branch with no recorded target
+  branch (without one it runs the full set). What it does not run: `pnpm build`, which a change to build configuration
+  or build scripts, or to the inputs of the preview build `apps/web` takes from `packages/ui`, also calls for (it prints
+  a note); and the gallery quick check, which stays with `agent-gallery`. The full set, the per-package checks and the
+  cross-package relations it encodes are in `scripts/verify/`.
 
 <!-- setup-agent:workflow:end -->

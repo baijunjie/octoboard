@@ -27,17 +27,41 @@ function repository(run) {
   }
 }
 
-test("a branch is judged from its recorded fork point, and the target branch has none", () => {
+const commit = (root, git, file, content) => {
+  writeFileSync(path.join(root, file), content);
+  git("add", ".");
+  git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", file);
+  return git("rev-parse", "HEAD");
+};
+
+test("a branch is judged from its merge base with its recorded target branch, and the target branch has none", () => {
   repository((root, git) => {
-    assert.deepEqual(resolveBase(git), { reason: "no recorded fork point", noForkPoint: true });
+    assert.deepEqual(resolveBase(git), { reason: "no recorded target branch", noTarget: true });
     const fork = git("rev-parse", "HEAD");
     git("switch", "-q", "-c", "feat/x");
-    assert.deepEqual(resolveBase(git), { reason: "no recorded fork point", noForkPoint: true });
-    git("config", "branch.feat/x.forkPoint", fork);
+    assert.deepEqual(resolveBase(git), { reason: "no recorded target branch", noTarget: true });
+    git("config", "branch.feat/x.targetBranch", "main");
     assert.deepEqual(resolveBase(git), { commit: fork });
-    git("config", "branch.feat/x.forkPoint", "nonexistent");
-    assert.match(resolveBase(git).reason, /not readable/);
+    git("config", "branch.feat/x.targetBranch", "nonexistent");
+    assert.match(resolveBase(git).reason, /no merge base/);
     assert.deepEqual(resolveBase(git, fork), { commit: fork });
+    assert.match(resolveBase(git, "nonexistent").reason, /not readable/);
+  });
+});
+
+test("what a rebase brings in from the target branch is out of the changes, the branch's own commits are in", () => {
+  repository((root, git) => {
+    git("switch", "-q", "-c", "feat/x");
+    git("config", "branch.feat/x.targetBranch", "main");
+    commit(root, git, "own.txt", "own");
+    git("switch", "-q", "main");
+    const advanced = commit(root, git, "target.txt", "target");
+    git("switch", "-q", "feat/x");
+    // Before the rebase the target branch's new commit is not in the branch at all.
+    assert.deepEqual(changedFiles(git, resolveBase(git).commit, workingTree(root)), ["own.txt"]);
+    git("-c", "user.name=t", "-c", "user.email=t@t", "rebase", "-q", "main");
+    assert.deepEqual(resolveBase(git), { commit: advanced });
+    assert.deepEqual(changedFiles(git, resolveBase(git).commit, workingTree(root)), ["own.txt"]);
   });
 });
 

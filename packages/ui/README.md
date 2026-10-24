@@ -173,14 +173,14 @@ any gallery failure; `pnpm gallery:sweep --help` lists the flags (`--group`, `--
 Playwright installs no browser: run `pnpm exec playwright install chromium` from `packages/ui` once, or point
 `--chromium <path>` / `OCTOBOARD_CHROMIUM` (or `--playwright <dir>` / `OCTOBOARD_PLAYWRIGHT`) at an existing one.
 
-Without `--lang` the sweep chooses its languages from what the branch changed since its recorded fork point (the same
-changes `pnpm verify` judges): English alone, unless a changed path can reach what differs between languages, when every
+Without `--lang` the sweep chooses its languages from what the branch changed since its merge base with its recorded target
+branch (the same changes `pnpm verify` judges): English alone, unless a changed path can reach what differs between languages, when every
 language with a catalog (`en`, `zh-Hans`) is swept. The paths that count are listed in `LANGUAGE_SENSITIVE` in
 `scripts/gallery-languages.mjs`: `src/i18n/` (where `joinPhrases.ts` is the one place that branches on the language
 explicitly), the gallery machinery (`src/gallery/`, `scripts/`, and the repository root's `scripts/verify/`), and the
 build, configuration and dependency files. Every language is also swept when the change cannot be judged: the branch has
-no recorded fork point (the target branch itself, a detached HEAD), the fork point cannot be read or is not an ancestor of
-`HEAD`, nothing differs from it, or git cannot list the difference; with `--url`, whose gallery is another checkout's,
+no recorded target branch (the target branch itself, a detached HEAD), there is no merge base with it, nothing differs
+from the merge base, or git cannot list the difference; with `--url`, whose gallery is another checkout's,
 every language is swept for want of changes that describe it. The sweep prints the languages it chose and why before
 it starts. `--lang <list>` names them, and `--lang all` sweeps every language with a catalog whatever changed. Add an entry
 to `LANGUAGE_SENSITIVE` when code that branches on the language is written outside `src/i18n/`.
@@ -208,7 +208,7 @@ Imports run one way between the feature directories: `src/panels/` imports `src/
 
 | Path | Role |
 |---|---|
-| `vite.config.ts` | The Vite and Vitest configuration: the React Compiler, Tailwind, and the plugins serving the app name, the gallery frame's Content Security Policy and the viewer theme shim |
+| `vite.config.ts` | The Vite and Vitest configuration: the React Compiler, Tailwind, and the plugins serving the app name, the gallery frame's Content Security Policy and the viewer theme shim, and, only when `pnpm verify` asks for it, the reporter in `src/test/failedFilesReporter.ts` that lists the failed test files |
 | `typography.mjs` | A build-time Tailwind plugin wrapping `@tailwindcss/typography` for `src/style.css` |
 | `index.html` | The window's Content Security Policy (a `<meta>` tag) and the inline script that applies the theme class before first paint |
 | `website-preview.html`, `vite.preview.config.ts` | The entry and build config of the fixture-backed React build embedded by the public website |

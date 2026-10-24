@@ -12,10 +12,10 @@ const base = { commit: "abc123" };
 const choose = (files) => chooseLanguages(ALL, base, files);
 
 test("every language is swept where there are no changes to judge by", () => {
-  const none = { reason: "no recorded fork point" };
+  const none = { reason: "no recorded target branch" };
   const targetBranch = chooseLanguages(ALL, none, null);
   expect(targetBranch.languages).toEqual(ALL);
-  expect(targetBranch.reason).toBe("no recorded fork point, so there are no changes to judge by");
+  expect(targetBranch.reason).toBe("no recorded target branch, so there are no changes to judge by");
   expect(chooseLanguages(ALL, { reason: "base x is not readable" }, null).languages).toEqual(ALL);
   expect(choose([]).languages).toEqual(ALL);
   expect(choose(null).languages).toEqual(ALL);
@@ -59,9 +59,9 @@ test("a path that only resembles a sensitive one is not", () => {
 const scratch = mkdtempSync(path.join(os.tmpdir(), "gallery-languages-"));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
-// A repository with one commit on `main`, then `feat` branched from it with its fork point recorded when
-// `forkPoint` is set. `edit` changes the working tree of `feat`.
-function checkout({ forkPoint = true, edit = () => {} }) {
+// A repository with one commit on `main`, then `feat` branched from it with its target branch recorded when
+// `targetBranch` is set. `edit` changes the working tree of `feat`.
+function checkout({ targetBranch = true, edit = () => {} }) {
   const root = mkdtempSync(path.join(scratch, "repo-"));
   const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   const write = (file, content) => {
@@ -74,7 +74,7 @@ function checkout({ forkPoint = true, edit = () => {} }) {
   git("add", ".");
   git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "x");
   git("switch", "-q", "-c", "feat");
-  if (forkPoint) git("config", "branch.feat.forkPoint", git("rev-parse", "main"));
+  if (targetBranch) git("config", "branch.feat.targetBranch", "main");
   edit(write);
   return root;
 }
@@ -96,17 +96,17 @@ test("from a real checkout, an untracked file counts as a change", () => {
   expect(languagesFromChanges(root, ALL).languages).toEqual(["en"]);
 });
 
-test("from a real checkout, nothing differing from the fork point sweeps every language", () => {
+test("from a real checkout, nothing differing from the merge base sweeps every language", () => {
   const chosen = languagesFromChanges(checkout({}), ALL);
   expect(chosen.languages).toEqual(ALL);
   expect(chosen.reason).toContain("nothing differs");
 });
 
-test("from a real checkout without a recorded fork point, every language is swept", () => {
-  const root = checkout({ forkPoint: false, edit: (write) => write("packages/ui/src/components/Badge.tsx", "b") });
+test("from a real checkout without a recorded target branch, every language is swept", () => {
+  const root = checkout({ targetBranch: false, edit: (write) => write("packages/ui/src/components/Badge.tsx", "b") });
   const chosen = languagesFromChanges(root, ALL);
   expect(chosen.languages).toEqual(ALL);
-  expect(chosen.reason).toContain("no recorded fork point");
+  expect(chosen.reason).toContain("no recorded target branch");
 });
 
 test("outside a git working copy every language is swept", () => {

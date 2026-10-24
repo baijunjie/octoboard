@@ -1,20 +1,22 @@
 // Maps the paths a branch changed to the checks that cover them, by the scope rule of `CLAUDE.md`
 // "Before delivery", "Formatting and checks": the full set, only files no check reads, or one
-// package's checks, and the full set for a shared layer, configuration, dependency versions, a
-// change spanning packages, or anything that cannot be judged. Anything not recognised here is the
-// last of these.
+// package's checks (with the UI's, for the modules the gallery sweep shares), and the full set for a
+// shared layer, configuration, dependency versions, a change spanning packages, or anything that
+// cannot be judged. Anything not recognised here is the last of these.
 //
 // Every changed path is one of: `unread` (no build, type check or test reads it), a package's own
-// path, or `full`. The cross-package relations that make a path `full` are:
+// path, or `full`. One cross-package relation is narrower than the full set: the modules
+// `packages/ui/scripts/gallery-sweep.mjs` imports from `scripts/verify/` (`SWEEP_SHARED`) are the
+// `verify` package's, used outside it only by the UI's gallery scripts, which the UI's tests run, so
+// a change to them runs the `verify` checks and the `ui` checks. The cross-package relations that
+// make a path `full` are:
 //   - what `apps/web` imports from `packages/ui/src`, and the inputs of the preview build it takes
 //     from there;
 //   - the wire protocol: `apps/daemon/PROTOCOL.md`, `apps/daemon/src/protocol.rs` and
 //     `packages/ui/src/protocol.ts`, kept in step by hand and consumed by the UI and the desktop shell;
 //   - the contract between `apps/desktop` and `packages/ui`: the Tauri commands and events, the
 //     window URL's parameters, the menu message keys and the status item icons. `apps/desktop` itself
-//     has no package entry, so every change to it is already `full`;
-//   - the modules `packages/ui/scripts/gallery-sweep.mjs` imports from `scripts/verify/`, which its
-//     tests (a UI test file) run.
+//     has no package entry, so every change to it is already `full`.
 
 // What `apps/web` imports from `packages/ui/src`: `i18n/matchLanguage.ts` and what it imports.
 export const WEB_IMPORTS_FROM_UI = [
@@ -56,7 +58,7 @@ export const DESKTOP_CONTRACT = [
 ];
 export const MENU_KEYS_FILE = "packages/ui/src/i18n/messages/en.ts";
 
-// The modules of `scripts/verify/` that the gallery sweep also uses.
+// The modules of `scripts/verify/` that the UI's gallery scripts also use, which the UI's tests run.
 export const SWEEP_SHARED = ["scripts/verify/changes.mjs", "scripts/verify/lock.mjs", "scripts/verify/stamp.mjs", "scripts/verify/tree.mjs"];
 
 export const WIRE_PROTOCOL = ["apps/daemon/PROTOCOL.md", "apps/daemon/src/protocol.rs", "packages/ui/src/protocol.ts"];
@@ -82,7 +84,7 @@ const CONFIGURATION = /(^|\/)(package\.json|Cargo\.toml|build\.rs|tsconfig[^/]*\
 
 export function classify(file) {
   if (WIRE_PROTOCOL.includes(file) || DESKTOP_CONTRACT.includes(file)) return "full";
-  if (WEB_IMPORTS_FROM_UI.includes(file) || SWEEP_SHARED.includes(file)) return "full";
+  if (WEB_IMPORTS_FROM_UI.includes(file)) return "full";
   if (WEB_PREVIEW_INPUTS.some((input) => file.startsWith(input))) return "full";
   if (CONFIGURATION.test(file)) return "full";
   if (UNREAD_FILES.includes(file) || UNREAD_PREFIXES.some((prefix) => file.startsWith(prefix))) return "unread";
@@ -100,12 +102,16 @@ export function planScope(files, { fullFiles = [] } = {}) {
     if (kind === "full") full.push(file);
     else if (kind !== "unread") packages.add(kind);
   }
+  const sweepShared = files.filter((file) => SWEEP_SHARED.includes(file));
   const advice = [];
   if (files.some((file) => BUILD_CONFIG.some((pattern) => pattern.test(file)))) {
     advice.push("a build configuration or build script changed: also run `pnpm build`, which this command does not");
   }
   if (full.length > 0) return { mode: "full", reason: `shared or unrecognised: ${preview(full)}`, packages: [], advice };
   if (packages.size > 1) return { mode: "full", reason: `spans packages: ${[...packages].join(", ")}`, packages: [], advice };
+  if (packages.size === 1 && sweepShared.length > 0) {
+    return { mode: "package", reason: `only verify, and the ui tests for the gallery sweep's use of ${preview(sweepShared)}`, packages: ["verify", "ui"], advice };
+  }
   if (packages.size === 1) return { mode: "package", reason: `only ${[...packages][0]}`, packages: [...packages], advice };
   return { mode: "unread", reason: "only files no build, type check or test reads", packages: [], advice };
 }

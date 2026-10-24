@@ -6,10 +6,12 @@ import tailwindcss from "@tailwindcss/vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { Features } from "lightningcss";
 import type { Plugin } from "vite";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 import appConfig from "../../config/app.json" with { type: "json" };
 import { loadEnv } from "../../scripts/env.mjs";
+
+import { REPORT_ENV } from "./src/test/failedFilesReporter";
 
 // Fills `%APP_NAME%` in `index.html` (the page title) from `config/app.json`, the source the app's
 // name comes from.
@@ -106,6 +108,8 @@ export default defineConfig(({ command }) => {
       // surfaces, HeroUI's toast queue).
       testTimeout: 30_000,
       hookTimeout: 30_000,
+      // `pnpm verify` asks which files failed, to re-run only those once they are fixed.
+      reporters: process.env[REPORT_ENV] ? [...configDefaults.reporters, "./src/test/failedFilesReporter.ts"] : configDefaults.reporters,
     },
     server: {
       port: 5174,

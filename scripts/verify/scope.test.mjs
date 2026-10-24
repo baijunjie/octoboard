@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
-import { classify, DESKTOP_CONTRACT, MENU_KEYS_FILE, planScope, WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WIRE_PROTOCOL } from "./scope.mjs";
+import { classify, DESKTOP_CONTRACT, MENU_KEYS_FILE, planScope, SWEEP_SHARED, WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WIRE_PROTOCOL } from "./scope.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -23,7 +23,6 @@ test("a change inside one package runs that package's checks", () => {
 
 test("several packages, shared layers and unrecognised paths run the full set", () => {
   assert.equal(mode(["packages/ui/src/App.tsx", "apps/daemon/src/main.rs"]), "full");
-  assert.equal(mode(["scripts/verify/lock.mjs"]), "full");
   for (const file of ["Cargo.lock", "pnpm-lock.yaml", "rust-toolchain.toml", "config/app.json", "eslint.config.mjs", "apps/desktop/src-tauri/src/lib.rs", "scripts/test-rust.mjs", ".github/workflows/quality.yml", "something/new.txt"]) {
     assert.equal(mode([file]), "full", file);
   }
@@ -42,6 +41,11 @@ test("the cross-package relations count as spanning packages", () => {
   assert.equal(classify("apps/daemon/README.md"), "unread");
 });
 
+test("a module the gallery sweep shares runs the verify and UI checks, not the full set", () => {
+  for (const file of SWEEP_SHARED) assert.deepEqual(planScope([file, "scripts/verify/scope.mjs"]).packages, ["verify", "ui"], file);
+  assert.equal(mode(["scripts/verify/lock.mjs", "packages/ui/src/App.tsx"]), "full");
+});
+
 test("the message catalog counts only when a change touches the menu keys", () => {
   assert.equal(mode([MENU_KEYS_FILE]), "package");
   assert.equal(mode([MENU_KEYS_FILE], { fullFiles: [MENU_KEYS_FILE] }), "full");
@@ -54,7 +58,7 @@ test("manifests and build, type check and test configuration run the full set", 
 });
 
 test("every path the relations name still exists", () => {
-  for (const file of [...WIRE_PROTOCOL, ...DESKTOP_CONTRACT, ...WEB_IMPORTS_FROM_UI, ...WEB_PREVIEW_INPUTS, MENU_KEYS_FILE]) {
+  for (const file of [...WIRE_PROTOCOL, ...DESKTOP_CONTRACT, ...SWEEP_SHARED, ...WEB_IMPORTS_FROM_UI, ...WEB_PREVIEW_INPUTS, MENU_KEYS_FILE]) {
     assert.ok(existsSync(path.join(root, file)), file);
   }
 });

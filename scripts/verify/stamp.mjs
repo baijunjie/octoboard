@@ -10,7 +10,7 @@ import path from "node:path";
 
 const MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 
-const hash = (text) => createHash("sha256").update(text).digest("hex").slice(0, 32);
+export const hash = (text) => createHash("sha256").update(text).digest("hex").slice(0, 32);
 
 // Where the stamps live, given the repository's `git rev-parse --git-common-dir` read from `root`.
 export const stampDirectory = (root, commonDir) => path.join(path.resolve(root, commonDir), "verify-stamps");

@@ -49,11 +49,12 @@ With no scenario given, every scenario is swept.
   --group <title>       Only the scenarios of the group whose title contains this text (case-insensitive).
   --lang <list>         Comma-separated languages, each one the app offers, or "all" for every language
                         with a catalog (${LANGUAGES_WITH_CATALOGS.join(", ")}). Without it the languages follow what the branch
-                        changed since its fork point: English alone, unless a changed path can reach what
-                        differs between languages (the i18n code, the gallery machinery, the build or
-                        configuration) or the change cannot be judged (no fork point, as on the target
-                        branch itself; nothing differing from it; git cannot say), when every language is
-                        swept; with --url, every language. The line before the sweep says which and why.
+                        changed since its merge base with its target branch: English alone, unless a
+                        changed path can reach what differs between languages (the i18n code, the gallery
+                        machinery, the build or configuration) or the change cannot be judged (no recorded
+                        target branch, as on the target branch itself; nothing differing from the merge
+                        base; git cannot say), when every language is swept; with --url, every language.
+                        The line before the sweep says which and why.
   --theme <name>        light (default), dark or both. A scenario's steps do not depend on the theme, so
                         light settles a step that no longer runs; dark is for a change to colours.
   --jobs <n>            Pages loaded at once (default: ${defaultJobs()}).

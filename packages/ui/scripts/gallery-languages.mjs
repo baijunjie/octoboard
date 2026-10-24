@@ -55,17 +55,17 @@ function sensitiveReason(file) {
  * catalog. */
 export function chooseLanguages(languages, base, files) {
   if (!base.commit) return { languages, reason: `${base.reason}, so there are no changes to judge by` };
-  if (files === null) return { languages, reason: "git could not list the changes since the fork point" };
-  if (files.length === 0) return { languages, reason: "nothing differs from the fork point, so there are no changes to judge by" };
+  if (files === null) return { languages, reason: "git could not list the changes since the merge base" };
+  if (files.length === 0) return { languages, reason: "nothing differs from the merge base, so there are no changes to judge by" };
   for (const file of files) {
     const what = sensitiveReason(file);
-    if (what) return { languages, reason: `${file} changed since the fork point, and a change to ${what} can reach what differs between languages` };
+    if (what) return { languages, reason: `${file} changed since the merge base, and a change to ${what} can reach what differs between languages` };
   }
   return { languages: [SOURCE_LANGUAGE], reason: "no changed path can make the languages differ; --lang all sweeps every language" };
 }
 
 /** `chooseLanguages` for the working copy at `root` (null when there is none): the changes are those of its
- * branch since the recorded fork point, up to the working tree as it is now. */
+ * branch since its merge base with its recorded target branch, up to the working tree as it is now. */
 export function languagesFromChanges(root, languages) {
   if (!root) return chooseLanguages(languages, { reason: "not inside a git working copy" }, null);
   const git = (...args) => {
