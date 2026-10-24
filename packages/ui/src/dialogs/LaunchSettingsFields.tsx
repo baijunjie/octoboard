@@ -48,7 +48,7 @@ export function useLaunchModels(agent: Agent, account: string | null, enabled: b
   const modelDescription = loading ? modelText : undefined;
   const modelAlertId = useId();
   const modelAlert = !loading && reason !== undefined ? (
-    <FailureAlert id={modelAlertId} announce={false} message={reason} />
+    <FailureAlert id={modelAlertId} announce={false} title={t("dialog.agentSettings.modelsFailedTitle")} message={reason} />
   ) : undefined;
   return { loading, models, modelText, modelDescription, modelAlert, modelAlertId: modelAlert ? modelAlertId : undefined };
 }

@@ -1,4 +1,3 @@
-import { Alert } from "@heroui/react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { useStableHandler } from "../components/useLatest";
@@ -36,13 +35,15 @@ import { KeepFocusInDialog } from "./KeepFocusInDialog";
 import { useSessionRecords } from "./useSessionRecords";
 import { PROJECT_NAME_LIMIT } from "./textLength";
 
-/** The one warning a confirmation shows, under its options, for what it is about to take along:
- * `title` over the list of sessions when there is one to show — each with its agent's icon and
- * title, plus a status glyph for live sessions; archived sessions are already identified by the
- * warning's wording — and under them `lines`, one more consequence for each option the user has
- * ticked, a line with an `id` for an option to be described by. With neither a title nor a line it
- * is not there at all, so a dialog never shows a second warning. HeroUI's own warning tint rather
- * than its default surface, which is the dialog's own fill and leaves the callout unmarked. */
+/** The one warning a confirmation shows, under its options, for what it is about to take along. Its
+ * title is `title` when there is one, over the list of sessions when there is one to show — each with
+ * its agent's icon and title, plus a status glyph for live sessions; archived sessions are already
+ * identified by the warning's wording — and with only `lines` it sums up the consequence instead.
+ * The details inside the Alert are that list and, under it, `lines`: one more consequence for each
+ * option the user has ticked, a line with an `id` for an option to be described by. With neither a
+ * title nor a line it is not there at all, so a dialog never shows a second warning. HeroUI's own
+ * warning tint rather than its default surface, which is the dialog's own fill and leaves the
+ * callout unmarked. */
 function ConfirmWarning({ title, sessions, lines = [] }: { title?: string; sessions?: Session[]; lines?: WarningLine[] }): React.ReactElement | null {
   const t = useT();
   const sessionsRef = useListMotion<HTMLUListElement>();
@@ -51,15 +52,9 @@ function ConfirmWarning({ title, sessions, lines = [] }: { title?: string; sessi
   const linesRef = useListMotion<HTMLDivElement>();
   if (!title && lines.length === 0) return null;
   return (
-    <div className="flex min-w-0 flex-col gap-3">
-      <TintedAlert status="warning">
-        <Alert.Indicator />
-        <Alert.Content>
-          {title ? <Alert.Title>{title}</Alert.Title> : <Alert.Description>{t("dialog.confirm.consequences")}</Alert.Description>}
-        </Alert.Content>
-      </TintedAlert>
+    <TintedAlert status="warning" title={title ?? t("dialog.confirm.consequences")}>
       {sessions && (
-        <ul ref={sessionsRef} className="relative mt-1 flex min-w-0 flex-col gap-1 self-stretch text-sm text-foreground">
+        <ul ref={sessionsRef} className="relative mt-1 flex min-w-0 flex-col gap-1">
           {sessions.map((session) => (
             <li key={session.id} data-list-motion={session.id} className="flex min-w-0 items-center gap-2">
               {/* The list items are not pressable, so a tap on a mark opens the popover. */}
@@ -74,10 +69,11 @@ function ConfirmWarning({ title, sessions, lines = [] }: { title?: string; sessi
           ))}
         </ul>
       )}
-      <div ref={linesRef} className={`relative flex min-w-0 flex-col gap-1 self-stretch text-sm text-foreground ${title && lines.length > 0 ? "mt-2" : ""}`}>
+      {/* Always mounted, so a line added or removed by an option moves in and out. */}
+      <div ref={linesRef} className={`relative flex min-w-0 flex-col gap-1 ${lines.length > 0 ? (sessions ? "mt-2" : "mt-1") : ""}`}>
         {lines.map((line) => <p key={line.key} id={line.id} data-list-motion={line.key}>{line.text}</p>)}
       </div>
-    </div>
+    </TintedAlert>
   );
 }
 

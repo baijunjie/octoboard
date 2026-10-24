@@ -145,7 +145,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "normal",
     title: "Queued trust prompts for all agents",
-    description: "Claude Code and Codex offer their projects' parent folders, while the Grok Build project is the home directory itself, whose parent is too broad to offer. The warning's configuration-file token takes its tone while the project path stays neutral. Each agent has its own caution, and Codex names its repository-root trust. All three asking sessions raise their hands. Not now advances through the queued prompts while the hands stay raised until trust is answered in the terminal.",
+    description: "Claude Code and Codex offer their projects' parent folders, while the Grok Build project is the home directory itself, whose parent is too broad to offer. The warning, titled \"The project's own configuration takes effect\", has its configuration-file token take its tone while the project path stays neutral. Each agent has its own caution, and Codex names its repository-root trust. All three asking sessions raise their hands. Not now advances through the queued prompts while the hands stay raised until trust is answered in the terminal.",
     state: snapshotState({
       consoles: [console_],
       projects: [web, api, grokProject],
@@ -340,7 +340,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Request to reopen a session on an account whose sharing change did not finish",
-    description: "Reopening Verify the migration would launch it on Client, whose last sharing change did not finish, so a warning line sits between the question and the buttons, naming the account and saying its configuration and conversations may be incomplete. The buttons stay Refuse and Reopen session: the dialog itself is the confirmation.",
+    description: "Reopening Verify the migration would launch it on Client, whose last sharing change did not finish, so a warning sits between the question and the buttons, titled with the account's name (\"The last sharing change of Client did not finish\") and saying under it that its configuration and conversations may be incomplete. The buttons stay Refuse and Reopen session: the dialog itself is the confirmation.",
     state: resumeState("s-api-1", requestOf({
       session: "s-api-1",
       action: "reopen",

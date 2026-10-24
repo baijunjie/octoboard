@@ -335,7 +335,7 @@ An account whose last change is complete is never asked about, nor is the defaul
 launch Octoboard starts by itself, such as the resumes around a change (see "When a change is carried out" above),
 does not ask, and neither does approving a session another session asked for with `request_session`, whose account
 Octoboard picks. Approving another session's request to resume a conversation does not ask either: where the session
-it would reopen, resume or open runs on such an account, that request's own confirmation carries a warning line saying
+it would reopen, resume or open runs on such an account, that request's own confirmation carries a warning saying
 the same instead (see "The confirmation dialog" in `docs/product/requests-to-resume-a-conversation.md`), and an
 automatic approval warns nothing.
 

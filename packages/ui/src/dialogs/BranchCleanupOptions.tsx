@@ -1,4 +1,4 @@
-import { Disclosure } from "@heroui/react";
+import { Disclosure, Surface } from "@heroui/react";
 import React, { useId, useState } from "react";
 
 import { BranchGroups, type BranchGroup, type BranchRow } from "../components/BranchGroups";
@@ -31,7 +31,9 @@ function useRows(): (items: SessionBranchItem[], tagChanges?: boolean) => Branch
 /** A disclosure, collapsed until asked, over the groups an option covers: a real button with a name
  * that stays put, its state carried by `aria-expanded` and the indicator, described by the option
  * it belongs to (`describedBy`). It is no heading, so several in one dialog add nothing to its
- * outline. It stays as the user left it for as long as it is shown. */
+ * outline. The expanded list sits on a secondary `Surface`, which sets the listed items apart from the
+ * option's own label and hint as one block the option covers. It stays as the user left it for as long
+ * as it is shown. */
 function BranchDisclosure({ groups, describedBy, name }: {
   groups: BranchGroup[];
   describedBy: string;
@@ -45,7 +47,9 @@ function BranchDisclosure({ groups, describedBy, name }: {
       </Disclosure.Trigger>
       <Disclosure.Content>
         <Disclosure.Body className="px-0">
-          <BranchGroups groups={groups} animate />
+          <Surface variant="secondary" className="rounded-lg px-3 py-2">
+            <BranchGroups groups={groups} animate />
+          </Surface>
         </Disclosure.Body>
       </Disclosure.Content>
     </Disclosure>

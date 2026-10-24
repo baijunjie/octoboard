@@ -664,7 +664,6 @@ it("takes a locked worktree, and the branch it has checked out, along with a pro
 
 /** The warning boxes the confirmation shows. */
 const warnings = () => [...document.querySelectorAll("[role=alertdialog] [data-slot=alert-root]")];
-const warningContent = () => warnings()[0].parentElement!;
 
 it("says that more may go along with a project in the dialog's one warning", async () => {
   mount({ kind: "delete-project", project }, [], [], {
@@ -677,10 +676,10 @@ it("says that more may go along with a project in the dialog's one warning", asy
   checkAll();
   await act(async () => {});
   expect(warnings()).toHaveLength(1);
-  expect(warningContent().textContent).toContain("deleted permanently");
+  expect(warnings()[0].textContent).toContain("deleted permanently");
 });
 
-it("adds what a ticked option does after the dialog's one warning, which holds no checkbox", async () => {
+it("adds what a ticked option does inside the dialog's one warning, after its list, which holds no checkbox", async () => {
   const child = sessionOf("s-child", console_.id, project.id, "Child", "archived", { bound_to: owner.id });
   mount({ kind: "delete-session", session: { ...owner, status: "archived" } }, [owner, child], [], {
     request: async (body) => body.type === "inspect_session_branches"
@@ -689,22 +688,24 @@ it("adds what a ticked option does after the dialog's one warning, which holds n
   });
   await act(async () => {});
   expect(warnings()).toHaveLength(1);
-  expect(warnings()[0].querySelector("input[type=checkbox], ul")).toBeNull();
-  expect(warnings()[0].querySelector('[data-slot="alert-content"]')?.children).toHaveLength(1);
+  expect(warnings()[0].querySelector("input[type=checkbox]")).toBeNull();
+  // The title, then the details block holding the list of sessions and, once an option is ticked, its lines.
+  const content = warnings()[0].querySelector('[data-slot="alert-content"]')!;
+  expect([...content.children].map((node) => node.getAttribute("data-slot"))).toEqual(["alert-title", "alert-details"]);
+  expect(content.querySelector("ul")?.textContent).toContain("Child");
   act(() => boxes()[0].click());
   act(() => boxes()[1].click());
   expect(warnings()).toHaveLength(1);
-  expect(warningContent().textContent).toContain("Also permanently deletes 2 worktrees and branches Git keeps.");
-  expect(warnings()[0].textContent).not.toContain("Also permanently deletes");
-  for (const box of boxes()) {
-    for (const id of (box.getAttribute("aria-describedby") ?? "").split(" ").filter(Boolean)) {
-      expect(document.getElementById(id)).not.toBeNull();
-      expect(document.getElementById(id)?.closest('[data-slot="alert-root"]')).toBeNull();
-    }
-  }
-  expect(warningContent().textContent).toContain("Also permanently deletes the locked worktree, uncommitted changes included.");
+  expect(warnings()[0].textContent).toContain("Also permanently deletes 2 worktrees and branches Git keeps.");
+  // The list comes first and the lines after it, in the same details block.
+  const details = content.lastElementChild!;
+  expect(details.firstElementChild?.tagName).toBe("UL");
+  expect(details.children[1].textContent).toContain("Also permanently deletes");
+  const described = boxes().flatMap((box) => (box.getAttribute("aria-describedby") ?? "").split(" ").filter(Boolean));
+  for (const id of described) expect(document.getElementById(id)).not.toBeNull();
+  expect(warnings()[0].textContent).toContain("Also permanently deletes the locked worktree, uncommitted changes included.");
   act(() => boxes()[0].click());
-  expect(warningContent().textContent).not.toContain("worktrees and branches Git keeps");
+  expect(warnings()[0].textContent).not.toContain("worktrees and branches Git keeps");
 });
 
 it("shows a warning only once an option is ticked where the confirmation has none of its own", async () => {
@@ -715,6 +716,8 @@ it("shows a warning only once an option is ticked where the confirmation has non
   expect(warnings()).toHaveLength(0);
   checkAll();
   expect(warnings()).toHaveLength(1);
+  // With no sessions to list, the title sums up the consequence and the lines follow it.
+  expect(warnings()[0].querySelector('[data-slot="alert-title"]')?.textContent).toBe("Additional consequences");
   checkAll();
   expect(warnings()).toHaveLength(0);
 });
@@ -814,7 +817,7 @@ it("puts the one warning under the options, so a line it gains moves no checkbox
   const tops = boxes().map((box) => box.closest("label"));
   act(() => boxes()[1].click());
   expect(boxes().map((box) => box.closest("label"))).toEqual(tops);
-  expect(warningContent().textContent).toContain("Also moves the agent's own records of this session and of the sessions deleted with it to the Trash.");
+  expect(warnings()[0].textContent).toContain("Also moves the agent's own records of this session and of the sessions deleted with it to the Trash.");
 });
 
 it("describes the Trash option by the line saying more may go, while it shows", async () => {
@@ -828,6 +831,8 @@ it("describes the Trash option by the line saying more may go, while it shows", 
   await act(async () => {});
   const ids = (checkbox().getAttribute("aria-describedby") ?? "").split(" ");
   expect(ids.map((id) => document.getElementById(id)?.textContent).join(" ")).toContain("deleted permanently");
+  // The line is part of the warning, and the option is still described by it.
+  expect(ids.some((id) => document.getElementById(id)?.closest('[data-slot="alert-root"]'))).toBe(true);
   checkAll();
   expect((checkbox().getAttribute("aria-describedby") ?? "").split(" ").map((id) => document.getElementById(id)?.textContent ?? "").join(" ")).not.toContain("deleted permanently");
 });

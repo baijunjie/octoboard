@@ -2,16 +2,16 @@ import { Alert } from "@heroui/react";
 import React from "react";
 
 import { AlertStatusContext } from "./AlertButton";
+import { AlertFrame } from "./AlertFrame";
 import { DetailsButton } from "./DetailsButton";
-import { TintedAlert } from "./TintedAlert";
 import { useAnnouncement } from "./useAnnouncement";
 
 /**
  * Durable failure content: the failure of a screen, a section or a lookup a form makes, which is shown
  * here and nowhere else. The Alert is compact ("Errors shown among other content" in
- * `docs/ui-accessibility.md`): `title` and `children`, the one short description (what happened,
- * inline content only, since `Alert.Description` is a `span`), then `remedy`, the one main thing to
- * do about it, also always visible and also inline content, so the visible copy is at most two
+ * `docs/ui-accessibility.md`): the `title`, required, saying what happened; `children`, the one
+ * short description, which says why rather than repeating the title (inline content only, since
+ * `Alert.Description` is a `span`); then `remedy`, the one main thing to do about it, also always visible and also inline content, so the visible copy is at most two
  * sentences in the application's own words; then at its end, where HeroUI's own Alert puts its
  * action, the buttons. `actions` is the recovery button (Try again) and `details` everything else,
  * which a Details button opens in a popover: first further explanation in the application's own words
@@ -47,7 +47,7 @@ export function ErrorAlert({
 }: {
   /** For a field that is described by the alert. */
   id?: string;
-  title?: React.ReactNode;
+  title: React.ReactNode;
   announce?: boolean;
   announceKey?: number;
   announceDelayMs?: number;
@@ -62,15 +62,13 @@ export function ErrorAlert({
   const announcement = useAnnouncement(announce, announceKey, announceDelayMs);
   return (
     <div id={id} className={`min-w-0 shrink-0 text-start ${className}`}>
-      <TintedAlert status={status} className="flex-wrap">
+      <AlertFrame status={status} className="flex-wrap">
         <Alert.Indicator aria-hidden="true" />
         <Alert.Content className="min-w-40 basis-0">
-          {(title || children) && (
-            <div key={announcement.key} role={announcement.role} className="flex min-w-0 max-w-full flex-col items-start">
-              {title && <Alert.Title>{title}</Alert.Title>}
-              {children && <Alert.Description>{children}</Alert.Description>}
-            </div>
-          )}
+          <div key={announcement.key} role={announcement.role} className="flex min-w-0 max-w-full flex-col items-start">
+            <Alert.Title>{title}</Alert.Title>
+            {children && <Alert.Description>{children}</Alert.Description>}
+          </div>
           {remedy && <Alert.Description>{remedy}</Alert.Description>}
         </Alert.Content>
         {(actions || details) && (
@@ -83,7 +81,7 @@ export function ErrorAlert({
             </AlertStatusContext.Provider>
           </div>
         )}
-      </TintedAlert>
+      </AlertFrame>
     </div>
   );
 }

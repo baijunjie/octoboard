@@ -496,7 +496,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Permissions, the shell cannot be asked",
-    description: "What a broken IPC looks like: the grants could not be read, on the platform that has them. The failure is a danger Alert in place of the table of grants.",
+    description: "What a broken IPC looks like: the grants could not be read, on the platform that has them. The failure is a danger Alert in place of the table of grants, titled \"Could not read the permissions\" with one line under it.",
     state,
     macosPermissions: "unreadable",
     steps: [

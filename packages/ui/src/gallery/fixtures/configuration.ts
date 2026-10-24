@@ -402,7 +402,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Export, with full project paths included",
-    description: "Checking Include full project paths brings up the warning that the file carries the paths on the machine running Octoboard.",
+    description: "Checking Include full project paths brings up the warning titled \"The file contains project paths\", saying under it that the file carries the paths on the machine running Octoboard.",
     state,
     steps: [
       ...exportFromSettings,

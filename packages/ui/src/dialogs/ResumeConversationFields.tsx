@@ -113,6 +113,7 @@ export function ResumeConversationFields({
             id={lookupAlertId}
             className="mt-2"
             announce
+            title={t("dialog.session.resumeProblemTitle")}
             remedy={errorRemedy(problem)}
             details={errorDetails(problem)}
           >

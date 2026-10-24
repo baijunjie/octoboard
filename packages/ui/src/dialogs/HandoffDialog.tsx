@@ -1,6 +1,5 @@
 import React, { useId, useRef, useState } from "react";
 
-import { failureParam } from "../components/DaemonErrorMessage";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { FailureAlert } from "../components/FailureAlert";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
@@ -152,8 +151,8 @@ function HandoffMoves({ session, busy }: { session: Session; busy: boolean }): R
           announce={painted}
           announceDelayMs={inspected.attempt === 0 ? AFTER_FOCUS_MOVE_DELAY_MS : undefined}
           attempt={inspected.attempt}
+          title={t("dialog.handOff.movesBranchesFailed")}
           message={inspected.error}
-          summary={<Message id="dialog.handOff.movesBranchesFailed" params={{ message: failureParam(inspected.error) }} />}
           pending={inspected.pending}
           onRetry={inspected.retry}
         />

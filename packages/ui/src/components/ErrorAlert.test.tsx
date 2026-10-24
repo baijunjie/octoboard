@@ -6,7 +6,6 @@ import { expect, it, onTestFinished } from "vitest";
 
 import { errorAlerts } from "../errorAlerts";
 import { DaemonRequestError } from "../daemon-client";
-import { ViewerErrorMessage } from "../viewer/ViewerErrorMessage";
 import { detailsButton, openDetails } from "./detailsTestSupport";
 import { AlertButton } from "./AlertButton";
 import { ErrorAlert } from "./ErrorAlert";
@@ -49,8 +48,8 @@ it("uses stock danger parts and only adds the status fill and the classes that l
 });
 
 it.each(["default", "accent", "success", "warning", "danger"] as const)("keeps every stock part for %s status", (status) => {
-  const parts = <><Alert.Indicator /><Alert.Content><Alert.Title>Account unavailable</Alert.Title><Alert.Description>Quota used up.</Alert.Description></Alert.Content></>;
-  const { container } = mount(<><Alert status={status}>{parts}</Alert><TintedAlert status={status}>{parts}</TintedAlert></>);
+  const parts = <><Alert.Indicator aria-hidden="true" /><Alert.Content><Alert.Title>Account unavailable</Alert.Title><Alert.Description>Quota used up.</Alert.Description></Alert.Content></>;
+  const { container } = mount(<><Alert status={status}>{parts}</Alert><TintedAlert status={status} title="Account unavailable" description="Quota used up." /></>);
   const [stock, wrapped] = Array.from(container.children);
   expect(wrapped.classList.contains(`alert-fill-${status}`)).toBe(true);
   expect(wrapped.className.split(" ").filter((name) => name !== `alert-fill-${status}`).join(" ").trim()).toBe(stock.className);
@@ -59,6 +58,24 @@ it.each(["default", "accent", "success", "warning", "danger"] as const)("keeps e
   for (const slot of ["indicator", "content", "title", "description"]) {
     expect(wrapped.querySelector(`[data-slot="alert-${slot}"]`)).not.toBeNull();
   }
+});
+
+it("holds its details inside the content after the description, in the description's text style", () => {
+  const { container } = mount(
+    <TintedAlert status="warning" title="Also affected" description="Two sessions end.">
+      <ul><li>First</li></ul>
+    </TintedAlert>,
+  );
+  const content = container.querySelector('[data-slot="alert-content"]')!;
+  expect([...content.children].map((node) => node.getAttribute("data-slot"))).toEqual(["alert-title", "alert-description", "alert-details"]);
+  expect(content.lastElementChild?.classList.contains("alert__description")).toBe(true);
+  expect(content.lastElementChild?.querySelector("li")?.textContent).toBe("First");
+  expect(container.querySelector('[data-slot="alert-description"]')?.querySelector("ul")).toBeNull();
+});
+
+it("renders an Alert with no details without an empty details block", () => {
+  const { container } = mount(<TintedAlert title="Heads up" />);
+  expect(container.querySelector('[data-slot="alert-content"]')?.children).toHaveLength(1);
 });
 
 it("announces the title and the description together, on a wrapper of its own and not on the stock content", () => {
@@ -89,7 +106,7 @@ it("does not announce a failure that was there as its view opened", () => {
 
 it("keeps the structured diagnostics of a failure behind the Alert's Details, and opens no error alert dialog for it", () => {
   const error = new DaemonRequestError("Environment unavailable", "shell_environment_timeout", { shell: "/bin/zsh", command: "env -0", timeout: "10s" });
-  const { container } = mount(<FailureAlert title="Could not read the file" announce={false} message={error} summary={<ViewerErrorMessage error={error} path="README.md" />} />);
+  const { container } = mount(<FailureAlert title="Could not read the file" announce={false} message={error} />);
   const alert = container.querySelector('[data-slot="alert-root"]');
   expect(alert?.querySelector('[data-slot="alert-title"]')?.textContent).toBe("Could not read the file");
   expect(alert?.querySelector('[data-slot="alert-description"]')?.querySelector("p,div,pre,ul")).toBeNull();
@@ -125,7 +142,7 @@ it("ends with the recovery action and a Details button that opens the rest, outs
 });
 
 it("gives focus back to the Details button when Escape closes the popover", () => {
-  const { container } = mount(<ErrorAlert details={<p>Free some disk space.</p>}>Disk full.</ErrorAlert>);
+  const { container } = mount(<ErrorAlert title="Could not load" details={<p>Free some disk space.</p>}>Disk full.</ErrorAlert>);
   const button = detailsButton(container)!;
   act(() => button.focus());
   const dialog = openDetails(container);
@@ -137,32 +154,32 @@ it("gives focus back to the Details button when Escape closes the popover", () =
 it("has no Details button when there is nothing more to say", () => {
   const { container } = mount(
     <>
-      <ErrorAlert actions={<button type="button">Try again</button>}>Disk full.</ErrorAlert>
-      <FailureAlert announce={false} message="Permission denied" onRetry={() => {}} />
+      <ErrorAlert title="Could not load" actions={<button type="button">Try again</button>}>Disk full.</ErrorAlert>
+      <FailureAlert announce={false} title="Could not read" message="Permission denied" onRetry={() => {}} />
     </>,
   );
   expect(detailsButton(container)).toBeUndefined();
   expect(container.querySelectorAll("button")).toHaveLength(2);
   const coded = new DaemonRequestError("raw", "git_failed", { detail: "fatal: not a git repository" });
-  const { container: other } = mount(<FailureAlert announce={false} message={coded} />);
+  const { container: other } = mount(<FailureAlert announce={false} title="Could not read" message={coded} />);
   expect(openDetails(other).textContent).toContain("fatal: not a git repository");
 });
 
 it("draws a warning with the warning status and the same parts", () => {
-  const { container } = mount(<ErrorAlert status="warning" actions={<button type="button">Retry</button>}>Check skipped.</ErrorAlert>);
+  const { container } = mount(<ErrorAlert status="warning" title="Check not run" actions={<button type="button">Retry</button>}>The repository was busy.</ErrorAlert>);
   const root = container.querySelector('[data-slot="alert-root"]')!;
   expect(root.classList.contains("alert-fill-warning")).toBe(true);
   expect(root.classList.contains("alert-fill-danger")).toBe(false);
 });
 
 it("names the wrapper by id for a field it describes", () => {
-  const { container } = mount(<ErrorAlert id="models-alert">No list.</ErrorAlert>);
+  const { container } = mount(<ErrorAlert id="models-alert" title="No models">No list.</ErrorAlert>);
   expect(container.querySelector("#models-alert")?.querySelector('[data-slot="alert-root"]')).not.toBeNull();
 });
 
 it("draws a danger Alert's recovery action solid and its Details soft, in the danger variants", () => {
   // A failure the application has no words for keeps its raw text behind Details.
-  const { container } = mount(<FailureAlert announce={false} message={new DaemonRequestError("Permission denied", "unexpected_error", {})} onRetry={() => {}} />);
+  const { container } = mount(<FailureAlert announce={false} title="Could not read" message={new DaemonRequestError("Permission denied", "unexpected_error", {})} onRetry={() => {}} />);
   const buttons = [...container.querySelectorAll("button")];
   expect(buttons.map((button) => button.textContent)).toEqual(["Details", "Try again"]);
   const [details, retry] = buttons;
@@ -172,7 +189,7 @@ it("draws a danger Alert's recovery action solid and its Details soft, in the da
 });
 
 it("draws a warning Alert's buttons from the warning tokens, solid for the action and soft for Details", () => {
-  const { container } = mount(<ErrorAlert status="warning" actions={<AlertButton kind="action">Try again</AlertButton>} details={<p>More</p>}>Slow</ErrorAlert>);
+  const { container } = mount(<ErrorAlert status="warning" title="Taking long" actions={<AlertButton kind="action">Try again</AlertButton>} details={<p>More</p>}>The disk is busy.</ErrorAlert>);
   // Details first, the recovery action at the trailing edge.
   const [details, retry] = [...container.querySelectorAll("button")];
   expect(retry.className).toContain("alert-button--warning");
@@ -198,8 +215,8 @@ it("puts the raw message of an error with no catalog message behind Details and 
 
 it("leaves the Alert's tone behind in the Details popover, where a chip takes its own colour", () => {
   const { container } = mount(
-    <ErrorAlert status="warning" details={<InlineReference>skills/</InlineReference>}>
-      Slow: <InlineReference>plugins/</InlineReference>
+    <ErrorAlert status="warning" title="Taking long" details={<InlineReference>skills/</InlineReference>}>
+      Still reading <InlineReference>plugins/</InlineReference>
     </ErrorAlert>,
   );
   expect(container.querySelector("[data-inline-reference]")?.getAttribute("data-color")).toBe("warning");

@@ -81,8 +81,5 @@
 1. 01 Tooltip wrapper that works on touch (closed)
 2. 02 Error and warning status marks (closed)
 3. 03 File viewer notices become status marks (closed)
-4. [04 Every Alert has a title and holds its own details](04-alert-titles.md)
+4. 04 Every Alert has a title and holds its own details (closed)
 5. [05 Final confirmation](05-final-confirmation.md)
-
-Milestone 04 depends on none of the others but runs after 03, which removes the
-viewer's Alert-based notices so 04 need not convert them.

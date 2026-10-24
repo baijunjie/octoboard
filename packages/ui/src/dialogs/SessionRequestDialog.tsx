@@ -1,4 +1,3 @@
-import { Alert } from "@heroui/react";
 import React, { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
@@ -227,12 +226,11 @@ export function useSessionRequestDialogProps(request: SessionRequest | undefined
     title: t(ACTION_TEXT[action].title),
     message: <SessionRequestMessage request={request} />,
     warning: incomplete && (
-      <TintedAlert status="warning">
-        <Alert.Indicator />
-        <Alert.Content>
-          <Alert.Description>{t("dialog.sessionRequest.incomplete", { account: isolate(incomplete.name) })}</Alert.Description>
-        </Alert.Content>
-      </TintedAlert>
+      <TintedAlert
+        status="warning"
+        title={t("dialog.sessionRequest.incompleteTitle", { account: isolate(incomplete.name) })}
+        description={t("dialog.sessionRequest.incomplete")}
+      />
     ),
     extraControl: isChangeRequest(request)
       ? (busy: boolean) => (

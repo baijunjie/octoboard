@@ -72,8 +72,8 @@ the conversation does not carry over: the new session starts by reading a record
 
 Only the lines that apply are shown. When none does, the dialog says that nothing moves — the session is responsible
 for no branches, owns no sessions and reports to no session; it never says so when the branch inspection failed.
-**An inspection that fails** is shown under the list in a red alert saying the branches it is responsible for could
-not be checked, with the reason and **Try again**, which inspects them again; the alert stays, its button unavailable,
+**An inspection that fails** is shown under the list in a red alert titled that the branches it is responsible for could
+not be checked, with the reason under the title and **Try again**, which inspects them again; the alert stays, its button unavailable,
 while that runs. It is announced to assistive technology when it appears after the dialog was drawn, and it opens no
 error alert (see "Failures shown on the screen" in `docs/product/error-alerts.md`). While the handoff request is under
 way the list stays as it was when it was sent.

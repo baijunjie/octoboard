@@ -228,7 +228,7 @@ it.each([
   { name: "a branch group", error: new DaemonRequestError("fallback", "session_branches_not_removed", { count: "1", items: JSON.stringify([{ kind: "branch", name: "fix/a", branch: "fix/a", state: "failed", detail: "error: refused" }]) }), summary: "Removing this failed:", detail: "error: refused" },
 ])("keeps $name in inline summary and external details without duplication", ({ error, summary, detail }) => {
   const container = mount(<DaemonProvider value={{ store: createStateStore({}) } as Daemon}>
-    <ErrorAlert><DaemonErrorMessage error={error} part="summary" /></ErrorAlert>
+    <ErrorAlert title="Could not finish"><DaemonErrorMessage error={error} part="summary" /></ErrorAlert>
     <section><DaemonErrorMessage error={error} part="details" /></section>
   </DaemonProvider>);
   const description = container.querySelector('[data-slot="alert-description"]')!;
@@ -471,7 +471,7 @@ it.each(["account_sharing_failed", "account_sharing_repair_failed"])("says %s sh
   ]) };
   const error = new DaemonRequestError("do not repeat the raw fallback", code, params);
   const container = mount(<DaemonProvider value={{ store } as Daemon}>
-    <ErrorAlert><DaemonErrorMessage error={error} part="summary" /></ErrorAlert>
+    <ErrorAlert title="Could not finish"><DaemonErrorMessage error={error} part="summary" /></ErrorAlert>
     <section><DaemonErrorMessage error={error} part="details" /></section>
   </DaemonProvider>);
   // The causes and their fixes are all further explanation: no main remedy of its own.

@@ -296,7 +296,8 @@ keeps no refusal for.
 
 **Outside the macOS application** — in a browser, or a desktop shell not running on macOS — the section is a single
 line saying that permissions can only be managed in the macOS application. Where a desktop shell is there but the read
-of the grants fails, the section is instead a red alert saying that the granted permissions could not be read, which
+of the grants fails, the section is instead a red alert titled that the permissions could not be read, saying that the system did not
+report which have been granted, which
 opens no error alert (see "Failures shown on the screen" in `docs/product/error-alerts.md`). Until the first read comes
 back the section shows neither line and nothing else either.
 

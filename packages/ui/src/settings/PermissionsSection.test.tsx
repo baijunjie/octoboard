@@ -74,10 +74,10 @@ it.each([
 it("says the grants could not be read when the shell refuses the read", async () => {
   const { container, buttons } = await mount({ unreadable: true });
   expect(buttons()).toEqual([]);
-  expect(container.textContent).toContain("Could not read which permissions");
+  expect(container.textContent).toContain("Could not read the permissions");
   expect(container.textContent).not.toContain("only be managed in the macOS app");
   // Permissions that cannot be read are the state of the section: an Alert, not a muted line.
-  expect(container.querySelector('[data-slot="alert-root"]')?.textContent).toContain("Could not read which permissions");
+  expect(container.querySelector('[data-slot="alert-root"]')?.textContent).toContain("Could not read the permissions");
   // Found so on the section's first read, it is what the section opened with, so it is not announced.
   expect(container.querySelector('[role="alert"]')).toBeNull();
 });

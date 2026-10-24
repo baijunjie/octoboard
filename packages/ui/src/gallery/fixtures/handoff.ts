@@ -154,7 +154,7 @@ export const handoffScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Hand off when the branches could not be checked",
-    description: "Under \"Moves to the new session\", a danger Alert says it could not check which branches the session is responsible for and that something unexpected went wrong. Details, which holds the raw message, stands on its right with Try again after it at the trailing edge, beside the sessions and the place under Hub; the failure is not read as none, so there is no Nothing line.",
+    description: "Under \"Moves to the new session\", a danger Alert titled \"Could not check which branches it is responsible for\" says under it that something unexpected went wrong. Details, which holds the raw message, stands on its right with Try again after it at the trailing edge, beside the sessions and the place under Hub; the failure is not read as none, so there is no Nothing line.",
     state,
     sessionBranches: { code: "internal_error", params: { detail: "git could not be run" }, message: "git could not be run" },
     steps: openHandoff(lead.title),

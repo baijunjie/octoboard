@@ -46,7 +46,7 @@ export function StartupScreen({ message, action }: StartupScreenProps): React.Re
             window. */}
         <main className={`flex min-h-0 flex-1 flex-col ${region.focused ? "ring-2 ring-focus ring-inset" : ""}`}>
           <FadedScroller region={region} className="flex min-h-0 flex-1 flex-col">
-            <div className="m-auto flex w-full min-w-0 flex-col items-center gap-4 p-8 text-center">
+            <div className="m-auto flex w-full min-w-0 flex-col items-center gap-4 p-8">
               <div className="w-full min-w-0 max-w-xl">{message}</div>
               <div className="flex gap-2">
                 {action && <Button onPress={action.onSelect}>{action.label}</Button>}
@@ -60,6 +60,11 @@ export function StartupScreen({ message, action }: StartupScreenProps): React.Re
   );
 }
 
+/** The heading of a startup screen's message, centred over the rest of it, which starts at the edge. */
+export function StartupHeading({ children }: { children: React.ReactNode }): React.ReactElement {
+  return <h1 className="text-center text-xl font-semibold text-foreground">{children}</h1>;
+}
+
 /** What the screen says when the shell passed the daemon's startup failure along as `?error=`. */
 export function DaemonFailedMessage({ error }: { error: string }): React.ReactElement {
   const t = useT();
@@ -67,8 +72,8 @@ export function DaemonFailedMessage({ error }: { error: string }): React.ReactEl
   return (
     <CodeToneContext value="danger">
       <div className="flex min-w-0 flex-col gap-4">
-        <h1 className="text-xl font-semibold text-foreground">{t("startup.daemonFailed.title")}</h1>
-        <ErrorAlert announce={false}>{t("startup.daemonFailed.description")}</ErrorAlert>
+        <StartupHeading>{t("startup.daemonFailed.title")}</StartupHeading>
+        <ErrorAlert announce={false} title={t("startup.daemonFailed.alertTitle")}>{t("startup.daemonFailed.description")}</ErrorAlert>
         <CodeBlock>{error}</CodeBlock>
       </div>
     </CodeToneContext>
@@ -82,8 +87,8 @@ export function NoAddressMessage(): React.ReactElement {
   return (
     <CodeToneContext value="danger">
       <div className="flex min-w-0 flex-col gap-4">
-        <h1 className="text-xl font-semibold text-foreground">{t("startup.noAddress.title")}</h1>
-        <ErrorAlert announce={false}>{t("startup.noAddress.description")}</ErrorAlert>
+        <StartupHeading>{t("startup.noAddress.title")}</StartupHeading>
+        <ErrorAlert announce={false} title={t("startup.noAddress.alertTitle")}>{t("startup.noAddress.description")}</ErrorAlert>
         <p>
           <Message id="startup.noAddress.shell" params={{ port: code("?port=") }} />
         </p>

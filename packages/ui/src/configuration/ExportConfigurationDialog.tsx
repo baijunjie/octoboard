@@ -1,5 +1,5 @@
 import { ActionableError } from "../errorRecovery";
-import { Alert, Description, Label, Radio, RadioGroup } from "@heroui/react";
+import { Description, Label, Radio, RadioGroup } from "@heroui/react";
 import React, { useId, useState } from "react";
 
 import { appConfig } from "../appConfig";
@@ -124,13 +124,12 @@ export function ExportConfigurationDialog({
       {/* HeroUI's own warning tint rather than its default surface, which is the dialog's own fill and
           leaves the callout unmarked. */}
       {includePaths && (
-        <TintedAlert id={warningId} status="warning">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Title>{t("configuration.export.paths.title")}</Alert.Title>
-            <Alert.Description><Message id="configuration.export.paths.description" /></Alert.Description>
-          </Alert.Content>
-        </TintedAlert>
+        <TintedAlert
+          id={warningId}
+          status="warning"
+          title={t("configuration.export.paths.title")}
+          description={<Message id="configuration.export.paths.description" />}
+        />
       )}
     </Dialog>
   );

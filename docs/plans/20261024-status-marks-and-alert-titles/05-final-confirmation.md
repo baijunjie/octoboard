@@ -23,3 +23,7 @@
   that falls back to its text) is spoken once, and its status region is empty again about 5 s later, so reading line
   by line meets the sentence only on its mark; a conflicted file's heading is read with its conflict kind
   ("merge.md: Conflicted. Both modified."); a conflicted file whose read failed is announced once, as an alert.
+- [ ] VoiceOver on a confirmation warning and the trust prompt: in Delete session with bound sessions and an option
+  ticked, the warning is read as its title, then the session list, then the consequence lines, and a ticked option's
+  checkbox is described by its line; the trust prompt's warning is read as "Caution:" followed by its title, then its
+  description.

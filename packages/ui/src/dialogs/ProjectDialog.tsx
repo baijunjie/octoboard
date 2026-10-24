@@ -143,7 +143,7 @@ export function ProjectDialog({
   const detectionAlert = detection.status === "failed" ? (
     // A lookup the form makes on its own, so its failure is an Alert directly under the field it is about,
     // which describes that field.
-    <FailureAlert id={detectionAlertId} announce message={detection.error} />
+    <FailureAlert id={detectionAlertId} announce title={t("dialog.project.detectFailedTitle")} message={detection.error} />
   ) : undefined;
   const locked = !editing && (source === "git" ? detection.status !== "ready" : detection.status === "checking" || detection.status === "failed");
 

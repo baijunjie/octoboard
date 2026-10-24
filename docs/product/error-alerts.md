@@ -59,8 +59,9 @@ The error alert announces the failure it shows; nothing else announces that fail
 ## Failures shown on the screen
 
 A failure that is the state of what a screen shows is shown there, in one of two shapes, chosen by whether anything
-else is shown with it. Either way, what is on screen is at most two sentences in Octoboard's own words: what happened,
-and the one main thing to do about it. Everything else is behind **Details**, a button that opens a popover holding,
+else is shown with it. Either way, what is on screen is a heading or title saying what happened and, under it, at most
+two sentences in Octoboard's own words: why, where that is known, rather than the heading said again, and the one main
+thing to do about it. Everything else is behind **Details**, a button that opens a popover holding,
 in this order, any further explanation in Octoboard's words (a reason per cause, each cause's own fix, further
 guidance), then the text that was not written for the reader: a message passed through from the system, Git or an
 agent, a diagnostic block, raw entries. Such text is never shown outside Details, and the two sentences on screen are
@@ -76,7 +77,7 @@ and **Details** as a secondary one, where there is more to show.
 
 **A compact alert** is a failure shown among other content: in a form dialog, a settings section, a popover or a
 submenu, or above content still shown. It is red, with the danger glyph, or amber, with the warning glyph, where its
-subject is still usable. It holds an optional title and one or two sentences, and at its trailing end at most two
+subject is still usable. It always has a title, with its sentences under it, and at its trailing end at most two
 buttons, in the alert's own colour: **Details**, where there is more to show, then the recovery action, where there is
 one — usually **Try again**, or the action that fixes it. A failed lookup a form makes on its own shows its alert
 directly under the field it is about, which it describes to assistive technology.
@@ -113,8 +114,7 @@ The places with a compact alert:
 - the handoff dialog's check of the branches a session is responsible for (see "Handing off from the window" in
   `docs/product/handing-off-sessions.md`);
 - a submenu whose items are read as it opens, which is the project menu's Switch branch (see "Switching the local
-  branch" in `docs/product/project-git-actions.md`). Its alert is the exception to the two sentences above: it says
-  the items could not be loaded followed by the reason as it arrived, and has no Details;
+  branch" in `docs/product/project-git-actions.md`), titled that the items could not be loaded;
 - Settings' Permissions section when the grants could not be read (see "Permissions" in `docs/product/settings.md`);
 - a configuration import's application settings that could not be applied, in the import's result (see "In the
   window" in `docs/product/configuration-export-and-import.md`);

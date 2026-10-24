@@ -167,8 +167,8 @@ A session, project or console the window does not know is named by its id, and t
 does not know is shown as a dash. **Nothing the agent wrote is shown**: a name the request would give an archived
 session is not shown either.
 
-**A warning line stands in for the second confirmation.** Where the session would run on an account whose last change
-of sharing is incomplete and no change of it is running, the dialog carries a warning saying that the account's last
-sharing change did not finish, so its configuration and conversations may be incomplete; approving is not asked about
+**A warning stands in for the second confirmation.** Where the session would run on an account whose last change
+of sharing is incomplete and no change of it is running, the dialog carries a warning alert, titled that the account's
+last sharing change did not finish, saying that its configuration and conversations may be incomplete; approving is not asked about
 again (see "Starting a session on an account whose last change is incomplete" in
 `docs/product/sharing-the-default-configuration.md`). An automatic approval warns nothing.

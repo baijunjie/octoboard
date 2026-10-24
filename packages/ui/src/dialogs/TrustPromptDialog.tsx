@@ -1,5 +1,5 @@
 import { ActionableError } from "../errorRecovery";
-import { Alert, Checkbox, Description, Label } from "@heroui/react";
+import { Checkbox, Description, Label } from "@heroui/react";
 import { errorPresentation } from "../errorPresentation";
 import React, { useState } from "react";
 
@@ -57,16 +57,18 @@ function TrustPromptMessage({
       {prompt.agent === "codex" && <p><Message id="dialog.trust.codexRoot" params={{ agent }} /></p>}
       {/* HeroUI's own warning tint rather than its default surface, which is the dialog's own fill and
           leaves the callout unmarked. */}
-      <TintedAlert status="warning">
-        <Alert.Indicator />
-        <Alert.Content>
-          <Alert.Description>
-            {/* The icon is presentational, so the word that makes this a caution is spoken instead. */}
+      <TintedAlert
+        status="warning"
+        title={(
+          <>
+            {/* The icon is presentational, so the word that makes this a caution is spoken instead,
+                ahead of the title. */}
             <span className="sr-only">{t("dialog.trust.cautionLabel")} </span>
-            <Caution agent={prompt.agent} />
-          </Alert.Description>
-        </Alert.Content>
-      </TintedAlert>
+            {t("dialog.trust.cautionTitle")}
+          </>
+        )}
+        description={<Caution agent={prompt.agent} />}
+      />
     </>
   );
 }

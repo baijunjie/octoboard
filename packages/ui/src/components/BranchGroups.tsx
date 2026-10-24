@@ -29,25 +29,21 @@ function code(value: string): React.ReactElement {
   return <span dir="ltr" className="font-mono [overflow-wrap:anywhere]">{value}</span>;
 }
 
-/** A branch name with its icon in front, the icon and the name's first segment on one line; the
- * rest may wrap after each `/`. */
+/** A branch name with its icon in front, one unit: it moves to the next line whole when it does
+ * not fit after the path, and wraps inside its own box only when it alone is wider than the list. */
 function BranchName({ branch }: { branch: string }): React.ReactElement {
-  const [first, ...rest] = branch.split("/");
   return (
-    <>
-      <span className="whitespace-nowrap">
-        <GitBranch className="me-1 inline size-3 align-[-0.125em]" />
-        {first}
-      </span>
-      {rest.map((part, at) => <React.Fragment key={at}>/<wbr />{part}</React.Fragment>)}
-    </>
+    <span className="inline-block max-w-full">
+      <GitBranch className="me-1 inline size-3 align-[-0.125em]" />
+      {branch}
+    </span>
   );
 }
 
 /** A worktree by its path with, after it, the branch it has checked out marked by a branch icon, or
- * "detached HEAD" kept on one line; a branch by its name. The icon and the branch's first segment
- * stay together. The branch is announced as one phrase of the catalog's, with the drawn name hidden
- * from it, as a name drawn in several parts is. */
+ * "detached HEAD" kept on one line; a branch by its name. The branch is announced as one phrase of the
+ * catalog's ("on branch ..."), which speaks for the icon and the name together, so the drawn name is
+ * hidden from it rather than read a second time. */
 function RowName({ row }: { row: BranchRow }): React.ReactElement {
   const t = useT();
   if (!row.worktree) return code(row.branch ?? row.path);

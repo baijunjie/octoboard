@@ -97,7 +97,7 @@ export function PermissionsSection(): React.ReactElement {
     // A shell that cannot be asked is not a shell with nothing to report: on macOS the command
     // always answers, so a refused read means the IPC itself is broken (a missing ACL entry, say),
     // and saying "only in the macOS app" there would misdiagnose the one platform that has this.
-    if (unreadable) return <ErrorAlert announce={settled}><Message id="settings.permissions.unreadable" /></ErrorAlert>;
+    if (unreadable) return <ErrorAlert announce={settled} title={t("settings.permissions.unreadable.title")}><Message id="settings.permissions.unreadable" /></ErrorAlert>;
     if (!rows) return line("settings.permissions.unavailable");
 
     return (

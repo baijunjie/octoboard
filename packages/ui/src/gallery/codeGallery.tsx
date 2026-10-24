@@ -1,4 +1,3 @@
-import { Alert } from "@heroui/react";
 import { CircleCheck } from "lucide-react";
 import React from "react";
 
@@ -138,15 +137,12 @@ export function CodeGallery(): React.ReactElement {
             {STATUSES.map((status) => (
               <CodeToneContext.Provider key={status} value={status}>
                 <div className="flex flex-col gap-3" data-alert-tone-sample={status}>
-                  <TintedAlert status={status} data-alert-sample={status}>
-                    <Alert.Indicator aria-hidden="true" />
-                    <Alert.Content>
-                      <Alert.Title>{status}</Alert.Title>
-                      <Alert.Description>
-                        {COLORS.map((color, index) => <React.Fragment key={color}>{index > 0 && "; "}{color}: <InlineReference monospace wrap color={color}>CLAUDE.md</InlineReference></React.Fragment>)}
-                      </Alert.Description>
-                    </Alert.Content>
-                  </TintedAlert>
+                  <TintedAlert
+                    status={status}
+                    data-alert-sample={status}
+                    title={status}
+                    description={COLORS.map((color, index) => <React.Fragment key={color}>{index > 0 && "; "}{color}: <InlineReference monospace wrap color={color}>CLAUDE.md</InlineReference></React.Fragment>)}
+                  />
                   <CodeBlock>{"env -0 && printf '%s' 'OCTOBOARD-ENV-SNAPSHOT-END-12345678-1234-1234-1234-123456789abc'"}</CodeBlock>
                 </div>
               </CodeToneContext.Provider>
@@ -155,20 +151,18 @@ export function CodeGallery(): React.ReactElement {
           <section className="flex flex-col gap-3 rounded-lg bg-surface p-3" aria-labelledby="nested-tones-title">
             <h2 id="nested-tones-title" className="font-semibold">Nearest alert wins; outside chips keep their own tone</h2>
             <CodeToneContext.Provider value="warning">
-              <TintedAlert status="warning" data-nested-sample="outer">
-                <Alert.Indicator aria-hidden="true" />
-                <Alert.Content>
-                  <Alert.Title>Outer warning</Alert.Title>
-                  <Alert.Description>Outer warning: <InlineReference monospace wrap color="danger">AGENTS.md</InlineReference></Alert.Description>
-                </Alert.Content>
-              </TintedAlert>
-              <TintedAlert status="success" data-nested-sample="inner">
-                <Alert.Indicator aria-hidden="true" />
-                <Alert.Content>
-                  <Alert.Title>Inner success</Alert.Title>
-                  <Alert.Description>Inner success: <InlineReference monospace wrap color="danger">.claude</InlineReference></Alert.Description>
-                </Alert.Content>
-              </TintedAlert>
+              <TintedAlert
+                status="warning"
+                data-nested-sample="outer"
+                title="Outer warning"
+                description={<>Outer warning: <InlineReference monospace wrap color="danger">AGENTS.md</InlineReference></>}
+              />
+              <TintedAlert
+                status="success"
+                data-nested-sample="inner"
+                title="Inner success"
+                description={<>Inner success: <InlineReference monospace wrap color="danger">.claude</InlineReference></>}
+              />
               <p>Outer warning again: <InlineReference monospace wrap color="accent">.codex</InlineReference></p>
             </CodeToneContext.Provider>
             <p>After both alerts: <InlineReference monospace wrap color="help">~/Projects</InlineReference></p>

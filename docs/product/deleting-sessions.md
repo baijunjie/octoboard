@@ -142,10 +142,11 @@ The confirmation — for one session or all archived sessions at once — hides 
 absent. Otherwise it offers an **unchecked by default** checkbox to also move the agent's own session records to the
 Trash, including while the check is pending or its result is unknown. It is a plain block, not inside a warning, and its
 hint says that the session, or the sessions, can then no longer be resumed in the agent itself and that the records can
-be recovered from the Trash. While it is ticked, a line below the confirmation's one warning alert, after its options
-and before its buttons, says that the agent's own records of the session — and of the sessions deleted with it, or of
-all the sessions deleted at once — are also moved to the Trash; a confirmation that had no warning gets one then (see
-"The confirmation" in `docs/product/branch-and-worktree-cleanup.md` for the other consequence lines). Unticked, used
+be recovered from the Trash. While it is ticked, a line in the confirmation's one warning alert, which sits after its
+options and before its buttons, says that the agent's own records of the session — and of the sessions deleted with
+it, or of all the sessions deleted at once — are also moved to the Trash; it comes after the other consequence lines,
+and a confirmation that had no warning gets one then (see "The confirmation" in
+`docs/product/branch-and-worktree-cleanup.md` for how the alert holds its list and its lines). Unticked, used
 sessions' agent records are kept; for a bulk deletion, every session's agent records are kept. Either way the
 confirmation's message says that the project's files are kept. How ticking the option changes the confirm button's
 label is set in "What an open dialog, menu or popover covers" in `docs/product/window-layout.md`. While a deletion runs,

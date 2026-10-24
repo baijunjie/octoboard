@@ -7,12 +7,12 @@ import { AlertButton } from "./AlertButton";
 import { DaemonErrorMessage, errorDetails, errorRemedy } from "./DaemonErrorMessage";
 import { ErrorAlert } from "./ErrorAlert";
 
-/** The Alert of a failure that is the state of what the screen shows: the failure's sentence as the
- * description with the one main thing to do under it, Try again, and the rest (further explanation,
- * then the raw text: the system's message, the diagnostics) behind the `ErrorAlert`'s Details button,
- * left out when there is none. `summary` is the
- * description when it is not the failure's own sentence (a message that names what was being read).
- * `onRetry` is optional: without it, or for a failure no retry can change (`retryCanHelp`), the Alert has no Try again. `pending` keeps the button where it is, unavailable, while the retry
+/** The Alert of a failure that is the state of what the screen shows: `title` says what failed, the
+ * failure's sentence is the description with the one main thing to do under it, Try again, and the rest
+ * (further explanation, then the raw text: the system's message, the diagnostics) is behind the
+ * `ErrorAlert`'s Details button, left out when there is none.
+ * `onRetry` is optional: without it, or for a failure no retry can change (`retryCanHelp`), the Alert
+ * has no Try again. `pending` keeps the button where it is, unavailable, while the retry
  * runs, so focus on it is not lost; the failure stays shown until the retry answers. `announce`,
  * `announceDelayMs` and `attempt` (which makes a failure that repeats itself in the same words
  * announce again) are `ErrorAlert`'s. The button never takes focus from a press, so a retry started
@@ -21,7 +21,6 @@ export function FailureAlert({
   id,
   title,
   message,
-  summary,
   onRetry,
   pending = false,
   announce,
@@ -32,9 +31,8 @@ export function FailureAlert({
 }: {
   /** For a field that is described by the alert. */
   id?: string;
-  title?: React.ReactNode;
+  title: React.ReactNode;
   message: ErrorPresentation;
-  summary?: React.ReactNode;
   onRetry?: () => void;
   pending?: boolean;
   announce: boolean;
@@ -61,7 +59,7 @@ export function FailureAlert({
         </AlertButton>
       )}
     >
-      {summary ?? <DaemonErrorMessage error={message} part="summary" />}
+      <DaemonErrorMessage error={message} part="summary" />
     </ErrorAlert>
   );
 }

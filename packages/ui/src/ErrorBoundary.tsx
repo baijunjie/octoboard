@@ -6,7 +6,7 @@ import { CodeToneContext } from "./components/codeTone";
 import { CodeBlock } from "./components/CodeBlock";
 import { FadedScroller, useFadeRegion } from "./components/scrollFade";
 import { Message, useT } from "./i18n/react";
-import { StartupScreen } from "./StartupScreen";
+import { StartupHeading, StartupScreen } from "./StartupScreen";
 
 interface ErrorBoundaryState {
   error?: Error;
@@ -53,8 +53,8 @@ function ErrorScreen({ error, onRetry }: { error: Error; onRetry: () => void }):
       message={
         <CodeToneContext value="danger">
           <div className="flex min-w-0 flex-col gap-4">
-            <h1 className="text-xl font-semibold text-foreground">{<Message id="error.crashed" />}</h1>
-            <ErrorAlert announce={false}>{error.message}</ErrorAlert>
+            <StartupHeading><Message id="error.crashed" /></StartupHeading>
+            <ErrorAlert announce={false} title={t("error.crashed.alertTitle")}>{error.message}</ErrorAlert>
             {/* The stack is taller than the screen more often than not, so it fades at the edge it
                 hides the rest behind. The ring goes on this wrapper, which draws it outside its own box, so
                 it needs no room of its own. `overflow-auto` beside the fade's own `overflow-y`: a long

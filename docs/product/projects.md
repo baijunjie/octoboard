@@ -45,7 +45,8 @@ commit without file contents or history into a scratch directory, which proves t
 credentials and shows its top-level names. Every field below the URL (clone into, name, description, tags, default
 agent) and the submit button stay disabled until that check has succeeded for the URL as it stands, an empty one included; while it
 runs the form says it is checking, and a failure is shown in an alert directly under the URL field, saying the
-repository could not be read with git's own reason behind Details, and keeps them disabled. Neither alert opens an error alert (see "Failures shown on the screen" in
+repository could not be read with git's own reason behind Details, and keeps them disabled. Both alerts are titled that the location could not be checked, with the refusal or failure under the title. Neither
+alert opens an error alert (see "Failures shown on the screen" in
 `docs/product/error-alerts.md`). A success enables them and preselects the detected agent. The check is bounded by a
 timeout, and its scratch directory is removed when it ends.
 

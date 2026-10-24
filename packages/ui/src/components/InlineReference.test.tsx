@@ -29,9 +29,9 @@ it("inherits the closest alert tone even when the caller requests a conflicting 
     <>
       <InlineReference monospace wrap size="xs">neutral</InlineReference>
       <InlineReference monospace wrap size="xs" color="help">purple</InlineReference>
-      <TintedAlert status="danger">
+      <TintedAlert status="danger" title="Outer">
         <InlineReference monospace wrap size="xs" color="success">outer</InlineReference>
-        <TintedAlert status="warning"><InlineReference monospace wrap size="xs" color="danger">inner</InlineReference></TintedAlert>
+        <TintedAlert status="warning" title="Inner"><InlineReference monospace wrap size="xs" color="danger">inner</InlineReference></TintedAlert>
         <CodeBlock color="accent">outer block</CodeBlock>
       </TintedAlert>
       <InlineReference monospace wrap size="xs">after</InlineReference>
@@ -46,8 +46,8 @@ it("inherits the closest alert tone even when the caller requests a conflicting 
 it("takes an accent alert's colour and lets a neutral alert override explicit color", () => {
   const container = mount(
     <>
-      <TintedAlert status="accent"><InlineReference monospace wrap size="xs">accent</InlineReference></TintedAlert>
-      <TintedAlert><InlineReference monospace wrap size="xs" color="danger">neutral</InlineReference></TintedAlert>
+      <TintedAlert status="accent" title="Accent"><InlineReference monospace wrap size="xs">accent</InlineReference></TintedAlert>
+      <TintedAlert title="Neutral"><InlineReference monospace wrap size="xs" color="danger">neutral</InlineReference></TintedAlert>
     </>,
   );
   expect(Array.from(container.querySelectorAll("code")).map((el) => el.dataset.color)).toEqual(["accent", "default"]);

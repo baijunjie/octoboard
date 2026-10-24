@@ -518,7 +518,8 @@ reopened, one interrupted meanwhile is resumed, and one whose process starts mea
 | Nowhere | none; an alert directly under the field says no conversation with that ID was found in any account | disabled |
 
 A lookup that fails shows its failure in an alert directly under the field, with no fields after it, and the submit
-button stays disabled. These alerts are the lookup's outcome, not a verdict on what was typed: the field is not marked
+button stays disabled. Each of these alerts — a session held elsewhere, no conversation found, a failed lookup — is titled that this
+conversation could not be resumed, with what was found or the failure under the title. They are the lookup's outcome, not a verdict on what was typed: the field is not marked
 invalid, and each is announced to assistive technology as it appears (see "Failures shown on the screen" in
 `docs/product/error-alerts.md`).
 The locked Agent field holds that agent alone; its account half shows the account that holds the conversation whenever

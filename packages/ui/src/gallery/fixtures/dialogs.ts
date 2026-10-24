@@ -495,7 +495,7 @@ const removeProjectTrash: Scenario = {
   group: "Projects",
   category: "normal",
   title: "Remove project and move its folder to the Trash",
-  description: "The Trash option is checked: the message and the hint under the option say the folder goes too, while the confirming button still reads \"Remove\". Under the option, the disclosure \"What goes with it (4)\" is closed, and the locked-worktree option \"Also move the locked worktrees to the Trash (4)\" follows as a plain block, unchecked, with its own closed Details. Under the options, the dialog's one stock warning has appeared because the Trash option is checked; separate consequence lines follow it for the worktrees moved to the Trash and the branches deleted permanently.",
+  description: "The Trash option is checked: the message and the hint under the option say the folder goes too, while the confirming button still reads \"Remove\". Under the option, the disclosure \"What goes with it (4)\" is closed, and the locked-worktree option \"Also move the locked worktrees to the Trash (4)\" follows as a plain block, unchecked, with its own closed Details. Under the options, the dialog's one warning has appeared because the Trash option is checked: with no sessions to list, it is titled \"Additional consequences\" and holds, inside it, the consequence lines for the worktrees moved to the Trash and the branches deleted permanently.",
   state: removalState,
   projectRemovalBranches: {
     [tagged[0].id]: [
@@ -519,7 +519,7 @@ const archiveConsoleSession: Scenario = {
   group: "Archive view",
   category: "normal",
   title: "Archive console session and its bound sessions",
-  description: "The confirmation offers two plain options, unchecked, each a checkbox with its count in the label, a short note and a closed Details disclosure: \"Also force-remove the worktrees and branches Git keeps (5)\" and \"Also delete the locked worktree\". Under them, the one stock warning is followed by a separate list of the running manually bound session, the waiting lead and its interrupted child. Confirming stops and archives all of them together. The confirming button reads \"Archive\" in the normal colour until a deletion option is ticked.",
+  description: "The confirmation offers two plain options, unchecked, each a checkbox with its count in the label, a short note and a closed Details disclosure: \"Also force-remove the worktrees and branches Git keeps (5)\" and \"Also delete the locked worktree\". Under them, the one warning is titled with the count of the sessions archived with it and holds, inside it, the list of the running manually bound session, the waiting lead and its interrupted child. Confirming stops and archives all of them together. The confirming button reads \"Archive\" in the normal colour until a deletion option is ticked.",
   sessionBranches: [
     worktreeItemOf(web, hubSessions.web, "feat/changelog-tidy", "/Users/dev/worktrees/website-changelog-tidy"),
     worktreeItemOf(web, hubSessions.web, null, "/Users/dev/worktrees/website-changelog-scratch"),
@@ -930,7 +930,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Session resume, conversation held by a session of another project",
-    description: "A danger Alert directly under the Session ID says the conversation is already held by a session in Website API, named by its task and its own name, \"Prevent duplicate API requests | Add idempotency keys\", as one chip, with the project as a chip of its own; nothing else appears below the field and the footer button is disabled.",
+    description: "A danger Alert directly under the Session ID, titled \"Could not resume this conversation\", says the conversation is already held by a session in Website API, named by its task and its own name, \"Prevent duplicate API requests | Add idempotency keys\", as one chip, with the project as a chip of its own; nothing else appears below the field and the footer button is disabled.",
     conversationLocation: { kind: "outside_project", session: "s-api-held" },
     steps: resumeLookup,
   },
@@ -941,7 +941,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Session resume, conversation held by a console session",
-    description: "A danger Alert directly under the Session ID says the conversation is already held by the console session \"Hub\" in Main; nothing else appears below the field and the footer button is disabled.",
+    description: "A danger Alert directly under the Session ID, titled \"Could not resume this conversation\", says the conversation is already held by the console session \"Hub\" in Main; nothing else appears below the field and the footer button is disabled.",
     conversationLocation: { kind: "outside_project", session: "s-console" },
     steps: resumeLookup,
   },
@@ -952,7 +952,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Session resume, no conversation with this ID",
-    description: "A danger Alert directly under the Session ID says no conversation with this ID was found in any account; nothing else appears below the field and the footer button is disabled.",
+    description: "A danger Alert directly under the Session ID, titled \"Could not resume this conversation\", says no conversation with this ID was found in any account; nothing else appears below the field and the footer button is disabled.",
     conversationLocation: { kind: "not_found" },
     steps: resumeLookup,
   },
@@ -963,7 +963,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Session resume, account holding the conversation no longer offered",
-    description: "The record sits in a Codex account that is no longer set up: a danger Alert directly under the Session ID says that the agent or account is no longer available; nothing else appears below the field and the footer button is disabled.",
+    description: "The record sits in a Codex account that is no longer set up: a danger Alert directly under the Session ID, titled \"Could not resume this conversation\", says that the agent or account is no longer available; nothing else appears below the field and the footer button is disabled.",
     conversationLocation: { kind: "record", agent: "codex", account: "a-removed" },
     steps: resumeLookup,
   },
@@ -974,7 +974,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Session resume, lookup refused",
-    description: "The daemon refused the lookup, and its reason, in the application's own words, is a danger Alert directly under the Session ID, with no Details since there is no raw text; nothing else appears below the field and the footer button is disabled.",
+    description: "The daemon refused the lookup, and its reason, in the application's own words, is a danger Alert directly under the Session ID, titled \"Could not resume this conversation\" over that reason, with no Details since there is no raw text; nothing else appears below the field and the footer button is disabled.",
     conversationLocation: { code: "unknown_project", params: { project: "p-web" }, message: "unknown project p-web" },
     steps: resumeLookup,
   },
@@ -1083,7 +1083,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Remove project with running sessions",
-    description: "The confirmation as first opened: the Trash option is unchecked, and the confirming button reads \"End and remove\" because sessions are running. Default, named and removed-directory account cases coexist in the running-sessions list; hover each agent mark.",
+    description: "The confirmation as first opened: the Trash option is unchecked, and the confirming button reads \"End and remove\" because sessions are running. The one warning is titled with the count of running sessions and holds the list of them. Default, named and removed-directory account cases coexist in the running-sessions list; hover each agent mark.",
     steps: [
       (ui) => projectActions(ui, web.name),
       (ui) => ui.press(ui.t("sidebar.project.remove")),
@@ -1094,7 +1094,7 @@ export const dialogScenarios: Scenario[] = [
     ...removeProjectTrash,
     id: "dialog-remove-project-trash-expanded",
     title: "Remove project to the Trash, lists opened",
-    description: "Both disclosures are open (What goes with it, Details), and the locked-worktree option is ticked: under the Trash option, the worktrees moved to the Trash with the folder (one on a detached HEAD) and the branches deleted permanently; under the locked option, the four locked worktrees in each wording, those with uncommitted changes ending in a soft warning \"uncommitted changes\" badge. The stock warning under the options is followed by consequence lines, including one for the locked worktrees moved to the Trash; the locked worktree's branch, now going with it, joins the branches.",
+    description: "Both disclosures are open (What goes with it, Details), and the locked-worktree option is ticked: under the Trash option, the worktrees moved to the Trash with the folder (one on a detached HEAD) and the branches deleted permanently; under the locked option, the four locked worktrees in each wording, those with uncommitted changes ending in a soft warning \"uncommitted changes\" badge. The warning under the options (\"Additional consequences\") holds the consequence lines, including one for the locked worktrees moved to the Trash; the locked worktree's branch, now going with it, joins the branches. The opened lists sit on a light grey panel, and a worktree's branch (icon and name) moves to the next line as a whole rather than breaking at a slash.",
     steps: [...removeDocsSite, (ui) => ui.press(ui.t("branchCleanup.along", { count: 4 })), (ui) => ui.pressEach(ui.t("branchCleanup.details")), (ui) => ui.press(ui.t("dialog.removeProject.alongLockedRemove", { count: 4 }))],
   },
   {
@@ -1106,7 +1106,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Remove project to the Trash, what goes along unknown",
-    description: "The Trash option is checked but the daemon could not say what else goes: the dialog's stock warning under the option is followed by a separate consequence line that outside worktrees may be moved to the Trash with the project and its branches deleted permanently, with no disclosure or locked-worktree option. Confirm stays available.",
+    description: "The Trash option is checked but the daemon could not say what else goes: the dialog's one warning under the option (\"Additional consequences\") holds a consequence line that outside worktrees may be moved to the Trash with the project and its branches deleted permanently, with no disclosure or locked-worktree option. Confirm stays available.",
     steps: removeDocsSite,
   },
   {
@@ -1163,7 +1163,7 @@ export const dialogScenarios: Scenario[] = [
     ...archiveConsoleSession,
     id: "dialog-archive-console-session-expanded",
     title: "Archive console session, lists opened",
-    description: "Both Details disclosures are open and both options ticked: under the force-remove option, the worktrees with uncommitted changes and with initialized submodules (each named by its path as plain monospace text, with its branch after a branch icon, or plain detached HEAD text) and the unmerged branch, each group under its lead line; under the locked option, the locked worktree with its row ending in a soft warning \"uncommitted changes\" badge. The stock warning under the options is followed by the affected sessions and a separate consequence line for each ticked option saying it also permanently deletes them. The confirming button reads \"Archive and delete\" in the danger colour because deletion options are ticked.",
+    description: "Both Details disclosures are open and both options ticked: under the force-remove option, the worktrees with uncommitted changes and with initialized submodules (each named by its path as plain monospace text, with its branch after a branch icon, or plain detached HEAD text) and the unmerged branch, each group under its lead line; under the locked option, the locked worktree with its row ending in a soft warning \"uncommitted changes\" badge. The one warning under the options holds the affected sessions first and, under them inside the same Alert, a consequence line for each ticked option saying it also permanently deletes them. The confirming button reads \"Archive and delete\" in the danger colour because deletion options are ticked. The opened lists sit on a light grey panel, and a worktree's branch (icon and name) moves to the next line as a whole rather than breaking at a slash.",
     steps: [
       ...archiveConsoleSession.steps!,
       (ui) => ui.pressEach(ui.t("branchCleanup.details")),
@@ -1326,7 +1326,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Edit a project whose agent cannot list its models",
-    description: "In Advanced, the project's Model picker offers the stored model alone and a danger Alert directly under it says the agent was not found, with the effort picker beneath it; the Alert follows the field, where the console dialog's matrix has one for both columns.",
+    description: "In Advanced, the project's Model picker offers the stored model alone and a danger Alert directly under it, titled \"Could not load the models\", says the agent was not found, with the effort picker beneath it; the Alert follows the field, where the console dialog's matrix has one for both columns.",
     agentModels: {
       claude: {
         models: [],
@@ -1607,7 +1607,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Project path refused",
-    description: "A danger Alert directly under the Directory field says the path does not exist, with the missing path as code in it.",
+    description: "A danger Alert directly under the Directory field, titled \"Could not check the location\", says the path does not exist, with the missing path as code in it.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
@@ -1684,7 +1684,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Unreadable Git source",
-    description: "The probe of the repository failed: a danger Alert directly under the Repository URL says it could not be read, with Git's diagnostic behind its Details button on the right, and the fields below stay locked.",
+    description: "The probe of the repository failed: a danger Alert directly under the Repository URL, titled \"Could not check the location\", says it could not be read, with Git's diagnostic behind its Details button on the right, and the fields below stay locked.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
@@ -1713,7 +1713,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "exceptional",
     title: "Edit a console whose agent cannot list its models",
-    description: "The daemon found no binary for the agent, so the model picker offers the stored model alone and a danger Alert below the launch settings table says why; the effort picker still works over what is stored.",
+    description: "The daemon found no binary for the agent, so the model picker offers the stored model alone and a danger Alert below the launch settings table, titled \"Could not load the models\", says why; the effort picker still works over what is stored.",
     state: dialogState,
     agentModels: {
       claude: {
@@ -1736,7 +1736,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "exceptional",
     title: "Model command failed with raw diagnostics",
-    description: "The model picker retains its stored choice, and one danger Alert below the launch settings table says the named agent could not list its models, with its multiline diagnostics in the Details popover on the right of the Alert.",
+    description: "The model picker retains its stored choice, and one danger Alert below the launch settings table, titled \"Could not load the models\", says the named agent could not list its models, with its multiline diagnostics in the Details popover on the right of the Alert.",
     state: dialogState,
     agentModels: { claude: { models: [], unavailable: {
       code: "models_command_failed",

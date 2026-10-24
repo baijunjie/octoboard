@@ -40,7 +40,7 @@ export const startupScenarios: Scenario[] = [
     category: "exceptional",
     title: "No daemon address",
     description:
-      "One main landmark contains the page heading and a short danger alert. The shell's port handoff and three development-server connection instructions follow outside the alert, with selectable code tokens. Use Narrow and Short to check wrapping and scrolling; Arabic shows the code inside right-to-left copy. The native-capable browser stub exposes Quit without closing the preview.",
+      "One main landmark contains the page heading, centred, and a danger alert titled \"Could not connect to the daemon\" with one line under it; the alert and the text below it start at the edge. The shell's port handoff and three development-server connection instructions follow outside the alert, with selectable code tokens. Use Narrow and Short to check wrapping and scrolling; Arabic shows the code inside right-to-left copy. The native-capable browser stub exposes Quit without closing the preview.",
     quitRequested: true,
     startup: { kind: "noAddress" },
   },
@@ -50,7 +50,7 @@ export const startupScenarios: Scenario[] = [
     category: "exceptional",
     title: "The daemon failed to start",
     description:
-      "One main landmark contains the page heading, a short danger alert and the daemon's selectable wrapping diagnostic outside it. Acknowledge the error dialog to inspect the page. Use Short to reveal the bottom fade, then Tab into the scrolling column for its focus ring and keyboard scrolling; Fit shows the whole report without a fade. The native-capable browser stub exposes Quit without closing the preview.",
+      "One main landmark contains the page heading, centred, a danger alert titled \"Could not connect to the daemon\" with one line under it, and the daemon's selectable wrapping diagnostic outside it; all but the heading and the Quit button start at the edge. Acknowledge the error dialog to inspect the page. Use Short to reveal the bottom fade, then Tab into the scrolling column for its focus ring and keyboard scrolling; Fit shows the whole report without a fade. The native-capable browser stub exposes Quit without closing the preview.",
     quitRequested: true,
     startup: DAEMON_FAILED,
   },
@@ -60,7 +60,7 @@ export const startupScenarios: Scenario[] = [
     category: "exceptional",
     title: "The UI crashed",
     description:
-      "One main landmark contains the crash page heading, a short danger alert and a separate Try again control. Acknowledge the error dialog to inspect the page. The stack stays outside the alert in its own scroll region: use Short to see its bottom fade, then Tab onto the stack for its frame-shaped focus ring and keyboard scrolling; Fit shows it whole without a fade. The native-capable browser stub exposes Quit without closing the preview.",
+      "One main landmark contains the crash page heading, centred, a danger alert titled \"An unexpected error occurred\" over the error's message, which starts at the edge, and a separate centred Try again control. Acknowledge the error dialog to inspect the page. The stack stays outside the alert in its own scroll region: use Short to see its bottom fade, then Tab onto the stack for its frame-shaped focus ring and keyboard scrolling; Fit shows it whole without a fade. The native-capable browser stub exposes Quit without closing the preview.",
     quitRequested: true,
     startup: { kind: "crash", stack: stackOf(12) },
   },

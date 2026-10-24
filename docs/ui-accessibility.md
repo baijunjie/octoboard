@@ -49,7 +49,8 @@ The user accepts that HeroUI's accent, used as the solid accent and the focus ri
 surfaces — a selected sidebar row, a control fill and its hover, the window chrome — in exchange for one accent colour
 across the application. A selected segment of a toggle group keeps HeroUI's own selected treatment.
 
-An Alert's only custom visual treatments are its status background, HeroUI's `--{colour}-soft` for its status, and its
+An Alert always has a title, so its indicator lines up with the title's line (see "Errors shown among other
+content"). An Alert's only custom visual treatments are its status background, HeroUI's `--{colour}-soft` for its status, and its
 shadow: HeroUI's `--surface-shadow` keeps its shape but takes the status colour instead of grey, so a tinted Alert has no
 grey rim. All other
 styles and component structure stay stock HeroUI 3, as specified under "Errors shown among other content". The stock
@@ -927,8 +928,8 @@ and in its centred row the recovery action (Try again) as the primary button and
 popover holding only the raw text, as in an Alert. An Alert is for a failure shown among other
 content.
 
-The Alert holds, beside `Alert.Indicator`: an optional `Alert.Title` and an `Alert.Description` in the application's
-own words of at most two sentences — what happened, and the one main thing to do about it. At its end, in the place
+The Alert holds, beside `Alert.Indicator`: an `Alert.Title` saying what happened, and an `Alert.Description` in the
+application's own words of at most two sentences — why, when that is known, and the one main thing to do about it. At its end, in the place
 HeroUI's own Alert puts its action button, stand at most two buttons: **Details** when there is more to show, then the
 recovery action when there is one (Try again, or the action that fixes it) at the trailing edge, where the primary
 button of a trailing-aligned group goes. Details opens a popover holding the rest: first any further
@@ -942,8 +943,20 @@ a failure that is the subject's state (no common commit, not a repository, a fil
 the Alert's status colour, as HeroUI's own Alert examples do: the recovery action is the solid button of that colour
 (HeroUI's `danger` variant in a danger Alert; the same solid treatment from `--warning` / `--warning-foreground` in a
 warning one, HeroUI having no warning button), and Details is the soft button of that colour (`danger-soft`, or its
-warning counterpart), so neither reads as a neutral control dropped onto a coloured box. A short error
-that already says what happened needs no generic title repeating it.
+warning counterpart), so neither reads as a neutral control dropped onto a coloured box.
+
+Every Alert — an error, a warning, a confirmation's warning — has a title. HeroUI centres the indicator on the title's
+24px line, so an Alert that opens with its 20px description draws its first line off the glyph's centre; the title is
+what keeps them aligned, not a CSS exception. The title does not merely repeat the description. The Alert wrappers
+require it in their types, and a lint restriction keeps HeroUI's `Alert` from being used outside them.
+
+An Alert holds everything that belongs to it: its title, its description and the items it is about — the list of
+sessions a confirmation takes along, the consequence of each option ticked. Nothing of the Alert sits outside it as
+loose text. Those items are children of `Alert.Content` after `Alert.Title` and `Alert.Description`, drawn in the
+description's own text style so the Alert keeps HeroUI's stock look; never inside `Alert.Description`, which is a
+single text run. This changes nothing about what goes behind **Details**: further explanation and raw text stay in its
+popover. An error-only screen's instructions and diagnostic block are not part of the Alert and stand around it, as
+below.
 
 The Alert is HeroUI's `Alert`: `ErrorAlert` for danger status, or a warning-status `TintedAlert` for a warning, with its
 status background fill and status-coloured shadow (see "One definition per semantic colour") as its only custom visual
@@ -953,7 +966,9 @@ sizes, or replace `Alert.Title` with a heading element. Neutral absence, loading
 state presentations.
 
 A screen whose only content is the error — the startup failure and the crash screen — is the error's own surface, as
-the error alert dialog is: its heading, instructions and diagnostic block may stand around the Alert.
+the error alert dialog is: its heading, instructions and diagnostic block may stand around the Alert. The heading is
+centred over the column, as is the row of buttons under it; the Alert, the instructions and any list in them are
+start-aligned, so a list's bullets stay beside their text.
 
 #### A failure that belongs to one row
 
@@ -1096,7 +1111,7 @@ Inline references retain HeroUI's colours, soft fill and shape; the help hue is 
 fill and text come from the tint tokens shared with `StatusBadge` (see "Confirmed visual choices"); the neutral chip is
 the neutral tint (the foreground at 8% in light and 10% in dark) rather than HeroUI's `--default-soft`, which all but
 vanishes on a white surface (1.09:1). `CodeBlock` uses the shared Typography wrapper for multi-line diagnostics. Outside
-an Alert, both default to neutral and may choose a colour. `TintedAlert` supplies `CodeToneContext`, passing each status
+an Alert, both default to neutral and may choose a colour. The Alert wrappers supply `CodeToneContext`, passing each status
 straight through as the chip's colour: default stays neutral, and accent, success, warning and danger use their matching
 colours. A chip drawn off that fill — in the Alert's Details popover — leaves the tone and keeps its own colour. The
 nearest status context takes precedence over an explicit colour, including field errors and toast titles. Do not

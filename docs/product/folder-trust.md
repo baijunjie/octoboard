@@ -73,7 +73,8 @@ the named session, when the session is known — with the project's path set apa
   project is pressed without asking;
 - for Codex only, that Codex records the trust for the root of the git repository the folder is in, which covers more
   than this project when the project is a subfolder or a linked worktree;
-- a caution, tinted and set apart at the end, true for the agent that is asking: for Claude Code, that trusting lets
+- a caution, a warning alert set apart at the end, titled that the project's own configuration takes effect, and
+  under the title what that means for the agent that is asking: for Claude Code, that trusting lets
   the project's own permission rules and hooks take effect and its `.claude/settings.json` may pre-approve tool
   permissions; for Codex, that trusting lets Codex load the project's own configuration, hooks and command rules, which
   can run code even without a model request, and that the confirmation does not change Codex's sandbox or approval

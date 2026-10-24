@@ -113,15 +113,18 @@ it("says the branches could not be checked rather than that nothing moves", asyn
   const { request } = mount(sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle"), [], "fail");
   await elapse(0);
   const text = (document.body.textContent ?? "").replace(/[\u2066-\u2069]/g, "");
-  expect(text).toContain("Could not check which branches it is responsible for: Something unexpected went wrong.");
+  expect(text).toContain("Could not check which branches it is responsible for");
   expect(text).not.toContain("it is responsible for no branches");
   // The failed check is an Alert under the list it feeds, not a line of the list.
-  expect(document.body.querySelector('[data-slot="alert-root"]')?.textContent?.replace(/[\u2066-\u2069]/g, "")).toContain("Could not check which branches it is responsible for: Something unexpected went wrong.");
-  // It arrived after the dialog opened, so its description, which has no title, announces itself once the
-  // dialog's opening focus move is past; Try again is inside it and asks again.
+  const alert = document.body.querySelector('[data-slot="alert-root"]')!;
+  expect(alert.querySelector('[data-slot="alert-title"]')?.textContent).toContain("Could not check which branches it is responsible for");
+  expect(alert.querySelector('[data-slot="alert-description"]')?.textContent).toContain("Something unexpected went wrong.");
+  // It arrived after the dialog opened, so the Alert announces itself once the dialog's opening
+  // focus move is past; Try again is inside it and asks again.
   expect(document.body.querySelector('[role="alert"]')).toBeNull();
   await elapse(AFTER_FOCUS_MOVE_DELAY_MS);
   const announcement = document.body.querySelector('[role="alert"]')!;
+  expect(announcement.textContent).toContain("Could not check which branches it is responsible for");
   expect(announcement.textContent).toContain("Something unexpected went wrong.");
   const retry = [...document.body.querySelectorAll('[data-slot="alert-root"] button')].find((button) => button.textContent === "Try again") as HTMLButtonElement;
   const asked = () => request.mock.calls.filter(([body]) => body.type === "inspect_session_branches").length;

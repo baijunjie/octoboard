@@ -386,7 +386,7 @@ it("offers the stored model alone and the reason when the agent cannot list its 
   await click(buttonText("Advanced"));
   expect(document.body.textContent).toContain("Loading the models this agent offers");
   await answerModels(pending, { code: "models_timed_out", params: { agent: "claude" }, message: "" });
-  const description = pickerNamed("Model").getAttribute("aria-describedby")?.split(" ").map((id) => document.getElementById(id)).find((node) => node?.textContent === "claude took too long to list its models.");
+  const description = pickerNamed("Model").getAttribute("aria-describedby")?.split(" ").map((id) => document.getElementById(id)).find((node) => node?.textContent?.includes("claude took too long to list its models."));
   expect(description).toBeDefined();
   const agent = description!.querySelector("[data-inline-reference]")!;
   expect(agent.textContent).toBe("claude");

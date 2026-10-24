@@ -75,6 +75,39 @@ export default defineConfig(
     },
   },
   {
+    files: ["packages/ui/**/*.{ts,tsx}"],
+    rules: {
+      // Every Alert has a title. The wrappers (exempted in the next block) require it in their types.
+      "no-restricted-imports": ["error", {
+        paths: [
+          {
+            name: "@heroui/react",
+            importNames: ["Alert", "AlertRoot", "AlertIndicator", "AlertContent", "AlertTitle", "AlertDescription"],
+            message: "Use ErrorAlert, FailureAlert or TintedAlert, which require a title.",
+          },
+          {
+            name: "@heroui/react/alert",
+            message: "Use ErrorAlert, FailureAlert or TintedAlert, which require a title.",
+          },
+        ],
+        patterns: [{
+          group: ["**/AlertFrame"],
+          message: "AlertFrame draws an Alert with no title; use ErrorAlert, FailureAlert or TintedAlert.",
+        }],
+      }],
+    },
+  },
+  {
+    // The wrappers compose HeroUI's Alert through AlertFrame, and their test compares them with the stock one.
+    files: [
+      "packages/ui/src/components/AlertFrame.tsx",
+      "packages/ui/src/components/ErrorAlert.tsx",
+      "packages/ui/src/components/TintedAlert.tsx",
+      "packages/ui/src/components/ErrorAlert.test.tsx",
+    ],
+    rules: { "no-restricted-imports": "off" },
+  },
+  {
     files: source,
     plugins: { "@stylistic": stylistic },
     rules: {

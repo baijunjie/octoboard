@@ -1,4 +1,4 @@
-import { Alert, ToggleButton, ToggleButtonGroup } from "@heroui/react";
+import { ToggleButton, ToggleButtonGroup } from "@heroui/react";
 import { CircleAlert, Info, Sparkles } from "lucide-react";
 import React, { useEffect, useRef } from "react";
 import { setInteractionModality } from "react-aria";
@@ -103,13 +103,11 @@ function SampleAlert({ meaning }: { meaning: Meaning }): React.ReactElement {
   }
   const status: AlertColor = color;
   return (
-    <TintedAlert status={status}>
-      <Alert.Indicator aria-hidden="true" />
-      <Alert.Content>
-        <Alert.Title>{status === "default" ? "Nothing to show yet" : status === "accent" ? "A new version is ready" : "Settings saved"}</Alert.Title>
-        <Alert.Description>{description}</Alert.Description>
-      </Alert.Content>
-    </TintedAlert>
+    <TintedAlert
+      status={status}
+      title={status === "default" ? "Nothing to show yet" : status === "accent" ? "A new version is ready" : "Settings saved"}
+      description={description}
+    />
   );
 }
 
