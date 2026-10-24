@@ -1567,14 +1567,14 @@ export const zhHans: Translation<"other"> = {
   "settings.accounts.removeAgentTitle": "确认移除 {agent}？",
   "settings.accounts.removeAgentMessage": "{agent} 将从已添加的智能体中移除。它的账户会保留，再次添加后即可恢复。",
   "settings.accounts.removeAgentInUse": "以下内容仍在使用 {agent}，设置保持不变：",
-  "settings.accounts.removeAgentConsoles": {
-    other: "{count} 个控制台",
+  "settings.accounts.removeAgentConsolesDefault": {
+    other: "{count} 个控制台将其设为默认智能体",
   },
-  "settings.accounts.removeAgentProjects": {
-    other: "{count} 个项目",
+  "settings.accounts.removeAgentProjectsDefault": {
+    other: "{count} 个项目将其设为默认智能体",
   },
-  "settings.accounts.removeAgentSessions": {
-    other: "{count} 个会话",
+  "settings.accounts.removeAgentSessionsUsing": {
+    other: "{count} 个会话正在使用它",
   },
   "settings.accounts.removeAgentNamed": "{what}：{names}",
   "settings.addAgent.description": "只能添加已安装在此设备上的智能体。",

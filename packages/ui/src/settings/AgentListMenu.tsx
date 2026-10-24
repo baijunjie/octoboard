@@ -116,7 +116,9 @@ export function AgentMoreMenu({ agent, index, count, onMove, onRemove }: {
 }
 
 /** The confirmation of taking an agent off the added list. It says the agent's accounts are kept and, when consoles,
- * projects or sessions still use the agent, names them and says they keep their setting. */
+ * projects or sessions still use the agent, names them and says they keep their setting. Each line says how its
+ * kind uses the agent: a console or project has it as its default agent, which is not the same as running sessions of
+ * it there. */
 export function RemoveAgentDialog({ agent, onRemoved, onCancel }: {
   agent: Agent;
   onRemoved: () => void;
@@ -131,9 +133,9 @@ export function RemoveAgentDialog({ agent, onRemoved, onCancel }: {
     ? <Message id="settings.accounts.removeAgentNamed" params={{ what: count, names: joinNodes(language, names, (name, key) => <InlineReference key={key} dir="auto" wrap>{name}</InlineReference>) }} />
     : count);
   const uses = [
-    usage.consoles.length > 0 && phrase(usage.consoles, t("settings.accounts.removeAgentConsoles", { count: usage.consoles.length })),
-    usage.projects.length > 0 && phrase(usage.projects, t("settings.accounts.removeAgentProjects", { count: usage.projects.length })),
-    usage.sessions.length > 0 && phrase(usage.sessions, t("settings.accounts.removeAgentSessions", { count: usage.sessions.length })),
+    usage.consoles.length > 0 && phrase(usage.consoles, t("settings.accounts.removeAgentConsolesDefault", { count: usage.consoles.length })),
+    usage.projects.length > 0 && phrase(usage.projects, t("settings.accounts.removeAgentProjectsDefault", { count: usage.projects.length })),
+    usage.sessions.length > 0 && phrase(usage.sessions, t("settings.accounts.removeAgentSessionsUsing", { count: usage.sessions.length })),
   ].filter((use): use is React.ReactNode => use !== false);
   return (
     <ConfirmDialog

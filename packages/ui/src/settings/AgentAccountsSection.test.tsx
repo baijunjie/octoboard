@@ -570,7 +570,7 @@ it("asks before removing an agent, says its accounts are kept, and removes it on
   const dialog = document.querySelector('[role="alertdialog"], [role="dialog"]')!;
   expect(dialog.textContent).toContain("Remove Codex?");
   expect(dialog.textContent).toContain("Its accounts are kept");
-  expect(dialog.textContent).not.toContain("Still using");
+  expect(dialog.textContent).not.toContain("still use");
   expect(request).not.toHaveBeenCalled();
   await act(async () => buttonNamed(dialog, "Cancel")!.click());
   expect(request).not.toHaveBeenCalled();
@@ -591,9 +591,9 @@ it("names what still uses the agent when removing it, and says it keeps its sett
   await chooseItem("Remove agent");
   const dialog = document.querySelector('[role="alertdialog"], [role="dialog"]')!;
   const text = dialog.textContent!.replace(/[\u2066-\u2069]/g, "");
-  expect(text).toContain("1 console: Main");
-  expect(text).toContain("1 project: Site");
-  expect(text).toContain("1 session: Fix build");
+  expect(text).toContain("1 console has it as its default agent: Main");
+  expect(text).toContain("1 project has it as its default agent: Site");
+  expect(text).toContain("1 session uses it: Fix build");
   expect(text).toContain("keep that setting");
   expect(text).not.toMatch(/[()]/);
   // The names stand as chips, with no brackets around them.

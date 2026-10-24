@@ -760,7 +760,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Remove agent confirmation, agent still in use",
-    description: "Removing Claude Code, which a console and both projects have as their agent and four sessions run on: after the lead sentence, a bulleted list says what still uses it, each line a count and then the names, every name a chip with no parentheses (more than five of a kind are only counted).",
+    description: "Removing Claude Code, which a console and both projects have as their default agent and four sessions run on: after the lead sentence, a bulleted list says what still uses it. Each line says how its kind uses the agent, then the names: the console and projects have it as their default agent, the sessions use it. Every name is a chip with no parentheses (more than five of a kind are only counted).",
     state: inUseState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),

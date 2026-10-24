@@ -1724,17 +1724,17 @@ export const en = {
   "settings.accounts.removeAgentTitle": "Remove {agent}?",
   "settings.accounts.removeAgentMessage": "{agent} is taken off the list of added agents. Its accounts are kept and come back if you add it again.",
   "settings.accounts.removeAgentInUse": "These still use {agent} and keep that setting:",
-  "settings.accounts.removeAgentConsoles": {
-    one: "{count} console",
-    other: "{count} consoles",
+  "settings.accounts.removeAgentConsolesDefault": {
+    one: "{count} console has it as its default agent",
+    other: "{count} consoles have it as their default agent",
   },
-  "settings.accounts.removeAgentProjects": {
-    one: "{count} project",
-    other: "{count} projects",
+  "settings.accounts.removeAgentProjectsDefault": {
+    one: "{count} project has it as its default agent",
+    other: "{count} projects have it as their default agent",
   },
-  "settings.accounts.removeAgentSessions": {
-    one: "{count} session",
-    other: "{count} sessions",
+  "settings.accounts.removeAgentSessionsUsing": {
+    one: "{count} session uses it",
+    other: "{count} sessions use it",
   },
   "settings.accounts.removeAgentNamed": "{what}: {names}",
   "settings.addAgent.description": "Only an agent installed on this machine can be added.",

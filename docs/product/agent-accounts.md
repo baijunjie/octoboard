@@ -104,9 +104,11 @@ goes back and the refusal is shown in an error alert.
 accounts are kept and come back if it is added again. When the agent is still in use, a sentence follows saying that
 what is listed still uses the agent and keeps that setting, then a list with one item per kind of user, leaving out a
 kind with none: the consoles whose Default agent fields name it, the projects whose Default agent is it, and the
-sessions of it that are not archived. Each item gives the count of its kind ("1 console", "3 sessions"); while there
-are at most five, the count is followed by a colon and their names, each set apart as a chip ("1 console: Main"),
-and beyond five only the count is given. Its confirm button, **Remove**, is styled as destructive. Once the agent is
+sessions of it that are not archived. Each item gives the count of its kind and says how that kind uses the agent: the
+consoles and projects items say that the agent is their default agent ("2 projects have it as their default agent"),
+and the sessions item says that the sessions use it ("3 sessions use it"). While there are at most five, the item is
+followed by a colon and their names, each set apart as a chip ("1 console has it as its default agent: Main", "1 session
+uses it: Fix build"), and beyond five only the item without names is given. Its confirm button, **Remove**, is styled as destructive. Once the agent is
 removed its tab goes, keyboard focus goes back to the selected section's tab in Settings' list of sections, and the
 accounts of the agent stay stored untouched. The consoles, projects and sessions that use it keep their setting, and its sessions go on running.
 
