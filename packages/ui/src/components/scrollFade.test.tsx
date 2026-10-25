@@ -8,10 +8,12 @@ import { FadedScroller, useScrollFade } from "./scrollFade";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** The width of the content, which each test moves to say the surface started or stopped scrolling
- * sideways, and the thickness of the vertical and horizontal scrollbars the box loses room to (0 for
- * overlay ones). jsdom has
- * no layout, so the measurements the marker and the mask's scrollbar strips follow are faked from here. */
+ * sideways, its height, for whether it has anything to scroll at all, and the thickness of the
+ * vertical and horizontal scrollbars the box loses room to (0 for overlay ones). jsdom has no layout,
+ * so the measurements the marker, the mask's scrollbar strips and the fade at rest follow are faked
+ * from here. */
 let contentWidth = 100;
+let contentHeight = 100;
 let scrollbar = 0;
 let scrollbarBlock = 0;
 const BOX_WIDTH = 100;
@@ -27,13 +29,15 @@ const scrollers = {
   useScrollFade: () => <Hooked />,
 };
 
-const ORIGINALS = Object.fromEntries((["scrollWidth", "clientWidth", "clientHeight", "offsetWidth", "offsetHeight"] as const)
+const ORIGINALS = Object.fromEntries((["scrollWidth", "scrollHeight", "clientWidth", "clientHeight", "offsetWidth", "offsetHeight"] as const)
   .map((key) => [key, Object.getOwnPropertyDescriptor(HTMLElement.prototype, key)]));
 
-/** Fakes the measurements for every element, from `contentWidth`, the scrollbars and the box. */
+/** Fakes the measurements for every element, from `contentWidth`, `contentHeight`, the scrollbars and
+ * the box. */
 function fakeLayout(): () => void {
   const sizes = {
     scrollWidth: () => contentWidth,
+    scrollHeight: () => contentHeight,
     clientWidth: () => BOX_WIDTH,
     clientHeight: () => BOX_HEIGHT,
     offsetWidth: () => BOX_WIDTH + scrollbar,
@@ -157,4 +161,63 @@ it("counts the end border into the strip, and not the start one", () => {
   [scrollbar, scrollbarBlock] = [2, 2];
   const { scroller } = mount(<FadedScroller data-testid="scroller" style={{ border: "1px solid" }} />);
   expect(strips(scroller())).toEqual(["1px", "1px"]);
+});
+
+/** Lets HeroUI's overflow watch see a change: its observer runs, then the frame it reports from. */
+async function settle(): Promise<void> {
+  await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+}
+
+// A scroll timeline that goes inactive keeps its animation at the progress it had last, so content
+// that shrinks to fit while scrolled would leave the start edge faded with nothing to scroll.
+it.each(Object.entries(scrollers))("%s takes the fade's animation off while it has nothing to scroll", async (_name, Scroller) => {
+  contentHeight = 500;
+  const { scroller } = mount(<Scroller />);
+  await settle();
+  expect(scroller().style.animation).toBe("");
+
+  contentHeight = BOX_HEIGHT;
+  scroller().append(document.createElement("span"));
+  await settle();
+  expect(scroller().style.animation).toBe("none");
+
+  contentHeight = 500;
+  scroller().append(document.createElement("span"));
+  await settle();
+  expect(scroller().style.animation).toBe("");
+});
+
+// HeroUI's overflow watch stays on the element it was attached to, so one put in its place would
+// otherwise keep the old element's rest, and with it no fade at all.
+it("gives the fade back to a scroller put in the place of one at rest", async () => {
+  contentHeight = BOX_HEIGHT;
+  const { scroller } = mount(<Keyed />);
+  await settle();
+  expect(scroller().style.animation).toBe("none");
+
+  contentHeight = 500;
+  act(() => document.querySelector("button")!.click());
+  // before the watch has reported on the new element at all
+  expect(scroller().style.animation).toBe("");
+  await settle();
+  expect(scroller().style.animation).toBe("");
+});
+
+// The watch moves with the element: one that fits when it takes the old one's place and grows later
+// is followed through both.
+it("follows a scroller put in the place of an overflowing one as it starts to overflow", async () => {
+  contentHeight = 500;
+  const { scroller } = mount(<Keyed />);
+  await settle();
+  expect(scroller().style.animation).toBe("");
+
+  contentHeight = BOX_HEIGHT;
+  act(() => document.querySelector("button")!.click());
+  await settle();
+  expect(scroller().style.animation).toBe("none");
+
+  contentHeight = 500;
+  scroller().append(document.createElement("span"));
+  await settle();
+  expect(scroller().style.animation).toBe("");
 });

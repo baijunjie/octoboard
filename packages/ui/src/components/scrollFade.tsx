@@ -1,6 +1,6 @@
 import { ScrollShadow, scrollShadowVariants, useScrollShadow, type ScrollShadowVisibility } from "@heroui/react";
 import type React from "react";
-import { useEffect, useLayoutEffect, useState, type CSSProperties, type Ref, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState, type CSSProperties, type Ref, type RefObject } from "react";
 import { useObjectRef } from "react-aria";
 
 import { useFocusVisibleProps } from "./useFocusVisibleProps";
@@ -28,6 +28,44 @@ function scrollPadding(orientation: Orientation, endInset = 0): CSSProperties {
 
 /** What draws no fade: the scroll-driven mask and its animation, off. */
 const NO_FADE: CSSProperties = { maskImage: "none", WebkitMaskImage: "none", animation: "none" };
+
+/**
+ * The scroll-driven fade, taken off while the scroller has nothing to scroll. A scroll timeline goes
+ * inactive once its scroller stops overflowing, which should drop both fades to 0px, but Chromium and
+ * WebKit both keep the animation at the progress it had last: content that shrinks to fit, or a box
+ * that grows around it, while scrolled away from the start leaves the start edge faded with nothing
+ * left to scroll it clear. Removing the animation drops that stale progress, and putting it back
+ * once there is overflow again starts it fresh on the live timeline. Only the animation goes: the
+ * mask stays, so the scroller remains the stacking context it is while it overflows.
+ *
+ * The overflow is the one HeroUI's watch reports, which also follows content that changes inside a
+ * box of fixed size; until its first report nothing is taken off. That watch attaches once per
+ * container ref, so `watchRef` is a new one for each element the caller's ref points at: given to
+ * `useScrollShadow`, it moves the watch to a scroller React replaced in place (the viewer's document on
+ * a new subject), which gets the animation back before paint until the watch reports on it.
+ */
+function useFadeAtRest(ref: RefObject<HTMLElement | null>, onVisibilityChange: ((visibility: ScrollShadowVisibility) => void) | undefined): {
+  style: CSSProperties;
+  onVisibilityChange: (visibility: ScrollShadowVisibility) => void;
+  watchRef: RefObject<HTMLElement | null>;
+} {
+  const [atRest, setAtRest] = useState(false);
+  const [element, setElement] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (ref.current === element) return;
+    setElement(ref.current);
+    setAtRest(false);
+  });
+  const watchRef = useMemo(() => ({ current: element }), [element]);
+  return {
+    watchRef,
+    style: atRest ? { animation: "none" } : {},
+    onVisibilityChange: (visibility) => {
+      setAtRest(visibility === "none");
+      onVisibilityChange?.(visibility);
+    },
+  };
+}
 
 /** The room the scrollbars take at the box's end edges, measured: the scrollbar plus the end border,
  * since both the mask and the sticky overlays are placed from the border box's edge. An overlay
@@ -197,6 +235,7 @@ type FadedScrollerProps = Omit<React.ComponentProps<typeof ScrollShadow>, "size"
 export function FadedScroller({ orientation = "vertical", region, style, className, ref: forwarded, stickyHeadingHeight, stickySurface, fade = true, endInset, ...props }: FadedScrollerProps): React.ReactElement {
   const ref = useObjectRef(forwarded);
   const strips = useScrollbarStrips(ref, orientation);
+  const rest = useFadeAtRest(ref, region?.onVisibilityChange);
   const [visibility, setVisibility] = useState<ScrollShadowVisibility>("none");
   const [topOffset, setTopOffset] = useState(stickyHeadingHeight ?? 0);
   // Like `useScrollbarStrips`, it re-runs on every commit, to pick up children React replaced.
@@ -229,10 +268,10 @@ export function FadedScroller({ orientation = "vertical", region, style, classNa
       ref={ref}
       onVisibilityChange={(value) => {
         if (stickyHeadingHeight !== undefined) setVisibility(value);
-        region?.onVisibilityChange?.(value);
+        rest.onVisibilityChange(value);
       }}
       {...region?.props}
-      style={{ ...scrollPadding(orientation, endInset), ...(fade ? {} : NO_FADE), ...style, ...strips.style, ...(stickyHeadingHeight === undefined ? {} : {
+      style={{ ...scrollPadding(orientation, endInset), ...(fade ? {} : NO_FADE), ...style, ...strips.style, ...rest.style, ...(stickyHeadingHeight === undefined ? {} : {
         maskImage: "none", WebkitMaskImage: "none", animation: "none",
         scrollPaddingTop: stickyScrollPaddingTop(stickyHeadingHeight),
       }) }}
@@ -326,7 +365,8 @@ export function useStickyScrollFade({ ref: forwarded, className, stickyHeadingHe
  * HeroUI's mask comes from its classes, so this applies those to the element itself. Where
  * `animation-timeline: scroll()` is supported the fade is pure CSS, keyed on the
  * `data-scroll-shadow-mode="auto"` this sets; `useScrollShadow` is called for the engines without
- * scroll timelines (an older WKWebView, say), whose `data-*` attributes the fade follows there.
+ * scroll timelines (an older WKWebView, say), whose `data-*` attributes the fade follows there, and in
+ * every engine for the overflow that takes the animation off at rest (`useFadeAtRest`).
  *
  * The element is a `div` unless the type parameter says otherwise (a `pre` of preformatted text).
  *
@@ -359,11 +399,12 @@ export function useScrollFade<T extends HTMLElement = HTMLDivElement>({
   "data-scrolls-sideways"?: true;
 } & RegionProps {
   const ref = useObjectRef(forwarded);
+  const rest = useFadeAtRest(ref as RefObject<HTMLElement | null>, region?.onVisibilityChange);
   useScrollShadow({
-    containerRef: ref as RefObject<HTMLElement>,
+    containerRef: rest.watchRef as RefObject<HTMLElement>,
     isEnabled: true,
     offset: 0,
-    onVisibilityChange: region?.onVisibilityChange,
+    onVisibilityChange: rest.onVisibilityChange,
     orientation,
     visibility: "auto",
   });
@@ -373,7 +414,7 @@ export function useScrollFade<T extends HTMLElement = HTMLDivElement>({
     ...strips.marker,
     ref,
     className: joinClasses(scrollShadowVariants({ orientation }).base(), className, region?.className),
-    style: { "--scroll-shadow-size": `${FADE_SIZE}px`, ...scrollPadding(orientation), ...style, ...strips.style } as CSSProperties,
+    style: { "--scroll-shadow-size": `${FADE_SIZE}px`, ...scrollPadding(orientation), ...style, ...strips.style, ...rest.style } as CSSProperties,
     "data-scroll-shadow-mode": "auto",
   };
 }
