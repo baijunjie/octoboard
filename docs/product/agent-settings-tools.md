@@ -15,16 +15,33 @@ tool is in the tool tables of `docs/product/hub-orchestration.md`; this document
 **One rule decides which settings the tools expose: an agent may help the user configure most of Octoboard, but not what
 must be done by the user personally.** Every setting of a console, its projects and the application that the sections
 below list is exposed under that rule. What must be done by the user personally is never available through these tools,
-to any session: changing a project's directory, source, host or remote URL; giving or taking away a project's trust
-permission; removing a project; creating or deleting a console; setting or removing a console's avatar; reading, setting
-or clearing a console's console session instructions (see "Console session instructions" in `docs/product/consoles.md`);
-adding, editing or removing an account, or turning one off or back on; adding or removing a trusted folder; reading or changing whether session
-requests or resume requests are approved automatically (see "Approving requests automatically" in
-`docs/product/session-requests.md`), since a session could otherwise approve its own requests; reading or changing
-whether usage windows are started automatically (see "Start usage windows automatically" in
-`docs/product/settings.md`), since that spends the user's quota. Each of those stays the user's own, in the UI. Nor
-do the tools reach what a window keeps for itself rather than the daemon, such as the appearance, Markdown style,
-language and keyboard shortcuts.
+to any session:
+
+- changing a project's directory, source, host or remote URL;
+- giving or taking away a project's trust permission;
+- removing a project;
+- creating or deleting a console;
+- setting or removing a console's avatar;
+- reading, setting or clearing a console's console session instructions (see "Console session instructions" in
+  `docs/product/consoles.md`);
+- adding, editing or removing an account, or turning one off or back on;
+- adding or removing a trusted folder;
+- adding, removing or reordering agents (see "Added agents" and "Reordering and removing an agent" in
+  `docs/product/agent-accounts.md`), since the list of added agents decides whether a new session of an agent may be
+  opened, or a session handed off to it, at all, from the window or by an agent's tool: a session could otherwise add
+  an agent the user removed or never added and start sessions on it, and which agents Octoboard runs, and in what
+  order they are offered, is the user's own choice;
+- reading or changing Claude Code's approval mode or Codex's approval reviewer (see "Approval modes" in
+  `docs/product/agent-accounts.md`), since a session could otherwise lift the permission prompts of the sessions
+  launched after it, its own next resume included, for instance by switching Claude Code to Approve everything;
+- reading or changing whether session requests, resume requests, account switches or handoffs are approved
+  automatically (see "Approving requests automatically" in `docs/product/session-requests.md`), since a session could
+  otherwise approve its own requests;
+- reading or changing whether usage windows are started automatically (see "Start usage windows automatically" in
+  `docs/product/settings.md`), since that spends the user's quota.
+
+Each of those stays the user's own, in the UI. Nor do the tools reach what a window keeps for itself rather than the
+daemon, such as the appearance, Markdown style, language and keyboard shortcuts.
 
 The console session's instructions tell it that projects, its console and the application settings belong to the
 user: it changes one only when asked to, says what it changed, and treats accounts and trusted folders as read-only.
