@@ -19,10 +19,12 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { loadEnv } from "../../../scripts/env.mjs";
 import {
+  appDir,
   assertLayeredIcon,
   findBundle,
   removeUpdateArchives,
   tauriBuild,
+  UNIVERSAL_ARCHITECTURES,
   UNIVERSAL_TARGET,
   universalBundleDir as bundleDir,
   withoutUpdaterArtifacts,
@@ -97,29 +99,41 @@ if (!signingIdentity) {
   mode = "notarized";
 }
 
-// A release runs on both Mac architectures: one universal `.app`, so one update archive serves every Mac. The Rust
-// targets of both must be installed (`rustup target add aarch64-apple-darwin x86_64-apple-darwin`).
+// `tauri.conf.json` has the build make the update archive, which it cannot sign without the key. An unsigned
+// build is for checking only and is never published, so it makes no archive and needs no key. An empty value counts
+// as unset, as the loader treats it (see `APPLE_ID` above); the value is a path to the key file or the key itself.
+if (mode !== "unsigned" && !process.env.TAURI_SIGNING_PRIVATE_KEY) {
+  throw new Error(
+    "A signed release signs the update archive with the update key, and TAURI_SIGNING_PRIVATE_KEY is not set. " +
+      "Set it to the path of the key file (the one `pnpm tauri signer generate` wrote) in .env.secret, and " +
+      "TAURI_SIGNING_PRIVATE_KEY_PASSWORD too when the key has a password. See .env.secret.example and " +
+      "apps/desktop/README.md.",
+  );
+}
+
+// A release runs on both Mac architectures: one universal `.app`, so one update archive serves every Mac. Their Rust
+// targets are added here rather than in `rust-toolchain.toml`, which would make every build that uses the toolchain,
+// CI on Linux included, download them; adding a target that is already installed does nothing. It runs in the app
+// directory so that rustup adds them to the toolchain `rust-toolchain.toml` pins, the one the build uses.
 const TARGET = ["--target", UNIVERSAL_TARGET];
+try {
+  execFileSync("rustup", ["target", "add", ...UNIVERSAL_ARCHITECTURES], { stdio: "inherit", cwd: appDir });
+} catch (err) {
+  throw new Error(
+    `Could not add the Rust targets ${UNIVERSAL_ARCHITECTURES.join(" and ")} a universal build needs ` +
+      `(${err.message}). The toolchain is managed by rustup: make sure it is on the PATH, add them with ` +
+      `\`rustup target add ${UNIVERSAL_ARCHITECTURES.join(" ")}\`, then run \`pnpm release\` again.`,
+    { cause: err },
+  );
+}
 
 // The archive is named without a version, so one an earlier signed build left would pass for this build's when
 // this one makes none (an unsigned build) or fails before writing it.
 removeUpdateArchives(path.join(bundleDir, "macos"));
 
-// `tauri.conf.json` has the build make the update archive, which it cannot sign without the key. An unsigned
-// build is for checking only and is never published, so it makes no archive and needs no key.
 if (mode === "unsigned") {
   tauriBuild(TARGET, withoutUpdaterArtifacts(process.env));
 } else {
-  // An empty value counts as unset, as the loader treats it (see `APPLE_ID` above); the value is a path to the key
-  // file or the key itself.
-  if (!process.env.TAURI_SIGNING_PRIVATE_KEY) {
-    throw new Error(
-      "A signed release signs the update archive with the update key, and TAURI_SIGNING_PRIVATE_KEY is not set. " +
-        "Set it to the path of the key file (the one `pnpm tauri signer generate` wrote) in .env.secret, and " +
-        "TAURI_SIGNING_PRIVATE_KEY_PASSWORD too when the key has a password. See .env.secret.example and " +
-        "apps/desktop/README.md.",
-    );
-  }
   // The CLI prompts for a password when the variable is absent, and a key made with an empty password needs the
   // empty one: set but empty, which the CLI counts as given (unlike the loader, see above).
   tauriBuild(TARGET, { ...process.env, TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ?? "" });

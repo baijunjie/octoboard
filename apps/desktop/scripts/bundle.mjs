@@ -1,7 +1,8 @@
 // What the desktop build scripts share around `tauri build`: running it (the Tauri CLI binary, its
-// environment and working directory), where its output lands, the lookup for the bundle file it
-// produced, the version an `.app` says it is, the check that it carries the layered icon, the removal of the
-// update archives a build leaves behind, and the environment of a build that makes no update archive.
+// environment and working directory), the universal target and the architectures it is made of, where its
+// output lands, the lookup for the bundle file it produced, the version an `.app` says it is, the check that it
+// carries the layered icon, the removal of the update archives a build leaves behind, and the environment of a
+// build that makes no update archive.
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -15,6 +16,8 @@ export const bundleDir = path.join(repoRoot, "target", "release", "bundle");
 // A release is one universal build (both Mac architectures in one `.app`), which lands under its target's own
 // directory instead.
 export const UNIVERSAL_TARGET = "universal-apple-darwin";
+// The architectures a universal build is made of, each a Rust target the build compiles for.
+export const UNIVERSAL_ARCHITECTURES = ["aarch64-apple-darwin", "x86_64-apple-darwin"];
 export const universalBundleDir = path.join(repoRoot, "target", UNIVERSAL_TARGET, "release", "bundle");
 const tauriBin = path.join(appDir, "node_modules", ".bin", "tauri");
 

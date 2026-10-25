@@ -24,7 +24,9 @@ checked with `cargo`. `src-tauri/` is a member of the root Cargo workspace along
   `src-tauri/binaries/`. Run it once before `pnpm tauri dev` or any `cargo build` that includes `src-tauri/` (including a
   workspace-wide one from the root), and again when `apps/daemon/` changes. Without it the build fails at compile time,
   saying the `binaries/octoboardd-<target triple>` resource does not exist. `pnpm build:daemon --universal` builds
-  the sidecars of a universal release (below) ahead of time, as `pnpm release` does through Tauri.
+  the sidecars of a universal release (below) ahead of time, as `pnpm release` does through Tauri; unlike
+  `pnpm release` it does not add the two Rust targets, so on a machine without them run
+  `rustup target add aarch64-apple-darwin x86_64-apple-darwin` first.
 - `pnpm test:rust` (from the repository root, `scripts/test-rust.mjs`) — runs `cargo test --workspace`, the tests of
   both crates in one invocation, so their shared dependencies build once. It sets `TAURI_CONFIG` to empty
   `bundle.externalBin`, which the tests can do because they never start the sidecar, so it needs no daemon build; a
@@ -78,11 +80,11 @@ be updated again, and with it leaked, anyone can ship an update to every one of 
 that `Octoboard.app.tar.gz` and its `.sig` exist next to the `.app`; the build first deletes the ones an earlier build left, so
 they are always this build's.
 
-A universal build needs both Rust targets (`rustup target add aarch64-apple-darwin x86_64-apple-darwin`). For it
-`scripts/build-daemon.mjs`, which Tauri runs as `beforeBuildCommand`, sees `TAURI_ENV_TARGET_TRIPLE` and builds the daemon
-for both architectures into `src-tauri/binaries/` (`octoboardd-<triple>` for each, which each per-architecture build
-resolves, and their `lipo` join `octoboardd-universal-apple-darwin`, which the bundler wants). `pnpm build:app` and
-`pnpm build:install` stay on the host's architecture.
+A universal build needs both Rust targets, which `pnpm release` adds with `rustup target add` before building (doing
+nothing when they are there). For it `scripts/build-daemon.mjs`, which Tauri runs as `beforeBuildCommand`, sees
+`TAURI_ENV_TARGET_TRIPLE` and builds the daemon for both architectures into `src-tauri/binaries/` (`octoboardd-<triple>`
+for each, which each per-architecture build resolves, and their `lipo` join `octoboardd-universal-apple-darwin`, which
+the bundler wants). `pnpm build:app` and `pnpm build:install` stay on the host's architecture.
 
 Like `pnpm build:install`, it needs Xcode 26's `actool` as the selected developer directory and fails when the `.app` lacks
 the layered app icon.
@@ -189,5 +191,5 @@ window theme, window show and window drag/zoom commands the UI uses.
 | `src-tauri/icons/tray-template.png` | The menu bar icon's monochrome template image, derived by hand from the app icon; no script regenerates it |
 | `scripts/build-daemon.mjs`, `scripts/build-app.mjs`, `scripts/install-app.mjs`, `scripts/release.mjs`, `scripts/publish-release.mjs` | The build, local-verification, local-install, release and release-publishing scripts above |
 | `scripts/release-manifest.mjs` | What `publish-release.mjs` decides without GitHub: manifests per version, asset names and addresses, the manifest itself (tested by `scripts/release-manifest.test.mjs`) |
-| `scripts/bundle.mjs` | Shared by the build scripts: `tauriBuild` (runs `tauri build` in this directory with `scripts/actool/` first on the `PATH`), where its output lands, `universalBundleDir` (where a release's output lands), the lookup for the bundle it produced, `appVersion` (the version an `.app` says it is), `removeUpdateArchives` (clears earlier builds' update archives), `assertLayeredIcon` (checks the `.app` for the compiled layered icon) and `withoutUpdaterArtifacts` (the environment of a build that makes no update archive) |
+| `scripts/bundle.mjs` | Shared by the build scripts: `tauriBuild` (runs `tauri build` in this directory with `scripts/actool/` first on the `PATH`), where its output lands, `UNIVERSAL_TARGET` and `UNIVERSAL_ARCHITECTURES` (a release's target and the architectures it is made of), `universalBundleDir` (where a release's output lands), the lookup for the bundle it produced, `appVersion` (the version an `.app` says it is), `removeUpdateArchives` (clears earlier builds' update archives), `assertLayeredIcon` (checks the `.app` for the compiled layered icon) and `withoutUpdaterArtifacts` (the environment of a build that makes no update archive) |
 | `scripts/actool/actool` | A shim for Xcode's `actool` that runs it with stdin on `/dev/null`, working around the Node-hosted Tauri CLI starting it with stdin closed; temporary, to be removed once the upstream fix ships |

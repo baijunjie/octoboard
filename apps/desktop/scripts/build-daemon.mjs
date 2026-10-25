@@ -12,13 +12,11 @@ import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { UNIVERSAL_ARCHITECTURES as ARCHITECTURES, UNIVERSAL_TARGET as UNIVERSAL } from "./bundle.mjs";
 
 const appDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const repoRoot = path.dirname(path.dirname(appDir));
 const binariesDir = path.join(appDir, "src-tauri", "binaries");
-
-const UNIVERSAL = "universal-apple-darwin";
-const ARCHITECTURES = ["aarch64-apple-darwin", "x86_64-apple-darwin"];
 
 // A universal release (`pnpm release`, which passes `--target universal-apple-darwin` to `tauri build`) is
 // announced to this script, run as `beforeBuildCommand`, through `TAURI_ENV_TARGET_TRIPLE`. Tauri then builds the
