@@ -382,9 +382,20 @@ html {
    window is. A mark of meaning drawn on a surface takes HeroUI's soft foreground of that colour (see
    docs/ui-accessibility.md's "One definition per semantic colour" section), not the solid colour. The
    ring's track is the foreground at 20% rather than HeroUI's `--default`, which vanishes on a selected
-   sidebar row and a control fill. */
+   sidebar row and a control fill. Its stroke is 6 of the 36-unit view box (about 2px at its 12px size)
+   in place of HeroUI's 4, which reads as a hairline that small; the radius stays HeroUI's, which its
+   arc length is computed from, so the stroke grows outwards past the view box as well as inwards. */
 .context-ring {
   --progress-circle-track-stroke: color-mix(in oklab, var(--foreground) 20%, transparent);
+}
+
+.context-ring .progress-circle__track {
+  overflow: visible;
+}
+
+.context-ring .progress-circle__track-circle,
+.context-ring .progress-circle__fill-circle {
+  stroke-width: 6;
 }
 
 .context-tone--accent {
