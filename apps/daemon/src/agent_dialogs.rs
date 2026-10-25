@@ -124,6 +124,19 @@ const DIALOGS: &[Entry] = &[
         WrittenMessage::Discarded,
         &["Entertocontinue\u{B7}Esctocancel"],
     ),
+    // Offered once an account's settings name a default mode other than auto, at a launch or once a
+    // turn ends: a paste is dropped and the Enter picks the focused Yes, which writes auto into the
+    // account's settings. It has no footer, so its Yes option, which does not vary with the mode,
+    // stands in for one.
+    entry(
+        Agent::Claude,
+        "claude_auto_mode_default",
+        WrittenMessage::Discarded,
+        &[
+            "Makeautomodeyourdefaultpermissionmode?",
+            "Yes,setautomodeasmydefaultpermissionmode",
+        ],
+    ),
     // Focus moved from the prompt to the task list under the prompt box: a paste is dropped, and
     // the Enter opens a subagent's view (or, on the main row inside one, returns to the
     // conversation). The hints are rows of their own, so a transcript quoting them in a sentence
@@ -319,6 +332,10 @@ mod tests {
     // Inside a subagent's view with the list focused, where the hint shows the focus.
     const VIEW_LIST_FOCUS: &str = "\u{276F} Message @general-purpose\u{2026}\n  \u{2191}/\u{2193} to select\n\u{276F} \u{25EF} main\n  \u{23FA} general-purpose  Slow probe agent\n";
     const VIEW_AGENT_ROW_FOCUS: &str = "\u{276F} Message @general-purpose\u{2026}\n  Enter to view \u{B7} x to stop\n  \u{25EF} main\n\u{276F} \u{23FA} general-purpose  Slow probe agent\n";
+    // Claude Code 2.1.310's prompt to make auto mode the default, as drawn under the transcript;
+    // it has no footer.
+    const AUTO_DEFAULT: &str = "\u{23FA} Auto mode lets Claude handle permission prompts automatically.\n\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\n Make auto mode your default permission mode?\n\n  Auto mode lets Claude handle permission prompts automatically. Claude checks each tool call for risky actions and\n  prompt injection before executing, runs the ones it assesses as lower-risk, and blocks the rest.\n\n  \u{276F} Yes, set auto mode as my default permission mode\n    No, keep manual mode\n";
+    const AUTO_DEFAULT_NO_FOCUSED: &str = " Make auto mode your default permission mode?\n\n  Auto mode lets Claude handle permission prompts automatically.\n\n    Yes, set auto mode as my default permission mode\n  \u{276F} No, keep accept edits\n";
     const AGENTS_VIEW: &str = "New sessions: Opus 5.5 · medium effort\n0 awaiting input · 1 working · 0 completed\nYour conversation moved to the background — enter opens it · esc returns to it\n❯ describe a task for a new session\n  enter to return · space to reply · ctrl+x to delete · ? for shortcuts\n";
 
     #[test]
@@ -353,6 +370,12 @@ mod tests {
             ),
             (Agent::Claude, AGENTS_VIEW, "claude_agents_view"),
             (Agent::Claude, CLAUDE_NOTICE, "claude_notice"),
+            (Agent::Claude, AUTO_DEFAULT, "claude_auto_mode_default"),
+            (
+                Agent::Claude,
+                AUTO_DEFAULT_NO_FOCUSED,
+                "claude_auto_mode_default",
+            ),
         ] {
             assert_eq!(recognise(agent, screen).map(|d| d.code), Some(code));
             for other in [Agent::Claude, Agent::Codex, Agent::Grok] {
@@ -377,6 +400,7 @@ mod tests {
         );
         assert_eq!(written(VIEW_LIST_FOCUS), WrittenMessage::Discarded);
         assert_eq!(written(AGENTS_VIEW), WrittenMessage::Diverted);
+        assert_eq!(written(AUTO_DEFAULT), WrittenMessage::Discarded);
     }
 
     #[test]
@@ -402,6 +426,8 @@ mod tests {
             "\u{276F} \n  \u{23FA} main\n  \u{25EF} main-loop  Poll the queue        8s\n",
             // A transcript quoting the agent list's hints in a sentence.
             "\u{25CF} matches \u{300C}\u{2191}/\u{2193} to select\u{300D} and \u{300C}Enter to view \u{B7} x to stop\u{300D}\n",
+            // A transcript quoting the auto mode prompt's title, without its option.
+            "> why did it ask \"Make auto mode your default permission mode?\"\n",
             "",
         ] {
             assert_eq!(recognise(Agent::Claude, screen), None, "{screen}");

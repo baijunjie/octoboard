@@ -101,6 +101,7 @@ the session is queued as above. Each has a code, which the owners' tools report 
 | Claude Code | "Resume this conversation?" coming up by itself in an idle session | `claude_resume_idle` |
 | Claude Code | "Resume from summary", offered at a resume | `claude_resume_from_summary` |
 | Claude Code | A notice that waits for Enter, ending "Enter to continue · Esc to cancel" | `claude_notice` |
+| Claude Code | "Make auto mode your default permission mode?", offered once when the account's settings name a default permission mode other than auto, after the prompt box at a launch or once a turn ends; its focused answer, picked by a message's Enter, would make auto the account's default | `claude_auto_mode_default` |
 | Claude Code | Its list of background agents under the prompt box, with the focus moved onto it | `claude_agent_list_focus` |
 | Claude Code | A background subagent's view, showing that subagent's transcript in place of the conversation | `claude_subagent_view` |
 | Claude Code | Its agents view, where what is typed starts another background session | `claude_agents_view` |
@@ -251,12 +252,13 @@ reported the prompt sent in time and such a screen came up meanwhile, what becam
 screen:
 
 - **A dialog that throws the message away** — "Resume this conversation?" at a launch, "Resume from summary", a notice
-  that waits for Enter, or the focused list of background agents. Nothing of the message is in the input box. It goes
-  back to the front of the session's queue and is written again once the dialog is gone, and, being written again, it
-  is checked again. No unsent hold is set. When the message's own Enter has already closed the dialog, it is written
-  again straight away, within the same delivery — at most once per delivery, so a dialog that every write brings back
-  cannot keep the sender waiting; a dialog still up, or one that comes back, leaves the message queued until it is
-  gone. Every client is sent the `message_discarded_by_dialog` notice about the session, naming its agent, provided
+  that waits for Enter, "Make auto mode your default permission mode?", or the focused list of background agents.
+  Nothing of the message is in the input box. It goes back to the front of the session's queue and is written again
+  once the dialog is gone, and, being written again, it is checked again. No unsent hold is set. When the message's
+  own Enter has already closed the dialog, it is written again straight away, within the same delivery — at most once
+  per delivery, so a dialog that every write brings back cannot keep the sender waiting; a dialog still up, or one
+  that comes back, leaves the message queued until it is gone. Every client is sent the `message_discarded_by_dialog`
+  notice about the session, naming its agent, provided
   the process written to is still running; the window shows it as a toast (see `docs/product/toasts.md`), not an error alert,
   titled with where the session is, saying the agent showed a dialog while Octoboard wrote a message into the session
   and discarded it, and that the message is written again once the dialog has been answered. A sender is told what

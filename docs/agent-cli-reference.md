@@ -304,6 +304,20 @@ ending "Enter to continue · Esc to cancel" (the rewind dialog's footer too), wi
 lost: its Enter dismissed the notice and the text went nowhere. Octoboard holds its writes while that footer is on
 screen.
 
+**"Make auto mode your default permission mode?"** (2.1.310, read from the executable and reproduced with a fake key
+against a local stub). Offered once per launch while the config directory's `.claude.json` has no
+`hasSeenAutoDefaultNudge`, its user settings set `permissions.defaultMode` to anything but `auto` (a fresh directory,
+with none set, never shows it), no project, local, flag (`--settings`) or policy settings set a default mode, auto mode
+is available for the model, and the server flag `tengu_maple_pier` is on. Whatever `--permission-mode` the launch
+passes does not matter. It comes up under the transcript in place of the prompt box about 50–170 ms after the box
+draws, or about 20 ms after the first turn's `Stop` when the launch carried a prompt; while a draft is in the input it
+waits, behind a row reading "Claude has a question for you — it shows once you send or clear what you're typing.".
+Body text, then unnumbered rows "Yes, set auto mode as my default permission mode" (focused) and "No, keep <mode>"
+("manual mode", "accept edits"), and **no footer**. No hook fires before, during or after it. A bracketed paste is
+dropped and a CR picks the focused row; an Enter within 150 ms of it mounting is ignored. Yes switches the session to
+auto, writes `permissions.defaultMode: "auto"` into the user settings and sets `hasSeenAutoDefaultNudge`; No and Esc
+only set `hasSeenAutoDefaultNudge`. Octoboard holds its writes while its title and Yes row are on screen.
+
 **Views of background agents** (2.1.307, reproduced against a local stub). A turn that starts an `Agent` with
 `run_in_background` adds a task list under the prompt box — a filled `⏺ main` row and a row per agent — and the hint
 "↓ to manage". With the footer focused (a hint row of its own: "↑/↓ to select", or "Enter to view · x to stop" while an
