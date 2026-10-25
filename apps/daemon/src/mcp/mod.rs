@@ -32,6 +32,7 @@ mod handover;
 mod quotas;
 mod resume_request;
 pub mod role;
+mod session_branches;
 mod settings;
 pub mod stdio;
 
@@ -143,6 +144,24 @@ macro_rules! session_context_field {
     };
 }
 
+/// What every description of a session says of the fields that tell what a write tool depends on.
+/// A macro so the read tools' `&'static str` descriptions can take it with `concat!`.
+macro_rules! session_record_fields {
+    () => {
+        "`account` is the account the session runs on, an account's id or `default` for the \
+         agent's default account as `get_account_quotas` lists them, with its `account_name`; \
+         `switch_session_account` refuses the account a session is on already. \
+         `observed_model` and `observed_effort` are what the agent's records show the session \
+         running with, null until reported; `default_effort` is the effort the agent runs that \
+         model at by itself, given when the records name the model but no effort. `pinned` is \
+         whether the session is pinned (`set_session_pinned`), and `locked` whether the user \
+         locked it, which archiving refuses. `branches` names the git branches the session is \
+         responsible for; `handover_branches`, and the `branches` of `new_session` and \
+         `request_session`, need the caller to be responsible for each, and \
+         `get_session_branches` gives each one's worktree. "
+    };
+}
+
 const STARTED_BY_A_SESSION: &str = started_by_a_session!();
 
 const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
@@ -168,6 +187,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
              A non-null `writes_held` says why messages for a running session are \
              queued rather than written into it, whatever its `status` reads; \
              `queued_messages` counts them. ",
+            session_record_fields!(),
             session_context_field!()
         ),
         schema: || object_schema(json!({}), &[]),
@@ -444,6 +464,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
              A non-null `writes_held` says why messages for a running session are \
              queued rather than written into it, whatever its `status` reads; \
              `queued_messages` counts them. ",
+            session_record_fields!(),
             session_context_field!()
         ),
         schema: || {
@@ -466,6 +487,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
              them. Each carries its `owner`, `owner_kind` and `yours`, so an earlier \
              one of yours can be reopened instead of starting over. A session with \
              `yours: false` is somebody else's: leave it alone. ",
+            session_record_fields!(),
             session_context_field!()
         ),
         schema: || {
@@ -489,6 +511,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     REQUEST_SESSION,
     REQUEST_RESUME_SESSION,
     LIST_SESSIONS,
+    GET_SESSION_BRANCHES,
     SHARE_INFO,
     GET_ACCOUNT_QUOTAS,
     ToolDef {
@@ -548,7 +571,8 @@ const ARCHIVE_SESSION: ToolDef = ToolDef {
     description: "End a session's process and archive it. Use it to wrap a session up \
                   explicitly; a session that finishes cleanly with nothing left open is \
                   archived without being asked. Refused for a session that is not yours \
-                  (`yours: false`): it is somebody else's, to be left alone. The git branches the \
+                  (`yours: false`): it is somebody else's, to be left alone, and for a session \
+                  that is `locked` (see `get_session`). The git branches the \
                   sessions archived created, and the linked worktrees that have them checked \
                   out, are removed once their processes have ended, wherever git can do it without \
                   force; `branches_left` in the answer names any that stay, and why.",
@@ -603,7 +627,7 @@ const SET_SESSION_PINNED: ToolDef = ToolDef {
     name: "set_session_pinned",
     description: "Pin a session of yours to the top of its list, or unpin it. Refused for a \
                   session that is not yours (`yours: false`): it is somebody else's, to be \
-                  left alone.",
+                  left alone. `get_session` shows whether a session is `pinned`.",
     schema: || {
         object_schema(
             json!({
@@ -657,7 +681,9 @@ const HANDOVER_BRANCHES: ToolDef = ToolDef {
                   could not be read) and whether that holds uncommitted changes, which stay for \
                   the new session to deal with. The sessions concerned other than this one are \
                   told. When a session is archived, the cleanup of its branches follows whoever \
-                  is responsible for them by then.",
+                  is responsible for them by then. `branches` in `get_session` and \
+                  `list_sessions` names the branches a session is responsible for, and \
+                  `get_session_branches` gives their worktrees, so read them first.",
     schema: || {
         object_schema(
             json!({
@@ -785,7 +811,8 @@ const SWITCH_SESSION_ACCOUNT: ToolDef = ToolDef {
                   on already, and an archived session; other refusals (an account whose quota \
                   is used up, say) can come after the user has chosen. Returns the session with \
                   the account it is now on and its model and reasoning effort where it has its \
-                  own.",
+                  own. `account` in `get_session` shows the account a session is on, to match \
+                  against `get_account_quotas`.",
     schema: || {
         object_schema(
             json!({
@@ -840,6 +867,38 @@ const REPORT: ToolDef = ToolDef {
     },
 };
 
+/// The branches a session is responsible for, with their worktrees: what `handover_branches`
+/// needs the caller to be responsible for, and the branches and worktrees archiving would try to
+/// remove. Any session may read any session's.
+const GET_SESSION_BRANCHES: ToolDef = ToolDef {
+    name: "get_session_branches",
+    description: "The git branches a session is responsible for, read-only, each with the \
+                  project (`project`) it is in and the worktree it is checked out in: \
+                  `worktree_status` is `checked_out`, `gone` (git's record of the worktree is \
+                  left, the directory is not), `none` (no worktree has it) or `unknown` (it \
+                  could not be read), `worktree` its path when there is one, and \
+                  `uncommitted_changes` whether a checked-out worktree holds uncommitted changes \
+                  (null when there is no worktree or it could not be read). Use it to see which \
+                  branches `handover_branches`, or the `branches` of `new_session` and \
+                  `request_session`, can take (each must be one the session is responsible for), \
+                  and which branches and worktrees archiving the session would try to remove. \
+                  `session` is any session, of any console or project, and defaults to this \
+                  one. A console session is responsible for no branch, so its list is empty. \
+                  `branches` in `get_session` and `list_sessions` names the same branches \
+                  without the worktrees.",
+    schema: || {
+        object_schema(
+            json!({
+                "session": {
+                    "type": "string",
+                    "description": "The session's id. Defaults to this session.",
+                },
+            }),
+            &[],
+        )
+    },
+};
+
 /// What every session, of whatever kind, may do with every other running session: look at them,
 /// and tell them things. Kept apart from `send_message` so that a message arriving in a session is
 /// framed by which tool sent it: an instruction comes from its owner, and information from anyone.
@@ -859,6 +918,7 @@ const LIST_SESSIONS: ToolDef = ToolDef {
          A non-null `writes_held` says why messages for a running session are \
          queued rather than written into it, whatever its `status` reads; \
          `queued_messages` counts them. ",
+        session_record_fields!(),
         session_context_field!()
     ),
     schema: || object_schema(json!({}), &[]),
@@ -1112,6 +1172,7 @@ const GET_ACCOUNT_QUOTAS: ToolDef = ToolDef {
 const BOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     REPORT,
     LIST_SESSIONS,
+    GET_SESSION_BRANCHES,
     SHARE_INFO,
     GET_PROJECT,
     GET_ACCOUNT_QUOTAS,
@@ -1167,6 +1228,7 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
              A non-null `writes_held` says why messages for a running session are \
              queued rather than written into it, whatever its `status` reads; \
              `queued_messages` counts them. ",
+            session_record_fields!(),
             session_context_field!()
         ),
         schema: || {
@@ -1193,6 +1255,7 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     REQUEST_RESUME_SESSION,
     REPORT,
     LIST_SESSIONS,
+    GET_SESSION_BRANCHES,
     SHARE_INFO,
     GET_PROJECT,
     GET_ACCOUNT_QUOTAS,
@@ -1587,6 +1650,7 @@ mod tests {
             [
                 "report",
                 "list_sessions",
+                "get_session_branches",
                 "share_info",
                 "get_project",
                 "get_account_quotas",
@@ -1615,6 +1679,7 @@ mod tests {
                 "request_resume_session",
                 "report",
                 "list_sessions",
+                "get_session_branches",
                 "share_info",
                 "get_project",
                 "get_account_quotas"
@@ -1647,6 +1712,7 @@ mod tests {
                 "request_session",
                 "request_resume_session",
                 "list_sessions",
+                "get_session_branches",
                 "share_info",
                 "get_account_quotas",
                 "show_page"

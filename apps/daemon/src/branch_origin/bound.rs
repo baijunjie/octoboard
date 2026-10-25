@@ -30,21 +30,33 @@ pub(super) struct Bound {
 /// for. Read from the store and the reflog files only, so it starts no process.
 pub(super) fn bound_in(state: &AppState, sessions: &[Session]) -> Result<Vec<Bound>> {
     let mut repos: Vec<(PathBuf, HashMap<&str, String>)> = Vec::new();
+    // The repository of each project, found once however many of the sessions are in it.
+    let mut found: HashMap<&str, Option<(String, PathBuf)>> = HashMap::new();
     for session in sessions {
         let Some(project_id) = &session.project_id else {
             continue;
         };
-        let Some(project) = state.store.get_project(project_id)? else {
-            continue;
+        let located = match found.get(project_id.as_str()) {
+            Some(located) => located.clone(),
+            None => {
+                let located = match state.store.get_project(project_id)? {
+                    Some(project) => {
+                        repository_of(Path::new(&project.path)).map(|repo| (project.id, repo))
+                    }
+                    None => None,
+                };
+                found.insert(project_id, located.clone());
+                located
+            }
         };
-        let Some(repo) = repository_of(Path::new(&project.path)) else {
+        let Some((project, repo)) = located else {
             continue;
         };
         match repos.iter_mut().find(|(known, _)| *known == repo) {
             Some((_, of)) => {
-                of.insert(&session.id, project.id);
+                of.insert(&session.id, project);
             }
-            None => repos.push((repo, HashMap::from([(session.id.as_str(), project.id)]))),
+            None => repos.push((repo, HashMap::from([(session.id.as_str(), project)]))),
         }
     }
     let mut bound = Vec::new();
@@ -53,14 +65,16 @@ pub(super) fn bound_in(state: &AppState, sessions: &[Session]) -> Result<Vec<Bou
             .store
             .branch_origins(&repo_key(&repo))?
             .into_iter()
+            // The asked sessions' rows first: the reflog is read only for those.
+            .filter(|row| projects.contains_key(row.responsible_session.as_str()))
             .filter(|row| is_same_branch(&repo, row))
-            .filter_map(|row| {
-                let project = projects.get(row.responsible_session.as_str())?.clone();
-                Some(BoundBranch {
+            .map(|row| {
+                let project = projects[row.responsible_session.as_str()].clone();
+                BoundBranch {
                     branch: row.branch,
                     session: row.responsible_session,
                     project,
-                })
+                }
             })
             .collect();
         if !branches.is_empty() {

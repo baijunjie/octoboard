@@ -1053,12 +1053,7 @@ impl AppState {
         session.status = self.shown_status(&session);
         session.background_tasks = self.shown_background_tasks(&session);
         session.switching_account = self.is_switching_account(&session.id);
-        session.default_effort = self
-            .default_efforts
-            .lock()
-            .expect("default efforts lock poisoned")
-            .get(&session.id)
-            .cloned();
+        session.default_effort = self.default_effort_of(&session.id);
         session.terminal_title = self.resolved_title(&session, &std::cell::OnceCell::new());
         session
     }
@@ -1171,6 +1166,16 @@ impl AppState {
             None => all.remove(id),
         };
         changed
+    }
+
+    /// The effort the session's agent runs it at by itself, as [`Self::set_default_effort`] last
+    /// recorded it.
+    pub fn default_effort_of(&self, id: &str) -> Option<String> {
+        self.default_efforts
+            .lock()
+            .expect("default efforts lock poisoned")
+            .get(id)
+            .cloned()
     }
 
     /// Forgets the default effort of every session not in `ids`, the sessions that exist.

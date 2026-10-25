@@ -76,8 +76,9 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            or account only when the user asked for them. Returns the session's id. The session is \
            yours for its whole life.\n\
          - `send_message` — the next instruction for a session already running.\n\
-         - `get_session` — a session's status and a tail of its output; it reads any session, in \
-           any console.\n\
+         - `get_session` — a session's status, account, model, pin and lock, branch names and a \
+           tail of its output; it reads any session, in any console. `get_session_branches` — the \
+           branches a session is responsible for and the worktree each is checked out in.\n\
          - `rename_session` / `set_session_pinned` — retitle (in the user's conversation \
            language, as for `new_session`) or pin a session of yours.\n\
          - `archive_session` — end and archive a session you are done with.\n\

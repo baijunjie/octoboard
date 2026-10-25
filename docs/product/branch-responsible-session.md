@@ -139,6 +139,29 @@ the caller itself, and the two must differ. No approval is asked: the caller own
   responsible for (see `docs/product/branch-and-worktree-cleanup.md`), so after the move the branches go with `to` and
   no longer with `from`.
 
+## Reading the branches a session is responsible for
+
+Every session, whatever its kind — a console session, an unbound or a lead project session, or one with the role of a
+bound one — has the read-only `get_session_branches` tool. It shows beforehand what `handover_branches`, and the
+`branches` of `new_session` and `request_session`, can take — each branch they name must be one the giving session is
+responsible for — and which branches and worktrees archiving the session would try to remove (see
+`docs/product/branch-and-worktree-cleanup.md`). Nothing in git or on disk changes.
+
+- **Any session can be read.** `session` is optional and names any session on record, of any console or project,
+  archived ones included; left out, it is the caller. A session that does not exist is refused.
+- **What it answers.** `{ session, branches }`, `session` being the id of the session read and `branches` one entry
+  per branch that session is responsible for: `branch`, the branch's name; `project`, the id of the project the
+  session is in; and `worktree`, `worktree_status` and `uncommitted_changes` as the result of `handover_branches`
+  gives them for each branch moved (see "Handing branches between sessions of an owner" above). When `git` cannot be
+  run, or the worktrees cannot be listed, every branch is still listed, with `worktree_status` `unknown`, `worktree`
+  `null` and `uncommitted_changes` `null`.
+- **An empty list** for a session responsible for no branch, and always for a console session (see "Project sessions
+  only" below).
+
+The names alone are also part of every session record the orchestration tools give, as `branches` (see "The console
+session's tools" in `docs/product/hub-orchestration.md`); reading them there runs no `git`, while
+`get_session_branches` runs it to find the worktrees, and only when the session is responsible for a branch.
+
 ## When a branch gets a responsible session
 
 Every launch of a project session's agent — a fresh one, a resume or an account switch alike — points the git of

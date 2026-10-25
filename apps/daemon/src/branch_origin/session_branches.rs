@@ -2,7 +2,9 @@
 //! worktree each is checked out in, its head, what it has committed against the branch it was cut
 //! from, and whether its worktree holds uncommitted changes. Reading only; nothing is checked out,
 //! fetched or written. The worktree of named branches can also be read alone ([`worktrees_of`]), as
-//! a branch handover reports it.
+//! a branch handover reports it, and the branches a session is responsible for can be read with
+//! their worktrees alone ([`responsible_for`]) or by name only ([`names_by_session`], which runs no
+//! process), as the MCP tools report them.
 //!
 //! What a branch is compared with follows the project pane's Git mode ("Committed changes" in
 //! `docs/product/project-pane-git-change-list.md`): any branch but the main working copy's has the
@@ -11,6 +13,7 @@
 //! its name on a configured remote (`origin`'s preferred). A branch with no base has only its head
 //! and worktree read, where the Git mode would list the main working copy's whole history.
 
+use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
@@ -20,6 +23,7 @@ use anyhow::Result;
 
 use super::bound::bound_in;
 use super::git::{changes, worktrees, Git, Listed};
+use super::handover::branch_name;
 use crate::browse::{compare, wire_path};
 use crate::protocol::{Session, UpstreamInfo};
 use crate::state::AppState;
@@ -85,30 +89,87 @@ pub fn of_session(state: &AppState, session: &Session) -> Result<Vec<BranchState
     Ok(states)
 }
 
+/// The names of the branches each of `sessions` is responsible for, by session id; a session
+/// responsible for none has no entry. Read from the store and the reflog files only, so it starts
+/// no process, and the repositories of the sessions' projects are read once between them.
+/// Blocking.
+pub fn names_by_session(
+    state: &AppState,
+    sessions: &[Session],
+) -> Result<HashMap<String, Vec<String>>> {
+    let mut names: HashMap<String, Vec<String>> = HashMap::new();
+    for repo in bound_in(state, sessions)? {
+        for branch in repo.branches {
+            names
+                .entry(branch.session)
+                .or_default()
+                .push(branch_name(&branch.branch));
+        }
+    }
+    Ok(names)
+}
+
+/// A branch a session is responsible for, with the project it is in and where it is checked out.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResponsibleBranch {
+    pub project: String,
+    pub branch: String,
+    pub worktree: Worktree,
+}
+
+/// The branches `session` is responsible for with their worktrees, in the store's order. Blocking.
+/// Runs no `git` when it is responsible for none; the worktrees are as [`worktrees_of`] reads them.
+pub fn responsible_for(state: &AppState, session: &Session) -> Result<Vec<ResponsibleBranch>> {
+    let mut responsible = Vec::new();
+    for repo in bound_in(state, std::slice::from_ref(session))? {
+        let wires: Vec<String> = repo
+            .branches
+            .iter()
+            .map(|branch| branch.branch.clone())
+            .collect();
+        let worktrees = worktrees_of(state, &repo.repo, &wires);
+        responsible.extend(repo.branches.into_iter().zip(worktrees).map(
+            |(bound, (branch, worktree))| ResponsibleBranch {
+                project: bound.project,
+                branch,
+                worktree,
+            },
+        ));
+    }
+    Ok(responsible)
+}
+
 /// Where each of `branches` (wire paths) of the repository `repo` is checked out, and whether that
 /// worktree holds uncommitted changes, in the order given: the worktrees are listed once and only
-/// the checked-out ones are asked for their changes. Blocking. A failure to run `git` at all is the
-/// error; one to list the worktrees leaves every branch [`Worktree::Unknown`].
-pub fn worktrees_of(
-    state: &AppState,
-    repo: &Path,
-    branches: &[String],
-) -> Result<Vec<(String, Worktree)>> {
-    let git = (state.host_tools.get().git)()?;
-    let listed = worktrees(&git, repo);
-    Ok(branches
+/// the checked-out ones are asked for their changes. Blocking. When `git` cannot be run, or the
+/// worktrees cannot be listed, every branch is [`Worktree::Unknown`]; a failure to run `git` is
+/// logged.
+pub fn worktrees_of(state: &AppState, repo: &Path, branches: &[String]) -> Vec<(String, Worktree)> {
+    let unknown = |reason: String| {
+        branches
+            .iter()
+            .map(|wire| (branch_name(wire), Worktree::Unknown(reason.clone())))
+            .collect()
+    };
+    let git = match (state.host_tools.get().git)() {
+        Ok(git) => git,
+        Err(err) => {
+            tracing::warn!(%err, "reading the worktrees of branches failed");
+            return unknown(format!("{err:#}"));
+        }
+    };
+    let listed = match worktrees(&git, repo) {
+        Ok(listed) => listed,
+        Err(detail) => return unknown(format!("the worktrees could not be listed: {detail}")),
+    };
+    branches
         .iter()
         .map(|wire| {
             let name = wire_path::decode(wire).unwrap_or_default();
-            let worktree = match &listed {
-                Ok(listed) => worktree_of(&git, listed, &name).0,
-                Err(detail) => {
-                    Worktree::Unknown(format!("the worktrees could not be listed: {detail}"))
-                }
-            };
+            let worktree = worktree_of(&git, &listed, &name).0;
             (String::from_utf8_lossy(&name).into_owned(), worktree)
         })
-        .collect())
+        .collect()
 }
 
 /// Where the branch `name` is checked out among `listed`, and why its changes could not be read

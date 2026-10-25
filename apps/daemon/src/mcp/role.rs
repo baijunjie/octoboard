@@ -298,11 +298,14 @@ fn relationships(agent: Agent, owns: bool) -> String {
     }
     lines.push(format!(
         "- `{list_sessions}` shows the other running sessions, in every console and project, and \
-         who owns each; `{share_info}` tells any of them something that touches its work — what \
+         who owns each, with its account, model and the names of the branches it is responsible \
+         for; `{get_session_branches}` gives the worktree each of those branches is checked out \
+         in. `{share_info}` tells any of them something that touches its work — what \
          you found, decided or changed. It is information for that session to weigh, not an \
          instruction, its own owner is sent a copy, and it needs no relationship between the two \
          of you. Share what another session would otherwise trip over, not progress notes.",
         list_sessions = tool("list_sessions"),
+        get_session_branches = tool("get_session_branches"),
         share_info = tool("share_info"),
     ));
     format!("{}\n\n{}", lines.join("\n"), handover_guidance(Some(agent)))

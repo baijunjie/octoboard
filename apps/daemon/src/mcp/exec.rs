@@ -19,6 +19,7 @@
 //! told to it in prose as well: in the call's result when it made the change itself, and in a
 //! message written into it when its owner did.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Result};
@@ -29,6 +30,7 @@ use crate::branch_origin::cleanup;
 use crate::branch_origin::handover::{
     branch_name, branch_noun_and_pronoun, move_branches, named_branches, Handed, Handover,
 };
+use crate::branch_origin::session_branches;
 use crate::coordinator::{self, OpenRequest};
 use crate::git_remote;
 use crate::protocol::{
@@ -50,6 +52,7 @@ use super::bindings;
 use super::handoff;
 use super::handover::{self, branch_names, held_by};
 use super::quotas;
+use super::session_branches as session_branches_tool;
 use super::settings::{
     self, describe_project, launch_argument, project_accounts_argument, resolve_account,
     worktrees_argument,
@@ -73,7 +76,7 @@ pub async fn call(
     }
 
     match tool {
-        "list_projects" => list_projects(state, &session),
+        "list_projects" => list_projects(state, &session).await,
         "add_project" => add_project(state, &session, arguments).await,
         "update_project" => settings::update_project(state, &session, arguments).await,
         "get_console" => settings::get_console(state, &session),
@@ -83,11 +86,11 @@ pub async fn call(
         "new_session" => new_session(state, &session, arguments, crate::term::launch).await,
         "send_message" => send_message(state, &session, arguments).await,
         "get_session" => get_session(state, &session, arguments).await,
-        "rename_session" => rename_session(state, &session, arguments),
-        "set_session_pinned" => set_session_pinned(state, &session, arguments),
+        "rename_session" => rename_session(state, &session, arguments).await,
+        "set_session_pinned" => set_session_pinned(state, &session, arguments).await,
         "archive_session" => archive_session(state, &session, arguments).await,
         "archive_self" => archive_self(state, &session).await,
-        "list_archived" => list_archived(state, &session, arguments),
+        "list_archived" => list_archived(state, &session, arguments).await,
         "reopen_session" => reopen_session(state, &session, arguments).await,
         "handover_branches" => handover::handover_branches(state, &session, arguments).await,
         "handoff_session" => {
@@ -105,7 +108,10 @@ pub async fn call(
         }
         "show_page" => show_page(state, &session, arguments),
         "report" => report(state, &session, arguments).await,
-        "list_sessions" => list_sessions(state, &session),
+        "list_sessions" => list_sessions(state, &session).await,
+        "get_session_branches" => {
+            session_branches_tool::get_session_branches(state, &session, arguments).await
+        }
         "get_project" => settings::get_project(state, &session),
         "get_account_quotas" => quotas::get_account_quotas(state, arguments),
         "share_info" => share_info(state, &session, arguments).await,
@@ -122,21 +128,40 @@ pub async fn call(
     }
 }
 
+/// The names of the branches each of `sessions` is responsible for, read on the blocking pool
+/// (the store and the reflog files, and no process).
+async fn branch_names_of(
+    state: &Arc<AppState>,
+    sessions: Vec<Session>,
+) -> Result<HashMap<String, Vec<String>>> {
+    let state = state.clone();
+    tokio::task::spawn_blocking(move || session_branches::names_by_session(&state, &sessions))
+        .await?
+}
+
 // -- orchestration tools -----------------------------------------------------
 
-fn list_projects(state: &Arc<AppState>, console_session: &Session) -> Result<Value> {
+async fn list_projects(state: &Arc<AppState>, console_session: &Session) -> Result<Value> {
     let projects = console_projects(state, &console_session.console_id)?;
-    let sessions = state.store.list_sessions()?;
+    let sessions: Vec<Session> = state
+        .store
+        .list_sessions()?
+        .into_iter()
+        .filter(|session| {
+            !session.status.is_dormant()
+                && projects
+                    .iter()
+                    .any(|project| session.project_id.as_deref() == Some(&project.id))
+        })
+        .collect();
+    let branches = branch_names_of(state, sessions.clone()).await?;
     let entries = projects
         .iter()
         .map(|project| {
             let live = sessions
                 .iter()
-                .filter(|session| {
-                    session.project_id.as_deref() == Some(&project.id)
-                        && !session.status.is_dormant()
-                })
-                .map(|session| describe_session(state, session, console_session))
+                .filter(|session| session.project_id.as_deref() == Some(&project.id))
+                .map(|session| describe_session(state, session, console_session, &branches))
                 .collect::<Result<Vec<Value>>>()?;
             let mut entry = describe_project(state, project)?;
             entry["sessions"] = json!(live);
@@ -480,7 +505,8 @@ async fn get_session(
 ) -> Result<Value> {
     let target = resolve_session(state, required_str(arguments, "session")?)?;
     let output = recent_output(state, &target.id).await;
-    let mut description = describe_session(state, &target, caller)?;
+    let branches = branch_names_of(state, vec![target.clone()]).await?;
+    let mut description = describe_session(state, &target, caller, &branches)?;
     description["recent_output"] = json!(output);
     if state.shown_status(&target) == SessionStatus::WaitingUser {
         description["note"] = json!(
@@ -670,7 +696,7 @@ fn unarchived_refusal(caller_id: &str, unarchived: &[Session]) -> Option<String>
     })
 }
 
-fn rename_session(
+async fn rename_session(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
@@ -678,10 +704,11 @@ fn rename_session(
     let target = resolve_owned_session(state, caller, required_str(arguments, "session")?)?;
     let title = raw_text(arguments, "title")?.ok_or_else(|| anyhow!("`title` is required"))?;
     let renamed = coordinator::rename_session(state, &target.id, &title)?;
-    describe_session(state, &renamed, caller)
+    let branches = branch_names_of(state, vec![renamed.clone()]).await?;
+    describe_session(state, &renamed, caller, &branches)
 }
 
-fn set_session_pinned(
+async fn set_session_pinned(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
@@ -692,12 +719,11 @@ fn set_session_pinned(
         .and_then(Value::as_bool)
         .ok_or_else(|| anyhow!("`pinned` is required and must be true or false"))?;
     let updated = coordinator::set_session_pinned(state, &target.id, pinned)?;
-    let mut description = describe_session(state, &updated, caller)?;
-    description["pinned"] = json!(updated.pinned);
-    Ok(description)
+    let branches = branch_names_of(state, vec![updated.clone()]).await?;
+    describe_session(state, &updated, caller, &branches)
 }
 
-fn list_archived(
+async fn list_archived(
     state: &Arc<AppState>,
     console_session: &Session,
     arguments: &Map<String, Value>,
@@ -707,15 +733,19 @@ fn list_archived(
         &console_session.console_id,
         required_str(arguments, "project")?,
     )?;
-    let sessions = state
+    let archived: Vec<Session> = state
         .store
         .list_sessions()?
-        .iter()
+        .into_iter()
         .filter(|session| {
             session.project_id.as_deref() == Some(&project.id)
                 && session.status == SessionStatus::Archived
         })
-        .map(|session| describe_session(state, session, console_session))
+        .collect();
+    let branches = branch_names_of(state, archived.clone()).await?;
+    let sessions = archived
+        .iter()
+        .map(|session| describe_session(state, session, console_session, &branches))
         .collect::<Result<Vec<Value>>>()?;
     Ok(json!({ "sessions": sessions }))
 }
@@ -768,14 +798,18 @@ fn show_page(
 /// owner to hand a session to or bind to is one of them.
 ///
 /// `pub(crate)` for the tests of `shared_config`, which describe a session being restarted.
-pub(crate) fn list_sessions(state: &Arc<AppState>, caller: &Session) -> Result<Value> {
-    let sessions = state
+pub(crate) async fn list_sessions(state: &Arc<AppState>, caller: &Session) -> Result<Value> {
+    let running: Vec<Session> = state
         .store
         .list_sessions()?
-        .iter()
+        .into_iter()
         .filter(|session| session.id != caller.id && !state.shown_status(session).is_dormant())
+        .collect();
+    let branches = branch_names_of(state, running.clone()).await?;
+    let sessions = running
+        .iter()
         .map(|session| {
-            let mut description = describe_session(state, session, caller)?;
+            let mut description = describe_session(state, session, caller, &branches)?;
             description["your_owner"] = json!(caller.bound_to.as_deref() == Some(&session.id));
             Ok(description)
         })
@@ -969,7 +1003,7 @@ async fn branches_to_hand_over(
 
 /// Finds a session the caller may read: any session on record, of any console or project. What a
 /// session may *do* to another is narrower, and is [`resolve_owned_session`]'s.
-fn resolve_session(state: &Arc<AppState>, wanted: &str) -> Result<Session> {
+pub(super) fn resolve_session(state: &Arc<AppState>, wanted: &str) -> Result<Session> {
     state
         .store
         .get_session(wanted)?
@@ -1036,11 +1070,16 @@ pub(super) fn resolve_owned_session(
 /// is relative to `caller`: a console may hold several console sessions, and each reads a
 /// session's owner alike but is told only of its own that they are its to act on.
 ///
+/// `branches` is the names of the branches the sessions described are responsible for, by session
+/// id, as [`branch_names_of`] reads them for all the sessions of a listing at once; a session with
+/// no entry is responsible for none.
+///
 /// `pub(crate)` for the tests of `shared_config`, which describe a session being restarted.
 pub(crate) fn describe_session(
     state: &Arc<AppState>,
     session: &Session,
     caller: &Session,
+    branches: &HashMap<String, Vec<String>>,
 ) -> Result<Value> {
     let owner_kind = match &session.bound_to {
         Some(owner) => state
@@ -1052,6 +1091,11 @@ pub(crate) fn describe_session(
     // Looked at before the status is read, so that the status, which reads the screen as that look
     // left it, and the hold cannot disagree about a dialog that came up in between.
     let write_hold = state.write_hold(&session.id);
+    // The account by id and name, as `get_account_quotas` and `switch_session_account` name it:
+    // `default` is the agent's default account. Never its directory, which is the user's.
+    let account_name = state
+        .store
+        .account_display_name(session.agent, session.account_id.as_deref())?;
     Ok(json!({
         "session": session.id,
         "title": session.title,
@@ -1064,6 +1108,19 @@ pub(crate) fn describe_session(
         // choosing which session gets a task. Null while no size is known: before the session's
         // first report, and after a compaction until its next request.
         "context": session.context,
+        "account": session.account_id.as_deref().unwrap_or("default"),
+        "account_name": account_name,
+        // What the agent's records show the session running with, as the agent spells it. Null
+        // until reported; `default_effort` is what the agent runs that model at by itself, given
+        // where the records name the model but no effort and its catalogue knows one.
+        "observed_model": session.observed_model,
+        "observed_effort": session.observed_effort,
+        "default_effort": state.default_effort_of(&session.id),
+        "pinned": session.pinned,
+        // A locked session cannot be archived.
+        "locked": session.locked,
+        // The names only: the worktree each stands in is `get_session_branches`'.
+        "branches": branches.get(&session.id).cloned().unwrap_or_default(),
         "role": session.role,
         "console": session.console_id,
         "project": session.project_id,
@@ -1920,6 +1977,203 @@ pub(super) mod tests {
 
     pub(in crate::mcp) fn arguments(value: Value) -> Map<String, Value> {
         value.as_object().unwrap().clone()
+    }
+
+    /// `shared_console_state` plus a project, `repo`, in a real repository, and sessions in it:
+    /// `kid` of the console session `a`, `lead` unbound, and `lead-kid` bound to `lead`.
+    pub(in crate::mcp) struct RepoState {
+        pub state: Arc<AppState>,
+        pub repo: ScratchDir,
+        _dir: ScratchDir,
+    }
+
+    impl RepoState {
+        pub fn new(name: &str) -> Self {
+            let (state, dir) = shared_console_state(name);
+            let repo =
+                crate::test_support::repo_with(&format!("mcp-exec-{name}-repo"), &[(b"a", b"a")]);
+            state
+                .store
+                .insert_project(&Project {
+                    id: "repo".to_string(),
+                    name: "repo".to_string(),
+                    path: repo.to_string_lossy().into_owned(),
+                    ..state.store.get_project("project-1").unwrap().unwrap()
+                })
+                .unwrap();
+            for (id, owner) in [
+                ("kid", Some("a")),
+                ("lead", None),
+                ("lead-kid", Some("lead")),
+            ] {
+                state
+                    .store
+                    .insert_session(&Session {
+                        project_id: Some("repo".to_string()),
+                        ..project_session(id, "console-1", owner)
+                    })
+                    .unwrap();
+            }
+            Self {
+                state,
+                repo,
+                _dir: dir,
+            }
+        }
+
+        /// Makes `branch`, recorded as `session`'s.
+        pub fn branch(&self, branch: &str, session: &str) {
+            crate::test_support::branch_made_by(&self.state, &self.repo, branch, session);
+        }
+    }
+
+    /// Stores a Claude account `claude-a`, whose directory no reader may see, and a session
+    /// `rich` in `repo` with every field of the record set: on that account, pinned, locked, with
+    /// an observed model and effort and a default effort, and responsible for two branches.
+    fn rich_session(fixture: &RepoState) {
+        let state = &fixture.state;
+        state
+            .store
+            .insert_account(&crate::protocol::Account {
+                id: "claude-a".to_string(),
+                agent: Agent::Claude,
+                name: "Work account".to_string(),
+                config_dir: "/tmp/octoboard-secret-account-dir".to_string(),
+                share_default_config: false,
+                share_default_config_incomplete: false,
+                disabled: false,
+            })
+            .unwrap();
+        state
+            .store
+            .insert_session(&Session {
+                project_id: Some("repo".to_string()),
+                account_id: Some("claude-a".to_string()),
+                config_dir: Some("/tmp/octoboard-secret-account-dir".to_string()),
+                pinned: true,
+                locked: true,
+                observed_model: Some("claude-opus-5-5".to_string()),
+                observed_effort: Some("high".to_string()),
+                ..project_session("rich", "console-1", Some("a"))
+            })
+            .unwrap();
+        state.set_default_effort("rich", Some("medium".to_string()));
+        fixture.branch("feature", "rich");
+        fixture.branch("feat/nested", "rich");
+    }
+
+    /// What a record says of the session, as each kind of caller reads it: a console session and
+    /// an unbound project session through `get_session`, a bound project session through
+    /// `list_sessions`.
+    #[tokio::test]
+    async fn every_caller_reads_the_account_model_pin_lock_and_branches_of_a_session() {
+        let fixture = RepoState::new("record-fields");
+        rich_session(&fixture);
+        let get = |caller: &'static str, session: &'static str| {
+            let state = fixture.state.clone();
+            async move {
+                call(
+                    &state,
+                    caller,
+                    "get_session",
+                    &arguments(json!({ "session": session })),
+                )
+                .await
+                .unwrap()
+            }
+        };
+        let listed = call(&fixture.state, "lead-kid", "list_sessions", &Map::new())
+            .await
+            .unwrap();
+        let in_list = |id: &str| {
+            listed["sessions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|entry| entry["session"] == id)
+                .unwrap()
+                .clone()
+        };
+        for (caller, record) in [
+            ("a", get("a", "rich").await),
+            ("lead", get("lead", "rich").await),
+            ("lead-kid", in_list("rich")),
+        ] {
+            assert_eq!(record["account"], "claude-a", "{caller}");
+            assert_eq!(record["account_name"], "Work account", "{caller}");
+            assert_eq!(record["observed_model"], "claude-opus-5-5", "{caller}");
+            assert_eq!(record["observed_effort"], "high", "{caller}");
+            assert_eq!(record["default_effort"], "medium", "{caller}");
+            assert_eq!(record["pinned"], true, "{caller}");
+            assert_eq!(record["locked"], true, "{caller}");
+            let mut branches: Vec<&str> = record["branches"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|branch| branch.as_str().unwrap())
+                .collect();
+            branches.sort_unstable();
+            assert_eq!(branches, ["feat/nested", "feature"], "{caller}");
+            assert!(
+                !record.to_string().contains("octoboard-secret-account-dir"),
+                "{caller}: {record}"
+            );
+        }
+
+        // A session on the default account that nothing was observed of.
+        let plain = in_list("kid");
+        assert_eq!(plain["account"], "default");
+        assert_eq!(plain["account_name"], crate::protocol::DEFAULT_ACCOUNT_NAME);
+        for field in ["observed_model", "observed_effort", "default_effort"] {
+            assert!(plain[field].is_null(), "{field}");
+        }
+        assert_eq!(plain["pinned"], false);
+        assert_eq!(plain["locked"], false);
+        assert_eq!(plain["branches"], json!([]));
+
+        // A console session is responsible for no branch.
+        assert_eq!(get("lead", "b").await["branches"], json!([]));
+    }
+
+    /// The default account is shown under the name the user gave it.
+    #[tokio::test]
+    async fn the_default_account_is_shown_under_the_name_the_user_gave_it() {
+        let fixture = RepoState::new("record-default-name");
+        fixture
+            .state
+            .store
+            .set_default_account_name(Agent::Claude, Some("Personal"))
+            .unwrap();
+        let record = call(
+            &fixture.state,
+            "a",
+            "get_session",
+            &arguments(json!({ "session": "kid" })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(record["account"], "default");
+        assert_eq!(record["account_name"], "Personal");
+    }
+
+    /// Reading a record runs no process: with no `git` to run, the branches are still listed.
+    #[tokio::test]
+    async fn reading_a_record_runs_no_git() {
+        let fixture = RepoState::new("record-no-git");
+        rich_session(&fixture);
+        fixture.state.host_tools.replace(crate::host_tools::Tools {
+            git: || Err(anyhow!("git must not run")),
+            ..crate::test_support::host_tools()
+        });
+        let record = call(
+            &fixture.state,
+            "a",
+            "get_session",
+            &arguments(json!({ "session": "rich" })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(record["branches"].as_array().unwrap().len(), 2);
     }
 
     /// Reads are console-wide: each console session sees the other's sessions and who owns them.
@@ -3704,7 +3958,8 @@ pub(super) mod tests {
         let caller = console_session("hub");
         let session = crate::test_support::project_session("s", Agent::Claude, SessionStatus::Idle);
         let describe = |session: &Session| {
-            describe_session(&state, session, &caller).unwrap()["background_tasks"].clone()
+            describe_session(&state, session, &caller, &HashMap::new()).unwrap()["background_tasks"]
+                .clone()
         };
 
         assert_eq!(describe(&session), json!([]));
@@ -3734,7 +3989,10 @@ pub(super) mod tests {
         state.store.insert_console(&console()).unwrap();
         let caller = console_session("hub");
         let session = crate::test_support::project_session("s", Agent::Claude, SessionStatus::Idle);
-        assert!(describe_session(&state, &session, &caller).unwrap()["context"].is_null());
+        assert!(
+            describe_session(&state, &session, &caller, &HashMap::new()).unwrap()["context"]
+                .is_null()
+        );
 
         let used = Session {
             context: Some(crate::protocol::SessionContext {
@@ -3745,7 +4003,7 @@ pub(super) mod tests {
             ..session
         };
         assert_eq!(
-            describe_session(&state, &used, &caller).unwrap()["context"],
+            describe_session(&state, &used, &caller, &HashMap::new()).unwrap()["context"],
             json!({"tokens": 120_000, "window": 200_000, "used_percent": 60})
         );
     }

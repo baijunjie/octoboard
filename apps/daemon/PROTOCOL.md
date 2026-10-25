@@ -2251,7 +2251,7 @@ in `docs/product/session-requests.md` ("Waiting for the answer", "How a request 
 |---|---|---|---|
 | `list_projects`, `add_project`, `update_project`, `get_console`, `update_console`, `get_settings`, `update_settings`, `list_archived`, `show_page` | yes | — | — |
 | `new_session`, `send_message`, `get_session`, `archive_session`, `reopen_session`, `rename_session`, `set_session_pinned` | yes | yes | — |
-| `list_sessions`, `share_info`, `get_account_quotas` | yes | yes | yes |
+| `list_sessions`, `get_session_branches`, `share_info`, `get_account_quotas` | yes | yes | yes |
 | `archive_self` | yes | yes (refused once bound, a lead session included, which wraps up with `report`) | — |
 | `handoff_session`, `handover_branches`, `switch_session_account`, `transfer_session`, `release_session` | yes | yes | — |
 | `bind_to_session` | — | yes (refused once bound, a lead session included) | — |
@@ -2459,7 +2459,15 @@ console, changes a project's path, source, host, remote or `trust_consent`, or w
   included, with `owner`, `owner_kind`, `yours` and `your_owner`; `get_session` and `share_info` reach any session,
   whichever console or project it is in, while the tools that act on a session (`send_message`, `rename_session` and so
   on) stay with the session's owner. See `docs/product/information-between-sessions.md`.
-- Every session a tool describes (`list_sessions`, `list_projects`, `get_session` and the rest) carries
+- Every session a tool describes (`list_sessions`, `list_projects`, `get_session` and the rest) carries the facts the
+  write tools depend on: `account` (the account's id, `default` for the agent's default account, as
+  `get_account_quotas` and `switch_session_account` name it) and `account_name`, never the account's directory;
+  `observed_model` and `observed_effort` (what the agent's records show, `null` until reported) and `default_effort`
+  (the effort the agent runs the observed model at by itself, `null` when the records name an effort or no model, or
+  the catalogue gives none); `pinned`; `locked`; and `branches`, the plain names of the git branches the session is
+  responsible for (empty for none, and for a console session). Reading them runs no process: `branches` comes from the store and the reflog files, once per
+  repository for a listing.
+- Every session a tool describes also carries
   `queued_messages`, the number of messages queued for it and not yet written, and `writes_held`: `null`, or for a
   running session whose writes are held whatever its `status` reads, `{ reason, explanation }` with `reason` one of
   `starting` (its agent has not sent the signal that it is past its startup screens), `trust_confirmation`,
@@ -2469,3 +2477,12 @@ console, changes a project's path, source, host, remote or `trust_consent`, or w
   prompt is sent there, whichever is first), `handoff`, `sharing_change` (it is being restarted for a change of its
   account's sharing of the default configuration, and is resumed afterwards) and `unsent_message`, and `explanation` in
   prose. See "Messages held until a session can take them" in `docs/product/message-delivery.md`.
+- `get_session_branches` takes an optional `session` (any session, defaulting to the caller) and answers
+  `{ session, branches }`, each branch `{ branch, project, worktree, worktree_status, uncommitted_changes }`:
+  `worktree_status` is `checked_out`, `gone`, `none` or `unknown` (`git` could not be run or the worktrees could not be
+  listed), `worktree` the path when there is one, and `uncommitted_changes` a boolean for a checked-out worktree and
+  `null` otherwise, also when that worktree's changes could not be read. It runs `git` for the worktrees only when the
+  session is responsible for a branch, and answers an empty list for a console session. The branches it lists are the
+  ones `handover_branches` and the `branches` of `new_session` and `request_session` need the caller to be responsible
+  for, and the ones archiving the session would try to remove along with their worktrees. `handover_branches` reports
+  each branch it moved in the same shape, without `project`.

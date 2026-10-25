@@ -182,7 +182,7 @@ is refused even where its agent still lists it. The session's tool list itself i
 call of any Octoboard tool, and its agent is told the list has changed (the MCP `tools/list_changed` notice); whether an
 agent reads the list again on that notice is the agent's own. Only two changes take tools away — binding to a project
 session, and a lead session handed to one — and they leave the bound session's set: `report`, `list_sessions`,
-`share_info`, `get_project`, `get_account_quotas`, `request_session` and `request_resume_session`. A release gives a session that had the role of a bound one the
+`get_session_branches`, `share_info`, `get_project`, `get_account_quotas`, `request_session` and `request_resume_session`. A release gives a session that had the role of a bound one the
 unbound project session's tools.
 
 ## A change of owner told at the next launch

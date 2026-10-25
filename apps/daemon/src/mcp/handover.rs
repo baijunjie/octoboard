@@ -4,7 +4,7 @@
 //! `handoff_session`), and nothing in git or on disk changes. The checks on the branches named,
 //! which `new_session` and `request_session` make too, are here as well.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Result};
@@ -23,6 +23,7 @@ use crate::state::AppState;
 
 use super::args::{optional_string, optional_string_list};
 use super::exec::resolve_owned_session;
+use super::session_branches::branch_entry;
 
 /// The names in the list argument `key`, each trimmed, as wire paths and named once. `None` when
 /// the argument is absent or names none; a blank name is refused.
@@ -182,12 +183,10 @@ pub(super) async fn handover_branches(
     let mut answer = json!({
         "from": from.id,
         "to": to.id,
-        "branches": standing.iter().map(|(branch, worktree)| json!({
-            "branch": branch,
-            "worktree": worktree_path(worktree),
-            "worktree_status": worktree_status(worktree),
-            "uncommitted_changes": uncommitted(worktree),
-        })).collect::<Vec<_>>(),
+        "branches": standing
+            .iter()
+            .map(|(branch, worktree)| branch_entry(branch, worktree))
+            .collect::<Vec<_>>(),
         "not_handed_over": moved
             .unmoved
             .iter()
@@ -313,8 +312,8 @@ fn refuse_if_at_work(state: &Arc<AppState>, from: &Session) -> Result<()> {
     ))
 }
 
-/// Where each of `branches` is checked out now. Reading only; a failure is logged and leaves the
-/// worktrees unknown, since the branches have moved by then.
+/// Where each of `branches` is checked out now. Reading only; a failure leaves the worktrees
+/// unknown, since the branches have moved by then.
 async fn standing_of(
     state: &Arc<AppState>,
     repository: &Path,
@@ -324,9 +323,7 @@ async fn standing_of(
     let read = tokio::task::spawn_blocking(move || {
         session_branches::worktrees_of(&state, &repository, &names)
     })
-    .await
-    .map_err(anyhow::Error::from)
-    .and_then(|read| read);
+    .await;
     read.unwrap_or_else(|err| {
         tracing::warn!(%err, "reading the worktrees of the branches handed over failed");
         branches
@@ -334,34 +331,6 @@ async fn standing_of(
             .map(|branch| (branch_name(branch), Worktree::Unknown(format!("{err:#}"))))
             .collect()
     })
-}
-
-/// The worktree a branch is checked out in, when it has one.
-fn worktree_path(worktree: &Worktree) -> Option<&PathBuf> {
-    match worktree {
-        Worktree::CheckedOut { path, .. } | Worktree::Gone(path) => Some(path),
-        Worktree::NotCheckedOut | Worktree::Unknown(_) => None,
-    }
-}
-
-/// How the result says a branch stands: `checked_out`, `gone` (git's record of the worktree is
-/// left, the directory is not), `none` (no worktree has it) or `unknown` (it could not be read).
-fn worktree_status(worktree: &Worktree) -> &'static str {
-    match worktree {
-        Worktree::CheckedOut { .. } => "checked_out",
-        Worktree::Gone(_) => "gone",
-        Worktree::NotCheckedOut => "none",
-        Worktree::Unknown(_) => "unknown",
-    }
-}
-
-/// Whether the branch's worktree holds uncommitted changes; `None` with no worktree or when that
-/// could not be read.
-fn uncommitted(worktree: &Worktree) -> Option<bool> {
-    match worktree {
-        Worktree::CheckedOut { uncommitted, .. } => *uncommitted,
-        _ => None,
-    }
 }
 
 /// The branches with their worktrees and whether those hold uncommitted changes, as a message

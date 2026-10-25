@@ -56,6 +56,6 @@ configuration is added. Each reuses a capability the app already has behind its 
 ## Milestones
 
 1. Document the user-only agent settings (closed)
-2. [Complete the session record](02-complete-the-session-record.md)
+2. Complete the session record (closed)
 3. [Read tools for models, history, archives and projects](03-read-tools-for-models-history-archives-and-projects.md)
 4. [Smaller conveniences](04-smaller-conveniences.md)
