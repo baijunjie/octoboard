@@ -26,7 +26,8 @@ the target branch) is built into Octoboard as a switch, so a project gets it wit
 - **The default rule stays short:**
   1. Before changing files in a git repository, create a new branch from the current branch with its own worktree at
      `<project>/.worktrees/<short-name>`, adding the path to `.git/info/exclude` so no tracked file changes; work and
-     commit there. Read-only work (investigating, answering questions) needs none. The location sits inside the
+     commit there, running git as `git -C <worktree>` rather than after a `cd` (Claude Code asks approval for a `cd`
+     before git). Read-only work (investigating, answering questions) needs none. The location sits inside the
      session's working directory, so agents do not ask permission for writes outside it.
   2. A branch handed over that already has a worktree is worked on there.
   3. When done, report the branch and its changes; merge, push or open a PR as the user or owner says, else as the
@@ -35,7 +36,7 @@ the target branch) is built into Octoboard as a switch, so a project gets it wit
      that is not the session's alone is never rebased.
   5. The agent cleans up itself, whenever the worktree is no longer needed, rather than leaving it to the cleanup an
      archive runs:
-     - After a local merge, go back to the main working copy and remove the worktree and the local branch at once; this
+     - After a local merge, remove the worktree and the local branch from the main working copy at once; this
        is part of the merge and is not asked again.
      - After a PR is opened, remove the worktree and the local branch at once (the agent cannot know when the PR is
        merged), leaving the remote branch. To change the PR later, recreate the worktree from the remote branch, push
@@ -72,7 +73,7 @@ the target branch) is built into Octoboard as a switch, so a project gets it wit
 ## Milestones
 
 - 01 Worktree settings (closed)
-- [02 Injecting the worktree rule](02-injecting-the-worktree-rule.md)
+- 02 Injecting the worktree rule (closed)
 - 03 Revert gate engine (closed)
 - [04 Revert gate in the hook dispatcher](04-revert-gate-in-the-hook-dispatcher.md)
 - [05 Settings UI](05-settings-ui.md)
@@ -81,5 +82,3 @@ the target branch) is built into Octoboard as a switch, so a project gets it wit
 
 - How a project's own installed gate is recognized: its `revert-gate.branch` configuration, the `revert-gate hook
   entry` marker line in a hook, or both.
-- Whether a branch recreated from its remote branch (rule 5, after a PR) is recorded as the session's branch the way a
-  branch it creates is; verified in 02, and the rule's wording adjusted if not.

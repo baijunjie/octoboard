@@ -288,7 +288,8 @@ impl AgentAdapter for CodexAdapter {
             toml_string(&mcp::role::role_description(
                 spec.role,
                 spec.owner.as_ref(),
-                Agent::Codex
+                Agent::Codex,
+                spec.worktrees.as_ref(),
             ))
         ));
 
@@ -656,7 +657,8 @@ mod tests {
             toml_string(&mcp::role::role_description(
                 fixture.role,
                 fixture.owner.as_ref(),
-                Agent::Codex
+                Agent::Codex,
+                fixture.worktrees.as_ref(),
             ))
         ))));
         assert!(!overrides.iter().any(|o| o.starts_with("instructions=")));

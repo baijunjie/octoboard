@@ -46,6 +46,8 @@ pub struct LaunchRequest {
     pub role: Role,
     /// Who the session reports to, if anyone; see `LaunchSpec::owner`.
     pub owner: Option<crate::mcp::Owner>,
+    /// The project's effective worktree settings; see `LaunchSpec::worktrees`.
+    pub worktrees: Option<crate::worktree_settings::WorktreeSettings>,
     pub cwd: PathBuf,
     /// Initial task, only on a fresh launch.
     pub task: Option<String>,
@@ -86,6 +88,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         agent,
         role,
         owner,
+        worktrees,
         cwd,
         task,
         resume_agent_session_id,
@@ -147,6 +150,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         session_id,
         role,
         owner,
+        worktrees,
         new_agent_session_id: &new_agent_session_id,
         resume_agent_session_id: resume_agent_session_id.as_deref(),
         cwd,

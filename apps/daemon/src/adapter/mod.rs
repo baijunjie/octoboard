@@ -47,6 +47,7 @@ use crate::protocol::{
     error_code, Agent, ApprovalReviewer, ClaudeApprovalMode, CodedError, Notice, Role,
     TerminalAppearance,
 };
+use crate::worktree_settings::WorktreeSettings;
 
 /// Everything an adapter needs to assemble one launch.
 pub struct LaunchSpec<'a> {
@@ -59,6 +60,9 @@ pub struct LaunchSpec<'a> {
     /// Who this session reports to, if anyone, which decides what its role text tells it is
     /// waiting on it and which tools its MCP server announces. Never set for a console session.
     pub owner: Option<Owner>,
+    /// The project's effective worktree settings, read when the launch was assembled, which shape
+    /// the worktree rule in the role text. Never set for a console session.
+    pub worktrees: Option<WorktreeSettings>,
     /// The id to give an agent that can pre-allocate one for a *new* conversation. Freshly
     /// generated per launch: both Claude Code and Grok refuse an id that already has a stored
     /// conversation, so reusing one would make relaunching a session that was opened and never
@@ -485,6 +489,7 @@ pub mod tests {
         pub session_id: String,
         pub role: crate::protocol::Role,
         pub owner: Option<Owner>,
+        pub worktrees: Option<crate::worktree_settings::WorktreeSettings>,
         pub new_agent_session_id: String,
         pub cwd: PathBuf,
         pub scratch: crate::test_support::ScratchDir,
@@ -506,6 +511,7 @@ pub mod tests {
                 session_id: &self.session_id,
                 role: self.role,
                 owner: self.owner.clone(),
+                worktrees: self.worktrees,
                 new_agent_session_id: &self.new_agent_session_id,
                 resume_agent_session_id: None,
                 cwd: &self.cwd,
@@ -541,6 +547,7 @@ pub mod tests {
             session_id: "session-1".to_string(),
             role: crate::protocol::Role::Project,
             owner: Some(Owner::Console),
+            worktrees: Some(crate::worktree_settings::WorktreeSettings::default()),
             new_agent_session_id: format!("agent-{}", std::process::id()),
             cwd,
             scratch: root,

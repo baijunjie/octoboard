@@ -1445,6 +1445,12 @@ fn launch_schema(whose: &str) -> Value {
     })
 }
 
+/// When a change to an item of the worktree rule takes effect. The rule is part of the role text,
+/// which Claude Code and Grok record on a session's first turn and replay on every resume.
+const RULE_REACHES: &str = "Unlike other settings, a change is sure to reach only project \
+                            sessions begun after it: one begun earlier may keep the worktree rule \
+                            it started with, even when resumed.";
+
 /// The `worktrees` argument: the four worktree settings, application-wide or as a project's own.
 fn worktrees_schema(project: bool) -> Value {
     let (whose, null) = if project {
@@ -1464,9 +1470,11 @@ fn worktrees_schema(project: bool) -> Value {
     };
     let mut delivery = json!({
         "type": nullable(json!("string")),
-        "description": "How finished work is delivered: `ask` (ask the user each time), `merge` \
-                        (merge into the target branch locally) or `pull_request` (push and open \
-                        a pull request).",
+        "description": format!(
+            "How finished work is delivered: `ask` (ask the user each time), `merge` (merge into \
+             the target branch locally) or `pull_request` (push and open a pull request). \
+             {RULE_REACHES}"
+        ),
     });
     delivery["enum"] = if project {
         json!(["ask", "merge", "pull_request", null])
@@ -1482,13 +1490,17 @@ fn worktrees_schema(project: bool) -> Value {
         "properties": {
             "use_worktrees": {
                 "type": nullable(json!("boolean")),
-                "description": "Whether project sessions are asked to develop in a worktree of \
-                                their own.",
+                "description": format!(
+                    "Whether project sessions are asked to develop in a worktree of their own. \
+                     {RULE_REACHES}"
+                ),
             },
             "rebase_before_merge": {
                 "type": nullable(json!("boolean")),
-                "description": "Whether a branch is rebased onto its target branch before it is \
-                                merged.",
+                "description": format!(
+                    "Whether a branch is rebased onto its target branch before it is merged. \
+                     {RULE_REACHES}"
+                ),
             },
             "delivery": delivery,
             "revert_gate": {

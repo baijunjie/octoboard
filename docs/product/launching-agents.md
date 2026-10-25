@@ -103,7 +103,10 @@ besides the variables a project session's agent is given for its git (see "The l
   `docs/product/hub-orchestration.md`), `handoff_session`, `switch_session_account`, `transfer_session`,
   `release_session` and `bind_to_session` where it has them, `request_session` for a session that is nobody's,
   `request_resume_session` for resuming a conversation the user asked for, `get_account_quotas` for what each account's
-  quota has left, and `list_sessions` and `share_info` for information. The text is written from who the session
+  quota has left, and `list_sessions` and `share_info` for information. Where its project's effective worktree settings
+  have use worktrees for development on at the launch, it also carries the worktree rule (see "The worktree rule" in
+  `docs/product/worktree-settings.md`). Every project session's text ends by saying that everything else is the
+  ordinary work of the project, under its own instructions, conventions and configuration. The text is written from who the session
   reports to when it launches, and says that what Octoboard tells it of a later change of owner replaces what it says
   (see "When a binding changes while a session runs" in
   `docs/product/changing-session-owners.md`); a change made while the session was not running is told at its next

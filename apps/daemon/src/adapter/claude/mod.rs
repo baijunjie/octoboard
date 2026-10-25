@@ -366,6 +366,7 @@ impl AgentAdapter for ClaudeAdapter {
             spec.role,
             spec.owner.as_ref(),
             Agent::Claude,
+            spec.worktrees.as_ref(),
         ));
         // Last, after every list-valued flag has closed. All are global flags, so they sit
         // alongside `--resume` too.
@@ -996,7 +997,12 @@ mod tests {
             .expect("--append-system-prompt is passed");
         assert_eq!(
             plan.args[at + 1],
-            mcp::role::role_description(fixture.role, fixture.owner.as_ref(), Agent::Claude)
+            mcp::role::role_description(
+                fixture.role,
+                fixture.owner.as_ref(),
+                Agent::Claude,
+                fixture.worktrees.as_ref(),
+            )
         );
     }
 }

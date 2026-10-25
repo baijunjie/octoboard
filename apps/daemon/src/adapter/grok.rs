@@ -228,6 +228,7 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: &Path) -> Result<LaunchPlan> {
         spec.role,
         spec.owner.as_ref(),
         Agent::Grok,
+        spec.worktrees.as_ref(),
     ));
 
     // A fullscreen launch writes `--model` into `[models] default` and `--reasoning-effort` into
@@ -1220,7 +1221,12 @@ mod tests {
             .expect("--rules is passed");
         assert_eq!(
             plan.args[at + 1],
-            mcp::role::role_description(fixture.role, fixture.owner.as_ref(), Agent::Grok)
+            mcp::role::role_description(
+                fixture.role,
+                fixture.owner.as_ref(),
+                Agent::Grok,
+                fixture.worktrees.as_ref(),
+            )
         );
     }
 

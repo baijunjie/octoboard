@@ -6,10 +6,11 @@ project's own worktree settings" below).
 
 ## What they do now
 
-No session reads the worktree settings yet: they are stored, carried and reported, but change nothing in how any
-session works. Settings has no section for them and the project dialog no control: they are read and changed only
-through the daemon's requests and through the console session's settings tools (see "Reading and changing them"
-below).
+Three of the settings — use worktrees for development, rebase before merging and delivery — shape the worktree rule a
+project session is given in its role description (see "The worktree rule" below). The revert gate is stored, carried
+and reported, but changes nothing in how any session works yet. Settings has no section for the worktree settings and
+the project dialog no control: they are read and changed only through the daemon's requests and through the console
+session's settings tools (see "Reading and changing them" below).
 
 ## The four settings
 
@@ -41,6 +42,61 @@ console session's `add_project`, which takes no worktree settings, or as one of 
 so does every project from before the settings existed. The one exception is a project created by an import, which
 takes its own values from the configuration document (see "What each project carries" in
 `docs/product/configuration-export-and-import.md`).
+
+## The worktree rule
+
+Every launch of a project session — a fresh one, a resume and an account switch alike — reads its project's effective
+worktree settings as they are at that moment. With use worktrees for development on, the session's role description
+(see "What is injected on every launch" in `docs/product/launching-agents.md`) carries a section headed "Developing in
+a worktree", placed just before the closing sentence that says the project's own instructions, conventions and
+configuration apply unchanged. With it off, the role description carries no such section. A console session is never
+given the rule, whatever the settings. Nothing is written into the project for it: the rule is part of the injected
+role text and goes with the process.
+
+The rule first says that where the project's own instructions set out how to use worktrees or branches, those are
+followed instead of the rule. Otherwise:
+
+1. **A branch and worktree of its own before changing files.** Before changing files in a git repository, the session
+   creates a new branch from the current branch, which becomes the new branch's target branch, with its own worktree at
+   `.worktrees/<short-name>` in the project directory it was started in, and adds `.worktrees/` to `.git/info/exclude`
+   so no tracked file changes; it works and commits there, running git in the worktree as `git -C <worktree>` rather
+   than after a `cd` (Claude Code asks for approval of any command that changes directory before running git, even a
+   git command that is allowed). Read-only work, such as investigating or answering questions, needs no worktree.
+2. **A handed-over branch.** A branch handed to the session that already has a worktree is worked on there.
+3. **Delivery.** When done, the session reports the branch and its changes, and merges, pushes or opens a pull request
+   as the user says — or, for a session whose role description names an owner, as the user or its owner says. A
+   session given the unbound project session's text, a lead session included, takes it only from the user. Where
+   nobody has said, the delivery setting decides: `ask` — it asks the user which; `merge` — it merges the branch into
+   its target branch locally; `pull_request` — it pushes the branch and opens a pull request.
+4. **Merging.** With rebase before merging on, the branch is rebased onto its target branch and the target branch
+   fast-forwarded to it, and a pushed branch that is not the session's alone is never rebased. With it off, the branch
+   is merged into its target branch without being rebased first.
+5. **Cleaning up.** The session removes a worktree itself as soon as it is no longer needed, rather than leaving it to
+   the cleanup run when the session is archived (see `docs/product/branch-and-worktree-cleanup.md`):
+   - after a local merge, it removes the worktree and the local branch from the main working copy at once, as part of
+     the merge and without asking again;
+   - after opening a pull request, it removes the worktree and the local branch at once, leaving the remote branch; to
+     change the pull request later it recreates the worktree from the remote branch, pushes to the same branch, and
+     cleans up again;
+   - a worktree opened only to verify something, never committed to, is opened detached and removed as soon as the
+     verification is done;
+   - it asks before removing a worktree that has uncommitted changes, or ignored files beyond regenerable dependencies
+     and build output (such as `.env` or local configuration), and never discards or force-removes anything on the
+     user's behalf.
+
+A local branch the session's git creates, including one recreated from its remote branch to change a pull request —
+whether with `git worktree add -b <branch> <path> <remote>/<branch>` or with `git worktree add <path> <branch>`, where
+git creates the local branch from the remote one — makes that session the branch's responsible session like any other
+branch it creates (see "When a branch gets a responsible session" in `docs/product/branch-responsible-session.md`).
+
+### When a change reaches a session
+
+Claude Code and Grok Build keep the role text a conversation was first given for the conversation's whole life, resumes
+included (see "What is injected on every launch" in `docs/product/launching-agents.md`). So, unlike the other settings
+read at launch, a change to use worktrees for development, rebase before merging or delivery — application-wide or a
+project's own — is sure to reach only project sessions begun after it: a session begun earlier may keep the rule it
+started with, or its absence, even when resumed. The settings tools' `worktrees` argument says so for each of those
+three items.
 
 ## Reading and changing them
 

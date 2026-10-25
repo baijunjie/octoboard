@@ -54,7 +54,7 @@ use crate::store::{ReorderOutcome, Store, LOCAL_HOST_ID};
 use crate::term;
 use crate::trust;
 use crate::worktree_settings::{
-    WorktreeOverride, WorktreeOverrideChanges, WorktreeSettingsChanges,
+    WorktreeOverride, WorktreeOverrideChanges, WorktreeSettings, WorktreeSettingsChanges,
 };
 
 /// Handles one request. The returned event, when there is one, is the answer to that request and
@@ -3876,6 +3876,29 @@ fn launch_settings(
     ))
 }
 
+/// The worktree settings in force for a project session's project as this launch is assembled,
+/// which shape the rule its role text carries; none for a console session, which is given no rule.
+fn launch_worktree_settings(
+    state: &Arc<AppState>,
+    session: &Session,
+) -> Result<Option<WorktreeSettings>> {
+    let Some(project_id) = session
+        .project_id
+        .as_ref()
+        .filter(|_| session.role == Role::Project)
+    else {
+        return Ok(None);
+    };
+    let project = state
+        .store
+        .get_project(project_id)?
+        .ok_or_else(|| CodedError::unknown_project(project_id))?;
+    Ok(Some(crate::worktree_settings::effective(
+        &state.store,
+        &project,
+    )?))
+}
+
 /// Launches the agent for an already-stored session, through `launch` (`term::launch` outside the
 /// tests, which cannot start an agent), and starts watching it.
 #[allow(clippy::too_many_arguments)]
@@ -3909,6 +3932,7 @@ async fn start_process(
         agent: session.agent,
         role: session.role,
         owner: owner_of(state, session)?,
+        worktrees: launch_worktree_settings(state, session)?,
         cwd: cwd.to_path_buf(),
         task: task.map(str::to_string),
         resume_agent_session_id: resume_agent_session_id.map(str::to_string),
@@ -9478,6 +9502,48 @@ mod tests {
             Some("changed-model")
         );
         assert_eq!(normalize_session_launch_setting(None), None);
+    }
+
+    /// A project session launches with its project's worktree settings as they are at that launch,
+    /// the project's own value winning; a console session, which is given no rule, with none.
+    #[test]
+    fn a_project_session_launches_with_its_projects_worktree_settings() {
+        let (state, _dir) = crate::test_support::app_state("coordinator-worktree-settings");
+        state
+            .store
+            .insert_console(&console(Agent::Claude, Path::new("/tmp/unused")))
+            .unwrap();
+        let mut project = project_of("console-1", "project-1");
+        state.store.insert_project(&project).unwrap();
+        let mut session = bare_session("s", Role::Project);
+        session.project_id = Some("project-1".to_string());
+        assert_eq!(
+            launch_worktree_settings(&state, &session).unwrap(),
+            Some(WorktreeSettings::default())
+        );
+        state
+            .store
+            .change_worktree_settings(&WorktreeSettingsChanges {
+                delivery: Some(crate::worktree_settings::Delivery::Merge),
+                ..WorktreeSettingsChanges::default()
+            })
+            .unwrap();
+        project.worktrees.use_worktrees = Some(false);
+        state.store.update_project(&project).unwrap();
+        assert_eq!(
+            launch_worktree_settings(&state, &session).unwrap(),
+            Some(WorktreeSettings {
+                use_worktrees: false,
+                delivery: crate::worktree_settings::Delivery::Merge,
+                ..WorktreeSettings::default()
+            })
+        );
+        let mut console_session = bare_session("c", Role::Console);
+        console_session.project_id = Some("project-1".to_string());
+        assert_eq!(
+            launch_worktree_settings(&state, &console_session).unwrap(),
+            None
+        );
     }
 
     /// A project session takes each value from its project, else from its console's project

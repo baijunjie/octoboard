@@ -182,7 +182,9 @@ reaches sessions opened afterwards, and a changed model or effort reaches a sess
 inherits that value (see `docs/product/model-and-reasoning-effort.md`). That holds for the calling console session
 too: its own console's model and effort reach it when it is next launched, and its console's account only console
 sessions opened afterwards. A changed `project_session_launch` reaches a project session at its next launch, unless its
-project or the session sets that value itself.
+project or the session sets that value itself. A changed `use_worktrees`, `rebase_before_merge` or `delivery`,
+application-wide or a project's own, is sure to reach only project sessions begun after it (see "When a change reaches a session" in
+`docs/product/worktree-settings.md`).
 
 ## Refusals
 
