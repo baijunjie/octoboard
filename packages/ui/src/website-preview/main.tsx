@@ -35,7 +35,11 @@ const scene: PreviewScene =
     : "overview";
 const theme = params.get("theme") === "light" ? "light" : "dark";
 const copy = copyFor(language);
-const { scenario, output } = createPreviewScenario(scene, language);
+const { scenario, output } = createPreviewScenario(
+  scene,
+  language,
+  !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+);
 localStorage.setItem(PREFERENCE_KEYS.language, language);
 localStorage.setItem("heroui-theme", theme);
 for (const [key, value] of Object.entries(scenario.preferences ?? {})) {

@@ -2,7 +2,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import type { TerminalRow } from "../terminal/terminalLines";
 import { brokenUrlsAt, linkSegmentsIn } from "../terminal/terminalLinks";
-import { installFakeTerminal, isWide, terminalFixtureUrl } from "./fakeTerminal";
+import { installFakeTerminal, isWide, terminalFixtureUrl, type TerminalScript } from "./fakeTerminal";
 
 const original = window.WebSocket;
 afterEach(() => { window.WebSocket = original; vi.useRealTimers(); });
@@ -191,4 +191,73 @@ it("leaves a session the supplied output declines to the sample of its URL's beh
   };
   expect(await drawn("output", "known")).toBe("supplied");
   expect(await drawn("shell", "other")).toContain("git status");
+});
+
+/** Opens a socket for a supplied script and collects what it writes. */
+function openScripted(script: TerminalScript, cols = 60) {
+  installFakeTerminal({ output: () => script });
+  const socket = new WebSocket(terminalFixtureUrl("output", "scripted"));
+  const messages: string[] = [];
+  socket.addEventListener("open", () => socket.send(JSON.stringify({ type: "resize", cols, rows: 24 })));
+  socket.addEventListener("message", (event) => messages.push(new TextDecoder().decode(event.data)));
+  return { socket, messages };
+}
+
+const counting: TerminalScript = {
+  screen: (cols, step) => `screen ${cols} ${step}`,
+  tick: (cols, step) => `tick ${cols} ${step}`,
+  interval: 100,
+};
+
+it("draws a script's screen and then its ticks at the interval", async () => {
+  vi.useFakeTimers();
+  const { socket, messages } = openScripted(counting);
+  await vi.advanceTimersByTimeAsync(20);
+  expect(messages).toEqual(["screen 60 0"]);
+  await vi.advanceTimersByTimeAsync(250);
+  expect(messages).toEqual(["screen 60 0", "tick 60 1", "tick 60 2"]);
+  socket.close();
+});
+
+it("draws a script without a tick once and never again", async () => {
+  vi.useFakeTimers();
+  const { socket, messages } = openScripted({ screen: () => "still" });
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(messages).toEqual(["still"]);
+  socket.close();
+});
+
+it("redraws a script at the new width and the step it has reached", async () => {
+  vi.useFakeTimers();
+  const { socket, messages } = openScripted(counting);
+  await vi.advanceTimersByTimeAsync(120);
+  socket.send(JSON.stringify({ type: "resize", cols: 40, rows: 24 }));
+  expect(messages.at(-1)).toBe(`${CLEAR}screen 40 1`);
+  await vi.advanceTimersByTimeAsync(100);
+  expect(messages.at(-1)).toBe("tick 40 2");
+  socket.close();
+});
+
+it("stops ticking when the socket closes", async () => {
+  vi.useFakeTimers();
+  const { socket, messages } = openScripted(counting);
+  await vi.advanceTimersByTimeAsync(220);
+  socket.close();
+  const count = messages.length;
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(messages).toHaveLength(count);
+});
+
+it("does not tick while the page is hidden and resumes when it shows", async () => {
+  vi.useFakeTimers();
+  const { socket, messages } = openScripted(counting);
+  await vi.advanceTimersByTimeAsync(20);
+  const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(messages).toEqual(["screen 60 0"]);
+  hidden.mockReturnValue(false);
+  await vi.advanceTimersByTimeAsync(100);
+  expect(messages).toEqual(["screen 60 0", "tick 60 1"]);
+  hidden.mockRestore();
+  socket.close();
 });

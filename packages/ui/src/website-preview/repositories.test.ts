@@ -7,7 +7,11 @@ import { sessionStatusKind } from "../sessionLabel";
 import { previewRepositories } from "./repositories";
 import { createPreviewDaemon } from "./daemon";
 import { createPreviewScenario } from "./scenarios";
+import type { TerminalScript } from "../gallery/fakeTerminal";
 
+/** What a terminal output draws first, at the classic width. */
+const screenOf = (output: string | TerminalScript | undefined) =>
+  typeof output === "object" ? output.screen(80, 0) : output;
 const daemon = () =>
   createPreviewDaemon(createPreviewScenario("changes", "en").scenario);
 const primaryFiles: Record<string, string> = {
@@ -390,10 +394,10 @@ describe("the website's eight independent repository fixtures", () => {
             { type: "shell", description: "pnpm test --watch" },
           ],
         });
-        expect(output("preview-review")).toContain("pnpm test --watch");
+        expect(screenOf(output("preview-review"))).toContain("pnpm test --watch");
         for (const id of sessions.keys()) {
           expect(output(id)).toBeDefined();
-          expect(output(id)).toBe(overview.output(id));
+          expect(screenOf(output(id))).toBe(screenOf(overview.output(id)));
         }
         expect(scenario.state!.pages!.get("preview-coordinator")![0].html).toBe(
           overview.scenario.state!.pages!.get("preview-coordinator")![0].html,

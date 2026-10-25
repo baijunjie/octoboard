@@ -15,6 +15,9 @@ import {
 import { previewRepositories } from "./repositories";
 import { previewCopy as english } from "./locales/en";
 import { previewCopy as chinese } from "./locales/zh-Hans";
+import { createTerminalScript } from "./terminals";
+import { terminalCopy } from "./terminalScripts";
+import type { TerminalScript } from "../gallery/fakeTerminal";
 
 export type PreviewScene = "overview" | "focus" | "changes";
 
@@ -79,7 +82,9 @@ function report(copy: typeof english): string {
 export function createPreviewScenario(
   scene: PreviewScene,
   language: Language,
-): { scenario: Scenario; output: (session: string) => string | undefined } {
+  /** Whether a working session's terminal moves; false for a visitor who asks for reduced motion. */
+  animate = true,
+): { scenario: Scenario; output: (session: string) => string | TerminalScript | undefined } {
   const copy = copyFor(language);
   const workspace = consoleOf("preview-console", copy.workspace, {
     workdir: "/demo/bistro",
@@ -291,7 +296,8 @@ export function createPreviewScenario(
       (ui) => ui.press(ui.changeRow("meal-deal-orders.ts", "modified")),
       (ui) => ui.wait(600),
     );
-  const sessionIds = new Set([coordinator.id, ...projectSessions.map((session) => session.id)]);
+  const sessions = [coordinator, ...projectSessions];
+  const startedAt = Date.now();
   const cyan = "\x1b[38;5;80m";
   const reset = "\x1b[0m";
   return {
@@ -310,13 +316,18 @@ export function createPreviewScenario(
         ].join("\r\n");
       }
       // Additional shells opened by the visitor use the fake terminal's default output.
-      if (!sessionIds.has(session)) return undefined;
-      const lines =
-        session === coordinator.id
-          ? copy.terminalProgress
-          : (copy.sessionUpdates[session] ?? copy.terminalChanges);
-      return (
-        [`${cyan}${copy.demo}${reset}`, "", ...lines].join("\r\n") + "\r\n"
+      const found = sessions.find((candidate) => candidate.id === session);
+      if (!found) return undefined;
+      return createTerminalScript(
+        {
+          id: found.id,
+          agent: found.agent,
+          status: found.status === "working" || found.status === "waiting_user" ? found.status : "idle",
+          cwd: projects.find((project) => project.id === found.project_id)?.path ?? workspace.workdir,
+          background: found.background_tasks?.[0]?.description,
+          copy: terminalCopy(found.id, copy.terminals[found.id]),
+        },
+        { startedAt, animate },
       );
     },
   };

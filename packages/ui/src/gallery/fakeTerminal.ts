@@ -36,7 +36,7 @@ export function isWide(ch: string): boolean {
 /** The cells a string takes: a CJK character is two, everything else one. Enough for this sample
  * only: it strips SGR colour codes and no other escape, and counts BMP CJK alone (a wide ideograph
  * from U+20000 up counts as one), with no combining marks or emoji. */
-function cells(text: string): number {
+export function cells(text: string): number {
   // eslint-disable-next-line no-control-regex -- ANSI SGR sequences begin with the escape control character.
   return [...text.replace(/\x1b\[[0-9;]*m/g, "")].reduce((sum, ch) => sum + (isWide(ch) ? 2 : 1), 0);
 }
@@ -116,6 +116,23 @@ function shortBrokenUrlLines(cols: number): string[] {
   }
   return lines;
 }
+
+/** Output that changes with time, for a consumer that simulates a program at work. The socket
+ * writes `screen(cols, 0)` once it opens, then, if `tick` is given, moves from one step to the next
+ * every `interval` ms by writing `tick`'s bytes; a resize to another width redraws `screen` at the
+ * step the screen has reached. A step is a count of ticks, so anything that must follow the clock
+ * (an elapsed timer, or progress that should survive reopening the session) reads `Date.now()`
+ * itself, which a paused tab does not freeze. */
+export interface TerminalScript {
+  /** The whole screen at `cols` columns after `step` ticks. */
+  screen(cols: number, step: number): string;
+  /** The bytes that move the screen from `step - 1` to `step` at `cols`. */
+  tick?(cols: number, step: number): string;
+  /** Milliseconds between two ticks; 125 where a script gives none. */
+  interval?: number;
+}
+
+const DEFAULT_TICK_INTERVAL = 125;
 
 const sample = (cols: number) => [
   `${ESC}1;38;5;208m ✻ Welcome to Claude Code${ESC}0m`,
@@ -254,12 +271,16 @@ class FakeTerminalSocket extends EventTarget {
   /** The width the output on screen was laid out for, once it has been written. */
   private drawnCols?: number;
 
-  /** Whether the output on screen depends on the width, which only the scrolling sample does. Other
-   * text is written once and left to the terminal's own resize behavior. */
+  /** Whether the output on screen depends on the width, which the scrolling sample and a script do.
+   * Other text is written once and left to the terminal's own resize behavior. */
   private sized = false;
   private readonly behaviour: TerminalBehaviour;
+  /** The supplied script, once it has been asked for, and the ticks it has had. */
+  private script?: TerminalScript;
+  private step = 0;
+  private ticker?: ReturnType<typeof setInterval>;
 
-  constructor(readonly url: string, private readonly supplied?: () => string | undefined) {
+  constructor(readonly url: string, private readonly supplied?: () => string | TerminalScript | undefined) {
     super();
     const behaviour = url.slice(FIXTURE_ORIGIN.length).split("/")[0] as TerminalBehaviour;
     this.behaviour = behaviour;
@@ -274,6 +295,7 @@ class FakeTerminalSocket extends EventTarget {
       // (the terminal settles on its real size a moment after opening) redraws in `send`.
       setTimeout(() => {
         this.draw("");
+        this.startTicking();
         // The daemon closes the socket once an exited shell's output has been sent.
         if (behaviour === "exited") setTimeout(() => this.close(), 20);
       }, 20);
@@ -283,11 +305,31 @@ class FakeTerminalSocket extends EventTarget {
   /** Writes the output laid out for the current width, after `clear`. */
   private draw(clear: string): void {
     this.drawnCols = this.cols;
-    // Supplied output is written once; without it (or where it declines) the behaviour's own sample is.
-    const supplied = this.supplied?.();
-    this.sized = supplied === undefined && this.behaviour === "output";
-    const bytes = new TextEncoder().encode(clear + (supplied ?? SAMPLES[this.behaviour](this.cols)));
-    this.dispatchEvent(new MessageEvent("message", { data: bytes.buffer }));
+    // Supplied text is written once and a script is laid out again at each width; without
+    // either (or where the consumer declines) the behaviour's own sample is written.
+    const supplied = this.script ?? this.supplied?.();
+    if (typeof supplied === "object") this.script = supplied;
+    this.sized = this.script !== undefined || (supplied === undefined && this.behaviour === "output");
+    const text = typeof supplied === "string"
+      ? supplied
+      : this.script?.screen(this.cols, this.step) ?? SAMPLES[this.behaviour](this.cols);
+    this.write(clear + text);
+  }
+
+  private write(text: string): void {
+    this.dispatchEvent(new MessageEvent("message", { data: new TextEncoder().encode(text).buffer }));
+  }
+
+  /** Ticks the script, if it has a `tick`. A hidden tab skips its ticks rather than queueing them,
+   * so it comes back to a screen that is a step or two behind and catches up on the next tick. */
+  private startTicking(): void {
+    const { script } = this;
+    if (!script?.tick || this.readyState !== 1) return;
+    this.ticker = setInterval(() => {
+      if (document.hidden) return;
+      this.step++;
+      this.write(script.tick!(this.cols, this.step));
+    }, script.interval ?? DEFAULT_TICK_INTERVAL);
   }
 
   send(data: unknown): void {
@@ -308,14 +350,16 @@ class FakeTerminalSocket extends EventTarget {
   close(): void {
     if (this.readyState === 3) return;
     this.readyState = 3;
+    clearInterval(this.ticker);
     this.dispatchEvent(new Event("close"));
   }
 }
 
 export interface FakeTerminalOptions {
-  /** Alternate sample text, keyed by session, for consumers such as the public website preview;
-   * `undefined` leaves a session to the sample its URL's behaviour draws. */
-  output?: (session: string) => string | undefined;
+  /** Alternate output for a session, as text written once or as a script that moves, for consumers
+   * such as the public website preview; `undefined` leaves a session to the sample its URL's
+   * behaviour draws. */
+  output?: (session: string) => string | TerminalScript | undefined;
   /** Refuse all other sockets rather than falling back to a real network connection. */
   strict?: boolean;
 }

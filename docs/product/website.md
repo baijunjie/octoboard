@@ -284,6 +284,27 @@ order-validation review session awaits instructions while a test watcher (`pnpm 
 background, so it shows as working in background. Its order-checking session waits for the user to confirm the
 discount rule. These statuses retain their application meanings in `docs/product/sessions.md`, "Session statuses".
 
+Each session's agent terminal imitates its agent's own terminal interface: Claude Code, Codex and Grok Build each
+have a distinct header, prompt, tool-call rows, input area and hints. These looks are approximations and name no
+model or version. A terminal shows the session's task prompt, then what its agent has done so far (file reads, edits
+with their added and removed line counts and, for some, the changed lines, command runs and the agent's remarks),
+then a state that follows the session's status:
+
+- A working session shows a status line with a spinner and an elapsed timer, and appends further steps from its own
+  short list 4 to 7 seconds apart; once the list is used up, only the spinner and timer keep running. Each session's
+  timer starts from a different sample elapsed time. Progress counts from when the preview loaded, so reopening a
+  session shows the steps already reached instead of replaying them, and a tab returning from the background catches
+  up at once.
+- A session awaiting instructions shows its finished summary and an empty input area; the order-validation review
+  session's terminal also names its running background task (`pnpm test --watch`).
+- The order-checking session waiting for the user shows its agent's question on whether meal deals can be combined
+  with member discounts, with numbered choices and keeping them separate selected.
+
+Visitors who prefer reduced motion see static terminals: no spinner motion, no appended steps and a fixed timer. The
+file reads, edits, test results and the coordinator's diff statistics shown in the terminals are derived from the
+sample repositories, so they agree with the files and diffs the visitor can open. The terminals carry no sample-data
+line of their own; the caption or label described below identifies the preview as a sample.
+
 Each of the eight projects has its own sample repository, with a distinct root, feature branch, business files and
 Git changes. Selecting another project shows that project's source and diffs. The examples cover promotion
 configuration in Promotion console, store availability and redemption in Store management console, browsing and
@@ -354,8 +375,9 @@ project's focus cards. The code-review scene opens the Files panel and the sampl
 change in the diff viewer automatically, including on phones. The preview does not connect to a daemon, run real
 agents, read or change real project files, or retain its preferences after a reload.
 It does not replace the website's stored language preference. The application controls follow the selected supported
-UI language; the fictional tasks, terminal output and report use Simplified Chinese for that language and English
-for all others.
+UI language; the fictional tasks, the agents' prose and task prompts in the terminals, and the report use Simplified
+Chinese for that language and English for all others. What the agents' tools print in the terminals, such as line
+counts, test results and key hints, stays in English in every language.
 
 The embedded view shows a loading message until ready. A reported startup failure, or no readiness after 20 seconds,
 shows a localized preview-specific error message that directs the visitor to choose a view above to retry. Selecting
