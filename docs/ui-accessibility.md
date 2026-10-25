@@ -316,8 +316,8 @@ needs an equivalent reachable another way; Close terminal in the panel's header 
 A panel that floats in from a button and leaves the rest of the window usable (the rail's account quota panel, and the
 popover of an error or warning mark) is a large tooltip with a body: one component (`Hint`, kind `popover`) gives both the same
 input logic. It is not a region: it is reached through its button, the way a menu is. Its dialog is named by what the
-panel is (Quota, the mark's name, a tone's word for a mark of one line), never by the text it holds: VoiceOver reads a
-dialog's name and then its content as focus enters it, so a dialog named by its own text is read twice.
+panel is (Quota, the mark's name, a tone's word for a mark of one line), never by the text it holds: VoiceOver reads
+both a dialog's name and its content as focus enters it, so a dialog named by its own text is read twice.
 
 **The input matrix**, by what the input can do:
 

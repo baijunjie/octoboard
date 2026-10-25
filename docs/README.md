@@ -364,8 +364,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   for when a new announcement needs a listening pass (what it takes to match a passing case and the checks a caller must
   still pass), the evidence limits, each case's UI location, mechanism, rendered ARIA wiring, spoken result, environment
   and reuse scope (control names, the `StatusAnnouncer` timings with and without a focus move, the login success
-  announcement and focus hand-off), the patterns heard failing, the unconfirmed ones, and which case each existing
-  `StatusAnnouncer` caller matches.
+  announcement and focus hand-off, a delayed `role="alert"`, on-demand reading of a confirmation warning and the trust
+  caution, and the reading paths into a hover- or Enter-opened popover), the patterns heard failing, the unconfirmed
+  ones, and which case each existing `StatusAnnouncer` caller matches.
 
 ## Code
 
