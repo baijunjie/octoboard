@@ -16,6 +16,7 @@ import type { ShellTerminal } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { useOctoboardTheme } from "../theme";
 import { openPathTarget } from "./openPathTarget";
+import { programCopyHandler } from "./osc52";
 import { TerminalController, type TermStatus } from "./TerminalController";
 import { TerminalEditMenu } from "./TerminalEditMenu";
 import { TerminalLinkTooltip } from "./TerminalLinkTooltip";
@@ -70,7 +71,7 @@ export function ShellTerminalView({
 }): React.ReactElement {
   const t = useT();
   const { terminalUrl, terminalReconnectDelay, request, toastError } = useDaemon();
-  const links = usePlatform().links;
+  const { links, clipboard } = usePlatform();
   const { resolved: colorTheme } = useOctoboardTheme();
   const rootRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -114,6 +115,7 @@ export function ShellTerminalView({
         },
         openLink: links && ((url) => links.open(url).catch((cause: unknown) => reportExternalLinkFailure(latest.current.t, url, cause))),
         onLinkHover: (link) => setLinkRef.current?.(link),
+        copyToClipboard: programCopyHandler(clipboard, () => latest.current),
         pathLinks: {
           probe: async (paths) => {
             const reply = await latest.current.request({ type: "probe_path_links", project: latest.current.project, paths });

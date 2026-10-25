@@ -5,6 +5,7 @@ import { type IBufferRange, Terminal } from "@xterm/xterm";
 
 import { interactionIsTouch } from "../touchInput";
 import { TerminalLinkColors } from "./linkColors";
+import { OSC_52, osc52ClipboardText } from "./osc52";
 import { installPathLinks, type PathAnswer, type PathLinkCache, type PathLinkTarget } from "./pathLinks";
 import {
   brokenUrlLinkProvider,
@@ -128,6 +129,12 @@ export interface TerminalControllerHandlers {
    * `undefined` once it is no longer on one. Plain-text addresses are not reported: their text is
    * their target. */
   onLinkHover?: (link: HoveredTerminalLink | undefined) => void;
+  /** Puts on the clipboard the text a program in the terminal asks to copy (OSC 52), as Claude Code
+   * does with the text selected in its own fullscreen view; absent where there is no clipboard, which
+   * leaves the request ignored. Never called for output written before the screen's session was
+   * attached: a live session's replay, a dormant session's saved output, or what was still queued
+   * when the screen was reset. */
+  copyToClipboard?: (text: string) => void;
   /** What the daemon makes of the file paths in the output, for the session on screen: absent where
    * there is no daemon to ask, which leaves paths as plain text. */
   pathLinks?: {
@@ -186,8 +193,14 @@ export class TerminalController {
    * saved snapshot, so repeated dormant renders do not replace it with another load. */
   private savedLoad?: WebSocket;
   /** Saved output or a reset barrier written and not yet parsed. While any is, xterm's answers
-   * to output queries are dropped unless it marked the data as the user's (`userInput`). */
+   * to output queries are dropped unless it marked the data as the user's (`userInput`), and what
+   * the output asks to copy is ignored. */
   private savedWritesInFlight = 0;
+  /** A live session's replay (the first frame after an attach) written and not yet parsed. What it
+   * asks to copy was asked before the attach, and may be long gone from the user's mind. */
+  private replayWritesInFlight = 0;
+  /** Removes the listeners `mount` puts on the container. */
+  private readonly mountListeners = new AbortController();
   /** Set by xterm's `onUserInput` right before the `onData` it belongs to, and consumed there:
    * whether that data came from the user (a key, a paste, an input method) rather than being
    * xterm's own answer to a query. */
@@ -220,6 +233,12 @@ export class TerminalController {
       // are left as they are.
       minimumContrastRatio: 4.5,
       altClickMovesCursor: true,
+      // With mouse reporting on (Claude Code's fullscreen view), a drag goes to the program and makes
+      // no selection of the terminal's own, so there is nothing for its menu to copy; Option-drag
+      // selects all the same, as Shift-drag does elsewhere. It takes Option-drag's column selection
+      // on macOS with it. The Option-click that would then move the cursor is held to the screens
+      // without mouse reporting (see `mount`).
+      macOptionClickForcesSelection: true,
       // Decorations, which colour the links, are an experimental API xterm gates behind this.
       allowProposedApi: true,
       // Leaving `allowNonHttpProtocols` unset is what keeps an OSC 8 link to any other scheme
@@ -247,6 +266,12 @@ export class TerminalController {
       if (this.term.buffer.active.viewportY !== this.hoveredViewportY) this.handlers.onLinkHover?.(undefined);
     });
     this.linkColors = new TerminalLinkColors(this.term, paths?.segments);
+    this.term.parser.registerOscHandler(OSC_52, (payload) => {
+      const text = osc52ClipboardText(payload);
+      if (text && this.savedWritesInFlight === 0 && this.replayWritesInFlight === 0) this.handlers.copyToClipboard?.(text);
+      // Handled even when ignored, which keeps xterm from logging it as an unknown sequence.
+      return true;
+    });
 
     const keepModifiersFromArming = keepModifiersFromArmingKeyDownSeen(this.term);
 
@@ -313,6 +338,15 @@ export class TerminalController {
     this.container = container;
     this.term.open(container);
     this.exposeReadOnlyView();
+    // Under mouse reporting an Option-click forces a selection rather than reaching the program, and
+    // xterm would turn a click that selected nothing into arrow keys towards it, which a fullscreen
+    // program reads as keys of its own (Claude Code walks its prompt history). Set before xterm's own
+    // listener on its element reads it.
+    container.addEventListener(
+      "mousedown",
+      () => (this.term.options.altClickMovesCursor = this.term.modes.mouseTrackingMode === "none"),
+      { capture: true, signal: this.mountListeners.signal },
+    );
     // Observed: fitting or clearing the terminal in the same task as `open()` throws from inside
     // xterm's own scheduled work, where no caller's `try` can catch it — and an uncaught throw
     // there takes the whole window down with it. Deferring by a frame avoids it. This is anchored
@@ -377,6 +411,7 @@ export class TerminalController {
     clearTimeout(this.resizeTimer);
     this.linkColors.dispose();
     this.pathLinks?.clear();
+    this.mountListeners.abort();
     this.disposed = true;
     this.generation++;
     this.socket?.close();
@@ -476,6 +511,7 @@ export class TerminalController {
     this.socket = socket;
 
     let everOpened = false;
+    let firstFrame = true;
 
     socket.addEventListener("open", () => {
       if (generation !== this.generation) return;
@@ -488,17 +524,25 @@ export class TerminalController {
     socket.addEventListener("message", (ev) => {
       if (generation !== this.generation) return;
       if (!(ev.data instanceof ArrayBuffer)) return;
-      if (this.painted) {
+      // The daemon replays the ring buffer as one frame, ahead of any live output, and sends none when
+      // the ring is empty, so a first frame of live output is held to the same rule.
+      const replay = firstFrame;
+      firstFrame = false;
+      if (replay) this.replayWritesInFlight++;
+      if (this.painted && !replay) {
         this.write(new Uint8Array(ev.data));
         return;
       }
+      const paint = !this.painted;
       // The write callback fires once xterm has parsed the data; the frame after it is when the
       // renderer has drawn it.
-      this.write(new Uint8Array(ev.data), () =>
+      this.write(new Uint8Array(ev.data), () => {
+        if (replay) this.replayWritesInFlight--;
+        if (!paint) return;
         requestAnimationFrame(() => {
           if (generation === this.generation) this.setPainted(true);
-        }),
-      );
+        });
+      });
     });
     socket.addEventListener("close", () => {
       if (generation !== this.generation) return;

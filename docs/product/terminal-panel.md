@@ -116,7 +116,9 @@ then sent away with its Close panel button or by moving the pointer away. In the
 
 - **Copy, paste and select all**: the same editing menu as a session's terminal, opened the same ways (see "Copy,
   paste and selection" in `docs/product/session-terminal.md`). Paste is unavailable while the terminal is not
-  connected, a terminal whose shell has exited included.
+  connected, a terminal whose shell has exited included. Selecting under mouse reporting, and text a program copies
+  with OSC 52, follow the same section; a program in a tab not shown can copy too. An Option-click moves the shell's
+  cursor as described in "Typing and the mouse" in the same doc.
 - **Links**: web addresses and file paths in the output are links by the rules of "Links in the output" in
   `docs/product/session-terminal.md`, with the terminal's project in the place of the session's. **A file opened in
   the file viewer from a shell terminal hands keyboard focus back to that terminal** when the viewer closes, while its

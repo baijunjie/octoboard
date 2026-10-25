@@ -20,6 +20,7 @@ import { useOctoboardTheme } from "../theme";
 import type { ViewedFile } from "../browser/TerminalFileViewer";
 import { TerminalController, type TermStatus } from "./TerminalController";
 import { openPathTarget } from "./openPathTarget";
+import { programCopyHandler } from "./osc52";
 import { SessionHistoryView } from "./SessionHistoryView";
 import { TerminalEditMenu } from "./TerminalEditMenu";
 import { TerminalLinkTooltip } from "./TerminalLinkTooltip";
@@ -93,7 +94,7 @@ export function TerminalPane({
 }: TerminalPaneProps): React.ReactElement {
   const t = useT();
   const { terminalUrl, terminalReconnectDelay, request, toastError } = useDaemon();
-  const links = usePlatform().links;
+  const { links, clipboard } = usePlatform();
   const { resolved: colorTheme } = useOctoboardTheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -226,6 +227,7 @@ export function TerminalPane({
         onPaintedChange: setPainted,
         openLink: links && ((url) => links.open(url).catch((cause: unknown) => reportExternalLinkFailure(translateRef.current, url, cause))),
         onLinkHover: (link) => setLinkRef.current?.(link),
+        copyToClipboard: programCopyHandler(clipboard, () => ({ t: translateRef.current, toastError: toastErrorRef.current })),
         pathLinks: {
           probe: async (paths) => {
             const reply = await requestRef.current({ type: "probe_path_links", project: projectIdRef.current ?? undefined, paths });

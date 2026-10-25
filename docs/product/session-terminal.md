@@ -19,8 +19,12 @@ instead (see `docs/product/welcome-screen.md`).
 ## Typing and the mouse
 
 The selected session's terminal is live: keystrokes go straight to the agent, exactly as in a system terminal. Mouse
-reporting works, so an agent's own mouse-driven TUI is usable. `Ctrl+C` reaches the agent, and so do `Tab` and
-`Shift+Tab`. `F6` and `Shift+F6` never do: they move keyboard focus to another region of the window (see "Moving
+reporting works, so an agent's own mouse-driven TUI is usable: while an agent has mouse reporting on (Claude Code's
+fullscreen view, for one), a plain drag goes to the agent and makes no selection of the terminal's own; how to select
+anyway is in "Copy, paste and selection" below. An Option-click (Alt-click outside macOS) moves the agent's prompt
+cursor to the clicked cell, by sending it arrow keys, only on a screen without mouse reporting and while the terminal
+is scrolled to the bottom; under mouse reporting it never sends arrow keys. `Ctrl+C` reaches the agent, and so do
+`Tab` and `Shift+Tab`. `F6` and `Shift+F6` never do: they move keyboard focus to another region of the window (see "Moving
 focus between regions with F6" in `docs/product/moving-focus-between-regions.md`).
 
 ## Copy, paste and selection
@@ -40,6 +44,27 @@ The clipboard is read only when Paste is chosen, so merely opening the menu does
 clipboard access completes after the user switches sessions or the original session can no longer accept input, the
 paste is discarded. It is never redirected to another session. A failed clipboard read, or a copy that neither way
 allows, shows an error alert.
+
+**Selecting with the mouse.** A drag selects terminal text, except while the running program has mouse reporting on:
+then a plain drag goes to the program, and Copy stays disabled for want of a selection. **Option-drag on macOS, and
+Shift-drag on other platforms, selects even under mouse reporting.** On macOS an Option-drag therefore always makes an
+ordinary selection, never a column (block) one; on other platforms an Alt-drag on a screen without mouse reporting
+selects a column.
+
+**Text a program copies.** A program running in the terminal can put text on the clipboard with the OSC 52 escape
+sequence, as Claude Code does with the text selected in its fullscreen view. Whichever selection the request names, the
+text goes to the one system clipboard. Only writes are honoured:
+
+- a request to read the clipboard is never answered, and a request to clear it is ignored;
+- a request in output written before the session was attached is ignored: the replay that opens each attach (or,
+  when there was nothing to replay, the first live output after it), a dormant session's saved output, and output still
+  waiting to be drawn when the screen is reset, as on a switch to another session;
+- where the platform has no clipboard the request is ignored; there is no fallback to the browser's selection copy.
+
+A write the clipboard fails shows the same error alert as a failed Copy, with its clipboard remedy (see "Recovery and
+unexpected errors" in `docs/product/error-alerts.md`). A browser's refusal of a copy the user did not just make (no
+recent gesture, or the page not focused) stays silent, so in a browser that refuses every such copy (Safari) a
+program's copy can fail without notice.
 
 ## Output, scrollback and size
 

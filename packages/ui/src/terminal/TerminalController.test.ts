@@ -31,6 +31,13 @@ const { FakeTerminal } = vi.hoisted(() => {
     }
 
     loadAddon(): void {}
+    private oscHandlers = new Map<number, (payload: string) => boolean>();
+    parser = {
+      registerOscHandler: (ident: number, handler: (payload: string) => boolean) => {
+        this.oscHandlers.set(ident, handler);
+        return { dispose: () => {} };
+      },
+    };
     registerLinkProvider(): void {}
     onScroll = () => ({ dispose: () => {} });
     onWriteParsed = () => ({ dispose: () => {} });
@@ -115,6 +122,8 @@ const { FakeTerminal } = vi.hoisted(() => {
     private parse(): void {
       for (const [text, callback] of this.queue.splice(0)) {
         if (text.includes("\x1b[c")) this.emit("\x1b[?1;2c");
+        // eslint-disable-next-line no-control-regex -- An OSC sequence begins with ESC and ends with BEL.
+        for (const [, ident, payload] of text.matchAll(/\x1b\](\d+);([^\x07]*)\x07/g)) this.oscHandlers.get(Number(ident))?.(payload);
         this.screen += text;
         callback?.();
       }
@@ -177,6 +186,7 @@ const settle = async () => {
 };
 
 let painted: boolean[];
+let copied: string[];
 let container: HTMLElement;
 let controller: TerminalController;
 let term: FakeTerminal;
@@ -198,10 +208,12 @@ beforeEach(async () => {
     framesPending.delete(frame);
   });
   painted = [];
+  copied = [];
   controller = new TerminalController(
     {
       onStatusChange: () => {},
       onPaintedChange: (value) => painted.push(value),
+      copyToClipboard: (text) => copied.push(text),
     },
     "dark",
   );
@@ -435,5 +447,39 @@ describe("keyboard focus on attaching a session the user picked", () => {
     controller.attach("a", url("a"), true);
     lastSocket().open();
     expect(focus).toHaveBeenCalledTimes(focuses);
+  });
+});
+
+describe("text a program asks to copy (OSC 52)", () => {
+  const copy = (text: string) => `\x1b]52;c;${btoa(String.fromCharCode(...new TextEncoder().encode(text)))}\x07`;
+
+  it("goes to the clipboard from live output, but not from the replay of what came before the attach", async () => {
+    controller.attach("a", url("a"), false);
+    lastSocket().open();
+    lastSocket().receive(`before${copy("old")}`);
+    await settle();
+    lastSocket().receive(copy("选中的文本"));
+    await settle();
+    expect(copied).toEqual(["选中的文本"]);
+  });
+
+  it("is ignored in a dormant session's saved output", async () => {
+    controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
+    lastSocket().receive(copy("saved"));
+    await settle();
+    expect(copied).toEqual([]);
+  });
+});
+
+describe("an Option-click", () => {
+  it("moves the cursor only on a screen without mouse reporting", () => {
+    const press = () => term.textarea!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    container.appendChild(term.textarea!);
+    term.modes.mouseTrackingMode = "drag";
+    press();
+    expect(term.options.altClickMovesCursor).toBe(false);
+    term.modes.mouseTrackingMode = "none";
+    press();
+    expect(term.options.altClickMovesCursor).toBe(true);
   });
 });
