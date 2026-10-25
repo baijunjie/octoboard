@@ -30,7 +30,8 @@ Code 2.1.304**, **Codex 0.162.1** and **Grok Build 1.0.62**. The Grok Build chai
 saves of the model and effort and on theme saves with `GROK_THEME` set, were measured on 2026-10-21 on **Grok Build
 1.0.62**. What "Signing in a config directory without a terminal" says was measured on 2026-10-19 on **Claude Code
 2.1.303**, **Codex 0.162.1** and **Grok Build 1.0.62**. What "Writing into a running session" says about invisible
-characters was read from the executable of, and measured on, **Claude Code 2.1.304** on 2026-10-20. All three rewrite
+characters was read from the executable of, and measured on, **Claude Code 2.1.304** on 2026-10-20; what it says
+about input written before bracketed paste is turned on, on **Claude Code 2.1.310** on 2026-10-25. All three rewrite
 their hook surface, their payload fields, their configuration layering and their on-disk layout on upgrade, so check a
 detail here against the installed version before relying on it.
 
@@ -1968,7 +1969,7 @@ Octoboard recognizes it in the terminal output and presses it; what pressing it 
 
 The sequence for all three agents is `ESC[200~`, the text with LF separators, `ESC[201~`, then `CR`; multi-line text
 arrives as one message with no delay between paste and Enter. Every agent queues a message written mid-turn and consumes
-it when the turn ends. (Codex additionally has `codex queue --thread <session id>`.) Five rules, each failing silently
+it when the turn ends. (Codex additionally has `codex queue --thread <session id>`.) Six rules, each failing silently
 or destructively if ignored:
 
 - A message starting with `/` runs as a slash command even inside a bracketed paste; prefix a single space. The same
@@ -1989,12 +1990,22 @@ or destructively if ignored:
   through terminal modes. If the hook state is missing or stale, do not write. Two kinds of screen are the exception,
   since no hook announces them, and are read off the terminal instead. The folder-trust confirmations are read from the
   output: no hook runs before one is answered, and nothing is written into a session from its launch until its first
-  hook has arrived; for Codex, which runs none until its first prompt, also until the confirmation has been pressed, the
+  hook has arrived (for Claude Code, also until bracketed paste is on, below); for Codex, which runs none until its first prompt, also until the confirmation has been pressed, the
   person's answer in the terminal is seen to replace it, or the watch for it has ended with none sighted; for Grok
   Build, which may run no hook at all, at most until 30 s have passed with no confirmation sighted, or, for one sighted,
   until the rendered screen no longer shows it. The dialogs an agent raises that only a person can answer (Claude Code's
   launch and resume dialogs and its views of background agents, Codex's and Grok Build's own screens) are read from the
   rendered screen, which is looked at before each write: nothing is written while one is up.
+- Claude Code reads nothing written before it turns bracketed paste on. From its start until Ink first puts the
+  terminal in raw mode, it reads stdin through an early-input capture that drops every `ESC[` sequence (so the paste
+  markers vanish) and turns `CR` into a newline, then seeds the prompt with what it caught; Ink's first raw-mode enable
+  stops the capture and writes `ESC[?2004h` (with `?1004h` and `?2031h`). With the default inline renderer that comes
+  before `SessionStart`; with the fullscreen renderer (`"tui": "fullscreen"`) `SessionStart` fires first, 28–325 ms
+  ahead of it, and a paste and `CR` written in between is left unsent in the input box, or wiped when a launch prompt
+  is submitted. Its folder-trust confirmation also turns bracketed paste on; a message written right after it is
+  answered and `SessionStart` arrived, before the main screen turned it on again, was still sent (15 of 15, fullscreen).
+  So Octoboard holds a Claude Code session's writes until both its first hook has arrived and bracketed paste has been
+  seen on its terminal since launch.
 - Claude Code does not send a prompt that holds an invisible character. When Enter submits one, it removes those
   characters, leaves the cleaned text in the input box with "Removed N invisible characters · review and press Enter to
   send", and starts no turn (its code returns before the submission that fires `UserPromptSubmit`, read from the

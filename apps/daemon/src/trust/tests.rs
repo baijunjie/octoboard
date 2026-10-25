@@ -2232,3 +2232,73 @@ fn a_hook_after_a_press_the_screen_confirmed_still_carries_the_entry() {
     assert!(watch.note_hook().carry);
     assert!(!watch.note_hook().carry);
 }
+
+/// Claude Code's fullscreen renderer runs `SessionStart` before it reads its input, and a message
+/// written in between is lost: the hook alone does not release the messages held for it, turning
+/// bracketed paste on afterwards does, and writes out what was queued.
+#[tokio::test]
+async fn claude_messages_wait_for_bracketed_paste_after_the_first_hook() {
+    let (state, dir) = state_with_project("paste-after-hook");
+    let message = crate::term::frame_message("hello");
+    let record = session("claude-1", Agent::Claude, Role::Project, Some("project-1"));
+    let script = format!(
+        "printf 'ready'; {}; sleep 30",
+        take(message.len(), "'%RECEIVED%'")
+    );
+    let (live, received) = start(&state, &dir, record, &script);
+    release_when_paste_mode_comes(&state, &live);
+
+    let delivery = crate::reporting::write_message(
+        &state,
+        "claude-1",
+        "hello",
+        crate::reporting::WhenBlocked::Queue,
+    )
+    .expect("accepted");
+    assert!(matches!(delivery, crate::reporting::Delivery::Queued));
+    on_hook(&state, &live);
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    assert!(live.trust.holds_writes(), "the hook alone is not enough");
+    assert_eq!(state.write_hold("claude-1"), Some(WriteHold::Starting));
+    assert!(sent(&received).is_empty());
+
+    // Split across two reads: the parsed state is what counts. Turning it off later changes
+    // nothing.
+    live.on_output(b"\x1b[?20");
+    assert!(live.trust.holds_writes());
+    live.on_output(b"04h");
+    live.on_output(b"\x1b[?2004l");
+    assert!(!live.trust.holds_writes());
+    assert_eq!(state.write_hold("claude-1"), None);
+    let delivered =
+        tokio::task::spawn_blocking(move || wait_for(PATIENCE, || sent(&received) == message));
+    assert!(
+        delivered.await.unwrap(),
+        "released when bracketed paste is on"
+    );
+}
+
+/// The inline renderer turns bracketed paste on before `SessionStart`, so the first hook releases
+/// at once and there is nothing left to wait for.
+#[test]
+fn claude_messages_are_released_by_the_first_hook_when_bracketed_paste_came_first() {
+    let watch = TrustState::new(Agent::Claude, None);
+    assert!(watch.holds_writes());
+    watch.note_paste_mode();
+    assert!(watch.holds_writes(), "still before the hook");
+    assert!(watch.note_hook().released);
+    assert!(!watch.holds_writes());
+}
+
+/// Codex and Grok Build do not wait for bracketed paste: their first hook releases them, with the
+/// terminal never having turned it on.
+#[test]
+fn codex_and_grok_are_released_by_the_first_hook_without_bracketed_paste() {
+    let codex = TrustState::new(Agent::Codex, None);
+    assert!(codex.note_hook().released);
+    assert!(!codex.holds_writes());
+
+    let grok = TrustState::new(Agent::Grok, None);
+    assert!(grok.note_hook().released);
+    assert!(!grok.holds_writes());
+}

@@ -36,12 +36,18 @@ pub(super) struct Screen {
     /// has been is held until it is seen to go ([`super::release_when_the_sighted_screen_goes`]).
     /// `None` holds them for as long as the session runs.
     pub(super) hook_fallback: Option<Duration>,
+    /// Whether the hook alone is not enough to say the agent reads its input: it must also have
+    /// turned bracketed paste on (`ESC [ ? 2004 h`), which it does at the moment its real input
+    /// handling starts. Claude Code's fullscreen renderer runs `SessionStart` before that, while
+    /// an early-input capture still reads the terminal itself, drops the paste markers and turns
+    /// the Enter into a newline, so a message written in between is never sent.
+    pub(super) waits_for_paste_mode: bool,
 }
 
 /// How an agent shows that its startup, the trust screen included, is behind it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum StartSignal {
-    /// It runs a hook as it starts, once it is past the screen. Its messages are then held until
+    /// It runs a hook as it starts, once it is past the screen. Its messages are held at least until
     /// that hook, whatever else happens: after Claude Code's trust screen another startup modal
     /// can follow (approving a project's `.mcp.json` servers, say), which a message's Enter would
     /// answer, and only the hook says the session is ready.
@@ -80,6 +86,7 @@ pub(super) const CLAUDE: Screen = Screen {
     input_ends_wait: false,
     start_signal: StartSignal::Hook,
     hook_fallback: None,
+    waits_for_paste_mode: true,
 };
 
 /// Codex 0.161.0: the question, then "› 1. Trust and continue" and "2. Quit". Codex redraws only
@@ -99,6 +106,7 @@ pub(super) const CODEX: Screen = Screen {
     input_ends_wait: true,
     start_signal: StartSignal::TerminalTitle,
     hook_fallback: None,
+    waits_for_paste_mode: false,
 };
 
 /// Grok Build 1.0.50: the question, then "Yes, proceed y" and "No, quit n", with no cursor.
@@ -118,6 +126,7 @@ pub(super) const GROK: Screen = Screen {
     // managed hooks (`allow_managed_hooks_only`) runs none of Octoboard's, and the session would
     // hold its messages for good.
     hook_fallback: Some(HOOK_FALLBACK),
+    waits_for_paste_mode: false,
 };
 
 pub(super) fn screen_of(agent: Agent) -> &'static Screen {
@@ -321,6 +330,9 @@ pub struct TrustState {
     pub(super) output_at_sighting: AtomicU64,
     /// A hook callback has arrived, so the screen is past and nothing on the terminal is it.
     pub(super) hook_seen: AtomicBool,
+    /// The session's terminal has had bracketed paste turned on at least once since the launch,
+    /// whatever it has done since; see [`Screen::waits_for_paste_mode`].
+    pub(super) paste_mode_seen: AtomicBool,
     /// An answer has been started. A session is answered at most once.
     pub(super) answered: AtomicBool,
     /// Octoboard's press of the screen succeeded.
@@ -352,6 +364,7 @@ impl TrustState {
             writes_at_sighting: AtomicU64::new(0),
             output_at_sighting: AtomicU64::new(0),
             hook_seen: AtomicBool::new(false),
+            paste_mode_seen: AtomicBool::new(false),
             answered: AtomicBool::new(false),
             pressed: AtomicBool::new(false),
             dismissed: AtomicBool::new(false),
@@ -412,8 +425,10 @@ impl TrustState {
     /// A hook of this session reached the daemon: the screen has been answered, so it is no longer
     /// looked for. Says what the first such hook leaves to do; a later one leaves nothing.
     pub(super) fn note_hook(&self) -> HookNoted {
-        let released = self.holds_writes();
+        let was_holding = self.holds_writes();
         let first = !self.hook_seen.swap(true, Ordering::AcqRel);
+        // Still held when the agent has yet to turn bracketed paste on: that moment releases them.
+        let released = was_holding && !self.holds_writes();
         *self.window.lock().expect("trust window mutex poisoned") = Vec::new();
         HookNoted {
             released,
@@ -436,13 +451,18 @@ impl TrustState {
     /// ends with the agent's terminal title — and, once the screen is up, until Octoboard's press
     /// of it has succeeded, the person's own answer in the terminal has been seen to take it away,
     /// or a hook arrives.
+    ///
+    /// For an agent that turns bracketed paste on only once it reads its input
+    /// ([`Screen::waits_for_paste_mode`], Claude Code) the hook is not the end of the hold: it
+    /// lasts until the terminal has also been seen to turn bracketed paste on, with no time
+    /// limit, like a hook that never comes.
     pub fn holds_writes(&self) -> bool {
         if self.hook_seen.load(Ordering::Acquire) {
-            return false;
+            return self.awaits_paste_mode();
         }
         if self.screen.hook_at_start() {
             // For an agent whose hook may never come, a sighted screen seen to go is as good as
-            // the hook. Claude Code has no such fallback, and its hold ends only with its hook.
+            // the hook. Claude Code has no such fallback: its hold cannot end before its hook.
             if self.screen.hook_fallback.is_some() && self.dismissed.load(Ordering::Acquire) {
                 return false;
             }
@@ -462,6 +482,18 @@ impl TrustState {
         !self.expired.load(Ordering::Acquire)
     }
 
+    /// Whether the agent has yet to turn bracketed paste on, and that is still what its messages
+    /// wait for ([`Screen::waits_for_paste_mode`]).
+    pub fn awaits_paste_mode(&self) -> bool {
+        self.screen.waits_for_paste_mode && !self.paste_mode_seen.load(Ordering::Acquire)
+    }
+
+    /// The session's parsed terminal has bracketed paste on. Latched: it does not matter whether
+    /// the agent turns it off again.
+    pub fn note_paste_mode(&self) {
+        self.paste_mode_seen.store(true, Ordering::Release);
+    }
+
     /// Lets through what is held for an agent whose hook has not come ([`Screen::hook_fallback`]),
     /// and says whether it did: not once a hook has arrived or the screen has been sighted, which
     /// this checks under the window's lock a sighting is made under.
@@ -478,6 +510,7 @@ impl TrustState {
     /// for a session past its screen.
     #[cfg(test)]
     pub(crate) fn end_watch(&self) {
+        self.note_paste_mode();
         self.note_hook();
     }
 

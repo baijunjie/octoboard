@@ -67,16 +67,24 @@ the agent's own folder-trust confirmation (see `docs/product/folder-trust.md`) �
 folder, at Codex's and Grok Build's, and declining it, which exits the agent, at Claude Code's. So from every launch of
 a session, a resume included, everything Octoboard writes into it — an instruction, a report, information shared by
 another session, a report panel form submission, the instruction `reopen_session` hands over when it is not the launch
-prompt — is queued as above until the confirmation can no longer be on screen:
+prompt — is queued as above until the confirmation can no longer be on screen and, for Claude Code, until the agent
+is reading its input:
 
-- for Claude Code, until the session's first hook report, which it sends only once it is past the confirmation —
-  with none to answer, within a couple of seconds of starting, a launch or a resume with no prompt included. A Claude
-  Code session whose hook reports never arrive holds its messages for as long as it runs;
-- for Grok Build, likewise until its first hook report, with one exception: a Grok Build session that has sent none 30
-  seconds after its launch — a managed policy that allows only managed hooks keeps every hook of Octoboard's from
-  running — has its messages let through anyway, provided its confirmation has not been recognised. A confirmation
-  that has been, before those 30 seconds or after them, holds its messages until Grok's screen no longer shows it, or
-  until a hook report arrives;
+- for Claude Code, until both of two things have happened, whichever comes last releasing the queue: the session's
+  first hook report has arrived, which Claude Code sends only once it is past the confirmation — with none to answer,
+  within a couple of seconds of starting, a launch or a resume with no prompt included — and Claude Code has turned
+  bracketed paste on in the session's terminal, which it does once it starts reading its input. Bracketed paste only
+  has to have been on once since the launch; whether Claude Code turns it off again later does not matter. With
+  Claude Code's default renderer bracketed paste comes on before the first hook report, so the report releases the
+  queue; with its fullscreen renderer (`"tui": "fullscreen"`) the report comes first, and a message written before
+  bracketed paste is on would be left unsent in its input box, or wiped when a launch prompt is submitted. A Claude
+  Code session whose hook reports never arrive, or that never turns bracketed paste on, holds its messages for as long
+  as it runs: they are never let through on time alone;
+- for Grok Build, until its first hook report, which it too sends only once it is past the confirmation. The one
+  exception: a Grok Build session that has sent none 30 seconds after its launch — a managed policy that allows only
+  managed hooks keeps every hook of Octoboard's from running — has its messages let through anyway, provided its
+  confirmation has not been recognised. A confirmation that has been, before those 30 seconds or after them, holds
+  its messages until Grok's screen no longer shows it, or until a hook report arrives;
 - for Codex, which reports nothing until its first prompt, until Octoboard's watch for the confirmation ends with none
   shown — at the first terminal title Codex sets, once its session has started; when that watch ends is in "How a
   confirmation is pressed" in `docs/product/folder-trust.md`. Once a confirmation is shown, they are held until
@@ -85,9 +93,9 @@ prompt — is queued as above until the confirmation can no longer be on screen:
   for as long as it runs: they are never let through on time alone.
 
 The user's own typing in the session's terminal is never held. A client's direct request to write into a session
-(`send_message` in the daemon's client protocol) is refused instead of queued, with the error code
-`session_trust_pending`, saying to send it once the confirmation has been answered, or once the session has finished
-starting if none appears.
+(`send_message` in the daemon's client protocol) is refused instead of queued while this hold lasts, with the error
+code `session_trust_pending`, saying to send it once the confirmation has been answered, or once the session has
+finished starting if none appears.
 
 **Messages are also held while the agent shows a screen only the user can answer.** Some of the agents' own screens
 run no hook and set no terminal title, and a message's paste and Enter would answer them: the message is thrown away
@@ -158,7 +166,7 @@ question — carries `null`: its `status` says so. When several holds apply, the
 
 | `reason` | The hold |
 |---|---|
-| `starting` | The agent has not yet signalled that it is past its startup screens, so its trust confirmation may still come (see above). |
+| `starting` | The agent has not yet signalled that it is past its startup screens, so its trust confirmation may still come — or, for Claude Code, has sent its first hook report but not yet turned bracketed paste on (see above). |
 | `trust_confirmation` | Its folder-trust confirmation is up and has not been answered. |
 | `agent_dialog` | It is showing a screen only the user can answer (above). |
 | `agent_action` | Codex's terminal title says it is waiting on the user. |

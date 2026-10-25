@@ -414,6 +414,15 @@ impl PtyCore {
         self.fan.lock().expect("fan mutex poisoned").total
     }
 
+    /// Whether bracketed paste is on now; see [`TerminalSnapshot::bracketed_paste_on`].
+    pub fn bracketed_paste_on(&self) -> bool {
+        self.fan
+            .lock()
+            .expect("fan mutex poisoned")
+            .terminal
+            .bracketed_paste_on()
+    }
+
     /// The text of the rows the parsed screen shows now; see [`TerminalSnapshot::visible_text`].
     pub fn screen_text(&self) -> String {
         self.fan

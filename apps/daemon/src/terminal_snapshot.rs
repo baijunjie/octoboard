@@ -81,6 +81,12 @@ impl TerminalSnapshot {
         self.parser.advance(&mut self.terminal, bytes);
     }
 
+    /// Whether bracketed paste is on now, read off the parsed state so that a sequence split
+    /// across reads counts.
+    pub fn bracketed_paste_on(&self) -> bool {
+        self.terminal.mode().contains(TermMode::BRACKETED_PASTE)
+    }
+
     pub fn resize(&mut self, rows: u16, cols: u16) {
         self.terminal.resize(Size {
             rows: usize::from(rows),

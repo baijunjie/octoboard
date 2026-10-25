@@ -112,14 +112,16 @@ pub enum WhenBlocked {
 
 /// Writes a message into a running session, or queues it until the session can take one.
 ///
-/// **The gate is the session's hook-reported state, never the terminal.** No agent signals its modal
-/// state through terminal modes, and a write while a modal dialog is up has its trailing Enter
+/// **The gate is the session's hook-reported state, never the terminal's modes.** No agent signals
+/// its modal state through terminal modes, and a write while a modal dialog is up has its trailing Enter
 /// confirm whatever option is highlighted — at Claude Code's trust dialog that exits the session, at
 /// Grok's approval modal it selects always-approve. Working and idle are both safe: every agent
 /// queues a message written mid-turn and consumes it when the turn ends. The one thing that comes
 /// before any hook is each agent's own trust screen, which the trailing Enter would answer — Codex
 /// and Grok Build would take it as trusting the folder — so a session whose trust watch still holds
-/// writes (`TrustState::holds_writes`) is blocked as well.
+/// writes (`TrustState::holds_writes`) is blocked as well. Claude Code's hold outlasts its first hook
+/// until it has also turned bracketed paste on, as its early-input capture would swallow a write
+/// before then.
 ///
 /// A session a sharing change is restarting takes none of this: its queue is held from the claim
 /// until the resume, so a message for it is queued, whatever the process's state, and `when_blocked`

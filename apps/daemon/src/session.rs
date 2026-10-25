@@ -235,6 +235,9 @@ impl LiveSession {
             if self.screen_watchers.load(Ordering::Acquire) > 0 {
                 self.look_for_dialog();
             }
+            if self.trust.awaits_paste_mode() && self.pty.bracketed_paste_on() {
+                self.trust.note_paste_mode();
+            }
         });
         if titled {
             self.trust.note_title();

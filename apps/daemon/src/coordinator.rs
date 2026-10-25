@@ -3751,11 +3751,11 @@ pub(crate) async fn relaunch_session_with(
     {
         Ok(()) => {
             // What was queued for the relaunched session — the instruction above, say — is
-            // released by its first hook; for Codex, which runs none until its first prompt, also
-            // by Octoboard's successful press of its trust screen, or once its trust watch has
-            // ended with none sighted (`trust::supervise`). Never before, since the agent may be
-            // sitting on its trust or approval screen, where the paste's trailing Enter would
-            // answer it.
+            // released by its first hook (for Claude Code, once bracketed paste is on as well);
+            // for Codex, which runs none until its first prompt, also by Octoboard's successful
+            // press of its trust screen, or once its trust watch has ended with none sighted
+            // (`trust::supervise`). Never before, since the agent may be sitting on its trust or
+            // approval screen, where the paste's trailing Enter would answer it.
             let recorded = state.session_record(&session.id)?;
             if recorded.status == SessionStatus::Archived {
                 // The archive may have landed while the launch was off the runtime, before

@@ -290,7 +290,7 @@ pub enum ClaimKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WriteHold {
     /// The agent has not yet sent the signal that it is past its startup screens: its first hook,
-    /// or for Codex its first terminal title.
+    /// or for Codex its first terminal title; for Claude Code also bracketed paste coming on.
     Starting,
     /// The agent's folder-trust confirmation is up and has not been answered.
     TrustConfirmation,
@@ -1799,8 +1799,9 @@ impl AppState {
         };
         // Nor while the agent may be showing its trust screen, which the paste's trailing Enter
         // would accept (Codex, Grok Build) or decline (Claude Code); see `crate::trust`. The press
-        // that answers it, its first hook, the end of the watch or, for an agent whose hook may
-        // never come, its fallback releases the queue.
+        // that answers it, its first hook (for Claude Code, bracketed paste coming on after it), the
+        // end of the watch or, for an agent whose hook may never come, its fallback releases the
+        // queue.
         if live.trust.holds_writes() || live.needs_user_action() {
             return Drain::Pending;
         }

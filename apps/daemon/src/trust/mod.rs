@@ -52,6 +52,13 @@
 //!   unless its screen has been sighted, which keeps them held until the rendered screen no longer
 //!   shows it ([`release_when_the_sighted_screen_goes`]). A dialog of the agent's holds them as
 //!   it does at any other time ([`crate::agent_dialogs`]).
+//! - Claude Code's hook is not enough on its own: with the fullscreen renderer `SessionStart`
+//!   runs before it reads its input, and a message written in that gap is taken by its
+//!   early-input capture, which drops the paste markers and turns the Enter into a newline. They
+//!   are held until the session's parsed terminal has also been seen to turn bracketed paste on
+//!   (`Screen::waits_for_paste_mode`), whichever of the two comes last releasing them
+//!   ([`on_hook`], [`release_when_paste_mode_comes`]); the inline renderer turns it on first, so
+//!   its first hook releases at once.
 //! - Codex runs none until its first prompt, so its messages are held while the watch is still
 //!   looking (until its first terminal title) and, once its screen is sighted, until Octoboard's
 //!   press of it succeeds, a hook arrives, or the person's own answer in the terminal is seen to
@@ -249,6 +256,9 @@ pub fn supervise(state: &Arc<AppState>, live: &Arc<LiveSession>) {
     if !live.trust.screen.hook_at_start() {
         release_when_the_screen_goes(state, live);
     }
+    if live.trust.screen.waits_for_paste_mode {
+        release_when_paste_mode_comes(state, live);
+    }
     if let Some(bound) = live.trust.screen.hook_fallback {
         release_when_no_hook_comes(state, live, bound);
         release_when_the_sighted_screen_goes(state, live);
@@ -322,6 +332,28 @@ fn release_when_the_screen_goes(state: &Arc<AppState>, live: &Arc<LiveSession>) 
                 release_held(&state, &live.id);
                 break;
             }
+        }
+    });
+}
+
+/// Releases the messages held for a session whose agent turns bracketed paste on only once it
+/// reads its input ([`Screen::waits_for_paste_mode`]), when that comes after its first hook: the
+/// drain does not retry by itself, and nothing else is left to call for it. When bracketed paste
+/// comes first the first hook releases them ([`on_hook`]).
+fn release_when_paste_mode_comes(state: &Arc<AppState>, live: &Arc<LiveSession>) {
+    let state = state.clone();
+    let live = Arc::downgrade(live);
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(RELEASE_POLL).await;
+            let Some(live) = live.upgrade() else { break };
+            if live.trust.awaits_paste_mode() {
+                continue;
+            }
+            if live.trust.hook_seen.load(Ordering::Acquire) {
+                release_held(&state, &live.id);
+            }
+            break;
         }
     });
 }
