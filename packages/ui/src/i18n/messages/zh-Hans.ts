@@ -805,7 +805,7 @@ export const zhHans: Translation<"other"> = {
   "shellTerminal.tabs": "终端",
   "shellTerminal.new": "新建终端",
   "shellTerminal.actions": "终端 {title} 的操作",
-  "shellTerminal.rename": "重命名终端…",
+  "shellTerminal.rename": "重命名终端",
   "shellTerminal.close": "关闭终端",
   "shellTerminal.tab.exited": "{title}（已退出）",
   "shellTerminal.exited": "Shell 已退出",

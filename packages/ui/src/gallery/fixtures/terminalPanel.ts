@@ -189,7 +189,7 @@ export const terminalPanelScenarios: Scenario[] = [
     category: "normal",
     title: "Actions menu of the shown tab",
     description:
-      "The header's actions button open on the shown tab, named after it: Rename terminal… and Close terminal. It is the keyboard's way to a tab's actions, as a tab has no close control the keyboard can reach.",
+      "The header's actions button open on the shown tab, named after it: Rename terminal and Close terminal. It is the keyboard's way to a tab's actions, as a tab has no close control the keyboard can reach.",
     state: stateOf(severalShells),
     preferences: TERMINAL_ONLY,
     steps: [openWebsite, (ui) => headerMenu(ui, "git log")],

@@ -68,7 +68,7 @@ started, renamed, exited or closed from another client show here as they happen.
 
 ## A terminal's actions
 
-**Rename terminal…** and **Close terminal** are offered:
+**Rename terminal** and **Close terminal** are offered:
 
 - for the shown tab, in the "⋯" menu in the panel's header, there only while a tab is shown;
 - for any tab, in its context menu: a right-click on the tab, or `Shift+F10` or the context-menu key with keyboard

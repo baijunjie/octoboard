@@ -882,7 +882,7 @@ export const en = {
   "shellTerminal.tabs": "Terminals",
   "shellTerminal.new": "New terminal",
   "shellTerminal.actions": "Actions for terminal {title}",
-  "shellTerminal.rename": "Rename terminal…",
+  "shellTerminal.rename": "Rename terminal",
   "shellTerminal.close": "Close terminal",
   "shellTerminal.tab.exited": "{title} (exited)",
   "shellTerminal.exited": "The shell has exited",
