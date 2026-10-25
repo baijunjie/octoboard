@@ -3870,11 +3870,11 @@ pub(super) mod tests {
         }
     }
 
-    /// The automatic approvals of session requests, resume requests, account switches and handoffs
-    /// are the user's alone: an agent can neither read them nor change them through the settings
-    /// tools, whatever it passes.
+    /// The automatic approvals of session requests, resume requests, account switches and handoffs,
+    /// and the switch asking for questions as choices, are the user's alone: an agent can neither
+    /// read them nor change them through the settings tools, whatever it passes.
     #[tokio::test]
-    async fn the_automatic_approvals_are_out_of_the_agents_reach() {
+    async fn the_users_own_switches_are_out_of_the_agents_reach() {
         let (state, _dir) = settings_state("app-settings-auto-approve");
         let listed = call(&state, "a", "get_settings", &arguments(json!({})))
             .await
@@ -3883,6 +3883,7 @@ pub(super) mod tests {
         assert!(listed.get("auto_approve_resume_requests").is_none());
         assert!(listed.get("auto_approve_account_switches").is_none());
         assert!(listed.get("auto_approve_handoffs").is_none());
+        assert!(listed.get("ask_questions_as_choices").is_none());
 
         for (stored, passed) in [(false, true), (true, false)] {
             state
@@ -3898,6 +3899,7 @@ pub(super) mod tests {
                 .set_auto_approve_account_switches(stored)
                 .unwrap();
             state.store.set_auto_approve_handoffs(stored).unwrap();
+            state.store.set_ask_questions_as_choices(stored).unwrap();
             let updated = call(
                 &state,
                 "a",
@@ -3907,6 +3909,7 @@ pub(super) mod tests {
                     "auto_approve_resume_requests": passed,
                     "auto_approve_account_switches": passed,
                     "auto_approve_handoffs": passed,
+                    "ask_questions_as_choices": passed,
                     "default_clone_dir": "/tmp/clones",
                 })),
             )
@@ -3916,11 +3919,13 @@ pub(super) mod tests {
             assert!(updated.get("auto_approve_resume_requests").is_none());
             assert!(updated.get("auto_approve_account_switches").is_none());
             assert!(updated.get("auto_approve_handoffs").is_none());
+            assert!(updated.get("ask_questions_as_choices").is_none());
             assert_eq!(updated["default_clone_dir"], "/tmp/clones");
             assert_eq!(state.store.auto_approve_session_requests().unwrap(), stored);
             assert_eq!(state.store.auto_approve_resume_requests().unwrap(), stored);
             assert_eq!(state.store.auto_approve_account_switches().unwrap(), stored);
             assert_eq!(state.store.auto_approve_handoffs().unwrap(), stored);
+            assert_eq!(state.store.ask_questions_as_choices().unwrap(), stored);
         }
     }
 

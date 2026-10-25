@@ -293,6 +293,7 @@ impl Store {
                 auto_approve_resume_requests INTEGER NOT NULL DEFAULT 0,
                 auto_approve_account_switches INTEGER NOT NULL DEFAULT 0,
                 auto_approve_handoffs INTEGER NOT NULL DEFAULT 0,
+                ask_questions_as_choices INTEGER NOT NULL DEFAULT 1,
                 auto_select_account INTEGER NOT NULL DEFAULT 0,
                 sidebar_order_by_status INTEGER NOT NULL DEFAULT 1,
                 auto_start_quota_windows INTEGER NOT NULL DEFAULT 0,
@@ -424,6 +425,13 @@ impl Store {
             conn.execute(
                 "ALTER TABLE settings \
                  ADD COLUMN auto_approve_handoffs INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
+        if !column_exists(&conn, "settings", "ask_questions_as_choices")? {
+            conn.execute(
+                "ALTER TABLE settings \
+                 ADD COLUMN ask_questions_as_choices INTEGER NOT NULL DEFAULT 1",
                 [],
             )?;
         }
@@ -1253,6 +1261,7 @@ impl Store {
             auto_approve_resume_requests: self.auto_approve_resume_requests()?,
             auto_approve_account_switches: self.auto_approve_account_switches()?,
             auto_approve_handoffs: self.auto_approve_handoffs()?,
+            ask_questions_as_choices: self.ask_questions_as_choices()?,
             auto_select_account: self.auto_select_account()?,
             sidebar_order_by_status: self.sidebar_order_by_status()?,
             auto_start_quota_windows: self.auto_start_quota_windows()?,
@@ -1529,6 +1538,24 @@ impl Store {
         let changed = self.lock().execute(
             "UPDATE settings SET auto_approve_handoffs = ?2 \
              WHERE id = ?1 AND auto_approve_handoffs != ?2",
+            params![SETTINGS_ID, value],
+        )?;
+        Ok(changed > 0)
+    }
+
+    pub fn ask_questions_as_choices(&self) -> Result<bool> {
+        Ok(self.lock().query_row(
+            "SELECT ask_questions_as_choices FROM settings WHERE id = ?1",
+            params![SETTINGS_ID],
+            |row| row.get(0),
+        )?)
+    }
+
+    /// Whether the setting actually changed.
+    pub fn set_ask_questions_as_choices(&self, value: bool) -> Result<bool> {
+        let changed = self.lock().execute(
+            "UPDATE settings SET ask_questions_as_choices = ?2 \
+             WHERE id = ?1 AND ask_questions_as_choices != ?2",
             params![SETTINGS_ID, value],
         )?;
         Ok(changed > 0)
@@ -4939,6 +4966,14 @@ mod tests {
                 read: |settings| settings.auto_approve_handoffs,
                 get: Store::auto_approve_handoffs,
                 set: Store::set_auto_approve_handoffs,
+                added_later: true,
+            },
+            Setting {
+                column: "ask_questions_as_choices",
+                default: true,
+                read: |settings| settings.ask_questions_as_choices,
+                get: Store::ask_questions_as_choices,
+                set: Store::set_ask_questions_as_choices,
                 added_later: true,
             },
             Setting {

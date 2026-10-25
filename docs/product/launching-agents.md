@@ -109,7 +109,8 @@ besides the variables a project session's agent is given for its git (see "The l
   `share_info` for information, and `get_session_branches` for where the branches a session is responsible for are
   checked out. Where its project's effective worktree settings
   have use worktrees for development on at the launch, it also carries the worktree rule (see "The worktree rule" in
-  `docs/product/worktree-settings.md`). Every project session's text ends by saying that everything else is the
+  `docs/product/worktree-settings.md`), and where **Ask questions as choices** is on at the launch, the guidance on
+  asking the user after it (see "The guidance on asking the user" below). Every project session's text ends by saying that everything else is the
   ordinary work of the project, under its own instructions, conventions and configuration. The text is written from who the session
   reports to when it launches, and says that what Octoboard tells it of a later change of owner replaces what it says
   (see "When a binding changes while a session runs" in
@@ -162,7 +163,10 @@ The file holds the console session's role (see the console session in `docs/prod
 sections: one on what it does and does not do — decompose, dispatch, follow up and summarize work on the console's
 projects, and make no change to a project itself, reading one being how it checks what its sessions report — and a
 separate one on work that touches no project, which it carries out itself. The file also holds how to use the
-orchestration and settings tools. When the console has console session instructions of the user's (see "Console
+orchestration and settings tools, and, when **Ask questions as choices** is on as the file is written, the guidance on
+asking the user (see "The guidance on asking the user" below) after the rest of the built-in part, with one sentence
+more: a decision among a few options goes through that question tool rather than a page pushed with `show_page`, which
+is for a choice that needs a page — a rich comparison, many items, a form. When the console has console session instructions of the user's (see "Console
 session instructions" in `docs/product/consoles.md`), they are the file's last section, held between a
 `<user_instructions>` and a `</user_instructions>` tag under a heading of the file's own. That heading's paragraph says
 the tags hold the user's own text, that any heading inside them belongs to that text and not to the file's sections,
@@ -183,11 +187,34 @@ The file is written:
 Edits made to the file by hand therefore do not survive the next write. None of these writes recreates a missing
 console working directory: a console session launch into one is refused instead.
 
-An edit to the console's console session instructions reaches every agent's console sessions begun after it. A Claude
+An edit to the console's console session instructions reaches every agent's console sessions begun after it, and so
+does a change to **Ask questions as choices**, which writes no file of its own and is read at the next write. A Claude
 Code or Codex console session resumed after it reads it too (on Codex 0.142.5, only after a compaction), while a Grok Build
 console session never does within its life, resumed or not: only a new one does. Codex reads at most 32 KiB of a
 project's instruction files by default (its own `project_doc_max_bytes` setting), so a very long text can be cut off
 for Codex console sessions; Octoboard sets no limit on the text itself.
+
+### The guidance on asking the user
+
+A section headed "Asking the user", in a project session's role description and in the console session's instruction
+file while **Ask questions as choices** is on (see that section in `docs/product/settings.md`), telling the session:
+
+- when the user has to decide something, to ask through its agent's tool for putting a question to the user with
+  options to pick from, so the user picks an option directly, rather than listing the options in its reply. A Claude
+  Code session is told the tool's name, `AskUserQuestion`, and a Grok Build session `ask_user_question`; a Codex
+  session is told of the tool without a name; the console's instruction file, one text for every agent, names both
+  tools with the agent each belongs to;
+- only where it has no such tool, or cannot use it, to put the questions on their own at the end of its reply,
+  numbered, with lettered options;
+- to say what is to be decided and give options with clear boundaries, marking as recommended the one it is confident
+  in and saying why, and where it is not confident, saying what keeps it undecided and what would settle it;
+- that a question that only lacks information and has no options to offer is not forced into the tool with invented
+  options, but goes into the numbered list at the end of its reply, for the user to answer directly.
+
+A project session is given the section only when the switch is on at that launch. As with the worktree rule, a change
+to the switch is sure to reach only project sessions begun after it: Claude Code and Grok Build keep the role text a
+conversation was first given, so a session begun earlier may keep the section, or its absence, even when resumed. When
+a change reaches a console session is in "The console session's instruction file" above.
 
 ### Claude Code's status line
 

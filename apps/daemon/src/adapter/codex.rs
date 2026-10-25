@@ -290,6 +290,7 @@ impl AgentAdapter for CodexAdapter {
                 spec.owner.as_ref(),
                 Agent::Codex,
                 spec.worktrees.as_ref(),
+                spec.ask_questions_as_choices,
             ))
         ));
 
@@ -659,6 +660,7 @@ mod tests {
                 fixture.owner.as_ref(),
                 Agent::Codex,
                 fixture.worktrees.as_ref(),
+                fixture.ask_questions_as_choices,
             ))
         ))));
         assert!(!overrides.iter().any(|o| o.starts_with("instructions=")));

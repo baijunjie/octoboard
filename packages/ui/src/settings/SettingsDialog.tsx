@@ -13,7 +13,7 @@ import { useIsNarrow } from "../layout/breakpoint";
 import { AboutSection } from "./AboutSection";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentAccountsSection, AGENT_STRIP_HEIGHT } from "./AgentAccountsSection";
-import { AgentPermissionsSection } from "./AgentPermissionsSection";
+import { AgentBehaviorSection } from "./AgentBehaviorSection";
 import { ConfigurationSection } from "./ConfigurationSection";
 import { GeneralSection } from "./GeneralSection";
 import { GitSection } from "./GitSection";
@@ -40,7 +40,7 @@ const SECTIONS = [
   { id: "accounts", label: "settings.section.accounts", Icon: KeyRound, Content: AgentAccountsSection, stickyHeadingHeight: AGENT_STRIP_HEIGHT },
   { id: "trusted-folders", label: "settings.section.trustedFolders", Icon: FolderCheck, Content: TrustedFoldersSection },
   { id: "permissions", label: "settings.section.permissions", Icon: ShieldCheck, Content: PermissionsSection },
-  { id: "agent-permissions", label: "settings.section.agentPermissions", Icon: ShieldUser, Content: AgentPermissionsSection },
+  { id: "agent-permissions", label: "settings.section.agentPermissions", Icon: ShieldUser, Content: AgentBehaviorSection },
   { id: "notifications", label: "settings.section.notifications", Icon: Bell, Content: NotificationsSection },
   { id: "shortcuts", label: "settings.section.shortcuts", Icon: Keyboard, Content: ShortcutsSection, stickyHeadingHeight: SHORTCUT_GROUP_HEADING_HEIGHT },
   { id: "configuration", label: "settings.section.configuration", Icon: FileCog, Content: ConfigurationSection },

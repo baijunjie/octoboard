@@ -11,7 +11,7 @@ row, on the accounts table's Disable heading and, in an account's settings dialo
 directory and on the sharing row (see "Approval modes", "The accounts table", "The account settings dialog" and
 "Sharing the default configuration" in `docs/product/agent-accounts.md`, and "Explanations in help tips" in
 `docs/product/labels-and-tooltips.md`). The sections, in order, are **General**, **Git**, **Worktrees**, **Agent
-accounts**, **Trusted folders**, **Permissions**, **Agent permissions**, **Notifications**, **Keyboard shortcuts**,
+accounts**, **Trusted folders**, **Permissions**, **Agent behavior**, **Notifications**, **Keyboard shortcuts**,
 **Configuration** and **About**; the dialog opens on General unless it was asked to open on another section.
 
 A console session can read the default clone directory, the automatic pulling of repositories, the automatic deletion of
@@ -246,7 +246,7 @@ account was not named uses the account of its agent whose weekly quota resets so
 row's description says what turning it on will do, and while it is on it says what is happening now: a new session uses
 the account whose weekly quota resets soonest, so quota that is about to reset is used before it is lost. The daemon
 stores it as `auto_select_account` and keeps it, so every window shows the same. Unlike the switches in Agent
-permissions, a console session may read and change it, and a full configuration export carries it (see "Application
+behavior, a console session may read and change it, and a full configuration export carries it (see "Application
 settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The application settings
 a full export carries" in `docs/product/configuration-export-and-import.md`). Which account is chosen, and who applies
 the choice, are in "Which account a session uses" in `docs/product/sessions.md`. Turning it on or off changes no
@@ -339,16 +339,17 @@ report which have been granted, which
 opens no error alert (see "Failures shown on the screen" in `docs/product/error-alerts.md`). Until the first read comes
 back the section shows neither line and nothing else either.
 
-## Agent permissions
+## Agent behavior
 
-What a session may do without asking the user first. A paragraph under the heading says as much, above four rows:
-**Automatically approve session requests**, **Automatically approve resume requests**, **Automatically approve account
-switches**, then **Automatically approve handoffs**. The section is the same in every client. Each switch is kept by the
-daemon, so every window shows the same, and besides its row only an import asked to apply a full configuration
-document's application settings changes it (see "The application settings a full export carries" in
-`docs/product/configuration-export-and-import.md`); turning one on or off leaves the others as they are. What an
-automatic approval does, what turning a switch on changes, and why agents cannot change any of the switches are in
-"Approving requests automatically" in `docs/product/session-requests.md`.
+What a session may do without asking the user first, and how it asks the user. A paragraph under the heading says as
+much, above five rows: **Automatically approve session requests**, **Automatically approve resume requests**,
+**Automatically approve account switches**, **Automatically approve handoffs**, then **Ask questions as choices**. The
+section is the same in every client. Each switch is kept by the daemon, so every window shows the same, and besides its
+row only an import asked to apply a full configuration document's application settings changes it (see "The
+application settings a full export carries" in `docs/product/configuration-export-and-import.md`); turning one on or
+off leaves the others as they are. What an automatic approval does, what turning one of the four approval switches on
+changes, and why agents cannot change any of them are in "Approving requests automatically" in
+`docs/product/session-requests.md`.
 
 ### Automatically approve session requests
 
@@ -386,6 +387,19 @@ is off the row's description says that, once it is on, a session can do so witho
 the user is asked and can change the agent, account, model and reasoning effort before confirming; while it is on, it
 says that a session does so without asking, and that turning it off has the user asked again, with those choices. The
 Hand off the user makes from the window is not affected.
+
+### Ask questions as choices
+
+A switch, **on to begin with** — installations from before the switch existed included: whether the instructions
+Octoboard gives a session ask it to put a question that needs the user's decision as options the user picks from,
+through the agent's own tool for asking, rather than listing the options in its reply (what a session is told is in
+"The guidance on asking the user" in `docs/product/launching-agents.md`). While the switch is on the row's description
+says so, that turning it off lets sessions ask in their own way, and that a change reaches sessions started afterwards;
+while it is off, it says that once it is on sessions are asked to do so, and that until then they ask in their own way.
+The daemon stores it as `ask_questions_as_choices`. A session already running keeps what it was told when it launched;
+when a change reaches a console session is in "The console session's instruction file" in
+`docs/product/launching-agents.md`. An agent can neither read nor change the switch through the settings tools (see
+"Who reads and changes what" in `docs/product/agent-settings-tools.md`).
 
 ## Notifications
 

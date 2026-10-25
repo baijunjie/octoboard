@@ -49,6 +49,8 @@ pub struct LaunchRequest {
     pub owner: Option<crate::mcp::Owner>,
     /// The project's effective worktree settings; see `LaunchSpec::worktrees`.
     pub worktrees: Option<crate::worktree_settings::WorktreeSettings>,
+    /// See `LaunchSpec::ask_questions_as_choices`.
+    pub ask_questions_as_choices: bool,
     pub cwd: PathBuf,
     /// Initial task, only on a fresh launch.
     pub task: Option<String>,
@@ -90,6 +92,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         role,
         owner,
         worktrees,
+        ask_questions_as_choices,
         cwd,
         task,
         resume_agent_session_id,
@@ -152,6 +155,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         role,
         owner,
         worktrees,
+        ask_questions_as_choices,
         new_agent_session_id: &new_agent_session_id,
         resume_agent_session_id: resume_agent_session_id.as_deref(),
         cwd,

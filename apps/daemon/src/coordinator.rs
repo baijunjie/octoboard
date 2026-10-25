@@ -1006,6 +1006,7 @@ async fn handle_inner(
             auto_approve_resume_requests,
             auto_approve_account_switches,
             auto_approve_handoffs,
+            ask_questions_as_choices,
             auto_select_account,
             sidebar_order_by_status,
             auto_start_quota_windows,
@@ -1021,6 +1022,7 @@ async fn handle_inner(
                     auto_approve_resume_requests,
                     auto_approve_account_switches,
                     auto_approve_handoffs,
+                    ask_questions_as_choices,
                     auto_select_account,
                     sidebar_order_by_status,
                     auto_start_quota_windows,
@@ -1426,7 +1428,10 @@ fn store_new_console(
     };
     // Written before the record is stored: nothing else can touch a console no one has been told
     // of yet, and a failed write then leaves no console behind.
-    mcp::console_instructions::write_console_session_instructions(&console)?;
+    mcp::console_instructions::write_console_session_instructions(
+        &console,
+        state.store.ask_questions_as_choices()?,
+    )?;
     state.store.insert_console(&console)?;
     state.broadcast(Event::ConsoleUpserted {
         console: console.clone(),
@@ -3935,6 +3940,7 @@ async fn start_process(
         role: session.role,
         owner: owner_of(state, session)?,
         worktrees: launch_worktree_settings(state, session)?,
+        ask_questions_as_choices: state.store.ask_questions_as_choices()?,
         cwd: cwd.to_path_buf(),
         task: task.map(str::to_string),
         resume_agent_session_id: resume_agent_session_id.map(str::to_string),
@@ -5891,6 +5897,7 @@ pub struct SettingsChanges {
     pub auto_approve_resume_requests: Option<bool>,
     pub auto_approve_account_switches: Option<bool>,
     pub auto_approve_handoffs: Option<bool>,
+    pub ask_questions_as_choices: Option<bool>,
     pub auto_select_account: Option<bool>,
     pub sidebar_order_by_status: Option<bool>,
     pub auto_start_quota_windows: Option<bool>,
@@ -5909,6 +5916,7 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         auto_approve_resume_requests,
         auto_approve_account_switches,
         auto_approve_handoffs,
+        ask_questions_as_choices,
         auto_select_account,
         sidebar_order_by_status,
         auto_start_quota_windows,
@@ -5944,6 +5952,9 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     }
     if let Some(value) = auto_approve_handoffs {
         changed |= state.store.set_auto_approve_handoffs(value)?;
+    }
+    if let Some(value) = ask_questions_as_choices {
+        changed |= state.store.set_ask_questions_as_choices(value)?;
     }
     if let Some(value) = auto_select_account {
         changed |= state.store.set_auto_select_account(value)?;
@@ -9248,21 +9259,21 @@ mod tests {
         assert_eq!(stored().as_deref(), Some("Be brief."));
         assert_eq!(
             file(),
-            mcp::console_instructions::console_session_instructions(Some("Be brief."))
+            mcp::console_instructions::console_session_instructions(Some("Be brief."), true)
         );
 
         handle(&state, None, update(None)).await.unwrap();
         assert_eq!(stored().as_deref(), Some("Be brief."));
         assert_eq!(
             file(),
-            mcp::console_instructions::console_session_instructions(Some("Be brief."))
+            mcp::console_instructions::console_session_instructions(Some("Be brief."), true)
         );
 
         handle(&state, None, update(Some(None))).await.unwrap();
         assert_eq!(stored(), None);
         assert_eq!(
             file(),
-            mcp::console_instructions::console_session_instructions(None)
+            mcp::console_instructions::console_session_instructions(None, true)
         );
 
         handle(&state, None, update(Some(Some("Answer in French."))))
@@ -9271,7 +9282,10 @@ mod tests {
         assert_eq!(stored().as_deref(), Some("Answer in French."));
         assert_eq!(
             file(),
-            mcp::console_instructions::console_session_instructions(Some("Answer in French."))
+            mcp::console_instructions::console_session_instructions(
+                Some("Answer in French."),
+                true
+            )
         );
 
         handle(&state, None, update(Some(Some("  \n "))))
@@ -9280,7 +9294,7 @@ mod tests {
         assert_eq!(stored(), None);
         assert_eq!(
             file(),
-            mcp::console_instructions::console_session_instructions(None)
+            mcp::console_instructions::console_session_instructions(None, true)
         );
         assert!(!file().contains("Answer in French."));
     }

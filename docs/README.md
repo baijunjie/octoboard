@@ -263,9 +263,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Settings](product/settings.md) — the Settings dialog: how it opens (the rail, and the macOS menu's Settings… /
   ⌘, and when that is ignored), how it closes and where focus goes, its General (Appearance, Language, the default
   clone directory and, in the macOS application alone, keeping Octoboard running in the background), Git, Agent
-  accounts, Trusted folders, Permissions, Agent permissions (automatically approving session requests and resume
-  requests, each its own switch), Notifications, Keyboard shortcuts and Configuration (exporting and importing the
-  configuration document, where the window can save and open files) sections.
+  accounts, Trusted folders, Permissions, Agent behavior (automatically approving session requests and resume
+  requests, each its own switch, and asking questions as choices), Notifications, Keyboard shortcuts and
+  Configuration (exporting and importing the configuration document, where the window can save and open files)
+  sections.
 - [Worktree settings](product/worktree-settings.md) — the four worktree settings (use worktrees, rebase before merging,
   delivery, revert gate), their values and defaults, the other three applying only while use worktrees is on, a project
   following each application-wide value or holding its own and how the effective values are worked out, and how they

@@ -330,6 +330,17 @@ it("states what turning on the automatic approvals lets agents do", async () => 
   expect(lines["Automatically approve handoffs"]).toEqual({ badge: "Turns on", note: "A session's request to hand one of its sessions off to another agent is then approved without asking you first." });
 });
 
+it("says applying the file turns off asking questions as choices", async () => {
+  await reviewing();
+  expect(settingLines()["Ask questions as choices"]).toEqual({ badge: "Turns off" });
+});
+
+it("states what turning on asking questions as choices does", async () => {
+  const turningOn = { ...REVIEW, settings: { ...REVIEW.settings!, ask_questions_as_choices: true, current_ask_questions_as_choices: false } };
+  await reviewing({ reply: (body) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected", ...turningOn }) : reply(body)) });
+  expect(settingLines()["Ask questions as choices"]).toEqual({ badge: "Turns on", note: "Octoboard asks sessions started afterwards to put a question that needs your decision as options you can pick." });
+});
+
 it("leaves out the automatic approvals when the file does not carry them", async () => {
   const without = {
     ...REVIEW,

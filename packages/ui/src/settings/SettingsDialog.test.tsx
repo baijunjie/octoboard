@@ -36,7 +36,7 @@ vi.mock("./GitSection", () => ({ GitSection: () => <p>Git section</p> }));
 vi.mock("./WorktreesSection", () => ({ WorktreesSection: () => <p>Worktrees section</p> }));
 vi.mock("./TrustedFoldersSection", () => ({ TrustedFoldersSection: () => <p>Trusted</p> }));
 vi.mock("./PermissionsSection", () => ({ PermissionsSection: () => <p>Permissions</p> }));
-vi.mock("./AgentPermissionsSection", () => ({ AgentPermissionsSection: () => <p>Agent permissions</p> }));
+vi.mock("./AgentBehaviorSection", () => ({ AgentBehaviorSection: () => <p>Agent behavior</p> }));
 vi.mock("./NotificationsSection", () => ({ NotificationsSection: () => <p>Notifications</p> }));
 vi.mock("./ConfigurationSection", () => ({ ConfigurationSection: () => <p>Configuration</p> }));
 
@@ -97,12 +97,12 @@ it("leaves the Add agent request for the accounts section to take up when anothe
   expect(taken.count).toBe(1);
 });
 
-it("lists the Agent permissions section right after Permissions and opens on it", async () => {
+it("lists the Agent behavior section right after Permissions and opens on it", async () => {
   const { selected } = mount({ nonce: 1, section: "agent-permissions", addAgent: false });
   await act(async () => {});
-  expect(selected()?.textContent).toContain("Agent permissions");
+  expect(selected()?.textContent).toContain("Agent behavior");
   const tabs = [...document.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
-  expect(tabs.indexOf("Agent permissions")).toBe(tabs.indexOf("Permissions") + 1);
+  expect(tabs.indexOf("Agent behavior")).toBe(tabs.indexOf("Permissions") + 1);
 });
 
 it("asks account forms to close for every later navigation request", async () => {

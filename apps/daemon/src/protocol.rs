@@ -888,6 +888,12 @@ pub struct Settings {
     /// `auto_approve_session_requests` does for `request_session`, independently of the other
     /// approvals. Off unless the user turned it on; only the user's own client changes it.
     pub auto_approve_handoffs: bool,
+    /// Whether the instructions given to every session at launch ask it to put each question that
+    /// needs the user's decision or answer as options to pick from. On unless the user turned it
+    /// off. Fixed per session when it starts, so a change reaches only sessions begun afterwards
+    /// (a console session's file is rewritten at each launch, so it follows at the next one). Only
+    /// the user's own client changes it.
+    pub ask_questions_as_choices: bool,
     /// Whether a new session whose account was left out runs on the account of its agent whose
     /// weekly quota resets soonest and still has some left. Off unless the user turned it on.
     /// When nothing ranks, the account is chosen as it is while this is off.
@@ -936,6 +942,7 @@ impl Default for Settings {
             auto_approve_resume_requests: false,
             auto_approve_account_switches: false,
             auto_approve_handoffs: false,
+            ask_questions_as_choices: true,
             auto_select_account: false,
             sidebar_order_by_status: true,
             auto_start_quota_windows: false,
@@ -2016,6 +2023,8 @@ pub enum RequestBody {
         auto_approve_account_switches: Option<bool>,
         #[serde(default)]
         auto_approve_handoffs: Option<bool>,
+        #[serde(default)]
+        ask_questions_as_choices: Option<bool>,
         #[serde(default)]
         auto_select_account: Option<bool>,
         #[serde(default)]

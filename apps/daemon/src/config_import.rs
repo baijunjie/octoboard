@@ -163,6 +163,9 @@ pub struct InspectedSettings {
     /// Absent when the document predates the setting, which applying it then leaves as it is.
     pub auto_approve_handoffs: Option<bool>,
     pub current_auto_approve_handoffs: bool,
+    /// Absent when the document predates the setting, which applying it then leaves as it is.
+    pub ask_questions_as_choices: Option<bool>,
+    pub current_ask_questions_as_choices: bool,
     /// Absent when the document predates the settings, which applying it then leaves as they are.
     pub worktrees: Option<WorktreeSettings>,
     pub current_worktrees: WorktreeSettings,
@@ -535,6 +538,8 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
             current_auto_approve_account_switches: state.store.auto_approve_account_switches()?,
             auto_approve_handoffs: settings.auto_approve_handoffs,
             current_auto_approve_handoffs: state.store.auto_approve_handoffs()?,
+            ask_questions_as_choices: settings.ask_questions_as_choices,
+            current_ask_questions_as_choices: state.store.ask_questions_as_choices()?,
             worktrees: settings.worktrees,
             current_worktrees: state.store.worktree_settings()?,
         }),
@@ -727,6 +732,7 @@ pub async fn apply(
             auto_approve_resume_requests: settings.auto_approve_resume_requests,
             auto_approve_account_switches: settings.auto_approve_account_switches,
             auto_approve_handoffs: settings.auto_approve_handoffs,
+            ask_questions_as_choices: settings.ask_questions_as_choices,
             auto_select_account: settings.auto_select_account,
             sidebar_order_by_status: settings.sidebar_order_by_status,
             auto_start_quota_windows: settings.auto_start_quota_windows,
@@ -1817,6 +1823,7 @@ mod tests {
                 auto_approve_resume_requests: None,
                 auto_approve_account_switches: None,
                 auto_approve_handoffs: None,
+                ask_questions_as_choices: None,
                 worktrees: None,
                 keyboard_shortcuts: None,
             })
@@ -1915,6 +1922,32 @@ mod tests {
         assert!(target.store.auto_approve_resume_requests().unwrap());
         assert!(target.store.auto_approve_account_switches().unwrap());
         assert!(target.store.auto_approve_handoffs().unwrap());
+    }
+
+    /// The question-asking switch is on by default, so what travels is the user turning it off:
+    /// the importing machine takes it only when settings are applied.
+    #[tokio::test]
+    async fn turning_off_asking_questions_as_choices_round_trips_in_a_full_export() {
+        let (source, source_dir) = app_state("import-ask-choices-source");
+        source.store.set_ask_questions_as_choices(false).unwrap();
+        source
+            .store
+            .insert_console(&crate::test_support::console(&source_dir))
+            .unwrap();
+        let full =
+            serde_json::to_value(crate::config_export::build(&source.store, None, true).unwrap())
+                .unwrap();
+        assert_eq!(full["settings"]["ask_questions_as_choices"], false);
+
+        let (target, _target_dir) = app_state("import-ask-choices-target");
+        let settings = inspect(&target, &full).await.unwrap().settings.unwrap();
+        assert_eq!(settings.ask_questions_as_choices, Some(false));
+        assert!(settings.current_ask_questions_as_choices);
+
+        apply(&target, &full, Vec::new(), false).await.unwrap();
+        assert!(target.store.ask_questions_as_choices().unwrap());
+        apply(&target, &full, Vec::new(), true).await.unwrap();
+        assert!(!target.store.ask_questions_as_choices().unwrap());
     }
 
     /// The worktree settings travel in a full export beside each project's own override: the
@@ -2079,6 +2112,7 @@ mod tests {
                 auto_approve_resume_requests: None,
                 auto_approve_account_switches: None,
                 auto_approve_handoffs: None,
+                ask_questions_as_choices: None,
                 worktrees: None,
                 keyboard_shortcuts: None,
             })
@@ -2111,6 +2145,7 @@ mod tests {
                 auto_approve_resume_requests: None,
                 auto_approve_account_switches: None,
                 auto_approve_handoffs: None,
+                ask_questions_as_choices: None,
                 worktrees: None,
                 keyboard_shortcuts: None,
             })

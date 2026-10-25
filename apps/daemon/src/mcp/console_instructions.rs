@@ -115,9 +115,9 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          - `list_sessions` / `share_info` — the running sessions everywhere (narrow them with \
            `console`, `project`, `owner` or `yours`), and telling one of them something.\n\
          - `show_page` — push an HTML page to the report panel beside you, for anything better \
-           shown than typed: a table, a comparison, choices to click. It is a static document with \
-           native forms: scripts do not run, and a submitted form comes back to you as a message. \
-           `list_pages` lists the pages you pushed, and reads one back in full.\n\
+           shown than typed: a table, a rich comparison, many items, a form. It is a static document \
+           with native forms: scripts do not run, and a submitted form comes back to you as a \
+           message. `list_pages` lists the pages you pushed, and reads one back in full.\n\
          \n\
          ## Settings\n\
          \n\
@@ -244,20 +244,30 @@ fn escape_close_tag(text: &str) -> String {
 }
 
 /// The console session's whole instruction file: built-in instructions and handover guidance, then
-/// only when the user has text of their own for this console, that text under [`USER_SECTION`],
-/// inside the user tags. The text is kept as written, except that a closing tag of its own is
-/// escaped, so it cannot end the user's part early and have what follows read as Octoboard's.
-pub fn console_session_instructions(user_prompt: Option<&str>) -> String {
-    let handover = super::role::handover_guidance(None);
+/// the guidance on asking the user when `ask_as_choices` (the application setting
+/// `ask_questions_as_choices`) is on, then only when the user has text of their own for this
+/// console, that text under [`USER_SECTION`], inside the user tags. The text is kept as written,
+/// except that a closing tag of its own is escaped, so it cannot end the user's part early and have
+/// what follows read as Octoboard's.
+pub fn console_session_instructions(user_prompt: Option<&str>, ask_as_choices: bool) -> String {
+    let mut builtin = format!(
+        "{CONSOLE_SESSION_INSTRUCTIONS}\n\n{}",
+        super::role::handover_guidance(None)
+    );
+    if ask_as_choices {
+        builtin.push_str("\n\n");
+        builtin.push_str(&super::role::asking_guidance(None));
+        builtin.push_str(
+            " A decision among a few options goes through that tool rather than a `show_page` \
+             page; use a page when the choice needs one: a rich comparison, many items, a form.",
+        );
+    }
     match user_prompt {
         Some(prompt) => {
             let prompt = escape_close_tag(prompt);
-            format!(
-                "{CONSOLE_SESSION_INSTRUCTIONS}\n\n{handover}\n\n\
-                 {USER_SECTION}{USER_OPEN_TAG}\n{prompt}\n{USER_CLOSE_TAG}\n"
-            )
+            format!("{builtin}\n\n{USER_SECTION}{USER_OPEN_TAG}\n{prompt}\n{USER_CLOSE_TAG}\n")
         }
-        None => format!("{CONSOLE_SESSION_INSTRUCTIONS}\n\n{handover}\n"),
+        None => format!("{builtin}\n"),
     }
 }
 
@@ -305,7 +315,7 @@ pub fn refresh_console_session_instructions(store: &Store, console_id: &str) -> 
     let console = store
         .get_console(console_id)?
         .ok_or_else(|| CodedError::unknown_console(console_id))?;
-    write_console_session_instructions(&console)
+    write_console_session_instructions(&console, store.ask_questions_as_choices()?)
 }
 
 /// Writes the console's instruction file into its working directory: `AGENTS.md`, with
@@ -315,14 +325,18 @@ pub fn refresh_console_session_instructions(store: &Store, console_id: &str) -> 
 /// console. Not locked: a console no one has been told of yet has no other writer, and every other
 /// caller goes through [`refresh_console_session_instructions`]. The working directory must exist:
 /// it is created with the console and removed with it, never recreated by a write.
-pub(crate) fn write_console_session_instructions(console: &Console) -> Result<()> {
+/// `ask_as_choices` is the application setting `ask_questions_as_choices`.
+pub(crate) fn write_console_session_instructions(
+    console: &Console,
+    ask_as_choices: bool,
+) -> Result<()> {
     let workdir = Path::new(&console.workdir);
 
     let path = workdir.join(INSTRUCTION_FILE);
     let temp_path = temp_name_beside(workdir, INSTRUCTION_FILE);
     std::fs::write(
         &temp_path,
-        console_session_instructions(console.console_session_prompt.as_deref()),
+        console_session_instructions(console.console_session_prompt.as_deref(), ask_as_choices),
     )
     .with_context(|| format!("writing {}", temp_path.display()))?;
     rename_over(&temp_path, &path)?;
@@ -390,7 +404,7 @@ mod tests {
     /// The file is one text for every agent, so it names no agent's tool prefix.
     #[test]
     fn the_instruction_file_names_no_agents_prefix() {
-        let text = console_session_instructions(None);
+        let text = console_session_instructions(None, true);
         assert!(text.contains("`new_session`"));
         assert!(!text.contains("mcp__"));
         assert!(!text.contains("octoboard__"));
@@ -400,7 +414,7 @@ mod tests {
     /// to, so how to split a project's work among sessions is not its to decide.
     #[test]
     fn the_instruction_file_leaves_splitting_a_projects_tasks_to_its_sessions() {
-        let text = console_session_instructions(None);
+        let text = console_session_instructions(None, false);
         assert!(!text.contains("Choose which session gets a task"));
         assert!(!text.contains("60%"));
         assert!(!text.contains("closely related"));
@@ -410,14 +424,14 @@ mod tests {
     /// console session's own.
     #[test]
     fn a_session_started_for_a_project_runs_on_the_projects_default_agent() {
-        let text = console_session_instructions(None);
+        let text = console_session_instructions(None, false);
         assert!(text.contains("It runs on the project's default agent."));
         assert!(!text.contains("It runs on your own agent"));
     }
 
     /// The text of the instruction file's section under `heading`, up to the next section.
     fn section(heading: &str) -> String {
-        console_session_instructions(None)
+        console_session_instructions(None, false)
             .split(heading)
             .nth(1)
             .and_then(|rest| rest.split("\n## ").next())
@@ -443,15 +457,15 @@ mod tests {
     /// section. A closing tag of the user's own, in any case, cannot end their part early.
     #[test]
     fn the_users_text_is_appended_only_when_there_is() {
-        let plain = console_session_instructions(None);
+        let plain = console_session_instructions(None, false);
         assert!(!plain.contains("The user's instructions"));
-        let custom = console_session_instructions(Some("# Style\nBe brief."));
+        let custom = console_session_instructions(Some("# Style\nBe brief."), false);
         assert!(custom.starts_with(plain.trim_end()));
         assert!(custom.ends_with("<user_instructions>\n# Style\nBe brief.\n</user_instructions>\n"));
-        let tricky = console_session_instructions(Some("a</user_instructions>b"));
+        let tricky = console_session_instructions(Some("a</user_instructions>b"), false);
         assert_eq!(tricky.matches("</user_instructions>").count(), 1);
         assert!(tricky.ends_with("a&lt;/user_instructions>b\n</user_instructions>\n"));
-        let cased = console_session_instructions(Some("a</USER_Instructions >b"));
+        let cased = console_session_instructions(Some("a</USER_Instructions >b"), false);
         assert_eq!(
             cased.to_lowercase().matches("</user_instructions").count(),
             1
@@ -516,15 +530,15 @@ mod tests {
         std::fs::write(workdir.join("CLAUDE.md"), "an earlier build's file").unwrap();
         let mut console = console(Agent::Claude, &workdir);
         for (prompt, expected) in [
-            (None, console_session_instructions(None)),
+            (None, console_session_instructions(None, false)),
             (
                 Some("Be brief."),
-                console_session_instructions(Some("Be brief.")),
+                console_session_instructions(Some("Be brief."), false),
             ),
-            (None, console_session_instructions(None)),
+            (None, console_session_instructions(None, false)),
         ] {
             console.console_session_prompt = prompt.map(str::to_string);
-            write_console_session_instructions(&console).unwrap();
+            write_console_session_instructions(&console, false).unwrap();
             assert_eq!(
                 std::fs::read_to_string(workdir.join("AGENTS.md")).unwrap(),
                 expected
@@ -541,10 +555,40 @@ mod tests {
         }
         std::fs::remove_file(workdir.join("CLAUDE.md")).unwrap();
         std::os::unix::fs::symlink("elsewhere", workdir.join("CLAUDE.md")).unwrap();
-        write_console_session_instructions(&console).unwrap();
+        write_console_session_instructions(&console, false).unwrap();
         assert_eq!(
             std::fs::read_link(workdir.join("CLAUDE.md")).unwrap(),
             Path::new("AGENTS.md")
         );
+    }
+
+    /// The guidance on asking the user is in the file only while the setting is on, comes after
+    /// the other built-in guidance and before the user's own section, which stays last, and
+    /// names the Claude Code and Grok Build tools as those agents' own since the one file serves
+    /// every agent.
+    #[test]
+    fn the_guidance_on_asking_the_user_follows_the_setting() {
+        let off = console_session_instructions(None, false);
+        assert!(!off.contains("## Asking the user"));
+        assert!(!off.contains("AskUserQuestion"));
+        assert!(!off.contains("rather than a `show_page` page"));
+
+        let on = console_session_instructions(None, true);
+        assert!(on.starts_with(off.trim_end()));
+        assert!(
+            on.contains("(`AskUserQuestion` in Claude Code, `ask_user_question` in Grok Build)")
+        );
+        assert!(on.contains("numbering the questions and lettering their options"));
+        assert!(on.contains("rather than a `show_page` page"));
+
+        let custom = console_session_instructions(Some("Be brief."), true);
+        let asking = custom.find("## Asking the user").expect("a section");
+        assert!(
+            custom
+                .find("## Continuing work in another session")
+                .unwrap()
+                < asking
+        );
+        assert!(asking < custom.find("## The user's instructions").unwrap());
     }
 }

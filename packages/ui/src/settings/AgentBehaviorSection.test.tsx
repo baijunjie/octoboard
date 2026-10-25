@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { LanguageProvider } from "../i18n/react";
-import { AgentPermissionsSection } from "./AgentPermissionsSection";
+import { AgentBehaviorSection } from "./AgentBehaviorSection";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -13,10 +13,10 @@ const request = vi.fn(() => Promise.resolve({}) as Promise<never>);
 vi.mock("../store", () => ({
   useDaemon: () => ({ request, toastError: vi.fn() }),
   useDaemonStore: (selector: (state: { settings: Record<string, boolean> }) => unknown) =>
-    selector({ settings: { auto_approve_session_requests: true, auto_approve_resume_requests: false, auto_approve_account_switches: false, auto_approve_handoffs: true } }),
+    selector({ settings: { auto_approve_session_requests: true, auto_approve_resume_requests: false, auto_approve_account_switches: false, auto_approve_handoffs: true, ask_questions_as_choices: true } }),
 }));
 
-it("shows the session-request, resume-request, account-switch and handoff switches in that order, each with its own value and setting", async () => {
+it("shows the session-request, resume-request, account-switch, handoff and question-asking switches in that order, each with its own value and setting", async () => {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -26,12 +26,12 @@ it("shows the session-request, resume-request, account-switch and handoff switch
   act(() =>
     root.render(
       <LanguageProvider>
-        <AgentPermissionsSection />
+        <AgentBehaviorSection />
       </LanguageProvider>,
     ),
   );
-  expect(container.textContent).toContain("Choose what sessions may do without asking you first.");
-  const [sessions, resumes, switches, handoffs] = [...container.querySelectorAll<HTMLInputElement>("input[type=checkbox]")];
+  expect(container.textContent).toContain("Choose what sessions may do without asking you first, and how they ask you.");
+  const [sessions, resumes, switches, handoffs, questions] = [...container.querySelectorAll<HTMLInputElement>("input[type=checkbox]")];
   expect(container.textContent!.indexOf("Automatically approve session requests")).toBeLessThan(
     container.textContent!.indexOf("Automatically approve resume requests"),
   );
@@ -41,7 +41,10 @@ it("shows the session-request, resume-request, account-switch and handoff switch
   expect(container.textContent!.indexOf("Automatically approve account switches")).toBeLessThan(
     container.textContent!.indexOf("Automatically approve handoffs"),
   );
-  expect([sessions.checked, resumes.checked, switches.checked, handoffs.checked]).toEqual([true, false, false, true]);
+  expect(container.textContent!.indexOf("Automatically approve handoffs")).toBeLessThan(
+    container.textContent!.indexOf("Ask questions as choices"),
+  );
+  expect([sessions.checked, resumes.checked, switches.checked, handoffs.checked, questions.checked]).toEqual([true, false, false, true, true]);
   await act(async () => {
     resumes.click();
   });
@@ -54,5 +57,9 @@ it("shows the session-request, resume-request, account-switch and handoff switch
     handoffs.click();
   });
   expect(request).toHaveBeenLastCalledWith({ type: "update_settings", auto_approve_handoffs: false });
-  expect(request).toHaveBeenCalledTimes(3);
+  await act(async () => {
+    questions.click();
+  });
+  expect(request).toHaveBeenLastCalledWith({ type: "update_settings", ask_questions_as_choices: false });
+  expect(request).toHaveBeenCalledTimes(4);
 });

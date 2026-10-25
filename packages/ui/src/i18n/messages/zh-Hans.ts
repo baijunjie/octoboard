@@ -1474,6 +1474,7 @@ export const zhHans: Translation<"other"> = {
   "configuration.import.settings.consequence.autoApproveResume": "之后会话请求重新打开、恢复会话或在新会话中恢复对话时，将直接获批，不再先询问你。",
   "configuration.import.settings.consequence.autoApproveAccountSwitches": "之后会话请求切换其名下某个会话的账户时，将直接获批，不再先询问你。",
   "configuration.import.settings.consequence.autoApproveHandoffs": "之后会话请求将其名下某个会话移交给另一个智能体时，将直接获批，不再先询问你。",
+  "configuration.import.settings.consequence.askQuestionsAsChoices": "Octoboard 会要求之后启动的会话在需要你做决定时用可点选的选项提问。",
   "configuration.import.settings.consequence.shortcuts": {
     other: "文件中有 {count} 项快捷键与默认值不同。仅对此设备或浏览器生效。",
   },
@@ -1560,7 +1561,7 @@ export const zhHans: Translation<"other"> = {
   "settings.section.accounts": "智能体账户",
   "settings.section.trustedFolders": "受信任的文件夹",
   "settings.section.permissions": "权限",
-  "settings.section.agentPermissions": "智能体行为权限",
+  "settings.section.agentPermissions": "智能体行为",
   "settings.section.notifications": "通知",
   "settings.section.configuration": "配置",
   "settings.section.shortcuts": "键盘快捷键",
@@ -1664,7 +1665,7 @@ export const zhHans: Translation<"other"> = {
     "会话按启动时间从新到旧排列，项目按名称排列，置顶的排在最前，等待你处理或正在工作的不会因此上移；没有未归档会话的项目排在最后。开启后，会话和项目会随状态变化移动位置，除置顶项外，等待你处理的排在最前。",
   "settings.sidebarOrder.description.on":
     "会话和项目会随状态变化移动位置，除置顶项外，等待你处理的排在最前。没有未归档会话的项目排在最后。",
-  "settings.agentPermissions.lead": "选择会话可以在不征得你同意的情况下执行哪些操作。",
+  "settings.agentPermissions.lead": "选择会话可以不先征得你同意就执行哪些操作，以及它们如何向你提问。",
   "settings.autoApproveSession.label": "自动批准会话请求",
   "settings.autoApproveSession.description.off":
     "开启后，会话可以直接启动向你汇报的新会话，无需先征得你的同意。新会话除你之外没有其他所有者。",
@@ -1685,6 +1686,11 @@ export const zhHans: Translation<"other"> = {
     "开启后，会话可以直接将其名下某个会话移交给另一个智能体的新会话，无需先征得你的同意。在此之前，每次都会先询问你，你可以在确认前修改智能体、账户、模型和推理强度。",
   "settings.autoApproveHandoffs.description.on":
     "会话可以直接将其名下某个会话移交给另一个智能体的新会话，无需先征得你的同意。关闭后会先询问你，你可以在确认前修改智能体、账户、模型和推理强度。",
+  "settings.askQuestionsAsChoices.label": "以选项形式提问",
+  "settings.askQuestionsAsChoices.description.off":
+    "开启后，Octoboard 会要求会话在需要你做决定时用可点选的选项提问，而不是在回复里罗列选项。在此之前，会话按各自的方式提问。",
+  "settings.askQuestionsAsChoices.description.on":
+    "Octoboard 会要求会话在需要你做决定时用可点选的选项提问，而不是在回复里罗列选项。关闭后，会话按各自的方式提问。更改对之后启动的会话生效。",
   "settings.autoSelect.label": "自动选择账户",
   "settings.autoSelect.description.off":
     "开启后，新建会话会使用周额度最快重置的账户，以免即将重置的额度被浪费。",

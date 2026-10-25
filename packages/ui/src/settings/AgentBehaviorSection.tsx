@@ -1,15 +1,17 @@
 import React from "react";
 
 import { useT } from "../i18n/react";
+import { AskQuestionsAsChoicesSetting } from "./AskQuestionsAsChoicesSetting";
 import { AutoApproveAccountSwitchesSetting } from "./AutoApproveAccountSwitchesSetting";
 import { AutoApproveHandoffsSetting } from "./AutoApproveHandoffsSetting";
 import { AutoApproveResumeRequestsSetting } from "./AutoApproveResumeRequestsSetting";
 import { AutoApproveSessionRequestsSetting } from "./AutoApproveSessionRequestsSetting";
 
-/** What a session may do without asking the user first: whether its requests to start a session and
- * to resume a conversation, and its account switches and handoffs, are approved on the spot, each
- * by its own switch. */
-export function AgentPermissionsSection(): React.ReactElement {
+/** How sessions behave towards the user: what they may do without asking first (whether their
+ * requests to start a session and to resume a conversation, and their account switches and
+ * handoffs, are approved on the spot, each by its own switch) and how they ask (a question as
+ * options to pick from). */
+export function AgentBehaviorSection(): React.ReactElement {
   const t = useT();
   return (
     <>
@@ -21,6 +23,7 @@ export function AgentPermissionsSection(): React.ReactElement {
         <AutoApproveResumeRequestsSetting />
         <AutoApproveAccountSwitchesSetting />
         <AutoApproveHandoffsSetting />
+        <AskQuestionsAsChoicesSetting />
       </div>
     </>
   );

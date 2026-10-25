@@ -229,6 +229,7 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: &Path) -> Result<LaunchPlan> {
         spec.owner.as_ref(),
         Agent::Grok,
         spec.worktrees.as_ref(),
+        spec.ask_questions_as_choices,
     ));
 
     // A fullscreen launch writes `--model` into `[models] default` and `--reasoning-effort` into
@@ -1226,6 +1227,7 @@ mod tests {
                 fixture.owner.as_ref(),
                 Agent::Grok,
                 fixture.worktrees.as_ref(),
+                fixture.ask_questions_as_choices,
             )
         );
     }

@@ -63,6 +63,10 @@ pub struct LaunchSpec<'a> {
     /// The project's effective worktree settings, read when the launch was assembled, which shape
     /// the worktree rule in the role text. Never set for a console session.
     pub worktrees: Option<WorktreeSettings>,
+    /// The application setting `ask_questions_as_choices` as it stood when the launch was
+    /// assembled, which decides whether a project session's role text asks it to put questions
+    /// to the user as options to pick from.
+    pub ask_questions_as_choices: bool,
     /// The id to give an agent that can pre-allocate one for a *new* conversation. Freshly
     /// generated per launch: both Claude Code and Grok refuse an id that already has a stored
     /// conversation, so reusing one would make relaunching a session that was opened and never
@@ -490,6 +494,7 @@ pub mod tests {
         pub role: crate::protocol::Role,
         pub owner: Option<Owner>,
         pub worktrees: Option<crate::worktree_settings::WorktreeSettings>,
+        pub ask_questions_as_choices: bool,
         pub new_agent_session_id: String,
         pub cwd: PathBuf,
         pub scratch: crate::test_support::ScratchDir,
@@ -512,6 +517,7 @@ pub mod tests {
                 role: self.role,
                 owner: self.owner.clone(),
                 worktrees: self.worktrees,
+                ask_questions_as_choices: self.ask_questions_as_choices,
                 new_agent_session_id: &self.new_agent_session_id,
                 resume_agent_session_id: None,
                 cwd: &self.cwd,
@@ -548,6 +554,7 @@ pub mod tests {
             role: crate::protocol::Role::Project,
             owner: Some(Owner::Console),
             worktrees: Some(crate::worktree_settings::WorktreeSettings::default()),
+            ask_questions_as_choices: true,
             new_agent_session_id: format!("agent-{}", std::process::id()),
             cwd,
             scratch: root,
