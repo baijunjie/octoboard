@@ -10,6 +10,7 @@ use crate::agent_dialogs::{self, Dialog, Sighting};
 use crate::protocol::Agent;
 use crate::pty::{NewPty, PtyCore, PtyOwner, Spawned};
 use crate::ptyio;
+use crate::title_interrupt::TitleActivity;
 use crate::trust::{CarriedTrust, TrustState};
 
 pub use crate::pty::spawn_reader_thread;
@@ -30,6 +31,8 @@ pub const AGENT_ERROR_SETTLE: Duration = Duration::from_secs(2);
 struct TitleObserver {
     parser: crate::terminal_title::Parser,
     latest: Option<Option<String>>,
+    /// What Claude Code's titles have said about its turns; see `crate::title_interrupt`.
+    activity: TitleActivity,
     state: Weak<crate::state::AppState>,
     runtime: Option<tokio::runtime::Handle>,
 }
@@ -162,6 +165,14 @@ impl LiveSession {
         observer.publish(self);
     }
 
+    /// What the agent's terminal title has said about its turns so far.
+    pub fn title_activity(&self) -> TitleActivity {
+        self.title
+            .lock()
+            .expect("title observer lock poisoned")
+            .activity
+    }
+
     /// The dialog the screen showed at the latest look, whoever made it: the watch, a write about
     /// to be made, a description of the session, or the output of a write in flight.
     pub fn agent_dialog(&self) -> Option<Dialog> {
@@ -215,6 +226,10 @@ impl LiveSession {
         let titled = {
             let mut observer = self.title.lock().expect("title observer lock poisoned");
             let completed = observer.parser.feed(data);
+            if completed.is_some() && self.agent == Agent::Claude {
+                let glyph = observer.parser.leading_glyph();
+                observer.activity.note(glyph, Instant::now());
+            }
             if let Some(title) = &completed {
                 // A title that only spun since the last one changes nothing, so it does not reach
                 // the store's lock.

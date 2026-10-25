@@ -81,6 +81,7 @@ mod terminal_snapshot;
 mod terminal_title;
 #[cfg(test)]
 mod test_support;
+mod title_interrupt;
 mod transcript;
 mod trust;
 mod worktree_settings;

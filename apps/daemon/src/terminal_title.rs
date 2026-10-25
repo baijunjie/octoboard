@@ -53,6 +53,7 @@ enum Mode {
 pub(crate) struct Parser {
     mode: Mode,
     osc: Vec<u8>,
+    glyph: Option<char>,
 }
 
 impl Parser {
@@ -128,6 +129,11 @@ impl Parser {
         latest
     }
 
+    /// The activity glyph the last completed title started with, if it started with one.
+    pub(crate) fn leading_glyph(&self) -> Option<char> {
+        self.glyph
+    }
+
     fn finish(&mut self, latest: &mut Option<Option<String>>) {
         if let Some(bytes) = self
             .osc
@@ -137,6 +143,7 @@ impl Parser {
             if let Ok(text) = std::str::from_utf8(bytes) {
                 if !text.chars().any(char::is_control) {
                     let title = without_spinner_glyphs(text.trim());
+                    self.glyph = text.trim().chars().next().filter(|c| is_spinner_glyph(*c));
                     *latest = Some((!title.is_empty()).then(|| title.to_owned()));
                 }
             }
@@ -177,6 +184,21 @@ mod tests {
         }
         let mut parser = Parser::default();
         assert_eq!(parser.feed(b"\x1b]2;old\x07\x1b]2; \x07"), Some(None));
+    }
+
+    #[test]
+    fn the_last_title_s_leading_glyph_is_kept() {
+        let mut parser = Parser::default();
+        parser.feed("\x1b]0;◐ Claude Code\x07\x1b]0;✳ Claude Code\x07".as_bytes());
+        assert_eq!(parser.leading_glyph(), Some('✳'));
+        parser.feed("\x1b]0;◐ Claude".as_bytes());
+        assert_eq!(
+            parser.leading_glyph(),
+            Some('✳'),
+            "an unfinished title changes nothing"
+        );
+        parser.feed(b"\x07\x1b]0;Fix the build\x07");
+        assert_eq!(parser.leading_glyph(), None);
     }
 
     #[test]

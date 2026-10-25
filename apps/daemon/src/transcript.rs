@@ -36,11 +36,17 @@
 //! running a tool — is silent in the same way: the interrupted turn fires no hook at all, so the
 //! session would read `Working` until its next prompt. What it leaves is a user entry whose text
 //! block is exactly `[Request interrupted by user]` (an interrupt while the model thinks or writes,
-//! seen in real transcripts of 2.1.296, 2.1.302 and 2.1.303) or `[Request interrupted by user for
-//! tool use]` (one while a tool runs, after the rejection `tool_result` above; see the same section
-//! of `docs/agent-cli-reference.md`). [`is_interrupt_line`] recognises either, and
-//! [`watch_for_interrupt`] arms the watch with it each time a hook moves a Claude Code session into
-//! `Working`, until the interrupt is found or the session leaves `Working` some other way.
+//! seen in real transcripts of 2.1.296, 2.1.302 and 2.1.303; on 2.1.310 only once the model has
+//! shown output) or `[Request interrupted by user for tool use]` (one while a tool runs, after the
+//! rejection `tool_result` above; see the same section of `docs/agent-cli-reference.md`).
+//! [`is_interrupt_line`] recognises either, and [`watch_for_interrupt`] arms the watch with it each
+//! time a hook moves a Claude Code session into `Working`, until the interrupt is found or the
+//! session leaves `Working` some other way.
+//!
+//! An interrupt before the model has shown anything — while the request waits for its response or
+//! the model is still thinking — leaves no marker at all on 2.1.310: the transcript is not written
+//! to. That one is read off the terminal title instead, by `crate::title_interrupt`, armed beside
+//! this watch and sharing its generation.
 //!
 //! The transcript is Claude Code's own and is rewritten on every upgrade; see `crate::record_watch`
 //! for how a line this does not recognise is treated.
@@ -64,7 +70,8 @@ const REJECTED_TOOL_USE_PREFIX: &str = "The user doesn't want to proceed with th
 /// what an interrupt while a tool runs writes.
 const INTERRUPTED_MARKER: &str = "[Request interrupted by user for tool use]";
 
-/// The user entry Claude Code writes for an interrupt while the model is thinking or writing.
+/// The user entry Claude Code writes for an interrupt while the model is writing, and before
+/// 2.1.310 while it is thinking too.
 const INTERRUPTED_PLAIN_MARKER: &str = "[Request interrupted by user]";
 
 /// What both interrupt markers start with, for ruling a line out before it is parsed.
@@ -212,7 +219,9 @@ pub fn watch_after_hook(
         SessionStatus::Working
             if hooks::starts_conversation(event) || previous != Some(SessionStatus::Working) =>
         {
-            watch_for_interrupt(state, session_id, transcript_path)
+            if let Some(generation) = watch_for_interrupt(state, session_id, transcript_path) {
+                crate::title_interrupt::watch(state, session_id, generation);
+            }
         }
         _ => {}
     }
@@ -256,14 +265,15 @@ fn watch_for_rejection(state: &Arc<AppState>, session_id: &str, transcript_path:
                 session_id,
                 generation,
                 SessionStatus::WaitingUser,
-                "rejection",
+                "transcript rejection",
             )
         },
     );
 }
 
 /// Starts watching `session_id`'s transcript for the record an interrupted turn leaves, the only
-/// trace of the user cancelling it; [`watch_after_hook`] says when.
+/// trace of the user cancelling it; [`watch_after_hook`] says when. Returns the watch's generation,
+/// or `None` when no watch was started.
 ///
 /// The watch reads only what is written after it is armed ([`Start::AtEndOrNew`]), so an interrupt
 /// left over from an earlier turn, or from a conversation resumed with its history, is never
@@ -281,13 +291,17 @@ fn watch_for_rejection(state: &Arc<AppState>, session_id: &str, transcript_path:
 /// cancelled, Claude Code has no clock-attributed turn end that could find it open, and the next
 /// prompt's `turn_started` replaces it. Closing it here could instead close the next turn, were its
 /// prompt to land between the status write and the close.
-fn watch_for_interrupt(state: &Arc<AppState>, session_id: &str, transcript_path: Option<&str>) {
+fn watch_for_interrupt(
+    state: &Arc<AppState>,
+    session_id: &str,
+    transcript_path: Option<&str>,
+) -> Option<u64> {
     let Some(transcript_path) = transcript_path else {
         tracing::debug!(
             session = %session_id,
             "no transcript path on a working session's hook; it cannot be watched for an interrupt"
         );
-        return;
+        return None;
     };
     let not_before = now_millis() - ARMING_SLACK.as_millis() as i64;
     record_watch::spawn(
@@ -306,10 +320,10 @@ fn watch_for_interrupt(state: &Arc<AppState>, session_id: &str, transcript_path:
                 session_id,
                 generation,
                 SessionStatus::Working,
-                "interrupt",
+                "transcript interrupt",
             )
         },
-    );
+    )
 }
 
 /// Whether the agent is still at the `status` the watch was armed for.
@@ -332,9 +346,9 @@ fn still_at(state: &AppState, session_id: &str, status: SessionStatus) -> Owed {
 }
 
 /// Puts the session back at its prompt, from the `expected` status watch `generation` was armed
-/// for, after the transcript showed a `found` record — a rejection or an interrupt, named for the
-/// log.
-fn back_at_prompt(
+/// for, after a watch saw `found` — a transcript rejection or interrupt, or a cancel read off the
+/// terminal title (`crate::title_interrupt`), named for the log.
+pub(crate) fn back_at_prompt(
     state: &Arc<AppState>,
     session_id: &str,
     generation: u64,
@@ -352,26 +366,26 @@ fn back_at_prompt(
         Some(Ok(true)) => {
             tracing::debug!(
                 session = %session_id,
-                "a transcript {found} was found; the agent is back at its prompt"
+                "a {found} was found; the agent is back at its prompt"
             );
             // Mirrors the release the hook path pairs with every status change: a message queued
             // while the session could not take one is still queued, and nothing else is coming to
             // release it. `flush_outbox`'s gate asks for a hook-reported state, which this `Idle`
             // is not, but both states it accepts are reached here anyway: a genuine rejection or
-            // interrupt leaves the agent at an empty prompt, and the `Chat about this` exit the
+            // interrupt leaves the agent at its prompt, and the `Chat about this` exit the
             // rejection match deliberately over-catches leaves it working.
             state.spawn_flush_outbox(session_id, SessionStatus::Idle);
         }
         Some(Ok(false)) | None => {
             tracing::debug!(
                 session = %session_id,
-                "a transcript {found} was found, but the session had already moved on"
+                "a {found} was found, but the session had already moved on"
             );
         }
         Some(Err(err)) => {
             tracing::debug!(
                 session = %session_id, %err,
-                "returning the session to its prompt after a transcript {found} failed"
+                "returning the session to its prompt after a {found} failed"
             );
         }
     }

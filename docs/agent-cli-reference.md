@@ -136,16 +136,29 @@ the first.
 
 **A user interrupt emits no hook event**, in the thinking phase or mid-tool. Only the interrupted turn is silent; the
 next turn reports normally. The session's next `UserPromptSubmit` is the reliable sign that the previous turn is over
-and should close the dangling `PreToolUse`. The interrupted tool's own child process is already gone. The only
-machine-readable trace is in the transcript at `transcript_path`. An interrupt in the thinking or writing phase writes
-a single top-level `"type":"user"` entry whose `message.content` is `[{"type":"text","text":"[Request interrupted by
-user]"}]`, carrying `interruptedMessageId` (seen on 2.1.296, 2.1.302 and 2.1.303). Mid-tool, it writes a `tool_result`
-with `is_error: true` beginning "The user doesn't want to proceed with this tool use", followed by a user block
-`[Request interrupted by user for tool use]`. Both are entries whose `message.content` is
-an **array** of blocks, and the first of them — the one holding the `tool_result` — also carries
-`"toolDenialKind": "user-rejected"`, at entry level rather than inside the block; the
-`[Request interrupted by user for tool use]` entry carries none. A declined prompt and a declined `AskUserQuestion`
-write this same pair, which is why one mechanism recovers all three cases.
+and should close the dangling `PreToolUse`. The interrupted tool's own child process is already gone. Once the model has
+shown output, the only machine-readable trace is in the transcript at `transcript_path`. An interrupt in the writing
+phase writes a single top-level `"type":"user"` entry whose `message.content` is `[{"type":"text","text":"[Request
+interrupted by user]"}]`, carrying `interruptedMessageId` (seen on 2.1.296, 2.1.302, 2.1.303 and 2.1.310). Mid-tool, it
+writes a `tool_result` with `is_error: true` beginning "The user doesn't want to proceed with this tool use", followed
+by a user block `[Request interrupted by user for tool use]`. Both are entries whose `message.content` is an **array**
+of blocks, and the first of them — the one holding the `tool_result` — also carries `"toolDenialKind": "user-rejected"`,
+at entry level rather than inside the block; the `[Request interrupted by user for tool use]` entry carries no
+`toolDenialKind`, and from 2.1.310 carries `interruptedMessageId` as well. A declined prompt and a declined
+`AskUserQuestion` write this same pair, which is why one mechanism recovers all three cases.
+
+**An interrupt before the model has shown anything writes nothing** on 2.1.310 (measured in a PTY against a local stub
+API, with the request held unanswered and with only `message_start` sent, and once against the real API with Opus still
+in its thinking phase): no interrupt entry, no hook, and the prompt entry written at submit stays the last user entry.
+Claude Code puts the prompt's text back in the input box, and submitting it again writes the prompt a second time, as
+a sibling of the first (the same `parentUuid`); a bracketed paste and Enter written then submit the restored text with
+the pasted text joined straight onto it, no separator between them. On 2.1.296–2.1.303 an interrupt in the thinking phase still wrote
+`[Request interrupted by user]`. The one trace left is the terminal title's status glyph (see "Terminal titles and the
+titles in an agent's own records" under "## Across the three agents"): `◐`/`◑` alternate about once a second while the
+turn runs, through tool calls and while the request waits, and the glyph turns to `✳` 70 ms after the Esc. The same
+`✳` follows every `Stop` (14 ms after the hook was posted) and every `PermissionRequest` whose dialog is shown (20–45
+ms after), and stays through the dialog; after the dialog is answered the glyph turns again with no hook until the
+tool's `PostToolUse`. The `◐` of a new turn came 6 ms *before* its `UserPromptSubmit` was posted. All on 2.1.310.
 
 **The markers are also replayed.** `api-request-blob` entries written into the main transcript while a session works
 carry the conversation so far in their `message.content`, earlier interrupt markers included (once with a trailing

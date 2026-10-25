@@ -114,7 +114,8 @@ pub struct Watch {
 /// and when `line_found` recognises one it stops and, if it is still the session's current watch,
 /// calls `on_found` with what that returned and the watch's generation — for a caller whose write
 /// must not land once the watch is retired (`AppState::while_record_watch_current`). Whether a
-/// file that is not there yet is waited for is [`Start`]'s to say.
+/// file that is not there yet is waited for is [`Start`]'s to say. Returns the watch's generation,
+/// or `None` when the record could not be read and no watch was started.
 ///
 /// The scan runs on a blocking worker: on a long session the added bytes run to megabytes, which
 /// must not sit on the runtime's threads. A read that fails for any other reason ends the watch.
@@ -126,7 +127,8 @@ pub fn spawn<T, P, A>(
     owed: impl Fn(&AppState, &str) -> Owed + Send + 'static,
     line_found: P,
     on_found: A,
-) where
+) -> Option<u64>
+where
     T: Send + 'static,
     P: Fn(&str) -> Option<T> + Send + Sync + 'static,
     A: FnOnce(&Arc<AppState>, &str, u64, T) + Send + 'static,
@@ -139,7 +141,7 @@ pub fn spawn<T, P, A>(
                     session = %session_id, %err,
                     "the record could not be read; it cannot be watched"
                 );
-                return;
+                return None;
             }
         },
         Start::AtEndOrNew => match std::fs::metadata(&path) {
@@ -150,7 +152,7 @@ pub fn spawn<T, P, A>(
                     session = %session_id, %err,
                     "the record could not be read; it cannot be watched"
                 );
-                return;
+                return None;
             }
         },
         Start::Carried => state.record_offset(session_id, &path),
@@ -239,6 +241,7 @@ pub fn spawn<T, P, A>(
             return;
         }
     });
+    Some(generation)
 }
 
 #[cfg(test)]
