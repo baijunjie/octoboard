@@ -42,8 +42,9 @@ const POLL_INTERVAL: Duration = Duration::from_millis(500);
 /// How the watched turn ended, as its `task_complete` record says.
 #[derive(Debug, PartialEq, Eq)]
 enum Ending {
-    /// The turn ended without an error: it completed, which Codex follows with `Stop`, or it was
-    /// interrupted, which Codex follows with `Interrupt`. Either hook ends it for Octoboard.
+    /// The turn ended without an error: a normal completion, which Codex follows with `Stop`, the
+    /// hook that ends it for Octoboard. An interrupted turn has no `task_complete`: `Interrupt`
+    /// ends it.
     Completed,
     /// The turn ended in an error, with the user-facing text where the record carries one.
     Failed(Option<String>),
@@ -63,7 +64,7 @@ fn ending_in_line(line: &str, turn_id: &str) -> Option<Ending> {
         return None;
     }
     // Keyed on the `error` key alone: a normal completion has none, and `last_agent_message` is
-    // null on a failed turn but also on an interrupted one.
+    // null on a failed turn but also on a manual `/compact` turn.
     Some(
         match payload.get("error").filter(|error| !error.is_null()) {
             None => Ending::Completed,
@@ -183,11 +184,11 @@ mod tests {
     const COMPLETED: &str = include_str!("../testdata/rollout_completed_turn.jsonl");
     const COMPLETED_TURN: &str = "01a1009e-6e43-73d3-a46f-5bc648f49a7a";
 
-    /// The interrupted turn, from a Codex 0.160.0 session: `task_complete` has a null
+    /// A manual `/compact` turn, from a Codex 0.160.0 session: `task_complete` has a null
     /// `last_agent_message` like a failed turn's, but no `error` key and no
     /// `time_to_first_token_ms`.
-    const INTERRUPTED: &str = include_str!("../testdata/rollout_interrupted_turn.jsonl");
-    const INTERRUPTED_TURN: &str = "01a1009f-e588-7f21-b87f-47a002c43820";
+    const COMPACT: &str = include_str!("../testdata/rollout_compact_turn.jsonl");
+    const COMPACT_TURN: &str = "01a1009f-e588-7f21-b87f-47a002c43820";
 
     /// The other near-miss: the failed capture cut off after `token_count`, a turn still running.
     const RUNNING: &str = include_str!("../testdata/rollout_running_turn.jsonl");
@@ -239,14 +240,11 @@ mod tests {
         );
     }
 
-    /// Why the ending is keyed on the `error` key and not on a null message: an interrupted turn
-    /// has a null message too, and is `Interrupt`'s to end.
+    /// Why the ending is keyed on the `error` key and not on a null message: a manual `/compact`
+    /// turn has a null message too, and did not fail.
     #[test]
-    fn an_interrupted_turn_is_not_a_failure() {
-        assert_eq!(
-            ending_of(INTERRUPTED, INTERRUPTED_TURN),
-            Some(Ending::Completed)
-        );
+    fn a_compact_turn_is_not_a_failure() {
+        assert_eq!(ending_of(COMPACT, COMPACT_TURN), Some(Ending::Completed));
     }
 
     #[test]

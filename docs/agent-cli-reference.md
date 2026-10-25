@@ -400,17 +400,18 @@ Turn-scoped events add `turn_id`, the per-turn key. The compaction events are th
   nothing either, so there is no event anywhere that ends the turn.
 
 **A turn's own outcome is in Codex's session record**, the rollout file whose path every hook payload carries as
-`transcript_path` (its naming and location are in "Moving a conversation to another config directory" below).
-Each turn is an `event_msg` line whose `payload` is `task_started`, then one whose `payload` is `task_complete`,
-both carrying the same `turn_id` as that turn's hook payloads. A turn that **failed** has `last_agent_message: null`
-and an `error` object (`message`, and `codex_error_info` — `"usage_limit_exceeded"` for the measured cause); a turn
-that **ended normally** has `last_agent_message` set and no `error` key at all (its keys are exactly `completed_at`,
-`duration_ms`, `last_agent_message`, `started_at`, `time_to_first_token_ms`, `turn_id`, `type`). An interrupted turn
-was seen with a null message, no `error` and no `time_to_first_token_ms`, so a null message alone does not mean a
-failure. The file is created about 0.25 s **after** the first prompt of a session — not at launch — and Codex
-flushes it per record: a failed turn's `task_complete` was readable 1.26 s after the prompt, with the process still
-running. The record can land before that turn's hook callback does: the margin measured on a session's first turn was
-0.249 s.
+`transcript_path` (its naming and location are in "Moving a conversation to another config directory" below). Each turn
+is an `event_msg` line whose `payload` is `task_started`, then one whose `payload` is `task_complete`, both carrying the
+same `turn_id` as that turn's hook payloads. A turn that **failed** has `last_agent_message: null` and an `error` object
+(`message`, and `codex_error_info` — `"usage_limit_exceeded"` for the measured cause); a turn that **ended normally**
+has `last_agent_message` set and no `error` key at all (its keys are exactly `completed_at`, `duration_ms`,
+`last_agent_message`, `started_at`, `time_to_first_token_ms`, `turn_id`, `type`). A manual `/compact` turn ends with a
+null message, no `error` and no `time_to_first_token_ms`, so a null message alone does not mean a failure. An
+interrupted turn — Esc, Ctrl+C or a declined approval — has no `task_complete`: it ends with a `turn_aborted` record
+(`reason: "interrupted"`, measured on 0.163.0). The file is created about 0.25 s **after** the first prompt of a session
+— not at launch — and Codex flushes it per record: a failed turn's `task_complete` was readable 1.26 s after the prompt,
+with the process still running. The record can land before that turn's hook callback does: the margin measured on a
+session's first turn was 0.249 s.
 
 **The user's own configuration can remove the prompt entirely.** With `approvals_reviewer = "auto_review"` Codex
 resolves an approval request itself: the hook fires, no modal is shown and the tool proceeds. A raised hand would ask
