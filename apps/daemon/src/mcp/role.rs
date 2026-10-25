@@ -239,8 +239,10 @@ fn relationships(agent: Agent, owns: bool) -> String {
              agent — when its account has run out of quota, say; `{get_account_quotas}` shows \
              what each account has left. It keeps its conversation and comes back awaiting \
              instructions (a turn in progress is cut off), so send it the next step with \
-             `{send_message}`. The user approves it first, and may change the account, model and \
-             effort, unless they have chosen to have account switches approved without asking.",
+             `{send_message}` — unless the result's `note` says it was sent a prompt to continue, \
+             which you must not repeat. The user approves it first, and may change the account, \
+             model and effort, unless they have chosen to have account switches approved without \
+             asking.",
             switch_session_account = tool("switch_session_account"),
             get_account_quotas = tool("get_account_quotas"),
             send_message = tool("send_message"),

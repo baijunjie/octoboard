@@ -113,12 +113,14 @@ choices of several sessions.
 | `session` | yes | The session to switch: one of the caller's (`yours: true`). |
 | `account` | yes | The account to move it to: an account's id, an account's name (matched ignoring case and surrounding spaces), or `default` for the agent's default account. It is looked up among the accounts of the session's own agent. |
 
-The session is sent no message about the switch, and neither is the caller, which has the result instead. The session
-comes back *awaiting instructions* like any switched session; a turn it was in the middle of when its process was ended
-is cut off, so the caller sends it its next step with `send_message`. A session with no conversation yet (see "Carrying
-the conversation" below) starts a fresh one on the new account. The call is answered once the switch's outcome is
-known — after the user's answer, where the user is asked — which can take a few seconds (see "What a switch does"
-below).
+The session is sent no message about the switch, and neither is the caller, which has the result instead. Where the
+switch cut a turn off, or the turn had stopped on the plan's usage limit, the session is sent the prompt to continue
+its task (see "Continuing after a switch" below), and the caller must not send it one of its own; otherwise it comes
+back *awaiting instructions* like any resumed session, any turn it was in the middle of cut off, and the caller sends
+it its next step with `send_message`. The result's `note` says which of the two it was. A session with no conversation
+yet (see "Carrying the conversation" below) starts a fresh one on the new account. The call is answered once the
+switch's outcome is known — after the user's answer, where the user is asked — which can take a few seconds (see
+"What a switch does" below).
 
 The call returns:
 
@@ -129,7 +131,7 @@ The call returns:
 | `account` | The account it is now on: the account's id, or `default` for the default account. |
 | `account_name` | That account's name; for the default account the name the user gave it, else `Default` (see "The default account" in `docs/product/agent-accounts.md`). |
 | `model`, `effort` | The session's own choice of model and of reasoning effort (see `docs/product/model-and-reasoning-effort.md`): a value, or `null` for the agent's own default; each absent where the session inherits it. |
-| `note` | Prose naming the account and agent the session is now on, saying that it is back awaiting instructions with any turn in progress cut off and is to be sent its next step with `send_message`, and, for a session that had no conversation yet, that it starts fresh there. Where the user chose another account than the one asked for, it says so, and it names each model or reasoning effort the user set — a value, or the agent's own default. |
+| `note` | Prose naming the account and agent the session is now on and saying either that its turn had been cut off by the switch or stopped on a usage limit, so it was sent a prompt to continue that task and the caller is not to send one itself, or that it is back awaiting instructions with any turn in progress cut off and is to be sent its next step with `send_message`; and, for a session that had no conversation yet, that it starts fresh there. Where the user chose another account than the one asked for, it says so, and it names each model or reasoning effort the user set — a value, or the agent's own default. |
 
 Refused before the user is asked, with the reason in prose (as a tool error) and nothing changed:
 
@@ -161,8 +163,9 @@ waiting; a call for another of the caller's sessions waits beside it.
 The confirmation is titled "Switch account?", with two buttons, **Refuse** and **Switch account**. One sentence names
 the requesting session, as a request for a session names it (see "The confirmation dialog" in
 `docs/product/session-requests.md`), then the session to switch, by its displayed name, and the agent and the account
-the call asked for; it says that the session keeps its conversation and that a turn in progress is cut off, and that
-the user can change the account, model and reasoning effort before confirming. A form follows:
+the call asked for; it says that the session keeps its conversation, that a turn in progress is cut off and continued
+automatically after the switch, as is a turn that stopped on a usage limit (see "Continuing after a switch" below), and
+that the user can change the account, model and reasoning effort before confirming. A form follows:
 
 - **Switch to** — the accounts of the session's own agent, by the rules of the row's Switch account submenu (see
   "Session rows" in `docs/product/sidebar-session-rows.md`): the default account first, the account the session is on
@@ -203,7 +206,8 @@ moment, and is answered as in "When an approval cannot be carried out" in `docs/
 A switch ends the session's process the way archiving does, copies the session's conversation into the target
 account's config directory, records the new account and directory on the session, and relaunches it as a resume does,
 with everything Octoboard injects reassembled. It archives nothing: while the process is down the session reads as
-*interrupted*, and it comes back in *awaiting instructions* like any resumed session. Ending an owner's process this
+*interrupted*, and it comes back in *awaiting instructions* like any resumed session, unless it is sent the prompt to
+continue its turn (see "Continuing after a switch" below). It is sent no message about the switch itself. Ending an owner's process this
 way does not itself switch or archive the sessions bound to it; a confirmation whose set takes them in switches each of
 them separately.
 
@@ -287,6 +291,43 @@ came from:
   and its path in the target are compared by where each resolves, links included, so when both accounts' directories
   holding it link to the same place, it is left as it is and not copied. The other items are copied as above; when
   every item is skipped, nothing is copied and no staging directory is made.
+
+## Continuing after a switch
+
+Ending a session's process cuts off a turn it was in, and with the process goes the agent's own wait to carry on
+after a usage limit (Claude Code's offer to continue automatically at a given time). So once the switch has
+relaunched the session, it is sent a prompt asking it to continue the task it was working on when it was interrupted
+without repeating work already complete — **only where the switch itself ended a live process** and that process was:
+
+- **in the middle of a turn**, or
+- **stopped on the plan's usage limit**.
+
+It is not sent when the user had cancelled the turn, when the turn had finished, when the session's process had already
+ended before the switch (whatever its turn looked like), or when the session had no conversation. This holds for every
+switch, from the user's **Switch account** submenu (each session of a confirmed set decided on its own) or from an
+owner's `switch_session_account`.
+
+**The decision is read from the agent's own record of the conversation**, in the account the session came from, once
+its process has gone; the agents' hooks do not tell a cancel apart. Anything the rules below do not recognise, and a
+record that cannot be read, counts as not to be continued: a prompt the user did not want is the worse mistake. The
+rules were measured with Claude Code 2.1.310, codex-cli 0.163.0 and Grok Build 1.0.70.
+
+| Agent | Record read | Continued | Not continued |
+|---|---|---|---|
+| Claude Code | The transcript's last user or assistant entry of the main conversation, and what follows it. Subagent entries and the agent's bookkeeping entries are skipped, and so is the interrupt marker it writes as it shuts down (the switch's own doing). | A tool call with no result yet; a tool result, a failed tool's included, with no reply after it; a reply cut off while still being written; an API error for the plan's usage limit (`error` `rate_limit` with `apiError` `usage_limit_reached`), unless the user then cancelled Claude Code's own automatic continue. | The user's interrupt marker (an Esc while the model writes or a tool runs); a declined tool call; a finished turn (`end_turn`) or any other stop reason; any other API error, a transient 429 or an overload included; the user's prompt, or a task notification, with nothing after it. |
+| Codex | The head rollout (see "Carrying the conversation" above): the last turn's ending. | A turn that ended in `task_complete` with the error `usage_limit_exceeded` (`codex_error_info`); a turn with no ending that holds the user's message. | A turn that ended in `turn_aborted` (an Esc or a declined approval); any other `task_complete`; a turn with no ending and no user message (a manual `/compact` cut off); a rollout with no turn. |
+| Grok Build | The session directory's `updates.jsonl`: the turn of the last prompt. | A turn that ended in an `error` whose text carries the HTTP status 402, the only sign of the usage limit; a turn with no ending that has shown output — a thought, a message or a tool call. | A turn that ended in `end_turn`, `cancelled` (a Ctrl+C after output, or a refused permission) or `rate_limit`, or in any other error; a turn with no ending and no output; a record with no prompt. |
+
+- **A turn cut off before any output is not continued**, for Claude Code and Grok Build: a cancel at that moment — an
+  Esc in Claude Code, which writes no marker then, or a Ctrl+C in Grok Build, where Esc does not cancel — leaves the
+  record looking just as a switch then does. A session switched while still thinking on a prompt therefore needs its
+  next step sent by hand.
+- **Grok Build's usage limit is read from its error text**, which is display text and may change between versions;
+  should it, the usage limit stops being continued.
+
+**The prompt is delivered as the relaunch's instruction** (see "Messages held until a session can take them" in
+`docs/product/message-delivery.md`): a Claude Code session, which resumes its conversation, is launched with it as its
+prompt; a Codex or Grok Build session has it queued and delivered like any message once it can take one.
 
 ## When a switch fails
 

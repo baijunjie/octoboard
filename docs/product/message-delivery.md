@@ -33,17 +33,18 @@ message written but not sent" below); every agent queues one written mid-turn an
    removals, so a removed character in front of a slash command does not keep it from being guarded.
 
 This holds for everything Octoboard writes into a running session — an instruction, a report, a report panel form
-submission, information shared by another session, the instruction `reopen_session` hands over — because all of them
-can be model-authored and none is reviewed first.
+submission, information shared by another session, the instruction `reopen_session` hands over, the prompt to continue
+after an account switch — because all of them can be model-authored and none is reviewed first.
 
-**An instruction `reopen_session` hands a Claude Code session that resumes a conversation is not written at all**: it
-is given to the relaunched agent as the prompt its launch starts with, since Claude Code can ask "Resume this
-conversation?" at a resume launched without one, and a message written into that dialog would be thrown away (see
-the screens that hold messages, below). The prompt is reshaped by the
-same three steps, and one that would then begin with `-` also gets a single leading space, so it is not read as a
+**An instruction `reopen_session` hands a Claude Code session that resumes a conversation is not written at all**, nor
+is the prompt to continue that an account switch sends one (see "Continuing after a switch" in
+`docs/product/switching-session-accounts.md`): it is given to the relaunched agent as the prompt its launch starts
+with, since Claude Code can ask "Resume this conversation?" at a resume launched without one, and a message written
+into that dialog would be thrown away (see the screens that hold messages, below). The prompt is reshaped by the same
+three steps, and one that would then begin with `-` also gets a single leading space, so it is not read as a
 command-line option; one that is nothing but whitespace once reshaped is dropped, and the session resumes with no
 prompt. Such a prompt is neither queued nor checked as below. For any other session, Claude Code's included when it has
-no conversation to resume, the instruction is queued and written like any other message.
+no conversation to resume, the instruction or prompt is queued and written like any other message.
 
 **A blank message is refused.** A message passed to `send_message` — a client's request or an owner's tool — that is
 nothing but whitespace once its control characters and invisible characters are removed is not written: a client is
@@ -66,9 +67,9 @@ is being handed off to another agent, whose queue is kept for the session that t
 the agent's own folder-trust confirmation (see `docs/product/folder-trust.md`) — accepting it, and so trusting the
 folder, at Codex's and Grok Build's, and declining it, which exits the agent, at Claude Code's. So from every launch of
 a session, a resume included, everything Octoboard writes into it — an instruction, a report, information shared by
-another session, a report panel form submission, the instruction `reopen_session` hands over when it is not the launch
-prompt — is queued as above until the confirmation can no longer be on screen and, for Claude Code, until the agent
-is reading its input:
+another session, a report panel form submission, the instruction `reopen_session` hands over or the prompt to continue
+after an account switch when it is not the launch prompt — is queued as above until the confirmation can no longer be
+on screen and, for Claude Code, until the agent is reading its input:
 
 - for Claude Code, until both of two things have happened, whichever comes last releasing the queue: the session's
   first hook report has arrived, which Claude Code sends only once it is past the confirmation — with none to answer,
@@ -184,8 +185,9 @@ message unsent is caught the same way.
 **The check.** When Octoboard writes a message into a Claude Code session whose agent is at its prompt — awaiting
 instructions or working in background, not mid-turn — it waits up to about three seconds for the agent's hooks to report
 a prompt sent (`UserPromptSubmit`). This applies to every message Octoboard writes: an owner's instruction, a report,
-shared information, a report panel form submission, the instruction `reopen_session` hands over when it is written
-rather than given as the launch prompt, the messages of a handover or a handoff, and a client's own `send_message`. A message that was queued is checked the same way when it is
+shared information, a report panel form submission, the instruction `reopen_session` hands over or the prompt to
+continue after an account switch when it is written rather than given as the launch prompt, the messages of a
+handover or a handoff, and a client's own `send_message`. A message that was queued is checked the same way when it is
 finally written. When several queued messages are written in one go, each is checked on its own, against the agent's
 status at the moment it is written: once the first is sent the agent reads as working, so the rest are written
 unchecked, as mid-turn messages; if the agent is at its prompt again by then — after a very short turn, say — the next

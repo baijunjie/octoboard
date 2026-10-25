@@ -76,6 +76,7 @@ mod state;
 mod status_line_mode;
 mod store;
 mod subprocess;
+mod switch_continue;
 mod term;
 mod terminal_snapshot;
 mod terminal_title;

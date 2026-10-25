@@ -1519,7 +1519,8 @@ async fn nothing_of_the_account_starts_while_its_change_runs() {
             || Ok(std::collections::HashMap::new()),
             launches.launch(false),
         )
-        .await,
+        .await
+        .map(drop),
     );
     assert!(!running.poll_exit());
     assert!(fixture.state.live_session("moving").is_some());
@@ -1535,7 +1536,8 @@ async fn nothing_of_the_account_starts_while_its_change_runs() {
             || Ok(std::collections::HashMap::new()),
             launches.launch(false),
         )
-        .await,
+        .await
+        .map(drop),
     );
     in_progress(
         crate::handoff::operation::hand_off_with(

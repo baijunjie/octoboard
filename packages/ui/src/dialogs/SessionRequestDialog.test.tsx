@@ -286,6 +286,7 @@ it("a switch names the session and the account asked for, and approves with that
   const dialog = mountOwned(switching);
   expect(document.body.querySelector("[role=alertdialog] [slot=title]")?.textContent).toBe("Switch account?");
   expect(dialogText()).toContain("asks to switch its session Old work to the Claude Code account Two.");
+  expect(dialogText()).toContain("continued automatically after the switch");
   await pressButton("Switch account");
   expect(dialog.sent()).toEqual([{ type: "answer_session_request", request_id: "r-1", approve: true, account: "a-two" }]);
 });

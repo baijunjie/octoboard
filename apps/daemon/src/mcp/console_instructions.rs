@@ -181,8 +181,9 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            switches without asking. The session keeps its conversation: its process is ended and \
            relaunched resuming it on the new account, and it is sent no message for it. It \
            comes back awaiting instructions and a turn in progress is cut off, so send it the \
-           next step with `send_message`. Use it rather than a handoff when the same agent can \
-           go on. `get_account_quotas` shows which accounts still have quota.\n\
+           next step with `send_message` — unless the result's `note` says it was sent a prompt \
+           to continue, which you must not repeat. Use it rather than a handoff when the same \
+           agent can go on. `get_account_quotas` shows which accounts still have quota.\n\
          - `transfer_session` passes a session of yours to another owner — another console \
            session of this console, or a project session of that session's project that can own \
            sessions — without asking the user. A session with sessions of its own (a lead \

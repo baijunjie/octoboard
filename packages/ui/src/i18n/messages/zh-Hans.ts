@@ -1373,8 +1373,8 @@ export const zhHans: Translation<"other"> = {
   "dialog.sessionRequest.refuse": "拒绝",
   "dialog.sessionRequest.switch.title": "切换账户？",
   "dialog.sessionRequest.switch.confirm": "切换账户",
-  "dialog.sessionRequest.question.switch":
-    "{requester} 请求将其会话 {session} 切换到 {agent} 账户 {account}。会话会保留其对话，正在进行的一轮会被中断。确认前，你可以修改账户、模型和推理强度。",
+  "dialog.sessionRequest.question.switchAndContinue":
+    "{requester} 请求将其会话 {session} 切换到 {agent} 账户 {account}。会话会保留其对话。正在进行的一轮会被中断，并在切换后自动继续；因用量上限而停止的一轮也会自动继续。确认前，你可以修改账户、模型和推理强度。",
   "dialog.sessionRequest.switch.account": "切换到",
   "dialog.sessionRequest.switch.current": "当前",
   "dialog.sessionRequest.switch.archived": "会话已归档，无法切换其账户。",

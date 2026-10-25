@@ -729,23 +729,24 @@ const HANDOFF_SESSION: ToolDef = ToolDef {
 const SWITCH_SESSION_ACCOUNT: ToolDef = ToolDef {
     name: "switch_session_account",
     description: "Move one of your sessions (`yours: true`) to another account of the agent it \
-                  runs on, for instance when its account has run out of quota. The session \
-                  keeps its conversation: its process is ended, the conversation is copied to \
-                  the account and the session is relaunched resuming it. It is not sent a \
-                  message for this: it comes back awaiting instructions, and a turn in progress \
-                  is cut off, so send it the next step with `send_message`. The user is asked \
-                  first, and may change the account and the session's model and reasoning effort, \
-                  so read what the result says was done; the call waits for their answer, for \
-                  several minutes at most — unless the user has chosen to have account \
-                  switches approved automatically, in which case the call does not wait. A \
-                  refusal, or no answer in time, comes back as an error and changes nothing. \
-                  Refused at once, before the user is asked and changing nothing, for an account \
-                  of another agent, an account the user turned off, the account the session is \
-                  on already, and an archived session; other refusals (an account whose quota \
-                  is used up, say) can come after the user has chosen. Returns the session with \
-                  the account it is now on and its model and reasoning effort where it has its \
-                  own. `account` in `get_session` shows the account a session is on, to match \
-                  against `get_account_quotas`.",
+                  runs on, for instance when its account has run out of quota. The session keeps \
+                  its conversation: its process is ended, the conversation is copied to the \
+                  account and the session is relaunched resuming it. It is not sent a message for \
+                  this: it comes back awaiting instructions, and a turn in progress is cut off, so \
+                  send it the next step with `send_message` — except where the result's `note` \
+                  says it was sent a prompt to continue its task (a turn the switch cut off or a \
+                  usage limit had stopped), which you must not repeat. The user is asked first, \
+                  and may change the account and the session's model and reasoning effort, so read \
+                  what the result says was done; the call waits for their answer, for several \
+                  minutes at most — unless the user has chosen to have account switches approved \
+                  automatically, in which case the call does not wait. A refusal, or no answer in \
+                  time, comes back as an error and changes nothing. Refused at once, before the \
+                  user is asked and changing nothing, for an account of another agent, an account \
+                  the user turned off, the account the session is on already, and an archived \
+                  session; other refusals (an account whose quota is used up, say) can come after \
+                  the user has chosen. Returns the session with the account it is now on and its \
+                  model and reasoning effort where it has its own. `account` in `get_session` \
+                  shows the account a session is on, to match against `get_account_quotas`.",
     schema: || {
         object_schema(
             json!({

@@ -3,7 +3,8 @@
 //! (`coordinator::switch_session_account`); what is here is the caller's side: that the session is
 //! its own, the account is read for the session's own agent, the user being asked first unless
 //! they chose to have switches approved without asking (`session_request`), and what the result
-//! tells it, since the session is not sent a message for the switch.
+//! tells it, since the session is not sent a message for the switch (only, at times, one to carry
+//! on with its turn).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -22,8 +23,9 @@ use super::settings::resolve_account;
 
 /// Moves a session of the caller's to another account of its own agent, keeping its conversation;
 /// see `coordinator::switch_session_account` for what happens to it and what is refused. The
-/// session is not told: it is relaunched on the new account and comes back awaiting instructions,
-/// which the result tells the caller to send.
+/// session is not told of the switch: it is relaunched on the new account and comes back awaiting
+/// instructions, which the result tells the caller to send — unless the relaunch was sent a prompt
+/// to carry on with its turn, which the result says instead.
 ///
 /// Unless the user has chosen to have account switches approved without asking, the call
 /// waits while the user is asked, who may change the account and the session's model and
@@ -109,7 +111,7 @@ async fn perform(
     let target = state.session_record(target_id)?;
     let account = edits.account.clone().unwrap_or_else(|| asked.clone());
     let chose_otherwise = account != asked;
-    coordinator::switch_session_account_with(
+    let continued = coordinator::switch_session_account_with(
         state,
         &target.id,
         Some(account),
@@ -133,11 +135,17 @@ async fn perform(
         .clone()
         .unwrap_or_else(|| "default".to_string());
     let mut note = format!(
-        "`{}` is now on the {} account `{name}`. It is back awaiting instructions: a turn it was \
-         in the middle of is cut off, so send it the next step with `send_message`.",
+        "`{}` is now on the {} account `{name}`. ",
         moved.id,
         moved.agent.label(),
     );
+    note.push_str(if continued {
+        "Its turn had been cut off by the switch or stopped on a usage limit, so it was sent a \
+         prompt to continue that task: do not send it one yourself."
+    } else {
+        "It is back awaiting instructions: a turn it was in the middle of is cut off, so send it \
+         the next step with `send_message`."
+    });
     if !(target.has_conversation && target.agent_session_id.is_some()) {
         note.push_str(" It had no conversation yet, so it starts fresh there.");
     }
@@ -179,7 +187,9 @@ async fn perform(
 mod tests {
     use super::*;
     use crate::mcp::exec::tests::{arguments, peer_state, shared_console_state};
-    use crate::protocol::{Account, Agent, Event, SessionRequestAction, DEFAULT_ACCOUNT_NAME};
+    use crate::protocol::{
+        Account, Agent, Event, SessionRequestAction, SessionStatus, DEFAULT_ACCOUNT_NAME,
+    };
     use crate::test_support::{
         heard_after_marker, running, stand_in_launch, Launched, ScratchDir, StandIn,
     };
@@ -338,6 +348,90 @@ mod tests {
         let record = state.store.get_session("of-a").unwrap().unwrap();
         assert_eq!(record.bound_to.as_deref(), Some("a"));
         assert_nobody_told(&state, &caller, &started);
+        // Its conversation shows no turn in progress, so it is not continued.
+        assert_eq!(launches.lock().unwrap()[0].2, None);
+        assert!(result["note"]
+            .as_str()
+            .unwrap()
+            .contains("send it the next step with `send_message`"));
+    }
+
+    /// Makes the conversation `prepare` put in the default account end on a tool call that never
+    /// got its result.
+    fn end_on_a_tool_call(dir: &ScratchDir) {
+        std::fs::write(
+            dir.join("default-claude").join(CONVERSATION),
+            concat!(
+                r#"{"type":"user","message":{"role":"user","content":"run it"}}"#,
+                "\n",
+                r#"{"type":"assistant","message":{"role":"assistant","stop_reason":"tool_use","#,
+                r#""content":[{"type":"tool_use","id":"t","name":"Bash","input":{}}]}}"#,
+                "\n"
+            ),
+        )
+        .unwrap();
+    }
+
+    /// A session whose turn the switch cut off on a tool call is relaunched with the prompt to
+    /// carry on, and the result tells the caller not to send one.
+    #[tokio::test]
+    async fn a_switch_that_cut_a_turn_off_continues_it() {
+        let (state, dir) = shared_console_state("switch-continue");
+        state.store.set_auto_approve_account_switches(true).unwrap();
+        let snapshot = prepare(&state, &dir, "of-a");
+        end_on_a_tool_call(&dir);
+        let _caller = running(&state, "a");
+        let _original = live_and_watched(&state, "of-a");
+        let (launches, started, resumed): (Launches, Started, Resumed) = Default::default();
+
+        let result = switch_session_account(
+            &state,
+            &state.session_record("a").unwrap(),
+            &arguments(json!({ "session": "of-a", "account": "claude-a" })),
+            snapshot,
+            recording_launch(&started, &launches, &resumed),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            launches.lock().unwrap()[0].2.as_deref(),
+            Some(crate::switch_continue::CONTINUE_PROMPT)
+        );
+        let note = result["note"].as_str().unwrap();
+        assert!(note.contains("do not send it one yourself"), "{note}");
+        assert!(!note.contains("send it the next step"), "{note}");
+    }
+
+    /// A session whose process had already ended is not continued, however its turn ended: the
+    /// switch did not cut it off.
+    #[tokio::test]
+    async fn a_switch_of_a_session_already_down_does_not_continue_it() {
+        let (state, dir) = shared_console_state("switch-continue-down");
+        state.store.set_auto_approve_account_switches(true).unwrap();
+        let snapshot = prepare(&state, &dir, "of-a");
+        end_on_a_tool_call(&dir);
+        let mut record = state.session_record("of-a").unwrap();
+        record.status = SessionStatus::Interrupted;
+        state.store.update_session(&record).unwrap();
+        let _caller = running(&state, "a");
+        let (launches, started, resumed): (Launches, Started, Resumed) = Default::default();
+
+        let result = switch_session_account(
+            &state,
+            &state.session_record("a").unwrap(),
+            &arguments(json!({ "session": "of-a", "account": "claude-a" })),
+            snapshot,
+            recording_launch(&started, &launches, &resumed),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(launches.lock().unwrap()[0].2, None);
+        assert!(result["note"]
+            .as_str()
+            .unwrap()
+            .contains("send it the next step with `send_message`"));
     }
 
     /// An unbound project session moves a session of its own back to the default account, which

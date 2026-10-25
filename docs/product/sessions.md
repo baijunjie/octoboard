@@ -688,8 +688,10 @@ Transitions:
   from. A resume that is refused or fails to launch leaves the session exactly where it was, archived included. Resuming a session
   whose owner is *archived* first does the same to its archived owners, the topmost first.
 - Switching a session to another account of its agent ends and relaunches its process without archiving it: it reads
-  as *interrupted* while the process is down and comes back in *awaiting instructions*, and a switch that fails leaves
-  it *interrupted* on the account it had (see `docs/product/switching-session-accounts.md`).
+  as *interrupted* while the process is down and comes back in *awaiting instructions* — working again where it is
+  sent the prompt to continue its turn (see "Continuing after a switch" in
+  `docs/product/switching-session-accounts.md`) — and a switch that fails leaves it *interrupted* on the account it had
+  (see `docs/product/switching-session-accounts.md`).
 - An agent's report never moves a session out of *interrupted* or *archived*: whether a stopped session is one or the
   other is Octoboard's own record, not the agent's.
 

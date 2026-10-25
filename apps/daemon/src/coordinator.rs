@@ -51,6 +51,7 @@ use crate::session::LiveSession;
 use crate::session_history;
 use crate::state::{AppState, Deletion};
 use crate::store::{ReorderOutcome, Store, LOCAL_HOST_ID};
+use crate::switch_continue;
 use crate::term;
 use crate::trust;
 use crate::worktree_settings::{
@@ -4377,8 +4378,9 @@ fn prepare_switch(
 
 /// Moves a session to another account of its own agent: ends its process the way archiving does,
 /// copies its conversation into the target account's directory, records the account and the
-/// directory on the session, and relaunches it as a resume does. Only the user or an owner asks
-/// for it — nothing calls this on a usage signal.
+/// directory on the session, and relaunches it as a resume does — with a prompt to carry on where
+/// the switch cut a turn off or a usage limit had stopped one (see `crate::switch_continue`). Only
+/// the user or an owner asks for it — nothing calls this on a usage signal.
 ///
 /// `account` is the target by id, `None` for the default account. Refused, with nothing recorded
 /// and (where it can be told beforehand) the process left running: a launch, resume or switch of
@@ -4420,6 +4422,7 @@ pub async fn switch_session_account(
         term::launch,
     )
     .await
+    .map(drop)
 }
 
 /// [`switch_session_account`] with the asker: `asked_by` is the asking owner's id, `None` for the
@@ -4427,7 +4430,9 @@ pub async fn switch_session_account(
 /// checked before it), else the switch is refused with nothing changed. `launch_edit` is what the
 /// user changed of the session's model and effort, checked with the rest and recorded just before
 /// the relaunch that reads it, and put back with the account when the switch fails. `launch` is
-/// `term::launch` outside the tests, which cannot start an agent.
+/// `term::launch` outside the tests, which cannot start an agent. Answers whether the relaunched
+/// session was sent [`switch_continue::CONTINUE_PROMPT`] to carry on with the turn the switch cut
+/// off or a usage limit stopped (see `crate::switch_continue`).
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn switch_session_account_with(
     state: &Arc<AppState>,
@@ -4438,7 +4443,7 @@ pub(crate) async fn switch_session_account_with(
     launch_edit: LaunchEdit,
     snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
     launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
-) -> Result<()> {
+) -> Result<bool> {
     let account = account.ok_or_else(|| field_required("account"))?;
     // Held until this function returns, after the come-up verdict and any revert, so nothing else
     // can launch, resume, switch or delete the session while its process is down, while the
@@ -4479,7 +4484,9 @@ pub(crate) async fn switch_session_account_with(
         .await??
     };
 
-    if let Some(live) = state.live_session(id) {
+    let ended = state.live_session(id);
+    let ended_a_process = ended.is_some();
+    if let Some(live) = ended {
         stop_process(live).await?;
     }
     wait_until_down(state, id).await?;
@@ -4487,24 +4494,38 @@ pub(crate) async fn switch_session_account_with(
     if state.session_record(id)?.status == SessionStatus::Archived {
         return Err(session_archived(id));
     }
+    // The process is down, so what the account it ran on holds now is final: a Codex thread may
+    // have started a segment since the plan, and that head is the one carried. Only a turn this
+    // switch ended, or that was waiting out a usage limit in the process it ended, is carried on: a
+    // session whose process had ended before was left there by something else.
+    let (relocation, carry_on) = match plan.relocation {
+        Some((from, to, record, agent_session_id)) => {
+            let agent = before.agent;
+            tokio::task::spawn_blocking(move || -> Result<_> {
+                let record = match agent {
+                    Agent::Codex => relocate::locate(agent, &from, &agent_session_id)?,
+                    _ => record,
+                };
+                let carry_on =
+                    ended_a_process && switch_continue::should_continue(agent, &from.join(&record));
+                Ok((Some((from, to, record, agent_session_id)), carry_on))
+            })
+            .await??
+        }
+        None => (None, false),
+    };
 
     // Held from before the copy until the session is recorded on the target, and given up before
     // the relaunch, which takes it itself: no change of sharing moves what the copy writes.
     let copying =
         crate::shared_config::before_switch_copy(state, before.agent, target_account.as_deref())
             .await?;
-    if let Some((from, to, record, agent_session_id)) = plan.relocation {
+    if let Some((from, to, record, agent_session_id)) = relocation {
         let agent = before.agent;
         // The environment the relaunch will see, which with the target's `config.toml` says where
         // a Codex home keeps its database.
         let launch_env = plan.shell_env.clone().unwrap_or_default();
         tokio::task::spawn_blocking(move || {
-            // The process is down, so the head found now is the final one: it may have started a
-            // segment since the plan.
-            let record = match agent {
-                Agent::Codex => relocate::locate(agent, &from, &agent_session_id)?,
-                _ => record,
-            };
             let companions = relocate::companions(agent, &from, &record, &agent_session_id);
             relocate::copy(&from, &to, &record, &companions)?;
             relocate::repoint_thread_row(agent, &to, &record, &agent_session_id, &launch_env)
@@ -4524,7 +4545,7 @@ pub(crate) async fn switch_session_account_with(
         state,
         &claim,
         id,
-        None,
+        carry_on.then_some(switch_continue::CONTINUE_PROMPT),
         false,
         plan.shell_env,
         terminal_appearance,
@@ -4547,7 +4568,7 @@ pub(crate) async fn switch_session_account_with(
             &[("session", id)],
         ));
     }
-    Ok(())
+    Ok(carry_on)
 }
 
 /// Refuses, in prose, an operation an owner asked for on a session that is no longer its own. The
@@ -11251,6 +11272,7 @@ mod tests {
                         launch,
                     )
                     .await
+                    .map(drop)
                 } else {
                     let claim = state.begin_launch("worker")?;
                     relaunch_session_with(

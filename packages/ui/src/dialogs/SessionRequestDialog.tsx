@@ -117,7 +117,7 @@ function SessionRequestMessage({ request }: { request: SessionRequest }): React.
     const account = recordAccount(t, accounts, defaultNames, request.agent, request.account);
     return (
       <p className="[overflow-wrap:anywhere]">
-        <Message id={request.action === "switch" ? "dialog.sessionRequest.question.switch" : "dialog.sessionRequest.question.handoff"} params={{ requester, agent, session, account }} />
+        <Message id={request.action === "switch" ? "dialog.sessionRequest.question.switchAndContinue" : "dialog.sessionRequest.question.handoff"} params={{ requester, agent, session, account }} />
       </p>
     );
   }
