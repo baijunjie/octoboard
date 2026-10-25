@@ -22,6 +22,9 @@ const codexSession = sessionOf("s-api-codex", console_.id, api.id, "Review the r
 const grokProject = projectOf("p-grok-home", console_.id, "Home", { path: "/Users/dev" });
 const grokSession = sessionOf("s-web-grok", console_.id, grokProject.id, "Tidy the stylesheet", "working", { agent: "grok" });
 const sessions = [...SAMPLE.sessions, codexSession, grokSession];
+const LONG_TITLE_WORD = "ProductionDeploymentCompatibilityRollbackReadinessChecklist";
+// A project session whose title is far longer than the others', with a word that cannot break.
+const longTitled = sessionOf("s-web-long", console_.id, web.id, `Reconcile the summary layout with the ${LONG_TITLE_WORD} export and review the remaining overflow cases`, "idle");
 const trustSessions = sessions.filter((session) => session.id !== "s-api-1").map((session) =>
   ["s-web-1", codexSession.id, grokSession.id].includes(session.id)
     ? { ...session, status: "waiting_user" as const }
@@ -457,7 +460,7 @@ export const noticeScenarios: Scenario[] = [
     category: "exceptional",
     title: "Queued error alerts",
     description:
-      "Errors require explicit OK, with no close button or automatic dismissal. The first names a missing folder as code. Recovery labels such as Browse, Try again and Settings are chips. OK advances through path, connection and account remedies (the account one puts a Manage accounts… button in the footer, left of OK), two refused reopens (the agent no longer has the session's conversation, and Codex could not restore its archived one), each an expected refusal with its own advice rather than the unexpected-failure alert, a session-specific error, a failed trust confirmation and an unknown code with fallback text.",
+      "Errors require explicit OK, with no close button or automatic dismissal. The first names a missing folder as code. Recovery labels such as Browse, Try again and Settings are chips. OK advances through path, connection and account remedies (the account one puts a Manage accounts… button in the footer, left of OK), two refused reopens (the agent no longer has the session's conversation, and Codex could not restore its archived one), each an expected refusal with its own advice rather than the unexpected-failure alert, a session-specific error and a failed trust confirmation (each titled for what failed, with a Session line above the message naming the session and where it is, the session and its project each a chip) and an unknown code with fallback text.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [
       { kind: "error", code: "path_not_found", params: { path: "/Users/dev/code/missing" }, message: "" },
@@ -505,9 +508,27 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Message written but not sent by the agent",
-    description: "An error alert tied to a console session, Hub, so its title is a sentence with the console's name, Main, as a chip in it, not a project name: it names the agent, says the message waits in the session's input box and that nothing more is written into the session until a prompt is sent, then gives the recovery of opening the session and pressing Enter.",
+    description: "An error alert tied to a console session, Hub. It is titled \"Message not sent\", and the first line of the body is the session line, \"Session: Hub — Main's console session\", with the session and the console each a chip, which names the console rather than a project. Then the body names the agent, says the message waits in the session's input box and that nothing more is written into the session until a prompt is sent, then gives the recovery of opening the session and pressing Enter.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [{ kind: "error", code: "message_not_sent", params: { agent: "Claude Code" }, message: "", session: SAMPLE.consoleSession.id }],
+  },
+  {
+    id: "toast-message-not-sent-long-title",
+    group: TRUST,
+    category: "exceptional",
+    title: "Message not sent, session with a long title",
+    description: "The session line of the alert, when the session's title is long and holds a word with no break opportunity: look that the session's chip wraps inside the dialog, keeps the project chip (Website) readable after it, and leaves the dialog's width, the title above it and the message below it undisturbed.",
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions: [...sessions, longTitled] }),
+    toasts: [{ kind: "error", code: "message_not_sent", params: { agent: "Claude Code" }, message: "", session: longTitled.id }],
+  },
+  {
+    id: "toast-queued-messages-dropped",
+    group: TRUST,
+    category: "exceptional",
+    title: "Queued messages dropped for a project session",
+    description: "An error alert titled \"Queued messages dropped\", with the session line above the message, the session and its project each a chip: what was dropped, the advice to check the session's input line before sending anything else, and why that line may hold part of a message.",
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
+    toasts: [{ kind: "error", code: "queued_messages_dropped", params: {}, message: "", session: "s-web-1" }],
   },
   {
     id: "toast-message-notices",
@@ -621,11 +642,26 @@ export const noticeScenarios: Scenario[] = [
     }],
   },
   {
+    id: "toast-launch-failed-session",
+    group: TRUST,
+    category: "exceptional",
+    title: "Launch failed for a session the app still has",
+    description: "An error alert titled \"Could not start the session\", without the session's name. The first line of the body is the session line, \"Session: Review the retry logic — Search API\", with the session and its project each a chip, then the failure itself: the missing path is a chip in the sentence saying it does not exist.",
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
+    toasts: [{
+      kind: "error",
+      code: "launch_failed",
+      params: { title: codexSession.title, reason_code: "path_not_found", path: "/Users/dev/code/search-api" },
+      message: "",
+      session: codexSession.id,
+    }],
+  },
+  {
     id: "toast-launch-path",
     group: TRUST,
     category: "exceptional",
     title: "Launch failed, nested path in its reason",
-    description: "The session title and the configuration path inside the failure reason are chips.",
+    description: "The session record is gone, so the alert keeps the title naming the session, \"Could not start Draft the release notes\", with the name a chip and no session line in the body; the configuration path inside the failure reason is a chip.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [{
       kind: "error",

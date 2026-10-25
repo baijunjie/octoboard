@@ -1,5 +1,6 @@
 //! Launching an agent in a PTY, and writing messages into a running one.
 
+mod image_path;
 mod invisible;
 
 use std::collections::HashMap;
@@ -256,16 +257,23 @@ pub const FRAGMENT_HAZARD: &str = concat!(
 /// always-approve. Writing mid-turn is safe and is the better path: every agent queues the message
 /// itself and consumes it when the turn ends.
 pub fn send_message(session: &LiveSession, text: &str) -> Result<(), crate::ptyio::PartialWrite> {
-    session.write_input(&frame_message(text))
+    session.write_input(&frame_message(session.agent, text))
 }
 
 /// Shapes a message into the bracketed-paste buffer `send_message` writes: see [`shaped`], then
-/// frame. Pulled out as a pure function so the ordering — both strips before the slash guard, not
-/// after — is something a test can pin directly, rather than re-deriving it from a copy of this
-/// logic; `send_message` itself needs a `LiveSession` and a PTY, which is why it is not tested
-/// directly.
-pub(crate) fn frame_message(text: &str) -> Vec<u8> {
+/// whatever the receiving agent needs on top, then frame. Pulled out as a pure function so the
+/// ordering — both strips before the slash guard, not after — is something a test can pin
+/// directly, rather than re-deriving it from a copy of this logic; `send_message` itself needs a
+/// `LiveSession` and a PTY, which is why it is not tested directly.
+pub(crate) fn frame_message(agent: Agent, text: &str) -> Vec<u8> {
     let text = shaped(text);
+    // Claude Code reads a pasted piece that ends in an image extension as an image and loses the
+    // Enter that follows (see `image_path`). Codex and Grok Build were not measured for it.
+    let text = if agent == Agent::Claude {
+        image_path::guard_image_paths(&text)
+    } else {
+        text
+    };
 
     let mut buf =
         Vec::with_capacity(PASTE_START.len() + text.len() + PASTE_END.len() + SUBMIT.len());
@@ -306,10 +314,11 @@ fn shaped(text: &str) -> String {
     }
 }
 
-/// A message as the command line of an agent launch takes it, shaped exactly as one written into a
-/// running session is, or `None` when nothing is left of it. A prompt that began with `/` would
-/// run a slash command, as a pasted one would, and one that began with `-` would be read as a flag;
-/// a leading space keeps either as text.
+/// A message as the command line of an agent launch takes it, or `None` when nothing is left of it.
+/// It gets [`shaped`] (the invisible-character strip and the slash guard) but not the image-path
+/// guard of `frame_message`, which is for a paste: argv is not one. A prompt that began with `/`
+/// would run a slash command, as a pasted one would, and one that began with `-` would be read as
+/// a flag; a leading space keeps either as text.
 pub(crate) fn launch_prompt(text: &str) -> Option<String> {
     if is_blank_once_stripped(text) {
         return None;
@@ -353,7 +362,7 @@ mod tests {
     #[test]
     fn an_embedded_paste_end_marker_does_not_survive() {
         let text = "before\x1b[201~\rafter";
-        let framed = frame_message(text);
+        let framed = frame_message(Agent::Claude, text);
         let occurrences = framed
             .windows(PASTE_END.len())
             .filter(|window| *window == PASTE_END)
@@ -376,7 +385,7 @@ mod tests {
     #[test]
     fn ordinary_multiline_text_with_tabs_survives_framing() {
         let text = "line one\n\tindented line two\nline three";
-        let framed = frame_message(text);
+        let framed = frame_message(Agent::Claude, text);
         let mut expected = Vec::new();
         expected.extend_from_slice(PASTE_START);
         expected.extend_from_slice(text.as_bytes());
@@ -390,7 +399,7 @@ mod tests {
     /// it from being guarded, any more than a control character may.
     #[test]
     fn invisible_characters_are_stripped_before_the_slash_guard() {
-        let framed = frame_message("\u{2068}/clear\u{2069} the cache");
+        let framed = frame_message(Agent::Claude, "\u{2068}/clear\u{2069} the cache");
         let mut expected = Vec::new();
         expected.extend_from_slice(PASTE_START);
         expected.extend_from_slice(b" /clear the cache");
@@ -407,12 +416,21 @@ mod tests {
     #[test]
     fn a_control_character_before_a_slash_command_still_gets_guarded() {
         let text = "\u{1}/clear";
-        let framed = frame_message(text);
+        let framed = frame_message(Agent::Claude, text);
         let mut expected = Vec::new();
         expected.extend_from_slice(PASTE_START);
         expected.extend_from_slice(b" /clear");
         expected.extend_from_slice(PASTE_END);
         expected.extend_from_slice(SUBMIT);
         assert_eq!(framed, expected);
+    }
+
+    #[test]
+    fn only_a_claude_code_message_has_its_image_paths_wrapped() {
+        let text = "done\n- /a/shot.png";
+        let framed = |agent| String::from_utf8(frame_message(agent, text)).unwrap();
+        assert!(framed(Agent::Claude).contains("- `/a/shot.png`\x1b[201~"));
+        assert!(framed(Agent::Codex).contains("- /a/shot.png\x1b[201~"));
+        assert!(framed(Agent::Grok).contains("- /a/shot.png\x1b[201~"));
     }
 }

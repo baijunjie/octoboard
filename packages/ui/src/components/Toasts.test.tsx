@@ -227,7 +227,7 @@ it("shows a failed launch's shell timeout once: the title names the launch, the 
   }
 });
 
-it("shows the error heading above a structured error's details when the toast is titled by its session's location", () => {
+it("shows the error heading above a structured error's details when the alert has a session", () => {
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
@@ -247,6 +247,69 @@ it("shows the error heading above a structured error's details when the toast is
     const alert = document.querySelector('[role="alertdialog"]');
     expect(alert?.querySelector("h3")?.textContent).toBe("Shell environment timed out");
     expect(alert?.querySelector("code")?.textContent).toBe("/bin/zsh -l -i -c 'env -0'");
+  } finally {
+    act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
+    act(() => root.unmount());
+    container.remove();
+  }
+});
+
+it("titles an error alert for what failed and names the session and its project in the body", () => {
+  vi.useFakeTimers();
+  onTestFinished(() => { vi.useRealTimers(); });
+  stubWidth(1280);
+  let deliver!: (request: import("../store").ToastRequest) => void;
+  const source: Daemon = {
+    ...daemon,
+    store: createStateStore({
+      sessions: new Map([["s1", sessionOf("s1", "c1", "p1", "Fix login", "idle")]]),
+      projects: new Map([["p1", { id: "p1", name: "Hub" } as unknown as import("../protocol").Project]]),
+    }),
+    onToast: (listener) => { deliver = listener; return () => {}; },
+  };
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  try {
+    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
+    act(() => deliver({ kind: "error", message: "Not sent.", session: "s1", daemonError: new DaemonRequestError("", "message_not_sent", { agent: "Claude Code" }) }));
+    const alert = document.querySelector('[role="alertdialog"]');
+    expect(alert?.querySelector("h2")?.textContent).toBe("Message not sent");
+    expect(alert?.textContent).toContain("Fix login");
+    expect(alert?.textContent).toContain("Hub");
+  } finally {
+    act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
+    act(() => root.unmount());
+    container.remove();
+  }
+});
+
+it("titles a failed launch's alert for the failure when it names the session in its body, and keeps the named title when the session is gone", () => {
+  vi.useFakeTimers();
+  onTestFinished(() => { vi.useRealTimers(); });
+  stubWidth(1280);
+  let deliver!: (request: import("../store").ToastRequest) => void;
+  const source: Daemon = {
+    ...daemon,
+    store: createStateStore({
+      sessions: new Map([["s1", sessionOf("s1", "c1", "p1", "Fix login", "idle")]]),
+      projects: new Map([["p1", { id: "p1", name: "Hub" } as unknown as import("../protocol").Project]]),
+    }),
+    onToast: (listener) => { deliver = listener; return () => {}; },
+  };
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  try {
+    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
+    const params = { title: "Fix login", reason_code: "path_not_found", path: "/missing" };
+    const message = daemonMessage("en", "launch_failed", params, "fallback", source.store.getState());
+    const request = { kind: "error" as const, message, daemonError: noticeErrorPresentation("launch_failed", params, message), daemonTitle: new DaemonRequestError(message, "launch_failed.title", params) };
+    act(() => deliver({ ...request, session: "s1" }));
+    const alert = document.querySelector('[role="alertdialog"]');
+    expect(alert?.querySelector("h2")?.textContent).toBe("Could not start the session");
+    expect(alert?.textContent).toContain("Fix login");
+    act(() => document.querySelector<HTMLElement>('[role="alertdialog"] button')?.click());
+    act(() => deliver({ ...request, session: "gone" }));
+    expect(document.querySelector('[role="alertdialog"] h2')?.textContent).toBe("Could not start Fix login");
   } finally {
     act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
     act(() => root.unmount());

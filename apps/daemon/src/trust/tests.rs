@@ -1672,7 +1672,7 @@ async fn codex_answered_in_the_terminal_is_no_longer_waiting() {
 #[tokio::test]
 async fn a_message_waits_while_codex_is_at_its_screen_and_follows_the_press() {
     let (state, dir) = state_with_project("held-message");
-    let message = crate::term::frame_message("hello");
+    let message = crate::term::frame_message(Agent::Codex, "hello");
     let record = session("codex-1", Agent::Codex, Role::Project, Some("project-1"));
     let script = codex_script_reading(Path::new("%RECEIVED%"), message.len());
     let (live, received) = start(&state, &dir, record, &script);
@@ -1738,7 +1738,7 @@ async fn trusting_a_project_presses_its_other_waiting_screens_and_no_others() {
 #[tokio::test]
 async fn a_message_for_codex_is_let_through_at_its_first_title_with_no_screen() {
     let (state, dir) = state_with_project("title-ends");
-    let message = crate::term::frame_message("hello");
+    let message = crate::term::frame_message(Agent::Codex, "hello");
     let record = session("codex-1", Agent::Codex, Role::Project, Some("project-1"));
     let script = format!(
         "printf 'ready'; {}; sleep 30",
@@ -1770,7 +1770,7 @@ async fn a_message_for_codex_is_let_through_at_its_first_title_with_no_screen() 
 #[tokio::test]
 async fn codex_answered_in_the_terminal_lets_held_messages_through_once_the_screen_goes() {
     let (state, dir) = state_with_project("codex-released");
-    let message = crate::term::frame_message("hello");
+    let message = crate::term::frame_message(Agent::Codex, "hello");
     let r = "'%RECEIVED%'";
     let answered = session("codex-1", Agent::Codex, Role::Project, Some("project-1"));
     let (answered_live, answered_received) = start(
@@ -2063,7 +2063,7 @@ async fn trust_waiting_preserves_the_agent_status_and_ends_only_when_the_screen_
 #[tokio::test]
 async fn grok_messages_are_let_through_when_no_hook_comes_within_the_bound() {
     let (state, dir) = state_with_project("hook-fallback");
-    let message = crate::term::frame_message("hello");
+    let message = crate::term::frame_message(Agent::Grok, "hello");
     let record = session("grok-1", Agent::Grok, Role::Project, Some("project-1"));
     let script = format!(
         "printf 'ready'; {}; sleep 30",
@@ -2239,7 +2239,7 @@ fn a_hook_after_a_press_the_screen_confirmed_still_carries_the_entry() {
 #[tokio::test]
 async fn claude_messages_wait_for_bracketed_paste_after_the_first_hook() {
     let (state, dir) = state_with_project("paste-after-hook");
-    let message = crate::term::frame_message("hello");
+    let message = crate::term::frame_message(Agent::Claude, "hello");
     let record = session("claude-1", Agent::Claude, Role::Project, Some("project-1"));
     let script = format!(
         "printf 'ready'; {}; sleep 30",

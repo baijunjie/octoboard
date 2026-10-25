@@ -144,6 +144,7 @@ export const en = {
   "error.diagnostics": "Error details",
   "error.details": "Details",
   "error.title": "Error",
+  "error.alertSession": "Session: {session}",
   "error.acknowledge": "OK",
   "error.crashed": "{appName} hit an error it could not recover from.",
   "error.crashed.alertTitle": "An unexpected error occurred",
@@ -502,6 +503,13 @@ export const en = {
   "daemon.launch_failed": "Could not start {title}: {reason}",
   // The same notice's title when its failure is laid out beneath it, which says the reason itself.
   "daemon.launch_failed.title": "Could not start {title}",
+  "daemon.launch_failed.alertTitle": "Could not start the session",
+  "daemon.message_not_sent.alertTitle": "Message not sent",
+  "daemon.trust_answer_failed.alertTitle": "Could not answer the trust confirmation",
+  "daemon.queued_messages_dropped.alertTitle": "Queued messages dropped",
+  "daemon.handoff_messages_dropped.alertTitle": "Handoff messages dropped",
+  "daemon.sharing_messages_dropped.alertTitle": "Messages dropped during a sharing change",
+  "daemon.session_request_not_waiting.alertTitle": "Request not carried out",
   "daemon.trust_answer_failed": "{appName} could not press {agent}'s trust confirmation ({reason}). Answer it in the terminal.",
   "daemon.trust_not_carried_over":
     "{appName} could not copy {agent}'s trust for this folder into {path} ({reason}), so {agent} will ask again the next time it opens this folder.",

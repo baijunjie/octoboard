@@ -50,7 +50,7 @@ export interface ToastRequest {
   /** The session the toast is about, so the stack can say where it is. A daemon `notice` always
    * has one; a notice the UI raises itself (`toastNotice`) has none. An `error` has one only where
    * the call site knows which session the daemon's message is about — the daemon says "this
-   * session" without naming it, having no notion of what the client calls it, so the toast's title
+   * session" without naming it, having no notion of what the client calls it, so the alert's body
    * is the only thing that tells the user which one. */
   session?: string;
 }

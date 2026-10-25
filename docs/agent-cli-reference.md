@@ -31,7 +31,7 @@ saves of the model and effort and on theme saves with `GROK_THEME` set, were mea
 1.0.62**. What "Signing in a config directory without a terminal" says was measured on 2026-10-19 on **Claude Code
 2.1.303**, **Codex 0.162.1** and **Grok Build 1.0.62**. What "Writing into a running session" says about invisible
 characters was read from the executable of, and measured on, **Claude Code 2.1.304** on 2026-10-20; what it says
-about input written before bracketed paste is turned on, on **Claude Code 2.1.310** on 2026-10-25. All three rewrite
+about input written before bracketed paste is turned on, and about pasted pieces that end in an image extension, on **Claude Code 2.1.310** on 2026-10-25. All three rewrite
 their hook surface, their payload fields, their configuration layering and their on-disk layout on upgrade, so check a
 detail here against the installed version before relying on it.
 
@@ -1983,7 +1983,7 @@ Octoboard recognizes it in the terminal output and presses it; what pressing it 
 
 The sequence for all three agents is `ESC[200~`, the text with LF separators, `ESC[201~`, then `CR`; multi-line text
 arrives as one message with no delay between paste and Enter. Every agent queues a message written mid-turn and consumes
-it when the turn ends. (Codex additionally has `codex queue --thread <session id>`.) Six rules, each failing silently
+it when the turn ends. (Codex additionally has `codex queue --thread <session id>`.) Seven rules, each failing silently
 or destructively if ignored:
 
 - A message starting with `/` runs as a slash command even inside a bracketed paste; prefix a single space. The same
@@ -2046,3 +2046,19 @@ or destructively if ignored:
   be checked that way, since the agent sends nothing until its turn ends (the behaviour is in "A message written but not
   sent" in `docs/product/message-delivery.md`). Codex and Grok Build were not measured: neither executable carries any
   wording about such a hold, but neither was run against one.
+- Claude Code reads a pasted piece that ends in an image extension as an image and loses the `CR` that follows
+  (measured on 2.1.310, 2026-10-25, a real `claude` in a PTY against a stub endpoint). Its paste handler splits the text
+  on newlines and on a space right before `/` or a Windows drive path; a piece whose trimmed, quote-stripped and
+  backslash-unescaped text ends in `.png`, `.jpg`, `.jpeg`, `.gif` or `.webp` (any case) takes an asynchronous
+  image-read path, whether or not the file exists and whether it is absolute or relative. An `Enter` that arrives while
+  the paste is processed is held and replayed on the text path, but the image path clears it when it completes: the
+  message sits in the input box as `[Image #1]` plus `[Pasted text #N +M lines]`, the path text is gone and an image
+  the receiver never asked for is inlined. Idle, no `UserPromptSubmit` fires; mid-turn, the message is not queued but
+  left in the input box. A plain multi-line paste was sent in about 0.4 s, any paste with such a piece was not, and a
+  `CR` written separately 0.3 s or more later sent it. A report listing produced screenshots one per line is the usual
+  trigger. A trailing space or invisible character does not avoid it (the piece is trimmed first; invisible characters
+  hold the prompt anyway). So Octoboard wraps the trailing path token of every such piece in backticks (``- `/a/b.png` ``,
+  a quoted path whole), which ends the piece in something else and keeps the path readable as text (a path containing a space is split by the backticks, and a path line inside a fenced code block is wrapped like any other); a piece that does not end
+  in the extension, such as a path followed by punctuation or one already in backticks, is left alone. The shaping
+  is for Claude Code only (Codex and Grok Build were not measured) and is in `apps/daemon/src/term/image_path.rs`.
+  Measured with the shaped message: sent both idle and mid-turn.

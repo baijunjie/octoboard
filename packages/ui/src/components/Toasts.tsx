@@ -6,9 +6,10 @@ import { CodeToneContext } from "./codeTone";
 import { DaemonErrorMessage, DaemonErrorTitle } from "./DaemonErrorMessage";
 import { errorAlerts } from "../errorAlerts";
 import { hasCodeParams, hasShellTimeoutDetails } from "../errorPresentation";
+import { isMessageKey, type MessageKey } from "../i18n/catalog";
 import { t } from "../i18n/language";
-import { useT } from "../i18n/react";
-import { sessionLocationContent } from "../sessionCopy";
+import { Message, useT } from "../i18n/react";
+import { sessionLocationContent, sessionWithLocationContent } from "../sessionCopy";
 import { useDaemon, type ToastRequest } from "../store";
 import { TOAST_BREAKPOINT } from "./toastGeometry";
 import { TitledControl } from "./TitledControl";
@@ -16,6 +17,18 @@ import { useLatest } from "./useLatest";
 
 /** How long a notice stays before it dismisses itself. */
 const NOTICE_DURATION_MS = 5000;
+
+type AlertTitleKey = Extract<MessageKey, `daemon.${string}.alertTitle`>;
+
+/** The catalog key of the title an error alert takes for what failed (`daemon.<code>.alertTitle`),
+ * where the code has one: it says what failed without naming the session, which the alert's body
+ * does. A failed launch's `daemonError` carries its cause's code, so its own is read off
+ * `daemonTitle`. */
+function alertTitleKey({ daemonError, daemonTitle }: ToastRequest): AlertTitleKey | undefined {
+  const code = daemonTitle ? daemonTitle.code.replace(/\.title$/, "") : daemonError?.code;
+  const key = `daemon.${code}.alertTitle`;
+  return isMessageKey(key) ? (key as AlertTitleKey) : undefined;
+}
 
 /** Matches a window at least as wide as HeroUI's toast breakpoint (its `sm:`); the narrow window is
  * the one it does not match. */
@@ -36,8 +49,9 @@ const shownToasts = new Map<string, string>();
 
 /**
  * Routes errors into the acknowledgement queue and displays notices in HeroUI's timed toast
- * stack. Session notifications retain their location and structured daemon message. Notices
- * keep keyboard focus where it was, remain selectable, and move clear of dialog footers.
+ * stack. An error alert is titled for what failed and names its session in the body; a session
+ * notice keeps its location and structured daemon message. Notices keep keyboard focus where it
+ * was, remain selectable, and move clear of dialog footers.
  */
 export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.ReactElement {
   const { store, onToast } = useDaemon();
@@ -49,12 +63,22 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
         const session = request.session ? sessions.get(request.session) : undefined;
         const location = session && sessionLocationContent(t, session, consoles, projects);
         if (request.kind === "error") {
+          const titleKey = alertTitleKey(request);
           errorAlerts.report({
             message: request.message,
             session: request.session,
             error: request.error ?? request.daemonError ?? request.message,
-            title: location ?? (request.daemonTitle ? <DaemonErrorMessage error={request.daemonTitle} /> : undefined),
-            content: request.content ?? <DaemonErrorMessage error={request.daemonError && (hasCodeParams(request.daemonError) || hasShellTimeoutDetails(request.daemonError)) ? request.daemonError : request.message} />,
+            // The title says what failed. Which session it is about goes in the body, since the
+            // daemon words its message as "this session" without naming it; a title that names the
+            // session (a failed launch's) gives way to the coded one there, and stays when the
+            // session is gone and the body cannot name it.
+            title: request.daemonTitle && !(session && titleKey) ? <DaemonErrorMessage error={request.daemonTitle} /> : titleKey && t(titleKey),
+            content: (
+              <>
+                {session && <div dir="auto" className="mb-2"><Message id="error.alertSession" params={{ session: sessionWithLocationContent(t, session, consoles, projects) }} /></div>}
+                {request.content ?? <DaemonErrorMessage error={request.daemonError && (hasCodeParams(request.daemonError) || hasShellTimeoutDetails(request.daemonError)) ? request.daemonError : request.message} />}
+              </>
+            ),
           });
         } else showToast(request, location);
       }),

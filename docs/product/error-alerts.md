@@ -33,8 +33,9 @@ and removing an account" in `docs/product/agent-accounts.md`) or a conversation 
 ## The error alert
 
 The error alert uses the standard danger icon and a danger acknowledgement button. It appears above any open dialog
-and takes keyboard focus. It identifies the failure and preserves available details, including the affected
-session's location when the failure carries one. It has one acknowledgement button. Escape, a click outside and a
+and takes keyboard focus. It identifies the failure and preserves available details. Its title says what failed;
+when the failure is about a session, the first line of its body names that session and where it is (its project or
+console), since the daemon's message says only "this session". It has one acknowledgement button. Escape, a click outside and a
 close button cannot dismiss it, and it never dismisses itself. Acknowledgement does not retry the failed operation.
 The originating dialog remains available for correcting inputs or retrying unless that operation's own contract
 closes it, or a recovery action navigates Settings and closes its account or agent forms (see "Opening and closing

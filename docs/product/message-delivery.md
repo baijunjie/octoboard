@@ -9,7 +9,7 @@ A session that is working, awaiting instructions or working in background takes 
 of the holds below applies to it, or it is a Claude Code session held behind a message its agent did not send (see "A
 message written but not sent" below); every agent queues one written mid-turn and consumes it when the turn ends.
 
-**A message is not written verbatim.** Its text is reshaped in three steps, in this order:
+**A message is not written verbatim.** Its text is reshaped in the steps below, in this order:
 
 1. Every control character except newline and tab is removed.
 2. Every character Claude Code treats as invisible is removed. Claude Code does not send a prompt that holds one: it
@@ -31,6 +31,12 @@ message written but not sent" below); every agent queues one written mid-turn an
 3. A message that would otherwise begin with `/` is written with a single leading space, so it reaches the model as
    text instead of being run as one of the agent's own slash commands. The check is made on the text left after the
    removals, so a removed character in front of a slash command does not keep it from being guarded.
+4. For a Claude Code session only: a line, or a part of one starting at a space right before `/` or a Windows drive path (`X:\`), that ends in an
+   image extension (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`) has its last word wrapped in backticks, so ``- /a/b.png``
+   arrives as ``- `/a/b.png` ``. Claude Code reads such a piece as an image to attach and, in doing so, loses the Enter
+   written after the message, which would then sit unsent in its input box, one written mid-turn included (see "A message
+   written but not sent" below). The path stays readable text, unless it contains a space, which the backticks then split; a path line inside a fenced code block is wrapped as well. A path followed by punctuation or already in backticks is
+   not touched. Codex and Grok Build have not been measured for this.
 
 This holds for everything Octoboard writes into a running session — an instruction, a report, a report panel form
 submission, information shared by another session, the instruction `reopen_session` hands over, the prompt to continue
@@ -40,8 +46,8 @@ after an account switch — because all of them can be model-authored and none i
 is the prompt to continue that an account switch sends one (see "Continuing after a switch" in
 `docs/product/switching-session-accounts.md`): it is given to the relaunched agent as the prompt its launch starts
 with, since Claude Code can ask "Resume this conversation?" at a resume launched without one, and a message written
-into that dialog would be thrown away (see the screens that hold messages, below). The prompt is reshaped by the same
-three steps, and one that would then begin with `-` also gets a single leading space, so it is not read as a
+into that dialog would be thrown away (see the screens that hold messages, below). The prompt is reshaped by the
+first three steps, and one that would then begin with `-` also gets a single leading space, so it is not read as a
 command-line option; one that is nothing but whitespace once reshaped is dropped, and the session resumes with no
 prompt. Such a prompt is neither queued nor checked as below. For any other session, Claude Code's included when it has
 no conversation to resume, the instruction or prompt is queued and written like any other message.
@@ -211,8 +217,8 @@ written during the wait nor lifts the hold below. Any other prompt counts, whoev
 - It is not written again, put back in the queue or changed: its text is already in the session's input box.
 - Every client is sent the `message_not_sent` notice about that session, naming its agent, provided the session's
   process that was written to is still running when the check ends. The window shows it as an error alert (see
-  `docs/product/error-alerts.md`) titled with where the session is, saying the agent did not send a message Octoboard
-  wrote into the session, that the message is waiting in its input box, and that nothing more is written into the
+  `docs/product/error-alerts.md`) titled "Message not sent", naming the session and where it is, and saying the agent
+  did not send a message Octoboard wrote into the session, that the message is waiting in its input box, and that nothing more is written into the
   session until a prompt is sent; the remedy is to open the session, check the message in its input box and press Enter
   to send it.
 - Nothing more is written into the session until its agent next reports a prompt sent, whoever sends it: the user
