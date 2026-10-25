@@ -25,6 +25,7 @@ use crate::protocol::{
     Account, Agent, CodedError, Console, Project, ProjectAccount, ProjectSource,
 };
 use crate::store::Store;
+use crate::worktree_settings::{WorktreeOverride, WorktreeSettings};
 
 /// Names the kind of file, so one that is not a configuration document is told apart from one
 /// whose version is unsupported.
@@ -87,6 +88,10 @@ pub struct DocumentSettings {
     /// setting as it is.
     #[serde(default)]
     pub auto_approve_handoffs: Option<bool>,
+    /// The application-wide worktree settings. Absent in a document exported before they existed:
+    /// importing it leaves them as they are.
+    #[serde(default)]
+    pub worktrees: Option<WorktreeSettings>,
     /// The keyboard shortcuts the exporting client has changed, by command id, which only the client
     /// reads and writes: the client adds them to a full export it saves (an empty object when it has
     /// none changed, which on import means every shortcut at its default) and applies them from an
@@ -177,6 +182,10 @@ pub struct DocumentProject {
     pub codex_session_effort: Option<String>,
     pub grok_session_model: Option<String>,
     pub grok_session_effort: Option<String>,
+    /// The project's own worktree settings, each item `null` when it follows the application-wide
+    /// value. Absent in an older document: every item follows.
+    #[serde(default)]
+    pub worktrees: WorktreeOverride,
 }
 
 /// The document for the console `console`, or for every console and the application settings when
@@ -218,6 +227,7 @@ pub fn build(
             auto_approve_resume_requests: Some(store.auto_approve_resume_requests()?),
             auto_approve_account_switches: Some(store.auto_approve_account_switches()?),
             auto_approve_handoffs: Some(store.auto_approve_handoffs()?),
+            worktrees: Some(store.worktree_settings()?),
             keyboard_shortcuts: None,
         }),
     };
@@ -314,6 +324,7 @@ fn document_project(
         codex_session_effort: project.codex_session_effort,
         grok_session_model: project.grok_session_model,
         grok_session_effort: project.grok_session_effort,
+        worktrees: project.worktrees,
     }
 }
 
@@ -397,6 +408,7 @@ mod tests {
             pinned: false,
             tags: Vec::new(),
             description: None,
+            worktrees: Default::default(),
         }
     }
 
@@ -541,6 +553,7 @@ mod tests {
                 auto_approve_resume_requests: Some(false),
                 auto_approve_account_switches: Some(false),
                 auto_approve_handoffs: Some(false),
+                worktrees: Some(WorktreeSettings::default()),
                 keyboard_shortcuts: None,
             })
         );

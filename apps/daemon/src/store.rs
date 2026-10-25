@@ -26,6 +26,7 @@ use crate::protocol::{
     ProjectSource, Role, Session, SessionStatus, Settings,
 };
 use crate::session_title::RecordTitles;
+use crate::worktree_settings::{WorktreeOverride, WorktreeSettings, WorktreeSettingsChanges};
 
 /// The single local host record every project and session points at. There is no other host yet,
 /// but the column exists so that adding remote hosts needs no data migration ("Data model" in
@@ -168,7 +169,12 @@ impl Store {
                 trust_consent INTEGER NOT NULL DEFAULT 0,
                 pinned        INTEGER NOT NULL DEFAULT 0,
                 tags          TEXT NOT NULL DEFAULT '[]',
-                description   TEXT
+                description   TEXT,
+                -- NULL follows the application-wide value; see `Store::worktree_settings`.
+                use_worktrees       INTEGER,
+                rebase_before_merge INTEGER,
+                delivery            TEXT,
+                revert_gate         INTEGER
             );
             CREATE TABLE IF NOT EXISTS sessions (
                 id               TEXT PRIMARY KEY,
@@ -282,7 +288,11 @@ impl Store {
                 -- NULL until the list is first decided; see `Store::added_agents`.
                 added_agents           TEXT,
                 -- NULL until the user names a default account; see `Store::default_account_names`.
-                default_account_names  TEXT
+                default_account_names  TEXT,
+                use_worktrees       INTEGER NOT NULL DEFAULT 1,
+                rebase_before_merge INTEGER NOT NULL DEFAULT 1,
+                delivery            TEXT NOT NULL DEFAULT 'ask',
+                revert_gate         INTEGER NOT NULL DEFAULT 1
             );
             "#,
         )?;
@@ -418,6 +428,14 @@ impl Store {
                  ADD COLUMN auto_start_quota_windows INTEGER NOT NULL DEFAULT 0",
                 [],
             )?;
+        }
+        for (column, definition) in WORKTREE_SETTING_COLUMNS {
+            if !column_exists(&conn, "settings", column)? {
+                conn.execute(
+                    &format!("ALTER TABLE settings ADD COLUMN {column} {definition}"),
+                    [],
+                )?;
+            }
         }
         // The approval choice was once kept per account, the default account's in `settings`
         // under a name that said so. It is one choice per agent now, and the default account's
@@ -601,6 +619,14 @@ impl Store {
             if !column_exists(&conn, "projects", column)? {
                 conn.execute(
                     &format!("ALTER TABLE projects ADD COLUMN {column} TEXT"),
+                    [],
+                )?;
+            }
+        }
+        for (column, definition) in WORKTREE_OVERRIDE_COLUMNS {
+            if !column_exists(&conn, "projects", column)? {
+                conn.execute(
+                    &format!("ALTER TABLE projects ADD COLUMN {column} {definition}"),
                     [],
                 )?;
             }
@@ -1019,9 +1045,10 @@ impl Store {
                                    claude_session_model, claude_session_effort,
                                    codex_session_model, codex_session_effort, grok_session_model,
                                    grok_session_effort, trust_consent, pinned, tags,
-                                   description)
+                                   description, use_worktrees, rebase_before_merge, delivery,
+                                   revert_gate)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
-                     ?18, ?19, ?20, ?21, ?22, ?23, ?24)",
+                     ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)",
             params![
                 project.id,
                 project.console_id,
@@ -1047,6 +1074,10 @@ impl Store {
                 project.pinned,
                 tags_to_text(&project.tags),
                 project.description,
+                project.worktrees.use_worktrees,
+                project.worktrees.rebase_before_merge,
+                project.worktrees.delivery.as_ref().map(enum_to_text),
+                project.worktrees.revert_gate,
             ],
         )?;
         Ok(())
@@ -1084,7 +1115,9 @@ impl Store {
                                  claude_session_model = ?10, claude_session_effort = ?11,
                                  codex_session_model = ?12, codex_session_effort = ?13,
                                  grok_session_model = ?14, grok_session_effort = ?15,
-                                 pinned = ?16, tags = ?17, description = ?18
+                                 pinned = ?16, tags = ?17, description = ?18,
+                                 use_worktrees = ?19, rebase_before_merge = ?20, delivery = ?21,
+                                 revert_gate = ?22
              WHERE id = ?1",
             params![
                 project.id,
@@ -1105,6 +1138,10 @@ impl Store {
                 project.pinned,
                 tags_to_text(&project.tags),
                 project.description,
+                project.worktrees.use_worktrees,
+                project.worktrees.rebase_before_merge,
+                project.worktrees.delivery.as_ref().map(enum_to_text),
+                project.worktrees.revert_gate,
             ],
         )?;
         Ok(())
@@ -1207,6 +1244,7 @@ impl Store {
             claude_approval_mode: self.claude_approval_mode()?,
             default_account_names: self.default_account_names()?,
             disabled_default_accounts: self.disabled_default_accounts()?,
+            worktrees: self.worktree_settings()?,
         })
     }
 
@@ -1328,6 +1366,37 @@ impl Store {
             params![SETTINGS_ID, mode.as_ref().map(enum_to_text)],
         )?;
         Ok(())
+    }
+
+    /// The application-wide worktree settings. A project's override is resolved against them by
+    /// `worktree_settings::effective`, never by reading this directly.
+    pub fn worktree_settings(&self) -> Result<WorktreeSettings> {
+        let conn = self.lock();
+        read_worktree_settings(&conn)
+    }
+
+    /// Applies `changes` to the application-wide worktree settings in one read-modify-write.
+    /// Whether anything actually changed.
+    pub fn change_worktree_settings(&self, changes: &WorktreeSettingsChanges) -> Result<bool> {
+        let conn = self.lock();
+        let current = read_worktree_settings(&conn)?;
+        let next = changes.applied_to(current);
+        if next == current {
+            return Ok(false);
+        }
+        conn.execute(
+            "UPDATE settings SET use_worktrees = ?2, rebase_before_merge = ?3, delivery = ?4,
+                                 revert_gate = ?5
+             WHERE id = ?1",
+            params![
+                SETTINGS_ID,
+                next.use_worktrees,
+                next.rebase_before_merge,
+                enum_to_text(&next.delivery),
+                next.revert_gate,
+            ],
+        )?;
+        Ok(true)
     }
 
     pub fn auto_pull_repositories(&self) -> Result<bool> {
@@ -2567,7 +2636,8 @@ const PROJECT_COLUMNS: &str = "id, console_id, host_id, name, path, default_agen
                                claude_account_default, codex_account_default, grok_account_default,
                                claude_session_model, claude_session_effort, codex_session_model,
                                codex_session_effort, grok_session_model, grok_session_effort,
-                               trust_consent, pinned, tags, description";
+                               trust_consent, pinned, tags, description, use_worktrees,
+                               rebase_before_merge, delivery, revert_gate";
 
 /// The projects columns flagging that a project pins an agent's default account. Added in place
 /// like [`PROJECT_SETTING_COLUMNS`] and absent from `CURRENT_SHAPE_COLUMNS` for the same reason;
@@ -2591,6 +2661,25 @@ const PROJECT_SETTING_COLUMNS: [&str; 9] = [
     "codex_session_effort",
     "grok_session_model",
     "grok_session_effort",
+];
+
+/// The `settings` columns of the worktree settings, with their definitions. Added in place to a
+/// database that predates them, at the application-wide defaults.
+const WORKTREE_SETTING_COLUMNS: [(&str, &str); 4] = [
+    ("use_worktrees", "INTEGER NOT NULL DEFAULT 1"),
+    ("rebase_before_merge", "INTEGER NOT NULL DEFAULT 1"),
+    ("delivery", "TEXT NOT NULL DEFAULT 'ask'"),
+    ("revert_gate", "INTEGER NOT NULL DEFAULT 1"),
+];
+
+/// The `projects` columns of a project's worktree override. Added in place like
+/// [`PROJECT_SETTING_COLUMNS`]; NULL, which a row from before them reads as, follows the
+/// application-wide value.
+const WORKTREE_OVERRIDE_COLUMNS: [(&str, &str); 4] = [
+    ("use_worktrees", "INTEGER"),
+    ("rebase_before_merge", "INTEGER"),
+    ("delivery", "TEXT"),
+    ("revert_gate", "INTEGER"),
 ];
 
 /// What the agent's records gave a session, to be stored if it differs from what is.
@@ -2801,6 +2890,22 @@ fn read_account(row: &Row<'_>) -> rusqlite::Result<Account> {
     })
 }
 
+fn read_worktree_settings(conn: &Connection) -> Result<WorktreeSettings> {
+    Ok(conn.query_row(
+        "SELECT use_worktrees, rebase_before_merge, delivery, revert_gate
+         FROM settings WHERE id = ?1",
+        params![SETTINGS_ID],
+        |row| {
+            Ok(WorktreeSettings {
+                use_worktrees: row.get(0)?,
+                rebase_before_merge: row.get(1)?,
+                delivery: enum_from_row(row, 2)?,
+                revert_gate: row.get(3)?,
+            })
+        },
+    )?)
+}
+
 fn read_project(row: &Row<'_>) -> rusqlite::Result<Project> {
     let id: String = row.get(0)?;
     let tags = tags_from_text(&id, &row.get::<_, String>(22)?);
@@ -2826,6 +2931,12 @@ fn read_project(row: &Row<'_>) -> rusqlite::Result<Project> {
         pinned: row.get(21)?,
         tags,
         description: row.get(23)?,
+        worktrees: WorktreeOverride {
+            use_worktrees: row.get(24)?,
+            rebase_before_merge: row.get(25)?,
+            delivery: enum_from_row_opt(row, 26)?,
+            revert_gate: row.get(27)?,
+        },
     })
 }
 
@@ -3000,6 +3111,7 @@ fn enum_from_text<T: DeserializeOwned>(text: &str) -> Result<T, serde_json::Erro
 mod tests {
     use super::*;
     use crate::test_support::ScratchFile;
+    use crate::worktree_settings::{self, Delivery};
 
     fn temp_db(name: &str) -> ScratchFile {
         ScratchFile::new(&format!("store-{name}"), "octoboard.db")
@@ -3703,6 +3815,7 @@ mod tests {
             pinned: false,
             tags: Vec::new(),
             description: None,
+            worktrees: Default::default(),
         }
     }
 
@@ -4788,6 +4901,130 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// The application-wide worktree settings start at on, on, ask, on, change item by item with a
+    /// repeat write reporting no change, and a database from before the columns existed gains them
+    /// at those defaults.
+    #[test]
+    fn the_worktree_settings_default_change_per_item_and_migrate() {
+        let path = temp_db("worktree-settings");
+        let store = Store::open(&path).expect("store");
+        assert_eq!(
+            store.worktree_settings().unwrap(),
+            WorktreeSettings::default()
+        );
+        assert_eq!(
+            store.get_settings().unwrap().worktrees,
+            WorktreeSettings::default()
+        );
+
+        let changes = WorktreeSettingsChanges {
+            delivery: Some(Delivery::PullRequest),
+            revert_gate: Some(false),
+            ..WorktreeSettingsChanges::default()
+        };
+        assert!(store.change_worktree_settings(&changes).unwrap());
+        assert!(!store.change_worktree_settings(&changes).unwrap());
+        assert!(!store
+            .change_worktree_settings(&WorktreeSettingsChanges::default())
+            .unwrap());
+        assert_eq!(
+            store.worktree_settings().unwrap(),
+            WorktreeSettings {
+                use_worktrees: true,
+                rebase_before_merge: true,
+                delivery: Delivery::PullRequest,
+                revert_gate: false,
+            }
+        );
+        drop(store);
+
+        {
+            let conn = Connection::open(&path).expect("database");
+            for (column, _) in WORKTREE_SETTING_COLUMNS {
+                conn.execute(&format!("ALTER TABLE settings DROP COLUMN {column}"), [])
+                    .expect("drop column");
+            }
+            for (column, _) in WORKTREE_OVERRIDE_COLUMNS {
+                conn.execute(&format!("ALTER TABLE projects DROP COLUMN {column}"), [])
+                    .expect("drop column");
+            }
+        }
+        let store = Store::open(&path).expect("reopened in place");
+        assert_eq!(
+            store.worktree_settings().unwrap(),
+            WorktreeSettings::default()
+        );
+    }
+
+    /// A project's override is stored per item with NULL for following the application-wide
+    /// value; a row from before the columns reads as following, and `effective` tracks a later
+    /// change of the application-wide value for the items the project does not hold.
+    #[test]
+    fn a_project_override_falls_back_to_the_global_value_and_follows_its_changes() {
+        let path = temp_db("worktree-override");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        store.insert_project(&project(false)).expect("project");
+        let stored = || store.get_project("project-1").unwrap().unwrap();
+        assert_eq!(stored().worktrees, WorktreeOverride::default());
+        assert_eq!(
+            worktree_settings::effective(&store, &stored()).unwrap(),
+            WorktreeSettings::default()
+        );
+
+        let mut edited = stored();
+        edited.worktrees = WorktreeOverride {
+            use_worktrees: Some(false),
+            delivery: Some(Delivery::Merge),
+            ..WorktreeOverride::default()
+        };
+        store.update_project(&edited).expect("update");
+        assert_eq!(stored().worktrees, edited.worktrees);
+        assert_eq!(
+            store.list_projects().unwrap()[0].worktrees,
+            edited.worktrees
+        );
+
+        store
+            .change_worktree_settings(&WorktreeSettingsChanges {
+                use_worktrees: Some(true),
+                rebase_before_merge: Some(false),
+                delivery: Some(Delivery::PullRequest),
+                revert_gate: Some(false),
+            })
+            .unwrap();
+        assert_eq!(
+            worktree_settings::effective(&store, &stored()).unwrap(),
+            WorktreeSettings {
+                use_worktrees: false,
+                rebase_before_merge: false,
+                delivery: Delivery::Merge,
+                revert_gate: false,
+            }
+        );
+
+        let mut cleared = stored();
+        cleared.worktrees = WorktreeOverride::default();
+        store.update_project(&cleared).expect("update");
+        assert_eq!(stored().worktrees, WorktreeOverride::default());
+        drop(store);
+
+        {
+            let conn = Connection::open(&path).expect("database");
+            for (column, _) in WORKTREE_OVERRIDE_COLUMNS {
+                conn.execute(&format!("ALTER TABLE projects DROP COLUMN {column}"), [])
+                    .expect("drop column");
+            }
+        }
+        let store = Store::open(&path).expect("reopened in place");
+        assert_eq!(
+            store.get_project("project-1").unwrap().unwrap().worktrees,
+            WorktreeOverride::default()
+        );
     }
 
     /// Turning a default account off and on records it per agent, a repeat write reports no change,

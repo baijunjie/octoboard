@@ -104,6 +104,7 @@ fn project(id: &str, console_id: &str, name: &str) -> Project {
         pinned: false,
         tags: Vec::new(),
         description: None,
+        worktrees: Default::default(),
     }
 }
 

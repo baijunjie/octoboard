@@ -26,6 +26,8 @@
 
 ## Handoff
 
+- The settings tools' text (`worktrees_schema` in `apps/daemon/src/mcp/mod.rs`) does not yet say that the revert gate
+  switch reaches running sessions at once: say so once the gate reads it at run time.
 - The gate is `octoboardd revert-gate <state> [--guard <branch>]... [--target <branch> <target-branch>]...
   [--fork-point <branch> <commit>]...`, with the hook's ref update lines on stdin: `--guard` names a resident guarded
   branch, each `--target` names a branch and its recorded target branch (every target named is guarded), each
@@ -40,8 +42,8 @@
 ## Notes for the developer
 
 - **Reusable capabilities**: the hook dispatchers and the `GIT_CONFIG_COUNT` slot they are injected through; the
-  branch-origin reporting and its state directory between the prepared and committed calls; the effective settings
-  from 01.
+  branch-origin reporting and its state directory between the prepared and committed calls; a project's effective
+  worktree settings (`worktree_settings::effective`).
 - **Development notes**: the dispatcher already forwards to the user's and the project's own hooks; the gate runs
   alongside, never instead of them. Nothing is written to the repository's configuration.
 - **Reference docs**: `docs/product/branch-responsible-session.md`, `docs/product/launching-agents.md`'s "The launch

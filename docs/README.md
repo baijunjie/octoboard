@@ -262,6 +262,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   accounts, Trusted folders, Permissions, Agent permissions (automatically approving session requests and resume
   requests, each its own switch), Notifications, Keyboard shortcuts and Configuration (exporting and importing the
   configuration document, where the window can save and open files) sections.
+- [Worktree settings](product/worktree-settings.md) — the four worktree settings (use worktrees, rebase before merging,
+  delivery, revert gate), their values and defaults, a project following each application-wide value or holding its
+  own and how the effective values are worked out, and how they are read and changed through the daemon's requests,
+  the agents' settings tools and the configuration export and import.
 - [Keyboard shortcuts](product/keyboard-shortcuts.md) — every shortcut the window lists and its default, which can be
   changed and which are fixed, how a combination is written and matched by physical key, Settings' Keyboard shortcuts
   section (changing, recording, resetting, restoring the defaults, what assistive technology is told), which

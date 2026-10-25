@@ -7,6 +7,13 @@
 > scratch repository creates its worktree under `.worktrees/`, and the branch it recreates from its remote branch after
 > a PR is checked for being recorded as its branch.
 
+## Handoff
+
+- The settings tools' text (`worktrees_schema` and the `update_project` / `update_settings` descriptions in
+  `apps/daemon/src/mcp/mod.rs`) does not yet say when a worktree setting change takes effect, and `update_project`'s
+  generic sentence (a change reaches sessions opened or resumed afterwards) is wrong for the rule, which reaches only
+  sessions begun after it: say so for use worktrees, rebase before merging and delivery.
+
 ## Technical design
 
 - [ ] The rule text from the overview's five points, opening with the project's own rules taking precedence; rebase

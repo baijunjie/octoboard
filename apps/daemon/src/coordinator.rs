@@ -53,6 +53,9 @@ use crate::state::{AppState, Deletion};
 use crate::store::{ReorderOutcome, Store, LOCAL_HOST_ID};
 use crate::term;
 use crate::trust;
+use crate::worktree_settings::{
+    WorktreeOverride, WorktreeOverrideChanges, WorktreeSettingsChanges,
+};
 
 /// Handles one request. The returned event, when there is one, is the answer to that request and
 /// goes to the asking socket only; everything that changed state has already been broadcast. For
@@ -319,6 +322,7 @@ async fn handle_inner(
                         codex_session_effort,
                         grok_session_model,
                         grok_session_effort,
+                        worktrees: WorktreeOverride::default(),
                     },
                     detect_default_agent,
                     tags,
@@ -347,6 +351,7 @@ async fn handle_inner(
             pinned,
             tags,
             description,
+            worktrees,
         } => {
             let launch = launch_settings::changes_of([
                 (Agent::Claude, claude_session_model, claude_session_effort),
@@ -371,6 +376,7 @@ async fn handle_inner(
                     pinned,
                     tags,
                     description,
+                    worktrees: worktrees.unwrap_or_default(),
                     ..ProjectChanges::default()
                 },
             )
@@ -1013,6 +1019,7 @@ async fn handle_inner(
             sidebar_order_by_status,
             auto_start_quota_windows,
             default_clone_dir,
+            worktrees,
         } => {
             update_settings(
                 state,
@@ -1027,6 +1034,7 @@ async fn handle_inner(
                     sidebar_order_by_status,
                     auto_start_quota_windows,
                     default_clone_dir,
+                    worktrees: worktrees.unwrap_or_default(),
                 },
             )?;
             Ok(None)
@@ -1662,6 +1670,7 @@ pub struct NewProjectSettings {
     pub codex_session_effort: Option<String>,
     pub grok_session_model: Option<String>,
     pub grok_session_effort: Option<String>,
+    pub worktrees: WorktreeOverride,
 }
 
 impl NewProjectSettings {
@@ -1890,6 +1899,7 @@ pub async fn add_project(
             pinned: settings.pinned,
             tags: tags.clone(),
             description: description.clone(),
+            worktrees: settings.worktrees,
         };
         state.store.insert_project(&project)?;
         crate::git_watch::add(state, &project);
@@ -1925,6 +1935,7 @@ pub struct ProjectChanges {
     pub remove_tags: Vec<String>,
     /// `Some(None)` clears it; blank text clears it too.
     pub description: Present<String>,
+    pub worktrees: WorktreeOverrideChanges,
 }
 
 /// Applies `changes` to the project `id`, broadcasts it and returns it as stored. Every reference
@@ -2035,6 +2046,7 @@ pub async fn update_project(
             tags.extend(changes.add_tags.iter().cloned());
             project.tags = normalise_tags(tags);
         }
+        project.worktrees = changes.worktrees.applied_to(project.worktrees);
         state.store.update_project(&project)?;
         // Read back rather than sent as `project`: the stored record carries what this write
         // does not touch (the remote URL, the trust consent), which another path may have just
@@ -5830,6 +5842,7 @@ pub struct SettingsChanges {
     pub auto_start_quota_windows: Option<bool>,
     /// Blank text goes back to the built-in default.
     pub default_clone_dir: Option<String>,
+    pub worktrees: WorktreeSettingsChanges,
 }
 
 /// Applies `changes`: absent means "leave it alone", as in `update_project`. Broadcasts
@@ -5846,6 +5859,7 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         sidebar_order_by_status,
         auto_start_quota_windows,
         default_clone_dir,
+        worktrees,
     } = changes;
     // Checked before anything is written, so a refused directory leaves the other field unapplied
     // too rather than half the request taking effect.
@@ -5891,6 +5905,7 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     if let Some(value) = default_clone_dir {
         changed |= state.store.set_default_clone_dir(value.as_deref())?;
     }
+    changed |= state.store.change_worktree_settings(&worktrees)?;
     if !changed {
         return Ok(());
     }
@@ -6230,6 +6245,7 @@ mod tests {
                 pinned: false,
                 tags: Vec::new(),
                 description: None,
+                worktrees: Default::default(),
             })
             .unwrap();
         let add = |id: &str, console: &str, role: Role, project: Option<&str>, status| {
@@ -6360,6 +6376,7 @@ mod tests {
                 pinned: false,
                 tags: Vec::new(),
                 description: None,
+                worktrees: Default::default(),
             })
             .unwrap();
         state
@@ -6469,6 +6486,7 @@ mod tests {
                     pinned: false,
                     tags: Vec::new(),
                     description: None,
+                    worktrees: Default::default(),
                 })
                 .unwrap();
             state
@@ -7533,6 +7551,7 @@ mod tests {
             pinned: false,
             tags: Vec::new(),
             description: None,
+            worktrees: Default::default(),
         }
     }
 
@@ -7696,6 +7715,7 @@ mod tests {
                     pinned: false,
                     tags: Vec::new(),
                     description: None,
+                    worktrees: Default::default(),
                 })
                 .unwrap();
         }
@@ -9245,6 +9265,7 @@ mod tests {
             pinned: false,
             tags: Vec::new(),
             description: None,
+            worktrees: Default::default(),
         };
         state.store.insert_project(&project).unwrap();
         let refused = |err: anyhow::Error| {
@@ -9676,6 +9697,150 @@ mod tests {
         assert_eq!(refused(err), error_code::INVALID_LAUNCH_SETTING);
     }
 
+    /// `update_settings` changes the worktree settings item by item, broadcasts `settings_updated`
+    /// with them only when one actually changed, and refuses an unknown delivery at parsing.
+    #[tokio::test]
+    async fn update_settings_changes_the_worktree_settings_and_broadcasts_only_a_change() {
+        use crate::worktree_settings::{Delivery, WorktreeSettings};
+        let (state, _dir) = crate::test_support::app_state("coordinator-worktree-settings");
+        let request = |json: &str| {
+            serde_json::from_str::<crate::protocol::Request>(json)
+                .unwrap()
+                .body
+        };
+        let mut events = state.subscribe();
+
+        handle(
+            &state,
+            None,
+            request(r#"{"type":"update_settings","worktrees":{"delivery":"merge","revert_gate":false}}"#),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            state.store.worktree_settings().unwrap(),
+            WorktreeSettings {
+                delivery: Delivery::Merge,
+                revert_gate: false,
+                ..WorktreeSettings::default()
+            }
+        );
+        assert!(matches!(
+            events.try_recv(),
+            Ok(Event::SettingsUpdated { settings })
+                if settings.worktrees.delivery == Delivery::Merge && !settings.worktrees.revert_gate
+        ));
+
+        for unchanged in [
+            r#"{"type":"update_settings","worktrees":{"delivery":"merge"}}"#,
+            r#"{"type":"update_settings","worktrees":{}}"#,
+            r#"{"type":"update_settings"}"#,
+        ] {
+            handle(&state, None, request(unchanged)).await.unwrap();
+            assert!(events.try_recv().is_err(), "{unchanged}");
+        }
+
+        assert!(serde_json::from_str::<crate::protocol::Request>(
+            r#"{"type":"update_settings","worktrees":{"delivery":"squash"}}"#
+        )
+        .is_err());
+    }
+
+    /// `update_project` sets a project's own worktree items on a value, leaves the override alone
+    /// when `worktrees` is absent or empty (an unrelated change included), and goes back to following
+    /// the application-wide value on `null` for an item; the first change broadcasts the project.
+    #[tokio::test]
+    async fn a_project_worktree_override_is_left_set_or_cleared_by_an_update() {
+        use crate::worktree_settings::{Delivery, WorktreeOverride};
+        let (state, dir) = crate::test_support::app_state("coordinator-update-project-worktrees");
+        let workdir = console_workdir(&dir);
+        state
+            .store
+            .insert_console(&console(Agent::Claude, &workdir))
+            .unwrap();
+        state
+            .store
+            .insert_project(&project_of("console-1", "project-1"))
+            .unwrap();
+        let stored = || {
+            state
+                .store
+                .get_project("project-1")
+                .unwrap()
+                .unwrap()
+                .worktrees
+        };
+        let update = |json: &str| {
+            serde_json::from_str::<crate::protocol::Request>(&format!(
+                r#"{{"type":"update_project","project":"project-1",{json}}}"#
+            ))
+            .unwrap()
+            .body
+        };
+        let mut events = state.subscribe();
+
+        handle(
+            &state,
+            None,
+            update(r#""worktrees":{"use_worktrees":false,"delivery":"pull_request"}"#),
+        )
+        .await
+        .unwrap();
+        let expected = WorktreeOverride {
+            use_worktrees: Some(false),
+            rebase_before_merge: None,
+            delivery: Some(Delivery::PullRequest),
+            revert_gate: None,
+        };
+        assert_eq!(stored(), expected);
+        assert!(matches!(
+            events.try_recv(),
+            Ok(Event::ProjectUpserted { project }) if project.worktrees == expected
+        ));
+
+        handle(&state, None, update(r#""pinned":true"#))
+            .await
+            .unwrap();
+        assert!(
+            state
+                .store
+                .get_project("project-1")
+                .unwrap()
+                .unwrap()
+                .pinned
+        );
+        assert_eq!(
+            stored(),
+            expected,
+            "an unrelated change leaves the override"
+        );
+        handle(&state, None, update(r#""worktrees":{}"#))
+            .await
+            .unwrap();
+        assert_eq!(stored(), expected);
+
+        handle(
+            &state,
+            None,
+            update(r#""worktrees":{"delivery":null,"revert_gate":true}"#),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            stored(),
+            WorktreeOverride {
+                use_worktrees: Some(false),
+                revert_gate: Some(true),
+                ..WorktreeOverride::default()
+            }
+        );
+
+        assert!(serde_json::from_str::<crate::protocol::Request>(
+            r#"{"type":"update_project","project":"p","worktrees":{"delivery":"squash"}}"#
+        )
+        .is_err());
+    }
+
     /// A project's description is left alone by an update that omits it, stored trimmed when
     /// given, and cleared by `null` or a blank string.
     #[tokio::test]
@@ -9748,6 +9913,7 @@ mod tests {
             pinned: None,
             tags: None,
             description: None,
+            worktrees: None,
         };
         edit(&mut request);
         request

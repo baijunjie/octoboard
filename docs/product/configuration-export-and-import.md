@@ -57,7 +57,7 @@ daemon's host, which the row then says. Four buttons apply one way to every proj
 default clone directory, clone from remotes) or leave every project out, and a project they do not reach keeps its row.
 The account references that would fall back to a default account are listed on the console or the project that holds
 them. A document with application settings gets a checkbox for them, unchecked, whose note has a line for each setting
-the document carries — one an older document leaves out has no line — saying what applying it would change from what
+the document carries — one an older document leaves out has no line, and the worktree settings have none — saying what applying it would change from what
 is set now: that it turns the setting on, and what then follows, in that setting's own words (see "The application
 settings a full export carries" below); that it turns it off; or that it is already as the document has it, so
 applying changes nothing. A document that carries keyboard shortcuts adds a line for them, which says that applying
@@ -124,8 +124,11 @@ import creates the console, and with it a working directory of its own.
 Its name, its description if it has one, the directory it points at, how it was associated, the remote URL recorded for
 it, its own default agent if it has one, whether it is pinned, its tags (see `docs/product/project-tags.md`), and — one
 set per agent — the account its sessions run under and the model and reasoning effort they launch with (see
-`docs/product/projects.md`). An import stores the description trimmed, and a project of a document that carries no
-description is imported with none. Export and import preserve the full length of project names and descriptions,
+`docs/product/projects.md`), and its own worktree settings under `worktrees`, `null` for each item it leaves to the
+application-wide value (see "A project's own worktree settings" in `docs/product/worktree-settings.md`). Every export
+carries them, full or of one console. An import stores the description trimmed, and a project of a document that
+carries no description is imported with none; one whose document carries no worktree settings follows every
+application-wide value. Export and import preserve the full length of project names and descriptions,
 including values beyond the editing limits in "Project names" and "The project's description" in
 `docs/product/projects.md`; an import neither rejects nor truncates them for their length.
 
@@ -185,10 +188,10 @@ accounts and which accounts are turned off (see "Added agents", "The default acc
 
 ### The application settings a full export carries
 
-Nine, each under its own key. The first is in every document that has application settings. Each of the other eight
+Ten, each under its own key. The first is in every document that has application settings. Each of the other nine
 is missing from a document exported before it was carried, and applying that document's settings then leaves the
-importing machine's value as it is; the import review notes each of the eight only when the document carries it as a
-boolean.
+importing machine's value as it is; the import review notes each of the eight switches after the first only when the
+document carries it as a boolean.
 
 - **Automatically pull repositories** (see "Automatically pulling repositories" in
   `docs/product/project-git-status.md`), under `auto_pull_repositories`. An import also reads it from a document that
@@ -214,6 +217,10 @@ boolean.
 - **Automatically approve handoffs** (see the same section), under `auto_approve_handoffs`. The review's line for
   turning it on says that a session's request to hand one of its sessions off to another agent is then approved without
   asking first.
+- **The application-wide worktree settings** (see "The four settings" in `docs/product/worktree-settings.md`), under
+  `worktrees`, an object holding all four of `use_worktrees`, `rebase_before_merge`, `delivery` and `revert_gate`.
+  Applying the document's settings sets all four to the document's values, and a document without it, or with `null`
+  there, leaves them as they are. Neither the import review nor its result has a line for them.
 
 **The keyboard shortcuts of the exporting client** travel with these, under `keyboard_shortcuts`. They are not the
 daemon's: each client keeps its own (see "Where the shortcuts are kept" in `docs/product/keyboard-shortcuts.md`), so
@@ -306,7 +313,8 @@ project" in `docs/product/projects.md`): its directory has to exist, its name, t
 normalized the same way, and a directory already associated with the console being imported into is not associated a
 second time, which is what two projects of one console resolving to the same directory runs into — the second of them is
 reported as failed. What the document says about a project — its pin, its tags, its default agent (none stays none, and
-nothing is detected from the directory), its account references, its models and efforts — is applied as it stands. How
+nothing is detected from the directory), its account references, its models and efforts, its own worktree settings — is
+applied as it stands. How
 the project was associated on the exporting machine does not carry over: what is recorded is how the daemon's host
 placed it, as a clone or as a local directory.
 

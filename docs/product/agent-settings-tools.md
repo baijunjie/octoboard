@@ -81,6 +81,7 @@ only when the user asked for it.
 | `trust_consent` | Whether the user has given the trust permission for it (see "The trust permission" in `docs/product/folder-trust.md`). Read-only. |
 | `accounts` | Its account setting for every agent, as above. |
 | `launch` | Its model and reasoning effort for every agent, as above; for a value it leaves unset, its sessions take its console's `project_session_launch` (see "The console's own settings: `get_console` and `update_console`" below). |
+| `worktrees` | Its worktree settings (see `docs/product/worktree-settings.md`) as `{"override": …, "effective": …}`: under `override` the project's own value for each of `use_worktrees`, `rebase_before_merge`, `delivery` and `revert_gate`, `null` for one it leaves to the application-wide value; under `effective` the four values in force for it now. |
 
 `list_projects` adds the sessions running in each project (see "The console session's tools" in
 `docs/product/hub-orchestration.md`).
@@ -93,7 +94,8 @@ the user in `ssh://git@example.com/r.git` names the remote and stays. A URL of a
 
 The console session's `add_project` associates projects from the same three sources as the user's form (see
 "Associating a project" in `docs/product/projects.md`), and besides the location takes the settings the
-form does: `name`, `description`, `default_agent`, `tags`, `accounts`, `launch` and `pinned`. Every project one call
+form does: `name`, `description`, `default_agent`, `tags`, `accounts`, `launch` and `pinned`. It takes no worktree
+settings: a project it adds follows every application-wide value. Every project one call
 adds takes the same settings, except that `name` and `description` apply only when a single project is associated (see
 "Project names" in `docs/product/projects.md`). A blank `name` or `description` counts as none given, and
 so does a `description` of `null`. The call answers with each added project's settings.
@@ -123,6 +125,7 @@ Takes `project` — an id, or a name that names exactly one project of the conso
 | `pinned` | Pins or unpins it. |
 | `default_agent` | An agent, or `null` to follow the console's again (its `project_session_agent`, else its `default_agent`). |
 | `accounts`, `launch` | As above. |
+| `worktrees` | An object of any of `use_worktrees` (`true` or `false`), `rebase_before_merge` (`true` or `false`), `delivery` (`ask`, `merge` or `pull_request`) and `revert_gate` (`true` or `false`); each item given becomes the project's own value, `null` for an item puts it back to following the application-wide value, and an item left out stays as it is. |
 
 `tags` beside `add_tags` or `remove_tags` is refused. Tags end up normalised as in `docs/product/project-tags.md`.
 Anything left out is left as it is, and the call answers with the project's settings as stored.
@@ -154,13 +157,15 @@ working directory. Neither the avatar itself nor the console's console session i
 | `auto_select_account` | Whether a new session whose account was not named uses the account of its agent whose weekly quota resets soonest (see "Automatically select an account" in `docs/product/settings.md` and "Which account a session uses" in `docs/product/sessions.md`). |
 | `sidebar_order_by_status` | Whether the user's sidebar ranks sessions and projects by status (see "Order the sidebar by status" in `docs/product/settings.md` and "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`). |
 | `default_clone_dir` | The default clone directory (see "Default clone directory" in `docs/product/settings.md`). |
+| `worktrees` | The application-wide worktree settings, as `use_worktrees`, `rebase_before_merge`, `delivery` and `revert_gate` (see "The four settings" in `docs/product/worktree-settings.md`). |
 | `accounts` | Every account, each with `id`, `agent`, `name`, `default` and `disabled`, which is true for an account the user turned off, so that no new session can be opened on it (see "Turning an account off" in `docs/product/agent-accounts.md`). Each agent's default account is listed first among that agent's, with the id `default` and, as its `name`, the name the user gave it, else `Default` (see "The default account" in `docs/product/agent-accounts.md`). An account's directory is never given. |
 | `trusted_directories` | The trusted folders (see "Trusted folders" in `docs/product/folder-trust.md`). Read-only. |
 
 `update_settings` takes `auto_pull_repositories`, `auto_delete_unresumable_archives`, `auto_select_account`,
-`sidebar_order_by_status` and `default_clone_dir`, under the rules of the same settings in Settings: the switches take
-`true` or `false`, a clone directory must be absolute or start with `~/`, and a blank one goes back to the built-in
-default. A refused value leaves the others unapplied too. An `auto_approve_session_requests`,
+`sidebar_order_by_status`, `default_clone_dir` and `worktrees`, under the rules of the same settings in Settings: the
+switches take `true` or `false`, a clone directory must be absolute or start with `~/`, and a blank one goes back to the
+built-in default. `worktrees` is an object of any of the four worktree settings, with the values `update_project`'s
+takes; an item left out, or given as `null`, stays as it is. A refused value leaves the others unapplied too. An `auto_approve_session_requests`,
 `auto_approve_resume_requests`, `auto_approve_account_switches`, `auto_approve_handoffs` or `auto_start_quota_windows`
 argument is ignored — the setting stays as it is, `get_settings` never lists any of them, and the rest of the call
 applies as usual. Turning `auto_pull_repositories` on fast-forwards the projects already known to be behind at once, as
@@ -183,4 +188,6 @@ project or the session sets that value itself.
 
 A refused call comes back as a tool error carrying the reason in prose and changes nothing, as for every Octoboard
 tool. Besides the refusals above, an argument of the wrong type — a boolean, a list or a text given as something else —
-is refused with a reason rather than read as left out.
+is refused with a reason rather than read as left out. So is a `worktrees` object, for a project or application-wide,
+that holds a key other than the four worktree settings or a `delivery` other than `ask`, `merge` and `pull_request`,
+so that a misspelt item is not taken for a change that changed nothing.

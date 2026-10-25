@@ -5,6 +5,17 @@
 > offers each item as following the global value or its own; both are translated into every offered language and shown
 > in the gallery; UI tests pass.
 
+## Handoff
+
+- The wire records already carry the settings, but the client does not know them yet: add `worktrees` to `Settings`
+  and `Project`, and to the `update_settings` / `update_project` requests, in `packages/ui/src/protocol.ts` (and the
+  gallery fixtures that build those records).
+- The import review's apply-settings note (`packages/ui/src/configuration/ImportReview.tsx`) and the import result
+  (`ImportResult.tsx`) get a line for the worktree settings, shown only when the document carries them
+  (`InspectedSettings.worktrees` / `current_worktrees`).
+- `add_project` takes no `worktrees`, so a new project follows every global value; if the project dialog offers the
+  Worktrees group while adding a project, `add_project` (control request and the agents' tool) has to take it too.
+
 ## Technical design
 
 - [ ] Settings → **Worktrees**: two switches (use worktrees, rebase before merging), the delivery choice (ask / merge /

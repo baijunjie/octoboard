@@ -24,6 +24,7 @@ use crate::protocol::{
     default_account_name_in, Agent, CodedError, Console, Project, ProjectAccount, Session,
 };
 use crate::state::AppState;
+use crate::worktree_settings;
 
 pub(super) async fn update_project(
     state: &Arc<AppState>,
@@ -46,9 +47,10 @@ pub(super) async fn update_project(
         add_tags: optional_string_list(arguments, "add_tags")?.unwrap_or_default(),
         remove_tags: optional_string_list(arguments, "remove_tags")?.unwrap_or_default(),
         description: present_text(arguments, "description")?,
+        worktrees: worktrees_argument(arguments)?,
     };
     let updated = coordinator::update_project(state, &project.id, changes).await?;
-    Ok(describe_project(&updated))
+    describe_project(state, &updated)
 }
 
 pub(super) fn get_console(state: &Arc<AppState>, console_session: &Session) -> Result<Value> {
@@ -111,6 +113,7 @@ pub(super) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
         "auto_select_account": state.store.auto_select_account()?,
         "sidebar_order_by_status": state.store.sidebar_order_by_status()?,
         "default_clone_dir": state.store.default_clone_dir()?,
+        "worktrees": state.store.worktree_settings()?,
         "accounts": listed,
         "trusted_directories": state.store.trusted_directories()?,
     }))
@@ -139,6 +142,7 @@ pub(super) fn update_settings(
             // Not settable by an agent: it spends the user's quota.
             auto_start_quota_windows: None,
             default_clone_dir: raw_text(arguments, "default_clone_dir")?,
+            worktrees: worktrees_argument(arguments)?,
         },
     )?;
     get_settings(state)
@@ -147,7 +151,30 @@ pub(super) fn update_settings(
 /// The caller's own project's settings, and nobody else's: what a project session may read of
 /// Octoboard's own record of it.
 pub(super) fn get_project(state: &Arc<AppState>, caller: &Session) -> Result<Value> {
-    Ok(describe_project(&own_project(state, caller, None)?))
+    describe_project(state, &own_project(state, caller, None)?)
+}
+
+/// The optional `worktrees` argument, read as the control requests read theirs: an item left out
+/// is left alone, and for a project `null` goes back to following the application-wide value.
+fn worktrees_argument<T: serde::de::DeserializeOwned + Default>(
+    arguments: &Map<String, Value>,
+) -> Result<T> {
+    match arguments.get("worktrees") {
+        None | Some(Value::Null) => Ok(T::default()),
+        Some(value) => {
+            // The control protocol ignores keys it does not know; a tool call that misspells an
+            // item would look like a success while changing nothing, so it is refused here.
+            if let Some(unknown) = value.as_object().and_then(|items| {
+                items
+                    .keys()
+                    .find(|key| !crate::worktree_settings::ITEMS.contains(&key.as_str()))
+            }) {
+                bail!("`worktrees.{unknown}` is not a worktree setting");
+            }
+            serde_json::from_value(value.clone())
+                .map_err(|err| anyhow!("`worktrees` is not valid: {err}"))
+        }
+    }
 }
 
 /// The entries of an argument that is an object keyed by agent, in no particular order.
@@ -258,9 +285,10 @@ fn per_agent_object(entry: impl Fn(Agent) -> Value) -> Value {
 
 /// A project's settings as every tool that reports one gives them: the account setting of each
 /// agent as `inherit`, `default` or an account id, and the remote without any credential it
-/// carries.
-pub(super) fn describe_project(project: &Project) -> Value {
-    json!({
+/// carries, and its worktree settings as the project's own choices (`null` follows the
+/// application-wide value) beside the values in force.
+pub(super) fn describe_project(state: &Arc<AppState>, project: &Project) -> Result<Value> {
+    Ok(json!({
         "project": project.id,
         "name": project.name,
         "description": project.description,
@@ -281,7 +309,11 @@ pub(super) fn describe_project(project: &Project) -> Value {
             let (model, effort) = project.launch(agent);
             json!({ "model": model, "effort": effort })
         }),
-    })
+        "worktrees": {
+            "override": project.worktrees,
+            "effective": worktree_settings::effective(&state.store, project)?,
+        },
+    }))
 }
 
 /// A console's settings as `get_console` and `update_console` give them. The avatar is a large

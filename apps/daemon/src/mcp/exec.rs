@@ -137,7 +137,7 @@ fn list_projects(state: &Arc<AppState>, console_session: &Session) -> Result<Val
                 })
                 .map(|session| describe_session(state, session, console_session))
                 .collect::<Result<Vec<Value>>>()?;
-            let mut entry = describe_project(project);
+            let mut entry = describe_project(state, project)?;
             entry["sessions"] = json!(live);
             Ok(entry)
         })
@@ -192,7 +192,11 @@ async fn add_project(
         },
     )
     .await?;
-    Ok(json!({ "projects": added.iter().map(describe_project).collect::<Vec<_>>() }))
+    let projects = added
+        .iter()
+        .map(|project| describe_project(state, project))
+        .collect::<Result<Vec<_>>>()?;
+    Ok(json!({ "projects": projects }))
 }
 
 /// Refuses a repository URL the console session may not clone from: one of a shape the import of a
@@ -1302,6 +1306,7 @@ pub(super) mod tests {
                 pinned: false,
                 tags: Vec::new(),
                 description: None,
+                worktrees: Default::default(),
             })
             .unwrap();
         let owner = console_session("owner");
@@ -1885,6 +1890,7 @@ pub(super) mod tests {
                     pinned: false,
                     tags: Vec::new(),
                     description: None,
+                    worktrees: Default::default(),
                 })
                 .unwrap();
         }
@@ -2195,6 +2201,7 @@ pub(super) mod tests {
                 pinned: false,
                 tags: Vec::new(),
                 description: None,
+                worktrees: Default::default(),
             })
             .unwrap();
         for session in [
@@ -2998,6 +3005,123 @@ pub(super) mod tests {
         assert_eq!(other["project"], "project-2");
         // A console session reads projects through `list_projects`.
         assert!(refused(&state, "a", "get_project", json!({}))
+            .await
+            .contains("not a tool"));
+    }
+
+    /// The worktree settings are read and changed through the settings tools: the application-wide
+    /// ones by `get_settings` / `update_settings`, a project's own by `update_project`, and
+    /// `get_project` and `list_projects` report the override beside the values in force.
+    #[tokio::test]
+    async fn the_worktree_settings_are_read_and_changed_through_the_tools() {
+        let (state, _dir) = settings_state("worktree-settings-tools");
+        let read = call(&state, "a", "get_settings", &Map::new())
+            .await
+            .unwrap();
+        assert_eq!(
+            read["worktrees"],
+            json!({
+                "use_worktrees": true,
+                "rebase_before_merge": true,
+                "delivery": "ask",
+                "revert_gate": true,
+            })
+        );
+
+        let updated = call(
+            &state,
+            "a",
+            "update_settings",
+            &arguments(json!({ "worktrees": { "delivery": "merge", "revert_gate": false } })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(updated["worktrees"]["delivery"], "merge");
+        assert_eq!(updated["worktrees"]["revert_gate"], false);
+        assert_eq!(updated["worktrees"]["use_worktrees"], true);
+        for bad in [
+            json!({ "worktrees": { "delivery": "rebase" } }),
+            json!({ "worktrees": { "use_worktrees": "yes" } }),
+            json!({ "worktrees": { "typo": true } }),
+        ] {
+            let message = refused(&state, "a", "update_settings", bad).await;
+            assert!(message.contains("worktrees"), "{message}");
+        }
+        assert_eq!(
+            state.store.worktree_settings().unwrap().delivery,
+            crate::worktree_settings::Delivery::Merge
+        );
+
+        let project = call(
+            &state,
+            "a",
+            "update_project",
+            &arguments(json!({
+                "project": "project-1",
+                "worktrees": { "use_worktrees": false, "delivery": "pull_request" },
+            })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            project["worktrees"]["override"],
+            json!({
+                "use_worktrees": false,
+                "rebase_before_merge": null,
+                "delivery": "pull_request",
+                "revert_gate": null,
+            })
+        );
+        assert_eq!(
+            project["worktrees"]["effective"],
+            json!({
+                "use_worktrees": false,
+                "rebase_before_merge": true,
+                "delivery": "pull_request",
+                "revert_gate": false,
+            })
+        );
+
+        // An item left out stays; `null` goes back to following the application-wide value.
+        let project = call(
+            &state,
+            "a",
+            "update_project",
+            &arguments(json!({
+                "project": "project-1",
+                "worktrees": { "delivery": null, "revert_gate": true },
+            })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(project["worktrees"]["override"]["use_worktrees"], false);
+        assert!(project["worktrees"]["override"]["delivery"].is_null());
+        assert_eq!(project["worktrees"]["effective"]["delivery"], "merge");
+        assert_eq!(project["worktrees"]["effective"]["revert_gate"], true);
+
+        let message = refused(
+            &state,
+            "a",
+            "update_project",
+            json!({ "project": "project-1", "worktrees": { "delivery": "rebase" } }),
+        )
+        .await;
+        assert!(message.contains("worktrees"), "{message}");
+
+        let listed = call(&state, "a", "list_projects", &Map::new())
+            .await
+            .unwrap();
+        assert_eq!(
+            listed["projects"][0]["worktrees"]["effective"]["use_worktrees"],
+            false
+        );
+        let own = call(&state, "of-a", "get_project", &Map::new())
+            .await
+            .unwrap();
+        assert_eq!(own["worktrees"]["override"]["revert_gate"], true);
+        assert_eq!(own["worktrees"]["effective"]["delivery"], "merge");
+        // A project session cannot change them.
+        assert!(refused(&state, "of-a", "update_settings", json!({}))
             .await
             .contains("not a tool"));
     }

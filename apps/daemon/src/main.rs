@@ -82,6 +82,7 @@ mod terminal_title;
 mod test_support;
 mod transcript;
 mod trust;
+mod worktree_settings;
 
 use std::sync::Arc;
 

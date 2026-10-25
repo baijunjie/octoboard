@@ -71,11 +71,11 @@ the target branch) is built into Octoboard as a switch, so a project gets it wit
 
 ## Milestones
 
-- [01 Worktree settings](01-worktree-settings.md)
-- [02 Injecting the worktree rule](02-injecting-the-worktree-rule.md) — needs 01
+- 01 Worktree settings (closed)
+- [02 Injecting the worktree rule](02-injecting-the-worktree-rule.md)
 - 03 Revert gate engine (closed)
-- [04 Revert gate in the hook dispatcher](04-revert-gate-in-the-hook-dispatcher.md) — needs 01
-- [05 Settings UI](05-settings-ui.md) — needs 01
+- [04 Revert gate in the hook dispatcher](04-revert-gate-in-the-hook-dispatcher.md)
+- [05 Settings UI](05-settings-ui.md)
 
 ## Open
 

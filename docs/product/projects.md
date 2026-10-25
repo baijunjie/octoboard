@@ -11,8 +11,9 @@ an optional default agent, how it was associated, the remote URL of the reposito
 remote URL" below), whether the user has pinned it (see "Order of projects and sessions" in
 `docs/product/order-of-projects-and-sessions.md`), any number of tags (see `docs/product/project-tags.md`), and — one
 set per agent — what it says about the account its sessions run under and an optional model and reasoning effort for
-them (see "The project's account, model and reasoning effort" below). Every project is bound to a host (see "Hosts"
-below).
+them (see "The project's account, model and reasoning effort" below), and its own worktree settings, each following
+the application-wide value until the project holds one of its own (see "A project's own worktree settings" in
+`docs/product/worktree-settings.md`). Every project is bound to a host (see "Hosts" below).
 
 A project also carries whether the user has given Octoboard permission to press any agent's trust confirmation for
 its directory without asking. A project starts without that permission, including one the console session associates;
@@ -275,7 +276,9 @@ back to following the console's default for project sessions; the account can be
 inheriting the console's reference among them, and the model and the effort back to unset.
 
 The console session can make the same changes to its console's projects (see "Changing a project: `update_project`" in
-`docs/product/agent-settings-tools.md`).
+`docs/product/agent-settings-tools.md`). A project's own worktree settings can be changed as well, but not from the
+project dialog: only by the console session and through the daemon's requests (see "Reading and changing them" in
+`docs/product/worktree-settings.md`).
 
 ## Browsing directories
 

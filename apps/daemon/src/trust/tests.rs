@@ -473,6 +473,7 @@ fn project(consent: bool) -> Project {
         pinned: false,
         tags: Vec::new(),
         description: None,
+        worktrees: Default::default(),
     }
 }
 

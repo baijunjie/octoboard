@@ -131,6 +131,7 @@ impl Fixture {
                 pinned: false,
                 tags: Vec::new(),
                 description: None,
+                worktrees: Default::default(),
             })
             .unwrap();
         id.to_string()

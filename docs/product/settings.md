@@ -19,6 +19,9 @@ archived sessions whose conversation is gone, automatic account selection, the a
 directories) and the trusted folders, and change the first four (see "Application settings: `get_settings` and
 `update_settings`" in `docs/product/agent-settings-tools.md`).
 
+The application-wide worktree settings are application settings too, but have no section here (see
+`docs/product/worktree-settings.md`).
+
 ## In a narrow window
 
 Below 1168 px — the width under which the sidebar becomes a drawer (see "Below 1168 px: the sidebar becomes a drawer"

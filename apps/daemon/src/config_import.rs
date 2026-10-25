@@ -32,6 +32,7 @@ use crate::protocol::{
     error_code, Account, Agent, CodedError, Params, ProjectAccount, ProjectSource,
 };
 use crate::state::AppState;
+use crate::worktree_settings::{WorktreeSettings, WorktreeSettingsChanges};
 
 /// Which directory a project is placed in. [`DirectoryChoice`] is the caller's pick of one, and
 /// this is the bare name that results report.
@@ -162,6 +163,9 @@ pub struct InspectedSettings {
     /// Absent when the document predates the setting, which applying it then leaves as it is.
     pub auto_approve_handoffs: Option<bool>,
     pub current_auto_approve_handoffs: bool,
+    /// Absent when the document predates the settings, which applying it then leaves as they are.
+    pub worktrees: Option<WorktreeSettings>,
+    pub current_worktrees: WorktreeSettings,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -531,6 +535,8 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
             current_auto_approve_account_switches: state.store.auto_approve_account_switches()?,
             auto_approve_handoffs: settings.auto_approve_handoffs,
             current_auto_approve_handoffs: state.store.auto_approve_handoffs()?,
+            worktrees: settings.worktrees,
+            current_worktrees: state.store.worktree_settings()?,
         }),
         None => None,
     };
@@ -725,6 +731,10 @@ pub async fn apply(
             sidebar_order_by_status: settings.sidebar_order_by_status,
             auto_start_quota_windows: settings.auto_start_quota_windows,
             default_clone_dir: None,
+            worktrees: settings
+                .worktrees
+                .map(WorktreeSettingsChanges::from)
+                .unwrap_or_default(),
         };
         match coordinator::update_settings(state, changes) {
             Ok(()) => settings_applied = Some(settings),
@@ -823,6 +833,7 @@ async fn place_project(
                         codex_session_effort: project.codex_session_effort,
                         grok_session_model: project.grok_session_model,
                         grok_session_effort: project.grok_session_effort,
+                        worktrees: project.worktrees,
                     },
                     // The document says what the project's default agent is, including none.
                     detect_default_agent: false,
@@ -892,6 +903,7 @@ mod tests {
             codex_session_effort: None,
             grok_session_model: None,
             grok_session_effort: None,
+            worktrees: Default::default(),
         }
     }
 
@@ -1693,6 +1705,7 @@ mod tests {
             pinned: false,
             tags: vec!["t".to_string()],
             description: Some("Round trip.".to_string()),
+            worktrees: Default::default(),
         };
         stored.default_agent = Some(Agent::Codex);
         source.store.insert_project(&stored).unwrap();
@@ -1804,6 +1817,7 @@ mod tests {
                 auto_approve_resume_requests: None,
                 auto_approve_account_switches: None,
                 auto_approve_handoffs: None,
+                worktrees: None,
                 keyboard_shortcuts: None,
             })
         );
@@ -1903,6 +1917,123 @@ mod tests {
         assert!(target.store.auto_approve_handoffs().unwrap());
     }
 
+    /// The worktree settings travel in a full export beside each project's own override: the
+    /// inspection shows the document's and the current ones, applying settings sets the global
+    /// ones, and a created project gets its override from the document. A single console's export
+    /// carries the override of its projects but no global settings, and a document from before
+    /// them imports with the global settings and every item following.
+    #[tokio::test]
+    async fn the_worktree_settings_and_a_projects_override_round_trip_in_an_export() {
+        use crate::worktree_settings::{Delivery, WorktreeOverride, WorktreeSettings};
+        let area = ScratchDir::new("import-worktrees-area");
+        let repo = directory(&area, "repo");
+        let (source, source_dir) = app_state("import-worktrees-source");
+        let hub = crate::test_support::console(&source_dir);
+        source.store.insert_console(&hub).unwrap();
+        let own = WorktreeOverride {
+            use_worktrees: Some(false),
+            delivery: Some(Delivery::PullRequest),
+            ..WorktreeOverride::default()
+        };
+        let mut stored = crate::test_support::insert_project(&source, &repo);
+        stored.worktrees = own;
+        source.store.update_project(&stored).unwrap();
+        source
+            .store
+            .change_worktree_settings(&crate::worktree_settings::WorktreeSettingsChanges {
+                rebase_before_merge: Some(false),
+                delivery: Some(Delivery::Merge),
+                ..Default::default()
+            })
+            .unwrap();
+        let global = source.store.worktree_settings().unwrap();
+        let full =
+            serde_json::to_value(crate::config_export::build(&source.store, None, true).unwrap())
+                .unwrap();
+        assert_eq!(full["settings"]["worktrees"]["delivery"], "merge");
+        assert_eq!(
+            full["consoles"][0]["projects"][0]["worktrees"]["delivery"],
+            "pull_request"
+        );
+        assert!(full["consoles"][0]["projects"][0]["worktrees"]["revert_gate"].is_null());
+        let single = serde_json::to_value(
+            crate::config_export::build(&source.store, Some(&hub.id), true).unwrap(),
+        )
+        .unwrap();
+        assert!(single["settings"].is_null());
+        assert_eq!(
+            single["consoles"][0]["projects"][0]["worktrees"]["use_worktrees"],
+            false
+        );
+
+        let (target, _target_dir) = app_state("import-worktrees-target");
+        let settings = inspect(&target, &full).await.unwrap().settings.unwrap();
+        assert_eq!(settings.worktrees, Some(global));
+        assert_eq!(settings.current_worktrees, WorktreeSettings::default());
+
+        apply(
+            &target,
+            &full,
+            vec![at(0, 0, DirectoryChoice::ExportedPath)],
+            false,
+        )
+        .await
+        .unwrap();
+        assert_eq!(stored_projects(&target)[0].worktrees, own);
+        assert_eq!(
+            target.store.worktree_settings().unwrap(),
+            WorktreeSettings::default(),
+            "settings are applied only when asked for"
+        );
+        let mut events = target.subscribe();
+        apply(&target, &full, Vec::new(), true).await.unwrap();
+        assert_eq!(target.store.worktree_settings().unwrap(), global);
+        let mut broadcast = false;
+        while let Ok(event) = events.try_recv() {
+            broadcast |= matches!(
+                event,
+                crate::protocol::Event::SettingsUpdated { settings } if settings.worktrees == global
+            );
+        }
+        assert!(broadcast);
+
+        // A document from before the settings existed leaves the global ones alone and has every
+        // item of a project following them.
+        let mut older = full.clone();
+        older["settings"]
+            .as_object_mut()
+            .unwrap()
+            .remove("worktrees");
+        older["consoles"][0]["projects"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("worktrees");
+        let (state, _dir) = app_state("import-worktrees-older");
+        state
+            .store
+            .change_worktree_settings(&crate::worktree_settings::WorktreeSettingsChanges {
+                revert_gate: Some(false),
+                ..Default::default()
+            })
+            .unwrap();
+        let settings = inspect(&state, &older).await.unwrap().settings.unwrap();
+        assert_eq!(settings.worktrees, None);
+        assert!(!settings.current_worktrees.revert_gate);
+        apply(
+            &state,
+            &older,
+            vec![at(0, 0, DirectoryChoice::ExportedPath)],
+            true,
+        )
+        .await
+        .unwrap();
+        assert!(!state.store.worktree_settings().unwrap().revert_gate);
+        assert_eq!(
+            stored_projects(&state)[0].worktrees,
+            WorktreeOverride::default()
+        );
+    }
+
     /// A document from before the cleanup setting existed leaves it as the importing machine has
     /// it.
     #[tokio::test]
@@ -1948,6 +2079,7 @@ mod tests {
                 auto_approve_resume_requests: None,
                 auto_approve_account_switches: None,
                 auto_approve_handoffs: None,
+                worktrees: None,
                 keyboard_shortcuts: None,
             })
         );
@@ -1979,6 +2111,7 @@ mod tests {
                 auto_approve_resume_requests: None,
                 auto_approve_account_switches: None,
                 auto_approve_handoffs: None,
+                worktrees: None,
                 keyboard_shortcuts: None,
             })
         );

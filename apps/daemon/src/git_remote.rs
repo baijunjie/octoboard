@@ -966,6 +966,7 @@ mod tests {
                 pinned: false,
                 tags: Vec::new(),
                 description: None,
+                worktrees: Default::default(),
             })
             .expect("project");
         (state, dir)

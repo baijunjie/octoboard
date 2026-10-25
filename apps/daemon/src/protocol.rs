@@ -559,6 +559,10 @@ pub struct Project {
     /// The user's own summary of what the project is for, read by agent sessions. Stored trimmed;
     /// `None` when blank.
     pub description: Option<String>,
+    /// The project's own worktree settings; an item left `null` follows the application-wide
+    /// value in `Settings::worktrees`.
+    #[serde(default)]
+    pub worktrees: crate::worktree_settings::WorktreeOverride,
 }
 
 impl Project {
@@ -917,6 +921,9 @@ pub struct Settings {
     /// The agents, by wire name, whose default account the user turned off for new work, as
     /// `Account::disabled` does for an account row. Not carried by an export.
     pub disabled_default_accounts: std::collections::BTreeSet<String>,
+    /// The application-wide worktree settings; a project may override each item (see
+    /// `Project::worktrees`).
+    pub worktrees: crate::worktree_settings::WorktreeSettings,
 }
 
 impl Default for Settings {
@@ -939,6 +946,7 @@ impl Default for Settings {
             claude_approval_mode: None,
             default_account_names: Default::default(),
             disabled_default_accounts: Default::default(),
+            worktrees: Default::default(),
         }
     }
 }
@@ -1663,6 +1671,11 @@ pub enum RequestBody {
         /// Absent leaves the description alone; an explicit `null` (or a blank string) clears it.
         #[serde(default, deserialize_with = "present_option")]
         description: Option<Option<String>>,
+        /// Absent leaves the project's worktree settings alone. Within it, per item: absent leaves
+        /// it alone, an explicit `null` goes back to following the application-wide value, and a
+        /// value sets the project's own. An unknown `delivery` is refused.
+        #[serde(default)]
+        worktrees: Option<crate::worktree_settings::WorktreeOverrideChanges>,
     },
     DeleteProject {
         project: String,
@@ -2005,6 +2018,9 @@ pub enum RequestBody {
         auto_start_quota_windows: Option<bool>,
         /// A blank value goes back to the built-in default.
         default_clone_dir: Option<String>,
+        /// Absent leaves the worktree settings alone; within it, each item absent is left alone.
+        #[serde(default)]
+        worktrees: Option<crate::worktree_settings::WorktreeSettingsChanges>,
     },
     /// Both fields are required: an account always has a name and a directory. Broadcasts
     /// `settings_updated`.
@@ -3199,7 +3215,7 @@ pub type Present<T> = Option<Option<T>>;
 /// Deserializes a present field — `null` included — as `Some`, leaving `None` to mean "the field
 /// was not sent at all". Used for the fields where clearing a value and leaving it alone are
 /// different requests.
-fn present_option<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
+pub(crate) fn present_option<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
 where
     T: Deserialize<'de>,
     D: Deserializer<'de>,
@@ -4904,6 +4920,7 @@ mod tests {
                 sidebar_order_by_status,
                 auto_start_quota_windows,
                 default_clone_dir,
+                ..
             } => (
                 auto_pull_repositories,
                 auto_delete_unresumable_archives,
