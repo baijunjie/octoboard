@@ -2,9 +2,11 @@ use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::os::unix::fs::PermissionsExt;
 use std::process::{Command, Output};
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
+
+mod gate;
 
 use super::git_hooks::{injected, interpreter, render, write_dir, Rendering, BUILT_IN_HOOKS};
 use super::*;
@@ -22,7 +24,12 @@ use crate::test_support::{
 /// The dispatchers every test here runs git with, written once per test binary under a fixed
 /// name, as a fresh executable per test would pay macOS's first-exec cost each time. Their report
 /// goes to a stand-in for `octoboardd git-ref` that appends what it was started with — its
-/// directory, `GIT_DIR` and arguments — to the file `OCTOBOARD_TEST_REPORTS` names.
+/// directory, `GIT_DIR` and arguments — to the file `OCTOBOARD_TEST_REPORTS` names. The same
+/// stand-in answers `octoboardd gate-hook`: it appends its arguments and the input it was given to
+/// the file `OCTOBOARD_TEST_GATES` names and exits with the status `OCTOBOARD_TEST_GATE_STATUS`
+/// holds, 0 when unset, as the gate would for a rejection (3) or any other outcome. With
+/// `OCTOBOARD_TEST_GATE_BINARY` set to the test binary it instead runs the real `gate-hook` in that
+/// binary (see `gate::gate_hook_child`), against whatever daemon the session's port names.
 fn dispatchers() -> &'static Path {
     static DIR: OnceLock<PathBuf> = OnceLock::new();
     DIR.get_or_init(|| dispatchers_for(&system_exec_path(), &[]))
@@ -49,7 +56,16 @@ fn dispatchers_with(exec_path: &str, system_files: &[PathBuf], state: &Path) -> 
     let temp = std::env::temp_dir();
     let stand_in = installed(
         "octoboardd-test-git-ref",
-        "#!/bin/sh\nprintf '%s\\t%s\\t%s\\n' \"$PWD\" \"${GIT_DIR-}\" \"$*\" >>\"$OCTOBOARD_TEST_REPORTS\"\n",
+        "#!/bin/sh\n\
+         if [ \"$1\" = gate-hook ]; then\n\
+         if [ -n \"${OCTOBOARD_TEST_GATE_BINARY-}\" ]; then\n\
+         OCTOBOARD_TEST_GATE_ARGS=\"$*\" exec \"$OCTOBOARD_TEST_GATE_BINARY\" --exact \
+         branch_origin::tests::gate::gate_hook_child --ignored --nocapture\n\
+         fi\n\
+         printf '%s\\t%s\\n' \"$*\" \"$(tr '\\n' ' ')\" >>\"${OCTOBOARD_TEST_GATES:-/dev/null}\"\n\
+         exit \"${OCTOBOARD_TEST_GATE_STATUS:-0}\"\n\
+         fi\n\
+         printf '%s\\t%s\\t%s\\n' \"$PWD\" \"${GIT_DIR-}\" \"$*\" >>\"$OCTOBOARD_TEST_REPORTS\"\n",
         0o755,
     );
     let root = temp.join("octoboardd-test-githooks");
@@ -148,6 +164,10 @@ struct Fixture {
     repo: ScratchDir,
     common_dir: PathBuf,
     reports: ScratchFile,
+    /// What the stand-in for `octoboardd gate-hook` was started with and given.
+    gates: ScratchFile,
+    /// The port the sessions' dispatchers are told the daemon is on.
+    port: AtomicU16,
     dir: ScratchDir,
 }
 
@@ -196,6 +216,8 @@ impl Fixture {
             repo,
             common_dir,
             reports: ScratchFile::new("branch-origin-reports", "reports"),
+            gates: ScratchFile::new("branch-origin-gates", "gates"),
+            port: AtomicU16::new(1),
             dir,
         };
         fixture.session("a");
@@ -231,8 +253,14 @@ impl Fixture {
         let mut command = fixture_git(dir);
         command
             .envs(user.iter().copied())
-            .envs(injected(slot, hooks, session, 1))
-            .env("OCTOBOARD_TEST_REPORTS", &*self.reports);
+            .envs(injected(
+                slot,
+                hooks,
+                session,
+                self.port.load(Ordering::Relaxed),
+            ))
+            .env("OCTOBOARD_TEST_REPORTS", &*self.reports)
+            .env("OCTOBOARD_TEST_GATES", &*self.gates);
         command
     }
 
@@ -317,12 +345,16 @@ fn parse_report(line: &str) -> (String, RefReport) {
     let git_dir = fields.next().unwrap();
     let args: Vec<&str> = fields.next().unwrap().split(' ').collect();
     let session = args[args.iter().position(|a| *a == "--session").unwrap() + 1].to_string();
+    let head = args
+        .iter()
+        .position(|a| *a == "--head")
+        .map(|at| std::ffi::OsStr::new(args[at + 1]));
     let refs: Vec<OsString> = args[args.iter().position(|a| *a == "--").unwrap() + 1..]
         .iter()
         .map(OsString::from)
         .collect();
     let git_dir = (!git_dir.is_empty()).then(|| std::ffi::OsStr::new(git_dir));
-    let report = crate::git_ref_mode::report_of(&cwd, git_dir, &refs, now_millis() / 1000);
+    let report = crate::git_ref_mode::report_of(&cwd, git_dir, head, &refs, now_millis() / 1000);
     (session, report)
 }
 
@@ -1053,6 +1085,7 @@ fn rows_past_the_cap_are_dropped_oldest_first() {
             responsible_session: "a".to_string(),
             responsible_since: n,
             responsible_title: "Session a".to_string(),
+            target_branch: None,
         })
         .collect();
     fixture

@@ -188,17 +188,17 @@ can be one of the other project's.
 - A `GIT_CONFIG_COUNT` exported by the user's shell that is a number, if there is one at all; one that is not already
   fails every git the user runs, and the session is given nothing.
 
-Where any of these is missing the session runs as it would without attribution, and nothing says so. Each git and
-daemon executable is checked at the first launch that uses it; a check that failed is tried again by a launch at least
-ten minutes later.
+Where any of these is missing the session runs as it would without attribution, and without the revert gate, and
+nothing says so. Each git and daemon executable is checked at the first launch that uses it; a check that failed is
+tried again by a launch at least ten minutes later.
 
 ## The session's git hooks
 
 The agent's environment gets `core.hooksPath` through git's own `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_<n>` and
 `GIT_CONFIG_VALUE_<n>` variables, in the next free slot after the entries the user's shell exports (which keep their
 order and their effect), together with `OCTOBOARD_SESSION_ID` and `OCTOBOARD_DAEMON_PORT`, which say where a report
-goes. Nothing is written to a configuration file or a repository, and nothing reaches a process outside the agent's
-tree.
+goes and whom the revert gate asks. Nothing is written to a configuration file or a repository, and nothing reaches a
+process outside the agent's tree.
 
 - **The dispatchers** live in `~/.octoboard/githooks/<content hash>/`, shared by every session, written once and left
   read-only. It holds a copy of the dispatcher under every hook name git documents: a built-in list, together with
@@ -210,6 +210,9 @@ tree.
   exported entry, or else the repository's own hooks directory — with the same arguments, input and environment. Only
   Octoboard's own `core.hooksPath` entry is taken out, so the hook, and every git it runs, sees the user's
   configuration alone. The hook's outcome is git's: one that aborts a commit or a transaction still aborts it.
+- **The revert gate runs after the user's hook.** Once the user's `reference-transaction` hook has passed a
+  transaction that moves an existing branch, or the user's `pre-push` hook has passed a push of branches, the
+  dispatcher runs the revert gate, which can still refuse it (see `docs/product/revert-gate.md`).
 - **A dispatcher refuses rather than skipping a hook.** When it cannot tell, from the configuration, where the user's
   hook is, it asks git; if git cannot answer, the dispatcher fails, saying it could not find out where that hook is,
   which fails whatever that hook can stop — a commit, say.
@@ -224,7 +227,9 @@ tree.
 - **What it costs.** Every hook git looks for starts a dispatcher — a `/bin/dash` script where the system has one,
   `/bin/sh` otherwise — about ten for a commit. Measured on a Mac whose endpoint-security software slows every process
   start, a commit with no hooks of the user's took some 50–60 ms longer, about twice that where the user's
-  configuration moves the hooks directory and each dispatcher asks git, and a branch creation about 20 ms longer.
+  configuration moves the hooks directory and each dispatcher asks git, and a branch creation about 20 ms longer. A
+  move of an existing branch and a push also wait on the revert gate (see "What it costs" in
+  `docs/product/revert-gate.md`).
 
 ## What the record is
 
@@ -234,8 +239,9 @@ tree.
   is archived or deleted (see "What is bound to a session" in `docs/product/branch-and-worktree-cleanup.md`).
 - **What a record holds**: the branch's birth — the commit and the second it was created at, which recognise the same
   branch across a rename and tell one deleted and created again under the same name apart — and its responsible
-  session, with the created name recorded for that session and when it became responsible. Nothing else about who
-  created the branch is kept.
+  session, with the created name recorded for that session and when it became responsible; and, for the revert gate,
+  the branch it was created from, with the commit of its birth standing as its fork point (see "Target branches and
+  fork points" in `docs/product/revert-gate.md`). Nothing else about who created the branch is kept.
 - **A record lives and dies with its branch.** Deleting the branch — after merging it, say — deletes its record, so
   a merged-and-deleted branch can no longer be traced. A branch deleted and created again under the same name is a new
   branch and does not inherit the old record.

@@ -678,6 +678,7 @@ pub(crate) fn branch_made_by(state: &AppState, repo: &Path, branch: &str, sessio
                 responsible_session: session.to_string(),
                 responsible_since: time * 1000,
                 responsible_title: format!("Work {session}"),
+                target_branch: None,
             }],
             100,
         )

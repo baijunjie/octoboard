@@ -2,8 +2,9 @@
 # Octoboard's git hook dispatcher, written by octoboardd. The project sessions Octoboard starts
 # point core.hooksPath at this directory through GIT_CONFIG_COUNT, and every hook name git can
 # look for is a copy of this script. Each copy runs the hook the user's own configuration names,
-# exactly where git itself would have found it, and a reference transaction that creates branches
-# also tells Octoboard which ones the session's git has just created.
+# exactly where git itself would have found it. A reference transaction that creates branches also
+# tells Octoboard which ones the session's git has just created, and one that moves an existing
+# branch, like a push of branches, is run past the revert gate once the user's own hook has passed.
 set -f
 octo_name=${0##*/}
 octo_dir=${0%/*}
@@ -145,35 +146,125 @@ esac
 
 octo_nl='
 '
+# Whether this git belongs to a project session, which is what the variables say.
+octo_session=
+if [ -n "${@SESSION_VARIABLE@-}" ] && [ -n "${@PORT_VARIABLE@-}" ]; then
+	octo_session=1
+fi
 octo_watch=
-if [ "$octo_name" = reference-transaction ] && [ -n "${@SESSION_VARIABLE@-}" ] &&
-	[ -n "${@PORT_VARIABLE@-}" ]; then
+if [ "$octo_name" = reference-transaction ] && [ -n "$octo_session" ]; then
 	case ${1-} in prepared | committed) octo_watch=1 ;; esac
 fi
 
-if [ -n "$octo_watch" ]; then
-	# The updates, read in the shell while they are few and spooled to a file once they are many,
-	# so a transaction of thousands of references costs a copy rather than a string grown line by
-	# line. git ends every line with a newline. Every write to the state directory is braced so
-	# that one it refuses, as a sandbox may, says nothing and leaves the user's hook alone: a
-	# failed redirection of `:` itself would end the script.
+# Reads the hook's input, which git ends every line of with a newline, into octo_input while the
+# lines are few and into the file $1 once they are many, so a transaction of thousands of
+# references costs a copy rather than a string grown line by line, and sets octo_spool to the file
+# when it is used. Every write to the state directory is braced so that one it refuses, as a
+# sandbox may, says nothing and leaves the user's hook alone: a failed redirection of `:` itself
+# would end the script. Fails, with the input read so far in octo_input and the rest not yet read,
+# when the file cannot be written.
+octo_read_input() {
 	octo_input=
 	octo_count=0
 	octo_spool=
-	octo_lines=
 	while [ "$octo_count" -lt 256 ] && IFS= read -r octo_line; do
 		octo_input=$octo_input$octo_line$octo_nl
 		octo_count=$((octo_count + 1))
 	done
-	if [ "$octo_count" -lt 256 ]; then
-		octo_lines=$octo_input
-	elif { { printf '%s' "$octo_input" && cat; } >@STATE@/$PPID.in; } 2>/dev/null; then
-		octo_spool=@STATE@/$PPID.in
-		octo_lines=$(grep -E '^0+ [0-9a-f]+ refs/heads/.' "$octo_spool")
+	[ "$octo_count" -lt 256 ] && return 0
+	{ { printf '%s' "$octo_input" && cat; } >"$1"; } 2>/dev/null || return 1
+	octo_spool=$1
+}
+
+# Runs the user's hook, if any, with the arguments of this script over the input octo_read_input
+# read, and sets octo_status to its status.
+octo_run_hook() {
+	octo_status=0
+	[ -n "$octo_hook" ] || return 0
+	if [ -n "$octo_spool" ]; then
+		"$octo_hook" "$@" <"$octo_spool"
+	elif [ -n "$octo_input" ]; then
+		printf '%s' "$octo_input" | "$octo_hook" "$@"
 	else
-		# A spool that cannot be opened reports nothing, and the user's hook still gets every
-		# update.
-		octo_watch=
+		"$octo_hook" "$@" </dev/null
+	fi
+	octo_status=$?
+}
+
+# Runs the revert gate over the same input, as the subcommand $1 of Octoboard's gate-hook takes
+# it, and makes octo_status 1 when the gate rejects, which it says by exiting 3. Anything else the
+# gate comes to, including a binary that cannot start, lets the hook pass. The gate prints its
+# reason itself.
+octo_run_gate() {
+	[ -x @EXE@ ] || return 0
+	if [ -n "$octo_spool" ]; then
+		@EXE@ gate-hook --session "$@SESSION_VARIABLE@" --port "$@PORT_VARIABLE@" "$@" <"$octo_spool"
+	else
+		printf '%s' "$octo_input" | @EXE@ gate-hook --session "$@SESSION_VARIABLE@" \
+			--port "$@PORT_VARIABLE@" "$@"
+	fi
+	[ $? -ne 3 ] || octo_status=1
+}
+
+# Empties the spool file, if the input was spooled.
+octo_clean() {
+	[ -z "$octo_spool" ] || { true >"$octo_spool"; } 2>/dev/null
+}
+
+# Whether the input has an update to an existing branch: a reference below refs/heads/ with a
+# value before and after it, neither all zeros.
+octo_moves_branch() {
+	if [ -n "$octo_spool" ]; then
+		grep -Eq '^[0-9a-f]*[1-9a-f][0-9a-f]* [0-9a-f]*[1-9a-f][0-9a-f]* refs/heads/.' "$octo_spool"
+		return
+	fi
+	IFS=$octo_nl
+	for octo_line in $octo_input; do
+		octo_old=${octo_line%% *}
+		octo_rest=${octo_line#* }
+		octo_new=${octo_rest%% *}
+		octo_ref=${octo_rest#* }
+		case $octo_ref in refs/heads/?*) ;; *) continue ;; esac
+		case $octo_old in '' | *[!0-9a-f]*) continue ;; esac
+		case $octo_old in *[!0]*) ;; *) continue ;; esac
+		case $octo_new in '' | *[!0-9a-f]*) continue ;; esac
+		case $octo_new in *[!0]*) unset IFS && return 0 ;; esac
+	done
+	unset IFS
+	return 1
+}
+
+# Whether the input, the lines `<local ref> <local sha> <remote ref> <remote sha>` of a push, has
+# a local value to push to a reference below refs/heads/, which a deletion has not.
+octo_pushes_branch() {
+	if [ -n "$octo_spool" ]; then
+		grep -Eq '^[^ ]+ [0-9a-f]*[1-9a-f][0-9a-f]* refs/heads/.' "$octo_spool"
+		return
+	fi
+	IFS=$octo_nl
+	for octo_line in $octo_input; do
+		octo_rest=${octo_line#* }
+		octo_new=${octo_rest%% *}
+		octo_ref=${octo_rest#* }
+		octo_ref=${octo_ref%% *}
+		case $octo_ref in refs/heads/?*) ;; *) continue ;; esac
+		case $octo_new in '' | *[!0-9a-f]*) continue ;; esac
+		case $octo_new in *[!0]*) unset IFS && return 0 ;; esac
+	done
+	unset IFS
+	return 1
+}
+
+if [ -n "$octo_watch" ]; then
+	if octo_read_input @STATE@/$PPID.in; then
+		if [ -n "$octo_spool" ]; then
+			octo_lines=$(grep -E '^0+ [0-9a-f]+ refs/heads/.' "$octo_spool")
+		else
+			octo_lines=$octo_input
+		fi
+	else
+		# A spool that cannot be opened reports nothing and gates nothing, and the user's hook
+		# still gets every update.
 		[ -n "$octo_hook" ] || exit 0
 		{ printf '%s' "$octo_input" && cat; } | "$octo_hook" "$@"
 		exit
@@ -183,6 +274,7 @@ if [ -n "$octo_watch" ]; then
 	# which the transaction cannot tell apart.
 	octo_refs=
 	octo_names=
+	octo_forced=
 	IFS=$octo_nl
 	for octo_line in $octo_lines; do
 		octo_old=${octo_line%% *}
@@ -210,19 +302,36 @@ if [ -n "$octo_watch" ]; then
 				octo_marks=
 				for octo_ref in $octo_names; do
 					case $octo_nl$octo_existing$octo_nl in
-					*"$octo_nl$octo_ref$octo_nl"*) octo_marks="${octo_marks}old $octo_ref$octo_nl" ;;
+					*"$octo_nl$octo_ref$octo_nl"*)
+						octo_marks="${octo_marks}old $octo_ref$octo_nl"
+						octo_forced=1
+						;;
 					*) octo_marks="${octo_marks}new $octo_ref$octo_nl" ;;
 					esac
 				done
+				# A start point of HEAD names no branch of its own: the branch HEAD is on is what
+				# a branch created from it was created from. It is read here, before the
+				# transaction writes anything, rather than at committed, where a command that
+				# also moves HEAD (switch -c, checkout -b) may have done so already.
+				case $octo_nl$octo_marks in
+				*"${octo_nl}new "*)
+					if octo_head=$(git symbolic-ref -q HEAD 2>/dev/null); then
+						octo_marks="${octo_marks}head $octo_head$octo_nl"
+					fi
+					;;
+				esac
 				{ printf '%s' "$octo_marks" >"$octo_known"; } 2>/dev/null
 			else
 				{ true >"$octo_known"; } 2>/dev/null
+				octo_forced=1
 			fi
 		else
 			octo_marks=
+			octo_head=
 			if [ -f "$octo_known" ]; then
 				while IFS= read -r octo_line; do
 					octo_marks=$octo_marks$octo_line$octo_nl
+					case $octo_line in 'head '?*) octo_head=${octo_line#head } ;; esac
 				done <"$octo_known"
 				{ true >"$octo_known"; } 2>/dev/null
 			fi
@@ -245,24 +354,41 @@ if [ -n "$octo_watch" ]; then
 			done
 			if [ -n "$octo_complete" ] && [ -n "$octo_created" ]; then
 				# In the background with every descriptor let go, so git never waits for it.
-				@EXE@ git-ref --session "$@SESSION_VARIABLE@" --port "$@PORT_VARIABLE@" -- $octo_created \
-					</dev/null >/dev/null 2>&1 &
+				@EXE@ git-ref --session "$@SESSION_VARIABLE@" --port "$@PORT_VARIABLE@" \
+					${octo_head:+--head "$octo_head"} -- $octo_created </dev/null >/dev/null 2>&1 &
 			fi
 		fi
 	fi
 
-	[ -n "$octo_hook" ] || exit 0
-	if [ -n "$octo_spool" ]; then
-		"$octo_hook" "$@" <"$octo_spool"
-		octo_status=$?
-		{ true >"$octo_spool"; } 2>/dev/null
+	# An existing branch forced to a value names no old one (`git branch -f`, `git update-ref`
+	# without the old value), so it moves as surely as one that does; so may a branch whose
+	# existence could not be asked.
+	octo_moving=$octo_forced
+	if [ "$1" = prepared ] && [ -z "$octo_moving" ] && octo_moves_branch; then
+		octo_moving=1
+	fi
+	octo_run_hook "$@"
+	# The user's hook has the first word: its failure is the transaction's, and the gate is asked
+	# only about one that would otherwise go through.
+	if [ "$octo_status" -eq 0 ] && [ -n "$octo_moving" ]; then
+		octo_run_gate reference-transaction "$1"
+	fi
+	octo_clean
+	exit "$octo_status"
+fi
+
+if [ "$octo_name" = pre-push ] && [ -n "$octo_session" ]; then
+	# The refs of a push, with the user's hook and the gate run as for a transaction.
+	if octo_read_input @STATE@/$PPID.push; then
+		octo_run_hook "$@"
+		if [ "$octo_status" -eq 0 ] && octo_pushes_branch; then
+			octo_run_gate pre-push
+		fi
+		octo_clean
 		exit "$octo_status"
 	fi
-	if [ -n "$octo_input" ]; then
-		printf '%s' "$octo_input" | "$octo_hook" "$@"
-	else
-		"$octo_hook" "$@" </dev/null
-	fi
+	[ -n "$octo_hook" ] || exit 0
+	{ printf '%s' "$octo_input" && cat; } | "$octo_hook" "$@"
 	exit
 fi
 

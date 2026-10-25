@@ -220,6 +220,18 @@ fn main_branch(env: &GitEnv, common_dir: &Path, cancel: &AtomicBool) -> Result<H
     }
 }
 
+/// The repository's remote default branch, by the rule the branch list's `default_branch` follows
+/// ([`find_remote_branches`]), without listing the repository's branches. `None` for a repository
+/// with none, or whose remotes are past a budget.
+pub fn remote_default_branch(
+    env: &GitEnv,
+    dir: &Path,
+    cancel: &AtomicBool,
+) -> Result<Option<UpstreamInfo>> {
+    // `HEAD` has no same-named branch on a remote, so only the remotes' own `HEAD`s are looked up.
+    Ok(find_remote_branches(env, dir, (b"HEAD", b""), true, cancel)?.default_branch)
+}
+
 /// What [`find_remote_branches`] found.
 #[derive(Default)]
 struct Found {

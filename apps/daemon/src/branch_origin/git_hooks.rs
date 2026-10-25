@@ -14,14 +14,17 @@
 //! user hook git would silently skip: the names are the ones this daemon knows, together with every
 //! one the installed git's own documentation lists. Each copy runs the hook the user's own
 //! configuration names (see the script), and `reference-transaction` reports the branches a
-//! committed transaction created by starting `octoboardd git-ref` in the background.
+//! committed transaction created by starting `octoboardd git-ref` in the background. When the
+//! user's hook has passed, a prepared transaction that moves an existing branch and a push of
+//! branches (`pre-push`) are run past the revert gate by starting `octoboardd gate-hook` in the
+//! foreground; only a status of 3 from it refuses the update.
 //!
 //! It is shared by every session and outlives them, so a background job a session leaves running
 //! still finds it: it lives under the data directory, named by a hash of its content, written once
 //! and left read-only. A tool that installs hooks wherever `git rev-parse --git-path hooks` points
 //! is refused there rather than writing into every session's hooks. Beside it, a writable state
 //! directory carries what a `reference-transaction` dispatcher learns while a transaction is
-//! prepared over to the same git's committed call.
+//! prepared over to the same git's committed call, and spools a long list of updates or refs.
 //!
 //! The script is written for one git build: the system-wide configuration files it scans for a
 //! `core.hooksPath` are that build's, and a hook run by another build, which git tells apart by the
@@ -59,7 +62,7 @@ const PORT_VARIABLE: &str = "OCTOBOARD_DAEMON_PORT";
 
 /// The directory beside the dispatchers, under the same root, where a `reference-transaction`
 /// dispatcher leaves what it learned while a transaction was prepared for the same git's committed
-/// call, and spools a long list of updates. Writable, unlike the dispatchers.
+/// call, and spools a long list of updates or pushed refs. Writable, unlike the dispatchers.
 const STATE_DIR: &str = "state";
 
 /// How long a file in [`STATE_DIR`] is kept. Each is read back within the one git command that

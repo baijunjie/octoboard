@@ -31,6 +31,11 @@ mark gains a tooltip it should not have, because the new trigger replaces the op
 Every check of a tooltip, in a jsdom test as in a gallery hover step, names whose tooltip is up from its text, and
 where none should open asserts that there is none.
 
+A test that something is refused asserts the refuser's own message as well as the failure. The operation the test
+drives may be refused by something else first, and the test then passes with the guard gone: git refuses
+`git branch -f` on a branch checked out in a worktree before any hook runs, so a hook test that drives it proves
+nothing about the hook.
+
 ## Never write a fresh executable per test — share one that has already been exec'd
 
 Applies to any test that needs a script of its own to run as a program: a fake shell, a fake agent

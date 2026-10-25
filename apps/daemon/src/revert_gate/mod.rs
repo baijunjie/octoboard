@@ -1,6 +1,9 @@
 //! `octoboardd revert-gate` — blocks updates that quietly undo changes already merged into a
-//! guarded branch. Meant to be started by a session's `reference-transaction` hook dispatcher, in
-//! the foreground, for each transaction; its exit status is the hook's verdict.
+//! guarded branch. The session hook dispatchers do not start it: `octoboardd gate-hook` asks the
+//! daemon for the inputs and calls [`check`] in-process. The command runs the gate directly, with
+//! the inputs given as arguments and the hook's stdin, and its exit status is the hook's verdict.
+//! Its first step, before any `git` runs, is to see whether a guarded branch is involved
+//! at all, and it allows at once when none is.
 //!
 //! The typical cause is a squash that changed the base without merging the content (e.g.
 //! committing after `git reset --soft <target branch>`), so old code gets squashed in as if it
@@ -67,14 +70,35 @@
 //!    `This reverts commit <sha>.`, the corresponding commit is allowed — a deliberate revert
 //!    must leave a record.
 //!
+//! A pull request is merged on the remote and its target branch never moves locally, so none of
+//! the above fires for it; the `pre-push` hook covers it instead:
+//!
+//! - A pushed branch that has a recorded target branch (`--target`) is checked by rules 2 and 3
+//!   against the content of that target branch's remote-tracking tip, extended back to its own
+//!   recorded fork point (`--fork-point`), which has to be recorded before squashing since it
+//!   cannot be computed once the rebase has happened. It only runs when the pushed tip is a
+//!   descendant of that tip, i.e. rebased onto the latest target branch: a branch not yet rebased
+//!   is pushed every day, and checking it regardless would be nothing but false positives. A
+//!   target branch whose remote state cannot be pinned down is not checked, with a line on stderr
+//!   saying so; one that is not on a remote at all is left alone silently. Rule 1 does not
+//!   apply: force-pushing a branch you alone own, after a squash, is expected.
+//! - A pushed guarded branch is checked by rules 2 and 3 against its own remote value, as given by
+//!   the remote when pushing; any non-fast-forward is rejected (it would overwrite what the remote
+//!   has, and a forced push is not refused by the remote). A remote value missing
+//!   locally is rejected outright: the content cannot be judged, and letting the push through
+//!   could overwrite commits someone else just pushed.
+//! - A branch with no recorded target branch, and a push not yet rebased onto the latest target
+//!   branch, are left unchecked, and the target branch's remote state is as of the last fetch.
+//!
 //! The exit status is 0 to allow and 3 to reject, with the reason on stderr; the caller treats
 //! only 3 as a rejection. When the gate itself fails (git failing, a deadline, bad input) the
 //! update is allowed, with a line on stderr saying so: better to miss one check than to let it
-//! wedge every ref update. `REVERT_GATE_SKIP=1` in the environment skips the check, only for
-//! cases a human confirmed. The hook needs git 2.28+.
+//! wedge every ref update or push. `REVERT_GATE_SKIP=1` in the environment skips the check, only
+//! for cases a human confirmed. The `reference-transaction` hook needs git 2.28+.
 
 mod content;
 mod git;
+mod push;
 #[cfg(test)]
 mod tests;
 
@@ -84,7 +108,10 @@ use std::io::{Read, Write};
 use anyhow::Result;
 
 use content::{find_reverts, Finding};
-use git::{is_null, is_oid, is_space, lossy, short, Git};
+use git::{
+    branches_at, busy_branches, is_ancestor, is_null, is_oid, is_space, lossy, remote_tips,
+    rev_count, short, upstream_of, Git,
+};
 
 /// The exit status of a rejection.
 const REJECTED: i32 = 3;
@@ -101,13 +128,39 @@ content of the target position: restore `--hard` with `git reset --merge`, `--mi
 If a rebase was blocked, leave it with `git rebase --abort`.
 ";
 
-/// The arguments of `octoboardd revert-gate`. Branch names are short names, without
-/// `refs/heads/`.
+/// The arguments of `octoboardd revert-gate`: the `reference-transaction` hook's state, or the
+/// `pre-push` subcommand.
 #[derive(clap::Args)]
+#[command(args_conflicts_with_subcommands = true, subcommand_negates_reqs = true)]
 pub struct Args {
     /// The `reference-transaction` hook's argument: `prepared`, `committed` or `aborted`. Only
     /// `prepared` is checked. The hook's ref update lines are read from stdin.
-    state: String,
+    #[arg(required = true)]
+    state: Option<String>,
+    #[command(flatten)]
+    options: Options,
+    #[command(subcommand)]
+    pre_push: Option<PrePush>,
+}
+
+#[derive(clap::Subcommand)]
+enum PrePush {
+    /// Check the refs of a push; the lines `<local ref> <local oid> <remote ref> <remote oid>` are
+    /// read from stdin.
+    PrePush {
+        /// The `pre-push` hook's first argument: the remote's name.
+        remote: String,
+        /// The `pre-push` hook's second argument: the remote's URL.
+        url: String,
+        #[command(flatten)]
+        options: Options,
+    },
+}
+
+// What the gate is told about the repository's branches. Branch names are short names, without
+// `refs/heads/`.
+#[derive(clap::Args)]
+struct Options {
     /// A resident guarded branch.
     #[arg(long, value_name = "BRANCH")]
     guard: Vec<String>,
@@ -119,58 +172,154 @@ pub struct Args {
     fork_point: Vec<String>,
 }
 
-/// What the gate knows about the repository's branches besides git's own state.
-struct Inputs {
-    guarded: HashSet<String>,
-    fork_points: HashMap<String, String>,
-}
-
-impl Inputs {
-    fn from_args(args: &Args) -> Self {
-        let guarded = args
-            .guard
-            .iter()
-            .chain(args.target.chunks(2).map(|pair| &pair[1]))
-            .filter(|branch| !branch.is_empty())
-            .cloned()
-            .collect();
-        // The last `--fork-point` given for a branch wins.
-        let fork_points = args
-            .fork_point
-            .chunks(2)
-            .map(|pair| (pair[0].clone(), pair[1].clone()))
-            .collect();
-        Self {
-            guarded,
-            fork_points,
+impl Options {
+    fn inputs(&self) -> GateInputs {
+        let pairs = |flat: &[String]| {
+            flat.chunks(2)
+                .map(|pair| (pair[0].clone(), pair[1].clone()))
+                .collect()
+        };
+        GateInputs {
+            guard: self.guard.clone(),
+            targets: pairs(&self.target),
+            fork_points: pairs(&self.fork_point),
         }
     }
 }
 
-/// Runs the gate and returns the exit status for the hook.
-pub fn run(args: &Args) -> i32 {
-    // Always drained: git writes the update lines to the hook's stdin.
-    let mut stdin = Vec::new();
-    let _ = std::io::stdin().read_to_end(&mut stdin);
-    if std::env::var_os("REVERT_GATE_SKIP").is_some_and(|value| value == "1") {
-        return 0;
+/// The hook the gate is run for.
+#[derive(clap::Subcommand)]
+pub enum Hook {
+    /// The `reference-transaction` hook at `state` (`prepared`, `committed` or `aborted`; only
+    /// `prepared` is checked); the ref updates come on stdin.
+    ReferenceTransaction { state: String },
+    /// The `pre-push` hook; the refs being pushed come on stdin. The gate judges the refs, not
+    /// where they go, so neither the remote nor its URL is taken.
+    PrePush,
+}
+
+/// What the gate knows about the repository's branches besides git's own state. It is also what the
+/// daemon answers the `gate-hook` mode with, so it is the wire form too.
+#[derive(Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct GateInputs {
+    /// Resident guarded branches.
+    pub guard: Vec<String>,
+    /// `(branch, target branch)` records; every target branch named is guarded.
+    pub targets: Vec<(String, String)>,
+    /// `(branch, fork point)` records; the fork point is anything `git rev-parse` resolves.
+    pub fork_points: Vec<(String, String)>,
+}
+
+/// [`GateInputs`] looked up by branch.
+struct Inputs {
+    guarded: HashSet<String>,
+    targets: HashMap<String, String>,
+    fork_points: HashMap<String, String>,
+}
+
+impl Inputs {
+    fn new(inputs: &GateInputs) -> Self {
+        let guarded = inputs
+            .guard
+            .iter()
+            .chain(inputs.targets.iter().map(|(_, target)| target))
+            .filter(|branch| !branch.is_empty())
+            .cloned()
+            .collect();
+        // The last record given for a branch wins.
+        Self {
+            guarded,
+            targets: inputs.targets.iter().cloned().collect(),
+            fork_points: inputs.fork_points.iter().cloned().collect(),
+        }
     }
-    let (status, message) = outcome(decide(
-        &Git::hook(),
-        &Inputs::from_args(args),
-        &args.state,
-        &stdin,
-    ));
+}
+
+/// Runs the gate for the process's own arguments and stdin, and returns the exit status for the
+/// hook.
+pub fn run(args: &Args) -> i32 {
+    let (hook, inputs) = match &args.pre_push {
+        Some(PrePush::PrePush { options, .. }) => (Hook::PrePush, options.inputs()),
+        None => (
+            Hook::ReferenceTransaction {
+                state: args.state.clone().unwrap_or_default(),
+            },
+            args.options.inputs(),
+        ),
+    };
+    check(&hook, &inputs, std::io::stdin())
+}
+
+/// Runs the gate for `hook`, with the hook's stdin, and returns the exit status for the hook. The
+/// first step, before any `git` runs, is to see whether a guarded branch is involved at all.
+pub fn check(hook: &Hook, inputs: &GateInputs, mut stdin: impl Read) -> i32 {
+    // Always drained: git writes the update lines to the hook's stdin.
+    let mut input = Vec::new();
+    let _ = stdin.read_to_end(&mut input);
+    let (status, message) = run_in(&Git::hook(), skip_requested(), hook, inputs, &input);
     let _ = std::io::stderr().write_all(message.as_bytes());
     status
 }
 
-/// The exit status and the stderr text for the result of [`decide`]. A failure of the gate
-/// itself allows the update.
-fn outcome(result: Result<Option<String>>) -> (i32, String) {
+/// Whether the environment asks to skip the check (`REVERT_GATE_SKIP=1`).
+pub fn skip_requested() -> bool {
+    std::env::var_os("REVERT_GATE_SKIP").is_some_and(|value| value == "1")
+}
+
+/// The exit status and the stderr text for `hook` run with `git`; `skipped` is the request to
+/// skip the check.
+fn run_in(
+    git: &Git,
+    skipped: bool,
+    hook: &Hook,
+    inputs: &GateInputs,
+    input: &[u8],
+) -> (i32, String) {
+    if skipped {
+        return (0, String::new());
+    }
+    let inputs = Inputs::new(inputs);
+    outcome(match hook {
+        Hook::ReferenceTransaction { state } => {
+            decide(git, &inputs, state, input).map(Verdict::rejection)
+        }
+        Hook::PrePush => push::decide_push(git, &inputs, input),
+    })
+}
+
+/// What the gate says about an update: whether it is rejected, and the stderr text, which can be
+/// there for an allowed update too (a check that could not be made).
+#[derive(Default)]
+struct Verdict {
+    rejected: bool,
+    text: String,
+}
+
+impl Verdict {
+    /// The verdict for `Some(message)` rejecting, `None` allowing.
+    fn rejection(message: Option<String>) -> Self {
+        Self {
+            rejected: message.is_some(),
+            text: message.unwrap_or_default(),
+        }
+    }
+
+    fn reject(&mut self, message: String) {
+        self.rejected = true;
+        self.text.push_str(&message);
+    }
+
+    fn note(&mut self, message: String) {
+        self.text.push_str(&message);
+    }
+}
+
+/// The exit status and the stderr text for the result of [`decide`] or [`push::decide_push`]. A
+/// failure of the gate itself allows the update.
+fn outcome(result: Result<Verdict>) -> (i32, String) {
     match result {
-        Ok(None) => (0, String::new()),
-        Ok(Some(message)) => (REJECTED, message),
+        Ok(verdict) if verdict.rejected => (REJECTED, verdict.text),
+        Ok(verdict) => (0, verdict.text),
         Err(err) => (
             0,
             format!("[revert-gate] Check failed, allowed anyway: {err:#}\n"),
@@ -207,24 +356,28 @@ fn decide(git: &Git, inputs: &Inputs, state: &str, stdin: &[u8]) -> Result<Optio
         if !is_oid(&old) || !is_oid(new) {
             continue; // a symref value (`ref:...`) is not a commit
         }
-        let forks = recorded_forks(git, inputs, &branches_at(git, new)?, branch)?;
-        if let Some(message) = check_move(git, branch, &old, new, &forks)? {
+        let forks = forks_of_others(git, inputs, new, branch)?;
+        if let Some(message) = check_move(git, Route::Local, branch, &old, new, &forks)? {
             return Ok(Some(message));
         }
     }
     Ok(None)
 }
 
-/// The commit ids that the fork points recorded by `branches` (other than `moved`) resolve to;
-/// branches with no record, or a record that will not resolve, are skipped.
-fn recorded_forks(
-    git: &Git,
-    inputs: &Inputs,
-    branches: &[String],
-    moved: &str,
-) -> Result<Vec<String>> {
+/// The commit ids of the fork points recorded by the branches at `commit` other than `moved`.
+fn forks_of_others(git: &Git, inputs: &Inputs, commit: &str, moved: &str) -> Result<Vec<String>> {
+    let branches: Vec<String> = branches_at(git, commit)?
+        .into_iter()
+        .filter(|name| name != moved)
+        .collect();
+    recorded_forks(git, inputs, &branches)
+}
+
+/// The commit ids that the fork points recorded by `branches` resolve to; branches with no
+/// record, or a record that will not resolve, are skipped.
+fn recorded_forks(git: &Git, inputs: &Inputs, branches: &[String]) -> Result<Vec<String>> {
     let mut forks = Vec::new();
-    for name in branches.iter().filter(|name| *name != moved) {
+    for name in branches {
         let Some(fork) = inputs.fork_points.get(name).filter(|fork| !fork.is_empty()) else {
             continue;
         };
@@ -235,106 +388,6 @@ fn recorded_forks(
         }
     }
     Ok(forks)
-}
-
-/// Local branch names pointing at `commit`. On a fast-forward merge `new` is the feature branch
-/// tip, which is how its recorded fork point is found.
-fn branches_at(git: &Git, commit: &str) -> Result<Vec<String>> {
-    let out = git.read([
-        "for-each-ref",
-        "--format=%(refname)",
-        &format!("--points-at={commit}"),
-        "refs/heads/",
-    ])?;
-    Ok(lossy(&out)
-        .split_whitespace()
-        .filter_map(|name| name.strip_prefix("refs/heads/"))
-        .map(str::to_string)
-        .collect())
-}
-
-fn is_ancestor(git: &Git, a: &str, b: &str) -> Result<bool> {
-    git.succeeds(["merge-base", "--is-ancestor", a, b])
-}
-
-fn rev_count(git: &Git, args: &[&str]) -> Result<usize> {
-    let out = git.read(
-        ["rev-list", "--count"]
-            .into_iter()
-            .chain(args.iter().copied()),
-    )?;
-    Ok(lossy(&out).trim().parse().unwrap_or(0))
-}
-
-fn remote_refs(git: &Git, branch: &str) -> Result<Vec<String>> {
-    let out = git.read([
-        "for-each-ref",
-        "--format=%(refname)",
-        &format!("refs/remotes/*/{branch}"),
-    ])?;
-    Ok(lossy(&out).split_whitespace().map(str::to_string).collect())
-}
-
-fn remote_tips(git: &Git, branch: &str) -> Result<Vec<String>> {
-    let out = git.read([
-        "for-each-ref",
-        "--format=%(objectname)",
-        &format!("refs/remotes/*/{branch}"),
-    ])?;
-    Ok(lossy(&out).split_whitespace().map(str::to_string).collect())
-}
-
-/// How the branch's upstream is written in a hint. With no upstream (or an upstream ref that does
-/// not exist), the unique same-named branch on a remote is used instead; with no or several
-/// same-named branches the hint is written `<remote>/<branch>`.
-fn upstream_hint(git: &Git, branch: &str) -> Result<String> {
-    let upstream = git.line_lenient([
-        "for-each-ref",
-        "--format=%(upstream)",
-        &format!("refs/heads/{branch}"),
-    ])?;
-    if !upstream.is_empty() && git.succeeds(["rev-parse", "--verify", "-q", upstream.as_str()])? {
-        return Ok(format!("{branch}@{{u}}"));
-    }
-    let refs = remote_refs(git, branch)?;
-    Ok(match refs.as_slice() {
-        [only] => only
-            .strip_prefix("refs/remotes/")
-            .unwrap_or(only)
-            .to_string(),
-        _ => format!("<remote>/{branch}"),
-    })
-}
-
-/// Names of branches checked out in any worktree, or currently being rebased. During a rebase
-/// HEAD is detached, so the worktree listing does not show which branch it is on; read that from
-/// each worktree's rebase state directory instead.
-fn busy_branches(git: &Git) -> Result<HashSet<String>> {
-    let mut names = HashSet::new();
-    let listing = git.read(["worktree", "list", "--porcelain"])?;
-    for line in lossy(&listing).split('\n') {
-        if let Some(name) = line.strip_prefix("branch refs/heads/") {
-            names.insert(name.to_string());
-        }
-    }
-    let common = git
-        .dir()?
-        .join(lossy(&git.read(["rev-parse", "--git-common-dir"])?).trim());
-    let mut gitdirs = vec![common.clone()];
-    if let Ok(linked) = std::fs::read_dir(common.join("worktrees")) {
-        gitdirs.extend(linked.filter_map(Result::ok).map(|entry| entry.path()));
-    }
-    for gitdir in gitdirs {
-        for state in ["rebase-merge", "rebase-apply"] {
-            let Ok(head) = std::fs::read(gitdir.join(state).join("head-name")) else {
-                continue;
-            };
-            if let Some(name) = lossy(&head).trim().strip_prefix("refs/heads/") {
-                names.insert(name.to_string());
-            }
-        }
-    }
-    Ok(names)
 }
 
 /// Remote-tracking branch tips below `new` but not below `old`; see rule 2. A tip below `old`
@@ -374,10 +427,20 @@ fn reverted_on_tips(
     Ok(found)
 }
 
+/// What moves a guarded branch.
+#[derive(Clone, Copy, PartialEq)]
+enum Route {
+    /// A ref update in this clone.
+    Local,
+    /// A push, which moves the branch on the remote.
+    Push,
+}
+
 /// Checks one move of the guarded branch `branch` from `old` to `new`: `None` when it is allowed,
 /// else the message that rejects it.
 fn check_move(
     git: &Git,
+    route: Route,
     branch: &str,
     old: &str,
     new: &str,
@@ -395,21 +458,35 @@ fn check_move(
     // itself has to be excluded — in the prepared phase it still points at `old`. A branch name
     // cannot contain glob characters, so it works directly as an `--exclude` pattern.
     let mut stranded = unpushed;
-    if unpushed > 0 && !busy_branches(git)?.contains(branch) {
+    if route == Route::Local && unpushed > 0 && !busy_branches(git)?.contains(branch) {
         let exclude = format!("--exclude={branch}");
         stranded = rev_count(
             git,
             &[old, &not_new, "--not", "--remotes", &exclude, "--branches"],
         )?;
     }
-    if stranded == 0 && remote_tips(git, branch)?.iter().any(|tip| tip == new) {
+    if route == Route::Local
+        && stranded == 0
+        && remote_tips(git, branch)?.iter().any(|tip| tip == new)
+    {
         return Ok(None);
     }
     if !is_ancestor(git, old, new)? {
+        if route == Route::Push {
+            return Ok(Some(format!(
+                "\n[revert-gate] Refusing to rewrite remote {branch} from {} to {}: not a \
+                 fast-forward, it would drop commits the remote already has. Do not force-push; \
+                 `git fetch` first, then `git rebase {}` in the working copy that holds {branch} \
+                 to replay the local unpushed commits on top of the remote, verify, then push.\n\n",
+                short(old),
+                short(new),
+                upstream_of(git, branch)?.1
+            )));
+        }
         // If even one dropped commit is already on a remote-tracking branch, this rewrites
         // published history.
         if rev_count(git, &[old, &not_new])? > unpushed {
-            let shown = upstream_hint(git, branch)?;
+            let shown = upstream_of(git, branch)?.1;
             return Ok(Some(format!(
                 "\n[revert-gate] Refusing to move {branch} from {} to {}: not a fast-forward, it would \
                  drop published commits, and {branch} must not rewrite published history.\n\
@@ -427,7 +504,11 @@ fn check_move(
     // mixed with other reference points and cannot be used as fork points.
     let mut findings = find_reverts(git, old, new, forks, forks)?;
     let mut remote_findings = Vec::new();
-    let tips = tips_below(git, branch, old, new)?;
+    let tips = if route == Route::Local {
+        tips_below(git, branch, old, new)?
+    } else {
+        Vec::new()
+    };
     if !tips.is_empty() {
         // Commits on the tip are checked against the tip instead; see rule 2. The parents of
         // published commits already hit against `old` are passed in as fork points too: when the
@@ -459,6 +540,7 @@ fn check_move(
         new,
         &findings,
         &remote_findings,
+        route,
         !tips.is_empty(),
     )))
 }
@@ -475,8 +557,8 @@ fn describe(findings: &[Finding]) -> String {
 }
 
 /// The message that rejects a move. `remote_findings` are the published commits found by
-/// checking against the remote-tracking branch tip; `aligning` means this local move replayed
-/// the branch on top of the remote-tracking branch (aligning with the remote), in which case
+/// checking against the remote-tracking branch tip; `aligning` means this local move replayed the
+/// branch on top of the remote-tracking branch (aligning with the remote), in which case
 /// `findings` only holds local unpushed commits.
 fn report(
     branch: &str,
@@ -484,6 +566,7 @@ fn report(
     new: &str,
     findings: &[Finding],
     remote_findings: &[Finding],
+    route: Route,
     aligning: bool,
 ) -> String {
     let mut text = format!(
@@ -509,7 +592,13 @@ fn report(
             describe(remote_findings)
         ));
     }
-    let cause = if aligning {
+    let cause = if route == Route::Push {
+        format!(
+            "The revert comes from a squash that changed the base, or from a conflict resolution \
+             that kept only one side: add a commit in the working copy that holds {branch} to \
+             bring the undone changes back, verify, then push; do not reset {branch}."
+        )
+    } else if aligning {
         "Most likely the wrong side was kept while resolving conflicts when aligning with the \
          remote: if a rebase was blocked, leave it with `git rebase --abort` and rebase again, \
          resolving conflicts so that the changes from both sides are combined."
@@ -524,7 +613,11 @@ fn report(
     };
     text.push_str(&format!(
         "\n{cause}\nIf the revert really is deliberate, confirm it and use `git revert` instead, or add one\n\
-         `Reverts: <sha>` line per undone commit to the message of the commit that undoes it.\n\n{RESTORE_HINT}\n"
+         `Reverts: <sha>` line per undone commit to the message of the commit that undoes it.\n\n"
     ));
+    if route == Route::Local {
+        text.push_str(RESTORE_HINT);
+        text.push('\n');
+    }
     text
 }

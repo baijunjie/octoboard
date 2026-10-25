@@ -63,9 +63,14 @@ the target branch) is built into Octoboard as a switch, so a project gets it wit
   in `.git/config`.
   - It is ported to Rust as a daemon subcommand rather than shipping the Python script: on a fresh macOS,
     `/usr/bin/python3` is a stub that prompts for the Command Line Tools.
+  - It checks both a session's local branch updates (the `reference-transaction` dispatcher) and its pushes (the
+    `pre-push` dispatcher): a branch pushed for a PR against its target branch's remote tip, and a guarded branch
+    pushed over remote commits the clone does not have. Without the push check it would do nothing for a project that
+    delivers through PRs, whose target branch never moves locally.
   - It guards only git run inside Octoboard sessions; the user's own terminal, IDE or git client is not covered, unlike
     the per-clone install.
-  - A project with its own gate installed skips the built-in one, as the project's own rules come first.
+  - It does not look for a gate a project installed itself: Octoboard minds its own feature, and the switch, per
+    project, alone decides. A project that has its own gate and wants only that turns the built-in one off.
   - On by default: it blocks only a move that undoes merged content, so it costs normal work nothing.
   - It fails open: a failing hook fails every ref update, so any error of the gate itself lets the update through.
   - It reads the current setting when it runs, so the switch reaches running sessions at once.
@@ -75,10 +80,5 @@ the target branch) is built into Octoboard as a switch, so a project gets it wit
 - 01 Worktree settings (closed)
 - 02 Injecting the worktree rule (closed)
 - 03 Revert gate engine (closed)
-- [04 Revert gate in the hook dispatcher](04-revert-gate-in-the-hook-dispatcher.md)
+- 04 Revert gate in the hook dispatcher (closed)
 - [05 Settings UI](05-settings-ui.md)
-
-## Open
-
-- How a project's own installed gate is recognized: its `revert-gate.branch` configuration, the `revert-gate hook
-  entry` marker line in a hook, or both.

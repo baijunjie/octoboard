@@ -1506,7 +1506,8 @@ fn worktrees_schema(project: bool) -> Value {
             "revert_gate": {
                 "type": nullable(json!("boolean")),
                 "description": "Whether a branch update that quietly undoes changes already on \
-                                the target branch is blocked.",
+                                the target branch is blocked. A change takes effect at once, in \
+                                running sessions too.",
             },
         },
         "additionalProperties": false,

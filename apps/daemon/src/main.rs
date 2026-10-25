@@ -22,6 +22,7 @@ mod coordinator;
 mod crash_cleanup;
 mod default_effort;
 mod env_shell;
+mod gate_hook_mode;
 mod git_env;
 mod git_push;
 mod git_ref_mode;
@@ -125,13 +126,30 @@ enum Command {
         session: String,
         #[arg(long)]
         port: u16,
+        /// The branch (`refs/heads/...`) the git that made them had checked out.
+        #[arg(long)]
+        head: Option<std::ffi::OsString>,
         /// Each created reference's name followed by the object id it was created at.
         #[arg(last = true)]
         refs: Vec<std::ffi::OsString>,
     },
-    /// Decide whether a `reference-transaction` hook's ref updates undo changes already merged
-    /// into a guarded branch; exits 3 to reject. It is meant to be started by the session's
-    /// `reference-transaction` hook dispatcher, not run by hand.
+    /// Ask the daemon whether the revert gate applies to the hook git is running and, when it
+    /// does, run the revert gate in this process with what the daemon gives it; exits 3 to
+    /// reject. This is what the session's `reference-transaction` and `pre-push` hook dispatchers
+    /// start in the foreground; it is not meant to be run by hand.
+    GateHook {
+        #[arg(long)]
+        session: String,
+        #[arg(long)]
+        port: u16,
+        #[command(subcommand)]
+        hook: revert_gate::Hook,
+    },
+    /// Decide whether a `reference-transaction` hook's ref updates, or with `pre-push` the refs
+    /// of a push, undo changes already merged into a guarded branch; exits 3 to reject. Runs the
+    /// gate directly with the guarded branches, target branches and fork points given as
+    /// arguments; the session's hook dispatchers go through `gate-hook` instead, which asks the
+    /// daemon for them.
     RevertGate(revert_gate::Args),
     /// Report a Claude Code session's context window and run the user's own status line. This is
     /// the status line the Claude Code adapter injects; it is not meant to be run by hand.
@@ -193,14 +211,23 @@ fn main() -> Result<()> {
     if let Some(Command::GitRef {
         session,
         port,
+        head,
         refs,
     }) = &cli.command
     {
-        git_ref_mode::run(session, *port, refs);
+        git_ref_mode::run(session, *port, head.as_deref(), refs);
         return Ok(());
     }
 
-    // Runs synchronously inside the user's git, which waits for its exit status.
+    // Both run synchronously inside the user's git, which waits for their exit status.
+    if let Some(Command::GateHook {
+        session,
+        port,
+        hook,
+    }) = &cli.command
+    {
+        std::process::exit(gate_hook_mode::run(session, *port, hook));
+    }
     if let Some(Command::RevertGate(args)) = &cli.command {
         std::process::exit(revert_gate::run(args));
     }

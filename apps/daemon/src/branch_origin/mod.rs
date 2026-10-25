@@ -17,6 +17,11 @@
 //! record lives in the daemon's SQLite (`store::BranchOrigin`) — the Git mode never writes to a
 //! user's repository, so no ref, note or configuration entry carries it.
 //!
+//! A row also keeps the branch the new one was created from, its target branch ([`target`]); the
+//! commit it was created at, its `birth_commit`, is the fork point. The revert gate holds the
+//! branch's later work against both ([`revert_gate_inputs`]). A rename carries the target along and
+//! a handover leaves it alone.
+//!
 //! A row's responsible session is the reporting session when the row is written, and another only
 //! through an explicit handover ([`hand_over`]) — never inferred. The row keeps the title the
 //! session had then, to name it once it is gone; who reported the branch is not kept apart from it.
@@ -46,7 +51,9 @@ pub mod git;
 mod git_files;
 pub mod git_hooks;
 pub mod handover;
+pub mod revert_gate_inputs;
 pub mod session_branches;
+mod target;
 #[cfg(test)]
 mod tests;
 
@@ -83,6 +90,11 @@ pub struct RefReport {
     /// The `GIT_DIR` git set for the hook, which it does whenever the repository is not the `.git`
     /// found in `cwd`; relative to `cwd` when relative.
     pub git_dir: Option<String>,
+    /// The branch (`refs/heads/...`) the creating git's `HEAD` was on while the transaction was
+    /// prepared, for a start point of `HEAD` to name a branch by; absent for a detached `HEAD`, or
+    /// from a dispatcher that did not capture it.
+    #[serde(default)]
+    pub head: Option<String>,
     pub refs: Vec<CreatedRef>,
     /// When the report was made, in seconds since the epoch.
     pub unix_time: i64,
@@ -120,12 +132,15 @@ fn record_created(state: &AppState, session_id: &str, report: &RefReport) -> Res
     let Some(repo) = repository_of(Path::new(&project.path)) else {
         return Ok(());
     };
-    if reported_repository(report).as_deref() != Some(repo.as_path()) {
+    if reported_repository(&report.cwd, report.git_dir.as_deref()).as_deref()
+        != Some(repo.as_path())
+    {
         tracing::debug!(session = %session_id, "branch origins: a report about another repository");
         return Ok(());
     }
     let key = repo_key(&repo);
     let responsible = Responsible::of(&session);
+    let head = report.head.as_deref().and_then(branch_of);
 
     let gate = state.branch_origins.gate(&repo);
     let _serialized = gate.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -154,6 +169,7 @@ fn record_created(state: &AppState, session_id: &str, report: &RefReport) -> Res
         }
         put.push(BranchOrigin {
             repository: key.clone(),
+            target_branch: target::target_of(&repo, &branch, head.as_deref()),
             branch,
             created_at: birth_time * 1000,
             birth_commit: created.oid.clone(),
@@ -173,13 +189,12 @@ fn record_created(state: &AppState, session_id: &str, report: &RefReport) -> Res
     Ok(())
 }
 
-/// The canonical common directory of the repository a report is about: the one `GIT_DIR` names
-/// when git set it, else the one holding the directory the hook ran in.
-fn reported_repository(report: &RefReport) -> Option<PathBuf> {
-    let cwd = PathBuf::from(std::ffi::OsStr::from_bytes(&wire_path::decode(
-        &report.cwd,
-    )?));
-    let Some(git_dir) = &report.git_dir else {
+/// The canonical common directory of the repository a hook ran in, from the directory git ran it in
+/// and the `GIT_DIR` it set (wire paths): the one `GIT_DIR` names when git set it, else the one
+/// holding the directory.
+fn reported_repository(cwd: &str, git_dir: Option<&str>) -> Option<PathBuf> {
+    let cwd = PathBuf::from(std::ffi::OsStr::from_bytes(&wire_path::decode(cwd)?));
+    let Some(git_dir) = git_dir else {
         return repository_of(&cwd);
     };
     let git_dir = cwd.join(std::ffi::OsStr::from_bytes(&wire_path::decode(git_dir)?));

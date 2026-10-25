@@ -7,10 +7,11 @@ project's own worktree settings" below).
 ## What they do now
 
 Three of the settings — use worktrees for development, rebase before merging and delivery — shape the worktree rule a
-project session is given in its role description (see "The worktree rule" below). The revert gate is stored, carried
-and reported, but changes nothing in how any session works yet. Settings has no section for the worktree settings and
-the project dialog no control: they are read and changed only through the daemon's requests and through the console
-session's settings tools (see "Reading and changing them" below).
+project session is given in its role description (see "The worktree rule" below). The fourth, the revert gate, switches
+the revert gate on a project session's git (see `docs/product/revert-gate.md`), and is read every time the gate runs, so
+a change reaches running sessions at once. Settings has no section for the worktree settings and the project dialog no
+control: they are read and changed only through the daemon's requests and through the console session's settings tools
+(see "Reading and changing them" below).
 
 ## The four settings
 
@@ -19,7 +20,7 @@ session's settings tools (see "Reading and changing them" below).
 | Use worktrees for development | `use_worktrees` | `true` / `false` | on | Whether project sessions are asked to develop in a worktree of their own. |
 | Rebase before merging | `rebase_before_merge` | `true` / `false` | on | Whether a branch is rebased onto its target branch before it is merged. |
 | Delivery | `delivery` | `ask`, `merge`, `pull_request` | `ask` | How finished work leaves its branch: the user is asked each time, the branch is merged into its target branch locally, or it is pushed and a pull request opened. |
-| Revert gate | `revert_gate` | `true` / `false` | on | Whether a branch update that quietly undoes changes already on the target branch is blocked. |
+| Revert gate | `revert_gate` | `true` / `false` | on | Whether git run inside a project session is refused a branch update or a push that quietly undoes changes already on a guarded branch (see `docs/product/revert-gate.md`). |
 
 The defaults hold for a fresh installation and for one from before the settings existed. Any other `delivery` value is
 refused.

@@ -1,6 +1,7 @@
 //! What the attribution reads out of a repository's administrative files: which repository a
-//! directory or a git directory is in, whether its references are in reftable format, and a
-//! branch's reflog.
+//! directory or a git directory is in, whether its references are in reftable format, a branch's
+//! reflog, whether a reference exists (loose or packed), and the remote default branch a remote's
+//! `HEAD` file names.
 //!
 //! All of it is read from the filesystem rather than asked of `git`: a report and a listing are
 //! handled while other work waits on the repository's gate, and a file read is cheaper than a
@@ -22,6 +23,13 @@ const MAX_REFLOG_LINE: u64 = 64 * 1024;
 /// and what is looked for is written at its creation or rename, so a reflog past this is searched
 /// only as far as this.
 const MAX_REFLOG_SEARCHED: u64 = 4 * 1024 * 1024;
+
+/// How much of `packed-refs` is searched for a reference: a line per reference, so this is far
+/// more than a repository's branches come to, and a file past it is searched only as far as this.
+const MAX_PACKED_REFS_SEARCHED: u64 = 16 * 1024 * 1024;
+
+/// How much of a symbolic reference's file is read: `ref: ` and a reference name.
+const MAX_SYMBOLIC_REF: u64 = 4 * 1024;
 
 /// The canonical common directory of the repository holding `dir`. `None` for a directory in no
 /// repository.
@@ -72,12 +80,74 @@ fn reflog_path(common_dir: &Path, branch: &str) -> Option<PathBuf> {
 
 /// The first line of `logs/refs/heads/<branch>`, if the branch has a reflog.
 pub(super) fn first_reflog_entry(common_dir: &Path, branch: &str) -> Option<ReflogEntry> {
+    first_reflog_line(common_dir, branch).map(|(entry, _)| entry)
+}
+
+/// [`first_reflog_entry`] with the entry's message, as git wrote it (`branch: Created from main`).
+pub(super) fn first_reflog_line(common_dir: &Path, branch: &str) -> Option<(ReflogEntry, Vec<u8>)> {
     let file = fs::File::open(reflog_path(common_dir, branch)?).ok()?;
     let mut line = Vec::new();
     BufReader::new(file.take(MAX_REFLOG_LINE))
         .read_until(b'\n', &mut line)
         .ok()?;
-    parse_reflog_line(&line).map(|(entry, _)| entry)
+    parse_reflog_line(&line).map(|(entry, message)| (entry, message.to_vec()))
+}
+
+/// Whether the reference `name` (`refs/heads/main`) exists in the repository, as a loose file or a
+/// line of `packed-refs`. A name with an empty or dot component is no reference, and is never
+/// joined onto the repository's path.
+pub(super) fn reference_exists(common_dir: &Path, name: &[u8]) -> bool {
+    let plain = !name.is_empty()
+        && name
+            .split(|&b| b == b'/')
+            .all(|part| !part.is_empty() && part != b"." && part != b"..");
+    if !plain || name.contains(&0) {
+        return false;
+    }
+    if common_dir.join(OsStr::from_bytes(name)).is_file() {
+        return true;
+    }
+    let Ok(file) = fs::File::open(common_dir.join("packed-refs")) else {
+        return false;
+    };
+    BufReader::new(file.take(MAX_PACKED_REFS_SEARCHED))
+        .split(b'\n')
+        .map_while(Result::ok)
+        .any(|line| {
+            line.iter()
+                .position(|&b| b == b' ')
+                .is_some_and(|at| &line[at + 1..] == name)
+        })
+}
+
+/// The branch the repository's remote default branch is, read from the files of a repository
+/// whose references are files: what `refs/remotes/<remote>/HEAD` is a symbolic reference to, less
+/// the remote, for the remote `origin` or else the first in byte order whose `HEAD` names a
+/// remote-tracking branch of its own that exists (loose or packed; a symbolic reference is never
+/// packed). `None` for none, and for a repository with no such files.
+pub(super) fn remote_default_branch_in_files(common_dir: &Path) -> Option<Vec<u8>> {
+    let remotes = fs::read_dir(common_dir.join("refs/remotes")).ok()?;
+    let mut found: Vec<(Vec<u8>, Vec<u8>)> = remotes
+        .flatten()
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+        .filter_map(|entry| {
+            let remote = entry.file_name().as_bytes().to_vec();
+            let mut text = Vec::new();
+            fs::File::open(entry.path().join("HEAD"))
+                .ok()?
+                .take(MAX_SYMBOLIC_REF)
+                .read_to_end(&mut text)
+                .ok()?;
+            let target = text.strip_prefix(b"ref: ")?.trim_ascii_end();
+            let prefix = [b"refs/remotes/", remote.as_slice(), b"/"].concat();
+            let branch = target
+                .strip_prefix(prefix.as_slice())
+                .filter(|b| !b.is_empty())?;
+            reference_exists(common_dir, target).then(|| (remote, branch.to_vec()))
+        })
+        .collect();
+    found.sort_by(|a, b| (a.0 != b"origin", &a.0).cmp(&(b.0 != b"origin", &b.0)));
+    found.into_iter().next().map(|(_, branch)| branch)
 }
 
 /// Whether any entry of the branch's reflog has a message `matches` accepts.
@@ -135,6 +205,53 @@ mod tests {
         assert_eq!(entry.commit, "1234567890abcdef1234567890abcdef12345678");
         assert_eq!(entry.time, 1_700_000_000);
         assert_eq!(message, b"branch: Created from HEAD");
+    }
+
+    #[test]
+    fn the_remote_default_branch_is_read_from_the_remotes_head_files() {
+        let repo = repo_with("branch-origin-remote-head", &[(b"a", b"a")]);
+        let common = repository_of(&repo).unwrap();
+        assert_eq!(remote_default_branch_in_files(&common), None);
+
+        for remote in ["zeta", "alpha", "origin"] {
+            let branch = format!("{remote}-main");
+            git(
+                &repo,
+                &[
+                    "update-ref",
+                    &format!("refs/remotes/{remote}/{branch}"),
+                    "HEAD",
+                ],
+            );
+            git(
+                &repo,
+                &[
+                    "symbolic-ref",
+                    &format!("refs/remotes/{remote}/HEAD"),
+                    &format!("refs/remotes/{remote}/{branch}"),
+                ],
+            );
+        }
+        assert_eq!(
+            remote_default_branch_in_files(&common),
+            Some(b"origin-main".to_vec())
+        );
+
+        git(&repo, &["pack-refs", "--all"]);
+        assert_eq!(
+            remote_default_branch_in_files(&common),
+            Some(b"origin-main".to_vec())
+        );
+
+        git(
+            &repo,
+            &["update-ref", "-d", "refs/remotes/origin/origin-main"],
+        );
+        assert_eq!(
+            remote_default_branch_in_files(&common),
+            Some(b"alpha-main".to_vec()),
+            "a head naming a branch that is gone does not count"
+        );
     }
 
     #[test]

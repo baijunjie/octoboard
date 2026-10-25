@@ -1882,8 +1882,10 @@ session's agent is started with `core.hooksPath` pointed, through `GIT_CONFIG_CO
 daemon's, and when a reference transaction of any git in that agent's process tree commits a branch that did not exist
 while the transaction was prepared, the `reference-transaction` dispatcher reports it to `POST /git-ref/:session`
 (below) — a forced update of an existing branch is not a creation; every other hook, and that one too, runs the hook the
-user's own configuration names. The report is recorded only for a repository the session's own project is in, and, where
-the repository keeps reflog files, only while the branch's reflog still begins with its creation at the reported commit.
+user's own configuration names. The `reference-transaction` and `pre-push` dispatchers also run the revert gate, after
+the user's hook has passed, as `POST /revert-gate/:session` (below) describes. The report is recorded only for a
+repository the session's own project is in, and, where the repository keeps reflog files, only while the branch's
+reflog still begins with its creation at the reported commit.
 The command that made the branch is never read, so any command, alias or script counts alike; a branch no session's git
 reported — one made in the user's own terminal, a copy (`git branch -c`), one made while the daemon was not running —
 carries no `origin`. A branch renamed after it was recorded keeps its `origin` under the new name, which git's reflog
@@ -2143,14 +2145,38 @@ Not part of the application's interface. This is how `octoboardd git-ref`, which
 `reference-transaction` hook dispatcher starts in the background, reports a committed transaction's created branches:
 
 ```
-{ cwd, git_dir?, refs: [{ name, oid }], unix_time }
+{ cwd, git_dir?, head?, refs: [{ name, oid }], unix_time }
 ```
 
 `cwd` is the directory git ran the hook in and `git_dir` the `GIT_DIR` it set, if any (relative to `cwd` when
-relative), both wire paths; `refs` holds each created reference's full name (a wire path) and the object id it was
-created at; `unix_time` is when the report was made, in seconds. Answers `200` with an empty body, or `400` for a body
-that does not parse, and records the report afterwards as "Comparing two branches" describes; the reporter ignores the
-answer.
+relative), both wire paths; `head` is the branch (`refs/heads/...`, a wire path) the git had checked out while the
+transaction was prepared, absent for a detached `HEAD`; `refs` holds each created reference's full name (a wire path)
+and the object id it was created at; `unix_time` is when the report was made, in seconds. Answers `200` with an empty
+body, or `400` for a body that does not parse, and records the report afterwards as "Comparing two branches" describes;
+the reporter ignores the answer. Beside the responsible session, each recorded branch keeps its target branch, the local
+branch it was created from (read from the first line of its reflog, `branch: Created from <start>`: a local branch, the
+local branch behind a remote-tracking one, or for `HEAD` the reported `head`; a reftable repository has no reflog and
+takes `head` whatever the start point was), and its fork point, the reported commit.
+
+## `POST /revert-gate/:session` — a session's git asking whether the revert gate applies
+
+Not part of the application's interface. This is how `octoboardd gate-hook`, which a project session's
+`reference-transaction` and `pre-push` hook dispatchers start in the foreground when git moves an existing branch or
+pushes one, gets the inputs it runs the revert gate with, in its own process:
+
+```
+{ cwd, git_dir? }
+```
+
+`cwd` and `git_dir` are as in `POST /git-ref/:session`. Answers `200` with `null` for a hook that is to skip the gate —
+a session that is gone or is no project's, a repository other than the one the session's project is in, the project's
+effective `revert_gate` setting off (read at every request, so turning it off reaches running sessions at once), or any
+failure — and otherwise with `{ guard: [branch], targets: [[branch, target_branch]], fork_points: [[branch, commit]] }`:
+`guard` is the repository's default branch (what a `refs/remotes/<remote>/HEAD` file names, `origin` preferred and else
+the first remote in byte order; empty for a repository with none; only a reftable repository, which has no such files,
+asks `git`), and the other two are the repository's recorded target branches and fork points, leaving out, where the
+repository keeps reflog files, a record whose branch has been deleted and made again since. Answers `400` for a body
+that does not parse. The hook lets the git command through whenever it gets anything else.
 
 ## `POST /context-window/:session` — a Claude Code session reporting its context window
 

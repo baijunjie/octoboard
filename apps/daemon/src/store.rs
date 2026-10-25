@@ -261,6 +261,10 @@ impl Store {
             -- at, which tell a branch deleted and made again under the same name from the one the
             -- row was made for; `created_at` is that time in milliseconds, or when the creation was
             -- reported.
+            -- `target_branch` is the branch the branch was created from, which the revert gate
+            -- holds its commits against, together with `birth_commit` as the fork point; NULL for
+            -- a branch whose creation was reported before it was recorded, and for one created
+            -- from something that is no branch.
             CREATE TABLE IF NOT EXISTS branch_origins (
                 repository     TEXT NOT NULL,
                 branch         TEXT NOT NULL,
@@ -270,6 +274,7 @@ impl Store {
                 responsible_session_id TEXT,
                 responsible_since      INTEGER,
                 responsible_title      TEXT,
+                target_branch          TEXT,
                 PRIMARY KEY (repository, branch)
             );
             CREATE TABLE IF NOT EXISTS settings (
@@ -359,6 +364,12 @@ impl Store {
         }
         if column_exists(&tx, "branch_origins", "source")? {
             tx.execute("ALTER TABLE branch_origins DROP COLUMN source", [])?;
+        }
+        if !column_exists(&tx, "branch_origins", "target_branch")? {
+            tx.execute(
+                "ALTER TABLE branch_origins ADD COLUMN target_branch TEXT",
+                [],
+            )?;
         }
         tx.commit()?;
         if !column_exists(&conn, "settings", "default_clone_dir")? {
@@ -2390,7 +2401,10 @@ impl Store {
 
     // -- branch origins ------------------------------------------------------
 
-    /// Every origin recorded for the repository.
+    /// Every origin recorded for the repository. A row is checked against its branch and dropped
+    /// only when the Git mode lists the branches, so until then it can describe a branch deleted,
+    /// or deleted and made again, since: a reader that acts on the rows holds each against the
+    /// branch's first reflog entry itself.
     pub fn branch_origins(&self, repository: &str) -> Result<Vec<BranchOrigin>> {
         let conn = self.lock();
         read_branch_origins(&conn, repository)
@@ -2423,8 +2437,9 @@ impl Store {
             let mut insert = tx.prepare(
                 "INSERT OR REPLACE INTO branch_origins
                      (repository, branch, created_at, birth_commit, birth_time,
-                      responsible_session_id, responsible_since, responsible_title)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                      responsible_session_id, responsible_since, responsible_title,
+                      target_branch)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             )?;
             for origin in put {
                 insert.execute(params![
@@ -2436,6 +2451,7 @@ impl Store {
                     origin.responsible_session,
                     origin.responsible_since,
                     origin.responsible_title,
+                    origin.target_branch,
                 ])?;
             }
         }
@@ -2501,7 +2517,8 @@ impl Store {
 fn read_branch_origins(conn: &Connection, repository: &str) -> Result<Vec<BranchOrigin>> {
     let mut stmt = conn.prepare(
         "SELECT repository, branch, created_at, birth_commit, birth_time,
-                responsible_session_id, responsible_since, responsible_title
+                responsible_session_id, responsible_since, responsible_title,
+                target_branch
          FROM branch_origins WHERE repository = ?1 ORDER BY branch",
     )?;
     let rows = stmt
@@ -2515,6 +2532,7 @@ fn read_branch_origins(conn: &Connection, repository: &str) -> Result<Vec<Branch
                 responsible_session: row.get(5)?,
                 responsible_since: row.get(6)?,
                 responsible_title: row.get(7)?,
+                target_branch: row.get(8)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -2539,6 +2557,9 @@ pub struct BranchOrigin {
     pub responsible_since: i64,
     /// The responsible session's title when it became so, so the row outlives that session.
     pub responsible_title: String,
+    /// The branch this one was created from, as a wire path; `None` when it was created from
+    /// something that is no local branch, or its creation was recorded before this was kept.
+    pub target_branch: Option<String>,
 }
 
 /// What [`Store::move_branch_responsibility`] did, by branch name.
@@ -3833,6 +3854,7 @@ mod tests {
             responsible_session: "session-1".to_string(),
             responsible_since: 7,
             responsible_title: "Title".to_string(),
+            target_branch: None,
         };
         let put = |store: &Store| {
             store
@@ -3938,6 +3960,43 @@ mod tests {
         assert_eq!(rows[0].responsible_title, "Title");
     }
 
+    /// A database from before the target branch was recorded keeps its rows, without one, and
+    /// gains the column in place.
+    #[test]
+    fn the_target_branch_column_is_added_in_place() {
+        let path = temp_db("branch-origin-target");
+        let origin = BranchOrigin {
+            repository: "/r/.git".to_string(),
+            branch: "feature".to_string(),
+            created_at: 7,
+            birth_commit: "abc".to_string(),
+            birth_time: 7,
+            responsible_session: "session-1".to_string(),
+            responsible_since: 7,
+            responsible_title: "Title".to_string(),
+            target_branch: Some("main".to_string()),
+        };
+        {
+            let store = Store::open(&path).expect("store");
+            store
+                .apply_branch_origins("/r/.git", &[], std::slice::from_ref(&origin), 10)
+                .unwrap();
+            assert_eq!(
+                store.branch_origins("/r/.git").unwrap(),
+                std::slice::from_ref(&origin)
+            );
+            let conn = store.lock();
+            conn.execute("ALTER TABLE branch_origins DROP COLUMN target_branch", [])
+                .expect("the older shape");
+        }
+
+        let store = Store::open(&path).expect("reopened in place");
+        let kept = store.branch_origins("/r/.git").unwrap();
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].responsible_session, "session-1");
+        assert_eq!(kept[0].target_branch, None);
+    }
+
     /// Each branch of a handover is compared and set on its own: the ones the expected session
     /// holds move, the rest are reported and stay.
     #[test]
@@ -3953,6 +4012,7 @@ mod tests {
             responsible_session: session.to_string(),
             responsible_since: 7,
             responsible_title: "Title".to_string(),
+            target_branch: None,
         };
         store
             .apply_branch_origins("/r/.git", &[], &[origin("a", "s1"), origin("b", "s2")], 10)

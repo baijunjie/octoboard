@@ -46,6 +46,7 @@ fn routes(state: Arc<AppState>) -> Router {
         .route("/ws/term/:session", get(term_ws))
         .route("/hook/:session", post(hook_callback))
         .route("/git-ref/:session", post(git_ref_callback))
+        .route("/revert-gate/:session", post(revert_gate_callback))
         .route("/context-window/:session", post(context_window_callback))
         .route("/mcp/:token", post(mcp_call))
         .with_state(state)
@@ -812,6 +813,31 @@ async fn git_ref_callback(
     axum::http::StatusCode::OK
 }
 
+// -- /revert-gate/:session ---------------------------------------------------
+
+/// A session's git asking whether the revert gate applies to the update or push it is running a
+/// hook for, and what the gate is to know (`octoboardd gate-hook`). The reply is the gate's inputs,
+/// or `null` to skip it. Answered on the blocking pool, since it reads the store and runs `git`;
+/// the hook is waiting on the answer, so nothing else is done here.
+async fn revert_gate_callback(
+    Path(session_id): Path<String>,
+    State(state): State<Arc<AppState>>,
+    body: Bytes,
+) -> axum::response::Response {
+    let Ok(request) =
+        serde_json::from_slice::<crate::branch_origin::revert_gate_inputs::GateRequest>(&body)
+    else {
+        return axum::http::StatusCode::BAD_REQUEST.into_response();
+    };
+    let inputs = tokio::task::spawn_blocking(move || {
+        crate::branch_origin::revert_gate_inputs::inputs(&state, &session_id, &request)
+    })
+    .await
+    .ok()
+    .flatten();
+    axum::Json(inputs).into_response()
+}
+
 // -- /context-window/:session -----------------------------------------------
 
 /// A Claude Code session's status line reporting the session's context window (`octoboardd
@@ -1149,6 +1175,7 @@ mod tests {
                 "GET /ws/term/s",
                 "POST /hook/s",
                 "POST /git-ref/s",
+                "POST /revert-gate/s",
                 "POST /context-window/s",
                 "POST /mcp/x",
             ];

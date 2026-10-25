@@ -21,7 +21,8 @@
 - [ ] Settings → **Worktrees**: two switches (use worktrees, rebase before merging), the delivery choice (ask / merge /
       pull request), and the revert gate switch.
 - [ ] The row text says a rule change reaches sessions begun after it, while the revert gate switch takes effect at
-      once, and that a project's own rules or own installed gate come first.
+      once, and that a project's own rules come first; the gate does not look for one a project installed itself, so
+      a project that wants only its own turns the switch off.
 - [ ] Project dialog: a Worktrees group with each item as "follow global" or a value of its own.
 
 ## Notes for the developer

@@ -1,5 +1,7 @@
-//! The `git` the gate runs, and the small readings of its output the rest of the gate shares.
+//! The `git` the gate runs, the small readings of its output the rest of the gate shares, and the
+//! queries about the repository's branches and remotes.
 
+use std::collections::HashSet;
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use std::process::{Command, Output};
@@ -174,4 +176,112 @@ pub(super) fn is_space(c: char) -> bool {
 /// The first ten characters of an object id, as the messages show it.
 pub(super) fn short(oid: &str) -> &str {
     &oid[..oid.len().min(10)]
+}
+
+// -- the repository's branches ---------------------------------------------------
+
+/// Local branch names pointing at `commit`. On a fast-forward merge `new` is the feature branch
+/// tip, which is how its recorded fork point is found.
+pub(super) fn branches_at(git: &Git, commit: &str) -> Result<Vec<String>> {
+    let out = git.read([
+        "for-each-ref",
+        "--format=%(refname)",
+        &format!("--points-at={commit}"),
+        "refs/heads/",
+    ])?;
+    Ok(lossy(&out)
+        .split_whitespace()
+        .filter_map(|name| name.strip_prefix("refs/heads/"))
+        .map(str::to_string)
+        .collect())
+}
+
+pub(super) fn is_ancestor(git: &Git, a: &str, b: &str) -> Result<bool> {
+    git.succeeds(["merge-base", "--is-ancestor", a, b])
+}
+
+pub(super) fn has_commit(git: &Git, oid: &str) -> Result<bool> {
+    git.succeeds(["cat-file", "-e", &format!("{oid}^{{commit}}")])
+}
+
+pub(super) fn rev_count(git: &Git, args: &[&str]) -> Result<usize> {
+    let out = git.read(
+        ["rev-list", "--count"]
+            .into_iter()
+            .chain(args.iter().copied()),
+    )?;
+    Ok(lossy(&out).trim().parse().unwrap_or(0))
+}
+
+pub(super) fn remote_refs(git: &Git, branch: &str) -> Result<Vec<String>> {
+    let out = git.read([
+        "for-each-ref",
+        "--format=%(refname)",
+        &format!("refs/remotes/*/{branch}"),
+    ])?;
+    Ok(lossy(&out).split_whitespace().map(str::to_string).collect())
+}
+
+pub(super) fn remote_tips(git: &Git, branch: &str) -> Result<Vec<String>> {
+    let out = git.read([
+        "for-each-ref",
+        "--format=%(objectname)",
+        &format!("refs/remotes/*/{branch}"),
+    ])?;
+    Ok(lossy(&out).split_whitespace().map(str::to_string).collect())
+}
+
+/// The branch's upstream ref, and how to write it in a hint. With no upstream (or an upstream ref
+/// that does not exist), the unique same-named branch on a remote is used instead; with no or
+/// several same-named branches there is no ref and the hint is written `<remote>/<branch>`.
+pub(super) fn upstream_of(git: &Git, branch: &str) -> Result<(Option<String>, String)> {
+    let upstream = git.line_lenient([
+        "for-each-ref",
+        "--format=%(upstream)",
+        &format!("refs/heads/{branch}"),
+    ])?;
+    if !upstream.is_empty() && git.succeeds(["rev-parse", "--verify", "-q", upstream.as_str()])? {
+        return Ok((Some(upstream), format!("{branch}@{{u}}")));
+    }
+    let mut refs = remote_refs(git, branch)?;
+    if refs.len() == 1 {
+        let only = refs.remove(0);
+        let shown = only
+            .strip_prefix("refs/remotes/")
+            .unwrap_or(&only)
+            .to_string();
+        return Ok((Some(only), shown));
+    }
+    Ok((None, format!("<remote>/{branch}")))
+}
+
+/// Names of branches checked out in any worktree, or currently being rebased. During a rebase
+/// HEAD is detached, so the worktree listing does not show which branch it is on; read that from
+/// each worktree's rebase state directory instead.
+pub(super) fn busy_branches(git: &Git) -> Result<HashSet<String>> {
+    let mut names = HashSet::new();
+    let listing = git.read(["worktree", "list", "--porcelain"])?;
+    for line in lossy(&listing).split('\n') {
+        if let Some(name) = line.strip_prefix("branch refs/heads/") {
+            names.insert(name.to_string());
+        }
+    }
+    let common = git
+        .dir()?
+        .join(lossy(&git.read(["rev-parse", "--git-common-dir"])?).trim());
+    let mut gitdirs = vec![common.clone()];
+    if let Ok(linked) = std::fs::read_dir(common.join("worktrees")) {
+        gitdirs.extend(linked.filter_map(Result::ok).map(|entry| entry.path()));
+    }
+    for gitdir in gitdirs {
+        for state in ["rebase-merge", "rebase-apply"] {
+            let Ok(head) = std::fs::read(gitdir.join(state).join("head-name")) else {
+                continue;
+            };
+            if let Some(name) = lossy(&head).trim().strip_prefix("refs/heads/") {
+                names.insert(name.to_string());
+            }
+        }
+    }
+    Ok(names)
 }
