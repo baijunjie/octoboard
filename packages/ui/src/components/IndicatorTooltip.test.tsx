@@ -49,11 +49,17 @@ it("draws the popover like a tooltip, with the control fills", () => {
   expect(openPopover()?.classList.contains("control-fills")).toBe(true);
 });
 
-it("names a popover by its text where the mark has no name of its own", () => {
-  const container = mountForTooltip(<IndicatorTooltip tooltip="Waiting for you"><span>!</span></IndicatorTooltip>);
-  press(trigger(container));
-  const popover = openPopover()!;
-  expect(document.getElementById(popover.getAttribute("aria-labelledby")!)?.textContent).toBe("Waiting for you");
+it.each([undefined, "Waiting for you"])("names the popover by a generic word where the mark's name is %s and the tooltip says \"Waiting for you\"", (label) => {
+  const container = mountForTooltip(
+    <IndicatorTooltip tooltip="Waiting for you" label={label}>
+      <span>!</span>
+    </IndicatorTooltip>,
+  );
+  press(trigger(container), "touch");
+  expect(openPopover()?.getAttribute("aria-label")).toBe("Hint");
+  expect(openPopover()?.hasAttribute("aria-labelledby")).toBe(false);
+  expect(openPopover()?.textContent).toBe("Waiting for you");
+  expect(trigger(container).getAttribute("aria-label")).toBe(label ?? null);
 });
 
 it("keeps the tooltip out while the popover is open", () => {

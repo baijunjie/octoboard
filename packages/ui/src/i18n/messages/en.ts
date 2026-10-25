@@ -151,6 +151,13 @@ export const en = {
   "error.tryAgain": "Try again",
   "error.unexpectedReply": "The daemon answered with something unexpected.",
   "error.stack": "Stack trace",
+  // Names the popover of a status mark whose one line is its label, so that the line is not also the name.
+  "mark.tone.danger": "Error",
+  "mark.tone.warning": "Warning",
+  "mark.tone.note": "Note",
+  // Names the touch popover of a hint whose trigger has no name of its own, or is named by the very
+  // text the popover shows.
+  "hint.name": "Hint",
 
   // The macOS application menu, handed to the shell (see `useNativeMenuLabels`).
   "menu.about": "About {appName}",

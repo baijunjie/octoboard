@@ -139,6 +139,10 @@ export const zhHans: Translation<"other"> = {
   "error.tryAgain": "重试",
   "error.unexpectedReply": "守护进程返回了意料之外的响应。",
   "error.stack": "堆栈跟踪",
+  "mark.tone.danger": "错误",
+  "mark.tone.warning": "警告",
+  "mark.tone.note": "提示",
+  "hint.name": "提示",
 
   "menu.about": "关于 {appName}",
   "menu.settings": "设置…",

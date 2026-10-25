@@ -14,7 +14,7 @@ import { ChangeBodiesError, type ViewerChangeSide, type ViewerContent, type View
 import { diffLayout } from "./diffLayout";
 import { FileViewer, type ViewerNavigation } from "./FileViewer";
 import { detailsButton } from "../components/detailsTestSupport";
-import { enter, leave, openTooltip, press } from "../components/tooltipTestSupport";
+import { enter, leave, openTooltip, press, tap } from "../components/tooltipTestSupport";
 import { markNames, ViewerHost } from "./viewerTestSupport";
 import { viewerErrorText } from "./viewerError";
 import { wordWrap } from "./wordWrap";
@@ -182,6 +182,10 @@ it("shows only the side inside the project, naming where the other one is", () =
   expect(markNames(dialog()!)).toEqual([`The previous version is outside this project, at ${isolate("lib/moved.ts")}. Only the version in this project is shown.`]);
   expect(dialog()?.textContent).toContain("This file cannot be displayed");
   expect(dialog()?.textContent).not.toContain("No file on this side.");
+  tap(dialog()!.querySelector("[data-status-mark]")!, "Enter");
+  const popover = document.querySelector("[data-status-mark-popover] [role=dialog]");
+  expect(popover?.getAttribute("aria-label")).toBe("Warning");
+  expect(popover?.querySelector("[data-inline-reference] code")?.textContent).toBe("lib/moved.ts");
 });
 
 // Next turning unavailable while it has focus — the last subject reached, or the list changing

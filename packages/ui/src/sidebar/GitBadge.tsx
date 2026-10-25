@@ -124,7 +124,7 @@ export function GitBadge({
     );
   }
   return (
-    <IndicatorTooltip tooltip={gitBadgeContent(language, t, status)} label={decorative ? undefined : label} className={className} touchPopover={touchPopover}>
+    <IndicatorTooltip tooltip={gitBadgeContent(language, t, status)} label={decorative ? undefined : label} labelRepeatsTooltip className={className} touchPopover={touchPopover}>
       {/* `contents` keeps the glyph, branch and counts the trigger's own grid items. */}
       {decorative ? (
         <span aria-hidden="true" className="contents">

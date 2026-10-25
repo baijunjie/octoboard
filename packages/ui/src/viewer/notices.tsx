@@ -85,9 +85,9 @@ function SpokenSentence({ text, element }: { text: string; element?: "div" | "sp
  * it first, or what part of it could not be shown. It is one mark in the `NoticeSlotBoxes` of the nearest
  * `NoticeSlotsProvider`, not where this is rendered. Without them there is nowhere to draw it and nothing is.
  *
- * The mark is named by `sentence`, which is also what it says: a failed or warned mark opens it in a
- * popover and a note in a tooltip, so a body of its own (`children`) is for what the sentence cannot
- * hold (markup, a failure's details).
+ * The mark is named by `sentence`, which is also what it says: every tone opens it in a popover.
+ * `line` is the same sentence with markup in it (a path in a chip), shown in the popover in place of
+ * the plain text; the popover is named by the tone either way.
  *
  * A notice that can appear after the surface has been drawn would otherwise never reach a reader,
  * so it is also spoken: pass `speak`, which says the sentence in a status region. A notice that is
@@ -100,17 +100,17 @@ export function FileNotice({
   tone = "explained",
   sentence,
   speak = false,
-  children,
+  line,
 }: {
   tone?: NoticeTone;
   sentence: string;
   speak?: boolean;
-  children?: React.ReactNode;
+  line?: React.ReactNode;
 }): React.ReactElement {
   const slot = useContext(NoticeSlots)?.slots[tone];
   return (
     <>
-      {slot && createPortal(<StatusMark tone={MARK_TONES[tone]} label={sentence}>{children}</StatusMark>, slot)}
+      {slot && createPortal(<StatusMark tone={MARK_TONES[tone]} label={sentence} line={line} />, slot)}
       {speak && <SpokenSentence text={sentence} />}
     </>
   );
@@ -118,9 +118,8 @@ export function FileNotice({
 
 /**
  * A notice about one spot of a document, drawn at that spot as a mark named and worded by its
- * sentence (`children`): a note in a tooltip, a warning or a failure in a popover. The mark is
- * phrasing content, so it is valid inside a paragraph. The glyph tells the tones apart by shape, so
- * colour is not what does.
+ * sentence (`children`), opened in a popover whatever the tone. The mark is phrasing content, so it
+ * is valid inside a paragraph. The glyph tells the tones apart by shape, so colour is not what does.
  *
  * `speak` is announced once, after the same delay as the other notices. A notice that is present
  * from the first paint passes none. The announcement is a `span`: this notice may sit where a `div`

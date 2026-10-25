@@ -1,8 +1,9 @@
 import { Tooltip } from "@heroui/react";
-import React, { useContext, useEffect, useId, useRef, useState } from "react";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import { mergeProps, useFocusable } from "react-aria";
 import { Popover as SurfacePopover, TooltipTriggerStateContext } from "react-aria-components";
 
+import { useT } from "../i18n/react";
 import { interactionIsTouch } from "../touchInput";
 import { OFFSET, PLACEMENT, TOOLTIP_SURFACE } from "./hintSurface";
 
@@ -22,17 +23,15 @@ function TooltipSurface({
 
 /** The open state of a touch popover and the element it is placed against, which the press that
  * opens it hands in. The shape keeps its tooltip shut while it is open (a pen hovering above the
- * screen opens a tooltip before it presses). `id` is the popover's text, which names the popover
- * where the trigger has no name. */
+ * screen opens a tooltip before it presses). */
 function useTouchPopover() {
   const [isOpen, setOpen] = useState(false);
   const anchor = useRef<Element | null>(null);
-  const id = useId();
   const open = (target: Element) => {
     anchor.current = target;
     setOpen(true);
   };
-  return { isOpen, setOpen, anchor, id, open };
+  return { isOpen, setOpen, anchor, open };
 }
 
 /**
@@ -43,21 +42,28 @@ function useTouchPopover() {
  *
  * It is modal, as a popover is: a tap outside closes it (and is not passed on to what lies
  * there), so does Escape, and focus, which it takes onto itself, goes back to what held it. It has
- * a dialog's role, so it is named: `label` is the trigger's accessible name, and a mark with none is
- * named by the text itself. Being modal it hides the trigger from assistive technology while open,
- * so it is not linked to the trigger as its description, as the tooltip is.
+ * a dialog's role, so it is named: `label` is the trigger's accessible name. A dialog must not be named by
+ * the very text it holds, which a screen reader would say twice, so the dialog takes `label` only where
+ * there is one, it differs from the content (`children`, when that is a string), and the caller has not
+ * declared that it repeats the tooltip's words (`labelRepeatsTooltip`, for a content that is markup);
+ * otherwise it is named by a generic word. Being modal it hides the trigger from assistive technology
+ * while open, so it is not linked to the trigger as its description, as the tooltip is.
  */
 function TouchPopover({
   state,
   label,
+  labelRepeatsTooltip = false,
   placement,
   children,
 }: {
   state: ReturnType<typeof useTouchPopover>;
   label?: string;
+  labelRepeatsTooltip?: boolean;
   placement?: "end";
   children: React.ReactNode;
 }): React.ReactElement {
+  const t = useT();
+  const named = label && label !== children && !labelRepeatsTooltip;
   return (
     <SurfacePopover
       isOpen={state.isOpen}
@@ -65,11 +71,10 @@ function TouchPopover({
       triggerRef={state.anchor}
       placement={placement ?? PLACEMENT}
       offset={OFFSET}
-      aria-label={label}
-      aria-labelledby={label ? undefined : state.id}
+      aria-label={named ? label : t("hint.name")}
       className={TOOLTIP_SURFACE}
     >
-      <div id={state.id}>{children}</div>
+      {children}
     </SurfacePopover>
   );
 }
@@ -161,7 +166,9 @@ export function ControlHint({
  * on a `display: contents` span). Nothing inside such a wrapper may be focusable.
  *
  * The `tooltip` is any content, for an indicator whose detail has a structure; the `label` stays a
- * plain string, so the accessible name never depends on the tooltip's markup.
+ * plain string, so the accessible name never depends on the tooltip's markup. Where the label says the
+ * very words the structured tooltip draws, `labelRepeatsTooltip` has the touch popover named by a
+ * generic word rather than by the text it holds.
  *
  * `touchPopover` is on by default, as a tap on a mark has no action of its own. It has to be turned
  * off for a mark inside something that handles the same tap (a row, a button, an option), or the
@@ -178,6 +185,7 @@ export function ControlHint({
 export function IndicatorHint({
   tooltip,
   label,
+  labelRepeatsTooltip = false,
   className,
   touchPopover = true,
   phrasing = false,
@@ -185,6 +193,9 @@ export function IndicatorHint({
 }: {
   tooltip: React.ReactNode;
   label?: string;
+  /** The label says the same words as the tooltip, which is not a string to compare it with, so the touch
+   * popover is not named by it; see above. */
+  labelRepeatsTooltip?: boolean;
   className?: string;
   /** The trigger is a `span`, for a mark inside a paragraph; see above. */
   phrasing?: boolean;
@@ -212,7 +223,7 @@ export function IndicatorHint({
         </Trigger>
         <TooltipSurface>{tooltip}</TooltipSurface>
       </Tooltip>
-      {touchPopover && <TouchPopover state={popover} label={label}>{tooltip}</TouchPopover>}
+      {touchPopover && <TouchPopover state={popover} label={label} labelRepeatsTooltip={labelRepeatsTooltip}>{tooltip}</TouchPopover>}
     </>
   );
 }

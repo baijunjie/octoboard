@@ -312,7 +312,7 @@ it("opens on Enter with focus inside", () => {
   expect(dialog()?.contains(document.activeElement)).toBe(true);
 });
 
-it("gives a content-less mark the label as its one line, naming the popover, and is valid inside a paragraph", () => {
+it("gives a content-less mark the label as its one line, the popover named by its tone, and is valid inside a paragraph", () => {
   withFakeTimers();
   const container = mountForTooltip(<p>Before <StatusMark inline label="Failed to read" /></p>);
   const button = mark(container);
@@ -322,9 +322,29 @@ it("gives a content-less mark the label as its one line, naming the popover, and
   enter(button);
   hoverDelay();
   expect(dialog()?.textContent).toBe("Failed to read");
-  const name = dialog()!.getAttribute("aria-labelledby")!;
-  expect(document.getElementById(name)?.textContent).toBe("Failed to read");
+  expect(dialog()?.getAttribute("aria-label")).toBe("Error");
+  expect(dialog()?.hasAttribute("aria-labelledby")).toBe(false);
   expect(openTooltip()).toBeNull();
+});
+
+it.each([["danger", "Error"], ["warning", "Warning"], ["note", "Note"]] as const)(
+  "names the popover of a content-less %s mark by its tone, not by the line it holds",
+  (tone, word) => {
+    const button = mountForTooltip(<StatusMark tone={tone} label="Could not be shown" />).querySelector("button")!;
+    expect(button.getAttribute("aria-label")).toBe("Could not be shown");
+    press(button);
+    expect(dialog()?.getAttribute("aria-label")).toBe(word);
+    expect(dialog()?.textContent).toBe("Could not be shown");
+  },
+);
+
+it("draws a bare mark's one line as `line` when given, still named by the tone", () => {
+  const button = mountForTooltip(<StatusMark tone="warning" label="Outside at a/b" line={<span>Outside at <code>a/b</code></span>} />).querySelector("button")!;
+  expect(button.getAttribute("aria-label")).toBe("Outside at a/b");
+  press(button);
+  expect(dialog()?.getAttribute("aria-label")).toBe("Warning");
+  expect(dialog()?.textContent).toBe("Outside at a/b");
+  expect(dialog()?.querySelector("code")?.textContent).toBe("a/b");
 });
 
 it("leaves focus alone when a hover-opened header mark closes", async () => {

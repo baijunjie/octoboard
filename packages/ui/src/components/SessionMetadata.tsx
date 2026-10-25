@@ -130,7 +130,8 @@ function ContextLabel({ context, touchPopover }: { context: SessionContext; touc
     </span>
   );
   return (
-    <IndicatorTooltip tooltip={<ContextTooltip title={title} amount={amount} usage={usage} />} label={details} className="flex shrink-0 items-center" touchPopover={touchPopover}>
+    // The card states the same figures as `details`, rounded, so its touch popover is not named by them.
+    <IndicatorTooltip tooltip={<ContextTooltip title={title} amount={amount} usage={usage} />} label={details} labelRepeatsTooltip className="flex shrink-0 items-center" touchPopover={touchPopover}>
       {mark}
     </IndicatorTooltip>
   );

@@ -1,6 +1,7 @@
 import { CircleAlert, Info, TriangleAlert } from "lucide-react";
-import React, { useId } from "react";
+import React from "react";
 
+import { useT } from "../i18n/react";
 import { Button } from "./Button";
 import { Hint } from "./Hint";
 
@@ -19,8 +20,12 @@ interface StatusMarkProps {
   inline?: boolean;
   /** A visible word after the glyph; the accessible name stays `label`. */
   text?: string;
-  /** The popover's body; without it the `label` is the one line. */
+  /** The popover's body; without it the `label` is the one line, and the tone's word names the popover. */
   children?: React.ReactNode;
+  /** The one line drawn richer than the plain-text `label` (markup in it), the same sentence. The mark stays
+   * bare, so the tone's word still names the popover; with `children`, or with `text` and no `children` (no
+   * popover then), it has no effect. */
+  line?: React.ReactNode;
   /** The mark stands in a collection's section header, which the collection's own walk does not reach. */
   inHeader?: boolean;
   /** The popover's last line, the recovery button (Try again), given a function that closes the popover. */
@@ -51,7 +56,7 @@ export function StatusMark(props: StatusMarkProps): React.ReactElement {
       </span>
     );
   }
-  return <PopoverMark label={label} glyph={glyph} inline={inline} inHeader={props.inHeader ?? false} text={text} actions={props.actions}>{children}</PopoverMark>;
+  return <PopoverMark label={label} tone={tone} line={props.line} glyph={glyph} inline={inline} inHeader={props.inHeader ?? false} text={text} actions={props.actions}>{children}</PopoverMark>;
 }
 
 /** The mark's trigger, the same for every tone: an icon button, or the glyph and its word, ghost, so it
@@ -104,6 +109,8 @@ function MarkButton({
 /** The popover the mark opens. */
 function PopoverMark({
   label,
+  tone,
+  line,
   glyph,
   inline,
   inHeader,
@@ -112,6 +119,8 @@ function PopoverMark({
   children,
 }: {
   label: string;
+  tone: MarkTone;
+  line?: React.ReactNode;
   glyph: React.ReactElement;
   inline: boolean;
   inHeader: boolean;
@@ -119,8 +128,10 @@ function PopoverMark({
   actions?: (close: () => void) => React.ReactNode;
   children?: React.ReactNode;
 }): React.ReactElement {
-  const lineId = useId();
-  // No body of its own: the label is the one line of reason, and names the popover.
+  const t = useT();
+  // No body of its own: the label (or `line`, its richer form) is the one line of reason. It cannot also
+  // name the popover, or a screen reader would say it as the dialog's name and again as its content, so
+  // the tone does.
   const bare = !children;
   const header = inHeader ? { excludeFromTabOrder: true, "data-section-heading-control": "" } : undefined;
   // The popover gives focus back to what held it as it unmounts, from a frame of its own, so the
@@ -138,8 +149,7 @@ function PopoverMark({
   return (
     <Hint
       kind="popover"
-      label={label}
-      labelledBy={bare ? lineId : undefined}
+      label={bare ? t(`mark.tone.${tone}`) : label}
       bodyClassName={bare && !actions ? undefined : "flex flex-col gap-2 [overflow-wrap:anywhere]"}
       contentProps={{ "data-status-mark-popover": "" }}
       onClosed={handBackToHeading}
@@ -149,7 +159,7 @@ function PopoverMark({
     >
       {({ close }) => (
         <>
-          {bare ? <span id={lineId}>{label}</span> : children}
+          {bare ? (line ?? label) : children}
           {actions && <div className="flex justify-end">{actions(close)}</div>}
         </>
       )}

@@ -597,12 +597,11 @@ function ChangeView({
       const outside = presentation.hidden === "old" ? "viewer.change.outsideOld" : "viewer.change.outsideNew";
       return (
         <>
-          <FileNotice tone="warned" sentence={t(outside, { path: isolate(displayWirePath(presentation.repositoryPath)) })}>
-            <Message
-              id={outside}
-              params={{ path: <InlineReference monospace wrap>{displayWirePath(presentation.repositoryPath)}</InlineReference> }}
-            />
-          </FileNotice>
+          <FileNotice
+            tone="warned"
+            sentence={t(outside, { path: isolate(displayWirePath(presentation.repositoryPath)) })}
+            line={<Message id={outside} params={{ path: <InlineReference monospace wrap>{displayWirePath(presentation.repositoryPath)}</InlineReference> }} />}
+          />
           {shown.state === "present" && shown.body ? (
             // The side is shown alone because the other one cannot be reached, not as a side of a
             // comparison, so a Markdown one is offered as a document like any whole file.

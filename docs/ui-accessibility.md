@@ -315,7 +315,9 @@ needs an equivalent reachable another way; Close terminal in the panel's header 
 
 A panel that floats in from a button and leaves the rest of the window usable (the rail's account quota panel, and the
 popover of an error or warning mark) is a large tooltip with a body: one component (`Hint`, kind `popover`) gives both the same
-input logic. It is not a region: it is reached through its button, the way a menu is.
+input logic. It is not a region: it is reached through its button, the way a menu is. Its dialog is named by what the
+panel is (Quota, the mark's name, a tone's word for a mark of one line), never by the text it holds: VoiceOver reads a
+dialog's name and then its content as focus enters it, so a dialog named by its own text is read twice.
 
 **The input matrix**, by what the input can do:
 
@@ -627,14 +629,15 @@ the caller's hover). What shows follows the input of the interaction, not the
 device, so a touch-screen laptop or a tablet with a trackpad gets what the input it used answers:
 
 - a mouse hover and keyboard focus open the tooltip, as always; a mouse press opens nothing extra;
-- a touch or pen press opens the same content in a **touch popover**, where the shape allows it. The popover is drawn like the tooltip, from the one
-  definition: it carries HeroUI's own `tooltip` class (surface, padding, text size, width cap, word breaking, and the
-  dialog fills of `style.css`) and the same `control-fills`, rather than a copy of them. It is modal, as a popover is:
-  an outside tap or Escape closes it, and focus, which it takes, goes back to what held it. Being modal it hides its
-  trigger from assistive technology while open, so it is not linked to the trigger as a description, as the tooltip
-  is; its dialog is named by the trigger's name (or, for a mark with none, by the text itself). The tooltip is closed
-  and held back while it is open, as a pen can hover before it presses and an open tooltip would swallow Escape ahead
-  of the popover.
+- a touch or pen press opens the same content in a **touch popover**, where the shape allows it. The popover is drawn
+  like the tooltip, from the one definition: it carries HeroUI's own `tooltip` class (surface, padding, text size, width
+  cap, word breaking, and the dialog fills of `style.css`) and the same `control-fills`, rather than a copy of them. It
+  is modal, as a popover is: an outside tap or Escape closes it, and focus, which it takes, goes back to what held it.
+  Being modal it hides its trigger from assistive technology while open, so it is not linked to the trigger as a
+  description, as the tooltip is; its dialog is named by the trigger's name, or by the generic word Hint where the
+  trigger has none or its name is the tooltip's own text: a dialog is never named by the text it holds, which VoiceOver
+  would read twice as it takes focus. The tooltip is closed and held back while it is open, as a pen can hover before it
+  presses and an open tooltip would swallow Escape ahead of the popover.
 
 Whether a shape opens it is a parameter, not a guess. Recognising from the DOM or from props whether a trigger "is a
 button" is unreliable: a react-aria control hides its press handling in its own hooks, a mark's own trigger is a
@@ -985,17 +988,18 @@ No sentence of error text is written into the row.
 
 **A mark is always a popover, and never also a tooltip.** What an error or a warning carries can hold a button (Try
 again) and raw text to select, which a tooltip cannot, and one mark wiring both surfaces would put two floating things
-on one glyph; a mark whose content is one short line is the same popover with that line as its content, named by it,
-drawn on the **tooltip's surface** like every floating surface of the application. A mark with a body, a button or
-raw text is drawn on it too, its content laid out inside.
-The exception is a mark that draws a word beside its glyph and has nothing more to say: the word already says it on
-screen, so it stays the glyph and the word as plain text, with no button and no popover.
-The popover holds the reason in the application's own words, then the main remedy, any further explanation, then the
-raw text, then the recovery action (Try again, at the popover's trailing edge). The glyph is a button named for what
-failed, with no tooltip (the popover says everything one would). A note (an informational mark, circled `i`) is the
-same button and the same popover with nothing to press in it: marks of every tone side by side look alike, take the
-pointer alike, are each a tab stop and open the same way, so they differ only in glyph and colour. Glyphs per tone: circled `!` for danger,
-a triangle for a warning, circled `i` for a note.
+on one glyph. A mark whose content is one short line is the same popover with that line as its content, which may be
+drawn richer than the mark's plain-text name (a path as a reference). Its dialog is named by the tone's word (Error,
+Warning or Note), not by the line, which VoiceOver would otherwise read twice. It is drawn on the **tooltip's surface**
+like every floating surface of the application. A mark with a body, a button or raw text is drawn on it too, its content
+laid out inside. The exception is a mark that draws a word beside its glyph and has nothing more to say: the word
+already says it on screen, so it stays the glyph and the word as plain text, with no button and no popover. The popover
+holds the reason in the application's own words, then the main remedy, any further explanation, then the raw text, then
+the recovery action (Try again, at the popover's trailing edge). The glyph is a button named for what failed, with no
+tooltip (the popover says everything one would). A note (an informational mark, circled `i`) is the same button and the
+same popover with nothing to press in it: marks of every tone side by side look alike, take the pointer alike, are each
+a tab stop and open the same way, so they differ only in glyph and colour. Glyphs per tone: circled `!` for danger, a
+triangle for a warning, circled `i` for a note.
 
 The popover is `Hint` of kind `popover` ("A floating panel that does not take the window" has the input matrix): a
 mouse resting on the mark opens it without moving focus; **a mouse click opens nothing**; a touch or pen tap,
@@ -1023,14 +1027,15 @@ and the opposite key goes back, as along any row; Tab leaves the tree, as it doe
 is open again once it lists. A failure arriving while the folder is open, and Try again, take rows or the mark away,
 so focus that fell to the page or the tree goes to the folder's row.
 
-**The inline form** is the mark inside running text (a Markdown image that could not load, a formula that could not
-be drawn): the glyph takes the text's size, the trigger is a button whose box is square (sized from the glyph, so its
-round shape is a circle as everywhere else) with negative block margins that leave the line's height as it was, and a
-button is phrasing content, so valid inside a paragraph. It is a tab stop like any other mark, so a sighted keyboard user reaches the
-reason, which the tooltip it replaced never gave them; the document's links and text are untouched, the mark is one
-more stop, named by the sentence. Inside a link (a linked image that failed) the mark is drawn right after the anchor,
-not in it, so no button nests in a link and a press on the mark is not a press on the link. Its target is exempt
-from "Pointer target size" as inline text is. A note in running text is the same button.
+**The inline form** is the mark inside running text (a Markdown image that could not load, a formula that could not be
+drawn): the glyph takes the text's size, the trigger is a button whose box is square (sized from the glyph, so its round
+shape is a circle as everywhere else) with negative block margins that leave the line's height as it was, and a button
+is phrasing content, so valid inside a paragraph. It is a tab stop like any other mark, so a sighted keyboard user
+reaches the reason, which the tooltip it replaced never gave them; the document's links and text are untouched, the mark
+is one more stop, named by the sentence, and its popover is named by its tone's word. Inside a link (a linked image that
+failed) the mark is drawn right after the anchor, not in it, so no button nests in a link and a press on the mark is not
+a press on the link. Its target is exempt from "Pointer target size" as inline text is. A note in running text is the
+same button.
 
 ### References in copy use `InlineReference`
 

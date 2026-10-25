@@ -157,7 +157,8 @@ interface HoverPopoverTrigger {
  * - `trigger` draws the trigger from the wiring it is handed.
  * - `children` is the body, given a function that closes the surface, the form it is open in and the id of
  *   its dialog.
- * - `label`, or `labelledBy` for a body that names itself, names the dialog.
+ * - `label` names the dialog. It must not be the text the body holds, or a screen reader says it twice (the
+ *   dialog's name, then its content): a body of one line is named by what the line is about instead.
  * - `placement` and `offset` default to the tooltip's; `contentClassName` and `bodyClassName` style the
  *   surface and its body; `contentProps` adds `data-*` attributes (a marker for what watches presses
  *   outside itself).
@@ -167,7 +168,6 @@ interface HoverPopoverTrigger {
 export function PopoverHint({
   trigger,
   label,
-  labelledBy,
   placement,
   offset,
   contentClassName,
@@ -180,8 +180,7 @@ export function PopoverHint({
   children,
 }: {
   trigger: (wiring: HoverPopoverTrigger) => React.ReactElement;
-  label?: string;
-  labelledBy?: string;
+  label: string;
   placement?: React.ComponentProps<typeof Popover.Content>["placement"];
   offset?: number;
   contentClassName?: string;
@@ -244,7 +243,6 @@ export function PopoverHint({
     if (hovered && rested.current) return;
     hover.onMouseHoverChange(hovered);
   };
-  const naming = labelledBy ? { "aria-labelledby": labelledBy } : { "aria-label": label };
   return (
     // The popover root only supplies the panel's styling and the trigger's popup attributes: the state is
     // held here, since the trigger's own press would toggle it where this opens by the kind of press.
@@ -280,11 +278,11 @@ export function PopoverHint({
           // Focusable but no tab stop: a mouse press on the panel's text has to leave focus in the panel, or a
           // focus-containing dialog it floats over (react-aria's `FocusScope contain`) takes focus back a frame
           // later and the drag-selection collapses.
-          <div ref={panel} id={popupId} role="dialog" tabIndex={-1} {...naming} aria-modal="false" className={`outline-none ${bodyClassName ?? ""}`} {...hover.panelProps}>
+          <div ref={panel} id={popupId} role="dialog" tabIndex={-1} aria-label={label} aria-modal="false" className={`outline-none ${bodyClassName ?? ""}`} {...hover.panelProps}>
             {children({ close, form, popupId })}
           </div>
         ) : (
-          <Dialog id={popupId} {...naming} className={`outline-none ${bodyClassName ?? ""}`}>
+          <Dialog id={popupId} aria-label={label} className={`outline-none ${bodyClassName ?? ""}`}>
             {children({ close, form, popupId })}
           </Dialog>
         )}

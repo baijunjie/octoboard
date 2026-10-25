@@ -187,6 +187,15 @@ for (const placement of PLACEMENTS) {
   });
 }
 
+it("names the touch popover of the badge in focus mode's header by a generic word, not by the sentence it holds", () => {
+  const badge = PLACEMENTS[1].mount(gitStatusOf(web.id, { ahead: 1 }), "git-branch");
+  press(badge, "touch");
+  const popover = openPopover();
+  expect(popover?.textContent).toBe("Branch main, 1 commit ahead");
+  expect(popover?.getAttribute("aria-label")).toBe("Hint");
+  expect(popover?.hasAttribute("aria-labelledby")).toBe(false);
+});
+
 it("names the badge in focus mode's header itself, once, with the sentence its tooltip carries", () => {
   const [, header] = PLACEMENTS;
   const badge = header.mount(gitStatusOf(web.id, { ahead: 1 }), "git-branch");
