@@ -1,5 +1,5 @@
 import { Modal, Tabs } from "@heroui/react";
-import { Bell, FileCog, FolderCheck, GitBranch, GitFork, Info, Keyboard, KeyRound, Settings2, ShieldCheck, UserCheck, type LucideIcon } from "lucide-react";
+import { Bell, FileCog, FolderCheck, GitBranch, GitFork, Info, Keyboard, KeyRound, Settings2, ShieldCheck, ShieldUser, type LucideIcon } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { TitledControl } from "../components/TitledControl";
@@ -40,7 +40,7 @@ const SECTIONS = [
   { id: "accounts", label: "settings.section.accounts", Icon: KeyRound, Content: AgentAccountsSection, stickyHeadingHeight: AGENT_STRIP_HEIGHT },
   { id: "trusted-folders", label: "settings.section.trustedFolders", Icon: FolderCheck, Content: TrustedFoldersSection },
   { id: "permissions", label: "settings.section.permissions", Icon: ShieldCheck, Content: PermissionsSection },
-  { id: "agent-permissions", label: "settings.section.agentPermissions", Icon: UserCheck, Content: AgentPermissionsSection },
+  { id: "agent-permissions", label: "settings.section.agentPermissions", Icon: ShieldUser, Content: AgentPermissionsSection },
   { id: "notifications", label: "settings.section.notifications", Icon: Bell, Content: NotificationsSection },
   { id: "shortcuts", label: "settings.section.shortcuts", Icon: Keyboard, Content: ShortcutsSection, stickyHeadingHeight: SHORTCUT_GROUP_HEADING_HEIGHT },
   { id: "configuration", label: "settings.section.configuration", Icon: FileCog, Content: ConfigurationSection },
