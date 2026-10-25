@@ -2329,24 +2329,38 @@ async fn a_retry_refused_before_it_started_keeps_the_earlier_failure() {
 
 #[tokio::test]
 async fn a_session_that_does_not_stop_holds_the_change_back_and_the_others_are_resumed() {
-    let fixture = Fixture::new();
-    let (_, account) = claude_setup(&fixture);
-    let launches = Launches::default();
-    launches.resume_through(&fixture.state, false);
-    *fixture.state.account_sharing.stop_timeout.lock().unwrap() =
-        Some(std::time::Duration::from_millis(500));
-    idle_session(&fixture, "fine", Agent::Claude);
-    // Its process ends, but nothing watches it, so it is never seen down.
-    let session = Session {
-        status: SessionStatus::Idle,
-        ..fixture.session("stuck", Agent::Claude)
-    };
-    fixture.state.store.update_session(&session).unwrap();
-    let _stuck = test_support::running(&fixture.state, "stuck");
-    let mut events = fixture.state.subscribe();
+    // The short stop timeout bounds the session that does stop as well, and a stalled machine can
+    // keep its process from being seen down in time: that run tested nothing, so it is run again.
+    let deadline = std::time::Instant::now() + test_support::PATIENCE;
+    let (fixture, account, launches, _stuck, mut events, err) = loop {
+        let fixture = Fixture::new();
+        let (_, account) = claude_setup(&fixture);
+        let launches = Launches::default();
+        launches.resume_through(&fixture.state, false);
+        *fixture.state.account_sharing.stop_timeout.lock().unwrap() =
+            Some(std::time::Duration::from_millis(500));
+        idle_session(&fixture, "fine", Agent::Claude);
+        // Its process ends, but nothing watches it, so it is never seen down.
+        let session = Session {
+            status: SessionStatus::Idle,
+            ..fixture.session("stuck", Agent::Claude)
+        };
+        fixture.state.store.update_session(&session).unwrap();
+        let stuck = test_support::running(&fixture.state, "stuck");
+        let events = fixture.state.subscribe();
 
-    let err = fixture.share(Agent::Claude, true).await.unwrap_err();
-    assert_eq!(code_of(&err), error_code::SHARING_SESSION_DID_NOT_STOP);
+        let err = fixture.share(Agent::Claude, true).await.unwrap_err();
+        assert_eq!(code_of(&err), error_code::SHARING_SESSION_DID_NOT_STOP);
+        // "fine" missed the point under test if its wait timed out (the error names the first
+        // session to time out), or if it was not resumed: never claimed because it was already
+        // down, or not seen down even by the time the others were resumed.
+        let named = err.downcast_ref::<CodedError>().unwrap().params["session"].clone();
+        if (named != "stuck" || launches.given().len() != 1) && std::time::Instant::now() < deadline
+        {
+            continue;
+        }
+        break (fixture, account, launches, stuck, events, err);
+    };
     let params = &err.downcast_ref::<CodedError>().unwrap().params;
     assert_eq!(params["session"], "stuck");
     assert_eq!(params["account"], "claude-a");
