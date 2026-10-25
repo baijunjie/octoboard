@@ -1507,7 +1507,7 @@ export const en = {
   "dialog.sessionRequest.switch.title": "Switch account?",
   "dialog.sessionRequest.switch.confirm": "Switch account",
   "dialog.sessionRequest.question.switchAndContinue":
-    "{requester} asks to switch its session {session} to the {agent} account {account}. The session keeps its conversation. A turn in progress is cut off and continued automatically after the switch, as is a turn that stopped on a usage limit. You can change the account, model and reasoning effort before you confirm.",
+    "{requester} asks to switch its session {session} to the {agent} account {account}. The session keeps its conversation. A turn in progress is cut off, and continued automatically after the switch where that is safe. You can change the account, model and reasoning effort before you confirm.",
   "dialog.sessionRequest.switch.account": "Switch to",
   "dialog.sessionRequest.switch.current": "Current",
   "dialog.sessionRequest.switch.archived": "The session is archived, so its account cannot be switched.",

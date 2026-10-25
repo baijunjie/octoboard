@@ -164,8 +164,9 @@ The confirmation is titled "Switch account?", with two buttons, **Refuse** and *
 the requesting session, as a request for a session names it (see "The confirmation dialog" in
 `docs/product/session-requests.md`), then the session to switch, by its displayed name, and the agent and the account
 the call asked for; it says that the session keeps its conversation, that a turn in progress is cut off and continued
-automatically after the switch, as is a turn that stopped on a usage limit (see "Continuing after a switch" below), and
-that the user can change the account, model and reasoning effort before confirming. A form follows:
+automatically after the switch where that is safe, and that the user can change the account, model and reasoning effort
+before confirming. The sentence on continuing is a general one: it lists neither which turns are continued, a turn
+stopped on a usage limit included, nor the exceptions (see "Continuing after a switch" below). A form follows:
 
 - **Switch to** — the accounts of the session's own agent, by the rules of the row's Switch account submenu (see
   "Session rows" in `docs/product/sidebar-session-rows.md`): the default account first, the account the session is on
