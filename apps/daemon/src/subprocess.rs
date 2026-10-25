@@ -136,16 +136,27 @@ impl Leader {
 /// Like it, a command whose output is still held open by something it started after it has
 /// exited fails, its group killed, rather than returning output that may stop short.
 pub fn run_with_timeout(command: &mut Command, timeout: Duration) -> Result<Output> {
-    run_unbounded(command, timeout, Reach::ProcessGroup)
+    run_unbounded(command, timeout, Reach::ProcessGroup, None)
+}
+
+/// [`run_with_timeout`] with `input` written to the command's stdin, which is closed after it.
+/// For a command that is handed a list on stdin and answers on stdout (`git cat-file --batch`).
+pub fn run_with_input(command: &mut Command, input: Vec<u8>, timeout: Duration) -> Result<Output> {
+    run_unbounded(command, timeout, Reach::ProcessGroup, Some(input))
 }
 
 /// [`run_with_timeout`] for an agent CLI: it reaches the command's whole session
 /// ([`Reach::Session`]) rather than its process group.
 pub fn run_agent_with_timeout(command: &mut Command, timeout: Duration) -> Result<Output> {
-    run_unbounded(command, timeout, Reach::Session)
+    run_unbounded(command, timeout, Reach::Session, None)
 }
 
-fn run_unbounded(command: &mut Command, timeout: Duration, reach: Reach) -> Result<Output> {
+fn run_unbounded(
+    command: &mut Command,
+    timeout: Duration,
+    reach: Reach,
+    input: Option<Vec<u8>>,
+) -> Result<Output> {
     static NEVER: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     let bounds = Bounds {
         timeout,
@@ -153,7 +164,7 @@ fn run_unbounded(command: &mut Command, timeout: Duration, reach: Reach) -> Resu
         stderr_limit: usize::MAX,
         reach,
     };
-    run_bounded(command, &bounds, &NEVER).map_err(|failure| match failure {
+    run_bounded_with(command, &bounds, &NEVER, input).map_err(|failure| match failure {
         BoundedFailure::Failed(err) => err,
         other => anyhow::anyhow!("{other}"),
     })
@@ -338,14 +349,31 @@ pub fn run_bounded(
     bounds: &Bounds,
     cancel: &std::sync::atomic::AtomicBool,
 ) -> std::result::Result<Output, BoundedFailure> {
+    run_bounded_with(command, bounds, cancel, None)
+}
+
+/// [`run_bounded`] with `input`, when there is any, written to the command's stdin on a thread of
+/// its own, so that a command which answers before it has read it all cannot block the deadline.
+fn run_bounded_with(
+    command: &mut Command,
+    bounds: &Bounds,
+    cancel: &std::sync::atomic::AtomicBool,
+    input: Option<Vec<u8>>,
+) -> std::result::Result<Output, BoundedFailure> {
     use std::sync::atomic::Ordering;
 
     let Spawned {
         mut leader,
+        stdin,
         stdout: stdout_rx,
         stderr: stderr_rx,
-        ..
-    } = spawn_bounded(command, bounds, false).map_err(BoundedFailure::Failed)?;
+    } = spawn_bounded(command, bounds, input.is_some()).map_err(BoundedFailure::Failed)?;
+    if let (Some(mut stdin), Some(input)) = (stdin, input) {
+        // A broken pipe means the command stopped reading; its exit status tells the rest.
+        thread::spawn(move || {
+            let _ = stdin.write_all(&input);
+        });
+    }
 
     let deadline = Instant::now() + bounds.timeout;
     let mut stdout = Vec::new();
@@ -612,6 +640,14 @@ mod tests {
         }
         let outcome = run_bounded(&mut command, &bounds, &cancel);
         Some((outcome, read_pid_file(&pid_file)?))
+    }
+
+    #[test]
+    fn input_larger_than_the_pipe_reaches_the_command_whole() {
+        let input = vec![b'x'; 1 << 20];
+        let output =
+            run_with_input(&mut Command::new("/bin/cat"), input.clone(), PATIENCE).unwrap();
+        assert_eq!(output.stdout, input);
     }
 
     #[test]

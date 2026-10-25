@@ -24,6 +24,19 @@
 - [ ] Add the prepared-stage call to the dispatcher, then the skip conditions, then the fail-open paths.
 - [ ] Settle the Open point on recognizing a project's own gate.
 
+## Handoff
+
+- The gate is `octoboardd revert-gate <state> [--guard <branch>]... [--target <branch> <target-branch>]...
+  [--fork-point <branch> <commit>]...`, with the hook's ref update lines on stdin: `--guard` names a resident guarded
+  branch, each `--target` names a branch and its recorded target branch (every target named is guarded), each
+  `--fork-point` a branch and its recorded fork point. It exits 3 to reject, with the message for the agent on stderr,
+  and 0 otherwise, including when it fails itself; treat only 3 as a rejection. Only `prepared` is checked.
+  `REVERT_GATE_SKIP=1` skips it, as in the per-clone gate.
+- Only the `reference-transaction` path was ported: the per-clone gate's `pre-push` check of a branch pushed for a PR
+  against its target branch's remote tip has no built-in counterpart.
+- Each `git` it runs goes through the daemon's bounded run, which adds about 10 ms of polling per call (around 0.1 s
+  for a rejecting move in a small repository); measure it on a real repository when wiring it in.
+
 ## Notes for the developer
 
 - **Reusable capabilities**: the hook dispatchers and the `GIT_CONFIG_COUNT` slot they are injected through; the

@@ -57,6 +57,7 @@ mod record_titles;
 mod record_watch;
 mod relocate;
 mod reporting;
+mod revert_gate;
 mod rfc3339;
 mod ringbuf;
 mod rollout;
@@ -127,6 +128,10 @@ enum Command {
         #[arg(last = true)]
         refs: Vec<std::ffi::OsString>,
     },
+    /// Decide whether a `reference-transaction` hook's ref updates undo changes already merged
+    /// into a guarded branch; exits 3 to reject. It is meant to be started by the session's
+    /// `reference-transaction` hook dispatcher, not run by hand.
+    RevertGate(revert_gate::Args),
     /// Report a Claude Code session's context window and run the user's own status line. This is
     /// the status line the Claude Code adapter injects; it is not meant to be run by hand.
     StatusLine {
@@ -192,6 +197,11 @@ fn main() -> Result<()> {
     {
         git_ref_mode::run(session, *port, refs);
         return Ok(());
+    }
+
+    // Runs synchronously inside the user's git, which waits for its exit status.
+    if let Some(Command::RevertGate(args)) = &cli.command {
+        std::process::exit(revert_gate::run(args));
     }
 
     // On the path of every status line update, and its stdout is the user's status line's.
