@@ -100,7 +100,7 @@ const asRows = [...items, ...commitRows];
 it.each([
   ["directory", directoryKey("staged", "src"), items, "tree"],
   ["commit", commitKey("3333333333"), commitRows, "flat"],
-] as const)("keeps a %s's shared chevron in the collection's expansion slot", (_kind, key, rows, layout) => {
+] as const)("keeps a %s's chevron in the collection's expansion slot", (_kind, key, rows, layout) => {
   function Changes() {
     const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
     return <ChangeTree items={rows} selected={undefined} label="Changes" onOpen={() => {}} listRef={() => {}} layout={layout} collapsed={collapsed} onCollapsedChange={setCollapsed} />;
@@ -108,7 +108,6 @@ it.each([
   const container = mountRows(<Changes />);
   const parent = row(container, key);
   const chevron = parent.querySelector<HTMLButtonElement>("[slot=chevron]")!;
-  expect(chevron.classList.contains("app-button--xs")).toBe(true);
   expect(chevron.tabIndex).toBe(-1);
   expect(chevron.getAttribute("aria-labelledby")).toBe(`${chevron.id} ${parent.id}`);
   act(() => parent.focus());

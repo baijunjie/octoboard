@@ -86,9 +86,8 @@ application buttons below. These are:
 - the report panel's previous-page and next-page buttons;
 - a right pane panel's Close panel button and the Terminal panel's Maximize panel / Restore panel size (see "A
   panel's header" in `docs/product/right-pane-panels.md`);
-- the project pane's Refresh and Collapse all folders buttons, a folder's arrow button in its file tree and in the Git mode's change list, and a
-  commit row's arrow button there ("Expand" / "Collapse") (see `docs/product/project-pane.md`), and the file viewer's
-  Previous file and Next file buttons (see `docs/product/file-viewer.md`);
+- the project pane's Refresh and Collapse all folders buttons (see `docs/product/project-pane.md`), and the file
+  viewer's Previous file and Next file buttons (see `docs/product/file-viewer.md`);
 - the copy buttons — the file viewer's Copy path and the Git mode's Copy worktree path, on the change list's line
   naming the worktree — whose tooltip, and the name announced with it, turns to the copied wording after a press (see
   "Copy buttons" below);
@@ -111,6 +110,12 @@ The rail's **Account quota** button is an exception: it has **no tooltip**, on h
 the mouse on it floats its panel in instead (see "Opening the panel" in `docs/product/account-quotas.md`),
 and its accessible name, which states the selected session's quota when the button shows one, is described in "The
 selected session's quota indicator" in `docs/product/account-quotas.md`.
+
+The **expand arrow** before a folder's row in the Files mode's tree and in the Git mode's change list, and before a
+commit row there, is an exception too: it has **no tooltip** and no hover fill of its own, being a bare arrow glyph.
+The row it sits on tints under the pointer, and a press anywhere on that row expands or folds it as the arrow does (see
+"Rows and the keyboard" in `docs/product/project-pane.md`). Assistive technology names the arrow "Expand" or
+"Collapse", followed by the row's name.
 
 The right pane's resize grips — its width handle and the handles between its panels — have a tooltip too, a short
 "Resize" shown beside the grip only while a mouse pointer rests on the handle, not on keyboard focus; the name

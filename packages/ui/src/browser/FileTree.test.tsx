@@ -51,7 +51,7 @@ it("tints the selected file's row and names it as selected", () => {
 });
 
 // react-aria's own label for the expand control (in its chevron slot) is its
-// translation of "Expand" ("扩展" in zh-CN), which is not the word the tooltip uses; the label comes
+// translation of "Expand" ("扩展" in zh-CN), which is not the app's word for it; the label comes
 // from the app's catalog, and react-aria's aria-labelledby (the control, then the row) appends the
 // folder's name.
 it("labels a directory's expand control from the catalog, by whether the directory is open", () => {
@@ -71,7 +71,7 @@ it("labels a directory's expand control from the catalog, by whether the directo
   expect(chevron().getAttribute("aria-labelledby")).toBe(`${chevron().id} ${container.querySelector("[role=row]")!.id}`);
 });
 
-it("keeps shared chevron presses in the tree's expansion and row-focus model", async () => {
+it("keeps chevron presses in the tree's expansion and row-focus model", async () => {
   const directory: TreeNode = {
     type: "directory", key: rowKey("src"), path: "src",
     entry: { name: "src", kind: "directory", size: 0, version: "v1", target: null },
@@ -85,9 +85,6 @@ it("keeps shared chevron presses in the tree's expansion and row-focus model", a
   const row = (path: string) => container.querySelector<HTMLElement>(`[role=row][data-key="${rowKey(path)}"]`)!;
   const folder = row("src");
   const chevron = folder.querySelector<HTMLButtonElement>("[slot=chevron]")!;
-  expect(chevron.classList.contains("app-button--xs")).toBe(true);
-  expect(chevron.classList.contains("button--ghost")).toBe(true);
-  expect(chevron.classList.contains("button--icon-only")).toBe(true);
   expect(chevron.tabIndex).toBe(-1);
   act(() => folder.focus());
   press(folder, "Enter");

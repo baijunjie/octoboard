@@ -337,8 +337,8 @@ The rows take the keyboard as the Files mode's tree does (see "Rows and the keyb
 through the rows alone, typing a name's first letters moves to one, Right and Left open and close a folder (the other
 way round under a right-to-left language), and Enter opens a change or opens and closes a folder; Space does nothing
 on a folder's row. A folder's row tells
-assistive technology whether it is open, and its arrow button is named Expand or Collapse (see "Tooltips on icon-only
-controls" in `docs/product/labels-and-tooltips.md`).
+assistive technology whether it is open, and its arrow, which has no tooltip, is named Expand or Collapse (see
+"Tooltips on icon-only controls" in `docs/product/labels-and-tooltips.md`).
 
 A change under a folded folder has no row, and it is the rows that the viewer moves through (see "Moving between
 changes" in `docs/product/project-pane-git-change-viewer.md`).

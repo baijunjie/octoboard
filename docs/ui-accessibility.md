@@ -234,13 +234,14 @@ Every button is HeroUI's `Button`. A native `<button>` is allowed only where a c
 cannot be, with the reason in a comment there. A hand-built `role="button"` element needs `tabIndex={0}` and its own
 Enter / Space handling.
 
-Files and Git tree chevrons use the shared compact Button with `slot="chevron"`, keeping the collection's
-expansion, focus and Tab exclusion. A whole row runs its action on Enter and expands or folds with Left / Right
-(reversed under RTL); a pointer press on the chevron expands or folds it too. React Aria 3.52.1's
-`useSelectableItem` maps Enter to the row's action (`onAction`, which includes the tree's expansion) and Space to
-selection; selection is disabled in these trees, so Space on a row does nothing. Keep that supported collection
-behavior rather than translating Space locally. The custom Git section-heading band retains its documented primitive
-exception and acts on both Enter and Space.
+Files and Git tree chevrons are also an exception to HeroUI's `Button`: they are React Aria's `Button` in
+`slot="chevron"`, drawn as a bare glyph with no hover fill, press shrink or tooltip, keeping the collection's
+expansion, focus and Tab exclusion (their target size is under "Pointer target size"). A whole row runs its action on
+Enter and expands or folds with Left / Right (reversed under RTL); a pointer press on the chevron expands or folds it
+too. React Aria 3.52.1's `useSelectableItem` maps Enter to the row's action (`onAction`, which includes the tree's
+expansion) and Space to selection; selection is disabled in these trees, so Space on a row does nothing. Keep that
+supported collection behavior rather than translating Space locally. The custom Git section-heading band retains its
+documented primitive exception and acts on both Enter and Space.
 
 A button that is unavailable for a reason the user needs to learn (the quick-create "+" while every account of its agent
 is used up) is not natively disabled, which would take it out of the Tab order and keep its tooltip from ever opening:
@@ -573,7 +574,7 @@ same text. Which control's tooltip repeats its name and which one's is the short
 the "Tooltips on icon-only controls" section of `docs/product/labels-and-tooltips.md`; `ActionMenu` gives its trigger a
 name of that shape by default. The exception is a button whose hover opens a floating panel that shows what
 its tooltip would say — the rail's account quota button (above), a status mark, the help tip's "?": it carries only
-its accessible name.
+its accessible name. So does a Files or Git tree chevron, whose whole row does what it does (see "Buttons").
 
 A tap does not open that tooltip, and on such a control it must not: a tap on an icon-only button or a menu trigger runs
 its action, so `TitledControl` has no touch popover. A control whose only action is to show its text is a popover hint
@@ -1496,7 +1497,9 @@ row's own target instead have the popover off.
 Neither exception in the criterion is easy to rely on here. *Spacing* needs a 24-pixel circle centred on the target to
 touch no other target, which a small control placed over a larger one (a delete badge on a corner) fails by
 construction. *Equivalent* needs the same action to be available from another control on the same view, which a lone
-affordance does not have.
+affordance does not have. The Files and Git tree chevrons are the one case that relies on *Equivalent*: a press
+anywhere on a folder or commit row expands or folds it, as the chevron does, so the 16-pixel chevron takes no 24-pixel
+hit box.
 
 A Terminal panel tab's close mark is drawn at 16 and hit at 24 through such an `::after`. It is a pointer-only
 shortcut, hidden from assistive technology, with its tooltip anchored beside it since a tab cannot hold a trigger; the

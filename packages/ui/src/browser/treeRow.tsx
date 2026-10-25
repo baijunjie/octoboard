@@ -1,9 +1,8 @@
 import { ChevronDown, ChevronRight, Folder, FolderOpen, FolderSymlink } from "lucide-react";
 import React from "react";
+import { Button } from "react-aria-components";
 
-import { Button } from "../components/Button";
 import { FadeOverflow } from "../components/FadeOverflow";
-import { TitledControl } from "../components/TitledControl";
 import { useT } from "../i18n/react";
 
 /** Every row, of the Files tree and of the Git mode's changes tree, is one line of this
@@ -11,20 +10,20 @@ import { useT } from "../i18n/react";
  * position alone. It includes `RowContent`'s `h-7` and the row's `my-0.5` margins. */
 export const ROW_HEIGHT = 32;
 
-/** The control that opens or closes a row's children, kept separate from the row's icon. */
+/** The control that opens or closes a row's children, kept separate from the row's icon. It is a bare
+ * glyph with no tooltip or hover fill: the row's own hover tint marks it, and a press anywhere on the
+ * row does the same. */
 export function ExpandChevron({ isExpanded }: { isExpanded: boolean }): React.ReactElement {
   const t = useT();
-  const toggleTitle = isExpanded ? t("browser.tree.collapse") : t("browser.tree.expand");
   return (
-    <TitledControl title={toggleTitle}>
-      {/* React Aria appends the row's name through aria-labelledby. Its default translation
-          of Expand differs from the tooltip, so both use the app's catalog. */}
-      <Button slot="chevron" aria-label={toggleTitle} size="xs" variant="ghost" isIconOnly className="shrink-0">
-        {isExpanded
-          ? <ChevronDown aria-hidden="true" className="size-3.5" />
-          : <ChevronRight aria-hidden="true" className="size-3.5 rtl:-scale-x-100" />}
-      </Button>
-    </TitledControl>
+    // React Aria's Button, not HeroUI's, which would add a hover fill and press shrink. React Aria
+    // appends the row's name through aria-labelledby; its default translation of Expand is replaced
+    // with the app's own word from the catalog.
+    <Button slot="chevron" aria-label={isExpanded ? t("browser.tree.collapse") : t("browser.tree.expand")} className="flex size-4 shrink-0 items-center justify-center text-app-muted outline-none">
+      {isExpanded
+        ? <ChevronDown aria-hidden="true" className="size-3.5" />
+        : <ChevronRight aria-hidden="true" className="size-3.5 rtl:-scale-x-100" />}
+    </Button>
   );
 }
 
