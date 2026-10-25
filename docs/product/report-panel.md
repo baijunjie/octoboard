@@ -27,6 +27,23 @@ Pushing a page keeps it and moves the panel to it. Nothing else in Octoboard sho
 announces one: a page pushed while the user was looking at another session is simply there in the
 panel when they come back to the console session.
 
+## Reading back the pages pushed
+
+The console session reads back the pages it has pushed with its `list_pages` tool, offered to console sessions only,
+as `show_page` is. It reads only the caller's own pages, the same ones its report panel pages through: another console
+session's pages are no more readable to it than they are in that session's panel.
+
+- Without arguments it answers with `pages`, every page the caller pushed, oldest first, each as `page` (its id, as
+  `show_page` returned it), `created_at` (milliseconds since the epoch), `html_bytes` (the size of its HTML in bytes)
+  and `title` (the text of its `<title>`, with runs of whitespace collapsed to one space; `null` when it has none or
+  only a blank one). The HTML itself is left out.
+- With `page`, a page's id, it answers with that one page in full: `page`, `created_at`, `title` and `html`. An id
+  that is not one of the caller's pages — another session's included — is refused, the same way as an id that names
+  no page, so the answer does not reveal that the page exists.
+
+It is how a console session finds the id of an earlier page, which tells a form submission from that page apart from
+one from another, and builds on what an earlier page showed.
+
 ## Paging through the history
 
 **Every page ever pushed is kept.** Pages belong to the console session that pushed them and are deleted with it,

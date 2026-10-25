@@ -7,21 +7,24 @@ archives of any console.
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `get_session` | `session` | The record of any session, of any console — status, title, agent, whether it is a console session, its console and project, which session owns it and whether that owner is a console session or a project session (or that it is unbound), whether it is the caller's, timestamps, its account, the model and effort it is seen running with, whether it is pinned or locked, and the names of the branches it is responsible for — plus a tail of what it has printed. |
-| `list_sessions` | — | The running sessions other than the caller, in every console and project. See `docs/product/information-between-sessions.md`. |
+| `get_session` | `session`, `output_bytes?` | The record of any session, of any console — status, title, agent, whether it is a console session, its console and project, which session owns it and whether that owner is a console session or a project session (or that it is unbound), whether it is the caller's, timestamps, its account, the model and effort it is seen running with, whether it is pinned or locked, and the names of the branches it is responsible for — plus a tail of what it has printed (see "Session records" below). |
+| `list_sessions` | `console?`, `project?`, `owner?`, `yours?` | The running sessions other than the caller, in every console and project, optionally narrowed. See `docs/product/information-between-sessions.md`. |
 | `read_session_history` | `session`, `limit?`, `before?` | What any session's conversation held, a page at a time from the latest. See "Reading a session's history" below. |
 | `get_session_branches` | `session?` | The git branches any session is responsible for, each with its project and worktree. See "Reading the branches a session is responsible for" in `docs/product/branch-responsible-session.md`. |
 | `list_agent_models` | `agent`, `account?` | The models an agent offers and the reasoning-effort levels of each. See "Reading the models an agent offers" below. |
 | `list_consoles` | — | Every console, each as `console` (its id), `name` and `yours` (whether it is the caller's own console). The id, or a name that names one console, is what a `console` argument takes. |
 | `list_projects` | `console?` | The projects of a console: the caller's own in full, another's only as far as needed to target one of its projects. See "Listing a console's projects" below. |
 | `list_archived` | `project` | The archived sessions of any project of any console, whoever owns them, each with its owner. The project is named by its id, in any console, or by its name — looked for among the caller's own console's projects first, else among every console's; a name that names more than one project is refused. |
-| `get_account_quotas` | `agent?` | Each account's plan quota. See "Reading quotas from a session" in `docs/product/account-quotas.md`. |
+| `get_account_quotas` | `agent?`, `refresh?` | Each account's plan quota, optionally read again first. See "Reading quotas from a session" in `docs/product/account-quotas.md`. |
 
 The reads are not narrowed by role because sessions of any kind can work in the same project, and so the same working
 directory, at once — two console sessions can dispatch into it, say — and one that could not see the others' sessions
-would collide with them. What stays narrower is a read of settings: `get_project` is a project session's read of its own
-project (see `docs/product/agent-settings-tools.md`), and `get_console` and `get_settings` are the console session's
-(see "The console session's tools" in `docs/product/hub-orchestration.md`). What a session may do to another is
+would collide with them. That holds for a bound session as much as for one that can own sessions, so a bound session
+is offered every read too, at the cost of a few more tool descriptions in its context. What stays narrower is a read of
+settings — `get_project` is a project session's read of its own project (see `docs/product/agent-settings-tools.md`),
+and `get_console` and `get_settings` are the console session's (see "The console session's tools" in
+`docs/product/hub-orchestration.md`) — and `list_pages`, a console session's read of the report panel pages it pushed
+itself (see "Reading back the pages pushed" in `docs/product/report-panel.md`). What a session may do to another is
 narrower too (see "Which sessions an owner drives" in `docs/product/hub-orchestration.md`). The tool descriptions, the
 console session's instructions and every project session's role description tell it that a session it does not own is
 somebody else's and is to be left alone, whatever it can read of it.
@@ -92,9 +95,12 @@ in `docs/product/model-and-reasoning-effort.md`.
 
 ## Session records
 
-`get_session` returns at most 8 KiB of the session's most recent output, with terminal escape
+`get_session` returns the session's most recent output in `recent_output`, with terminal escape
 sequences and cursor-control bytes stripped and runs of blank lines collapsed, so it is readable
-prose rather than a rendered frame. For a session whose process has ended, an archived or
+prose rather than a rendered frame. How much is set by `output_bytes`, a whole number from 1 to 65536 (64 KiB),
+counted in bytes of the raw output before anything is stripped; left out, it is 8192 (8 KiB). A value outside those
+bounds, or one that is not a whole number, is refused rather than clamped, so a caller is never left believing it read
+more than it did. Output shorter than what is asked for is returned whole. For a session whose process has ended, an archived or
 interrupted one, that is the output the daemon kept when the process ended, so the field reads the
 same whether the session is running or not. It is `null` only where the daemon never kept any
 output — no process of the session has printed anything yet, it ended with the daemon killed
@@ -129,8 +135,8 @@ folder-trust confirmation that needs the user, a Codex action title or a screen 
 whatever its agent last reported (see "What the statuses are derived from" in `docs/product/sessions.md`), and one that
 a change of its account's sharing has ended and is about to resume reads `starting` (see "When a change is carried out"
 in `docs/product/sharing-the-default-configuration.md`). Each record also carries `queued_messages` and `writes_held`,
-which say how many messages are queued for the session and what keeps them from being written whatever its `status`
-reads (see "Messages held until a session can take them" in `docs/product/message-delivery.md`).
+which say how many messages are waiting to be written into the session — information kept for an interrupted session
+until its resume included — and what keeps them from being written whatever its `status` reads (see "Messages held until a session can take them" in `docs/product/message-delivery.md`).
 
 Each record also carries the facts the tools that act on a session depend on, so a caller can check them beforehand:
 

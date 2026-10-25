@@ -629,6 +629,70 @@ async fn messages_for_the_original_during_a_handoff_are_forwarded_to_the_receivi
     );
 }
 
+/// Information kept for an interrupted original, which the archive that ends the handoff would
+/// drop with the session, is forwarded to the receiving session and no longer kept.
+#[tokio::test]
+async fn information_kept_for_an_interrupted_original_goes_to_the_receiving_session() {
+    let fixture = Fixture::new("kept-info");
+    fixture
+        .state
+        .store
+        .insert_session(&session("original", true, "interrupted", None, false))
+        .unwrap();
+    fixture
+        .state
+        .store
+        .add_pending_info("original", "kept before the handoff")
+        .unwrap();
+
+    let receiving = fixture.hand_off("original").await.unwrap();
+
+    fixture.output_of(&receiving.id, "kept before the handoff");
+    assert!(fixture
+        .state
+        .store
+        .pending_info("original")
+        .unwrap()
+        .is_empty());
+    assert_eq!(fixture.stored("original").status, SessionStatus::Archived);
+}
+
+/// A kept message that a resume already put on the original's queue is forwarded once, in the
+/// queue's order, and one that is only in the store follows it.
+#[tokio::test]
+async fn kept_information_that_is_also_queued_is_forwarded_once() {
+    let fixture = Fixture::new("kept-and-queued");
+    fixture.run(session("original", true, "idle", None, false));
+    let queued = fixture
+        .state
+        .store
+        .add_pending_info("original", "kept and queued")
+        .unwrap();
+    fixture
+        .state
+        .queue_kept_message("original", "kept and queued", queued);
+    fixture
+        .state
+        .store
+        .add_pending_info("original", "kept only")
+        .unwrap();
+
+    let receiving = fixture.hand_off("original").await.unwrap();
+
+    let output = fixture.output_of(&receiving.id, "kept only");
+    assert_eq!(output.matches("kept and queued").count(), 1, "{output}");
+    assert!(
+        output.find("kept and queued") < output.find("kept only"),
+        "{output}"
+    );
+    assert!(fixture
+        .state
+        .store
+        .pending_info("original")
+        .unwrap()
+        .is_empty());
+}
+
 /// A handoff that fails before the receiving session has started releases the hold: what was
 /// queued meanwhile is written to the original as usual.
 #[tokio::test]

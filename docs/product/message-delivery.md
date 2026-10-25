@@ -59,9 +59,12 @@ when it clears, delivery resumes if the last hook-reported status permits it (se
 `docs/product/sessions.md`).
 
 A message for a session with no process running is refused outright: a resume starts the agent at
-its prompt and replays nothing. Anything still queued when a session's process ends goes with it, unless the session
-is being handed off to another agent, whose queue is kept for the session that takes its place (see
-"Messages for the original during a handoff" in `docs/product/handing-off-sessions.md`).
+its prompt and replays nothing. The one exception is information shared with an interrupted session, which is kept
+until the session is resumed (see "Information for an interrupted session" in
+`docs/product/information-between-sessions.md`). Anything still queued when a session's process ends goes with it,
+unless the session is being handed off to another agent, whose queue is kept for the session that takes its place (see
+"Messages for the original during a handoff" in `docs/product/handing-off-sessions.md`), or it is information kept for
+an interrupted session, which stays kept for the next resume.
 
 **Messages are also held while a session's trust confirmation may be up.** A message's trailing Enter would answer
 the agent's own folder-trust confirmation (see `docs/product/folder-trust.md`) — accepting it, and so trusting the
@@ -160,7 +163,8 @@ names the session and tells them to look at it before anything else is sent.
 
 **What the owners' tools report.** Every session record the session tools give (see "Session records" in
 `docs/product/what-every-session-reads.md`) carries `queued_messages`, the number of messages queued for the session and not
-yet written, and `writes_held`: `null`, or, for a running session that holds what is written to it whatever its
+yet written — information kept for an interrupted session until its resume included, each piece counted once — and
+`writes_held`: `null`, or, for a running session that holds what is written to it whatever its
 `status` reads, an object with `reason`, an `explanation` in prose, and, for `agent_dialog`, the screen's code in
 `dialog`. A session held only because its agent reported it is waiting for the user — at a permission prompt or a
 question — carries `null`: its `status` says so. When several holds apply, the first of these is reported:

@@ -34,8 +34,8 @@ use crate::branch_origin::session_branches;
 use crate::coordinator::{self, OpenRequest};
 use crate::git_remote;
 use crate::protocol::{
-    error_code, now_millis, Agent, CodedError, Console, Event, Origin, Page, Project,
-    ProjectSource, Role, Session, SessionStatus,
+    error_code, now_millis, Agent, CodedError, Console, Event, Origin, Project, ProjectSource,
+    Role, Session, SessionStatus,
 };
 use crate::reporting::{self, Delivery, ReportStatus, WhenBlocked};
 use crate::session_request;
@@ -53,6 +53,7 @@ use super::handoff;
 use super::handover::{self, branch_names, held_by};
 use super::history;
 use super::models;
+use super::pages;
 use super::quotas;
 use super::reads;
 use super::session_branches as session_branches_tool;
@@ -106,16 +107,17 @@ pub async fn call(
             )
             .await
         }
-        "show_page" => show_page(state, &session, arguments),
+        "show_page" => pages::show_page(state, &session, arguments),
+        "list_pages" => pages::list_pages(state, &session, arguments),
         "report" => report(state, &session, arguments).await,
-        "list_sessions" => reads::list_sessions(state, &session).await,
+        "list_sessions" => reads::list_sessions(state, &session, arguments).await,
         "get_session_branches" => {
             session_branches_tool::get_session_branches(state, &session, arguments).await
         }
         "list_agent_models" => models::list_agent_models(state, arguments).await,
         "read_session_history" => history::read_session_history(state, arguments).await,
         "get_project" => settings::get_project(state, &session),
-        "get_account_quotas" => quotas::get_account_quotas(state, arguments),
+        "get_account_quotas" => quotas::get_account_quotas(state, arguments).await,
         "share_info" => share_info(state, &session, arguments).await,
         "transfer_session" => bindings::transfer_session(state, &session, arguments).await,
         "release_session" => bindings::release_session(state, &session, arguments).await,
@@ -674,26 +676,6 @@ async fn reopen_session(
     Ok(json!({ "session": target.id }))
 }
 
-fn show_page(
-    state: &Arc<AppState>,
-    console_session: &Session,
-    arguments: &Map<String, Value>,
-) -> Result<Value> {
-    let html = required_str(arguments, "html")?.to_string();
-    let page = Page {
-        id: Uuid::new_v4().to_string(),
-        console_session_id: console_session.id.clone(),
-        html,
-        // No agent exposes a message id to put here yet; the rewind linkage that would read it is
-        // not built.
-        anchor_message_id: None,
-        created_at: now_millis(),
-    };
-    state.store.insert_page(&page)?;
-    state.broadcast(Event::PageCreated { page: page.clone() });
-    Ok(json!({ "page": page.id }))
-}
-
 // -- information exchange ----------------------------------------------------
 
 async fn share_info(
@@ -714,13 +696,28 @@ async fn share_info(
         sharing::deliver_info(&owned_state, &caller_id, &target_id, &text)
     })
     .await??;
-    let mut note = delivery_note(delivery).to_string();
+    let mut note = if target.status == SessionStatus::Interrupted && delivery == Delivery::Queued {
+        "Queued: this session is interrupted, with no process running. It is kept, and delivered \
+         once the session is resumed, so do not send it again."
+            .to_string()
+    } else {
+        delivery_note(delivery).to_string()
+    };
     match copy {
         OwnerCopy::NotNeeded => {}
         OwnerCopy::Sent(Delivery::Written) => note.push_str(" Its owner was sent a copy."),
-        OwnerCopy::Sent(Delivery::Queued) => note.push_str(
-            " Its owner's copy is queued, and will arrive as soon as the owner can take it.",
-        ),
+        OwnerCopy::Sent(Delivery::Queued) => {
+            let owner_interrupted = target
+                .bound_to
+                .as_deref()
+                .and_then(|owner| state.store.get_session(owner).ok().flatten())
+                .is_some_and(|owner| owner.status == SessionStatus::Interrupted);
+            note.push_str(if owner_interrupted {
+                " Its owner's copy is kept, and will arrive once the owner is resumed."
+            } else {
+                " Its owner's copy is queued, and will arrive as soon as the owner can take it."
+            })
+        }
         OwnerCopy::Sent(Delivery::Unsent) => note.push_str(
             " Its owner's copy was written into the owner's input but not sent to its \
              conversation; the user has been told.",
@@ -1013,8 +1010,10 @@ pub(crate) fn describe_session(
         "yours": session.bound_to.as_deref() == Some(caller.id.as_str()),
         "started_at": session.started_at,
         "ended_at": session.ended_at,
-        // Messages sent to this session that are waiting to be written into it.
-        "queued_messages": state.queued_count(&session.id),
+        // Messages sent to this session that are waiting to be written into it, including what is
+        // kept for an interrupted session to take at its resume.
+        "queued_messages": state.queued_count(&session.id)
+            + state.kept_unqueued_count(&session.id)?,
         // What keeps them waiting while `status` alone would say the session can take one, so an
         // idle session with messages queued is not left unexplained. Null when nothing holds it.
         "writes_held": write_hold.map(|hold| {
@@ -2075,6 +2074,220 @@ pub(super) mod tests {
         assert!(read("archived-of-b").await["recent_output"].is_null());
     }
 
+    /// `output_bytes` sets how much of the output is returned, from 1 to 64 KiB; outside that it is
+    /// refused, not clamped.
+    #[tokio::test]
+    async fn the_output_tail_length_is_the_callers_within_bounds() {
+        let (state, dir) = shared_console_state("tool-surface-tail-length");
+        let output_dir = dir.join("output");
+        std::fs::create_dir_all(&output_dir).unwrap();
+        let mut kept = b"first words ".to_vec();
+        kept.extend(vec![b'a'; 20 * 1024]);
+        kept.extend_from_slice(b" last words");
+        std::fs::write(output_dir.join("archived-of-a"), kept).unwrap();
+        let read = |extra: Value| {
+            let state = state.clone();
+            async move {
+                let mut arguments = arguments(json!({ "session": "archived-of-a" }));
+                arguments.extend(extra.as_object().unwrap().clone());
+                call(&state, "a", "get_session", &arguments).await
+            }
+        };
+
+        let short = read(json!({ "output_bytes": 16 })).await.unwrap();
+        assert_eq!(
+            short["recent_output"].as_str().unwrap().trim_end(),
+            "aaaaa last words"
+        );
+        let default = read(json!({})).await.unwrap();
+        assert_eq!(
+            default["recent_output"].as_str().unwrap().trim_end().len(),
+            8 * 1024
+        );
+        let long = read(json!({ "output_bytes": 64 * 1024 })).await.unwrap();
+        assert!(long["recent_output"]
+            .as_str()
+            .unwrap()
+            .contains("first words"));
+        for bad in [json!(0), json!(64 * 1024 + 1), json!(-1), json!("8")] {
+            let err = read(json!({ "output_bytes": bad }))
+                .await
+                .expect_err("out of bounds");
+            assert!(err.to_string().contains("output_bytes"), "{err}");
+        }
+    }
+
+    /// `list_sessions` narrows by console, project, owner and whether the session is the
+    /// caller's, every filter given having to hold; a name that matches nothing is refused.
+    #[tokio::test]
+    async fn list_sessions_filters_combine() {
+        let (state, _dir) = peer_state("peer-list-filters");
+        let ids = |caller: &'static str, filters: Value| {
+            let state = state.clone();
+            async move {
+                let listed = call(&state, caller, "list_sessions", &arguments(filters))
+                    .await
+                    .unwrap();
+                let mut ids: Vec<String> = listed["sessions"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|session| session["session"].as_str().unwrap().to_string())
+                    .collect();
+                ids.sort();
+                ids
+            }
+        };
+
+        assert_eq!(
+            ids("loose", json!({ "console": "console-2" })).await,
+            ["foreign"]
+        );
+        assert_eq!(
+            ids("loose", json!({ "project": "project-3" })).await,
+            ["other-project"]
+        );
+        assert_eq!(ids("loose", json!({ "owner": "a" })).await, ["of-a"]);
+        assert_eq!(ids("starter", json!({ "yours": true })).await, ["mine"]);
+        let not_yours = ids("starter", json!({ "yours": false })).await;
+        assert!(!not_yours.contains(&"mine".to_string()) && not_yours.len() > 3);
+        assert_eq!(
+            ids("starter", json!({ "project": "project-1", "yours": true })).await,
+            ["mine"]
+        );
+        assert_eq!(
+            ids("starter", json!({ "project": "project-3", "yours": true })).await,
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            ids("a", json!({ "console": "console-1", "owner": "starter" })).await,
+            ["mine"]
+        );
+        // A console session's own sessions, the same filter for any role.
+        assert_eq!(ids("a", json!({ "yours": true })).await, ["of-a"]);
+
+        for (filter, refusal) in [
+            (
+                json!({ "console": "nowhere" }),
+                "there is no console `nowhere`",
+            ),
+            (
+                json!({ "project": "nowhere" }),
+                "there is no project `nowhere`",
+            ),
+            (
+                json!({ "owner": "nowhere" }),
+                "there is no session `nowhere`",
+            ),
+            (json!({ "yours": "yes" }), "`yours` must be true or false"),
+        ] {
+            let err = call(&state, "a", "list_sessions", &arguments(filter.clone()))
+                .await
+                .expect_err(&filter.to_string());
+            assert_eq!(err.to_string(), refusal);
+        }
+    }
+
+    /// Information for an interrupted session is kept in the store for its resume (which the
+    /// coordinator's tests follow); its owner's copy is sent or kept by the owner's own state;
+    /// archiving the session drops what was kept, and an archived session is refused outright.
+    #[tokio::test]
+    async fn information_for_an_interrupted_session_is_kept_for_its_resume() {
+        let (state, _dir) = peer_state("peer-share-interrupted");
+        let console_a = running(&state, "a");
+        with_status(&state, "of-a", SessionStatus::Interrupted);
+        let share = |target: &'static str| {
+            let state = state.clone();
+            async move {
+                call(
+                    &state,
+                    "loose",
+                    "share_info",
+                    &arguments(json!({ "session": target, "text": "the port moved" })),
+                )
+                .await
+            }
+        };
+
+        let result = share("of-a").await.unwrap();
+        assert_eq!(result["delivered"], false);
+        let note = result["note"].as_str().unwrap();
+        assert!(
+            note.contains("interrupted") && note.contains("resumed"),
+            "{note}"
+        );
+        assert!(note.contains("sent a copy"), "{note}");
+        assert_eq!(state.store.pending_info("of-a").unwrap().len(), 1);
+        assert!(output_containing(&console_a, "the port moved").contains("Copy of information"));
+
+        // `get_session` counts it among the messages waiting for the session.
+        let described = call(
+            &state,
+            "a",
+            "get_session",
+            &arguments(json!({ "session": "of-a" })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(described["queued_messages"], 1);
+
+        // Archived while information is kept for it: nothing is kept for a later reopen.
+        with_status(&state, "of-b", SessionStatus::Interrupted);
+        share("of-b").await.unwrap();
+        assert_eq!(state.store.pending_info("of-b").unwrap().len(), 1);
+        coordinator::archive_session(&state, "of-b").unwrap();
+        assert!(state.store.pending_info("of-b").unwrap().is_empty());
+
+        let err = share("archived-of-a").await.expect_err("archived");
+        assert!(err.to_string().contains("archived"), "{err}");
+        assert!(state
+            .store
+            .pending_info("archived-of-a")
+            .unwrap()
+            .is_empty());
+    }
+
+    /// The copy for an interrupted owner is kept like the information itself.
+    #[tokio::test]
+    async fn the_copy_for_an_interrupted_owner_is_queued() {
+        let (state, _dir) = peer_state("peer-share-interrupted-owner");
+        let _of_a = running(&state, "of-a");
+        with_status(&state, "a", SessionStatus::Interrupted);
+        let result = call(
+            &state,
+            "loose",
+            "share_info",
+            &arguments(json!({ "session": "of-a", "text": "heads up" })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(result["delivered"], true);
+        assert!(result["note"]
+            .as_str()
+            .unwrap()
+            .contains("copy is kept, and will arrive once the owner is resumed"));
+        assert_eq!(state.store.pending_info("a").unwrap().len(), 1);
+    }
+
+    /// A resumed session whose kept information is on its queue counts each message once, not
+    /// once in the store and once in the queue.
+    #[tokio::test]
+    async fn kept_information_that_is_queued_is_counted_once() {
+        let (state, _dir) = shared_console_state("tool-surface-kept-count");
+        let _live = running(&state, "of-a");
+        let row = state.store.add_pending_info("of-a", "kept").unwrap();
+        state.queue_kept_message("of-a", "kept", row);
+        let described = call(
+            &state,
+            "a",
+            "get_session",
+            &arguments(json!({ "session": "of-a" })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(described["queued_messages"], 1);
+    }
+
     /// A running session that holds what is queued for it says so and why, in the listing and in
     /// `get_session` alike, however idle its status reads; one with no process holds nothing.
     #[tokio::test]
@@ -2581,6 +2794,7 @@ pub(super) mod tests {
             ("of-a", "archive_session"),
             ("starter", "add_project"),
             ("starter", "show_page"),
+            ("starter", "list_pages"),
             ("a", "report"),
             ("mine", "transfer_session"),
             ("mine", "release_session"),

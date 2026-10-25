@@ -2636,7 +2636,9 @@ async fn a_session_being_restarted_is_described_to_agents_as_starting() {
     let described =
         describe_session(&fixture.state, &session, &caller, &Default::default()).unwrap();
     assert_eq!(described["status"], "starting");
-    let listed = list_sessions(&fixture.state, &caller).await.unwrap();
+    let listed = list_sessions(&fixture.state, &caller, &Default::default())
+        .await
+        .unwrap();
     assert_eq!(listed["sessions"][0]["session"], "idle");
     assert_eq!(listed["sessions"][0]["status"], "starting");
 
@@ -2646,7 +2648,9 @@ async fn a_session_being_restarted_is_described_to_agents_as_starting() {
         fixture.state.shown_status(&session),
         SessionStatus::Interrupted
     );
-    let listed = list_sessions(&fixture.state, &caller).await.unwrap();
+    let listed = list_sessions(&fixture.state, &caller, &Default::default())
+        .await
+        .unwrap();
     assert!(listed["sessions"].as_array().unwrap().is_empty());
 }
 

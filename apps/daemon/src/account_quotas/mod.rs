@@ -8,9 +8,11 @@
 //! poller started with the daemon keeps them fresh, and `refresh_account_quotas` runs the same
 //! path on request. Both read an account whose last attempt is older than [`POLL_INTERVAL`],
 //! stretched for an account that keeps failing, so a client that asks on every open costs next
-//! to nothing; a request also reads some accounts sooner, as set out below. An account is also
-//! read once a window it holds has reset since its last attempt, a short grace ([`RESET_GRACE`])
-//! later, so a window that rolled over is not shown as used up until the next interval. A reading
+//! to nothing; a request also reads some accounts sooner, as set out below, and a session that
+//! asks for fresh readings over MCP has an account read again once a minute has passed since its
+//! last attempt ([`refresh_on_demand`]). An account is also read once a window it holds has reset
+//! since its last attempt, a short grace ([`RESET_GRACE`]) later, so a window that rolled over is
+//! not shown as used up until the next interval. A reading
 //! that fails over one that had windows keeps those windows, with the reason set beside them.
 //!
 //! An account whose configuration directory is missing or that is not signed in is a state of the
@@ -32,7 +34,10 @@
 //! with a reset time again, so a window that a kick does not start (a credit pool with no period,
 //! say) is not kicked over and over, and neither is one whose kick failed. A model's own weekly
 //! window is never kicked: the request goes to one cheap model and cannot start another's. A kick
-//! holds the account's claim and a slot like a reading does.
+//! holds the account's claim and a slot like a reading does. A reading a session asked for over
+//! MCP ([`refresh_on_demand`]) is the exception: it starts no kick itself, and marks an account
+//! whose reading calls for one due instead, so that the poller's next tick reads it again and
+//! kicks it, as it would have after any other reading.
 //!
 //! The module also decides whether a reading means the account is used up
 //! ([`AccountQuotas::exhausted`]).
@@ -72,6 +77,12 @@ const MIN_REREAD_INTERVAL: Duration = Duration::from_secs(30);
 /// moment to roll the window over, so that the reading taken shows the new window and not the old
 /// one.
 const RESET_GRACE: Duration = Duration::from_secs(30);
+
+/// How old an account's last attempt must be before a request for a refresh on demand
+/// ([`refresh_on_demand`]) reads it again, whatever the poller's own interval: bounds how often
+/// an agent asking can start a CLI for one account, and every attempt counts, the poller's
+/// included.
+const ON_DEMAND_INTERVAL: Duration = Duration::from_secs(60);
 
 /// How often the poller looks for accounts that are due. Much shorter than [`POLL_INTERVAL`] so
 /// that an account created, or an agent found available, after the poller's start is read within
@@ -324,6 +335,10 @@ impl AccountQuotas {
             }
             let is_due = inner.entries.get(&key).is_none_or(|entry| {
                 let since = now.saturating_duration_since(entry.attempted);
+                // Whatever else makes an account due, a session asking is held to the limit.
+                if trigger == Trigger::Demand {
+                    return since >= ON_DEMAND_INTERVAL;
+                }
                 entry.due
                     || since >= wait_after(entry.failures)
                     || reset_since_attempt(entry, wall)
@@ -390,15 +405,44 @@ impl AccountQuotas {
     /// request is meant to start them all. None once the daemon is shutting down, with no window
     /// counted as kicked.
     fn claim_kick(&self, state: &AppState, key: &Key) -> Option<Claim> {
-        if self.stopping.load(Ordering::Relaxed) {
+        if !self.kick_allowed(state, key) {
             return None;
+        }
+        let mut guard = self.lock();
+        let inner = &mut *guard;
+        let fresh = unkicked_windows(inner, key)?;
+        inner.kicked.entry(key.clone()).or_default().extend(fresh);
+        Some(self.claim_locked(inner, key.clone(), now_millis()))
+    }
+
+    /// Marks the account's reading due when [`Self::claim_kick`] would claim a kick for it, without
+    /// claiming one: the next poll then reads it and kicks. For a reading that is not followed by
+    /// a kick itself (see [`refresh_on_demand`]), so that the window the user's setting would
+    /// start is not left unstarted until the account's next ordinary reading.
+    fn make_due_for_kick(&self, state: &AppState, key: &Key) {
+        if !self.kick_allowed(state, key) {
+            return;
+        }
+        let mut inner = self.lock();
+        if unkicked_windows(&inner, key).is_some() {
+            if let Some(entry) = inner.entries.get_mut(key) {
+                entry.due = true;
+            }
+        }
+    }
+
+    /// Whether the daemon, the user's setting and the account allow a kick at all: it is not
+    /// shutting down, the setting that starts quota windows is on, and the account is not disabled.
+    fn kick_allowed(&self, state: &AppState, key: &Key) -> bool {
+        if self.stopping.load(Ordering::Relaxed) {
+            return false;
         }
         match state.store.auto_start_quota_windows() {
             Ok(true) => {}
-            Ok(false) => return None,
+            Ok(false) => return false,
             Err(err) => {
                 tracing::warn!(%err, "reading the setting that starts quota windows failed");
-                return None;
+                return false;
             }
         }
         // A disabled account is left alone: no window is started on it.
@@ -406,37 +450,12 @@ impl AccountQuotas {
             .store
             .account_disabled(key.agent, key.account.as_deref())
         {
-            Ok(false) => {}
-            Ok(true) => return None,
+            Ok(disabled) => !disabled,
             Err(err) => {
                 tracing::warn!(%err, "reading whether the account is disabled failed");
-                return None;
+                false
             }
         }
-        let mut guard = self.lock();
-        let inner = &mut *guard;
-        if inner.in_flight.contains_key(key) {
-            return None;
-        }
-        let quota = &inner.entries.get(key)?.quota;
-        if quota.unavailable.is_some() {
-            return None;
-        }
-        let kicked = inner.kicked.get(key).map_or(&[][..], Vec::as_slice);
-        let fresh: Vec<WindowId> = quota
-            .windows
-            .iter()
-            .filter(|window| {
-                window.resets_at.is_none() && window.kind != QuotaWindowKind::WeeklyModel
-            })
-            .map(window_id)
-            .filter(|id| !kicked.contains(id))
-            .collect();
-        if fresh.is_empty() {
-            return None;
-        }
-        inner.kicked.entry(key.clone()).or_default().extend(fresh);
-        Some(self.claim_locked(inner, key.clone(), now_millis()))
     }
 
     /// A probe's whole claim-and-finish for `key`, with `quota` as its outcome.
@@ -571,6 +590,28 @@ impl AccountQuotas {
             inner.entries.len() != before
         });
     }
+}
+
+/// The windows of the account `key` that a kick would start and that no kick has started in their
+/// episode, or `None` when nothing is running for the account, its reading is not a successful one
+/// or no window is such.
+fn unkicked_windows(inner: &Inner, key: &Key) -> Option<Vec<WindowId>> {
+    if inner.in_flight.contains_key(key) {
+        return None;
+    }
+    let quota = &inner.entries.get(key)?.quota;
+    if quota.unavailable.is_some() {
+        return None;
+    }
+    let kicked = inner.kicked.get(key).map_or(&[][..], Vec::as_slice);
+    let fresh: Vec<WindowId> = quota
+        .windows
+        .iter()
+        .filter(|window| window.resets_at.is_none() && window.kind != QuotaWindowKind::WeeklyModel)
+        .map(window_id)
+        .filter(|id| !kicked.contains(id))
+        .collect();
+    (!fresh.is_empty()).then_some(fresh)
 }
 
 /// The wire name of the session window, whichever agent it belongs to. Each agent's own interface
@@ -800,6 +841,10 @@ enum Trigger {
     Poll,
     /// A client asked, as it does on opening a panel that shows quotas.
     Request,
+    /// A session asked for fresh readings, and is waiting for them: each account is read again
+    /// once [`ON_DEMAND_INTERVAL`] has passed since its last attempt. Starts no quota window (see
+    /// [`refresh_on_demand`]).
+    Demand,
 }
 
 /// Which accounts a refresh covers; the default is all of them.
@@ -843,7 +888,8 @@ pub fn spawn(state: &Arc<AppState>) {
 }
 
 /// Where a probe or a kick gets the shell environment it runs in.
-type ShellSource = Arc<dyn Fn() -> anyhow::Result<HashMap<String, String>> + Send + Sync>;
+pub(crate) type ShellSource =
+    Arc<dyn Fn() -> anyhow::Result<HashMap<String, String>> + Send + Sync>;
 
 /// Reads the accounts of `scope` that are due and broadcasts after each. See [`refresh_with`].
 pub async fn refresh(state: &Arc<AppState>, scope: &Scope) {
@@ -856,6 +902,15 @@ pub async fn refresh(state: &Arc<AppState>, scope: &Scope) {
 pub async fn refresh_requested(state: &Arc<AppState>, scope: &Scope) {
     let shell = Arc::new(crate::env_shell::cached_snapshot);
     refresh_with(state, scope, Trigger::Request, shell).await;
+}
+
+/// [`refresh`] for a session that asked for fresh readings and waits for them: every account of
+/// `scope` whose last attempt, the poller's included, is older than [`ON_DEMAND_INTERVAL`] is read
+/// now, due or not; one read more recently keeps its reading. It never starts a quota window,
+/// whatever the setting that starts them says: that spends quota, and is the user's setting to
+/// act on at the poller's own reads, not something a session's request may set off.
+pub(crate) async fn refresh_on_demand(state: &Arc<AppState>, scope: &Scope, shell: ShellSource) {
+    refresh_with(state, scope, Trigger::Demand, shell).await;
 }
 
 /// Reads the accounts of `scope` that are due for `trigger`, as many at a time as the daemon-wide
@@ -877,7 +932,8 @@ async fn refresh_with(state: &Arc<AppState>, scope: &Scope, trigger: Trigger, sh
     for claim in claims {
         let (state, shell) = (state.clone(), shell.clone());
         readings.spawn(async move {
-            if let Some(kick) = read_account(&state, &shell, claim).await {
+            let kicks = trigger != Trigger::Demand;
+            if let Some(kick) = read_account(&state, &shell, claim, kicks).await {
                 tokio::spawn(async move { kick_and_read(&state, &shell, kick).await });
             }
         });
@@ -928,8 +984,14 @@ async fn kick_held_with(state: &Arc<AppState>, shell: ShellSource) {
 }
 
 /// Reads the account `claim` is on and records the reading. Returns the claim for a kick when the
-/// reading calls for one (see [`AccountQuotas::claim_kick`]). Holds a slot while the CLI runs.
-async fn read_account(state: &Arc<AppState>, shell: &ShellSource, claim: Claim) -> Option<Claim> {
+/// reading calls for one (see [`AccountQuotas::claim_kick`]) and `kicks` allows it. Holds a slot
+/// while the CLI runs.
+async fn read_account(
+    state: &Arc<AppState>,
+    shell: &ShellSource,
+    claim: Claim,
+    kicks: bool,
+) -> Option<Claim> {
     let _slot = state.account_quotas.slots.acquire().await;
     let key = claim.key.clone();
     let shell = shell.clone();
@@ -954,7 +1016,13 @@ async fn read_account(state: &Arc<AppState>, shell: &ShellSource, claim: Claim) 
     });
     let key = claim.key.clone();
     state.account_quotas.finish(state, claim, quota);
-    state.account_quotas.claim_kick(state, &key)
+    if kicks {
+        state.account_quotas.claim_kick(state, &key)
+    } else {
+        // Left to the poller, which reads it again within a tick and kicks as it always does.
+        state.account_quotas.make_due_for_kick(state, &key);
+        None
+    }
 }
 
 /// Carries a claim from a kick through the reading after it, and on to a further kick if that
@@ -985,7 +1053,7 @@ async fn kick_and_read(state: &Arc<AppState>, shell: &ShellSource, claim: Claim)
         if !state.account_quotas.kick_is_wanted(&claim) {
             return;
         }
-        match read_account(state, shell, claim).await {
+        match read_account(state, shell, claim, true).await {
             Some(next) => claim = next,
             None => return,
         }
@@ -1748,6 +1816,14 @@ mod tests {
             std::fs::write(self.bin.join("after.reply"), reply).unwrap();
         }
 
+        /// Makes the account's last attempt `age` old.
+        fn age_attempt(&self, age: Duration) {
+            let mut inner = self.state.account_quotas.lock();
+            for entry in inner.entries.values_mut() {
+                entry.attempted = Instant::now() - age;
+            }
+        }
+
         fn count(&self, file: &str) -> usize {
             std::fs::read_to_string(self.bin.join(file)).map_or(0, |text| text.lines().count())
         }
@@ -1780,6 +1856,65 @@ mod tests {
             let held = self.state.account_quotas.list();
             held[0].windows[0].resets_at
         }
+    }
+
+    /// A refresh on demand reads an account whose last attempt is over a minute old though it is
+    /// not due, and starts no window itself, the setting that starts them being on; the poller's
+    /// next tick does, without the account having to wait for its ordinary interval.
+    #[tokio::test]
+    async fn a_refresh_on_demand_rereads_an_account_and_leaves_the_kick_to_the_poller() {
+        let fixture = KickFixture::new("quota-demand-reads", true);
+        fixture.refresh().await;
+        // The poll kicked it, as the setting asks; the reading of that is the baseline.
+        assert_eq!((fixture.count("runs"), fixture.count("kicks")), (2, 1));
+        fixture.serve(&codex_reply(false));
+        fixture.age_attempt(Duration::from_secs(61));
+
+        refresh_on_demand(&fixture.state, &Scope::default(), fixture.shell.clone()).await;
+        fixture.settled().await;
+
+        assert_eq!((fixture.count("runs"), fixture.count("kicks")), (3, 1));
+        assert_eq!(fixture.session_reset(), None);
+        assert!(fixture
+            .state
+            .account_quotas
+            .is_due_for_test(Agent::Codex, None));
+
+        // The mark does not let a session's request past the limit: two more in a row read nothing.
+        for _ in 0..2 {
+            refresh_on_demand(&fixture.state, &Scope::default(), fixture.shell.clone()).await;
+        }
+        fixture.settled().await;
+        assert_eq!((fixture.count("runs"), fixture.count("kicks")), (3, 1));
+
+        // The next poll tick reads the account again, nothing but the mark having made it due, and
+        // kicks it.
+        refresh_with(
+            &fixture.state,
+            &Scope::default(),
+            Trigger::Poll,
+            fixture.shell.clone(),
+        )
+        .await;
+        fixture.settled().await;
+        assert_eq!((fixture.count("runs"), fixture.count("kicks")), (5, 2));
+        assert_eq!(fixture.session_reset(), Some(1_792_261_723_000));
+    }
+
+    /// Within a minute of the last attempt the held reading stands, whoever took it.
+    #[tokio::test]
+    async fn a_refresh_on_demand_within_a_minute_of_an_attempt_keeps_the_reading() {
+        let fixture = KickFixture::new("quota-demand-limited", false);
+        fixture.refresh().await;
+        assert_eq!(fixture.count("runs"), 1);
+
+        fixture.age_attempt(Duration::from_secs(59));
+        refresh_on_demand(&fixture.state, &Scope::default(), fixture.shell.clone()).await;
+        assert_eq!(fixture.count("runs"), 1);
+
+        fixture.age_attempt(Duration::from_secs(61));
+        refresh_on_demand(&fixture.state, &Scope::default(), fixture.shell.clone()).await;
+        assert_eq!(fixture.count("runs"), 2);
     }
 
     #[tokio::test]
@@ -1970,7 +2105,7 @@ mod tests {
             .pop()
             .expect("a claim");
         let (state, shell) = (fixture.state.clone(), fixture.shell.clone());
-        let running = tokio::spawn(async move { read_account(&state, &shell, claim).await });
+        let running = tokio::spawn(async move { read_account(&state, &shell, claim, true).await });
         let deadline = Instant::now() + crate::test_support::PATIENCE;
         while fixture.count("runs") == 0 {
             assert!(Instant::now() < deadline, "the probe did not start");

@@ -1,17 +1,21 @@
 //! The tool with which a session reads how much plan quota each account has left,
-//! `get_account_quotas`. It returns the readings the daemon already holds (`AccountQuotas`) and
-//! never waits for a probe, so what it says is as old as each reading's `fetched_at`.
+//! `get_account_quotas`. It returns the readings the daemon already holds (`AccountQuotas`), so
+//! what it says is as old as each reading's `fetched_at`; only a call that asks to `refresh` waits
+//! for new ones, and then only for the accounts not read within the last minute, whichever way
+//! the last reading came (`account_quotas::refresh_on_demand`). A refresh never starts a quota
+//! window.
 
 use std::sync::Arc;
 
 use anyhow::Result;
 use serde_json::{json, Map, Value};
 
+use crate::account_quotas::{self, ShellSource};
 use crate::coordinator;
 use crate::protocol::{now_millis, Agent, QuotaWindow};
 use crate::state::AppState;
 
-use super::args::optional_agent;
+use super::args::{optional_agent, optional_bool};
 
 /// What is said of an account that no reading is held for yet.
 const NOT_READ_YET: &str = "Not read yet: the daemon has not taken a reading of this account's \
@@ -23,11 +27,35 @@ const NOT_READ_YET: &str = "Not read yet: the daemon has not taken a reading of 
 /// reads one that is installed but not added); one not yet detected is listed, its accounts not
 /// read yet. An account is judged
 /// exhausted by the rule that keeps it from opening a session (`AccountQuotas::exhausted`).
-pub(super) fn get_account_quotas(
+///
+/// With `refresh` the readings of those accounts are first taken again where the last attempt is
+/// over a minute old; a call within the minute is not an error, it gets what is held.
+pub(super) async fn get_account_quotas(
     state: &Arc<AppState>,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
+    get_account_quotas_with(
+        state,
+        arguments,
+        Arc::new(crate::env_shell::cached_snapshot),
+    )
+    .await
+}
+
+/// [`get_account_quotas`] reading in the shell environment `shell` gives.
+async fn get_account_quotas_with(
+    state: &Arc<AppState>,
+    arguments: &Map<String, Value>,
+    shell: ShellSource,
+) -> Result<Value> {
     let only = optional_agent(arguments, "agent")?;
+    if optional_bool(arguments, "refresh")?.unwrap_or(false) {
+        let scope = account_quotas::Scope {
+            agent: only,
+            account: None,
+        };
+        account_quotas::refresh_on_demand(state, &scope, shell).await;
+    }
     let accounts = state.store.list_accounts()?;
     let now = now_millis();
     let mut listed = Vec::new();
@@ -84,6 +112,8 @@ fn describe_window(window: &QuotaWindow) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
     use crate::mcp::exec::tests::{arguments, shared_console_state};
     use crate::protocol::{
         Account, AccountQuota, AgentAvailability, Availability, QuotaUnavailable, QuotaWindowKind,
@@ -151,8 +181,8 @@ mod tests {
     /// Every account of an available agent is listed, the default one first, with the reading
     /// held for it: the remaining share derived from the used one, and an account no reading is
     /// held for marked as not read yet. A reading that failed carries the reason.
-    #[test]
-    fn every_account_is_listed_with_its_reading_or_a_note_that_there_is_none() {
+    #[tokio::test]
+    async fn every_account_is_listed_with_its_reading_or_a_note_that_there_is_none() {
         let (state, _dir) = shared_console_state("quotas-listed");
         available(&state, &[Agent::Claude]);
         insert_account(&state, Agent::Claude, "claude-a");
@@ -167,7 +197,9 @@ mod tests {
             .account_quotas
             .hold_in_dir_for_test(&failed, "/tmp/claude-b");
 
-        let result = get_account_quotas(&state, &arguments(json!({ "agent": "claude" }))).unwrap();
+        let result = get_account_quotas(&state, &arguments(json!({ "agent": "claude" })))
+            .await
+            .unwrap();
 
         let ids: Vec<&Value> = result["accounts"]
             .as_array()
@@ -210,8 +242,8 @@ mod tests {
 
     /// An account is exhausted by the rule that keeps it from opening a session: a used-up
     /// window that has not reset. One that has reset is not.
-    #[test]
-    fn an_account_with_a_used_up_window_that_has_not_reset_is_exhausted() {
+    #[tokio::test]
+    async fn an_account_with_a_used_up_window_that_has_not_reset_is_exhausted() {
         let (state, _dir) = shared_console_state("quotas-exhausted");
         available(&state, &[Agent::Codex]);
         insert_account(&state, Agent::Codex, "codex-a");
@@ -227,7 +259,9 @@ mod tests {
             );
         }
 
-        let result = get_account_quotas(&state, &arguments(json!({}))).unwrap();
+        let result = get_account_quotas(&state, &arguments(json!({})))
+            .await
+            .unwrap();
 
         assert_eq!(entry(&result, "codex", "codex-a")["exhausted"], true);
         assert_eq!(
@@ -244,8 +278,8 @@ mod tests {
 
     /// `agent` narrows the list to one agent. An agent that is not installed, or not on the added
     /// list, has no accounts listed; one not detected yet lists them, not read yet.
-    #[test]
-    fn the_agent_argument_filters_and_an_uninstalled_or_unadded_agent_is_left_out() {
+    #[tokio::test]
+    async fn the_agent_argument_filters_and_an_uninstalled_or_unadded_agent_is_left_out() {
         let (state, _dir) = shared_console_state("quotas-filter");
         state.set_agent_availability(vec![AgentAvailability {
             agent: Agent::Grok,
@@ -254,7 +288,9 @@ mod tests {
         }]);
         insert_account(&state, Agent::Grok, "grok-a");
 
-        let all = get_account_quotas(&state, &arguments(json!({}))).unwrap();
+        let all = get_account_quotas(&state, &arguments(json!({})))
+            .await
+            .unwrap();
         let agents: Vec<&Value> = all["accounts"]
             .as_array()
             .unwrap()
@@ -264,7 +300,9 @@ mod tests {
         assert_eq!(agents, ["claude", "codex"]);
         assert_eq!(all["accounts"][0]["fetched_at"], Value::Null);
 
-        let codex = get_account_quotas(&state, &arguments(json!({ "agent": "codex" }))).unwrap();
+        let codex = get_account_quotas(&state, &arguments(json!({ "agent": "codex" })))
+            .await
+            .unwrap();
         assert_eq!(codex["accounts"].as_array().unwrap().len(), 1);
         assert_eq!(codex["accounts"][0]["agent"], "codex");
 
@@ -272,15 +310,67 @@ mod tests {
             .store
             .set_added_agents_if_undecided(&[Agent::Claude])
             .unwrap();
-        let added = get_account_quotas(&state, &arguments(json!({}))).unwrap();
+        let added = get_account_quotas(&state, &arguments(json!({})))
+            .await
+            .unwrap();
         assert_eq!(added["accounts"].as_array().unwrap().len(), 1);
         assert_eq!(added["accounts"][0]["agent"], "claude");
 
-        let grok = get_account_quotas(&state, &arguments(json!({ "agent": "grok" }))).unwrap();
+        let grok = get_account_quotas(&state, &arguments(json!({ "agent": "grok" })))
+            .await
+            .unwrap();
         assert_eq!(grok["accounts"], json!([]));
 
         let err = get_account_quotas(&state, &arguments(json!({ "agent": "gemini" })))
+            .await
             .expect_err("unknown agent");
         assert!(err.to_string().contains("gemini"), "{err}");
+    }
+
+    /// `refresh` takes new readings before answering, once per account a minute: a second call
+    /// within it is answered from what is held, with no error, and a call without `refresh`
+    /// never reads.
+    #[tokio::test]
+    async fn refresh_reads_an_account_once_a_minute_and_answers_from_the_cache_in_between() {
+        let (state, _dir) = shared_console_state("quotas-refresh");
+        available(&state, &[Agent::Claude]);
+        let reads = Arc::new(AtomicUsize::new(0));
+        let shell: ShellSource = {
+            let reads = reads.clone();
+            Arc::new(move || {
+                reads.fetch_add(1, Ordering::SeqCst);
+                anyhow::bail!("no shell under test")
+            })
+        };
+        let ask = |refresh: bool| {
+            let (state, shell) = (state.clone(), shell.clone());
+            async move {
+                let arguments = arguments(json!({ "agent": "claude", "refresh": refresh }));
+                get_account_quotas_with(&state, &arguments, shell).await
+            }
+        };
+
+        let plain = ask(false).await.unwrap();
+        assert_eq!(reads.load(Ordering::SeqCst), 0);
+        assert_eq!(
+            entry(&plain, "claude", "default")["unavailable"],
+            NOT_READ_YET
+        );
+
+        let refreshed = ask(true).await.unwrap();
+        assert_eq!(reads.load(Ordering::SeqCst), 1);
+        assert_ne!(
+            entry(&refreshed, "claude", "default")["unavailable"],
+            NOT_READ_YET
+        );
+
+        let again = ask(true).await.unwrap();
+        assert_eq!(reads.load(Ordering::SeqCst), 1);
+        assert_eq!(again, refreshed);
+
+        let err = get_account_quotas(&state, &arguments(json!({ "refresh": "yes" })))
+            .await
+            .expect_err("not a boolean");
+        assert!(err.to_string().contains("refresh"), "{err}");
     }
 }

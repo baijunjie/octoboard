@@ -6,14 +6,17 @@
 //! sender, says whether the sender is the receiver's owner, and quotes the body line by line
 //! between a header and a closing line, so that text in the body cannot pass for one of
 //! Octoboard's own messages (a report, a report panel form submission) or for the end of this one.
-//! Delivery itself is [`reporting::write_message`], with everything that brings: sanitizing,
-//! holding for a session that is waiting for the user, refusing one with no process.
+//! Delivery to a session with a process is [`reporting::write_message`], with everything that
+//! brings: sanitizing, and holding for a session that is waiting for the user. A session with no
+//! process is handled here instead (see [`write_or_hold`]): an interrupted one has the
+//! information kept in the store and handed to it when it is resumed, and an archived one is
+//! refused.
 
 use std::sync::Arc;
 
 use anyhow::Result;
 
-use crate::protocol::{error_code, CodedError, Session};
+use crate::protocol::{error_code, CodedError, Session, SessionStatus};
 use crate::reporting::{self, Delivery, WhenBlocked};
 use crate::state::AppState;
 
@@ -48,18 +51,13 @@ pub fn deliver_info(
     let receiver = state.session_record(receiver_id)?;
     let from_owner = receiver.bound_to.as_deref() == Some(sender.id.as_str());
 
-    let delivery = reporting::write_message(
-        state,
-        &receiver.id,
-        &render_info(&sender, text, from_owner),
-        WhenBlocked::Queue,
-    )?;
+    let delivery = write_or_hold(state, &receiver.id, &render_info(&sender, text, from_owner))?;
 
     let copy = match receiver.bound_to.as_deref().filter(|_| !from_owner) {
         None => OwnerCopy::NotNeeded,
         Some(owner_id) => {
             let message = render_info_copy(&sender, &receiver, text);
-            match reporting::write_message(state, owner_id, &message, WhenBlocked::Queue) {
+            match write_or_hold(state, owner_id, &message) {
                 Ok(delivery) => OwnerCopy::Sent(delivery),
                 Err(err) => OwnerCopy::Failed(copy_failure(&err)),
             }
@@ -68,11 +66,34 @@ pub fn deliver_info(
     Ok((delivery, copy))
 }
 
+/// [`reporting::write_message`], except for a session with no process: an interrupted one has the
+/// message kept in the store, and a resume puts it on the session's queue (`coordinator`'s
+/// `relaunch_session_with`), so it is written once the session is up and can take it, and is not
+/// lost with the daemon or a relaunch that failed; archiving or deleting the session drops it. An
+/// archived session is refused, since nothing says it will ever be resumed.
+///
+/// **Blocks** like [`reporting::write_message`].
+fn write_or_hold(state: &Arc<AppState>, id: &str, text: &str) -> Result<Delivery> {
+    let session = state.session_record(id)?;
+    if session.status == SessionStatus::Archived {
+        return Err(CodedError::raised(
+            error_code::SESSION_ARCHIVED,
+            "this session is archived, so it takes no information until it is reopened",
+            &[("session", id)],
+        ));
+    }
+    if session.status == SessionStatus::Interrupted && state.keep_info_if_not_running(id, text)? {
+        return Ok(Delivery::Queued);
+    }
+    reporting::write_message(state, id, text, WhenBlocked::Queue)
+}
+
 /// Why a copy failed, from the sender's side: the error text speaks of "this session", which the
 /// sender would read as the receiver.
 fn copy_failure(err: &anyhow::Error) -> String {
     match err.downcast_ref::<CodedError>().map(|coded| coded.code) {
         Some(error_code::SESSION_NOT_RUNNING) => "its owner has no process running".to_string(),
+        Some(error_code::SESSION_ARCHIVED) => "its owner is archived".to_string(),
         Some(error_code::QUEUED_MESSAGES_LOST) => {
             "its owner's input line may hold a fragment of an earlier message".to_string()
         }

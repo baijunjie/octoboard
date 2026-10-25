@@ -310,6 +310,9 @@ moved. The held queue is kept even if the original's process ends meanwhile.
 
 - Once the receiving session has taken the place, everything queued for the original, including what was already
   waiting there before the handoff, is forwarded to the receiving session, in order, before the original is archived.
+  Information kept for an interrupted original until its resume (see "Information for an interrupted session" in
+  `docs/product/information-between-sessions.md`) follows the queue, each piece once, and is then no longer kept for
+  the original.
   So is anything queued for the original after that, until the handoff ends.
 - A handoff that fails before the receiving session has started, or before its place has moved, releases the hold: the
   queue is written into the original as usual.

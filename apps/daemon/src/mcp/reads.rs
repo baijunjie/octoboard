@@ -13,13 +13,20 @@ use serde_json::{json, Map, Value};
 use crate::protocol::{Session, SessionStatus};
 use crate::state::AppState;
 
-use super::args::{console_projects, find_console, find_project, optional_string, required_str};
+use super::args::{
+    console_projects, find_console, find_project, optional_bool, optional_count, optional_string,
+    required_str,
+};
 use super::exec::{branch_names_of, describe_session, resolve_session};
 use super::settings::describe_project;
 
-/// How much of a session's output `get_session` hands back. Enough to see what it is doing and how
-/// it got there, short of handing the caller a transcript to wade through.
-const OUTPUT_TAIL: usize = 8 * 1024;
+/// How much of a session's output `get_session` hands back when the caller names no length. Enough
+/// to see what it is doing and how it got there, short of handing the caller a transcript to wade
+/// through.
+const DEFAULT_OUTPUT_TAIL: usize = 8 * 1024;
+
+/// The most output `get_session` hands back, however much is asked for.
+const MAX_OUTPUT_TAIL: usize = 64 * 1024;
 
 /// Every console's id and name, and which is the caller's own.
 pub(super) fn list_consoles(state: &Arc<AppState>, caller: &Session) -> Result<Value> {
@@ -98,7 +105,11 @@ pub(super) async fn get_session(
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
     let target = resolve_session(state, required_str(arguments, "session")?)?;
-    let output = recent_output(state, &target.id).await;
+    // Refused outside the bounds rather than clamped, so a caller that asked for more than it can
+    // have is not left believing it read it all.
+    let tail = optional_count(arguments, "output_bytes", 1, MAX_OUTPUT_TAIL)?
+        .unwrap_or(DEFAULT_OUTPUT_TAIL);
+    let output = recent_output(state, &target.id, tail).await;
     let branches = branch_names_of(state, vec![target.clone()]).await?;
     let mut description = describe_session(state, &target, caller, &branches)?;
     description["recent_output"] = json!(output);
@@ -111,14 +122,15 @@ pub(super) async fn get_session(
     Ok(description)
 }
 
-/// The tail of what a session has printed, readable. A running session's comes from its ring
-/// buffer; one whose process has ended has the ring buffer's last contents kept, which is what
-/// `GET /ws/term/:session` replays, so the same path is read here. `None` when nothing was kept —
-/// no process of it has printed anything yet, it ended with the daemon killed outright before the
-/// output could be kept, or a new process took it over and discarded the old output at launch.
-async fn recent_output(state: &Arc<AppState>, id: &str) -> Option<String> {
+/// The last `tail` bytes of what a session has printed, readable. A running session's comes from
+/// its ring buffer; one whose process has ended has the ring buffer's last contents kept, which is
+/// what `GET /ws/term/:session` replays, so the same path is read here. `None` when nothing was
+/// kept — no process of it has printed anything yet, it ended with the daemon killed outright
+/// before the output could be kept, or a new process took it over and discarded the old output at
+/// launch.
+async fn recent_output(state: &Arc<AppState>, id: &str, tail: usize) -> Option<String> {
     if let Some(live) = state.live_session(id) {
-        return Some(readable_output(&live.recent_output(OUTPUT_TAIL)));
+        return Some(readable_output(&live.recent_output(tail)));
     }
     // A file read of up to the whole ring buffer, so not on a runtime worker.
     let state = state.clone();
@@ -129,7 +141,7 @@ async fn recent_output(state: &Arc<AppState>, id: &str) -> Option<String> {
         .await
         .unwrap_or(None);
     saved.map(|output| {
-        let from = output.len().saturating_sub(OUTPUT_TAIL);
+        let from = output.len().saturating_sub(tail);
         readable_output(&output[from..])
     })
 }
@@ -163,13 +175,44 @@ pub(super) async fn list_archived(
 /// console and project, console sessions included: information may go to any of them, and an
 /// owner to hand a session to or bind to is one of them.
 ///
+/// `console`, `project`, `owner` and `yours` narrow the list; each given one must hold, so they
+/// combine as AND. A `console`, `project` or `owner` that names nothing is refused rather than
+/// read as a filter that matches nothing.
+///
 /// `pub(crate)` for the tests of `shared_config`, which describe a session being restarted.
-pub(crate) async fn list_sessions(state: &Arc<AppState>, caller: &Session) -> Result<Value> {
+pub(crate) async fn list_sessions(
+    state: &Arc<AppState>,
+    caller: &Session,
+    arguments: &Map<String, Value>,
+) -> Result<Value> {
+    let console = optional_string(arguments, "console")
+        .map(|wanted| find_console(state, &wanted))
+        .transpose()?;
+    let project = optional_string(arguments, "project")
+        .map(|wanted| find_project(state, caller, &wanted))
+        .transpose()?;
+    let owner = optional_string(arguments, "owner")
+        .map(|wanted| resolve_session(state, &wanted))
+        .transpose()?;
+    let yours = optional_bool(arguments, "yours")?;
     let running: Vec<Session> = state
         .store
         .list_sessions()?
         .into_iter()
         .filter(|session| session.id != caller.id && !state.shown_status(session).is_dormant())
+        .filter(|session| {
+            console
+                .as_ref()
+                .is_none_or(|console| session.console_id == console.id)
+                && project
+                    .as_ref()
+                    .is_none_or(|project| session.project_id.as_deref() == Some(&project.id))
+                && owner
+                    .as_ref()
+                    .is_none_or(|owner| session.bound_to.as_deref() == Some(&owner.id))
+                && yours
+                    .is_none_or(|yours| (session.bound_to.as_deref() == Some(&caller.id)) == yours)
+        })
         .collect();
     let branches = branch_names_of(state, running.clone()).await?;
     let sessions = running

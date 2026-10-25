@@ -64,6 +64,8 @@ again.
   open (see "The icon's menu" in `docs/product/menu-bar-icon.md`).
 - **Opening the rail's account quota panel** asks for the same, each time the panel opens, whether the mouse floats it in or a tap or the keyboard opens it; a
   tap on a panel the mouse floated in is not a new opening (see "The account quota panel on the rail" below).
+- **When a session asks**, with `get_account_quotas`' `refresh`, the accounts it covers are read again once their
+  last attempt is at least **60 seconds** old (see "Reading quotas from a session" below).
 - **After a kick** (see "Starting a window that has not begun counting" below), the account is read again once the
   kick has ended, whether or not it succeeded.
 - At most **four** readings and kicks, together, run at once across the whole daemon, and one account is never read
@@ -264,7 +266,8 @@ by default and applies to every agent alike.
 
 ### When an account is kicked
 
-An account is kicked after any reading of it (see "When quotas are read" above) when all of these hold:
+An account is kicked after any reading of it (see "When quotas are read" above), except one a session asked for (see
+below), when all of these hold:
 
 - the setting is on;
 - the account is not turned off (see "Turning an account off" in `docs/product/agent-accounts.md`), the default
@@ -274,6 +277,12 @@ An account is kicked after any reading of it (see "When quotas are read" above) 
 - the reading shows a window with no reset time that is not a **model-specific weekly** limit, which is never kicked:
   the request goes to one model and cannot start another model's limit;
 - that window has not been kicked in its current episode.
+
+A reading a session asked for with `get_account_quotas`' `refresh` (see "Reading quotas from a session" below) never
+kicks: when it shows an account these conditions would kick, the account is marked due instead, so the background
+poller reads it again at its next look, within about 15 seconds, and kicks it after that reading as it would after any
+other. What a session's request sets off is a reading and nothing more; spending quota to start a window stays the
+user's setting, acted on at the readings Octoboard takes itself.
 
 One kick covers every such window of the account at once. A window's **episode** ends only when a reading shows that
 window with a reset time again, so a window still without one after its kick, and one whose kick failed, is not kicked
@@ -388,7 +397,7 @@ the readings described in "When quotas are read" above.
 
 Every session, of any kind, has the `get_account_quotas` tool, so an agent can check what an account has left before it
 picks one for `switch_session_account` or `handoff_session`. It takes an optional `agent` to list only that agent's
-accounts, and answers with every account of every agent a session could be opened on, the default account first
+accounts and an optional `refresh` (below), and answers with every account of every agent a session could be opened on, the default account first
 (`account` is `default`), whether or not a reading is held for it. An agent that is not installed or not on the added
 list lists no accounts; one not detected yet lists its accounts as not read yet. Each entry gives the account's
 `account_name`, `plan`, `fetched_at` (milliseconds since the epoch, `null` for an account not read yet), `exhausted`
@@ -400,7 +409,23 @@ with `kind` (`session` for the five-hour window, whichever agent's it is; `weekl
 `label`, `used_percent`, `remaining_percent` (100 less the used share, never below 0), `resets_at` and
 `window_minutes`. Values are percentages only; no absolute token or money amount is given.
 
-It answers from the readings already held and never waits for a new one, so an entry is as old as its `fetched_at`.
+By default it answers from the readings already held and takes no new one, so an entry is as old as its `fetched_at`
+and a call spends nothing. With `refresh` set to `true` it first reads again the accounts it lists — every agent's, or
+only `agent`'s when that is given — and answers once those readings have finished, which can take several seconds:
+
+- An account is read only when its last attempt, whatever took it — the background poller, a window's request, a kick's
+  follow-up reading or an earlier `refresh` — is at least **60 seconds** old. That limit holds whichever session asks
+  and however often, and it is the only rule: a failing account's longer retry interval does not hold it back, and an
+  account due for a reading for any other reason is not read sooner by the request. Within the limit the held reading
+  is returned as it is, with no error.
+- An account whose reading is already running is not read again; the call answers with what is held for it.
+- The reading is an ordinary one (see "How a quota is read" above): it reaches every window like any other, and counts
+  towards the four readings and kicks that may run at once.
+- It never kicks (see "When an account is kicked" above).
+- A `refresh` that is not `true` or `false` is refused.
+
+Each reading runs the agent's CLI, which is why a session's request is limited per account rather than left to the
+caller: the tool's description tells the agent to ask only when a reading is too old to decide on.
 
 ## The account quota panel on the rail
 

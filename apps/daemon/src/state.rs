@@ -403,7 +403,7 @@ impl Drop for OutboxHold {
         let successor = self.successor.lock().expect("hold lock poisoned").take();
         let target = match &successor {
             Some(successor) => {
-                for text in self.state.outbox.take(&self.id) {
+                for (text, _) in self.state.outbox.take(&self.id) {
                     self.state.outbox.push(successor, &text);
                 }
                 successor
@@ -1613,6 +1613,15 @@ impl AppState {
         turn.last_event_at = now_millis();
     }
 
+    /// Ends the session's process the way its exit watcher does: it leaves the live map and its
+    /// queue goes with it.
+    #[cfg(test)]
+    pub fn end_process_for_test(self: &Arc<Self>, id: &str) {
+        if let Some(live) = self.live_session(id) {
+            self.unregister_live(&live);
+        }
+    }
+
     /// Whether a clock-attributed turn end would be consumed as an echo of an earlier ending rather
     /// than acted on. Nothing in the daemon has to ask — `close_turn` decides it — but the rule is
     /// subtle enough that its test says so directly rather than inferring it.
@@ -1742,6 +1751,43 @@ impl AppState {
         ticket
     }
 
+    /// [`Self::queue_message`] for a message kept in the store as `row` (see
+    /// [`Self::keep_info_if_not_running`]): the row is deleted once the message has been written
+    /// into the session, not when it is queued, so a queue that is lost leaves it for the next
+    /// resume.
+    pub fn queue_kept_message(&self, id: &str, text: &str, row: i64) {
+        if self.outbox.push_kept(id, text, row).is_some() {
+            self.note_activity(id);
+        }
+    }
+
+    /// How many messages are kept in the store for the session and not on the queue, which counts
+    /// the ones that are (see [`Self::queued_count`]).
+    pub fn kept_unqueued_count(&self, id: &str) -> Result<usize> {
+        Ok(self
+            .store
+            .pending_info(id)?
+            .iter()
+            .filter(|(row, _)| !self.outbox.is_row_queued(*row))
+            .count())
+    }
+
+    /// Keeps `text` in the store for the session `id`, to be queued at its next resume, unless it
+    /// has a process or is being launched, in which case it returns `false` and keeps nothing. The
+    /// check and the insert are one step under the `live` lock, which [`Self::begin_launch`] takes
+    /// for writing before it reads the store, so a launch that begins either sees the row or is
+    /// seen by this check, and a message is never kept for a session that has already read what
+    /// was kept. (An archive can still land between this check and the insert; its rows are then
+    /// cleared by the next archive or delete of the session, and are harmless until a reopen.)
+    pub fn keep_info_if_not_running(&self, id: &str, text: &str) -> Result<bool> {
+        let live = self.live.read().expect("live sessions lock poisoned");
+        if live.sessions.contains_key(id) || live.launching.contains(id) {
+            return Ok(false);
+        }
+        self.store.add_pending_info(id, text)?;
+        Ok(true)
+    }
+
     /// [`Self::queue_message`] for a session a change of its account's sharing is restarting, and
     /// `None` for any other. The check and the push are one step under the `live` lock, which
     /// [`AccountSharingLock::end_restart`] takes to let the session go before it ends the hold, so
@@ -1794,7 +1840,8 @@ impl AppState {
         // And never a session on its way out. Archiving records the status before the process is
         // gone, so a hook from the dying process can arrive reporting work while the live entry it
         // would be drained through is still registered. Nothing is waiting on this answer: a sender
-        // is refused before it ever queues for a dormant session.
+        // is refused before it ever queues for a dormant session, and what is held for an
+        // interrupted one is in the store (`Store::add_pending_info`), not in the queue.
         match self.store.get_session(id) {
             Ok(Some(record)) if !record.status.is_dormant() => {}
             _ => return Drain::Pending,
@@ -1829,6 +1876,16 @@ impl AppState {
                 live: &live,
             },
         );
+        // What was kept in the store is now in the session, or at least in its input box.
+        let written = self.outbox.take_written();
+        if !written.is_empty() {
+            if let Err(err) = self.store.delete_pending_info(&written) {
+                tracing::warn!(
+                    session = %id, %err,
+                    "deleting information written into a session failed"
+                );
+            }
+        }
         let still_running = self
             .live_session(id)
             .is_some_and(|current| Arc::ptr_eq(&current, &live));
@@ -1990,6 +2047,15 @@ impl AppState {
 
     /// Removes and returns what is queued for a session, oldest first.
     pub fn take_queued(&self, id: &str) -> Vec<String> {
+        self.take_queued_with_rows(id)
+            .into_iter()
+            .map(|(text, _)| text)
+            .collect()
+    }
+
+    /// [`Self::take_queued`], each message with the row of the store it is kept in, if it is (see
+    /// [`Self::queue_kept_message`]).
+    pub fn take_queued_with_rows(&self, id: &str) -> Vec<(String, Option<i64>)> {
         self.outbox.take(id)
     }
 

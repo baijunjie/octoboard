@@ -295,18 +295,20 @@ fn relationships(agent: Agent, owns: bool) -> String {
         lines.push(format!(
             "- `{get_account_quotas}` shows how much plan quota each account has left, as \
              percentages of each window and with the time it resets; check it before relying on \
-             an account that may be running low.",
+             an account that may be running low. Readings are taken about every five minutes; \
+             `refresh` takes a new one, at most once a minute per account.",
             get_account_quotas = tool("get_account_quotas"),
         ));
     }
     lines.push(format!(
         "- Every session reads the same things, whichever its kind, and any of them may read any \
          session, project or console: `{get_session}` a session's status and a tail of its \
-         output, `{read_session_history}` what its conversation held (the messages of the user \
-         and Octoboard and the agent's final replies, not its tool calls) a page at a time from \
-         the latest, `{list_consoles}` the consoles, `{list_projects}` the projects of a \
-         console (yours unless you name another, of which it gives only what `{request_session}` \
-         needs to target a project), and `{list_archived}` the archived sessions of a project. \
+         output (8 KiB, or up to 64 KiB with `output_bytes`), `{read_session_history}` what \
+         its conversation held (the messages of the user and Octoboard and the agent's final \
+         replies, not its tool calls) a page at a time from the latest, `{list_consoles}` the \
+         consoles, `{list_projects}` the projects of a console (yours unless you name another, \
+         of which it gives only what `{request_session}` needs to target a project), and \
+         `{list_archived}` the archived sessions of a project. \
          A session that is not yours (`yours: false`) is to be left alone, whatever you can read \
          of it.",
         get_session = tool("get_session"),
@@ -324,11 +326,13 @@ fn relationships(agent: Agent, owns: bool) -> String {
     lines.push(format!(
         "- `{list_sessions}` shows the other running sessions, in every console and project, and \
          who owns each, with its account, model and the names of the branches it is responsible \
-         for; `{get_session_branches}` gives the worktree each of those branches is checked out \
-         in. `{share_info}` tells any of them something that touches its work — what \
-         you found, decided or changed. It is information for that session to weigh, not an \
-         instruction, its own owner is sent a copy, and it needs no relationship between the two \
-         of you. Share what another session would otherwise trip over, not progress notes.",
+         for (`console`, `project`, `owner` and `yours` narrow it); `{get_session_branches}` \
+         gives the worktree each of those branches is checked out in. `{share_info}` tells any \
+         of them something that touches its work — what you found, decided or changed. It is \
+         information for that session to weigh, not an instruction, its own owner is sent a \
+         copy, and it needs no relationship between the two of you. An interrupted session \
+         takes it once it is resumed; an archived one is refused. Share what another session \
+         would otherwise trip over, not progress notes.",
         list_sessions = tool("list_sessions"),
         get_session_branches = tool("get_session_branches"),
         share_info = tool("share_info"),

@@ -8,7 +8,7 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   read through the agent's own CLI and when, the windows per agent and their labels, how a quota is shown, the
   reading / unavailable / out-of-date states and their reasons, the two-layer 5-hour / weekly meter and the account
   picker's usage bar, what a reading leaves in the account's directory, the rail's quota panel, and when an account
-  counts as used up and what that refuses, and the `get_account_quotas` tool that gives a session the readings.
+  counts as used up and what that refuses, and the `get_account_quotas` tool that gives a session the readings and refreshes them on request.
 - [Collection motion](product/collection-motion.md) — entry, exit and position transitions for dynamic collections, including
   horizontal and wrapping items, virtualized rows, keyboard focus and reduced motion.
 - [Consoles](product/consoles.md) — consoles: their fields and working directory, the two default agents, agents
@@ -133,8 +133,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Reporting to an owner](product/reporting-to-owners.md) — how a bound session reports to its owner with `report`, the
   report synthesised when a session stops without reporting, and automatic archiving on a `done` report.
 - [Information between sessions](product/information-between-sessions.md) — listing the running sessions of every
-  console with `list_sessions` and writing information into any of them with `share_info`: why it reaches a session as
-  information rather than an instruction, and the copy its owner is sent.
+  console with `list_sessions` and writing information into any of them with `share_info`: the filters that narrow the list, why it reaches a session
+  as information rather than an instruction, the copy its owner is sent, and information kept for an interrupted
+  session until it is resumed (an archived one is refused).
 - [Message delivery](product/message-delivery.md) — how a message written into a session is delivered: what is
   sanitized, when it is queued until the session can take it, the hold while a trust confirmation may be up, the holds
   behind screens an agent raises that only the user can answer and after a Grok Build error, a Claude Code relaunch
@@ -156,7 +157,7 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   project session has, the `accounts` and `launch` argument shapes, when a change takes effect, and what is never
   exposed to an agent.
 - [Report panel](product/report-panel.md) — what a console session shows in the right pane: pushing a page with
-  `show_page` and what the page id is for, paging back through the kept history, why a history page is read-only and
+  `show_page` and what the page id is for, reading back the pages pushed with `list_pages`, paging back through the kept history, why a history page is read-only and
   where that is enforced, why a page is a static document whose scripts never run and what is stripped from it, why it
   has no route to the network, submitting a native form and how its fields reach the console session, Escape and F6
   inside a page, the window shortcuts (⌘[ / ⌘], ⌃Tab) a page passes on to the window, the light surface a page renders

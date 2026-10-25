@@ -2,7 +2,7 @@
 //! console session, an instruction the console session sent, an instruction handed to a session
 //! being reopened.
 //!
-//! Three properties, each of which something upstream depends on:
+//! Four properties, each of which something upstream depends on:
 //!
 //! - **Order-preserving.** A message that cannot be written yet does not let a later one past it.
 //!   Reports from several project sessions arriving at one console session, and a console
@@ -11,7 +11,9 @@
 //!   whose drain reports the loss; a message a view of the agent's took instead of the
 //!   conversation (below), which is reported too; and a session whose process ends, which takes
 //!   its queue with it. Short of those, whoever queued a message was told not to send it again and
-//!   is right.
+//!   is right. A message kept in the store for a session that was interrupted is backed by its row
+//!   there, which goes only once the message is written (or lost in a half-write), so a process
+//!   ending before then leaves it for the next resume.
 //! - **A held queue is kept and not written.** A handoff holds the original's queue: messages are
 //!   still accepted, a drain in progress stops at its next message, and the queue survives the
 //!   session's process ending, so that its holder can forward it to the session that takes over
@@ -158,6 +160,21 @@ pub struct Outbox {
     /// the session is being handed off and what is queued for it goes to its successor, or
     /// restarted for a change of its account's sharing (the value is `true`).
     held: Mutex<HashMap<String, bool>>,
+    /// The messages that are also kept in the store (`Store::add_pending_info`), by ticket, and
+    /// the row each is kept in. A row is deleted only once its message has been written into the
+    /// session ([`Self::take_written`]), so a daemon that exits before the queue drains, or a
+    /// process that ends first, leaves it for the next resume.
+    kept: Mutex<Keeps>,
+}
+
+#[derive(Default)]
+struct Keeps {
+    /// Ticket to row, for a message still queued or being written.
+    queued: HashMap<Ticket, i64>,
+    /// The same the other way round, so a row is queued once however often it is read.
+    tickets: HashMap<i64, Ticket>,
+    /// The rows whose messages have been written, not yet deleted from the store.
+    written: Vec<i64>,
 }
 
 impl Outbox {
@@ -171,6 +188,62 @@ impl Outbox {
             .or_default()
             .push_back((ticket, text.to_string()));
         ticket
+    }
+
+    /// [`Self::push`] for a message kept in the store as row `row`, which goes once it is written.
+    /// A row that already has a message queued or being written is not queued again, whatever
+    /// session it is asked for: a queue held across a restart still has it.
+    pub fn push_kept(&self, id: &str, text: &str, row: i64) -> Option<Ticket> {
+        let mut queues = self.queues.lock().expect("outbox lock poisoned");
+        let ticket = {
+            let mut kept = self.kept.lock().expect("outbox kept lock poisoned");
+            if kept.tickets.contains_key(&row) {
+                return None;
+            }
+            let ticket = self.next_ticket.fetch_add(1, Ordering::Relaxed);
+            kept.queued.insert(ticket, row);
+            kept.tickets.insert(row, ticket);
+            ticket
+        };
+        queues
+            .entry(id.to_string())
+            .or_default()
+            .push_back((ticket, text.to_string()));
+        Some(ticket)
+    }
+
+    /// Whether the message kept as row `row` is queued or being written.
+    pub fn is_row_queued(&self, row: i64) -> bool {
+        self.kept
+            .lock()
+            .expect("outbox kept lock poisoned")
+            .tickets
+            .contains_key(&row)
+    }
+
+    /// The rows of kept messages written into their sessions since the last call, for the store to
+    /// delete.
+    pub fn take_written(&self) -> Vec<i64> {
+        std::mem::take(&mut self.kept.lock().expect("outbox kept lock poisoned").written)
+    }
+
+    /// The message with this ticket is in its session, so its row, if it has one, may go.
+    fn mark_written(&self, ticket: Ticket) {
+        let mut kept = self.kept.lock().expect("outbox kept lock poisoned");
+        if let Some(row) = kept.queued.remove(&ticket) {
+            kept.tickets.remove(&row);
+            kept.written.push(row);
+        }
+    }
+
+    /// The messages with these tickets will not be written by this queue, so their rows stay.
+    fn unkeep(&self, tickets: impl Iterator<Item = Ticket>) {
+        let mut kept = self.kept.lock().expect("outbox kept lock poisoned");
+        for ticket in tickets {
+            if let Some(row) = kept.queued.remove(&ticket) {
+                kept.tickets.remove(&row);
+            }
+        }
     }
 
     /// Writes out whatever is queued for this session, oldest first.
@@ -250,7 +323,7 @@ impl Outbox {
             };
             let before = prompts.sent();
             match write(&text) {
-                Ok(()) if !checked || prompts.wait_past(before) => {}
+                Ok(()) if !checked || prompts.wait_past(before) => self.mark_written(ticket),
                 Ok(()) => {
                     let now = prompts.sighting();
                     if now.discarded_seen > seen.discarded_seen {
@@ -262,9 +335,12 @@ impl Outbox {
                     }
                     if now.diverted_seen > seen.diverted_seen {
                         tracing::warn!(session = %id, "a view of background agents took a message");
+                        self.mark_written(ticket);
                         return Drain::Diverted(ticket);
                     }
                     tracing::warn!(session = %id, "a written message was not sent by the agent");
+                    // Its text is in the input box, which is as far as a written message goes.
+                    self.mark_written(ticket);
                     prompts.mark_unsent(before);
                     return Drain::Unsent(ticket);
                 }
@@ -280,7 +356,10 @@ impl Outbox {
                     // The queue behind it goes too. The next message written into this session is
                     // run together with the fragment, so it would arrive spoiled — delivering it
                     // spoiled is worse than saying it was not delivered.
-                    let abandoned = self.forget(id);
+                    // The sender is told these messages were lost, so their rows are done with
+                    // too, and a resume does not deliver what was reported undelivered.
+                    self.mark_written(ticket);
+                    let abandoned = self.forget_as_done(id);
                     tracing::error!(
                         session = %id,
                         written = partial.written,
@@ -315,16 +394,32 @@ impl Outbox {
                 .contains(id)
     }
 
+    /// [`Self::forget`] for a queue that is reported lost: the rows of its kept messages go too.
+    fn forget_as_done(&self, id: &str) -> usize {
+        let queue = self
+            .queues
+            .lock()
+            .expect("outbox lock poisoned")
+            .remove(id)
+            .unwrap_or_default();
+        for (ticket, _) in &queue {
+            self.mark_written(*ticket);
+        }
+        queue.len()
+    }
+
     /// Forgets this session's queue and says how much went with it. Called when its process is gone
     /// — there is nothing to write to, and a resume starts the agent at its prompt rather than
     /// replaying a queue it never saw — and when a write left the input line holding a fragment.
     pub fn forget(&self, id: &str) -> usize {
-        self.queues
+        let queue = self
+            .queues
             .lock()
             .expect("outbox lock poisoned")
             .remove(id)
-            .map(|queue| queue.len())
-            .unwrap_or(0)
+            .unwrap_or_default();
+        self.unkeep(queue.iter().map(|(ticket, _)| *ticket));
+        queue.len()
     }
 
     /// Stops writing this session's queue until [`Self::release_hold`]. Pushing still works.
@@ -359,14 +454,28 @@ impl Outbox {
             .unwrap_or(false)
     }
 
-    /// Removes and returns what is queued for this session, oldest first.
-    pub fn take(&self, id: &str) -> Vec<String> {
-        self.queues
+    /// Removes and returns what is queued for this session, oldest first, each with the row it is
+    /// kept in, if it is.
+    pub fn take(&self, id: &str) -> Vec<(String, Option<i64>)> {
+        let queue = self
+            .queues
             .lock()
             .expect("outbox lock poisoned")
             .remove(id)
-            .map(|queue| queue.into_iter().map(|(_, text)| text).collect())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        // Whoever takes it forwards it, and what is kept for the session is theirs to deal with.
+        let kept = self.kept.lock().expect("outbox kept lock poisoned");
+        let rows: Vec<Option<i64>> = queue
+            .iter()
+            .map(|(ticket, _)| kept.queued.get(ticket).copied())
+            .collect();
+        drop(kept);
+        self.unkeep(queue.iter().map(|(ticket, _)| *ticket));
+        queue
+            .into_iter()
+            .zip(rows)
+            .map(|((_, text), row)| (text, row))
+            .collect()
     }
 
     fn claim(&self, id: &str) -> bool {
@@ -593,6 +702,43 @@ mod tests {
             Drain::Clear
         );
         assert_eq!(written, vec!["first", "late arrival"]);
+    }
+
+    /// A message kept in the store is queued once per row however often it is pushed, its row is
+    /// handed on once it is written, a queue that is forgotten or taken leaves the row alone, and a
+    /// queue reported lost counts as done.
+    #[test]
+    fn a_kept_message_is_queued_once_and_its_row_goes_when_it_is_written_or_lost() {
+        let outbox = Outbox::default();
+        assert!(outbox.push_kept("s", "kept", 7).is_some());
+        assert!(outbox.push_kept("s", "kept", 7).is_none());
+        assert_eq!(outbox.len("s"), 1);
+        assert_eq!(
+            outbox.drain_with("s", &mut |_| Ok(()), &MidTurn),
+            Drain::Clear
+        );
+        assert_eq!(outbox.take_written(), [7]);
+        // Written, the row may be queued again by a later resume that still finds it.
+        assert!(outbox.push_kept("s", "kept", 7).is_some());
+
+        // Taken, it reports its row and is no longer queued.
+        let taken = outbox.take("s");
+        assert_eq!(taken, [("kept".to_string(), Some(7))]);
+        assert!(outbox.push_kept("s", "kept", 7).is_some());
+        outbox.forget("s");
+        assert!(outbox.take_written().is_empty());
+
+        // Lost: reported to the sender as undelivered, so its row and those behind it go.
+        outbox.push_kept("s", "first", 1);
+        outbox.push_kept("s", "second", 2);
+        outbox.push("s", "plain");
+        assert_eq!(
+            outbox.drain_with("s", &mut |_| Err(partial(3)), &MidTurn),
+            Drain::Lost
+        );
+        let mut rows = outbox.take_written();
+        rows.sort();
+        assert_eq!(rows, [1, 2]);
     }
 
     /// Nothing went in, so the session could not take it: it stays at the front, and the one behind

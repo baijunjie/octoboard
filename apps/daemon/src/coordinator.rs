@@ -3676,6 +3676,8 @@ pub(crate) async fn relaunch_session_with(
     // told of their owner on every resume. Read and built with the refusals, before anything is
     // written, and cleared only for the count seen here, so a change marked since stays owed.
     let owed = state.store.owner_notice_pending(id)?;
+    // Information shared while the session was interrupted, read with the refusals as well.
+    let held = state.store.pending_info(id)?;
     let combined = if owed > 0 {
         let notice = mcp::owner_notice(state, &session)?;
         Some(match instruction {
@@ -3715,6 +3717,15 @@ pub(crate) async fn relaunch_session_with(
         }
         queued => (None, queued),
     };
+    // The information is queued in the order it arrived. For a Claude Code resume the instruction
+    // goes as the launch prompt, so the information is written after it; for the other agents it
+    // is queued behind the information. Each row stays in the store until its message has been
+    // written into the session (`AppState::flush_outbox`): a launch that fails, a process that
+    // ends or a daemon that exits before then discards the queue and leaves the row for the next
+    // resume.
+    for (row, text) in &held {
+        state.queue_kept_message(&session.id, text, *row);
+    }
     // Queued with every refusal above already past, so a call that never launched leaves nothing
     // behind for a later launch to deliver.
     if let Some(instruction) = queued {
@@ -4291,6 +4302,14 @@ fn archive_record(state: &Arc<AppState>, id: &str) -> Result<()> {
     if let Some(live) = state.live_session(id) {
         // Ending the process waits out the graceful period, which the caller should not.
         stop_process(live);
+    }
+    // Information held for it to take at a resume is not for it once archived: a later reopen
+    // must not be handed it.
+    if let Err(err) = state.store.clear_pending_info(id) {
+        tracing::warn!(
+            session = %id, %err,
+            "dropping the information held for an archived session failed"
+        );
     }
     Ok(())
 }
@@ -13140,6 +13159,114 @@ mod tests {
         assert_eq!(queued.len(), 1);
         assert!(queued[0].contains("you have no owner now"), "{queued:?}");
         assert_eq!(state.store.owner_notice_pending("codex").unwrap(), 0);
+    }
+
+    /// Information shared with an interrupted session stays in the store through a launch that
+    /// fails, and through a successful one until its message has been written into the session:
+    /// a queue lost before then (the process ends, the daemon exits) leaves the rows for the next
+    /// resume, which queues each message once, in the order the information arrived. Archiving or
+    /// deleting the session drops what is kept.
+    #[tokio::test]
+    async fn information_kept_for_an_interrupted_session_is_deleted_only_once_it_is_written() {
+        use SessionStatus::Idle;
+        let interrupt = |state: &Arc<AppState>, id: &str| {
+            let mut session = state.session_record(id).unwrap();
+            session.status = SessionStatus::Interrupted;
+            state.store.update_session(&session).unwrap();
+        };
+        let (state, _dir, _live) = binding_fixture(
+            "kept-info",
+            vec![
+                console_session("hub", Idle),
+                dormant_with_conversation("codex", Agent::Codex, "hub"),
+                dormant_with_conversation("archived-later", Agent::Codex, "hub"),
+                dormant_with_conversation("deleted-later", Agent::Codex, "hub"),
+            ],
+            &["hub"],
+        );
+        let share = |target: &str, text: &str| {
+            let (delivery, _) = crate::sharing::deliver_info(&state, "hub", target, text).unwrap();
+            assert_eq!(delivery, crate::reporting::Delivery::Queued);
+        };
+        share("codex", "first news");
+        share("codex", "second news");
+        assert!(state.take_queued("codex").is_empty());
+
+        relaunch_stand_in(&state, "codex", true)
+            .await
+            .expect_err("the launch fails");
+        assert_eq!(state.store.pending_info("codex").unwrap().len(), 2);
+        assert_eq!(state.queued_count("codex"), 0);
+
+        // A launch that succeeds queues them, and keeps the rows until they are written.
+        let (_, queued) = relaunch_stand_in(&state, "codex", false).await.unwrap();
+        assert_eq!(queued.len(), 2, "{queued:?}");
+        assert!(queued[0].contains("first news"), "{queued:?}");
+        assert!(queued[1].contains("second news"), "{queued:?}");
+        assert_eq!(state.store.pending_info("codex").unwrap().len(), 2);
+
+        // The queue is lost before it drained, as when the daemon exits or the process ends: the
+        // next resume queues each message once.
+        state.end_process_for_test("codex");
+        interrupt(&state, "codex");
+        assert_eq!(state.store.pending_info("codex").unwrap().len(), 2);
+        let (_, queued) = relaunch_stand_in(&state, "codex", false).await.unwrap();
+        assert_eq!(queued.len(), 2, "{queued:?}");
+
+        // Written into the session, the rows go.
+        state.end_process_for_test("codex");
+        interrupt(&state, "codex");
+        let started = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let launches = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let claim = state.begin_launch("codex").unwrap();
+        relaunch_session_with(
+            &state,
+            &claim,
+            "codex",
+            None,
+            true,
+            None,
+            None,
+            crate::test_support::stand_in_launch(&started, &launches, || {}),
+        )
+        .await
+        .unwrap();
+        drop(claim);
+        assert_eq!(state.store.pending_info("codex").unwrap().len(), 2);
+        let live = state.live_session("codex").expect("running");
+        state.flush_outbox("codex", SessionStatus::Idle);
+        let seen = crate::test_support::output_containing(&live, "second news");
+        assert!(seen.contains("first news"), "{seen}");
+        assert!(state.store.pending_info("codex").unwrap().is_empty());
+        assert_eq!(state.queued_count("codex"), 0);
+
+        // A share that meets a launch under way keeps nothing: the launch may already have read
+        // what was kept.
+        let claim = state.begin_launch("archived-later").unwrap();
+        assert!(!state
+            .keep_info_if_not_running("archived-later", "too late")
+            .unwrap());
+        drop(claim);
+        assert!(state
+            .store
+            .pending_info("archived-later")
+            .unwrap()
+            .is_empty());
+
+        share("archived-later", "stale news");
+        share("deleted-later", "stale news");
+        archive_session(&state, "archived-later").unwrap();
+        assert!(state
+            .store
+            .pending_info("archived-later")
+            .unwrap()
+            .is_empty());
+        state.discard_session("deleted-later").unwrap();
+        assert!(state
+            .store
+            .pending_info("deleted-later")
+            .unwrap()
+            .is_empty());
     }
 
     /// The parting note of an owner that releases a session that is not running is kept with the

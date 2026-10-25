@@ -180,7 +180,7 @@ confirmations, settings and sessions would each need an owner and an authorizati
   is text written into the receiving terminal, so any session that can write to another could steer it. Commanding is
   therefore the only hard-enforced boundary (`send_message`, `archive_session` and `reopen_session` act on the caller's
   own sessions). Sharing information is a separate tool, offered to every session and reaching any running session in
-  any console or project (see `docs/product/information-between-sessions.md`); it is delivered under a header naming
+  any console or project, and keeping what it is given for an interrupted session until that session is resumed (see `docs/product/information-between-sessions.md`); it is delivered under a header naming
   the sender and saying the text is information to weigh, role descriptions tell each session whose work it takes, and
   the receiver's owner is copied so it is never blind to what reaches its sessions. Octoboard makes the distinction
   plain; whether a model keeps to it is the model's call.

@@ -449,9 +449,26 @@ pub(super) async fn tell(
 }
 
 /// Forwards what was queued for the original to the receiving session, in order, through the same
-/// delivery any message takes.
+/// delivery any message takes: its queue, then the information kept in the store for it while it
+/// was interrupted that is not in it, which the archive that follows would otherwise drop.
 async fn forward_queued(state: &Arc<AppState>, original: &str, receiving: &str) {
-    for text in state.take_queued(original) {
+    // The queue in order, then what is kept and was not queued: a kept message is in both once the
+    // session has been resumed and not yet written to.
+    let queued = state.take_queued_with_rows(original);
+    let in_queue: Vec<i64> = queued.iter().filter_map(|(_, row)| *row).collect();
+    let mut texts: Vec<String> = queued.into_iter().map(|(text, _)| text).collect();
+    match state.store.pending_info(original) {
+        Ok(kept) => texts.extend(
+            kept.into_iter()
+                .filter(|(row, _)| !in_queue.contains(row))
+                .map(|(_, text)| text),
+        ),
+        Err(err) => tracing::warn!(
+            session = %original, %err,
+            "reading the information kept for the original session failed"
+        ),
+    }
+    for text in texts {
         if let Err(err) =
             reporting::write_message_off_runtime(state, receiving, text, WhenBlocked::Queue).await
         {
@@ -476,6 +493,13 @@ async fn forward_queued(state: &Arc<AppState>, original: &str, receiving: &str) 
                 .about(receiving),
             );
         }
+    }
+    // Forwarded, or announced as dropped: either way not the original's to keep.
+    if let Err(err) = state.store.clear_pending_info(original) {
+        tracing::warn!(
+            session = %original, %err,
+            "clearing the information kept for the original session failed"
+        );
     }
 }
 

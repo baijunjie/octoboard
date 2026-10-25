@@ -49,6 +49,11 @@ can change while the session runs (see `docs/product/changing-session-owners.md`
 orchestration is at most two levels deep: a console session, a lead session bound to it, and the lead session's own
 sessions.
 
+**Two things no tool does, by design.** No session can interrupt another session's turn: what it writes into a session
+mid-turn waits for the turn to end, as the agent queues it (see "Messages held until a session can take them" in
+`docs/product/message-delivery.md`). And no tool opens a file or a diff in the window for the user: besides the
+sessions' own terminals, a console session's report panel is the only place a session shows the user anything.
+
 A session is offered the tools of the Octoboard that launched it, for as long as that agent process runs: a tool
 Octoboard gains later reaches a running session only once it is next launched — resumed, reopened or moved to another
 account.
@@ -87,6 +92,7 @@ Besides the reads in `docs/product/what-every-session-reads.md`:
 | `request_resume_session` | `conversation`, `project?`, `title?`, `model?`, `effort?` | Asks the user to resume a conversation by its id, as the session dialog's Resume conversation tab does; a console session has to name the project. See `docs/product/requests-to-resume-a-conversation.md`. |
 | `share_info` | see `docs/product/information-between-sessions.md` | As for every session. |
 | `show_page` | `html` | Pushes an HTML page to the calling console session's report panel, beside the console session's own terminal. Answers with the new page's id. See `docs/product/report-panel.md`. |
+| `list_pages` | `page?` | Lists the pages the calling console session pushed, or reads one of them back in full. See "Reading back the pages pushed" in `docs/product/report-panel.md`. |
 
 A project is named either by its id or by its name where that name is unambiguous within the
 console; an ambiguous name is refused and asks for the id. A project of another console is refused, except by
@@ -137,7 +143,7 @@ own project and drive them, the way a console session drives its console's. Besi
 | `share_info` | see `docs/product/information-between-sessions.md` | As for every session. |
 | `get_project` | — | Its own project's settings, read-only, as for every project session (see "A project's settings" in `docs/product/agent-settings-tools.md`). |
 
-It has no `add_project` or `show_page`, and none of the tools that change a setting: `update_project`, `get_console`,
+It has no `add_project`, `show_page` or `list_pages`, and none of the tools that change a setting: `update_project`, `get_console`,
 `update_console`, `get_settings` and `update_settings` are the console session's alone.
 
 **Writes are the caller's own** — the console session's rule. `send_message`, `rename_session`,

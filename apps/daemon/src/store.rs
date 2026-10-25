@@ -249,6 +249,14 @@ impl Store {
                 anchor_message_id TEXT,
                 created_at        INTEGER NOT NULL
             );
+            -- Information shared with a session that was interrupted, held to be written into it
+            -- once it is resumed (`Store::add_pending_info`), oldest first by `id`. Deleting the
+            -- session takes its rows.
+            CREATE TABLE IF NOT EXISTS pending_info (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                text       TEXT NOT NULL
+            );
             -- The session working on a branch, keyed on the branch because one session works on
             -- many and a branch has one responsible session. It starts as the session whose own git
             -- reported creating the branch and moves only by a handover. No `REFERENCES` on
@@ -1684,6 +1692,51 @@ impl Store {
         }
         write_added_agents(&conn, &agents)?;
         Ok(true)
+    }
+
+    // -- information held for interrupted sessions ----------------------------
+
+    /// Holds `text`, a message for the interrupted session `session_id`, until it is resumed and
+    /// the message has been written into it. Returns the row it is kept in.
+    pub fn add_pending_info(&self, session_id: &str, text: &str) -> Result<i64> {
+        let conn = self.lock();
+        conn.execute(
+            "INSERT INTO pending_info (session_id, text) VALUES (?1, ?2)",
+            params![session_id, text],
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    /// What is held for the session with the row each is kept in, oldest first.
+    pub fn pending_info(&self, session_id: &str) -> Result<Vec<(i64, String)>> {
+        let conn = self.lock();
+        let mut stmt =
+            conn.prepare("SELECT id, text FROM pending_info WHERE session_id = ?1 ORDER BY id")?;
+        let rows = stmt
+            .query_map(params![session_id], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    /// Drops the held messages in these rows, which have been written into their session, in one
+    /// transaction.
+    pub fn delete_pending_info(&self, rows: &[i64]) -> Result<()> {
+        let mut conn = self.lock();
+        let tx = conn.transaction()?;
+        for row in rows {
+            tx.execute("DELETE FROM pending_info WHERE id = ?1", params![row])?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Drops everything held for the session, which will not take it.
+    pub fn clear_pending_info(&self, session_id: &str) -> Result<()> {
+        self.lock().execute(
+            "DELETE FROM pending_info WHERE session_id = ?1",
+            params![session_id],
+        )?;
+        Ok(())
     }
 
     // -- pages ---------------------------------------------------------------
@@ -5319,6 +5372,38 @@ mod tests {
         store.clear_owner_notice("session-1", 2).unwrap();
         assert_eq!(store.owner_notice_pending("session-1").unwrap(), 0);
         assert_eq!(store.owner_notice_pending("nobody").unwrap(), 0);
+    }
+
+    /// Information held for an interrupted session is read oldest first, survives the store being
+    /// opened again, is dropped by id or for the whole session, and goes with the session.
+    #[test]
+    fn information_held_for_a_session_survives_reopening_and_goes_with_the_session() {
+        let path = temp_db("pending-info");
+        {
+            let store = Store::open(&path).expect("store");
+            store
+                .insert_console(&console(None, None, None))
+                .expect("console");
+            store.insert_session(&session(None)).expect("session");
+            store.add_pending_info("session-1", "one").unwrap();
+            store.add_pending_info("session-1", "two").unwrap();
+        }
+        let store = Store::open(&path).expect("reopened");
+        let held = store.pending_info("session-1").unwrap();
+        assert_eq!(
+            held.iter()
+                .map(|(_, text)| text.as_str())
+                .collect::<Vec<_>>(),
+            ["one", "two"]
+        );
+        store.delete_pending_info(&[held[0].0]).unwrap();
+        assert_eq!(store.pending_info("session-1").unwrap().len(), 1);
+        store.add_pending_info("session-1", "three").unwrap();
+        store.clear_pending_info("session-1").unwrap();
+        assert!(store.pending_info("session-1").unwrap().is_empty());
+        store.add_pending_info("session-1", "four").unwrap();
+        store.delete_session("session-1").unwrap();
+        assert!(store.pending_info("session-1").unwrap().is_empty());
     }
 
     /// A binding is cleared only while the session is still bound to the owner the caller read,

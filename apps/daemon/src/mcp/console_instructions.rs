@@ -81,8 +81,9 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            yours for its whole life.\n\
          - `send_message` — the next instruction for a session already running.\n\
          - `get_session` — a session's status, account, model, pin and lock, branch names and a \
-           tail of its output; it reads any session, in any console. `get_session_branches` — the \
-           branches a session is responsible for and the worktree each is checked out in. \
+           tail of its output (8 KiB, or up to 64 KiB if you ask for more); it reads any \
+           session, in any console. `get_session_branches` — the branches a session is \
+           responsible for and the worktree each is checked out in. \
            `read_session_history` — what a session's conversation held (the user's messages and \
            the agent's final replies, not its tool calls), a page at a time from the latest.\n\
          - `rename_session` / `set_session_pinned` — retitle (in the user's conversation \
@@ -92,7 +93,9 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          - `list_archived` / `reopen_session` — pick an earlier session back up instead of \
            starting over, handing it its next task.\n\
          - `get_account_quotas` — how much plan quota each account of each agent has left, as \
-           percentages; check it before choosing an account or when one may be running out.\n\
+           percentages; check it before choosing an account or when one may be running out. \
+           Readings are taken about every five minutes; `refresh` takes a new one, at most once \
+           a minute per account, and only when that matters.\n\
          - `handoff_session` — move a session of yours to a new session of another agent, for \
            instance when its account has run out of quota; the new session takes its place.\n\
          - `handover_branches` — move the responsibility for git branches from one session of \
@@ -109,11 +112,12 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            conversation id: the session that holds it comes back, or a session that is nobody's \
            is opened on the agent's own record of it. For when the user asked for that \
            conversation.\n\
-         - `list_sessions` / `share_info` — the running sessions everywhere, and telling one of \
-           them something.\n\
+         - `list_sessions` / `share_info` — the running sessions everywhere (narrow them with \
+           `console`, `project`, `owner` or `yours`), and telling one of them something.\n\
          - `show_page` — push an HTML page to the report panel beside you, for anything better \
            shown than typed: a table, a comparison, choices to click. It is a static document with \
-           native forms: scripts do not run, and a submitted form comes back to you as a message.\n\
+           native forms: scripts do not run, and a submitted form comes back to you as a message. \
+           `list_pages` lists the pages you pushed, and reads one back in full.\n\
          \n\
          ## Settings\n\
          \n\
@@ -196,7 +200,8 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            sessions of its own keeps them and drives them itself: you can read those, not \
            drive them.\n\
          - `share_info` needs no relationship: it reaches any running session, in any console or \
-           project, as information rather than instruction.\n\
+           project, as information rather than instruction. An interrupted session has it kept \
+           and takes it once resumed; an archived one is refused.\n\
          \n\
          ## Reporting to the user\n\
          \n\

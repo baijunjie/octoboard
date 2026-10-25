@@ -31,6 +31,7 @@ mod handoff;
 mod handover;
 mod history;
 mod models;
+mod pages;
 mod quotas;
 pub(crate) mod reads;
 mod resume_request;
@@ -446,6 +447,28 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     SHARE_INFO,
     GET_ACCOUNT_QUOTAS,
     ToolDef {
+        name: "list_pages",
+        description: "The pages this session has pushed to the report panel with `show_page`, \
+                      oldest first, read-only: each one's id (`page`), `created_at` \
+                      (milliseconds since the epoch), `html_bytes` and `title` (its `<title>`; \
+                      null when it has none). Only this session's own pages are listed. Name a \
+                      `page` to read that one in full, `html` included. Use it to find the id of \
+                      an earlier page, which tells a form submission apart from one of another \
+                      page, or to build on what an earlier page showed.",
+        schema: || {
+            object_schema(
+                json!({
+                    "page": {
+                        "type": "string",
+                        "description": "A page's id, as `show_page` returned it. Left out, \
+                                        every page is listed without its HTML.",
+                    },
+                }),
+                &[],
+            )
+        },
+    },
+    ToolDef {
         name: "show_page",
         description: "Push a page to the report panel the user sees beside this session. Every \
                       page pushed is kept, and the user can page back through earlier ones. `html` \
@@ -460,8 +483,9 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                       key, so give every field you want back a `name`. For a choice use \
                       `<button name=\"choice\" value=\"...\">`; the pressed button's value comes \
                       back. `required` and `pattern` validation works. The call's result carries \
-                      the pushed page's id; keep it, since it is the only way to tell a later \
-                      submission came from this page rather than one pushed after it.",
+                      the pushed page's id; keep it, since it is how a later submission is told to \
+                      have come from this page rather than one pushed after it (`list_pages` \
+                      lists the ids again).",
         schema: || {
             object_schema(
                 json!({
@@ -838,8 +862,9 @@ const GET_SESSION_BRANCHES: ToolDef = ToolDef {
 const GET_SESSION: ToolDef = ToolDef {
     name: "get_session",
     description: concat!(
-        "The session's status, plus a tail of what it has printed (a session that \
-         has ended keeps its last output; `null` if none was kept). Any session can \
+        "The session's status, plus a tail of what it has printed (the last 8 KiB, or \
+         `output_bytes` of it; a session that has ended keeps its last output; `null` if \
+         none was kept). Any session can \
          be read, in any project or console, but one with `yours: false` is not \
          yours to act on, whether nobody owns it (`owner: null` on a project session) or \
          it reports to a different session: leave it alone. A session that is waiting \
@@ -850,7 +875,8 @@ const GET_SESSION: ToolDef = ToolDef {
          session but still has work running in the background. \
          A non-null `writes_held` says why messages for a running session are \
          queued rather than written into it, whatever its `status` reads; \
-         `queued_messages` counts them. ",
+         `queued_messages` counts them, and the information kept for an interrupted \
+         session to take when it is resumed. ",
         session_record_fields!(),
         session_context_field!()
     ),
@@ -858,6 +884,14 @@ const GET_SESSION: ToolDef = ToolDef {
         object_schema(
             json!({
                 "session": { "type": "string", "description": "The session's id." },
+                "output_bytes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65536,
+                    "description": "How many bytes of the session's output to return, counted \
+                                    before escape sequences are stripped. Defaults to 8192; \
+                                    a value above 65536 or below 1 is refused, not clamped.",
+                },
             }),
             &["session"],
         )
@@ -888,7 +922,9 @@ const LIST_PROJECTS: ToolDef = ToolDef {
          has work running in the background. \
          A non-null `writes_held` says why messages for a running session are \
          queued rather than written into it, whatever its `status` reads; \
-         `queued_messages` counts them. With `console` naming another console (`list_consoles` \
+         `queued_messages` counts them, and the information kept for an interrupted \
+         session to take when it is resumed. With `console` naming another console \
+         (`list_consoles` \
          lists them), only \
          what is needed to target a project of it with `request_session` or \
          `request_resume_session` is returned: each project's id (`project`), name, \
@@ -1027,9 +1063,10 @@ const READ_SESSION_HISTORY: ToolDef = ToolDef {
     },
 };
 
-/// What every session, of whatever kind, may do with every other running session: look at them,
-/// and tell them things. Kept apart from `send_message` so that a message arriving in a session is
-/// framed by which tool sent it: an instruction comes from its owner, and information from anyone.
+/// What every session, of whatever kind, may do with every other session: look at the running ones,
+/// and tell any of them things (an interrupted one takes it when resumed). Kept apart from
+/// `send_message` so that a message arriving in a session is framed by which tool sent it: an
+/// instruction comes from its owner, and information from anyone.
 const LIST_SESSIONS: ToolDef = ToolDef {
     name: "list_sessions",
     description: concat!(
@@ -1039,29 +1076,58 @@ const LIST_SESSIONS: ToolDef = ToolDef {
          `owner` (the session it reports to, `owner_kind` saying whether that is a \
          console or a project session; null when nobody owns it and it reports to the \
          user). `yours` marks a session that reports to you, and `your_owner` the \
-         session you report to, which is also given at the top level. Use it to find \
-         who to share information with, or an owner to hand a session to or bind to. An \
+         session you report to, which is also given at the top level. `console`, \
+         `project`, `owner` and `yours` narrow the list, and a session must match every \
+         one given. Use it to find who to share information with, or an owner to hand a \
+         session to or bind to. An \
          idle session with a non-empty `background_tasks` takes messages like any idle \
          session but still has work running in the background. \
          A non-null `writes_held` says why messages for a running session are \
          queued rather than written into it, whatever its `status` reads; \
-         `queued_messages` counts them. ",
+         `queued_messages` counts them, and the information kept for an interrupted \
+         session to take when it is resumed. ",
         session_record_fields!(),
         session_context_field!()
     ),
-    schema: || object_schema(json!({}), &[]),
+    schema: || {
+        object_schema(
+            json!({
+                "console": {
+                    "type": "string",
+                    "description": "Only sessions in this console, by id or name.",
+                },
+                "project": {
+                    "type": "string",
+                    "description": "Only sessions in this project, by id or name.",
+                },
+                "owner": {
+                    "type": "string",
+                    "description": "Only sessions that report to this session, by id.",
+                },
+                "yours": {
+                    "type": "boolean",
+                    "description": "`true`: only the sessions that report to you. `false`: only \
+                                    the ones that do not.",
+                },
+            }),
+            &[],
+        )
+    },
 };
 
 const SHARE_INFO: ToolDef = ToolDef {
     name: "share_info",
-    description: "Tell a running session something it may find useful: what you found, decided \
-                  or changed that touches its work. Any session can be told, in any project or \
+    description: "Tell a session something it may find useful: what you found, decided or \
+                  changed that touches its work. Any session can be told, in any project or \
                   console, console sessions included; no session needs to own the other. It is \
                   delivered marked as information from you, not as an instruction, and the \
                   session it is for takes work only from its owner. When that session reports to \
                   another session, that owner is sent a copy. Held until the user is done when \
-                  the session is waiting for them. Refused for this session itself, and for a \
-                  session with no process running.",
+                  the session is waiting for them. For an interrupted session, with no process \
+                  running, it is kept and delivered when the session is resumed, and dropped if \
+                  the session is archived or deleted first; the answer says `Queued`. Refused \
+                  for this session itself, and for an archived session, which takes nothing \
+                  until it is reopened.",
     schema: || {
         object_schema(
             json!({
@@ -1273,11 +1339,11 @@ const GET_ACCOUNT_QUOTAS: ToolDef = ToolDef {
                   since the epoch; null when it is not exhausted or the reset time is unknown). \
                   Only agents a session could be opened on are listed: one that is not installed \
                   or not added lists no accounts. These are the readings Octoboard last took, \
-                  refreshed about every five minutes, and this call does not take a new one: \
-                  `fetched_at` says how old a reading is, `unavailable` gives the reason a \
-                  reading is missing or could not be refreshed (an account not read yet has \
-                  `fetched_at: null`, as has one of an agent not detected yet). Use it to check \
-                  an account before relying on it, or to pick the account for \
+                  refreshed about every five minutes, and this call takes a new one only when \
+                  `refresh` is true: `fetched_at` says how old a reading is, `unavailable` \
+                  gives the reason a reading is missing or could not be refreshed (an account not \
+                  read yet has `fetched_at: null`, as has one of an agent not detected yet). Use \
+                  it to check an account before relying on it, or to pick the account for \
                   `switch_session_account` or `handoff_session`.",
     schema: || {
         object_schema(
@@ -1286,6 +1352,16 @@ const GET_ACCOUNT_QUOTAS: ToolDef = ToolDef {
                     "type": "string",
                     "enum": ["claude", "codex", "grok"],
                     "description": "List only this agent's accounts. Left out, every agent's.",
+                },
+                "refresh": {
+                    "type": "boolean",
+                    "description": "Take new readings before answering, of the accounts listed. \
+                                    The call then waits for them, which can take several \
+                                    seconds. An account is read at most once a minute, whoever \
+                                    asked: within it the held reading is returned as it is, \
+                                    with no error. A refresh only reads quota and never starts \
+                                    a quota window. Defaults to false, which spends nothing; \
+                                    ask only when a reading is too old to decide on.",
                 },
             }),
             &[],
@@ -1848,6 +1924,7 @@ mod tests {
                 "list_consoles",
                 "share_info",
                 "get_account_quotas",
+                "list_pages",
                 "show_page"
             ]
         );

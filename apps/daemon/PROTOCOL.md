@@ -2249,7 +2249,7 @@ in `docs/product/session-requests.md` ("Waiting for the answer", "How a request 
 
 | Tool | Console session | Unbound or lead project session | Bound project session |
 |---|---|---|---|
-| `add_project`, `update_project`, `get_console`, `update_console`, `get_settings`, `update_settings`, `show_page` | yes | — | — |
+| `add_project`, `update_project`, `get_console`, `update_console`, `get_settings`, `update_settings`, `show_page`, `list_pages` | yes | — | — |
 | `new_session`, `send_message`, `archive_session`, `reopen_session`, `rename_session`, `set_session_pinned` | yes | yes | — |
 | `get_session`, `list_sessions`, `read_session_history`, `get_session_branches`, `list_agent_models`, `list_consoles`, `list_projects`, `list_archived`, `share_info`, `get_account_quotas` | yes | yes | yes |
 | `archive_self` | yes | yes (refused once bound, a lead session included, which wraps up with `report`) | — |
@@ -2470,9 +2470,17 @@ console, changes a project's path, source, host, remote or `trust_consent`, or w
   agent, and anything `switch_session_account` refuses is refused in prose and changes nothing; the session must still
   be the caller's once the switch holds its claim.
 - `list_sessions` answers every running session but the caller's, in every console and project, console sessions
-  included, with `owner`, `owner_kind`, `yours` and `your_owner`; `get_session` and `share_info` reach any session,
-  whichever console or project it is in, while the tools that act on a session (`send_message`, `rename_session` and so
-  on) stay with the session's owner. See `docs/product/information-between-sessions.md`.
+  included, with `owner`, `owner_kind`, `yours` and `your_owner`, narrowed by the optional `console`, `project`,
+  `owner` and `yours` filters, all of which must match; `get_session` (whose optional `output_bytes`, 1 to 65536 and
+  8192 by default, sets the length of the terminal output tail) and `share_info` reach any session, whichever console
+  or project it is in, while the tools that act on a session (`send_message`, `rename_session` and so on) stay with the
+  session's owner. `share_info` to an interrupted session keeps the information in the store until the session is
+  resumed, and is refused for an archived one. See `docs/product/information-between-sessions.md`.
+- `get_account_quotas` takes an optional `refresh`: the accounts it lists are read again first where their last
+  attempt is at least 60 seconds old, without ever starting a quota window. See "Reading quotas from a session" in
+  `docs/product/account-quotas.md`.
+- `list_pages`, a console session's only, lists the report pages it pushed, or with `page` answers one of them with
+  its HTML. See `docs/product/report-panel.md`.
 - Every session a tool describes (`list_sessions`, `list_projects`, `get_session` and the rest) carries the facts the
   write tools depend on: `account` (the account's id, `default` for the agent's default account, as
   `get_account_quotas` and `switch_session_account` name it) and `account_name`, never the account's directory;
@@ -2482,7 +2490,8 @@ console, changes a project's path, source, host, remote or `trust_consent`, or w
   responsible for (empty for none, and for a console session). Reading them runs no process: `branches` comes from the store and the reflog files, once per
   repository for a listing.
 - Every session a tool describes also carries
-  `queued_messages`, the number of messages queued for it and not yet written, and `writes_held`: `null`, or for a
+  `queued_messages`, the number of messages queued for it and not yet written (information kept for it while it is
+  interrupted included), and `writes_held`: `null`, or for a
   running session whose writes are held whatever its `status` reads, `{ reason, explanation }` with `reason` one of
   `starting` (its agent has not sent the signal that it is past its startup screens), `trust_confirmation`,
   `agent_dialog` (its agent is showing a dialog only the user can answer, such as Claude Code's "Resume this

@@ -194,10 +194,11 @@ message about the change could not be written, is **owed a notice** of it. The n
 a restart of Octoboard, and is not part of the session record clients read.
 
 It is delivered when the session's process is next started — a resume, a reopen, or any other relaunch, such as one
-for a switch of account — ahead of anything else that launch hands it, in the same text as the launch's own
-instruction where there is one (an owner's `reopen_session` text, say): a Claude Code session resuming a conversation
+for a switch of account — ahead of the launch's own instruction, in the same text as that instruction where there is
+one (an owner's `reopen_session` text, say): a Claude Code session resuming a conversation
 has it in its launch prompt, any other session as a message delivered once it can take one (see "Messages held until a session can take them" in
-`docs/product/message-delivery.md`).
+`docs/product/message-delivery.md`). Where it stands among the information kept for an interrupted session is in
+"Information for an interrupted session" in `docs/product/information-between-sessions.md`.
 
 The notice is built at delivery, from the binding as it stands then, so a later change replaces an earlier one still
 owed and several changes end in one notice. A session that has an owner is told that its owner changed while it was
