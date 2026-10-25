@@ -68,6 +68,7 @@ Once it holds more than it can show, each of these fades at its edge:
   `docs/product/account-quotas.md`);
 - the **directory browser's** list of directories (see "Browsing directories" in
   `docs/product/projects.md`);
+- the **update notice's release notes** (see "A newer version is available" in `docs/product/in-app-updates.md`);
 - a **strip of tabs** whose tabs do not fit, which scrolls sideways: the row Settings' list of sections becomes
   in a narrow window (see "In a narrow window" in `docs/product/settings.md`). **A tab strip fades over 64 px,
   not 24**. While a tab has visible keyboard focus, the strip's fade is suppressed so the tab and its focus ring stay
@@ -110,12 +111,15 @@ covers. These are:
   buttons sit at the end of that content and the window itself never scrolls, so a long message — the reasons a
   daemon could not start, say — would otherwise leave nothing between those buttons and the top of the screen to take
   focus. In Tab order it comes before the buttons it holds.
-- **the stack trace on the screen for a UI that failed**, named as the stack trace. Nothing else on that screen
+- **the stack trace on the screen for a UI that failed**, named "Error details". Nothing else on that screen
   scrolls the stack, so without it the fade at the stack's edge would be saying there is more where a keyboard could
   not go. In Tab order it comes before Try again, and after the screen's column where that is a stop too.
 - **the list of accounts in the rail's account quota panel**, named "Accounts". Its rows hold nothing that takes
   focus, so nothing else would scroll it. In Tab order it comes after the agent tabs and before Manage accounts… (see
   "What the panel shows" in `docs/product/account-quotas.md`).
+- **the update notice's release notes**, named "What is new", as the disclosure that opens them is. Nothing in them
+  takes focus. In Tab order they come after the notice's buttons (see "A newer version is available" in
+  `docs/product/in-app-updates.md`).
 
 **Keyboard focus does not land under a fade**: a row, a control or a region scrolled into view stops 24 px short of
 the edge, clear of the fade, rather than arriving underneath. In focus mode's lists and the Git mode's change lists

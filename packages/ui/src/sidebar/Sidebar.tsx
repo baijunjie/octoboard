@@ -384,7 +384,7 @@ export function Sidebar({
           // makes it the fixed card. Drawers share that card's inset from the chrome.
           // Starting below `--top-chrome-height` leaves the top bar, and
           // with it the sidebar toggle, visible while the drawer is open; ending above
-          // `--bottom-chrome-height` does the same for the connection banner.
+          // `--bottom-chrome-height` does the same for the connection banner and the update notice.
           //
           // `data-escape-scope`: one of the origins `usePaneToggles`'s capture-phase Escape listener
           // closes a drawer for. `data-pane` is how it finds this element to see whether it holds

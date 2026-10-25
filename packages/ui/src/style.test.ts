@@ -82,7 +82,7 @@ it("keeps the stylesheets in the order of the package's components/index.css", (
 
 it("pins tw-animate-css to the version @heroui/styles depends on", () => {
   const read = (url: URL) => JSON.parse(readFileSync(url, "utf8")) as { devDependencies?: Record<string, string>; dependencies?: Record<string, string> };
-  const own = read(new URL("../package.json", import.meta.url)).devDependencies?.["tw-animate-css"];
+  const own = read(new URL("../package.json", import.meta.url)).dependencies?.["tw-animate-css"];
   const heroui = read(new URL("../node_modules/@heroui/styles/package.json", import.meta.url)).dependencies?.["tw-animate-css"];
   expect(own, "tw-animate-css in package.json").toBe(heroui);
 });

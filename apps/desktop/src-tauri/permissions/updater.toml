@@ -1,0 +1,8 @@
+# A custom permission for the app's own update commands; see `exit-lifecycle.toml` for why an
+# app-defined command needs a file like this.
+"$schema" = "./schemas/schema.json"
+
+[[permission]]
+identifier = "allow-updater"
+description = "Allows the frontend to check for a new version on a release channel and to download and install what the check found."
+commands.allow = ["check_for_update", "install_update"]

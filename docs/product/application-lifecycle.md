@@ -11,14 +11,16 @@ finished behaviour.
 
 ## System requirements and distribution
 
-- **macOS 11 or later**, on **Apple Silicon only** — the release build is a single-architecture `arm64` bundle, and
-  there is no Intel or universal build.
+- **macOS 11 or later**, on Apple Silicon or Intel — the release build is one universal bundle holding both
+  architectures, the bundled daemon included.
 - Octoboard is distributed as a `.dmg` disk image. It cannot be distributed through the Mac App Store: its translucent
   window (see "The window chrome and the content panel" in `docs/product/window-layout.md`) relies on a private macOS
   interface, which the store does not admit. The release build is signed with a Developer ID and notarized, so
   Gatekeeper admits it as built: `spctl` reports `Notarized Developer ID` for the `.app` and the `.dmg`, including a
   copy carrying the quarantine attribute, and `codesign --verify --deep --strict` passes on the bundled daemon. That was
   verified on the machine that built it; installing and running it on a clean machine has not been tried yet.
+- Once installed, the application updates itself in place from the project's releases, on the user's request (see
+  `docs/product/in-app-updates.md`).
 - The server form has no requirements or distribution settled: the daemon is a single binary meant to be put on the
   server as it is, and its Linux build is not established yet.
 
@@ -40,12 +42,16 @@ Two things happen on every daemon start:
 **One Octoboard at a time.** A second daemon running against the same `~/.octoboard` would own a second set of agent
 processes while sharing one database, so it refuses to start. The application then opens its window anyway, on a
 screen that states why the daemon could not start and offers to quit — a failed start never leaves a window with no
-explanation. With no daemon running there is nothing to keep running, so closing the window quits whatever that
+explanation. The daemon's own reason is shown there as raw text in a block of its own, its long lines wrapped; the
+error alert shown over the screen says the daemon did not start, with the same reason in a block under that
+sentence. With no daemon running there is nothing to keep running, so closing the window quits whatever that
 setting says (see "Closing the window" below). The lock is per data directory, so on a server it is one daemon per
 Unix user, whose `~/.octoboard` is the daemon's (see "The daemon on its own" below).
 
-If the daemon starts but dies later, the application says so and asks the user to restart Octoboard; it does not
-silently keep showing a stale session list.
+If the daemon starts but dies later, the application says so in an error alert asking the user to restart Octoboard; it
+does not silently keep showing a stale session list. The alert treats it as an unexpected failure, offering **Report
+issue**, with the daemon's exit reason behind **Error details** rather than in its sentence (see "Recovery and
+unexpected errors" in `docs/product/error-alerts.md`).
 
 **The window appears already themed.** It is created hidden and shown only once the UI has applied the chosen
 appearance (see "Light, dark and follow the system" in `docs/product/appearance.md`), so a launch never flashes the
@@ -255,11 +261,35 @@ application on confirmation (see "Closing the window" above).
   is not brought back for it. Seen with the menu bar icon's Quit while the window was closed and no session was
   running: the application exited with no window, Dock icon or notice appearing.
 - Quitting does not depend on the daemon answering: if it does not, the application exits anyway after a short wait.
+- If the application cannot end itself once the quit is under way, an error alert says Octoboard could not be quit,
+  and the window stays open. The alert treats it as an unexpected failure, offering **Report issue**, with the
+  reason behind **Error details**.
 - Until the window has loaded far enough to be able to ask, a quit is never held back — a window that never gets as
   far as showing the confirmation can still be quit.
 
 Because a logout, restart or shutdown is answered exactly like any other quit, **Octoboard can hold up a logout,
 restart or shutdown until the user answers the confirmation dialog.** That is deliberate, not an oversight.
+
+### Restarting
+
+Octoboard restarts itself only to apply an installed update, when the user presses **Restart now** (see "Restarting to
+apply an update" in `docs/product/in-app-updates.md`). A restart is a quit followed by a fresh launch, and follows the
+rules above:
+
+- It asks for confirmation exactly when a quit would — a session *starting*, *working*, *waiting for the user* or
+  *working in background*, or a busy shell terminal — and otherwise restarts at once. The confirmation is titled as a
+  restart, its message says that restarting interrupts those sessions, each resumable after the restart, and ends what
+  the terminals run, as the quit's message would, and its confirming button reads Restart. Cancel leaves everything
+  running.
+- A quit gesture arriving while the restart's confirmation is open turns it into the quit's confirmation.
+- Once confirmed, everything ends as in a confirmed quit — every session left *interrupted* and resumable, every shell
+  terminal ended, the window's size and position saved — and Octoboard starts again. The daemon is stopped before the
+  new launch, since the new launch's daemon would otherwise refuse to start while the old one holds the data directory
+  (see "Starting up" above): the old daemon is first asked to shut down, as in any quit; one still running **2
+  seconds** later is sent a termination signal, which has it end its sessions' processes first, and one still running
+  **5 seconds** after that is killed.
+- If the application cannot restart, an error alert says Octoboard could not be restarted, treated as an unexpected
+  failure as a failed quit is.
 
 ### Quitting when the window has stopped responding
 

@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Builds the app for local verification: the same `tauri build` as `pnpm release`, but in a child
 // environment with every `APPLE_*` variable removed, so the result can never be Developer ID-signed
-// or submitted to Apple's notarization service, whatever the calling shell carries. Extra arguments
-// go to `tauri build` (`pnpm build:app --bundles app` skips the `.dmg`).
+// or submitted to Apple's notarization service, whatever the calling shell carries, and one that
+// makes no update archive. Extra arguments go to `tauri build` (`pnpm build:app --bundles app`
+// skips the `.dmg`).
 //
 // The environment is filtered here, in JavaScript, and handed to `execFileSync` as an explicit
 // `env`: no shell parses it, so no quoting or word-splitting rule can turn the stripping into a
@@ -14,7 +15,7 @@
 import { spawnSync } from "node:child_process";
 import { statSync } from "node:fs";
 import path from "node:path";
-import { assertLayeredIcon, bundleDir, findBundle, tauriBuild } from "./bundle.mjs";
+import { assertLayeredIcon, bundleDir, findBundle, tauriBuild, withoutUpdaterArtifacts } from "./bundle.mjs";
 
 // Arguments that move the output away from `target/release/bundle` (or produce none) are refused up
 // front, for a fast and actionable failure; the check on the bundle's age below is what catches the
@@ -31,8 +32,9 @@ if (relocating) {
   );
 }
 
-const env = Object.fromEntries(
-  Object.entries(process.env).filter(([name]) => !name.startsWith("APPLE_")),
+// The update signing key goes too, with the update archive that needs it (`withoutUpdaterArtifacts`).
+const env = withoutUpdaterArtifacts(
+  Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("APPLE_"))),
 );
 
 const startedAt = Date.now();

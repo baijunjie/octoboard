@@ -3,8 +3,9 @@
 //! size and position (`window_state.rs`), the exit-confirmation flow (`exit.rs`), running in the
 //! background once the window is closed (`background.rs`) behind a menu bar icon (`tray.rs`), the
 //! macOS privacy permissions the agents in its terminals can need (`permissions.rs`), the system's
-//! save and open dialogs for the configuration document (`configuration_file.rs`), and the
-//! webview's content rule list that keeps report pages off the web (`page_isolation.rs`, macOS).
+//! save and open dialogs for the configuration document (`configuration_file.rs`), looking for,
+//! downloading and installing a new version (`updater.rs`), and the webview's content rule list
+//! that keeps report pages off the web (`page_isolation.rs`, macOS).
 //! Everything after the window loads talks to the daemon over WebSocket only, per the architectural
 //! rule in "Why the daemon is split out" in `docs/architecture.md` — no Tauri IPC command carries
 //! daemon traffic, so this process reads the sidecar's stdout itself and bakes the port into the
@@ -23,7 +24,9 @@
 //! `permissions.rs` ask the system instead: a read of this process's own privacy grants, the one
 //! prompt that asks the user for one, and a System Settings deep link. The two in
 //! `configuration_file.rs` raise the system's save and open dialogs for the configuration document
-//! and write or read the file the user picked; the page names no path of its own.
+//! and write or read the file the user picked; the page names no path of its own. The two in
+//! `updater.rs` carry a channel's name in and a version, its notes and the download's progress
+//! out.
 
 mod background;
 mod configuration_file;
@@ -36,6 +39,7 @@ mod sidecar;
 mod tray;
 #[cfg(target_os = "macos")]
 mod tray_lines;
+mod updater;
 mod window_state;
 
 use std::thread;
@@ -53,10 +57,7 @@ use exit::{
     confirm_quit, frontend_exit_heartbeat, install_application_should_terminate_override,
     request_quit, should_let_quit_through, ExitState,
 };
-use menu::{
-    build_menu, set_menu_labels, Labels, DEFAULT_SETTINGS_ACCELERATOR, SETTINGS_ITEM_ID,
-    SETTINGS_REQUESTED_EVENT,
-};
+use menu::{build_menu, set_menu_labels, ui_event_for, Labels, DEFAULT_SETTINGS_ACCELERATOR};
 use sidecar::{mark_daemon_stopped, spawn_daemon_and_wait_for_port, DaemonState};
 
 /// The label of the one window the application opens.
@@ -78,10 +79,13 @@ pub fn run() {
         // The system's save and open dialogs, which `configuration_file.rs` raises itself for the
         // configuration export and import; the page is given none of the plugin's own commands.
         .plugin(tauri_plugin_dialog::init())
+        // Driven from `updater.rs` through its own commands; the page is given none of the plugin's own.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(ExitState::default())
         .manage(BackgroundState::default())
         .manage(DaemonState::default())
         .manage(tray::TrayState::default())
+        .manage(updater::UpdaterState::default())
         .invoke_handler(tauri::generate_handler![
             frontend_exit_heartbeat,
             confirm_quit,
@@ -93,14 +97,16 @@ pub fn run() {
             permissions::macos_request_permission,
             permissions::macos_open_privacy_settings,
             configuration_file::save_configuration_file,
-            configuration_file::open_configuration_file
+            configuration_file::open_configuration_file,
+            updater::check_for_update,
+            updater::install_update
         ])
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();
-            if id == SETTINGS_ITEM_ID {
+            if let Some(event) = ui_event_for(id) {
                 // Only a signal: the Settings dialog is the UI's to open, and it decides whether
                 // now is a good time.
-                let _ = app.emit(SETTINGS_REQUESTED_EVENT, ());
+                let _ = app.emit(event, ());
             } else if id == "quit" {
                 request_quit(app);
             } else {
@@ -170,8 +176,8 @@ pub fn run() {
             api.prevent_exit();
         }
         // Every quit path ends here: Cmd+Q and the menu's Quit through `app.exit`, the Dock's Quit
-        // and a logout through AppKit's `applicationWillTerminate:`, and the window's close when it
-        // quits instead of hiding.
+        // and a logout through AppKit's `applicationWillTerminate:`, the window's close when it
+        // quits instead of hiding, and the restart of `confirm_quit`.
         RunEvent::Exit => window_state::save(app_handle),
         // Opening the app again while it runs in the background, from the Finder, Spotlight or the
         // Dock, brings the window back. Answered with a window still on screen too: one closed in

@@ -318,6 +318,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   restart interrupting every session, the data directory being the owner's), and the files Octoboard keeps under
   `~/.octoboard` (and the two it keeps outside it), including the database that also holds the settings the daemon
   stores.
+- [In-app updates](product/in-app-updates.md) — how the macOS app updates itself: the Beta and Stable channels and
+  switching between them, automatic and manual checks and what counts as up to date, the update notice strip (available,
+  downloading, installed) and its focus and announcements, installing in place with the restart only suggested, which
+  failures raise an alert, and the Updates and Update channel rows in Settings > About.
 - [Menu bar icon](product/menu-bar-icon.md) — the macOS menu bar icon: what a click does, its menu
   (running sessions grouped by status in sidebar order, at most 10 per group with an "N more…" line, "No sessions
   running", the status and agent pictures, the per-agent quota submenus, Open, Quit), choosing a session from it, and
@@ -539,6 +543,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   checked-out submodule; why a diff between two specific versions names each one `<revision>:<path>` and ends its
   arguments with `--`; what a test proving a read leaves the repository alone has to set up first (a stale-stat
   fixture and a positive control); and why a test fixture is built only from Git 2.36's commands.
+- [Adding a dependency](memory/adding-a-dependency.md) — which `packages/ui/package.json` field an npm package goes
+  in: anything the UI bundle ships (JS, CSS imported by package name, Tailwind plugins) in `dependencies`, since the
+  third-party licenses list reads only that field.
 - [Adding a user setting](memory/adding-a-user-setting.md) — the checklist for adding a user setting: exposing it in
   the agents' settings tools unless only the user may change it, and carrying every application setting that is not
   valid only on this machine through a full configuration export and import.

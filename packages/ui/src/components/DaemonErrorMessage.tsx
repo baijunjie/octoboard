@@ -193,12 +193,12 @@ export function SharingCauseSummary({ items }: { items: SharingFailureItem[] }):
   );
 }
 
-/** What the system said. After a sentence it runs on as a small code chip; alone on its line (`alone`) it is plain
- * monospace text, since a chip is for a reference within copy. A message of several lines keeps them in a block.
- * Compact, so a row stays one line. */
+/** What the system said. After a sentence it runs on as a small code chip, compact so a row stays one line; alone
+ * on its line (`alone`) or of several lines it is raw text standing as a block of its own, so it takes the diagnostic
+ * block's surface. */
 function RawDiagnostic({ children, alone = false }: { children: string; alone?: boolean }): React.ReactElement {
+  if (alone) return <DiagnosticBlock>{children}</DiagnosticBlock>;
   if (children.trim().includes("\n")) return <div className="mt-1"><DiagnosticBlock>{children}</DiagnosticBlock></div>;
-  if (alone) return <code dir="ltr" className="block font-mono text-xs [overflow-wrap:anywhere]">{children}</code>;
   return <>{" "}<InlineReference dir="ltr" monospace wrap>{children}</InlineReference></>;
 }
 

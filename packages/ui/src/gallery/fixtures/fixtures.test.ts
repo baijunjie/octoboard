@@ -51,7 +51,8 @@ async function matchersOf(language: Language): Promise<{ id: string; matcher: Ma
  * non-whitespace character of its own, which keeps those generic ones alive. A plural message counts
  * in every form it has. A test of the name is caught only against the bare messages: it is a
  * closure, which says nothing of the values it was built from, so `startsWith("new-name.ts, renamed")`
- * is not caught. */
+ * is not caught. Fixture data equal to a bare message is caught too (a project named "Website", once the
+ * About section made that a message): the remedy is to rename the data. */
 function englishCopyIn(language: Language): (matcher: Matcher) => boolean {
   const english = (Object.keys(en) as MessageKey[]).flatMap((key) => {
     const message: Message = en[key];

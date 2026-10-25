@@ -192,7 +192,12 @@ retain usable plain wording with the same names or fallback IDs.
 Known raw output from Git and agent commands appears separately from the short explanation as selectable code,
 including when it is the cause of a launch or trust-confirmation failure, an import failure, or a model or quota
 reading failure. The output retains its line breaks, indentation and left-to-right order. Long lines scroll
-horizontally, with a labelled region reachable from the keyboard. A short ordinary reason remains part of the
+horizontally, with a labelled region reachable from the keyboard. Raw text that stands as a block of its own — in an
+alert's body, behind **Error details** or **Details**, in a mark's popover, or on a screen of its own — sits on a tinted
+surface of its own rather than directly on the alert, popover or screen holding it, with whatever names it (the
+disclosure's summary, a heading) outside that surface. A crash's stack trace, which can be taller than its room, also
+scrolls vertically within its block; a daemon's startup failure, written in lines of prose, wraps its long lines instead
+of scrolling. A short ordinary reason remains part of the
 explanation; it is not turned into a diagnostic block simply because it accompanies an error. Unrecognized daemon
 messages retain the daemon's own readable wording; on the screen and in a mark's popover, that wording follows the
 sentence saying something unexpected went wrong (see "Failures shown on the screen" above). These rules hold wherever

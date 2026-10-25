@@ -7,9 +7,10 @@ fn read_json(path: &str) -> serde_json::Value {
 }
 
 fn main() {
-    // Exposes the app name from the repo-root `config/app.json` as `OCTOBOARD_APP_NAME`, and fails
-    // the build when a copy of it that Tauri or Cargo force to live elsewhere has drifted: the
-    // `productName` in `tauri.conf.json` and the workspace `repository` in the root `Cargo.toml`.
+    // Exposes the app name and the repository address from the repo-root `config/app.json` as
+    // `OCTOBOARD_APP_NAME` and `OCTOBOARD_REPOSITORY_URL`, and fails the build when a copy of it
+    // that Tauri or Cargo force to live elsewhere has drifted: the `productName` in
+    // `tauri.conf.json` and the workspace `repository` and `license` in the root `Cargo.toml`.
     let config = read_json("../../../config/app.json");
     let name = config["name"]
         .as_str()
@@ -17,6 +18,10 @@ fn main() {
     let repository_url = config["repositoryUrl"]
         .as_str()
         .expect("config/app.json `repositoryUrl` is a string");
+
+    let license = config["license"]
+        .as_str()
+        .expect("config/app.json `license` is a string");
 
     let tauri_conf = read_json("tauri.conf.json");
     let product_name = tauri_conf["productName"].as_str();
@@ -31,6 +36,14 @@ fn main() {
         "the workspace `repository` in the root Cargo.toml must equal config/app.json `repositoryUrl`"
     );
 
+    assert_eq!(
+        std::env::var("CARGO_PKG_LICENSE").unwrap_or_default(),
+        license,
+        "the workspace `license` in the root Cargo.toml must equal config/app.json `license`"
+    );
+
     println!("cargo:rustc-env=OCTOBOARD_APP_NAME={name}");
+    // Where the update manifests are published (`src/updater.rs`).
+    println!("cargo:rustc-env=OCTOBOARD_REPOSITORY_URL={repository_url}");
     tauri_build::build()
 }

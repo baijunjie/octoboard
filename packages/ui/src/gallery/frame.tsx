@@ -6,7 +6,7 @@
 // scenario that offers `backgroundRun` gets one whose `set` does nothing (`galleryPlatform`), so
 // there is no shell to push the choice to. Its stored preferences are set from the URL before the
 // app loads (`prepareStorage`).
-import React from "react";
+import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
 
 import { isLanguage, type Language } from "../i18n/languages";
@@ -18,6 +18,7 @@ import { holdPrimaryModifier } from "./heldModifier";
 import { createUi, settleMotion, stuckExit } from "./interact";
 import { prepareStorage } from "./prepare";
 import { LIVE_CHANGE_EVENT } from "./scenario";
+import { fixtureUpdater } from "./updaterFixture";
 
 const params = new URLSearchParams(window.location.search);
 const scenario = SCENARIOS.find((s) => s.id === params.get("scenario"));
@@ -37,7 +38,12 @@ installFakeTerminal();
 // A scenario that asks for it opens with the modifier held; `held=0` is the shell's Released over that.
 const heldModifier = (params.get("held") ?? (scenario?.held ? "1" : "0")) === "1" ? holdPrimaryModifier() : undefined;
 
-const [{ App }, { Toasts }, { ErrorAlerts }, { ErrorBoundary }, { LanguageProvider }, { selectPlatform }, { PlatformProvider }, startup, store, { ThemeProvider }] =
+// The app's modules are imported dynamically, after `prepareStorage` above: they read stored preferences (the
+// language among them) as they load, so the scenario's own choices have to be in storage first. The converse binds
+// everything this file imports statically, `./fixtures`, every scenario file and whatever those import included: none
+// of it may read a stored preference at module load, or the scenario opens in the previous one's language (English
+// under `lang=zh-Hans`, say).
+const [{ App }, { Toasts }, { ErrorAlerts }, { ErrorBoundary }, { LanguageProvider }, { selectPlatform }, { PlatformProvider }, startup, store, { ThemeProvider }, { UpdatesProvider, useUpdates }] =
   await Promise.all([
     import("../App"),
     import("../components/Toasts"),
@@ -49,6 +55,7 @@ const [{ App }, { Toasts }, { ErrorAlerts }, { ErrorBoundary }, { LanguageProvid
     import("../StartupScreen"),
     import("../store"),
     import("../theme"),
+    import("../updates/UpdatesProvider"),
   ]);
 // After react-aria's own listeners are registered, as in `main.tsx` (see `focusGuard.ts`).
 await import("../focusGuard");
@@ -75,7 +82,8 @@ let requestQuit: (() => void) | undefined;
  * capability stubbed from the scenario's `configuration` (absent where it says the platform has
  * none) so that no download or file picker is raised from a capture, and the exit capability for a
  * scenario that says `quitRequested`, whose quit request is raised once its steps have run and whose
- * confirmation ends nothing. Nothing else native. */
+ * confirmation ends nothing, and the updater for a scenario that has one (`updater`), with that same exit
+ * capability, since a restart goes through it. Nothing else native. */
 function galleryPlatform(): ReturnType<typeof selectPlatform> {
   const platform = selectPlatform();
   const grants = scenario?.macosPermissions;
@@ -84,7 +92,7 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
   return {
     ...platform,
     ...((params.get("chrome") === "1" || scenario?.desktopApp) && { windowChrome: { leftInset: () => 0, subscribe: () => () => {} } }),
-    ...(scenario?.desktopApp && { appMenu: { onSettingsRequested: () => () => {}, setLabels: async () => {} } }),
+    ...(scenario?.desktopApp && { appMenu: { onSettingsRequested: () => () => {}, onAboutRequested: () => () => {}, setLabels: async () => {} } }),
     ...(grants && {
       macosPermissions: {
         status: () =>
@@ -98,7 +106,8 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
         if (typeof scenario.externalLinks === "object") throw new Error(scenario.externalLinks.error);
       } },
     }),
-    ...(scenario?.quitRequested && {
+    ...(scenario?.updater && { updater: fixtureUpdater(scenario.updater) }),
+    ...((scenario?.quitRequested || scenario?.updater) && {
       exit: {
         register: ({ onQuitRequested }) => {
           requestQuit = onQuitRequested;
@@ -147,11 +156,13 @@ if (daemon && scenario) installReportPageFixture(document, daemon, scenario.id);
 const { ViewerGallery } = scenario?.viewer ? await import("./viewerGallery") : { ViewerGallery: undefined };
 const viewerSubjects = scenario?.viewer ? await scenario.viewer.subjects(language) : undefined;
 const { CodeGallery } = scenario?.codePalette ? await import("./codeGallery") : { CodeGallery: undefined };
+const { LicensesGallery } = scenario?.licensesDialog ? await import("./licensesGallery") : { LicensesGallery: undefined };
 const { SemanticColoursGallery } = scenario?.semanticColours ? await import("./semanticColoursGallery") : { SemanticColoursGallery: undefined };
 
 function screen(): React.ReactElement {
   if (!scenario) return <p className="p-4">Unknown scenario “{params.get("scenario")}”.</p>;
   if (CodeGallery) return <CodeGallery />;
+  if (LicensesGallery && scenario.licensesDialog) return <LicensesGallery state={scenario.licensesDialog} />;
   if (SemanticColoursGallery) return <SemanticColoursGallery />;
   switch (scenario.startup?.kind) {
     case "noAddress":
@@ -175,13 +186,37 @@ function screen(): React.ReactElement {
   );
 }
 
+/** Runs the automatic check a scenario with `updater.checked` says has already happened, once the window is up, as
+ * the provider's own first one would shortly after launch. Renders nothing. */
+function CheckedOnOpen(): null {
+  const store = useUpdates()?.store;
+  useEffect(() => {
+    void store?.check("automatic");
+  }, [store]);
+  return null;
+}
+
+// Around the screens and the error boundary, as `main.tsx` has it, so the update notice and the Settings rows find
+// the store. No automatic check follows on its own, which would move a settled view 30 seconds on: a scenario that
+// wants one says `checked`.
+function withUpdates(content: React.ReactElement): React.ReactElement {
+  return (
+    <UpdatesProvider firstCheckDelayMs={null}>
+      {scenario?.updater?.checked && <CheckedOnOpen />}
+      {content}
+    </UpdatesProvider>
+  );
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <PlatformProvider value={galleryPlatform()}>
       <LanguageProvider>
-        <ErrorBoundary>
-          <ThemeProvider>{screen()}</ThemeProvider>
-        </ErrorBoundary>
+        {withUpdates(
+          <ErrorBoundary>
+            <ThemeProvider>{screen()}</ThemeProvider>
+          </ErrorBoundary>,
+        )}
         <ErrorAlerts daemon={daemon} />
       </LanguageProvider>
     </PlatformProvider>

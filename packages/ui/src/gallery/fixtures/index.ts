@@ -1,4 +1,7 @@
+// Everything imported here is imported statically by the gallery frame before it prepares storage, so none of it may
+// read a stored preference (the language, say) at module load: see the note above the frame's dynamic imports.
 import type { Scenario } from "../scenario";
+import { aboutScenarios } from "./about";
 import { activityScenarios } from "./activity";
 import { archiveScenarios } from "./archive";
 import { busyScenarios } from "./busy";
@@ -22,6 +25,7 @@ import { sessionHistoryScenarios } from "./sessionHistory";
 import { settingsScenarios } from "./settings";
 import { shortcutsScenarios } from "./shortcuts";
 import { structuredErrorScenarios } from "./structuredErrors";
+import { updateScenarios } from "./updates";
 import { startupScenarios } from "./startup";
 import { terminalPanelScenarios } from "./terminalPanel";
 import { viewerScenarios } from "./viewer";
@@ -48,6 +52,7 @@ export const SCENARIOS: Scenario[] = [
   ...connectionScenarios,
   ...sessionHistoryScenarios,
   ...terminalPanelScenarios,
+  ...updateScenarios,
   ...noticeScenarios,
   ...structuredErrorScenarios,
   ...archiveScenarios,
@@ -55,6 +60,7 @@ export const SCENARIOS: Scenario[] = [
   ...projectFilesScenarios,
   ...projectGitScenarios,
   ...settingsScenarios,
+  ...aboutScenarios,
   ...shortcutsScenarios,
   ...dialogScenarios,
   ...handoffScenarios,

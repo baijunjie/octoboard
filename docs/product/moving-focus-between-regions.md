@@ -1,8 +1,9 @@
 # Moving focus between regions
 
 How `F6` moves keyboard focus between the window's regions: the top bar, the rail, the panes (or the welcome screen
-standing in for them, see `docs/product/welcome-screen.md`), the connection banner and the toasts, whose places in the
-window are in `docs/product/window-layout.md`; and where the window does not move focus after a tap.
+standing in for them, see `docs/product/welcome-screen.md`), the update notice, the connection banner and the toasts,
+whose places in the window are in `docs/product/window-layout.md`; and where the window does not move focus after a
+tap.
 
 ## Moving focus between regions with F6
 
@@ -18,8 +19,9 @@ order:
 6. the terminal;
 7. the right pane's panels, each a region of its own, in stacking order, except that a maximized Terminal panel
    comes first among them (see "Panels and keyboard focus" in `docs/product/right-pane-panels.md`);
-8. the connection banner, only while it is shown;
-9. the toasts, only while at least one toast is shown.
+8. the update notice, only while it is shown (see "The update notice" in `docs/product/in-app-updates.md`);
+9. the connection banner, only while it is shown;
+10. the toasts, only while at least one toast is shown.
 
 It works wherever focus is, the terminal included: there `Tab` and `Shift+Tab` still go to the agent, and `F6` and
 `Shift+F6` never do. The same holds in a shell terminal of the Terminal panel, for the shell. It works from inside a report page too (see "Escape and F6 inside a page" in
@@ -39,8 +41,8 @@ panel with nothing to take focus (a Files panel while it is still loading, see "
 unless its area is then offering a creation action, which makes it a stop (see "A console with nothing in it" in
 `docs/product/session-terminal.md`) — or while the archive view covers it.
 With no console the sidebar, the archive view, the terminal and the right pane are all skipped together, none of them
-being on screen, and the welcome screen is the only stop between the rail and the connection banner; with a console
-the welcome screen is the one skipped. The sidebar counts as shown when it is docked in the row at 1168 px and wider,
+being on screen, and the welcome screen is the only stop between the rail and the update notice or the connection
+banner; with a console the welcome screen is the one skipped. The sidebar counts as shown when it is docked in the row at 1168 px and wider,
 or its drawer is open below that. A docked sidebar column that is still easing closed already counts as hidden, and
 one that is still easing open already counts as shown (see "The sidebar toggle and the panel toggles" in
 `docs/product/window-layout.md`). A right pane panel counts as shown while it is open, docked in the pane's column or
@@ -59,6 +61,7 @@ Where focus lands in each region:
 | Report panel | the pager's first enabled button in its header, else its Close panel; Tab goes on to the report page |
 | Files panel | its header's selected tab, Files or Changes, preserving the current mode; the arrow keys move between Files and Changes, and Tab goes through the tab's controls (the filter toggle, in Files Collapse all folders while it is enabled, and in Changes Group by folder and Group by commit), then Refresh, the panel's own buttons (see "A panel's header" in `docs/product/right-pane-panels.md`) and the content below; Try again while the panel failed to load (see "Loading the project pane" in `docs/product/project-pane.md`) |
 | Terminal panel | the shown tab's shell terminal, so typing reaches the shell; instead its cover's Reconnect while that is offered, and New terminal in its header while the project has no terminal (see "Keyboard focus" in `docs/product/terminal-panel.md`) |
+| Update notice | its first button: What is new where the release has notes, otherwise Download and install, or Restart now once the update is installed; it has none while the update downloads, and F6 then skips it |
 | Connection banner | its Retry button; it has none while the banner only says it is reconnecting, and F6 then skips it |
 | Toasts | the newest toast |
 
@@ -75,8 +78,8 @@ The control focus lands on shows its focus ring, even when the last input before
 and the banner's Retry button, when that button is available. Either key reaches Retry from the dialog; either key
 from Retry returns to the control focus left while it is still available in the dialog, otherwise to the dialog
 itself. The dialog stays open, and once focus is back inside it, Tab stays within it and Escape closes it as usual.
-The rest of the window, toasts included, remains outside this cycle. While the banner only says it is reconnecting,
-or no banner is shown, both keys leave focus where it is.
+The rest of the window, the update notice and toasts included, remains outside this cycle. While the banner only says
+it is reconnecting, or no banner is shown, both keys leave focus where it is.
 
 **With a menu open**, both keys leave focus where it is, even when Retry is available or the menu is inside a dialog.
 The menu has to be dismissed before these keys reach Retry. A mouse press can still reach Retry without dismissing

@@ -1,7 +1,8 @@
+import type { ThirdPartyLicenses } from "../about/thirdPartyLicenses";
 import type { Language } from "../i18n/languages";
 import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/ImportReview";
-import type { MacosPermissionsStatus } from "../platform";
+import type { AvailableUpdate, MacosPermissionsStatus, UpdateChannel, UpdateProgress } from "../platform";
 import type { OwnerKind, PanelKind } from "../panels/stackState";
 import type { Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, MessageParams, ModelsUnavailable, PathLinkKind, PathLinkView, SessionBranchItem, SessionRecordsPresence } from "../protocol";
 import type { FixtureError, FixtureFiles } from "./fixtures/projectFiles";
@@ -40,6 +41,8 @@ export interface Preferences {
   markdownStyle?: MarkdownStyle;
   /** Closing the window keeps the app running in the background; off by default. */
   runInBackground?: boolean;
+  /** The release channel the application updates from; beta when unset. */
+  updateChannel?: UpdateChannel;
   /** The keyboard shortcuts the user has changed, by command; the others keep their defaults. */
   keyboardShortcuts?: Overrides;
 }
@@ -118,6 +121,28 @@ export interface ConfigurationFixture {
    * `"pending"` for an import that is never answered (a long clone). A scenario that applies an
    * import gives it. */
   imported?: Omit<Imported, "type"> | FixtureError | "pending";
+}
+
+/** What a check answers: a newer version, `"upToDate"`, `"pending"` for a check that is never answered,
+ * `"installed"` for the shell saying an update is already installed (which this window never saw), or the updater's
+ * own failure text. */
+export type UpdaterCheck = AvailableUpdate | "upToDate" | "pending" | "installed" | { error: string };
+
+/** What the desktop shell's updater answers, for a window that can update itself: the Settings rows and the
+ * update notice exist only with one. */
+export interface UpdaterFixture {
+  /** The version running. */
+  currentVersion?: string;
+  /** What a check answers, `"upToDate"` by default: one answer for either channel, or one per channel (a channel
+   * left out answers `"upToDate"`). */
+  check?: UpdaterCheck | Partial<Record<UpdateChannel, UpdaterCheck>>;
+  /** Whether a check has already run when the window opens, as the automatic one does shortly after launch, so
+   * its result (a notice, a Settings row) is on screen without a press. Without it the window has not looked
+   * yet, and stays so: the gallery's provider makes no automatic checks of its own. */
+  checked?: boolean;
+  /** What an install does: `progress` is reported first, then it ends as `ends` says, by default with the update
+   * in place; `"pending"` is a download that never finishes and `"gone"` the shell having nothing to install any more. */
+  install?: { progress?: UpdateProgress; ends?: "pending" | "gone" | { error: string } };
 }
 
 export interface Scenario {
@@ -290,9 +315,18 @@ export interface Scenario {
   /** Stub external links without opening a host browser; an error models a refused desktop opener. */
   externalLinks?: "available" | { error: string };
   configuration?: ConfigurationFixture;
+  /** The platform can update the application, as the desktop app does: the Settings rows for the version and
+   * channel, and the update notice once a check finds a version. It also has the exit capability that a restart
+   * goes through, whose confirmation ends nothing. */
+  updater?: UpdaterFixture;
   /** `"unavailable"` for a platform with no clipboard; `text` gives a private, mutable clipboard
    * for interactive copy and paste previews. Without either, the browser's clipboard stands. */
   clipboard?: "unavailable" | { text: string };
+  /** Shows the third-party licenses dialog alone, in place of the app, over this list or in its `"loading"` or
+   * `"failed"` state, or failing its first load and answering with this list from Try again (`{ failsOnce }`). The
+   * dialog reads the list the build generated, which differs between checkouts and which Settings > About cannot be
+   * given another of, so it is mounted directly with a loader that answers with this. */
+  licensesDialog?: ThirdPartyLicenses | "loading" | "failed" | { failsOnce: ThirdPartyLicenses };
   steps?: Step[];
   /** Changes the viewer can make to what the window shows once it is up, as buttons above it. */
   liveChanges?: LiveChange[];

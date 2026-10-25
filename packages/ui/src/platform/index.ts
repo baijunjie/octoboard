@@ -3,6 +3,7 @@ import { tauriPlatform } from "./tauri";
 import type { Agent } from "../protocol";
 
 export { ConfigurationFileError } from "./configurationFileError";
+export { UpdaterError } from "./updaterError";
 
 /**
  * The only route from the UI to anything native. Every capability is optional: a member that is
@@ -55,6 +56,9 @@ export interface PlatformAdapter {
    * shell answers the window's close button and can do either, so the Settings switch for it
    * exists only there. */
   readonly backgroundRun?: BackgroundRunCapability;
+  /** Looking for, downloading and installing a new version of the application: present only where a shell
+   * can replace itself, so the update notices and Settings rows exist only there. */
+  readonly updater?: UpdaterCapability;
 }
 
 export interface ExitHandlers {
@@ -78,8 +82,9 @@ export interface ExitCapability {
   register(handlers: ExitHandlers): () => void;
   /** Proof this webview is alive and answering; see `useAppExit` for when it is sent. */
   heartbeat(): Promise<void>;
-  /** Ends the process. Only after the daemon has been shut down. */
-  confirmQuit(): Promise<void>;
+  /** Ends the process, or with `restart` relaunches the application in its place (how an installed update
+   * takes effect). Only after the daemon has been shut down. */
+  confirmQuit(options?: { restart?: boolean }): Promise<void>;
 }
 
 export type NotificationPermissionStatus = "granted" | "denied" | "undecided";
@@ -131,6 +136,10 @@ export interface WindowChromeCapability {
 export interface AppMenuCapability {
   /** Subscribes to the menu's Settings item (Cmd+, unless rebound), returning the function that undoes it. */
   onSettingsRequested(handler: () => void): () => void;
+  /** Subscribes to the menu's About item, which the UI answers by opening Settings on its About section (the
+   * shell shows no panel of its own), returning the function that undoes it. Absent in a shell whose menu has no
+   * such item. */
+  onAboutRequested?(handler: () => void): () => void;
   /** Hands the shell the menu's labels, keyed by `menu.*` message key and already in the UI's
    * language, and the accelerator of the Settings item as a Tauri accelerator string (the user can
    * rebind it); the shell rebuilds the menu with them, keeps its English text for any label
@@ -233,6 +242,37 @@ export interface ClipboardCapability {
   writeText(text: string): Promise<void>;
   /** Reads text only when the user chooses Paste; may ask for permission or reject. */
   readText?(): Promise<string>;
+}
+
+/** The release stream the user follows: `beta` is offered every release, `stable` only those without a
+ * prerelease suffix. */
+export type UpdateChannel = "stable" | "beta";
+
+/** A newer version a check found. */
+export interface AvailableUpdate {
+  version: string;
+  /** The release notes, when the release has any. */
+  notes?: string;
+}
+
+/** How much of the update has been downloaded so far. */
+export interface UpdateProgress {
+  downloaded: number;
+  /** The download's size, when the server said. */
+  total?: number;
+}
+
+export interface UpdaterCapability {
+  /** The version of the running application. */
+  currentVersion(): Promise<string>;
+  /** Looks for a newer version on `channel`: resolves with it, or `undefined` when the running version is the
+   * newest or the channel has no release yet; rejects with an `UpdaterError`. Never replaces the running
+   * application. */
+  check(channel: UpdateChannel): Promise<AvailableUpdate | undefined>;
+  /** Downloads and installs what the last `check` found, calling `onProgress` as the download advances.
+   * Resolves once the new version is in place, which takes effect when the application is next launched; rejects
+   * with an `UpdaterError`. */
+  install(onProgress: (progress: UpdateProgress) => void): Promise<void>;
 }
 
 export interface BackgroundRunCapability {

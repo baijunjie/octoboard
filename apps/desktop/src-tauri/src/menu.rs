@@ -12,12 +12,31 @@ pub const APP_NAME: &str = env!("OCTOBOARD_APP_NAME");
 /// The Settings item's id, which `on_menu_event` in `lib.rs` matches.
 pub const SETTINGS_ITEM_ID: &str = "settings";
 
+/// The About item's id, which `on_menu_event` in `lib.rs` matches.
+pub const ABOUT_ITEM_ID: &str = "about";
+
 /// The Settings item's accelerator until the UI sends the one the user has chosen.
 pub const DEFAULT_SETTINGS_ACCELERATOR: &str = "CmdOrCtrl+,";
 
 /// What `on_menu_event` emits to the webview when the Settings item is chosen; the platform
 /// adapter's `tauri.ts` listens for it.
 pub const SETTINGS_REQUESTED_EVENT: &str = "settings-requested";
+
+/// What `on_menu_event` emits to the webview when the About item is chosen; the platform adapter's
+/// `tauri.ts` listens for it. The UI opens Settings at its About section, so the native About panel
+/// is never shown.
+pub const ABOUT_REQUESTED_EVENT: &str = "about-requested";
+
+/// The event a menu item that only asks the UI to do something emits to the webview, `None` for any
+/// other item. Both are bare signals: what the UI does with them, and whether now is a good time, is
+/// its own to decide.
+pub fn ui_event_for(item_id: &str) -> Option<&'static str> {
+    match item_id {
+        SETTINGS_ITEM_ID => Some(SETTINGS_REQUESTED_EVENT),
+        ABOUT_ITEM_ID => Some(ABOUT_REQUESTED_EVENT),
+        _ => None,
+    }
+}
 
 /// The menu's labels, keyed by the UI's `menu.*` message keys (`packages/ui/src/i18n/messages/en.ts`),
 /// which the UI hands over in its current language through `set_menu_labels`. A key the UI did not
@@ -91,9 +110,16 @@ pub fn build_menu(
             .accelerator(usable_accelerator(settings_accelerator))
             .build(app)?;
 
+    // A plain item as well, not the native About panel: About is a section of the UI's Settings.
+    let about = MenuItemBuilder::with_id(
+        ABOUT_ITEM_ID,
+        labels.get("menu.about", &format!("About {APP_NAME}")),
+    )
+    .build(app)?;
+
     // The submenu title is the product name, which no language translates.
     let app_menu = SubmenuBuilder::new(app, APP_NAME)
-        .about_with_text(labels.get("menu.about", &format!("About {APP_NAME}")), None)
+        .item(&about)
         .separator()
         .item(&settings)
         .separator()
@@ -135,6 +161,17 @@ pub fn build_menu(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_items_that_ask_the_ui_to_open_something_each_have_their_own_event() {
+        assert_eq!(
+            ui_event_for(SETTINGS_ITEM_ID),
+            Some(SETTINGS_REQUESTED_EVENT)
+        );
+        assert_eq!(ui_event_for(ABOUT_ITEM_ID), Some(ABOUT_REQUESTED_EVENT));
+        assert_ne!(SETTINGS_REQUESTED_EVENT, ABOUT_REQUESTED_EVENT);
+        assert_eq!(ui_event_for("quit"), None);
+    }
 
     #[test]
     fn a_key_the_menu_cannot_parse_gives_way_to_the_default() {

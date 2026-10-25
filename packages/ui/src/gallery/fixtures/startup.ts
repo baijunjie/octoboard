@@ -50,7 +50,7 @@ export const startupScenarios: Scenario[] = [
     category: "exceptional",
     title: "The daemon failed to start",
     description:
-      "One main landmark contains the page heading, centred, a danger alert titled \"Could not connect to the daemon\" with one line under it, and the daemon's selectable wrapping diagnostic outside it; all but the heading and the Quit button start at the edge. Acknowledge the error dialog to inspect the page. Use Short to reveal the bottom fade, then Tab into the scrolling column for its focus ring and keyboard scrolling; Fit shows the whole report without a fade. The native-capable browser stub exposes Quit without closing the preview.",
+      "One main landmark contains the page heading, centred, a danger alert titled \"Could not connect to the daemon\" with one line under it, and the daemon's diagnostic outside it, on a secondary surface of its own that keeps the danger tone: selectable code that wraps over as many lines as it needs, with no scroll region, fade or Tab stop of its own. All but the heading and the Quit button start at the edge. The error dialog holds the application's own sentence (\"The daemon did not start.\") with the same raw text under it in a wrapping block on its own surface, not as the dialog's body text; the message is taller than the dialog's body, which scrolls with a fade at its bottom edge. Acknowledge it to inspect the page, whose own column scrolls (a fade at its bottom edge) down to the Quit button. The native-capable browser stub exposes Quit without closing the preview.",
     quitRequested: true,
     startup: DAEMON_FAILED,
   },
@@ -60,7 +60,7 @@ export const startupScenarios: Scenario[] = [
     category: "exceptional",
     title: "The UI crashed",
     description:
-      "One main landmark contains the crash page heading, centred, a danger alert titled \"An unexpected error occurred\" over an instruction in the application's own words, which starts at the edge, and a separate centred Try again control. Acknowledge the error dialog to inspect the page. The error's message is not in the alert: it heads the stack, outside the alert in its own scroll region. Use Short to see its bottom fade, then Tab onto the stack for its frame-shaped focus ring and keyboard scrolling; Fit shows it whole without a fade. The native-capable browser stub exposes Quit without closing the preview.",
+      "One main landmark contains the crash page heading, centred, a danger alert titled \"An unexpected error occurred\" over an instruction in the application's own words, which starts at the edge, and a separate centred Try again control. Acknowledge the error dialog to inspect the page. The error's message is not in the alert: it heads the stack below it, which sits on a secondary surface of its own that keeps the danger tone, as does the same stack in the error dialog above the page. The stack is as tall as the window allows up to 40% of its height, then scrolls (both ways) with a fade at the edge it hides the rest behind. Use Short to see that, then Tab onto the stack (named Error details) for its focus ring and keyboard scrolling; Fit shows it whole without a fade. The native-capable browser stub exposes Quit without closing the preview.",
     quitRequested: true,
     startup: { kind: "crash", stack: stackOf(12) },
   },

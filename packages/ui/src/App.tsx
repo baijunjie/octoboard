@@ -1,5 +1,6 @@
 import { runAccountSwitchBatch } from "./accountSwitchBatch";
 import { StatusAnnouncer } from "./components/StatusAnnouncer";
+import type { PlainMessageKey } from "./i18n/catalog";
 import { isolate } from "./i18n/isolate";
 import { errorAlerts } from "./errorAlerts";
 import { noAgentState, pickableAgents } from "./agents";
@@ -68,6 +69,9 @@ import { LoginPageOpener } from "./settings/AccountLogin";
 import { SettingsDialog } from "./settings/SettingsDialog";
 import { registerSettingsLauncher } from "./settings/settingsLauncher";
 import { useSettingsDialog } from "./settings/useSettingsDialog";
+import { updateNoticeKind } from "./updates/noticeKind";
+import { UpdateNotice } from "./updates/UpdateNotice";
+import { useUpdateSelector, useUpdateStore } from "./updates/UpdatesProvider";
 import { useSessionActionShortcuts } from "./sidebar/useSessionActionShortcuts";
 import { belongsToFocus, focusAfterSelect, focusFor, focusKey, KEY_SWITCH_SELECTION, resolveFocus, shortcutOutcome } from "./sidebar/focus";
 import { useFocusShortcut } from "./sidebar/focusShortcut";
@@ -314,6 +318,9 @@ export function App(): React.ReactElement {
   );
   // The "no agent added" state offers Add agent; only "no agent installed" has nothing to press.
   const emptyHasAction = emptyState !== undefined && !(emptyState.kind === "no-agents" && emptyState.reason === "install");
+  // Only the store and whether the notice is shown: the whole state changes with every tick of a download.
+  const updateStore = useUpdateStore();
+  const updateNoticeShown = useUpdateSelector((state) => updateNoticeKind(state) !== undefined) ?? false;
   // A region off screen is skipped by F6: a hidden docked pane, a closed drawer, and a floating pane
   // too, which is only a hover away rather than shown. The top bar and the rail are always there.
   const regionCycle = useRegionCycle({
@@ -325,6 +332,7 @@ export function App(): React.ReactElement {
       archive: archiveOpen && !covered && !floatingShown,
       terminal: (selectedSession !== undefined || emptyHasAction) && !archiveOpen && !covered && !floatingShown,
       banner: connectionState === "reconnecting" || connectionState === "closed",
+      update: updateNoticeShown,
     },
     panels: shownPanelRegions(ownerStack, ownerKind),
     focusTerminal,
@@ -424,12 +432,16 @@ export function App(): React.ReactElement {
   // The exit flow's frontend owner: it registers with the shell on mount, which is what makes the
   // window quittable. Only its confirmation is needed here: the main app has no separate "Quit"
   // control.
-  const { exitConfirmOpen, exitHolders, closeExitConfirm, confirmExit } = useAppExit({
+  const { exitConfirmOpen, exitHolders, exitRestarts, closeExitConfirm, confirmExit, requestRestart } = useAppExit({
     getSessions: allSessions,
     getShellTerminals: () => Array.from(store.getState().shellTerminals.values()),
     requestShutdown: () => request({ type: "shutdown" }),
-    toastError,
   });
+
+  // An installed update takes effect on a restart, which only ever happens through the exit flow above, so the
+  // user is asked about the sessions it ends and can cancel. The update notice and Settings ask for it here.
+  const answerRestart = useStableHandler(() => void requestRestart());
+  useEffect(() => updateStore?.onRestartRequested(answerRestart), [updateStore, answerRestart]);
 
   // The question before a launch on an account whose sharing change did not finish; this window's
   // own launches (a resume, a quick create) go through it and render it at this level.
@@ -1166,6 +1178,7 @@ export function App(): React.ReactElement {
       </div>
       {/* A login started in Settings opens its authorization page for as long as the window lives, Settings open or not. */}
       <LoginPageOpener />
+      <UpdateNotice focusTerminal={focusTerminal} />
       <ConnectionBanner state={connectionState} onRetry={reconnect} focusTerminal={focusTerminal} />
       <StatusAnnouncer text={switchAnnouncement} />
       {settingsOpen && <SettingsDialog navigation={settingsNavigation} onClose={closeSettings} />}
@@ -1196,9 +1209,9 @@ export function App(): React.ReactElement {
       <PendingQuestionDialog />
       {exitConfirmOpen && (
         <ConfirmDialog
-          title={<Message id="app.quit.title" />}
-          message={t(exitHolders.terminals ? exitHolders.sessions ? "app.quit.message.both" : "app.quit.message.terminals" : "app.quit.message")}
-          confirmLabel={t("common.quit")}
+          title={<Message id={exitRestarts ? "app.restart.title" : "app.quit.title"} />}
+          message={t(exitMessageKey(exitRestarts, exitHolders))}
+          confirmLabel={t(exitRestarts ? "common.restart" : "common.quit")}
           destructive
           onCancel={closeExitConfirm}
           onConfirm={confirmExit}
@@ -1206,6 +1219,13 @@ export function App(): React.ReactElement {
       )}
     </div>
   );
+}
+
+/** The confirmation's text for what a restart or a quit would end: sessions, terminals, both or neither. */
+function exitMessageKey(restarts: boolean, holders: { sessions: boolean; terminals: boolean }): PlainMessageKey {
+  const prefix = restarts ? "app.restart.message" : "app.quit.message";
+  if (!holders.terminals) return prefix;
+  return holders.sessions ? `${prefix}.both` : `${prefix}.terminals`;
 }
 
 // The helpers below sit outside `App` because the React Compiler cannot compile a component

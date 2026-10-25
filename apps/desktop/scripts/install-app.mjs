@@ -3,7 +3,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import { loadEnv } from "../../../scripts/env.mjs";
-import { appDir, assertLayeredIcon, bundleDir, findBundle, tauriBuild } from "./bundle.mjs";
+import { appDir, assertLayeredIcon, bundleDir, findBundle, tauriBuild, withoutUpdaterArtifacts } from "./bundle.mjs";
 
 if (process.platform !== "darwin") throw new Error("build:install requires macOS.");
 if (process.argv.length > 2) throw new Error("build:install takes no arguments; configure .env.install.local.");
@@ -21,7 +21,7 @@ const identities = execFileSync("security", ["find-identity", "-v", "-p", "codes
 if (!identities.includes(`"${identity}"`)) throw new Error(`No valid signing identity found: ${identity}`);
 
 // Local installation must never inherit notarization credentials, including from the calling shell.
-const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("APPLE_")));
+const env = withoutUpdaterArtifacts(Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("APPLE_"))));
 env.APPLE_SIGNING_IDENTITY = identity;
 const config = JSON.parse(readFileSync(path.join(appDir, "src-tauri", "tauri.conf.json"), "utf8"));
 const startedAt = Date.now();

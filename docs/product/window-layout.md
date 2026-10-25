@@ -10,8 +10,11 @@ session's **report panel** (see `docs/product/report-panel.md`) or a project's *
 `docs/product/project-pane.md`). The right pane is not there at all while it has no owner or none of its owner's panels
 is open (see "What the right pane shows" below and `docs/product/right-pane-panels.md`). The connection banner, while the daemon
 connection is down, is a full-width strip along the window's bottom edge, under the rail and the content panel (see
-"Losing the daemon connection" in `docs/product/application-lifecycle.md`). Toasts float over the bottom right, above
-the banner while it is shown (see `docs/product/toasts.md`).
+"Losing the daemon connection" in `docs/product/application-lifecycle.md`). In the macOS application the update notice,
+while there is an update to tell the user about, is another such strip, directly above the banner when both are shown
+(see "The update notice" in `docs/product/in-app-updates.md`); whatever this doc says ends above the connection banner
+ends above the update notice as well. Toasts float over the bottom right, above those strips while they are shown (see
+`docs/product/toasts.md`).
 
 **With no console at all the content panel holds none of those panes**: a single **welcome screen** fills it instead,
 offering the one thing there is to do, and the top bar carries no sidebar toggle (see
@@ -203,6 +206,11 @@ margin from the strip's top edge that it would have kept from the window's botto
 to spare, a confirmation say, centres in the space above the strip rather than in the whole window, so it sits half
 the strip's height higher than it otherwise would. With the strip gone, every dialog sits exactly where it would with
 no connection banner at all.
+
+The update notice's strip counts toward the same room: while it is shown, a dialog that fills the window keeps its
+margin from the top of the uppermost strip, and a dialog with room to spare centres in the space above both strips. It
+is not drawn above a dialog's overlay, though: it stays on screen, dimmed along with everything else, and a press where it
+is drawn lands on the overlay, as a press anywhere else outside the dialog does.
 
 **A dialog whose content changes its height while it is open eases to the new height** — a tab switched, a section
 opened, a failure line appearing — over **200 ms**, growing or shrinking about its centre. Its first size and a change of

@@ -1,8 +1,9 @@
 // What the desktop build scripts share around `tauri build`: running it (the Tauri CLI binary, its
 // environment and working directory), where its output lands, the lookup for the bundle file it
-// produced, and the check that the `.app` carries the layered icon.
+// produced, the version an `.app` says it is, the check that it carries the layered icon, the removal of the
+// update archives a build leaves behind, and the environment of a build that makes no update archive.
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -11,6 +12,10 @@ const repoRoot = path.dirname(path.dirname(appDir));
 // The Tauri crate is a member of the root Cargo workspace, so its bundle lands in the workspace's
 // own build directory at the repository root, not under `src-tauri/`.
 export const bundleDir = path.join(repoRoot, "target", "release", "bundle");
+// A release is one universal build (both Mac architectures in one `.app`), which lands under its target's own
+// directory instead.
+export const UNIVERSAL_TARGET = "universal-apple-darwin";
+export const universalBundleDir = path.join(repoRoot, "target", UNIVERSAL_TARGET, "release", "bundle");
 const tauriBin = path.join(appDir, "node_modules", ".bin", "tauri");
 
 // Runs `tauri build` with `args` in the app directory and `env` as its environment, plus
@@ -20,6 +25,37 @@ export function tauriBuild(args, env) {
   const shimDir = path.join(appDir, "scripts", "actool");
   const buildEnv = { ...env, PATH: [shimDir, env.PATH].filter(Boolean).join(path.delimiter) };
   execFileSync(tauriBin, ["build", ...args], { cwd: appDir, env: buildEnv, stdio: "inherit" });
+}
+
+// `bundle.createUpdaterArtifacts` in `tauri.conf.json` makes `tauri build` sign an update archive and fail
+// without the update signing key, which only a release has (`release.mjs`). A build for local checks or local
+// installation neither needs the key nor should sign anything with it, so its environment turns the archive off
+// and drops the key variables.
+export function withoutUpdaterArtifacts(env) {
+  const kept = Object.fromEntries(
+    Object.entries(env).filter(([name]) => !name.startsWith("TAURI_SIGNING_PRIVATE_KEY")),
+  );
+  const config = kept.TAURI_CONFIG ? JSON.parse(kept.TAURI_CONFIG) : {};
+  config.bundle = { ...config.bundle, createUpdaterArtifacts: false };
+  return { ...kept, TAURI_CONFIG: JSON.stringify(config) };
+}
+
+// The version the `.app` says it is (`CFBundleShortVersionString`), which is what the build was made from.
+export function appVersion(app) {
+  return execFileSync(
+    "/usr/libexec/PlistBuddy",
+    ["-c", "Print :CFBundleShortVersionString", path.join(app, "Contents", "Info.plist")],
+    { encoding: "utf8" },
+  ).trim();
+}
+
+// Removes the update archives and signatures of earlier builds from `dir`. Their names carry no version, and an
+// unsigned build makes none, so one left over would be taken for the new build's.
+export function removeUpdateArchives(dir) {
+  if (!existsSync(dir)) return;
+  for (const name of readdirSync(dir)) {
+    if (name.includes(".app.tar.gz")) rmSync(path.join(dir, name), { force: true });
+  }
 }
 
 // The bundler adds the layered icon only when Xcode 26's `actool` compiles it, and otherwise still
@@ -60,7 +96,7 @@ export function findBundle(dir, extension) {
   if (matches.length > 1) {
     throw new Error(
       `found ${matches.length} "${extension}" files in ${dir} (${matches.join(", ")}) — clean ` +
-        "the workspace's target/release/bundle and rebuild so only the current version's is there.",
+        `the bundle directory ${dir} and rebuild so only the current version's is there.`,
     );
   }
   return path.join(dir, matches[0]);

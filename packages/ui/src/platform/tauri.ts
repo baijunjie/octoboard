@@ -14,8 +14,11 @@ import type {
   OpenedConfigurationFile,
   PlatformAdapter,
   StatusItemCapability,
+  UpdaterCapability,
+  UpdateProgress,
   WindowChromeCapability,
 } from "./index";
+import { UpdaterError } from "./updaterError";
 
 // Every Tauri module is loaded with a dynamic `import()` and only from here, so a plain browser
 // never fetches them.
@@ -36,6 +39,7 @@ export function tauriPlatform(): PlatformAdapter {
     links: tauriLinks(),
     macosPermissions: tauriMacosPermissions(),
     backgroundRun: tauriBackgroundRun(),
+    updater: tauriUpdater(),
   };
 }
 
@@ -108,6 +112,13 @@ function tauriAppMenu(): AppMenuCapability {
       });
       return undo;
     },
+    onAboutRequested(handler) {
+      const { track, undo } = unlistenTracker();
+      void import("@tauri-apps/api/event").then(async ({ listen }) => {
+        track(await listen("about-requested", () => handler()));
+      });
+      return undo;
+    },
     async setLabels(labels, settingsAccelerator) {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("set_menu_labels", { labels, settingsAccelerator });
@@ -167,9 +178,9 @@ function tauriExit(): ExitCapability {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("frontend_exit_heartbeat");
     },
-    async confirmQuit() {
+    async confirmQuit({ restart } = {}) {
       const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("confirm_quit");
+      await invoke("confirm_quit", { restart });
     },
   };
 }
@@ -280,6 +291,45 @@ function tauriBackgroundRun(): BackgroundRunCapability {
     async set(enabled) {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("set_run_in_background", { enabled });
+    },
+  };
+}
+
+/** Through the shell's own commands (`updater.rs`), which carry a channel's name in and a version, its notes and
+ * the download's progress out. The shell rejects with `{ kind, detail? }`. */
+function tauriUpdater(): UpdaterCapability {
+  const failure = (err: unknown): UpdaterError => {
+    const { kind, detail } = (typeof err === "object" && err !== null ? err : {}) as { kind?: string; detail?: string };
+    if (kind === "busy" || kind === "installed" || kind === "nothing_to_install") return new UpdaterError(kind);
+    return new UpdaterError("failed", detail ?? (err instanceof Error ? err.message : typeof err === "string" ? err : ""));
+  };
+  return {
+    async currentVersion() {
+      const { getVersion } = await import("@tauri-apps/api/app");
+      return getVersion();
+    },
+    async check(channel) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const found = await invoke<{ version: string; notes: string | null } | null>("check_for_update", { channel }).catch((err) => {
+        throw failure(err);
+      });
+      return found ? { version: found.version, notes: found.notes ?? undefined } : undefined;
+    },
+    async install(onProgress) {
+      const { Channel, invoke } = await import("@tauri-apps/api/core");
+      const progress = new Channel<{ downloaded: number; total: number | null }>();
+      // Ticks the shell sends after the call has settled are not progress of anything.
+      let settled = false;
+      progress.onmessage = ({ downloaded, total }) => {
+        if (!settled) onProgress({ downloaded, total: total ?? undefined } satisfies UpdateProgress);
+      };
+      await invoke("install_update", { onProgress: progress })
+        .catch((err) => {
+          throw failure(err);
+        })
+        .finally(() => {
+          settled = true;
+        });
     },
   };
 }

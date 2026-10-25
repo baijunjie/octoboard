@@ -156,7 +156,7 @@ function KeyboardHost({ state, menu = false }: { state: "open" | "closed" | "rec
   useRegionCycle({
     shown: {
       topbar: true, rail: false, welcome: false, sidebar: false, archive: false,
-      terminal: false, banner: state !== "open",
+      terminal: false, banner: state !== "open", update: false,
     },
     focusTerminal: () => {},
   });

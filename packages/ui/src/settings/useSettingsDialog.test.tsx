@@ -72,3 +72,38 @@ it("numbers each request, so an open dialog can follow a later one", () => {
   expect(first).toMatchObject({ section: "accounts", addAgent: true });
   expect(hook().settingsNavigation).toMatchObject({ section: "accounts", addAgent: false });
 });
+
+function mountWithMenu(options: { otherModalOpen?: boolean; ready?: boolean }) {
+  let about: () => void = () => {};
+  const menu = { onSettingsRequested: () => () => {}, onAboutRequested: (handler: () => void) => { about = handler; return () => {}; }, setLabels: async () => {} };
+  let hook!: ReturnType<typeof useSettingsDialog>;
+  function Probe() {
+    hook = useSettingsDialog({ ready: options.ready ?? true, otherModalOpen: options.otherModalOpen ?? false, focusTerminal: () => {} });
+    return null;
+  }
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  act(() => root.render(<PlatformProvider value={{ kind: "tauri", appMenu: menu }}><Probe /></PlatformProvider>));
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  return { hook: () => hook, about: () => act(() => about()) };
+}
+
+it("opens Settings on About from the native menu's About item, and moves an open Settings there", () => {
+  const { hook, about } = mountWithMenu({});
+  about();
+  expect(hook()).toMatchObject({ settingsOpen: true, settingsNavigation: { section: "about" } });
+  act(() => hook().openSettingsAt("git"));
+  about();
+  expect(hook().settingsNavigation.section).toBe("about");
+});
+
+it("ignores the menu's About item before the UI is ready and while another modal is open", () => {
+  for (const options of [{ ready: false }, { otherModalOpen: true }]) {
+    const { hook, about } = mountWithMenu(options);
+    about();
+    expect(hook().settingsOpen).toBe(false);
+  }
+});

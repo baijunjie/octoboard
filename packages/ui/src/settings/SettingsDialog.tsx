@@ -1,5 +1,5 @@
 import { Modal, Tabs } from "@heroui/react";
-import { Bell, FileCog, FolderCheck, GitBranch, Keyboard, KeyRound, Settings2, ShieldCheck, UserCheck, type LucideIcon } from "lucide-react";
+import { Bell, FileCog, FolderCheck, GitBranch, Info, Keyboard, KeyRound, Settings2, ShieldCheck, UserCheck, type LucideIcon } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { TitledControl } from "../components/TitledControl";
@@ -10,6 +10,7 @@ import { useEscapeWhileTooltipOpen } from "../dialogs/useEscapeWhileTooltipOpen"
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
 import { useIsNarrow } from "../layout/breakpoint";
+import { AboutSection } from "./AboutSection";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentAccountsSection, AGENT_STRIP_HEIGHT } from "./AgentAccountsSection";
 import { AgentPermissionsSection } from "./AgentPermissionsSection";
@@ -41,6 +42,7 @@ const SECTIONS = [
   { id: "notifications", label: "settings.section.notifications", Icon: Bell, Content: NotificationsSection },
   { id: "shortcuts", label: "settings.section.shortcuts", Icon: Keyboard, Content: ShortcutsSection, stickyHeadingHeight: SHORTCUT_GROUP_HEADING_HEIGHT },
   { id: "configuration", label: "settings.section.configuration", Icon: FileCog, Content: ConfigurationSection },
+  { id: "about", label: "settings.section.about", Icon: Info, Content: AboutSection },
 ] as const satisfies readonly Section[];
 
 /** How many animation frames (about half a second) a tab waits for a modal in front of Settings to go before it

@@ -182,15 +182,14 @@ it("keeps a sharing repair's own reason behind Details when it names no entry, a
   const reason = "account `Work`'s links to the default configuration could not be checked: permission denied";
   const empty = new DaemonRequestError(reason, "account_sharing_repair_failed", { account: "a1", name: "Work", items: "[]", cause: "permission_denied" });
   const unnamed = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={empty} /></DaemonProvider>);
-  // Alone on its line in Details it is plain monospace text, not a chip.
-  expect(unnamed.querySelector("[hidden] code")?.textContent).toBe(reason);
+  // Alone on its line in Details it is a diagnostic block on its own surface, not a chip.
+  expect(unnamed.querySelector("[hidden] pre code")?.textContent).toBe(reason);
   expect(unnamed.querySelector("[hidden] [data-inline-reference]")).toBeNull();
   expect(unnamed.textContent).toContain("could not be brought up to date");
   expect(unnamed.textContent).toContain("You do not have permission to change the account’s directory.");
   act(() => unnamed.querySelector("button")!.click());
-  expect(unnamed.querySelector("code")?.textContent).toBe(reason);
+  expect(unnamed.querySelector("pre code")?.textContent).toBe(reason);
   expect(unnamed.querySelector("[data-inline-reference] code")).toBeNull();
-  expect(unnamed.querySelector("pre")).toBeNull();
   const items = JSON.stringify([{ item: "skills/", left: "unchanged", detail: "permission denied", cause: "busy" }]);
   const listed = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={new DaemonRequestError(reason, "account_sharing_repair_failed", { account: "a1", name: "Work", items })} /></DaemonProvider>);
   expect(listed.querySelector("[hidden] li")?.lastElementChild?.textContent).toBe("permission denied");

@@ -1,5 +1,6 @@
 import {
   Archive,
+  Download,
   FileCog,
   FileText,
   Focus,
@@ -43,6 +44,7 @@ export const GROUPS = [
   { title: "Trust prompts and toasts", icon: MessageSquareWarning },
   { title: "Configuration", icon: FileCog },
   { title: "Settings", icon: Settings },
+  { title: "Updates", icon: Download },
   { title: "Window layout", icon: PanelsTopLeft },
   { title: "Component colors", icon: FileText },
 ] as const satisfies readonly { title: string; icon: LucideIcon }[];

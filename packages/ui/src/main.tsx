@@ -17,6 +17,7 @@ import { PlatformProvider } from "./platform/react";
 import { DaemonFailedMessage, NoAddressMessage, StartupScreen } from "./StartupScreen";
 import { createDaemon, DaemonProvider } from "./store";
 import { ThemeProvider } from "./theme";
+import { UpdatesProvider } from "./updates/UpdatesProvider";
 import "./focusGuard";
 import "./style.css";
 
@@ -110,6 +111,9 @@ function BackgroundRunSync(): null {
   return null;
 }
 
+// `UpdatesProvider` is outside `ErrorBoundary` too: a crash and its Try again remount everything below the boundary,
+// and the update state (an installed update waiting for its restart, a download under way) must survive that.
+//
 // One render for every screen, so none of them is outside the boundary. `ErrorBoundary` wraps
 // `ThemeProvider`, not the other way around: `useTheme`'s state initialiser reads `localStorage`
 // unguarded, and a throw there must still land on the boundary's fallback rather than a blank
@@ -123,12 +127,14 @@ root.render(
       <LanguageProvider>
         <NativeMenuLabelsSync />
         <BackgroundRunSync />
-        <ErrorBoundary>
-          <ThemeProvider>
-            <NativeWindowThemeSync />
-            {screen()}
-          </ThemeProvider>
-        </ErrorBoundary>
+        <UpdatesProvider>
+          <ErrorBoundary>
+            <ThemeProvider>
+              <NativeWindowThemeSync />
+              {screen()}
+            </ThemeProvider>
+          </ErrorBoundary>
+        </UpdatesProvider>
         <ErrorAlerts daemon={daemon} />
       </LanguageProvider>
     </PlatformProvider>

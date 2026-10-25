@@ -3,11 +3,10 @@ import React, { useId, useLayoutEffect, useRef, useState, useSyncExternalStore }
 
 import { Button } from "../components/Button";
 import { appConfig } from "../appConfig";
-import { CodeBlock } from "../components/CodeBlock";
 import { ExternalLink } from "../components/ExternalLink";
 import { RecoveryGuidance, recoveryAction } from "../components/ErrorGuidance";
 import { InlineReference } from "../components/InlineReference";
-import { FadedScroller, useFadeRegion } from "../components/scrollFade";
+import { DiagnosticBlock } from "../components/DiagnosticBlock";
 import { errorAlerts } from "../errorAlerts";
 import { diagnosticText } from "../errorText";
 import { Message, useT } from "../i18n/react";
@@ -33,15 +32,10 @@ function DetailsDisclosure({ children }: { children: React.ReactNode }): React.R
 function DiagnosticDetails({ text }: { text: string }): React.ReactElement {
   const t = useT();
   const summaryId = useId();
-  const region = useFadeRegion({ labelledBy: summaryId });
   return (
     <details className="min-w-0 max-w-full">
       <summary id={summaryId}>{t("error.diagnostics")}</summary>
-      <div className={`min-w-0 max-w-full rounded-md bg-default ${region.focused ? "ring-2 ring-focus" : ""}`}>
-        <FadedScroller dir="ltr" orientation="horizontal" region={region} className="min-w-0 max-w-full overflow-x-auto overflow-y-hidden rounded-md">
-          <CodeBlock dir="ltr" wrap={false} className="[&>.app-code]:rounded-none [&>.app-code]:bg-transparent">{text}</CodeBlock>
-        </FadedScroller>
-      </div>
+      <DiagnosticBlock labelledBy={summaryId}>{text}</DiagnosticBlock>
     </details>
   );
 }

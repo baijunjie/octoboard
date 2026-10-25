@@ -38,7 +38,18 @@ tauri-plugin-notification = "~2.7.0"
 tauri-plugin-clipboard-manager = "~2.5.0"
 # The system's save and open dialogs, raised from `configuration_file.rs` for the configuration export and import.
 tauri-plugin-dialog = "2.8"
+# In-app updates, driven from `updater.rs` (the UI has no NPM counterpart, so there is no JS release line to
+# hold it to). `rustls-tls` is the plugin's default TLS; the check and the download never leave the two
+# manifest URLs and the release assets they name.
+tauri-plugin-updater = "2.14"
 anyhow = "1"
+# For `sidecar::terminate`, which sends the daemon SIGTERM so it stops its sessions' processes before a restart
+# kills it. The release line `octoboardd` and `tauri` already resolve.
+libc = "0.2"
+# For the one request `updater.rs` makes to tell a missing manifest from a failing server, which the updater plugin
+# reports alike. The release line, and the TLS setup, the plugin already brings: it installs the TLS provider
+# the request relies on.
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
 # For `menu::usable_accelerator`, which parses an accelerator the way the menu items do: tauri drops one that
 # does not parse without a word. The release line `tauri` already resolves, without the features it
 # brings along.

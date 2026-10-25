@@ -33,16 +33,19 @@ Per-package commands are in that package's doc.
 - [`rustfmt.toml`](../rustfmt.toml) — the formatting configuration shared by both Cargo workspace crates.
 - [`.github/workflows/quality.yml`](../.github/workflows/quality.yml) — the CI checks for ESLint and Rust formatting.
 - [`config/app.json`](../config/app.json) — the single source for product identity, repository and issue-report destinations,
-  author and support contact details. The UI and website fill the name into their copy as `{appName}` and into page titles; the website
-  exposes `author.name` as `operatorName` and `support.email` as `contactEmail`. The desktop and daemon crates'
-  `build.rs` hand the name to the menu, window title and daemon messages. The copies Tauri and Cargo require
-  (`productName` in `tauri.conf.json`, `repository` in the root `Cargo.toml`) mirror it, and the desktop crate's
-  `build.rs` fails the build when they drift.
+  author and support contact details, the website address, the license and the copyright year. The UI and website fill
+  the name into their copy as `{appName}` and into page titles; the website exposes `author.name` as `operatorName` and
+  `support.email` as `contactEmail`. The desktop and daemon crates' `build.rs` hand the name to the menu, window title
+  and daemon messages, and the desktop crate's also the repository address, where its update manifests are. The copies
+  Tauri and Cargo require (`productName` in `tauri.conf.json`, `repository` and `license` in the root `Cargo.toml`)
+  mirror it, and the desktop crate's `build.rs` fails the build when they drift. Two more copies cannot be derived:
+  the root `LICENSE` (license, copyright year and author) and the website's default origin in
+  `apps/web/site.config.ts` (the website address); `packages/ui/src/appConfig.test.ts` fails when either drifts.
 - [`.env`](../.env), [`.env.secret.example`](../.env.secret.example) and [`scripts/env.mjs`](../scripts/env.mjs) — the
   env files and the small reader they share. `.env` (committed) holds non-secret configuration, read by the UI's dev
   server, with a gitignored `.env.local` overriding it; `.env.secret` (gitignored, template `.env.secret.example`) holds
-  the release credentials, read by `apps/desktop/scripts/release.mjs` and by `apps/desktop/scripts/install-app.mjs`
-  for its signing identity.
+  the release credentials (Apple's, and the update signing key), read by `apps/desktop/scripts/release.mjs` and by
+  `apps/desktop/scripts/install-app.mjs` for its signing identity.
   [`.env.install.example`](../.env.install.example) is the template for the gitignored `.env.install.local`, read
   only by the desktop's `build:install` command for its installation directory.
 - [`scripts/`](../scripts/) — the repository-level scripts behind root `package.json` commands: `env.mjs` (the env
@@ -73,8 +76,9 @@ Per-package commands are in that package's doc.
 - [`apps/desktop/`](../apps/desktop/README.md) — `@octoboard/desktop`, the Tauri 2 shell of the macOS desktop
   application: window (with its overlay titlebar, translucent native material and remembered frame), native menu
   (labelled in the UI's language), `octoboardd` sidecar, exit flow, optional background running behind a menu bar icon
-  (a Settings choice, off by default), the macOS privacy-permission grants the Settings dialog offers, and build,
-  local-install and release scripts. It loads the UI from `packages/ui/` and has no UI of its own; a client of `apps/daemon/` over WebSocket
+  (a Settings choice, off by default), the macOS privacy-permission grants the Settings dialog offers, the in-app
+  update commands (looking for, downloading and installing a signed update from a release channel), and build,
+  local-install, release and release-publishing scripts. It loads the UI from `packages/ui/` and has no UI of its own; a client of `apps/daemon/` over WebSocket
   only.
 - [`apps/ios/`](../apps/ios/README.md) — placeholder for the native iOS client; no content, not a workspace package.
 - [`apps/android/`](../apps/android/README.md) — placeholder for the native Android client; no content, not a
@@ -89,7 +93,8 @@ Per-package commands are in that package's doc.
   daemon client, store and platform adapter, the window chrome (the top bar and the left rail with the console
   switcher and the plan quota entry), the content panel with the sidebar (projects and sessions, the project and console session focus modes) or, while there is no console, the welcome screen,
   the archive view, the xterm.js terminal pane, the pane-layout state, Back/Forward navigation history, the settings
-  dialog (agent accounts, with the added agents list, sign-in and plan quota, among its sections), the other dialogs, the read-only file viewer (code, rendered Markdown, image and diff rendering behind an application-owned
+  dialog (agent accounts, with the added agents list, sign-in and plan quota, and About, with the version, update
+  controls and third-party licenses, among its sections), the in-app update state and notice, the other dialogs, the read-only file viewer (code, rendered Markdown, image and diff rendering behind an application-owned
   interface), the right pane at the end side of the content panel (a stack of panel cards: a project's Files, the browser of its
   files and a local branch's uncommitted and committed changes, and its Terminal, its shell terminals as tabs, or a console session's Report) and the internationalization (language choice and message catalogs), the keyboard shortcut registry (rebindable bindings, their store and the Settings section), and a dev-only gallery of UI states
   over a fixture daemon (`src/gallery/`, served by the dev server), plus the separate website-preview build. Loaded by

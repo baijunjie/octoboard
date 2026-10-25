@@ -6,6 +6,20 @@ Any confirmation in `packages/ui` — including one where the user has to type a
 `ConfirmDialog` (`packages/ui/src/dialogs/ConfirmDialog.tsx`, whose `typeToConfirm` asks for that word), never a
 dialog of its own.
 
+## Raw error text is `DiagnosticBlock`, never a container written for the occasion
+
+Wherever `packages/ui` shows raw error text as a block of its own — a message passed through from the system, Git or
+an agent, a diagnostic — in an error alert, an Alert's Details popover, an "Error details" disclosure or an error
+screen, render it with `DiagnosticBlock` (`packages/ui/src/components/DiagnosticBlock.tsx`). Never put it in a
+`<p className="font-mono">`, a bare `CodeBlock` or a copy of the block's markup. It is the user's design rule that raw
+text sits on a surface of its own, never straight on the dialog, Alert or popover around it, and the component also
+carries that text's accessibility (a named horizontal scroll region reachable by keyboard, the focus ring drawn on the
+surface), which hand-written copies drifted away from. A disclosure's summary or other label stays outside the block,
+its id passed as `labelledBy`; without one the region is named "Error details". Two variants exist for text that does
+not fit the default: `tall` also scrolls vertically (up to 40% of the viewport, a crash's stack), and `wrap` breaks long
+lines and has no scroll region at all (a message in prose-like lines, such as the daemon's startup failure). A change
+to how raw text looks goes into the component, not into one caller.
+
 ## A confirmation's options sit outside its warning, and the dialog has one warning, under them
 
 This is the user's design rule for every confirmation in `packages/ui` that offers options, such as taking more

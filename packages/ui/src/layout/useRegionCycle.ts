@@ -11,7 +11,7 @@ import { useLatest } from "../components/useLatest";
  * is in the DOM while it holds a toast, and one that is closing (kept mounted for its exit animation,
  * `data-exiting`) is not a landing place. */
 const BEFORE_PANELS = ["topbar", "rail", "welcome", "sidebar", "archive", "terminal"] as const;
-const AFTER_PANELS = ["banner", "toast"] as const;
+const AFTER_PANELS = ["update", "banner", "toast"] as const;
 type FixedRegion = (typeof BEFORE_PANELS)[number] | (typeof AFTER_PANELS)[number];
 type ShownRegion = Exclude<FixedRegion, "toast">;
 
@@ -33,8 +33,8 @@ function currentRegion(regions: readonly Region[]): Region | undefined {
  * the terminal takes Tab and Shift+Tab for the agent, so without this a keyboard user could never
  * leave it (WCAG 2.2 SC 2.1.2). `shown` says which regions are on screen right now; the others,
  * including a floating pane that is merely able to slide in, are skipped, as is a region with
- * nothing to focus. The connection banner is a stop, after the panels, while its strip is shown. The
- * toast stack joins the cycle, last, while a toast is shown.
+ * nothing to focus. The update notice and the connection banner are stops, in that order after the panels,
+ * while their strips are shown. The toast stack joins the cycle, last, while a toast is shown.
  *
  * Registered on the window's capture phase so the key never reaches xterm.js, which would write
  * it to the agent, nor react-aria's own landmark navigation, which would move focus out from under

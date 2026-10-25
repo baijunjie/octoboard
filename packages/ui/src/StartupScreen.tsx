@@ -5,7 +5,7 @@ import { errorAlerts } from "./errorAlerts";
 import { ContentPanel } from "./components/ContentPanel";
 import { ErrorAlert } from "./components/ErrorAlert";
 import { CodeToneContext } from "./components/codeTone";
-import { CodeBlock } from "./components/CodeBlock";
+import { DiagnosticBlock } from "./components/DiagnosticBlock";
 import { InlineReference } from "./components/InlineReference";
 import { BareTitleBar } from "./components/TitleBar";
 import { FadedScroller, useFadeRegion } from "./components/scrollFade";
@@ -30,7 +30,7 @@ interface StartupScreenProps {
  */
 export function StartupScreen({ message, action }: StartupScreenProps): React.ReactElement {
   const t = useT();
-  const { requestQuit, canQuit } = useAppExit({ toastError: (message) => errorAlerts.report({ message }) });
+  const { requestQuit, canQuit } = useAppExit();
   // Reachable from the keyboard while it scrolls, as a dialog's body is: the buttons sit at the end
   // of the content, so a long message has nothing between them and the top to take focus, and the
   // window itself never scrolls.
@@ -68,13 +68,20 @@ export function StartupHeading({ children }: { children: React.ReactNode }): Rea
 /** What the screen says when the shell passed the daemon's startup failure along as `?error=`. */
 export function DaemonFailedMessage({ error }: { error: string }): React.ReactElement {
   const t = useT();
-  useEffect(() => { errorAlerts.report({ message: error, title: t("startup.daemonFailed.title") }); }, [error, t]);
+  useEffect(() => {
+    // The raw text sits on a surface of its own under the application's sentence, never straight on the dialog.
+    errorAlerts.report({
+      message: error,
+      title: t("startup.daemonFailed.title"),
+      content: <><p>{t("startup.daemonFailed.description")}</p><DiagnosticBlock wrap>{error}</DiagnosticBlock></>,
+    });
+  }, [error, t]);
   return (
     <CodeToneContext value="danger">
       <div className="flex min-w-0 flex-col gap-4">
         <StartupHeading>{t("startup.daemonFailed.title")}</StartupHeading>
         <ErrorAlert announce={false} title={t("startup.daemonFailed.alertTitle")}>{t("startup.daemonFailed.description")}</ErrorAlert>
-        <CodeBlock>{error}</CodeBlock>
+        <DiagnosticBlock wrap>{error}</DiagnosticBlock>
       </div>
     </CodeToneContext>
   );

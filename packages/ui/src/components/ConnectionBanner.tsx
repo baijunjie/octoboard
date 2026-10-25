@@ -1,12 +1,11 @@
 import { RefreshCw, Unplug } from "lucide-react";
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import { Button } from "./Button";
 import type { ConnectionState } from "../daemon-client";
 import { useT } from "../i18n/react";
-import { focusOpenDialog } from "./regionFocus";
 import { StatusAnnouncer } from "./StatusAnnouncer";
-import { useFocusHandoff } from "./useFocusHandoff";
+import { useBottomStrip } from "./useBottomStrip";
 
 /** The CSS custom property this banner publishes its own height to. `style.css` exposes it as
  * `--bottom-chrome-height`, the offset that everything overlaying the content area ends above, so
@@ -64,12 +63,8 @@ export function ConnectionBanner({
   focusTerminal: () => void;
 }): React.ReactElement {
   const t = useT();
-  const previousFocus = useRef<Element | null>(null);
-  const held = useFocusHandoff(() => {
-    if (!focusOpenDialog(previousFocus.current)) focusTerminal();
-  });
-  const ref = useRef<HTMLDivElement>(null);
   const visible = state === "reconnecting" || state === "closed";
+  const { ref, focusProps } = useBottomStrip({ visible, heightVar: BANNER_HEIGHT_VAR, focusTerminal });
   const [announcementReady, setAnnouncementReady] = useState(false);
   const message = t(state === "closed" ? "connection.disconnected" : "connection.reconnecting");
 
@@ -84,31 +79,6 @@ export function ConnectionBanner({
     return () => clearTimeout(timer);
   }, [visible]);
 
-  // Keyed on `visible` rather than `ref.current`: a deps array is diffed during render, while
-  // React only detaches a removed element's ref in the commit phase, after render — so on the
-  // very render where the strip goes, `ref.current` still points at the old node, the deps would
-  // compare equal, and the cleanup below (the one that resets the property back to `0px`) would
-  // never run. Any re-render between the strip appearing and its removal arms that bug; keying on
-  // the boolean the render itself decides with avoids it regardless of how many re-renders happen
-  // in between.
-  useLayoutEffect(() => {
-    if (!visible) return;
-    const node = ref.current;
-    if (!node) return;
-    // Written synchronously here too, not only from the observer's first callback, so nothing that
-    // ends above `--bottom-chrome-height` is misplaced for the one frame between this banner
-    // appearing and its first `ResizeObserver` callback.
-    document.documentElement.style.setProperty(BANNER_HEIGHT_VAR, `${node.offsetHeight}px`);
-    const observer = new ResizeObserver(() => {
-      document.documentElement.style.setProperty(BANNER_HEIGHT_VAR, `${node.offsetHeight}px`);
-    });
-    observer.observe(node);
-    return () => {
-      observer.disconnect();
-      document.documentElement.style.setProperty(BANNER_HEIGHT_VAR, "0px");
-    };
-  }, [visible]);
-
   return (
     // The marked element stays mounted whatever the state, and without a strip it is a flex item
     // of no height. React Aria collects the top layers once, as the dialog opens, and the observer it
@@ -121,11 +91,7 @@ export function ConnectionBanner({
         <div
           ref={ref}
           data-region="banner"
-          {...held}
-          onFocus={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget)) previousFocus.current = event.relatedTarget;
-            held.onFocus(event);
-          }}
+          {...focusProps}
           // `min-h-8` is the height the Retry button (h-6) and the padding take, so the strip is as
           // tall while it only says it is reconnecting as once it offers Retry.
           className="flex min-h-8 items-center justify-center gap-3 bg-warning px-3 py-1 text-xs text-warning-foreground"

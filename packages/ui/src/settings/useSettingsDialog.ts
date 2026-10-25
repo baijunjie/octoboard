@@ -7,15 +7,15 @@ import { usePlatform } from "../platform/react";
 import type { SettingsSectionId } from "./SettingsDialog";
 
 /**
- * Whether the settings dialog is open, and how to open it (on its first section, or at a given one
- * with `openSettingsAt`, optionally with the Add agent dialog in front, or on an account's sharing
- * switch) and close it, including from the native menu's Settings item (Cmd+,). That request is
- * ignored while anything else holds the user's attention: another modal (`otherModalOpen`), an open
- * action menu, the settings themselves, or before the UI has anything to show (`ready` is false),
- * where it would otherwise pop the dialog up later, unasked. Closing hands keyboard focus to
- * `focusTerminal`, whatever the modal's own focus restore would pick, unless a dialog is open under
- * it (Settings was opened from one): focus then stays with that dialog, which it is handed back to
- * if the restore left it on `<body>`.
+ * Whether the settings dialog is open, and how to open it (on its first section, or at a given one with
+ * `openSettingsAt`, optionally with the Add agent dialog in front, or on an account's sharing switch) and close it,
+ * including from the native menu's Settings item (Cmd+,). That request is ignored while anything else holds the user's
+ * attention: another modal (`otherModalOpen`), an open action menu, the settings themselves, or before the UI has
+ * anything to show (`ready` is false), where it would otherwise pop the dialog up later, unasked. The native menu's
+ * About item opens Settings on its About section the same way, and moves an open Settings there unless another modal or
+ * an open action menu holds the user's attention. Closing hands keyboard focus to `focusTerminal`, whatever the modal's
+ * own focus restore would pick, unless a dialog is open under it (Settings was opened from one): focus then stays with
+ * that dialog, which it is handed back to if the restore left it on `<body>`.
  */
 export function useSettingsDialog({
   ready,
@@ -68,18 +68,24 @@ export function useSettingsDialog({
     if (ready && !open && !otherModalOpen && !isActionMenuOpen()) setOpen(true);
   });
   useEffect(() => appMenu?.onSettingsRequested(() => requestFromMenuRef.current()), [appMenu]);
+  const requestAboutFromMenuRef = useLatest(() => {
+    if (ready && !otherModalOpen && !isActionMenuOpen()) openSettingsAt("about");
+  });
+  useEffect(() => appMenu?.onAboutRequested?.(() => requestAboutFromMenuRef.current()), [appMenu]);
+
+  function openSettingsAt(target: SettingsSectionId, options?: { addAgent?: boolean; account?: string }): void {
+    setSection(target);
+    setAddAgent(options?.addAgent ?? false);
+    setAccount(options?.account);
+    setNonce((count) => count + 1);
+    setOpen(true);
+  }
 
   return {
     settingsOpen: open,
     settingsNavigation: { nonce, section, addAgent, account },
     openSettings: () => setOpen(true),
-    openSettingsAt: (target, options) => {
-      setSection(target);
-      setAddAgent(options?.addAgent ?? false);
-      setAccount(options?.account);
-      setNonce((count) => count + 1);
-      setOpen(true);
-    },
+    openSettingsAt,
     closeSettings: () => {
       setSection(undefined);
       setAddAgent(false);

@@ -9,8 +9,8 @@
 //! - The Dock icon's own Quit plus a system-initiated logout/restart/shutdown
 //!   (`application_should_terminate` below, installed onto AppKit's own delegate).
 //! - `RunEvent::ExitRequested` (also handled in `lib.rs`), which in practice only ever serves
-//!   `confirm_quit`'s own self-raised `app.exit(0)`, or a window torn down before the frontend got
-//!   as far as registering with `frontend_exit_heartbeat`.
+//!   `confirm_quit`'s own self-raised `app.exit(0)` or restart, or a window torn down before the
+//!   frontend got as far as registering with `frontend_exit_heartbeat`.
 //!
 //! The window's close button is a fourth way out, except that it hides the window instead when the
 //! user chose to run in the background (`background.rs`); with no daemon left to keep running it
@@ -27,7 +27,7 @@ use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::sidecar::daemon_stopped;
+use crate::sidecar::{daemon_stopped, stop_daemon};
 
 /// How soon a second prevented exit must follow the first for it to be let through unconditionally
 /// — the escape hatch in `should_let_quit_through` below for a frontend that registered for the
@@ -88,9 +88,23 @@ pub fn frontend_exit_heartbeat(state: tauri::State<ExitState>) {
 /// Marks the pending quit as confirmed and asks Tauri to exit. The `RunEvent::ExitRequested`
 /// handler in `lib.rs` sees `should_let_quit_through` consume the flag below and lets this one
 /// through.
+///
+/// With `restart` the process is relaunched instead of just ending, which is how an installed
+/// update takes effect (`updater.rs`): the UI asks for it through the same confirmation as any
+/// quit, since a restart ends the sessions as a quit does. The new instance's daemon would find this
+/// one's instance lock held and fail to start, so the daemon is stopped first, off the main thread
+/// because that waits; the restart then goes through the event loop like any exit, so `RunEvent::Exit`
+/// saves the window state on the way out.
 #[tauri::command]
-pub fn confirm_quit(app: AppHandle, state: tauri::State<ExitState>) {
+pub fn confirm_quit(app: AppHandle, state: tauri::State<ExitState>, restart: Option<bool>) {
     state.confirmed.store(true, Ordering::SeqCst);
+    if restart == Some(true) {
+        tauri::async_runtime::spawn_blocking(move || {
+            stop_daemon(&app);
+            app.request_restart();
+        });
+        return;
+    }
     app.exit(0);
 }
 

@@ -938,15 +938,16 @@ recovery action when there is one (Try again, or the action that fixes it) at th
 button of a trailing-aligned group goes. Details opens a popover holding the rest: first any further
 explanation in the application's own words (a reason per cause, each cause's own fix, further guidance), then what is
 not written for the reader — a message passed through from the system, Git or an agent, a diagnostic block, raw
-entries. Raw text is never shown outside Details, and the one-sentence description and main remedy are never hidden
-in it; an error with nothing beyond those two sentences has no Details button. A catalog message keeps the same split:
-its visible summary and remedy carry no raw parameter (no system text, no `{detail}`), and any further explanation is a
-`.details` entry of its own that Details shows first. Try again appears only where trying again can change the answer;
-a failure that is the subject's state (no common commit, not a repository, a file outside the scope) has none. The buttons take
-the Alert's status colour, as HeroUI's own Alert examples do: the recovery action is the solid button of that colour
-(HeroUI's `danger` variant in a danger Alert; the same solid treatment from `--warning` / `--warning-foreground` in a
-warning one, HeroUI having no warning button), and Details is the soft button of that colour (`danger-soft`, or its
-warning counterpart), so neither reads as a neutral control dropped onto a coloured box.
+entries, each block on a surface of its own (see "References in copy use `InlineReference`"). Raw text is never shown
+outside Details, and the one-sentence description and main remedy are never hidden in it; an error with nothing beyond
+those two sentences has no Details button. A catalog message keeps the same split: its visible summary and remedy carry
+no raw parameter (no system text, no `{detail}`), and any further explanation is a `.details` entry of its own that
+Details shows first. Try again appears only where trying again can change the answer; a failure that is the subject's
+state (no common commit, not a repository, a file outside the scope) has none. The buttons take the Alert's status
+colour, as HeroUI's own Alert examples do: the recovery action is the solid button of that colour (HeroUI's `danger`
+variant in a danger Alert; the same solid treatment from `--warning` / `--warning-foreground` in a warning one, HeroUI
+having no warning button), and Details is the soft button of that colour (`danger-soft`, or its warning counterpart), so
+neither reads as a neutral control dropped onto a coloured box.
 
 Every Alert — an error, a warning, a confirmation's warning — has a title. HeroUI centres the indicator on the title's
 24px line, so an Alert that opens with its 20px description draws its first line off the glyph's centre; the title is
@@ -1067,8 +1068,12 @@ its own is plain text.
 Plain-text surfaces, including accessible names, native labels, announcements and system notifications, retain
 readable text without chip markup. Isolate references at the sentence boundary where needed, as specified under
 "Text direction"; collection keys, `textValue`, sorting, defaults and submitted values stay raw.
-Raw diagnostics use `CodeBlock` or the existing source renderer,
-preserving their text, direction and indentation; long content remains scrollable and reachable from the keyboard.
+Raw diagnostics shown as a block of their own sit on a secondary `Surface` of their own, never straight on the
+dialog, Alert or popover that holds them, with the summary or label naming them outside that surface; they preserve
+their text, direction and indentation, and long content remains scrollable and reachable from the keyboard, the focus
+ring drawn on the surface. A block that may be taller than its room (a crash's stack) is `tall`: it scrolls vertically
+as well, with the same named region and ring. A `wrap`ped block breaks long lines instead, so it has nothing to scroll
+and no region to name.
 Keep structured error metadata separate from the plain error message, so notifications and unknown-error fallbacks
 retain usable text.
 
