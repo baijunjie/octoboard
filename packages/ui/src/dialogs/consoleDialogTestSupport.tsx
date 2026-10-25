@@ -7,6 +7,7 @@ import { consoleOf } from "../gallery/fixtures/builders";
 import type { Account, Agent, AgentAvailability, AgentModel, Console, Event, ModelsUnavailable, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ConsoleDialog } from "./ConsoleDialog";
+import { DEFAULT_WORKTREE_SETTINGS } from "../worktreeSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -43,7 +44,7 @@ export function render(
   const request = vi.fn((body: RequestBody) => respond?.(body) ?? Promise.resolve(body.type === "list_agent_models" ? listing(body, MODELS) : ({ type: "ack" } as Event)));
   const daemon: Daemon = {
     store: createStateStore({
-      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", accounts },
+      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts },
       agentAvailability: new Map(
         (["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined" }]),
       ),

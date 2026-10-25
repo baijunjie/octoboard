@@ -5,10 +5,11 @@ import { daemonMessage } from "../daemonMessage";
 import { errorPresentation, noticeErrorPresentation } from "../errorPresentation";
 import { errorText } from "../errorText";
 import { currentLanguage } from "../i18n/language";
-import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, type Account, type AccountLogin, type AccountSharing, type Agent, type ConsoleSessionColour, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type Project, type QuotaWindow, type RequestBody, type Session, type SharingCause, type SessionRecordsPresence, type ShellTerminal } from "../protocol";
+import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, type Account, type AccountLogin, type AccountSharing, type Agent, type ConsoleSessionColour, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type Project, type QuotaWindow, type RequestBody, type Session, type SharingCause, type SessionRecordsPresence, type ShellTerminal, type WorktreeOverride, type WorktreeOverrideChanges } from "../protocol";
 import { accountQuotaOf } from "../quota/accountQuotaOf";
 import { exhaustedQuotaWindow } from "../quota/quotaFormat";
 import { applyDaemonEvent, createStateStore, type Daemon, type ToastRequest } from "../store";
+import { FOLLOWING_WORKTREE_SETTINGS } from "../worktreeSettings";
 import type { Scenario } from "./scenario";
 import { terminalFixtureUrl } from "./fakeTerminal";
 import { createConfigurationReplies } from "./fixtureConfiguration";
@@ -125,6 +126,12 @@ function projectFields(body: Extract<RequestBody, { type: "add_project" | "updat
     if (effort !== undefined) fields[`${agent}_session_effort`] = trimmedOrNull(effort);
   }
   return fields;
+}
+
+/** A project's own worktree settings after a request's: per item, absent keeps it, `null` goes back to following the
+ * application-wide value, and a value becomes the project's own. */
+function projectWorktrees(current: WorktreeOverride, changes: WorktreeOverrideChanges | undefined): WorktreeOverride {
+  return { ...current, ...changes };
 }
 
 function normalizeTags(tags: string[]): string[] {
@@ -584,7 +591,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
               cloneDir = normalizedPath(given);
             }
           }
-          store.setState({ settings: { ...current.settings, auto_pull_repositories: body.auto_pull_repositories ?? current.settings.auto_pull_repositories, auto_delete_unresumable_archives: body.auto_delete_unresumable_archives ?? current.settings.auto_delete_unresumable_archives, ...(body.auto_approve_session_requests !== undefined && { auto_approve_session_requests: body.auto_approve_session_requests }), ...(body.auto_approve_resume_requests !== undefined && { auto_approve_resume_requests: body.auto_approve_resume_requests }), ...(body.auto_approve_account_switches !== undefined && { auto_approve_account_switches: body.auto_approve_account_switches }), ...(body.auto_approve_handoffs !== undefined && { auto_approve_handoffs: body.auto_approve_handoffs }), ...(body.auto_select_account !== undefined && { auto_select_account: body.auto_select_account }), ...(body.sidebar_order_by_status !== undefined && { sidebar_order_by_status: body.sidebar_order_by_status }), ...(body.auto_start_quota_windows !== undefined && { auto_start_quota_windows: body.auto_start_quota_windows }), default_clone_dir: cloneDir } });
+          store.setState({ settings: { ...current.settings, auto_pull_repositories: body.auto_pull_repositories ?? current.settings.auto_pull_repositories, auto_delete_unresumable_archives: body.auto_delete_unresumable_archives ?? current.settings.auto_delete_unresumable_archives, ...(body.auto_approve_session_requests !== undefined && { auto_approve_session_requests: body.auto_approve_session_requests }), ...(body.auto_approve_resume_requests !== undefined && { auto_approve_resume_requests: body.auto_approve_resume_requests }), ...(body.auto_approve_account_switches !== undefined && { auto_approve_account_switches: body.auto_approve_account_switches }), ...(body.auto_approve_handoffs !== undefined && { auto_approve_handoffs: body.auto_approve_handoffs }), ...(body.auto_select_account !== undefined && { auto_select_account: body.auto_select_account }), ...(body.sidebar_order_by_status !== undefined && { sidebar_order_by_status: body.sidebar_order_by_status }), ...(body.auto_start_quota_windows !== undefined && { auto_start_quota_windows: body.auto_start_quota_windows }), ...(body.worktrees !== undefined && { worktrees: { ...current.settings.worktrees, ...body.worktrees } }), default_clone_dir: cloneDir } });
           return { type: "ack" };
         }
         case "set_codex_approval_reviewer": {
@@ -933,6 +940,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
               claude_account_id: { kind: "inherit" },
               codex_account_id: { kind: "inherit" },
               grok_account_id: { kind: "inherit" },
+              worktrees: projectWorktrees(FOLLOWING_WORKTREE_SETTINGS, body.worktrees),
               ...projectFields(body),
             };
             projects.set(project.id, project);
@@ -946,7 +954,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           const current = store.getState().projects.get(body.project);
           if (!current) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
           if (body.name !== undefined && !body.name.trim()) return fail({ code: "field_required", params: { field: "name" }, message: "name is required" });
-          const project = { ...current, ...projectFields(body),
+          const project = { ...current, ...projectFields(body), worktrees: projectWorktrees(current.worktrees, body.worktrees),
             ...(body.name !== undefined && body.name.trim() !== current.name.trim() && { name: body.name.trim() }),
             ...(body.description !== undefined && trimmedOrNull(body.description) !== trimmedOrNull(current.description) && { description: trimmedOrNull(body.description) }),
             ...(body.tags !== undefined && { tags: normalizeTags(body.tags) }),

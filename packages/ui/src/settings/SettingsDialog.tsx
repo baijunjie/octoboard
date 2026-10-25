@@ -1,5 +1,5 @@
 import { Modal, Tabs } from "@heroui/react";
-import { Bell, FileCog, FolderCheck, GitBranch, Info, Keyboard, KeyRound, Settings2, ShieldCheck, UserCheck, type LucideIcon } from "lucide-react";
+import { Bell, FileCog, FolderCheck, GitBranch, GitFork, Info, Keyboard, KeyRound, Settings2, ShieldCheck, UserCheck, type LucideIcon } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { TitledControl } from "../components/TitledControl";
@@ -22,6 +22,7 @@ import { PermissionsSection } from "./PermissionsSection";
 import { SHORTCUT_GROUP_HEADING_HEIGHT, ShortcutsSection } from "./ShortcutsSection";
 import { SettingsFocusContext } from "./useSectionRefocus";
 import { TrustedFoldersSection } from "./TrustedFoldersSection";
+import { WorktreesSection } from "./WorktreesSection";
 
 interface Section {
   id: string;
@@ -35,6 +36,7 @@ interface Section {
 const SECTIONS = [
   { id: "general", label: "settings.section.general", Icon: Settings2, Content: GeneralSection },
   { id: "git", label: "settings.section.git", Icon: GitBranch, Content: GitSection },
+  { id: "worktrees", label: "settings.section.worktrees", Icon: GitFork, Content: WorktreesSection },
   { id: "accounts", label: "settings.section.accounts", Icon: KeyRound, Content: AgentAccountsSection, stickyHeadingHeight: AGENT_STRIP_HEIGHT },
   { id: "trusted-folders", label: "settings.section.trustedFolders", Icon: FolderCheck, Content: TrustedFoldersSection },
   { id: "permissions", label: "settings.section.permissions", Icon: ShieldCheck, Content: PermissionsSection },

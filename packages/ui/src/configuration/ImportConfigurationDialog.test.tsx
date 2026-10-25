@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { setInteractionModality } from "react-aria";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
 import { MIXED_RESULT, REVIEW } from "../gallery/fixtures/configuration";
@@ -299,6 +299,30 @@ it("leaves out the setting a file from before it existed does not carry", async 
   expect(text()).toContain("Turns on Automatically pull repositories");
   expect(text()).not.toContain("archived sessions whose conversation is gone");
   expect(text()).not.toContain("Automatically select an account");
+});
+
+describe("the worktree settings", () => {
+  const FILE = { use_worktrees: false, rebase_before_merge: true, delivery: "merge" as const, revert_gate: true };
+  const inspecting = (worktrees: typeof FILE | undefined, current: typeof FILE | undefined) => {
+    const { worktrees: _, current_worktrees: __, ...rest } = REVIEW.settings!;
+    const settings = { ...rest, ...(worktrees && { worktrees }), ...(current && { current_worktrees: current }) };
+    return (body: RequestBody) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected" as const, ...REVIEW, settings }) : reply(body));
+  };
+
+  it("notes that applying changes them when the file's differ from this machine's", async () => {
+    await reviewing({ reply: inspecting(FILE, { ...FILE, use_worktrees: true }) });
+    expect(text()).toContain("Applying sets the settings under Worktrees to those in the file");
+  });
+
+  it("notes that applying changes nothing when they are the same", async () => {
+    await reviewing({ reply: inspecting(FILE, FILE) });
+    expect(text()).toContain("The settings under Worktrees in the file are the ones already set");
+  });
+
+  it("leaves them out when the file does not carry them", async () => {
+    await reviewing({ reply: inspecting(undefined, FILE) });
+    expect(text()).not.toContain("Worktrees");
+  });
 });
 
 it("stops before any request when a project is to go to a directory that is missing or not a path", async () => {

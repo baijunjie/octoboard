@@ -4,7 +4,8 @@
 // here by hand, and the test beside this file holds those answers to the rules the daemon follows.
 import type { Imported } from "../../configuration/ImportResult";
 import type { Inspection } from "../../configuration/ImportReview";
-import type { InspectedProject } from "../../protocol";
+import type { InspectedProject, WorktreeSettings } from "../../protocol";
+import { DEFAULT_WORKTREE_SETTINGS } from "../../worktreeSettings";
 import type { Ui } from "../interact";
 import type { ConfigurationFixture, Scenario, Step } from "../scenario";
 import { ALL_AGENTS, SAMPLE, consoleOf, projectOf, snapshotState } from "./builders";
@@ -40,17 +41,17 @@ const layout = {
 };
 const state = snapshotState({
   ...layout,
-  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, accounts },
+  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, worktrees: DEFAULT_WORKTREE_SETTINGS, accounts },
 });
 const autoPulling = snapshotState({
   ...layout,
-  settings: { auto_pull_repositories: true, auto_delete_unresumable_archives: true, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, accounts },
+  settings: { auto_pull_repositories: true, auto_delete_unresumable_archives: true, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, worktrees: DEFAULT_WORKTREE_SETTINGS, accounts },
 });
 const noConsoleState = snapshotState({
   consoles: [],
   projects: [],
   sessions: [],
-  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, accounts },
+  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, worktrees: DEFAULT_WORKTREE_SETTINGS, accounts },
 });
 
 const openSettings = (ui: Ui) => ui.press(ui.t("rail.settings"));
@@ -81,6 +82,9 @@ const project = (extra: Partial<InspectedProject> & Pick<InspectedProject, "name
   ...extra,
 });
 
+/** The worktree settings the full export carries: not the ones this machine starts with. */
+const FILE_WORKTREES: WorktreeSettings = { use_worktrees: true, rebase_before_merge: false, delivery: "merge", revert_gate: true };
+
 /** A document of a laptop's layout set up on a machine where it sits elsewhere: one project at its
  * recorded path, one found under the default clone directory, one to be cloned and one that nothing
  * places (whose recorded path is long enough to break over lines), a second console whose only
@@ -105,6 +109,8 @@ export const REVIEW: Omit<Inspection, "type"> = {
     current_auto_approve_account_switches: false,
     auto_approve_handoffs: true,
     current_auto_approve_handoffs: false,
+    worktrees: FILE_WORKTREES,
+    current_worktrees: DEFAULT_WORKTREE_SETTINGS,
   },
   consoles: [
     {
@@ -228,7 +234,7 @@ const LONG_CLONE_DETAIL = [
  * it was imported, a clone that failed with a long reason, a project nothing placed, a console that
  * could not be created with its project not tried, and the account references that fell back. */
 export const MIXED_RESULT: Omit<Imported, "type"> = {
-  settings_applied: { auto_pull_repositories: true, auto_delete_unresumable_archives: false, auto_select_account: true, sidebar_order_by_status: false, auto_start_quota_windows: true, auto_approve_session_requests: true, auto_approve_resume_requests: true, auto_approve_account_switches: true, auto_approve_handoffs: true },
+  settings_applied: { auto_pull_repositories: true, auto_delete_unresumable_archives: false, auto_select_account: true, sidebar_order_by_status: false, auto_start_quota_windows: true, auto_approve_session_requests: true, auto_approve_resume_requests: true, auto_approve_account_switches: true, auto_approve_handoffs: true, worktrees: FILE_WORKTREES },
   consoles: [
     {
       name: "Work laptop",
@@ -361,6 +367,12 @@ const SHORTCUTS_HERE = {
 const SETTINGS_APPLIED_RESULT: Omit<Imported, "type"> = {
   settings_applied: { auto_pull_repositories: false },
   consoles: SETTINGS_FAILED_RESULT.consoles,
+};
+
+/** `WITH_SETTING_OFF`, its document carrying the worktree settings this machine already has. */
+const WITH_WORKTREES_HERE: Omit<Inspection, "type"> = {
+  ...WITH_SETTING_OFF,
+  settings: { ...WITH_SETTING_OFF.settings!, worktrees: DEFAULT_WORKTREE_SETTINGS, current_worktrees: DEFAULT_WORKTREE_SETTINGS },
 };
 
 const reviewing = (extra: Partial<ConfigurationFixture> = {}): ConfigurationFixture => ({ file: FILE, inspection: REVIEW, imported: MIXED_RESULT, ...extra });
@@ -567,7 +579,7 @@ export const configurationScenarios: Scenario[] = [
     category: "normal",
     title: "Import, review",
     description:
-      "Projects found at recorded or default paths, clone candidates, missing paths, account fallbacks and an empty console appear together; settings start unchecked, and their note has ten lines: automatic pull turns on, archive cleanup turns off, automatic account selection turns on, ordering the sidebar by status turns off, starting usage windows automatically turns on, the four automatic approvals of agents' requests (sessions, resumes, account switches, handoffs) turn on, and the last says applying sets the Keyboard shortcuts on this device to those in the file, 3 of them changed from the defaults, applying to this device or browser only.",
+      "Projects found at recorded or default paths, clone candidates, missing paths, account fallbacks and an empty console appear together; settings start unchecked, and their note has eleven lines: automatic pull turns on, archive cleanup turns off, automatic account selection turns on, ordering the sidebar by status turns off, starting usage windows automatically turns on, the four automatic approvals of agents' requests (sessions, resumes, account switches, handoffs) turn on, one says applying sets the settings under Worktrees to those in the file, which differ from the current ones, and the last says applying sets the Keyboard shortcuts on this device to those in the file, 3 of them changed from the defaults, applying to this device or browser only.",
     state,
     configuration: reviewing({ file: SHORTCUTS_FILE }),
     steps: [
@@ -620,11 +632,11 @@ export const configurationScenarios: Scenario[] = [
     id: "configuration-import-review-shortcuts-same",
     group: GROUP,
     category: "normal",
-    title: "Import, keyboard shortcuts the device already has",
-    description: "The settings note ends in a line saying the Keyboard shortcuts in the file are the ones this device already has, so applying changes nothing, after the one line about automatic pull.",
+    title: "Import, keyboard shortcuts and worktree settings the device already has",
+    description: "After the one line about automatic pull, the settings note has two lines saying the settings under Worktrees and the Keyboard shortcuts in the file are the ones this device already has, so applying changes nothing.",
     state: autoPulling,
     preferences: { keyboardShortcuts: SHORTCUTS_HERE },
-    configuration: { file: SHORTCUTS_FILE, inspection: WITH_SETTING_OFF },
+    configuration: { file: SHORTCUTS_FILE, inspection: WITH_WORKTREES_HERE },
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -712,7 +724,7 @@ export const configurationScenarios: Scenario[] = [
     title: "Import result with failures and fallbacks",
     state: state,
     configuration: reviewing({ file: SHORTCUTS_FILE }),
-    description: "Placement outcomes, failed projects and consoles, fallback accounts and applied settings share the result; the settings show ten lines, automatic pull on, archive cleanup off, automatic account selection on, ordering the sidebar by status off, starting usage windows automatically on, all four automatic approvals of agents' requests (sessions, resumes, account switches, handoffs) on, and last the Keyboard shortcuts on this device now having 3 changes from the defaults, followed on the same line by 2 shortcuts in the file that could not be applied here and were left out. A failed project or console reads like the other outcomes in its Result cell: a danger-coloured circled \"!\" followed by the word \"Failed\", as one button named after the project (or the console, when the whole console failed), such as \"Website failed\", and its Detail cell is empty. Short height exposes scrolling; Phone folds rows.",
+    description: "Placement outcomes, failed projects and consoles, fallback accounts and applied settings share the result; the settings show eleven lines, automatic pull on, archive cleanup off, automatic account selection on, ordering the sidebar by status off, starting usage windows automatically on, all four automatic approvals of agents' requests (sessions, resumes, account switches, handoffs) on, the settings under Worktrees now matching the file, and last the Keyboard shortcuts on this device now having 3 changes from the defaults, followed on the same line by 2 shortcuts in the file that could not be applied here and were left out. A failed project or console reads like the other outcomes in its Result cell: a danger-coloured circled \"!\" followed by the word \"Failed\", as one button named after the project (or the console, when the whole console failed), such as \"Website failed\", and its Detail cell is empty. Short height exposes scrolling; Phone folds rows.",
     steps: [
       ...importFromSettings,
       chooseFile,

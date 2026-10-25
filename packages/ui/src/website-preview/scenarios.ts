@@ -18,6 +18,7 @@ import { previewCopy as chinese } from "./locales/zh-Hans";
 import { createTerminalScript } from "./terminals";
 import { terminalCopy } from "./terminalScripts";
 import type { TerminalScript } from "../gallery/fakeTerminal";
+import { DEFAULT_WORKTREE_SETTINGS } from "../worktreeSettings";
 
 export type PreviewScene = "overview" | "focus" | "changes";
 
@@ -227,7 +228,7 @@ export function createPreviewScenario(
           auto_pull_repositories: false,
           auto_delete_unresumable_archives: true,
           added_agents: ALL_AGENTS,
-          default_clone_dir: "/demo",
+          default_clone_dir: "/demo", worktrees: DEFAULT_WORKTREE_SETTINGS,
           accounts: [],
         },
         accountQuotas: previewQuotas(),

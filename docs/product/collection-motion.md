@@ -2,14 +2,16 @@
 
 ## Items moving within a collection
 
-When items are added, removed, reordered or folded within a visible collection, items that remain visible slide
-to their new positions over **300 ms**. This applies to navigation lists, session cards and archive rows, settings
-records, selected tags and wrapping chips, the file and Git change lists and trees, the accounts listed in the account
-quota panel on the rail, and tab strips: the agent tabs in Settings' Agent accounts section, in the account quota panel
-and in the console dialog's Advanced section, and the Terminal panel's tabs. The quota meters within one account are
-not such a collection: they appear and disappear without motion as its readings change. Horizontal and wrapping
-collections move horizontally and vertically as needed, in either reading direction. A tab dropped at the end of a drag
-slides into its new place from where it was let go.
+When items are added, removed, reordered or folded within a visible collection, items that remain visible slide to their
+new positions over **300 ms**. This applies to navigation lists, session cards and archive rows, settings records, the
+rows of Settings' Worktrees section that come and go with its Use worktrees for development switch (see "Worktrees" in
+`docs/product/settings.md`), selected tags and wrapping chips, the file and Git change lists and trees, the accounts
+listed in the account quota panel on the rail, and tab strips: the agent tabs in Settings' Agent accounts section, in
+the account quota panel and in the console dialog's Advanced section, and the Terminal panel's tabs. The quota meters
+within one account are not such a collection: they appear and disappear without motion as its readings change, and
+neither are the pickers of the project dialog's Worktrees group, which appear and disappear without motion as its use
+worktrees picker changes. Horizontal and wrapping collections move horizontally and vertically as needed, in either
+reading direction. A tab dropped at the end of a drag slides into its new place from where it was let go.
 
 New items fade in from **25% of their own width to the left** of their final positions; removed items fade out
 while moving **25% of their own width to the right** from their previous positions. These directions stay the same

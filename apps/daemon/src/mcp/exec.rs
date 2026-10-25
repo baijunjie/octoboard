@@ -52,6 +52,7 @@ use super::handover::{self, branch_names, held_by};
 use super::quotas;
 use super::settings::{
     self, describe_project, launch_argument, project_accounts_argument, resolve_account,
+    worktrees_argument,
 };
 
 /// How much of a session's output `get_session` hands back. Enough to see what it is doing and how
@@ -164,6 +165,7 @@ async fn add_project(
     }
     let mut settings = coordinator::NewProjectSettings {
         pinned: optional_bool(arguments, "pinned")?.unwrap_or(false),
+        worktrees: worktrees_argument(arguments)?,
         ..Default::default()
     };
     for (agent, account) in project_accounts_argument(state, arguments)? {
@@ -3024,7 +3026,7 @@ pub(super) mod tests {
                 "use_worktrees": true,
                 "rebase_before_merge": true,
                 "delivery": "ask",
-                "revert_gate": true,
+                "revert_gate": false,
             })
         );
 
@@ -3032,12 +3034,12 @@ pub(super) mod tests {
             &state,
             "a",
             "update_settings",
-            &arguments(json!({ "worktrees": { "delivery": "merge", "revert_gate": false } })),
+            &arguments(json!({ "worktrees": { "delivery": "merge", "revert_gate": true } })),
         )
         .await
         .unwrap();
         assert_eq!(updated["worktrees"]["delivery"], "merge");
-        assert_eq!(updated["worktrees"]["revert_gate"], false);
+        assert_eq!(updated["worktrees"]["revert_gate"], true);
         assert_eq!(updated["worktrees"]["use_worktrees"], true);
         for bad in [
             json!({ "worktrees": { "delivery": "rebase" } }),
@@ -3078,7 +3080,7 @@ pub(super) mod tests {
                 "use_worktrees": false,
                 "rebase_before_merge": true,
                 "delivery": "pull_request",
-                "revert_gate": false,
+                "revert_gate": true,
             })
         );
 
@@ -3089,7 +3091,7 @@ pub(super) mod tests {
             "update_project",
             &arguments(json!({
                 "project": "project-1",
-                "worktrees": { "delivery": null, "revert_gate": true },
+                "worktrees": { "delivery": null, "revert_gate": false },
             })),
         )
         .await
@@ -3097,7 +3099,7 @@ pub(super) mod tests {
         assert_eq!(project["worktrees"]["override"]["use_worktrees"], false);
         assert!(project["worktrees"]["override"]["delivery"].is_null());
         assert_eq!(project["worktrees"]["effective"]["delivery"], "merge");
-        assert_eq!(project["worktrees"]["effective"]["revert_gate"], true);
+        assert_eq!(project["worktrees"]["effective"]["revert_gate"], false);
 
         let message = refused(
             &state,
@@ -3118,7 +3120,7 @@ pub(super) mod tests {
         let own = call(&state, "of-a", "get_project", &Map::new())
             .await
             .unwrap();
-        assert_eq!(own["worktrees"]["override"]["revert_gate"], true);
+        assert_eq!(own["worktrees"]["override"]["revert_gate"], false);
         assert_eq!(own["worktrees"]["effective"]["delivery"], "merge");
         // A project session cannot change them.
         assert!(refused(&state, "of-a", "update_settings", json!({}))
@@ -3583,6 +3585,95 @@ pub(super) mod tests {
         .await
         .unwrap();
         assert!(added["projects"][0]["description"].is_null());
+    }
+
+    /// `add_project` takes the project's own worktree values as `update_project` does, except that
+    /// an item left out or `null` follows the application-wide value; a parent source gives them to
+    /// every project it adds, and a bad value is refused before anything is stored.
+    #[tokio::test]
+    async fn add_project_takes_the_projects_own_worktree_values() {
+        let (state, dir) = settings_state("add-project-worktrees");
+        let before = state.store.list_projects().unwrap().len();
+        for bad in [
+            json!({ "delivery": "rebase" }),
+            json!({ "use_worktrees": "yes" }),
+            json!({ "typo": true }),
+        ] {
+            let args = json!({ "source": "local", "path": "/tmp", "worktrees": bad });
+            let message = refused(&state, "a", "add_project", args).await;
+            assert!(message.contains("worktrees"), "{message}");
+        }
+        assert_eq!(state.store.list_projects().unwrap().len(), before);
+
+        call(
+            &state,
+            "a",
+            "update_settings",
+            &arguments(json!({ "worktrees": { "revert_gate": true } })),
+        )
+        .await
+        .unwrap();
+        let repo = dir.join("repo");
+        std::fs::create_dir(&repo).unwrap();
+        let added = call(
+            &state,
+            "a",
+            "add_project",
+            &arguments(json!({
+                "source": "local",
+                "path": repo.to_string_lossy(),
+                "worktrees": { "use_worktrees": false, "delivery": "merge", "revert_gate": null },
+            })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            added["projects"][0]["worktrees"]["override"],
+            json!({
+                "use_worktrees": false,
+                "rebase_before_merge": null,
+                "delivery": "merge",
+                "revert_gate": null,
+            })
+        );
+        assert_eq!(
+            added["projects"][0]["worktrees"]["effective"]["revert_gate"],
+            true
+        );
+
+        let parent = dir.join("parent");
+        for name in ["one", "two"] {
+            std::fs::create_dir_all(parent.join(name).join(".git")).unwrap();
+        }
+        let added = call(
+            &state,
+            "a",
+            "add_project",
+            &arguments(json!({
+                "source": "parent",
+                "path": parent.to_string_lossy(),
+                "worktrees": { "rebase_before_merge": false },
+            })),
+        )
+        .await
+        .unwrap();
+        let projects = added["projects"].as_array().unwrap();
+        assert_eq!(projects.len(), 2);
+        assert!(projects
+            .iter()
+            .all(|project| project["worktrees"]["override"]["rebase_before_merge"] == false));
+
+        let bare = dir.join("bare");
+        std::fs::create_dir(&bare).unwrap();
+        let added = call(
+            &state,
+            "a",
+            "add_project",
+            &arguments(json!({ "source": "local", "path": bare.to_string_lossy() })),
+        )
+        .await
+        .unwrap();
+        assert!(added["projects"][0]["worktrees"]["override"]["delivery"].is_null());
     }
 
     /// `new_session`'s account must belong to the session's agent, and its model must be one the

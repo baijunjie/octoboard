@@ -9,6 +9,7 @@ import { errorAlerts } from "../errorAlerts";
 import type { Agent, AgentAvailability, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { AddAgentDialog } from "./AddAgentDialog";
+import { DEFAULT_WORKTREE_SETTINGS } from "../worktreeSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -20,7 +21,7 @@ function render(
 ) {
   const daemon: Daemon = {
     store: createStateStore({
-      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", accounts: [] },
+      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [] },
       agentAvailability: new Map(Object.entries(availability).map(([agent, state]) => [agent as Agent, { agent: agent as Agent, availability: state }])),
     }),
     request: vi.fn(request) as Daemon["request"],

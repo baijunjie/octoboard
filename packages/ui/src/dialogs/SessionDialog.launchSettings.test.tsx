@@ -4,6 +4,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import type { Daemon } from "../store";
 import { parentConsole, renderDialog, hub1, buttons, optionElements, pickerNamed } from "./sessionDialogTestSupport";
+import { DEFAULT_WORKTREE_SETTINGS } from "../worktreeSettings";
 
 vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
 
@@ -49,7 +50,7 @@ it.each(["inherit", "pick", "clear"] as const)("opens with session launch settin
 
 it("queries the selected account and keeps overrides separate when changing agents", async () => {
   const { container, root, daemon, pastMountRefocus } = renderDialog([], {
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", accounts: [
+    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [
       { id: "a-work", agent: "claude", name: "Work", config_dir: "/accounts/work" },
     ] },
   }, { claude_account_id: "a-work" }, { kind: "unbound" }, { codex_session_model: "codex-project" });
@@ -85,7 +86,7 @@ it("queries the selected account and keeps overrides separate when changing agen
 
 it("keeps the selected agent and the account picker when the last named account is removed", async () => {
   const { container, root, daemon, pastMountRefocus } = renderDialog([], {
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", accounts: [
+    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [
       { id: "a-work", agent: "claude", name: "Work", config_dir: "/accounts/work" },
     ] },
   }, { default_agent: "codex" });
@@ -96,7 +97,7 @@ it("keeps the selected agent and the account picker when the last named account 
   await act(async () => pickerNamed("Claude Code account").click());
   await act(async () => optionElements().find((option) => option.textContent === "Work")!.click());
   const agentTrigger = pickerNamed("Agent");
-  act(() => daemon.store.setState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", accounts: [] } }));
+  act(() => daemon.store.setState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [] } }));
   expect(pickerNamed("Agent")).toBe(agentTrigger);
   expect(agentTrigger.textContent).toContain("Claude Code");
   expect(pickerNamed("Claude Code account").textContent).toContain("Default");
@@ -104,7 +105,7 @@ it("keeps the selected agent and the account picker when the last named account 
 
 it.each(["inherit", "pick", "clear"] as const)("opens console sessions with console launch settings: %s", async (mode) => {
   const { container, root, daemon } = renderDialog([hub1], {
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", accounts: [
+    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [
       { id: "a-console", agent: "claude", name: "Console account", config_dir: "/accounts/console" },
       { id: "a-codex", agent: "codex", name: "Codex work", config_dir: "/accounts/codex" },
     ] },
@@ -164,7 +165,7 @@ it.each(["inherit", "pick", "clear"] as const)("opens console sessions with cons
 
 it("opens console sessions on the console's default agent and its account", async () => {
   const { container, root, daemon } = renderDialog([], {
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", accounts: [
+    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [
       { id: "a-codex", agent: "codex", name: "Work", config_dir: "/accounts/codex" },
     ] },
   }, { default_agent: "codex", codex_account_id: "a-codex" }, undefined, null);
@@ -236,7 +237,7 @@ it("keeps the Name hint visible", () => {
 it("lists an account whose sharing change runs as unavailable in the account picker", async () => {
   const { container, root } = renderDialog([], {
     settings: {
-      auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p",
+      auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", worktrees: DEFAULT_WORKTREE_SETTINGS,
       accounts: [{ id: "a-1", agent: "claude", name: "Work", config_dir: "/home/me/.claude-work" }],
     },
     accountSharing: new Map([["a-1", { account: "a-1", progress: { share: true, phase: "changing" as const, done: 0, total: 3 } }]]),

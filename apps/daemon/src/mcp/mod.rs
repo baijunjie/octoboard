@@ -179,8 +179,10 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                       every git repository directly beneath `path`, or `git` to clone \
                       `remote_url` into `path`, which defaults to the user's default clone \
                       directory. Returns the settings of each project added, as `list_projects` \
-                      gives them. A `git` URL must be an http(s), ssh or git URL without \
-                      credentials in it: the user's own git credentials are used.",
+                      gives them; a `parent` source gives the same settings, `worktrees` \
+                      included, to every project it adds. A `git` URL must be an http(s), \
+                      ssh or git URL without credentials in it: the user's own git \
+                      credentials are used.",
         schema: || {
             object_schema(
                 json!({
@@ -231,6 +233,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                         "type": "boolean",
                         "description": "Pin the project to the top of the console's project list.",
                     },
+                    "worktrees": worktrees_schema(WorktreesFor::NewProject),
                 }),
                 &["source"],
             )
@@ -282,7 +285,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                     },
                     "accounts": accounts_schema(true),
                     "launch": launch_schema("the project's sessions"),
-                    "worktrees": worktrees_schema(true),
+                    "worktrees": worktrees_schema(WorktreesFor::Project),
                 }),
                 &["project"],
             )
@@ -397,7 +400,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                                         given. An absolute path or one starting with `~/`; blank \
                                         goes back to the built-in default.",
                     },
-                    "worktrees": worktrees_schema(false),
+                    "worktrees": worktrees_schema(WorktreesFor::Application),
                 }),
                 &[],
             )
@@ -895,7 +898,8 @@ const GET_PROJECT: ToolDef = ToolDef {
          (the model and effort sessions of each agent start with; a value left unset falls back \
          to the console's `project_session_launch`), and `worktrees` (the project's own \
          `override` of the worktree settings, `null` following the application-wide value, and \
-         the `effective` values in force). Only this session's own project can be \
+         the `effective` resolved values; `rebase_before_merge`, `delivery` and `revert_gate` \
+         apply only while `use_worktrees` is on). Only this session's own project can be \
          read. ",
         started_by_a_session!()
     ),
@@ -1451,15 +1455,29 @@ const RULE_REACHES: &str = "Unlike other settings, a change is sure to reach onl
                             sessions begun after it: one begun earlier may keep the worktree rule \
                             it started with, even when resumed.";
 
+/// Whose worktree settings a tool's `worktrees` argument holds.
+#[derive(Clone, Copy, PartialEq)]
+enum WorktreesFor {
+    Application,
+    /// An existing project's own choices: an item left out is left as it is.
+    Project,
+    /// A project being added: an item left out follows the application-wide value.
+    NewProject,
+}
+
 /// The `worktrees` argument: the four worktree settings, application-wide or as a project's own.
-fn worktrees_schema(project: bool) -> Value {
-    let (whose, null) = if project {
-        (
+fn worktrees_schema(whose: WorktreesFor) -> Value {
+    let project = whose != WorktreesFor::Application;
+    let (owner, left_out) = match whose {
+        WorktreesFor::Application => ("the application-wide values", "is left as it is"),
+        WorktreesFor::Project => (
             "this project's own choices",
-            "; `null` goes back to following the application-wide value",
-        )
-    } else {
-        ("the application-wide values", "")
+            "is left as it is; `null` goes back to following the application-wide value",
+        ),
+        WorktreesFor::NewProject => (
+            "this project's own choices",
+            "or `null` follows the application-wide value",
+        ),
     };
     let nullable = |kind: Value| {
         if project {
@@ -1473,7 +1491,7 @@ fn worktrees_schema(project: bool) -> Value {
         "description": format!(
             "How finished work is delivered: `ask` (ask the user each time), `merge` (merge into \
              the target branch locally) or `pull_request` (push and open a pull request). \
-             {RULE_REACHES}"
+             Applies only while `use_worktrees` is on. {RULE_REACHES}"
         ),
     });
     delivery["enum"] = if project {
@@ -1484,8 +1502,7 @@ fn worktrees_schema(project: bool) -> Value {
     json!({
         "type": "object",
         "description": format!(
-            "The worktree settings for project sessions, {whose}; an item left out is left as it \
-             is{null}."
+            "The worktree settings for project sessions, {owner}; an item left out {left_out}."
         ),
         "properties": {
             "use_worktrees": {
@@ -1499,15 +1516,15 @@ fn worktrees_schema(project: bool) -> Value {
                 "type": nullable(json!("boolean")),
                 "description": format!(
                     "Whether a branch is rebased onto its target branch before it is merged. \
-                     {RULE_REACHES}"
+                     Applies only while `use_worktrees` is on. {RULE_REACHES}"
                 ),
             },
             "delivery": delivery,
             "revert_gate": {
                 "type": nullable(json!("boolean")),
                 "description": "Whether a branch update that quietly undoes changes already on \
-                                the target branch is blocked. A change takes effect at once, in \
-                                running sessions too.",
+                                the target branch is blocked. Applies only while `use_worktrees` \
+                                is on. A change takes effect at once, in running sessions too.",
             },
         },
         "additionalProperties": false,

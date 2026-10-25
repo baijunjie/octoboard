@@ -91,15 +91,17 @@ export function SwitchSettingRow({
   description,
   isSelected,
   onChange,
+  motionKey,
 }: {
   label: string;
   help?: React.ReactNode;
   description: React.ReactNode;
   isSelected: boolean;
   onChange: (value: boolean) => void;
+  motionKey?: string;
 }): React.ReactElement {
   return (
-    <SettingRow label={label} help={help} description={description}>
+    <SettingRow label={label} help={help} description={description} motionKey={motionKey}>
       <SettingSwitch label={label} isSelected={isSelected} onChange={onChange} />
     </SettingRow>
   );

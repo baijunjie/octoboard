@@ -22,15 +22,17 @@ import { Message, useT } from "../i18n/react";
 import { tagVocabulary } from "../projectFiltering";
 import type { Agent, Project, ProjectAccount, ProjectSource } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
+import { changedWorktreeItems, FOLLOWING_WORKTREE_SETTINGS } from "../worktreeSettings";
 import { markDisabledPickable } from "./accountOptions";
 import { AgentAccountField } from "./AgentAccountField";
 import { Dialog, useDialogAction, useSubmitValidation } from "./Dialog";
 import { DirectoryPicker } from "./DirectoryPicker";
-import { LaunchSettingsFields } from "./LaunchSettingsFields";
+import { AdvancedSection, LaunchSettingsFields } from "./LaunchSettingsFields";
 import { OptionSelect, type Option } from "./OptionSelect";
 import { TagsInput } from "./TagsInput";
 import { TextAreaInput } from "./TextAreaInput";
 import { TextInput } from "./TextInput";
+import { WorktreeSettingsField } from "./WorktreeSettingsField";
 import { useDetectedAgent } from "./useDetectedAgent";
 import { projectNameDefault } from "./projectNameDefault";
 import { exceedsTextLimit, PROJECT_DESCRIPTION_LIMIT, PROJECT_NAME_LIMIT } from "./textLength";
@@ -110,6 +112,11 @@ export function ProjectDialog({
   const [fields, setFields] = useState(initial);
   const [initialAccounts] = useState(() => readProjectAccounts(editing ?? {}));
   const [accountFields, setAccountFields] = useState(initialAccounts);
+  // The project's own worktree settings when the dialog opens, and the edits since; `null` follows the application-wide value.
+  const [initialWorktrees] = useState(() => editing?.worktrees ?? FOLLOWING_WORKTREE_SETTINGS);
+  const [worktrees, setWorktrees] = useState(initialWorktrees);
+  // The Advanced section's state while it holds the worktree settings alone; with launch settings it keeps its own.
+  const [advancedExpanded, setAdvancedExpanded] = useState(false);
   const [description, setDescription] = useState(editing?.description ?? "");
   const [tags, setTags] = useState<string[]>(editing?.tags ?? []);
   // The tags to offer are the ones this console's projects carry now; there is no registry of them.
@@ -187,6 +194,9 @@ export function ProjectDialog({
       const sent = defaultAgent === "detect" ? initial : fields;
       const sentAccounts = defaultAgent === "detect" ? initialAccounts : accountFields;
       const trimmedDescription = addsParent ? "" : description.trim();
+      // On add every item starts out following, so what changed is what the project holds a value of its own for.
+      const worktreeChanges = changedWorktreeItems(worktrees, initialWorktrees);
+      const worktreesChanged = Object.keys(worktreeChanges).length > 0;
       if (editing) {
         await request({
           type: "update_project",
@@ -202,6 +212,8 @@ export function ProjectDialog({
           tags,
           // Cleared with an explicit `null`, and sent only when it changed.
           ...(trimmedDescription !== (editing.description ?? "") && { description: trimmedDescription || null }),
+          // Only the items that changed, `null` for one that goes back to following the application-wide value.
+          ...(worktreesChanged && { worktrees: worktreeChanges }),
         });
       } else {
         await request({
@@ -219,6 +231,8 @@ export function ProjectDialog({
           ...changedProjectAccounts("create", sentAccounts, initialAccounts),
           tags,
           ...(trimmedDescription && { description: trimmedDescription }),
+          // Only the items set to a value of their own; the rest follow the application-wide value.
+          ...(worktreesChanged && { worktrees: worktreeChanges }),
         });
       }
       onClose();
@@ -239,6 +253,7 @@ export function ProjectDialog({
     },
     ...agentIconPickerOptions(t, agentAvailability, addedAgents, defaultAgent === "" || defaultAgent === "detect" ? undefined : defaultAgent),
   ];
+  const worktreeField = <WorktreeSettingsField value={worktrees} onChange={setWorktrees} isDisabled={locked} />;
 
   return (
     <>
@@ -372,7 +387,7 @@ export function ProjectDialog({
               : undefined
           }
         />
-        {agent && modelField && effortField && (
+        {agent && modelField && effortField ? (
           <LaunchSettingsFields
             agent={agent}
             account={launchAccount}
@@ -382,7 +397,16 @@ export function ProjectDialog({
             onEffortChange={(value) => setFields({ ...fields, [effortField]: value })}
             inherit={owner ? consoleProjectLaunch(owner, agent) : undefined}
             isDisabled={locked}
-          />
+            expanded={advancedExpanded}
+            onExpandedChange={setAdvancedExpanded}
+          >
+            {worktreeField}
+          </LaunchSettingsFields>
+        ) : (
+          // "Detect from files" has no launch settings to offer, so the Advanced section holds the worktree settings alone.
+          <AdvancedSection expanded={advancedExpanded} onExpandedChange={setAdvancedExpanded}>
+            {worktreeField}
+          </AdvancedSection>
         )}
       </Dialog>
       {pickingDirectory && (

@@ -52,8 +52,19 @@ impl Default for WorktreeSettings {
             use_worktrees: true,
             rebase_before_merge: true,
             delivery: Delivery::Ask,
-            revert_gate: true,
+            revert_gate: false,
         }
+    }
+}
+
+impl WorktreeSettings {
+    /// Whether the revert gate runs. It is part of working in worktrees, so it is inactive while
+    /// `use_worktrees` is off whatever `revert_gate` holds; the stored value is kept, and turning
+    /// `use_worktrees` back on restores the gate as it was set. Rebase and delivery are likewise
+    /// moot while `use_worktrees` is off, but they only shape the rule text, which is not given
+    /// then; the gate is the one that acts, so this is the rule it asks.
+    pub fn revert_gate_active(&self) -> bool {
+        self.use_worktrees && self.revert_gate
     }
 }
 
@@ -158,14 +169,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_defaults_are_on_on_ask_on() {
+    fn the_defaults_are_on_on_ask_off() {
         assert_eq!(
             WorktreeSettings::default(),
             WorktreeSettings {
                 use_worktrees: true,
                 rebase_before_merge: true,
                 delivery: Delivery::Ask,
-                revert_gate: true,
+                revert_gate: false,
             }
         );
         assert_eq!(
@@ -240,9 +251,9 @@ mod tests {
     #[test]
     fn settings_changes_leave_absent_items_alone() {
         let changes: WorktreeSettingsChanges =
-            serde_json::from_str(r#"{"revert_gate":false}"#).unwrap();
+            serde_json::from_str(r#"{"revert_gate":true}"#).unwrap();
         let applied = changes.applied_to(WorktreeSettings::default());
-        assert!(!applied.revert_gate);
+        assert!(applied.revert_gate);
         assert!(applied.use_worktrees);
         assert_eq!(applied.delivery, Delivery::Ask);
     }

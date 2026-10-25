@@ -62,7 +62,7 @@ fn inputs_of(
     let Some(project) = state.store.get_project(&project_id)? else {
         return Ok(None);
     };
-    if !worktree_settings::effective(&state.store, &project)?.revert_gate {
+    if !worktree_settings::effective(&state.store, &project)?.revert_gate_active() {
         return Ok(None);
     }
     let Some(repo) = repository_of(Path::new(&project.path)) else {

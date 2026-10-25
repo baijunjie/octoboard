@@ -5,22 +5,20 @@ settings fill the right under the section's heading, one row per setting: on the
 it saying what it does — a trusted folder's row has its path alone — and on the right its control. Under a right-to-left
 language the sides swap (see "Right-to-left layout" in `docs/product/window-layout.md`). A section that explains itself
 as a whole does so in a paragraph under its heading, and no section heading has a "?" help tip; help tips are on one
-row in "Git", and in Agent accounts on the **Start usage windows automatically** row (see "Start usage windows
-automatically" below), on each agent's Permission approval row, on the accounts table's Disable heading and, in an
-account's settings dialog, after the default account's directory and on the sharing row (see "Approval modes", "The
-accounts table", "The account settings dialog" and "Sharing the default configuration" in
-`docs/product/agent-accounts.md`, and "Explanations in help tips" in `docs/product/labels-and-tooltips.md`). The
-sections, in order, are **General**, **Git**, **Agent accounts**, **Trusted folders**, **Permissions**, **Agent
-permissions**, **Notifications**, **Keyboard shortcuts**, **Configuration** and **About**; the dialog opens on General unless it was asked to open on
-another section.
+row in "Git", on the **Revert gate** row in Worktrees (see "Worktrees" below), and in Agent accounts on the **Start
+usage windows automatically** row (see "Start usage windows automatically" below), on each agent's Permission approval
+row, on the accounts table's Disable heading and, in an account's settings dialog, after the default account's
+directory and on the sharing row (see "Approval modes", "The accounts table", "The account settings dialog" and
+"Sharing the default configuration" in `docs/product/agent-accounts.md`, and "Explanations in help tips" in
+`docs/product/labels-and-tooltips.md`). The sections, in order, are **General**, **Git**, **Worktrees**, **Agent
+accounts**, **Trusted folders**, **Permissions**, **Agent permissions**, **Notifications**, **Keyboard shortcuts**,
+**Configuration** and **About**; the dialog opens on General unless it was asked to open on another section.
 
 A console session can read the default clone directory, the automatic pulling of repositories, the automatic deletion of
-archived sessions whose conversation is gone, automatic account selection, the agent accounts (without their
-directories) and the trusted folders, and change the first four (see "Application settings: `get_settings` and
-`update_settings`" in `docs/product/agent-settings-tools.md`).
-
-The application-wide worktree settings are application settings too, but have no section here (see
-`docs/product/worktree-settings.md`).
+archived sessions whose conversation is gone, automatic account selection, the ordering of the sidebar by status, the
+application-wide worktree settings, the agent accounts (without their directories) and the trusted folders, and change
+all but the last two (see "Application settings: `get_settings` and `update_settings`" in
+`docs/product/agent-settings-tools.md`).
 
 ## In a narrow window
 
@@ -199,6 +197,40 @@ branch with commits of its own alone; a "?" at the end of its name says that the
 whichever way the switch is set, so the branch always shows how far ahead or behind it is. What it does, what it
 never does and where the value is kept are in "Automatically pulling repositories" in
 `docs/product/project-git-status.md`.
+
+## Worktrees
+
+The application-wide worktree settings: how a project session is asked to use git worktrees and deliver finished work,
+and the revert gate. What each one does, its values and its default are in `docs/product/worktree-settings.md`, and a
+project can hold its own value for any of them (see "A project's own worktree settings" there). The rows, in order, are
+**Use worktrees for development**, **Rebase before merging**, **Revert gate** and **Delivery**. A change applies that
+one item alone. The daemon keeps the values, so every window shows the same.
+
+As with the other switches here, while a switch is off its row's description says what turning it on will do, and while
+it is on it says what is happening now.
+
+- **Use worktrees for development**, a switch, on to begin with. Its description says that a project session is asked
+  to create a branch and a worktree of its own before it changes files, that a change reaches only sessions begun after
+  it, that a project's own rules for worktrees and branches come first, and that the other three rows are shown while
+  it is on. While it is off the other three rows are not shown: their values are kept, and the rows come back with them
+  when it is turned on again. When a row that goes had keyboard focus — another window or a console session can turn
+  the switch off — focus moves to this switch.
+- **Rebase before merging**, a switch, on to begin with. Its description says that a branch is rebased onto its target
+  branch before it is merged, that a change reaches only sessions begun after it, and that a project's own rules come
+  first.
+- **Revert gate**, a switch, off to begin with. Its description says that in a project session a branch update that
+  quietly undoes changes already on its target branch is blocked, and that a change takes effect at once, running
+  sessions included. A "?" help tip at the end of its name ("About passing the revert gate") says what it blocks —
+  usually what a merge or rebase whose conflicts were resolved wrongly leaves — and how a deliberate undo passes: made
+  with `git revert`, or with a `Reverts: <sha>` line in the message of the commit that undoes it (see "A deliberate
+  revert" in `docs/product/revert-gate.md`).
+- **Delivery**, a choice of **Ask each time**, **Merge locally** and **Open a pull request**, Ask each time to begin
+  with. Its description says that it is how a session delivers finished work when nobody has said how, that a change
+  reaches only sessions begun after it, and that a project's own rules come first.
+
+A console session may read and change all four, and a full configuration export carries them (see "Application
+settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The application settings
+a full export carries" in `docs/product/configuration-export-and-import.md`).
 
 ## Agent accounts
 

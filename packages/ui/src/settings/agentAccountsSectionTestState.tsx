@@ -5,13 +5,14 @@ import { useEffect, useSyncExternalStore } from "react";
 import { vi } from "vitest";
 
 import type { Account, AccountLogin, AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Project, Session, Settings } from "../protocol";
+import { DEFAULT_WORKTREE_SETTINGS } from "../worktreeSettings";
 
 export const request = vi.fn(() => Promise.resolve({}));
 export const toastError = vi.fn();
 export const settings: Settings = {
   auto_pull_repositories: false,
   auto_delete_unresumable_archives: true,
-  added_agents: ["claude", "codex", "grok"], default_clone_dir: "/home/dev/Projects",
+  added_agents: ["claude", "codex", "grok"], default_clone_dir: "/home/dev/Projects", worktrees: DEFAULT_WORKTREE_SETTINGS,
   accounts: [],
 };
 export const accountQuotas: AccountQuota[] = [];

@@ -33,6 +33,7 @@ vi.mock("./AgentAccountsSection", () => ({
 }));
 vi.mock("./GeneralSection", () => ({ GeneralSection: () => <p>General</p> }));
 vi.mock("./GitSection", () => ({ GitSection: () => <p>Git section</p> }));
+vi.mock("./WorktreesSection", () => ({ WorktreesSection: () => <p>Worktrees section</p> }));
 vi.mock("./TrustedFoldersSection", () => ({ TrustedFoldersSection: () => <p>Trusted</p> }));
 vi.mock("./PermissionsSection", () => ({ PermissionsSection: () => <p>Permissions</p> }));
 vi.mock("./AgentPermissionsSection", () => ({ AgentPermissionsSection: () => <p>Agent permissions</p> }));

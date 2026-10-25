@@ -9,11 +9,13 @@ import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { ErrorAlerts } from "../dialogs/ErrorAlerts";
 import { errorAlerts } from "../errorAlerts";
 import { setLanguage } from "../i18n/language";
-import type { ImportedProject } from "../protocol";
+import type { Event, ImportedProject } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ImportResult } from "./ImportResult";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+type ImportedSettings = NonNullable<Extract<Event, { type: "configuration_imported" }>["settings_applied"]>;
 
 const project = (index: number): ImportedProject => ({
   name: `P${index}`,
@@ -205,6 +207,22 @@ it("tells of each application setting that was applied, and of none the file did
   expect(container.textContent).not.toContain("Automatically approve");
   expect(container.textContent).not.toContain("archived sessions");
   expect(container.textContent).not.toContain("Automatically select an account");
+});
+
+it("tells of the worktree settings when they were applied, and not otherwise", () => {
+  const daemon = { store: createStateStore({}) } as Daemon;
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  const render = (settings_applied: ImportedSettings) =>
+    act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles: [], settings_applied }} /></DaemonProvider>));
+  render({ auto_pull_repositories: true, worktrees: { use_worktrees: true, rebase_before_merge: true, delivery: "ask", revert_gate: true } });
+  expect(container.textContent).toContain("the settings under Worktrees now match the file");
+  render({ auto_pull_repositories: true });
+  expect(container.textContent).not.toContain("Worktrees");
 });
 
 it("marks a failed line with the glyph and the word Failed, named after what failed, whose popover holds the reason, and writes no error text into the table", () => {

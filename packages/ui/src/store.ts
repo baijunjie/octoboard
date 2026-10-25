@@ -30,6 +30,7 @@ import {
   type Settings,
   type ShellTerminal,
 } from "./protocol";
+import { DEFAULT_WORKTREE_SETTINGS } from "./worktreeSettings";
 
 /**
  * A window notification. Errors require acknowledgement in the shared error dialog; notices
@@ -291,7 +292,7 @@ const initialState: State = {
   trustedDirectories: [],
   sessionRequests: [],
   gitStatuses: new Map(),
-  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", accounts: [] },
+  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [] },
   agentAvailability: new Map(INITIAL_AGENT_AVAILABILITY.map((a) => [a.agent, a])),
   accountQuotas: [],
   accountLogins: [],

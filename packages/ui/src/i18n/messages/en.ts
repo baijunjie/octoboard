@@ -1224,6 +1224,9 @@ export const en = {
   "dialog.project.detectFailedTitle": "Could not check the location",
   "dialog.project.detectFailed": "The daemon answered with something unexpected.",
   "dialog.project.urlChecking": "Checking the repository…",
+  "dialog.project.worktrees.description":
+    "Each item follows the app setting unless you choose a value for this project. A change to a rule reaches only sessions begun after it, and a change to the revert gate takes effect at once.",
+  "dialog.project.worktrees.sameAsGlobal": "Same as app setting",
   "dialog.consoleSession.title": "Open console session in {console}",
   "dialog.consoleSession.launchInheritanceNote": "Unchanged values follow the console settings.",
   "dialog.session.title": "Open session in {project}",
@@ -1620,6 +1623,10 @@ export const en = {
     "Applying puts the {setting} on this device back to their defaults.",
   "configuration.import.settings.shortcuts.same":
     "The {setting} in the file are the ones this device already has, so applying changes nothing.",
+  "configuration.import.settings.worktrees.changes":
+    "Applying sets the settings under {setting} to those in the file, which differ from the current ones.",
+  "configuration.import.settings.worktrees.same":
+    "The settings under {setting} in the file are the ones already set, so applying changes nothing.",
   "configuration.import.console.projects": {
     one: "{count} project",
     other: "{count} projects",
@@ -1691,6 +1698,7 @@ export const en = {
     "{agent} account {name}, named by the project {project} in {console}",
   "configuration.import.result.settings.on": "Application settings applied: {setting} is now on.",
   "configuration.import.result.settings.off": "Application settings applied: {setting} is now off.",
+  "configuration.import.result.settings.worktrees": "Application settings applied: the settings under {setting} now match the file.",
   "configuration.import.result.settings.failedTitle": "Could not import application settings",
   "configuration.import.result.settings.failed": "The application settings could not be applied: {reason}",
   "configuration.import.result.shortcuts": {
@@ -1708,6 +1716,7 @@ export const en = {
   "settings.sections": "Settings sections",
   "settings.section.general": "General",
   "settings.section.git": "Git",
+  "settings.section.worktrees": "Worktrees",
   "settings.section.accounts": "Agent accounts",
   "settings.section.trustedFolders": "Trusted folders",
   "settings.section.permissions": "Permissions",
@@ -1926,6 +1935,32 @@ export const en = {
   "settings.git.autoPull.help": "About automatic pulling",
   "settings.git.autoPull.remoteCheck":
     "The remote is checked every few minutes whichever way this is set, so the branch always shows how far ahead or behind it is.",
+  "settings.worktrees.useWorktrees.label": "Use worktrees for development",
+  "settings.worktrees.useWorktrees.description.off":
+    "Once this is on, a project session is asked to create a branch and a worktree of its own before it changes files. A change reaches only sessions begun after it, and a project's own rules for worktrees and branches come first. Rebase, delivery and the revert gate are shown while this is on.",
+  "settings.worktrees.useWorktrees.description.on":
+    "A project session is asked to create a branch and a worktree of its own before it changes files. A change reaches only sessions begun after it, and a project's own rules for worktrees and branches come first. Rebase, delivery and the revert gate are shown while this is on.",
+  "settings.worktrees.rebase.label": "Rebase before merging",
+  "settings.worktrees.rebase.description.off":
+    "Once this is on, a branch is rebased onto its target branch before it is merged. A change reaches only sessions begun after it, and a project's own rules come first.",
+  "settings.worktrees.rebase.description.on":
+    "A branch is rebased onto its target branch before it is merged. A change reaches only sessions begun after it, and a project's own rules come first.",
+  "settings.worktrees.delivery.label": "Delivery",
+  "settings.worktrees.delivery.description":
+    "How a session delivers finished work when nobody has said how. A change reaches only sessions begun after it, and a project's own rules come first.",
+  "settings.worktrees.delivery.ask": "Ask each time",
+  "settings.worktrees.delivery.merge": "Merge locally",
+  "settings.worktrees.delivery.pullRequest": "Open a pull request",
+  "settings.worktrees.revertGate.label": "Revert gate",
+  "settings.worktrees.revertGate.description.off":
+    "Once this is on, in a project session a branch update that quietly undoes changes already on its target branch is blocked. A change takes effect at once, running sessions included.",
+  "settings.worktrees.revertGate.description.on":
+    "In a project session, a branch update that quietly undoes changes already on its target branch is blocked. A change takes effect at once, running sessions included.",
+  "settings.worktrees.revertGate.help": "About passing the revert gate",
+  "settings.worktrees.revertGate.deliberate":
+    "It blocks an update that quietly drops changes already on the target branch, usually after a merge or rebase whose conflicts were resolved wrongly. To undo a commit on purpose, undo it with {gitRevert}, or add a {reverts} line to the message of the commit that undoes it, and the update passes.",
+  "settings.worktrees.on": "On",
+  "settings.worktrees.off": "Off",
   "settings.trusted.description":
     "Under these folders, every agent's trust confirmation is accepted for you without asking, for every project, including projects added later. Each agent then records the trust in its own configuration and applies the project's own permission rules and hooks. A folder is trusted from a session's trust dialog. Trust a folder only if you trust everything that ends up inside it.",
   "settings.trusted.empty": "No trusted folders yet",

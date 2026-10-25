@@ -251,6 +251,28 @@ export interface AccountSharing {
   };
 }
 
+/** How finished work leaves its branch: the user is asked each time, the branch is merged into its target branch
+ * locally, or it is pushed and a pull request opened. */
+export type WorktreeDelivery = "ask" | "merge" | "pull_request";
+
+/** The four worktree settings' values, application-wide (`Settings.worktrees`). */
+export interface WorktreeSettings {
+  use_worktrees: boolean;
+  rebase_before_merge: boolean;
+  delivery: WorktreeDelivery;
+  revert_gate: boolean;
+}
+
+/** A project's own worktree settings: an item that is `null` follows the application-wide value. */
+export type WorktreeOverride = { [K in keyof WorktreeSettings]: WorktreeSettings[K] | null };
+
+/** A change to the worktree settings: an item left out stays as it is. */
+export type WorktreeSettingsChanges = Partial<WorktreeSettings>;
+
+/** A change to a project's own worktree settings: an item left out stays as it is, `null` goes back to following the
+ * application-wide value, and a value becomes the project's own. */
+export type WorktreeOverrideChanges = Partial<WorktreeOverride>;
+
 export interface Project {
   id: string;
   console_id: string;
@@ -290,6 +312,8 @@ export interface Project {
   /** The user's own summary of what the project is for, read by agent sessions; absent or null is
    * none. */
   description?: string | null;
+  /** The project's own worktree settings; an item that is `null` follows `Settings.worktrees`. */
+  worktrees: WorktreeOverride;
 }
 
 /** How much the main conversation's latest request carried: a gauge of whether continuing the session is
@@ -624,6 +648,8 @@ export interface Settings {
   /** Where a `git` association clones into when no directory is named: the one the user set, or
    * `~/Projects` expanded while none is. Always an absolute path. */
   default_clone_dir: string;
+  /** The application-wide worktree settings; a project may hold its own value for each item (`Project.worktrees`). */
+  worktrees: WorktreeSettings;
   /** Every account of every agent, application-wide. The default account of each agent is not
    * among these — it is the state of pinning nothing, not a row. */
   accounts: Account[];
@@ -674,6 +700,8 @@ export interface DocumentProject {
   codex_session_effort?: string | null;
   grok_session_model?: string | null;
   grok_session_effort?: string | null;
+  /** Absent in a file exported before the settings existed: every item follows the application-wide value. */
+  worktrees?: WorktreeOverride | null;
 }
 
 export interface DocumentConsole {
@@ -723,6 +751,8 @@ export interface DocumentSettings {
   auto_approve_account_switches?: boolean | null;
   /** Absent in a file exported before the setting was carried; applying then leaves it as it is. */
   auto_approve_handoffs?: boolean | null;
+  /** Absent in a file exported before the settings were carried; applying then leaves them as they are. */
+  worktrees?: WorktreeSettings | null;
   /** The keyboard shortcuts the exporting client changed, by command id: added by the client to the
    * document it saves, never by the daemon, which only carries them through. Absent in a file
    * without them; applying then leaves the client's shortcuts as they are. */
@@ -827,6 +857,10 @@ export interface InspectedSettings {
   auto_approve_handoffs?: boolean | null;
   /** This machine's value. Absent when the reply predates the setting. */
   current_auto_approve_handoffs?: boolean;
+  /** Absent when the document predates the settings. */
+  worktrees?: WorktreeSettings | null;
+  /** This machine's values. Absent when the reply predates the settings. */
+  current_worktrees?: WorktreeSettings;
 }
 
 /** An `error` reply's `code`, `params` and `message`, for something an import could not do. */
@@ -1149,6 +1183,8 @@ export type RequestBody =
     /** Absent or blank means no description. Ignored when a parent directory adds more than one
        * project. */
     description?: string;
+    /** The project's own worktree settings; an item absent or `null` follows the application-wide value. */
+    worktrees?: WorktreeOverrideChanges;
   }
   | {
     type: "update_project";
@@ -1177,6 +1213,9 @@ export type RequestBody =
     tags?: string[];
     /** Absent leaves the description alone; an explicit `null` (or a blank string) clears it. */
     description?: string | null;
+    /** Per item: absent leaves it alone, an explicit `null` goes back to following the application-wide value, and a
+       * value becomes the project's own. */
+    worktrees?: WorktreeOverrideChanges;
   }
   /** `stop_sessions` ends the project's running sessions first (as `archive_session` does) instead
    * of being refused with `project_has_running_sessions`; default false. `trash_directory` moves
@@ -1345,7 +1384,7 @@ export type RequestBody =
   /** Each settable field is optional: absent means leave it as it is. Answered with `ack`;
    * broadcasts `settings_updated` only when something actually changed (the trusted-folders
    * pattern). */
-  | { type: "update_settings"; auto_pull_repositories?: boolean; auto_delete_unresumable_archives?: boolean; auto_approve_session_requests?: boolean; auto_approve_resume_requests?: boolean; auto_approve_account_switches?: boolean; auto_approve_handoffs?: boolean; auto_select_account?: boolean; sidebar_order_by_status?: boolean; auto_start_quota_windows?: boolean; default_clone_dir?: string }
+  | { type: "update_settings"; auto_pull_repositories?: boolean; auto_delete_unresumable_archives?: boolean; auto_approve_session_requests?: boolean; auto_approve_resume_requests?: boolean; auto_approve_account_switches?: boolean; auto_approve_handoffs?: boolean; auto_select_account?: boolean; sidebar_order_by_status?: boolean; auto_start_quota_windows?: boolean; default_clone_dir?: string; worktrees?: WorktreeSettingsChanges }
   /** Answered with `ack` at once; each reading that finishes arrives as `account_quotas_updated`.
    * Re-reads the quotas of the accounts it selects whose last attempt is older than the polling
    * interval, and also those whose last attempt is over 30 seconds old and which hold no windows

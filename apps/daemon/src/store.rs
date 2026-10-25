@@ -297,7 +297,7 @@ impl Store {
                 use_worktrees       INTEGER NOT NULL DEFAULT 1,
                 rebase_before_merge INTEGER NOT NULL DEFAULT 1,
                 delivery            TEXT NOT NULL DEFAULT 'ask',
-                revert_gate         INTEGER NOT NULL DEFAULT 1
+                revert_gate         INTEGER NOT NULL DEFAULT 0
             );
             "#,
         )?;
@@ -2690,7 +2690,7 @@ const WORKTREE_SETTING_COLUMNS: [(&str, &str); 4] = [
     ("use_worktrees", "INTEGER NOT NULL DEFAULT 1"),
     ("rebase_before_merge", "INTEGER NOT NULL DEFAULT 1"),
     ("delivery", "TEXT NOT NULL DEFAULT 'ask'"),
-    ("revert_gate", "INTEGER NOT NULL DEFAULT 1"),
+    ("revert_gate", "INTEGER NOT NULL DEFAULT 0"),
 ];
 
 /// The `projects` columns of a project's worktree override. Added in place like
@@ -4963,7 +4963,7 @@ mod tests {
         }
     }
 
-    /// The application-wide worktree settings start at on, on, ask, on, change item by item with a
+    /// The application-wide worktree settings start at on, on, ask, off, change item by item with a
     /// repeat write reporting no change, and a database from before the columns existed gains them
     /// at those defaults.
     #[test]
@@ -4981,7 +4981,7 @@ mod tests {
 
         let changes = WorktreeSettingsChanges {
             delivery: Some(Delivery::PullRequest),
-            revert_gate: Some(false),
+            revert_gate: Some(true),
             ..WorktreeSettingsChanges::default()
         };
         assert!(store.change_worktree_settings(&changes).unwrap());
@@ -4995,7 +4995,7 @@ mod tests {
                 use_worktrees: true,
                 rebase_before_merge: true,
                 delivery: Delivery::PullRequest,
-                revert_gate: false,
+                revert_gate: true,
             }
         );
         drop(store);
@@ -5054,7 +5054,7 @@ mod tests {
                 use_worktrees: Some(true),
                 rebase_before_merge: Some(false),
                 delivery: Some(Delivery::PullRequest),
-                revert_gate: Some(false),
+                revert_gate: Some(true),
             })
             .unwrap();
         assert_eq!(
@@ -5063,7 +5063,7 @@ mod tests {
                 use_worktrees: false,
                 rebase_before_merge: false,
                 delivery: Delivery::Merge,
-                revert_gate: false,
+                revert_gate: true,
             }
         );
 

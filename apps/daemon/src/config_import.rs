@@ -2012,13 +2012,13 @@ mod tests {
         state
             .store
             .change_worktree_settings(&crate::worktree_settings::WorktreeSettingsChanges {
-                revert_gate: Some(false),
+                revert_gate: Some(true),
                 ..Default::default()
             })
             .unwrap();
         let settings = inspect(&state, &older).await.unwrap().settings.unwrap();
         assert_eq!(settings.worktrees, None);
-        assert!(!settings.current_worktrees.revert_gate);
+        assert!(settings.current_worktrees.revert_gate);
         apply(
             &state,
             &older,
@@ -2027,7 +2027,7 @@ mod tests {
         )
         .await
         .unwrap();
-        assert!(!state.store.worktree_settings().unwrap().revert_gate);
+        assert!(state.store.worktree_settings().unwrap().revert_gate);
         assert_eq!(
             stored_projects(&state)[0].worktrees,
             WorktreeOverride::default()

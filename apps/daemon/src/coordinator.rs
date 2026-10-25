@@ -301,6 +301,7 @@ async fn handle_inner(
             detect_default_agent,
             tags,
             description,
+            worktrees,
         } => {
             add_project(
                 state,
@@ -322,7 +323,7 @@ async fn handle_inner(
                         codex_session_effort,
                         grok_session_model,
                         grok_session_effort,
-                        worktrees: WorktreeOverride::default(),
+                        worktrees: worktrees.unwrap_or_default(),
                     },
                     detect_default_agent,
                     tags,
@@ -9779,7 +9780,9 @@ mod tests {
         handle(
             &state,
             None,
-            request(r#"{"type":"update_settings","worktrees":{"delivery":"merge","revert_gate":false}}"#),
+            request(
+                r#"{"type":"update_settings","worktrees":{"delivery":"merge","revert_gate":true}}"#,
+            ),
         )
         .await
         .unwrap();
@@ -9787,14 +9790,14 @@ mod tests {
             state.store.worktree_settings().unwrap(),
             WorktreeSettings {
                 delivery: Delivery::Merge,
-                revert_gate: false,
+                revert_gate: true,
                 ..WorktreeSettings::default()
             }
         );
         assert!(matches!(
             events.try_recv(),
             Ok(Event::SettingsUpdated { settings })
-                if settings.worktrees.delivery == Delivery::Merge && !settings.worktrees.revert_gate
+                if settings.worktrees.delivery == Delivery::Merge && settings.worktrees.revert_gate
         ));
 
         for unchanged in [
@@ -9810,6 +9813,50 @@ mod tests {
             r#"{"type":"update_settings","worktrees":{"delivery":"squash"}}"#
         )
         .is_err());
+    }
+
+    /// A project added with its own worktree values stores them, the items it leaves out following
+    /// the application-wide value, and a parent directory gives the same values to every project it
+    /// adds.
+    #[tokio::test]
+    async fn add_project_stores_its_own_worktree_values_for_every_project_added() {
+        use crate::worktree_settings::{Delivery, WorktreeOverride};
+        let (state, dir) = crate::test_support::app_state("coordinator-add-project-worktrees");
+        let workdir = console_workdir(&dir);
+        state
+            .store
+            .insert_console(&console(Agent::Claude, &workdir))
+            .unwrap();
+        let own = WorktreeOverride {
+            use_worktrees: Some(false),
+            delivery: Some(Delivery::PullRequest),
+            ..WorktreeOverride::default()
+        };
+        let add = |source: &str, path: &Path| {
+            let path = serde_json::to_string(&path.to_string_lossy()).unwrap();
+            let request = serde_json::from_str::<crate::protocol::Request>(&format!(
+                r#"{{"type":"add_project","console_id":"console-1","source":"{source}","path":{path},
+                    "worktrees":{{"use_worktrees":false,"delivery":"pull_request"}}}}"#
+            ))
+            .unwrap();
+            handle(&state, None, request.body)
+        };
+
+        let single = dir.join("single");
+        std::fs::create_dir(&single).unwrap();
+        add("local", &single).await.unwrap();
+        let added = state.store.list_projects().unwrap();
+        assert_eq!(added.len(), 1);
+        assert_eq!(added[0].worktrees, own);
+
+        let parent = dir.join("parent");
+        for name in ["one", "two"] {
+            std::fs::create_dir_all(parent.join(name).join(".git")).unwrap();
+        }
+        add("parent", &parent).await.unwrap();
+        let added = state.store.list_projects().unwrap();
+        assert_eq!(added.len(), 3);
+        assert!(added.iter().all(|project| project.worktrees == own));
     }
 
     /// `update_project` sets a project's own worktree items on a value, leaves the override alone

@@ -249,6 +249,8 @@ export function LaunchSettingsFields({
   note,
   inherit,
   isDisabled,
+  expanded: controlledExpanded,
+  onExpandedChange,
   children,
 }: {
   agent: Agent;
@@ -260,9 +262,15 @@ export function LaunchSettingsFields({
   note?: string;
   inherit?: LaunchPair;
   isDisabled?: boolean;
+  /** Whether the section is open, for a dialog that keeps it open across a swap of this component for another
+   * `AdvancedSection`; without it the section keeps its own state. */
+  expanded?: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
   children?: React.ReactNode;
 }): React.ReactElement {
-  const [expanded, setExpanded] = useState(false);
+  const [ownExpanded, setOwnExpanded] = useState(false);
+  const expanded = controlledExpanded ?? ownExpanded;
+  const setExpanded = onExpandedChange ?? setOwnExpanded;
   const launch = useLaunchModels(agent, account, expanded);
   return (
     <AdvancedSection expanded={expanded} onExpandedChange={setExpanded} status={launch.modelText}>

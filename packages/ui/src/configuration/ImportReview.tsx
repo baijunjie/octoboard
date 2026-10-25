@@ -14,6 +14,7 @@ import { TextInput } from "../dialogs/TextInput";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
+import { sameValue } from "../sameValue";
 import type { AccountFallback, Event, InspectedConsole, InspectedProject } from "../protocol";
 import {
   applyToAll,
@@ -328,6 +329,14 @@ export function ImportReview({
       )}
       {typeof settings.auto_approve_handoffs === "boolean" && typeof settings.current_auto_approve_handoffs === "boolean" && (
         <SettingNote label={t("settings.autoApproveHandoffs.label")} wanted={settings.auto_approve_handoffs} current={settings.current_auto_approve_handoffs} turnsOn="configuration.import.settings.autoApproveHandoffs.turnsOn" />
+      )}
+      {settings.worktrees && settings.current_worktrees && (
+        <span className="block">
+          <Message
+            id={sameValue(settings.worktrees, settings.current_worktrees) ? "configuration.import.settings.worktrees.same" : "configuration.import.settings.worktrees.changes"}
+            params={{ setting: <InlineReference dir="auto" wrap>{t("settings.section.worktrees")}</InlineReference> }}
+          />
+        </span>
       )}
       {shortcuts && (
         <span className="block">

@@ -5,7 +5,7 @@ import { ALL_AGENTS, SAMPLE, branchItemOf, consoleOf, minutesAgo, projectOf, ses
 import { agentAvailability } from "./liveChanges";
 import { SAMPLE_CODEX_MODELS } from "./agentModels";
 import { IMAGES } from "./viewerImages";
-
+import { DEFAULT_WORKTREE_SETTINGS, FOLLOWING_WORKTREE_SETTINGS } from "../../worktreeSettings";
 
 const { console: console_, web, api, sessions } = SAMPLE;
 
@@ -57,6 +57,7 @@ const accountsState = snapshotState({
     auto_delete_unresumable_archives: true,
     added_agents: ALL_AGENTS,
     default_clone_dir: "/Users/dev/Projects",
+    worktrees: DEFAULT_WORKTREE_SETTINGS,
     accounts: [
       { id: "a-work", agent: "claude", name: "Work account for release coordination across all production services مرحبا 发布", config_dir: "/Users/dev/.claude-work" },
       { id: "a-personal", agent: "claude", name: "Personal account for documentation and experimental development مرحبا 发布", config_dir: "/Users/dev/.claude-personal" },
@@ -146,6 +147,30 @@ const inheriting = projectOf("p-inheriting", console_.id, "Inheriting Site");
 const inheritingState = snapshotState({
   consoles: [{ ...console_, claude_account_id: "a-personal", claude_project_session_model: RETIRED_MODEL, claude_project_session_effort: RETIRED_EFFORT }],
   projects: [inheriting],
+  sessions: [],
+  settings: accountsState.settings,
+});
+
+// A project that holds its own delivery and revert gate and follows the application-wide value for the other two,
+// which are set apart from the defaults so that each badge names a value that is not the one the project holds.
+const worktreeProject = projectOf("p-worktrees", console_.id, "Worktree Site", {
+  worktrees: { ...FOLLOWING_WORKTREE_SETTINGS, delivery: "merge", revert_gate: false },
+});
+const worktreeState = snapshotState({
+  consoles: [console_],
+  projects: [worktreeProject],
+  sessions: [],
+  settings: { ...accountsState.settings!, worktrees: { use_worktrees: true, rebase_before_merge: false, delivery: "pull_request", revert_gate: true } },
+});
+
+// A project that turns worktrees off for itself while the application-wide setting has them on, and holds a value of
+// its own for rebase and delivery: those two stay as stored, out of sight.
+const noWorktreesProject = projectOf("p-no-worktrees", console_.id, "Scratch Site", {
+  worktrees: { ...FOLLOWING_WORKTREE_SETTINGS, use_worktrees: false, rebase_before_merge: true, delivery: "merge" },
+});
+const noWorktreesState = snapshotState({
+  consoles: [console_],
+  projects: [noWorktreesProject],
   sessions: [],
   settings: accountsState.settings,
 });
@@ -810,10 +835,12 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Add project",
-    description: "Description follows Name, empty, with the placeholder No description and a note under it saying what it is for.",
+    description: "Description follows Name, empty, with the placeholder No description and a note under it saying what it is for. Advanced is open and the Worktrees group ends it, below Model and Reasoning effort: its four pickers, in the order Use worktrees for development, Rebase before merging, Revert gate and Delivery, all read Same as app setting, each followed by a grey badge with the current application-wide value (On, On, Off, Ask each time). The window is tall enough for the whole dialog, which scrolls in a shorter one.",
+    height: 1400,
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
     ],
   },
   {
@@ -1322,6 +1349,36 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
+    state: worktreeState,
+    id: "dialog-edit-project-worktrees",
+    group: "Projects",
+    category: "normal",
+    title: "Project worktree settings, some its own",
+    description: "Advanced is open and ends in the Worktrees group, which holds a picker for each setting in the order Use worktrees for development, Rebase before merging, Revert gate, Delivery (last). Revert gate reads Off and Delivery reads Merge locally, the project's own values with no badge; Use worktrees for development and Rebase before merging read Same as app setting, followed by a grey badge with the application-wide value (On and Off). The window is tall enough for the whole dialog, which scrolls in a shorter one.",
+    height: 1200,
+    steps: [
+      (ui) => projectActions(ui, worktreeProject.name),
+      (ui) => ui.press(ui.t("sidebar.project.edit")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    state: noWorktreesState,
+    id: "dialog-edit-project-worktrees-off",
+    group: "Projects",
+    category: "normal",
+    title: "Project worktree settings, worktrees off for the project",
+    description: "In the Worktrees group, Use worktrees for development reads Off, the project's own value, while the application-wide value is On, and is the only picker there: Rebase before merging, Revert gate and Delivery are not shown, though the project's own values for rebase and delivery are kept and come back when worktrees are turned on. The window is tall enough for the whole dialog, which scrolls in a shorter one.",
+    height: 1200,
+    steps: [
+      (ui) => projectActions(ui, noWorktreesProject.name),
+      (ui) => ui.press(ui.t("sidebar.project.edit")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+    ],
+  },
+  {
+    ...dialogFixture,
     id: "dialog-edit-project-models-unavailable",
     group: "Projects",
     category: "exceptional",
@@ -1622,12 +1679,14 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Parent directory source",
-    description: "Default agent is a single field with a \"?\" at the end of its label and the visible line that an agent chosen here applies to every repository; the way Detect from files decides is in the tip. There are no Name and Description fields: both apply to a single project only.",
+    description: "Default agent is a single field with a \"?\" at the end of its label and the visible line that an agent chosen here applies to every repository; the way Detect from files decides is in the tip. There are no Name and Description fields: both apply to a single project only. Advanced is open and, with Detect from files offering no model or effort, holds the Worktrees group alone, its four pickers reading Same as app setting, Delivery last.",
+    height: 1000,
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
       (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.local"))),
       (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.parent"))),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
     ],
   },
   {

@@ -15,6 +15,7 @@ import { IS_MAC } from "../useWindowShortcut";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { projectFocusIncludeConsoleSessions } from "./projectFocusPreference";
 import type { SidebarHandlers } from "./types";
+import { DEFAULT_WORKTREE_SETTINGS } from "../worktreeSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -53,7 +54,7 @@ const withTeams = [...sessions, lead, underLead, underFree];
  * project groups read themselves. */
 function mount(render: (handlers: SidebarHandlers) => React.ReactElement, stored: Session[] = [], agentAvailability?: Map<Agent, AgentAvailability>): { text: () => string; container: HTMLElement; handlers: SidebarHandlers; unmount: () => void } {
   const daemon: Daemon = {
-    store: createStateStore({ ...(agentAvailability && { agentAvailability }), sessions: new Map(stored.map((session) => [session.id, session])), settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", accounts: [{ id: "work", agent: "claude", name: "Work", config_dir: "/w" }] } }),
+    store: createStateStore({ ...(agentAvailability && { agentAvailability }), sessions: new Map(stored.map((session) => [session.id, session])), settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [{ id: "work", agent: "claude", name: "Work", config_dir: "/w" }] } }),
     request: vi.fn(),
     toastError: vi.fn(),
     toastNotice: vi.fn(),

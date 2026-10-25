@@ -10,6 +10,7 @@ import { PlatformProvider } from "../platform/react";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
 import type { StatusItemMenuDraft } from "./statusItemMenu";
 import { useStatusItemMenu } from "./useStatusItemMenu";
+import { DEFAULT_WORKTREE_SETTINGS } from "../worktreeSettings";
 
 const withIcons = vi.hoisted(() => vi.fn(async (draft: StatusItemMenuDraft, _appearance: "light" | "dark") => ({ ...draft, icons: {} })));
 vi.mock("./statusItemIcons", () => ({ withIcons }));
@@ -72,7 +73,7 @@ it("updates the native icon on session selection, quota changes and cleared sele
   });
   const { store, select } = mount(statusItem, vi.fn(), {
     sessions: new Map([[codex.id, codex], [claude.id, claude]]),
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "", accounts: [{ id: "work", agent: "claude", name: "Work", config_dir: "/work" }] },
+    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [{ id: "work", agent: "claude", name: "Work", config_dir: "/work" }] },
     agentAvailability: new Map([["codex", { agent: "codex", availability: "available" }], ["claude", { agent: "claude", availability: "available" }]]),
     accountQuotas: [reading("codex", null, 100), reading("claude", "work", 35)],
   });
@@ -132,7 +133,7 @@ it("shows each submenu's current-console default account and follows console swi
   quotas[2]!.windows.push({ kind: "weekly", label: null, used_percent: 100, resets_at: null, window_minutes: 10080 });
   const { store, select } = mount(statusItem, vi.fn(), {
     consoles: new Map([[work.id, work], [personal.id, personal]]),
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "", accounts: [{ id: "work-account", agent: "claude", name: "Team", config_dir: "/team" }] },
+    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [{ id: "work-account", agent: "claude", name: "Team", config_dir: "/team" }] },
     agentAvailability: new Map([["codex", { agent: "codex", availability: "available" }], ["claude", { agent: "claude", availability: "available" }]]),
     accountQuotas: quotas,
   });

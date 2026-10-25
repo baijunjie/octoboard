@@ -79,6 +79,10 @@ For a git association:
   `docs/product/launching-agents.md`).
 - A clone can take minutes; other state updates keep flowing while it runs.
 
+The form's collapsed **Advanced** section (see "The project's account, model and reasoning effort" below) also holds the
+new project's own worktree settings, each following the application-wide value unless a value is picked for it (see
+"Reading and changing them" in `docs/product/worktree-settings.md`).
+
 A directory that is already associated with the same console is skipped rather than associated twice. Associating a
 parent directory again after new repositories have appeared beneath it therefore adds only the new ones. If every
 directory found is already associated, the request is refused and says so.
@@ -178,24 +182,26 @@ names and effort levels are each agent's own, and a session reads only the set o
 
 The project dialog, both when associating and when editing a project, joins the account picker to the **Default agent**
 field as a single field, the way the session dialog joins its Agent field to one, and holds the same collapsed
-**Advanced** section. All of it belongs to the agent the Default agent field currently settles on — the agent picked,
-or the agent "Same as console" names while the field is on it — so switching that field shows another agent's
-set, and what was set for an agent no longer shown is kept and still saved. The account picker lists, in this order,
-the inherited entry, "Same as console", with a badge naming the account the console resolves to for that agent (the
-agent's default account when the console pins none); the agent's default account, named as it is everywhere
-else; and then that agent's own accounts. It is offered only when that agent has an account of its own. A project whose
-named account is no longer stored shows the inherited entry, and keeps what it has stored until another entry is
-picked. A turned-off account — the default account or one of the agent's own (see "Turning an account off" in
-`docs/product/agent-accounts.md`) — is left out of the picker, except the one the project named when the dialog opened
-and the one picked in it now: as in the console dialog, since a project's account is a lasting preference, that one
-stays listed and pickable, with a short note "Disabled" under its name and, as its description for assistive
+**Advanced** section, with the project's Worktrees group below the model and effort (see "Reading and changing them" in
+`docs/product/worktree-settings.md`). All of it but the Worktrees group belongs to the agent the Default agent field
+currently settles on — the agent picked, or the agent "Same as console" names while the field is on it — so switching
+that field shows another agent's set, and what was set for an agent no longer shown is kept and still saved. The account
+picker lists, in this order, the inherited entry, "Same as console", with a badge naming the account the console
+resolves to for that agent (the agent's default account when the console pins none); the agent's default account, named
+as it is everywhere else; and then that agent's own accounts. It is offered only when that agent has an account of its
+own. A project whose named account is no longer stored shows the inherited entry, and keeps what it has stored until
+another entry is picked. A turned-off account — the default account or one of the agent's own (see "Turning an account
+off" in `docs/product/agent-accounts.md`) — is left out of the picker, except the one the project named when the dialog
+opened and the one picked in it now: as in the console dialog, since a project's account is a lasting preference, that
+one stays listed and pickable, with a short note "Disabled" under its name and, as its description for assistive
 technology, that sessions cannot open on it until it is turned back on. "Same as console" carries no such mark, its
-badge naming the console's account as usual. A project that names a turned-off account keeps it; the sessions that
-would run on it are refused until then.
+badge naming the console's account as usual. A project that names a turned-off account keeps it; the sessions that would
+run on it are refused until then.
 
-While a new project on a **parent directory** is set to "Detect from files" neither the account picker nor the Advanced
-section is shown, since no agent is settled — each repository found is detected on its own — and anything set in
-them before the source changed is not stored.
+While a new project on a **parent directory** is set to "Detect from files" the account picker is not shown and the
+Advanced section holds the Worktrees group alone, since no agent is settled — each repository found is detected on its
+own — and any account, model or effort set before the source changed is not stored. The Advanced section stays open or
+closed as it was when the Default agent field or the source changes.
 
 A project the console session associates takes the accounts, models and efforts its call gives, and otherwise inherits
 its console's account for every agent and leaves every model and effort unset. A parent-directory association gives
@@ -243,22 +249,23 @@ a repository with no remote left.
 
 ## Editing a project
 
-Only the name, the description, the default agent, the account, the model and the reasoning effort, and the tags can be
-changed, besides pinning and unpinning the project. The name is changed from the project's Rename or Project settings,
-everything else from Project settings, which opens the project dialog under that title (see "Project rows" in
-`docs/product/sidebar-project-rows.md`). The description field follows the name, and the tags field sits between the
-description and the default agent: typing in it offers the tags already in use that the project lacks, in a list that
-opens below the field and stays open after a pick so several can be added in a row, and Enter adds what was typed as a
-tag, or the highlighted suggestion if there is one; leaving the field adds it too. The tags the project carries show
-inside the field, ahead of the text input, and wrap onto more lines as they grow, the field growing with them. Each is a
-picked tag (see "Picked tags" in `docs/product/project-tags.md`), and removing one, with its remove button or with
-Backspace or Delete while it has focus, puts the focus in the text input. Backspace in the empty text input removes the
-last tag, one per key press (holding it down does not keep removing). Clicking the field's empty area puts the focus in
-the text input. The same field is in the dialog that associates a project, and the tags chosen there go on every project
-that association creates. The association itself — the source and the directory — is fixed once the project exists; a
-project that should point somewhere else is removed (see `docs/product/removing-projects.md`) and associated again. The
-remote URL is not editable either, and saving an edit never overwrites it: Octoboard keeps that value in step with the
-repository itself (see "The project's remote URL" above).
+Only the name, the description, the default agent, the account, the model and the reasoning effort, the tags and the
+project's own worktree settings can be changed, besides pinning and unpinning the project. The name is changed from the
+project's Rename or Project settings, everything else from Project settings, which opens the project dialog under that
+title (see "Project rows" in `docs/product/sidebar-project-rows.md`). The description field follows the name, and the
+tags field sits between the description and the default agent: typing in it offers the tags already in use that the
+project lacks, in a list that opens below the field and stays open after a pick so several can be added in a row, and
+Enter adds what was typed as a tag, or the highlighted suggestion if there is one; leaving the field adds it too. The
+tags the project carries show inside the field, ahead of the text input, and wrap onto more lines as they grow, the
+field growing with them. Each is a picked tag (see "Picked tags" in `docs/product/project-tags.md`), and removing one,
+with its remove button or with Backspace or Delete while it has focus, puts the focus in the text input. Backspace in
+the empty text input removes the last tag, one per key press (holding it down does not keep removing). Clicking the
+field's empty area puts the focus in the text input. The same field is in the dialog that associates a project, and the
+tags chosen there go on every project that association creates. The association itself — the source and the directory —
+is fixed once the project exists; a project that should point somewhere else is removed (see
+`docs/product/removing-projects.md`) and associated again. The remote URL is not editable either, and saving an edit
+never overwrites it: Octoboard keeps that value in step with the repository itself (see "The project's remote URL"
+above).
 
 The name cannot be cleared: saving an empty name is rejected. The description can be emptied, which leaves the project
 with none. New or changed text follows the limits in "Project names" and "The project's description" above, counted
@@ -276,9 +283,8 @@ back to following the console's default for project sessions; the account can be
 inheriting the console's reference among them, and the model and the effort back to unset.
 
 The console session can make the same changes to its console's projects (see "Changing a project: `update_project`" in
-`docs/product/agent-settings-tools.md`). A project's own worktree settings can be changed as well, but not from the
-project dialog: only by the console session and through the daemon's requests (see "Reading and changing them" in
-`docs/product/worktree-settings.md`).
+`docs/product/agent-settings-tools.md`), its own worktree settings included. How the project dialog offers those is in
+"Reading and changing them" in `docs/product/worktree-settings.md`.
 
 ## Browsing directories
 

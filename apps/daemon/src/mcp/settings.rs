@@ -155,8 +155,9 @@ pub(super) fn get_project(state: &Arc<AppState>, caller: &Session) -> Result<Val
 }
 
 /// The optional `worktrees` argument, read as the control requests read theirs: an item left out
-/// is left alone, and for a project `null` goes back to following the application-wide value.
-fn worktrees_argument<T: serde::de::DeserializeOwned + Default>(
+/// is left alone, and for a project `null` goes back to following the application-wide value. For
+/// a new project, where there is nothing to leave alone, both follow it.
+pub(super) fn worktrees_argument<T: serde::de::DeserializeOwned + Default>(
     arguments: &Map<String, Value>,
 ) -> Result<T> {
     match arguments.get("worktrees") {

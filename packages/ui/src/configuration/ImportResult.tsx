@@ -177,6 +177,11 @@ export function ImportResult({ result, shortcuts }: { result: Imported; shortcut
         settingLine(t("settings.autoApproveAccountSwitches.label"), result.settings_applied.auto_approve_account_switches)}
       {typeof result.settings_applied?.auto_approve_handoffs === "boolean" &&
         settingLine(t("settings.autoApproveHandoffs.label"), result.settings_applied.auto_approve_handoffs)}
+      {result.settings_applied?.worktrees && (
+        <p>
+          <Message id="configuration.import.result.settings.worktrees" params={{ setting: <InlineReference dir="auto" wrap>{t("settings.section.worktrees")}</InlineReference> }} />
+        </p>
+      )}
       {shortcuts && (
         <p>
           <Message id={shortcuts.applied === 0 ? "configuration.import.result.shortcutsReset" : "configuration.import.result.shortcuts"} params={{ setting: <InlineReference dir="auto" wrap>{t("settings.section.shortcuts")}</InlineReference>, count: shortcuts.applied }} />

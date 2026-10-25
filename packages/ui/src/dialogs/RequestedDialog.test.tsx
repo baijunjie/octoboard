@@ -10,6 +10,7 @@ import { DaemonRequestError } from "../daemon-client";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import type { DialogRequest } from "./dialogRequest";
 import { RequestedDialog } from "./RequestedDialog";
+import { DEFAULT_WORKTREE_SETTINGS } from "../worktreeSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -28,7 +29,7 @@ function mount(
   const daemon: Daemon = {
     store: createStateStore({
       sessions: new Map(sessions.map((s) => [s.id, s])),
-      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "", accounts },
+      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts },
     }),
     request: vi.fn(callbacks.request) as never,
     toastError: vi.fn(),

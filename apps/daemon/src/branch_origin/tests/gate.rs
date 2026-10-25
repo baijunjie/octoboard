@@ -118,7 +118,7 @@ fn rev(repo: &Path, spec: &str) -> String {
 /// The fixture's project repository, with two files committed and a bare `origin` it has pushed
 /// `main` to, whose `HEAD` is the default branch. Returns it and the remote's path.
 fn project_with_remote() -> (Fixture, PathBuf) {
-    let fixture = Fixture::new();
+    let fixture = gated_fixture();
     let repo = &fixture.repo;
     commit_file(repo, "a.txt", &numbered("alpha", 10), "base");
     commit_file(repo, "other.txt", &numbered("other", 6), "base, other");
@@ -164,6 +164,13 @@ fn set_revert_gate(fixture: &Fixture, on: bool) {
             ..Default::default()
         })
         .unwrap();
+}
+
+/// A fixture with the revert gate switched on, which it is not by default.
+fn gated_fixture() -> Fixture {
+    let fixture = Fixture::new();
+    set_revert_gate(&fixture, true);
+    fixture
 }
 
 // -- the target branch ------------------------------------
@@ -303,7 +310,7 @@ fn the_default_branch_of_a_remote_that_is_not_origin_is_read_from_its_head_file(
 /// Skipped where `git` does not know the format.
 #[test]
 fn the_default_branch_of_a_reftable_repository_is_asked_of_git() {
-    let fixture = Fixture::new();
+    let fixture = gated_fixture();
     let repo = ScratchDir::new("branch-origin-gate-reftable");
     let init = fixture_git(&repo)
         .args(["init", "-q", "--ref-format=reftable"])
@@ -365,7 +372,7 @@ fn a_branch_deleted_and_made_again_outside_the_session_contributes_nothing() {
 
 #[test]
 fn a_repository_with_no_remote_has_no_resident_guarded_branch() {
-    let fixture = Fixture::new();
+    let fixture = gated_fixture();
 
     let answer = inputs(&fixture.state, "a", &request(&fixture.repo)).expect("an answer");
 
@@ -428,6 +435,58 @@ fn the_switch_is_read_at_every_request_and_a_projects_own_value_wins() {
     assert_eq!(ask(), None, "and so does it when it is off");
 }
 
+fn set_use_worktrees(fixture: &Fixture, on: bool) {
+    fixture
+        .state
+        .store
+        .change_worktree_settings(&WorktreeSettingsChanges {
+            use_worktrees: Some(on),
+            ..Default::default()
+        })
+        .unwrap();
+}
+
+#[test]
+fn the_gate_runs_only_while_worktrees_are_used_and_the_stored_switch_is_kept() {
+    let (fixture, _) = project_with_remote();
+    let ask = || inputs(&fixture.state, "a", &request(&fixture.repo));
+    assert!(ask().is_some(), "both on");
+
+    set_use_worktrees(&fixture, false);
+    assert_eq!(ask(), None, "use worktrees is off, the gate switch on");
+    let stored = fixture.state.store.worktree_settings().unwrap();
+    assert!(stored.revert_gate, "the gate switch is left as it was set");
+
+    set_use_worktrees(&fixture, true);
+    assert!(ask().is_some(), "turning use worktrees back on restores it");
+}
+
+#[test]
+fn a_projects_own_use_worktrees_decides_whether_the_gate_runs() {
+    let (fixture, _) = project_with_remote();
+    let ask = || inputs(&fixture.state, "a", &request(&fixture.repo));
+    let mut project = fixture.state.store.get_project("project").unwrap().unwrap();
+
+    project.worktrees.use_worktrees = Some(false);
+    fixture.state.store.update_project(&project).unwrap();
+    assert_eq!(ask(), None, "the project opts out of worktrees");
+
+    set_use_worktrees(&fixture, false);
+    project.worktrees.use_worktrees = Some(true);
+    fixture.state.store.update_project(&project).unwrap();
+    assert!(ask().is_some(), "the project opts in over an off default");
+
+    set_revert_gate(&fixture, false);
+    project.worktrees.use_worktrees = None;
+    project.worktrees.revert_gate = Some(true);
+    fixture.state.store.update_project(&project).unwrap();
+    assert_eq!(
+        ask(),
+        None,
+        "its own gate switch does not outrank the main one"
+    );
+}
+
 #[test]
 fn the_hook_side_takes_only_an_answer_as_a_reason_to_run_the_gate() {
     let (fixture, _) = project_with_remote();
@@ -462,7 +521,7 @@ fn with_gate_status<'a>(command: &'a mut Command, status: &str) -> &'a mut Comma
 
 #[test]
 fn an_existing_branch_moving_is_put_to_the_gate_once_and_a_creation_is_not() {
-    let fixture = Fixture::new();
+    let fixture = gated_fixture();
     fixture.as_session("a", &["commit", "-q", "--allow-empty", "-m", "next"]);
 
     let calls = gate_calls(&fixture);
@@ -482,7 +541,7 @@ fn an_existing_branch_moving_is_put_to_the_gate_once_and_a_creation_is_not() {
 
 #[test]
 fn an_existing_branch_forced_without_its_old_value_is_put_to_the_gate() {
-    let fixture = Fixture::new();
+    let fixture = gated_fixture();
     let first = rev(&fixture.repo, "HEAD");
     fixture.as_session("a", &["commit", "-q", "--allow-empty", "-m", "next"]);
     fixture.as_session("a", &["branch", "topic", &first]);
@@ -501,7 +560,7 @@ fn an_existing_branch_forced_without_its_old_value_is_put_to_the_gate() {
 
 #[test]
 fn a_gate_that_rejects_fails_the_transaction_and_anything_else_lets_it_through() {
-    let fixture = Fixture::new();
+    let fixture = gated_fixture();
     let head = rev(&fixture.repo, "HEAD");
     let commit = |status: &str| {
         let mut command = fixture.session_git("a", &fixture.repo, &[]);
@@ -520,7 +579,7 @@ fn a_gate_that_rejects_fails_the_transaction_and_anything_else_lets_it_through()
 
 #[test]
 fn the_users_hook_has_the_first_word_and_the_gate_is_not_asked_when_it_fails() {
-    let fixture = Fixture::new();
+    let fixture = gated_fixture();
     write_hook(
         &fixture.common_dir.join("hooks/reference-transaction"),
         "cat >/dev/null\n[ \"$1\" = prepared ] && exit 1\nexit 0",
@@ -538,7 +597,7 @@ fn the_users_hook_has_the_first_word_and_the_gate_is_not_asked_when_it_fails() {
 
 #[test]
 fn a_long_transaction_that_moves_branches_is_gated_whole() {
-    let fixture = Fixture::new();
+    let fixture = gated_fixture();
     let first = rev(&fixture.repo, "HEAD");
     fixture.as_session("a", &["commit", "-q", "--allow-empty", "-m", "next"]);
     let second = rev(&fixture.repo, "HEAD");
@@ -572,7 +631,7 @@ fn a_long_transaction_that_moves_branches_is_gated_whole() {
 
 #[test]
 fn a_session_without_the_variables_is_not_gated() {
-    let fixture = Fixture::new();
+    let fixture = gated_fixture();
     write_hook(
         &fixture.common_dir.join("hooks/reference-transaction"),
         "cat >/dev/null",
@@ -591,7 +650,7 @@ fn a_session_without_the_variables_is_not_gated() {
 
 #[test]
 fn a_gate_that_cannot_start_lets_the_update_through() {
-    let fixture = Fixture::new();
+    let fixture = gated_fixture();
     let root = fixture.dir.join("hooks-without-binary");
     let names: BTreeSet<String> = BUILT_IN_HOOKS.iter().map(|n| n.to_string()).collect();
     let state = fixture.dir.join("state");
@@ -630,7 +689,7 @@ fn push_setup(fixture: &Fixture) -> PathBuf {
 
 #[test]
 fn a_push_of_a_branch_is_put_to_the_gate_after_the_users_hook() {
-    let fixture = Fixture::new();
+    let fixture = gated_fixture();
     push_setup(&fixture);
     fixture.as_session("a", &["push", "-q", "origin", "main"]);
 
@@ -673,7 +732,7 @@ fn a_push_of_a_branch_is_put_to_the_gate_after_the_users_hook() {
 /// gate both get every line.
 #[test]
 fn a_long_push_is_handed_to_the_users_hook_and_the_gate_whole() {
-    let fixture = Fixture::new();
+    let fixture = gated_fixture();
     push_setup(&fixture);
     let seen = fixture.dir.join("seen");
     write_hook(
@@ -711,7 +770,7 @@ fn a_long_push_is_handed_to_the_users_hook_and_the_gate_whole() {
 
 #[test]
 fn a_gate_that_rejects_refuses_the_push() {
-    let fixture = Fixture::new();
+    let fixture = gated_fixture();
     let remote = push_setup(&fixture);
 
     let mut command = fixture.session_git("a", &fixture.repo, &[]);

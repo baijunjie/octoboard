@@ -65,6 +65,7 @@ export function exportedDocument(state: State, consoleId?: string, includePaths 
     codex_session_effort: project.codex_session_effort,
     grok_session_model: project.grok_session_model,
     grok_session_effort: project.grok_session_effort,
+    worktrees: project.worktrees,
   });
   const consoles = Array.from(state.consoles.values())
     .filter((console) => consoleId === undefined || console.id === consoleId)
@@ -111,6 +112,7 @@ export function exportedDocument(state: State, consoleId?: string, includePaths 
         ...(typeof state.settings.auto_approve_resume_requests === "boolean" && { auto_approve_resume_requests: state.settings.auto_approve_resume_requests }),
         ...(typeof state.settings.auto_approve_account_switches === "boolean" && { auto_approve_account_switches: state.settings.auto_approve_account_switches }),
         ...(typeof state.settings.auto_approve_handoffs === "boolean" && { auto_approve_handoffs: state.settings.auto_approve_handoffs }),
+        worktrees: state.settings.worktrees,
       },
     }),
     consoles,

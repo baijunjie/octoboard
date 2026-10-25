@@ -3,6 +3,7 @@ import type { Session, SessionContext } from "../../protocol";
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
 import { ALL_AGENTS, consoleOf, contextOf, minutesAgo, projectOf, sessionOf, snapshotState, switchingAccount } from "./builders";
+import { DEFAULT_WORKTREE_SETTINGS } from "../../worktreeSettings";
 
 const GROUP = "Focus mode";
 
@@ -22,7 +23,7 @@ const hub4 = sessionOf("s-console-4", console_.id, undefined, "Release notes", "
 const settings = {
   auto_pull_repositories: false,
   auto_delete_unresumable_archives: true,
-  added_agents: ALL_AGENTS, default_clone_dir: "/Users/dev/Projects",
+  added_agents: ALL_AGENTS, default_clone_dir: "/Users/dev/Projects", worktrees: DEFAULT_WORKTREE_SETTINGS,
   accounts: [{ id: "a-work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" }],
 };
 

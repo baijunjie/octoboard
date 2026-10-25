@@ -263,9 +263,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   requests, each its own switch), Notifications, Keyboard shortcuts and Configuration (exporting and importing the
   configuration document, where the window can save and open files) sections.
 - [Worktree settings](product/worktree-settings.md) — the four worktree settings (use worktrees, rebase before merging,
-  delivery, revert gate), their values and defaults, a project following each application-wide value or holding its
-  own and how the effective values are worked out, and how they are read and changed through the daemon's requests,
-  the agents' settings tools and the configuration export and import.
+  delivery, revert gate), their values and defaults, the other three applying only while use worktrees is on, a project
+  following each application-wide value or holding its own and how the effective values are worked out, and how they
+  are read and changed in Settings, in the project dialog, through the daemon's requests, the agents' settings tools
+  and the configuration export and import.
 - [The revert gate](product/revert-gate.md) — the built-in gate on a project session's git: which branches are guarded
   and how a session's new branch gets its target branch and fork point, what local updates and pushes it refuses and
   how a deliberate revert passes, what the agent sees, the switch read every time it runs, where it runs and where

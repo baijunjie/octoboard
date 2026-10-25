@@ -6,9 +6,12 @@ after `git reset --soft <target branch>`, say — so old code goes back in as if
 fast-forwards it all the same because it checks only ancestry. The gate checks by content instead, and refuses the
 update or the push before it happens. Ordinary commits, rebases, merges and pushes go through.
 
-It is on by default and is switched by the project's effective `revert_gate` worktree setting (see "The switch"
-below). It needs nothing installed: it runs from the hook dispatchers every project session's git is already pointed at
-(see "The session's git hooks" in `docs/product/branch-responsible-session.md`).
+It is off by default (opt in per project or application-wide) and runs only while the project's effective
+`use_worktrees` and `revert_gate` worktree settings are both on (see "The switch" below). It needs nothing installed,
+in the project or on the machine: it runs from the hook dispatchers every project session's git is already pointed at
+(see "The session's git hooks" in `docs/product/branch-responsible-session.md`), as part of Octoboard itself, and
+depends on no interpreter such as Python — on a fresh macOS, `/usr/bin/python3` is only a stub that prompts to install
+the Command Line Tools.
 
 ## Guarded branches
 
@@ -64,7 +67,9 @@ branch is not checked. The update is refused when:
 
 ### A push
 
-A push of a local branch to a branch of the remote is checked, every branch of it:
+A push of a local branch to a branch of the remote is checked, every branch of it. This is what covers a project that
+delivers through pull requests: its target branch never moves locally, so a check of local updates alone would never
+see the change.
 
 - **a branch with a recorded target branch**, pushed once it has been rebased onto that target's remote-tracking tip
   (the target's upstream, or else its one remote-tracking branch of the same name), is refused when, against that tip,
@@ -94,9 +99,14 @@ that brings the changes back, never to force-push or reset.
 
 ## The switch
 
-The gate runs only while the project's effective `revert_gate` setting is on (see "The four settings" in
-`docs/product/worktree-settings.md`): application-wide, on by default, with a per-project override. The setting is read
-every time the gate runs, so turning it off or on reaches running sessions at once, without relaunching them.
+The gate runs only while the project's effective `use_worktrees` and `revert_gate` settings are both on (see "The
+four settings" in `docs/product/worktree-settings.md`), each application-wide with a per-project override.
+`revert_gate` is off by default: Octoboard does not assume a project wants it, so a project, or the whole installation,
+opts in.
+Both settings are read every time the gate runs, so turning either off or on reaches running sessions at once, without
+relaunching them. The gate is part of working in worktrees: while `use_worktrees` is off it does not run whatever
+`revert_gate` holds, and the stored `revert_gate` value is kept and takes effect again when `use_worktrees` is turned
+back on. Where the user turns it on and off is in "Reading and changing them" in `docs/product/worktree-settings.md`.
 
 ## Where it runs
 
@@ -119,7 +129,9 @@ every time the gate runs, so turning it off or on reaches running sessions at on
 
 The gate fails open. Git goes through, saying nothing, whenever the daemon cannot be reached, does not answer within
 about a second and a half, or answers with anything else; and it goes through when the gate's own check fails, with a
-line saying the check failed and the update was allowed.
+line saying the check failed and the update was allowed. A failing hook fails every reference update git makes, so the
+gate refuses only an update it has judged; an error of its own, or a daemon that is down, is no reason to stop the
+user's git.
 
 ## What it costs
 

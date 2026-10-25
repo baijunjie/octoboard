@@ -1630,6 +1630,12 @@ pub enum RequestBody {
         /// one project, as `name` is.
         #[serde(default)]
         description: Option<String>,
+        /// The project's own worktree settings; the object, or an item in it, absent or `null`
+        /// follows the application-wide value. A parent directory gives the same values to every
+        /// project it adds. A `delivery` that is none of `ask`, `merge` or `pull_request` is
+        /// refused.
+        #[serde(default)]
+        worktrees: Option<crate::worktree_settings::WorktreeOverride>,
     },
     UpdateProject {
         project: String,
@@ -4609,6 +4615,38 @@ mod tests {
         assert_eq!(grok_account_id, Some(ProjectAccount::Default));
         assert_eq!(grok_session_model.as_deref(), Some("grok-4"));
         assert_eq!(claude_session_effort, None);
+    }
+
+    /// `add_project` takes a project's own worktree values: an item absent or `null` follows the
+    /// application-wide value, and a `delivery` outside the three is refused.
+    #[test]
+    fn add_project_parses_its_own_worktree_values() {
+        use crate::worktree_settings::{Delivery, WorktreeOverride};
+        let parse = |tail: &str| {
+            serde_json::from_str::<Request>(&format!(
+                r#"{{"type":"add_project","console_id":"c","source":"local","path":"/p"{tail}}}"#
+            ))
+        };
+        let worktrees = |tail: &str| match parse(tail).unwrap().body {
+            RequestBody::AddProject { worktrees, .. } => worktrees.unwrap_or_default(),
+            _ => panic!("not add_project"),
+        };
+        assert_eq!(worktrees(""), WorktreeOverride::default());
+        assert_eq!(
+            worktrees(r#","worktrees":null"#),
+            WorktreeOverride::default()
+        );
+        assert_eq!(
+            worktrees(
+                r#","worktrees":{"use_worktrees":false,"delivery":"merge","revert_gate":null}"#
+            ),
+            WorktreeOverride {
+                use_worktrees: Some(false),
+                delivery: Some(Delivery::Merge),
+                ..WorktreeOverride::default()
+            }
+        );
+        assert!(parse(r#","worktrees":{"delivery":"rebase"}"#).is_err());
     }
 
     /// A project's account takes all three states on an update: `null` is inheriting, and an

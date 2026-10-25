@@ -8,6 +8,7 @@ import { errorAlerts } from "../errorAlerts";
 import type { Account, Agent, AgentAvailability, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { AccountDialog } from "./AccountDialog";
+import { DEFAULT_WORKTREE_SETTINGS } from "../worktreeSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -28,7 +29,7 @@ function render(
   renameDefault = false,
 ) {
   const daemon: Daemon = {
-    store: createStateStore({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: addedAgents, default_clone_dir: "", accounts: [work] }, agentAvailability }),
+    store: createStateStore({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: addedAgents, default_clone_dir: "", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [work] }, agentAvailability }),
     request: vi.fn(request) as Daemon["request"],
     toastError: vi.fn(),
     toastNotice: vi.fn(),

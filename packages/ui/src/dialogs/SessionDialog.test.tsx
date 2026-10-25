@@ -12,6 +12,7 @@ import { sessionOf } from "../gallery/fixtures/builders";
 import { DaemonProvider } from "../store";
 import { SessionDialog } from "./SessionDialog";
 import { parentConsole, project, renderDialog, hub1, buttons, optionElements, choose, pickerNamed } from "./sessionDialogTestSupport";
+import { DEFAULT_WORKTREE_SETTINGS } from "../worktreeSettings";
 
 vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
 
@@ -177,7 +178,7 @@ it("opens on a selectable agent, with the console's account for it, and sends bo
         ["grok", { agent: "grok", availability: "available" }],
       ]),
       settings: {
-        auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p",
+        auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", worktrees: DEFAULT_WORKTREE_SETTINGS,
         accounts: [{ id: "a-1", agent: "codex", name: "Work", config_dir: "/home/me/.codex-work" }],
       },
     },
@@ -201,7 +202,7 @@ it("opens on the account whose weekly quota resets soonest when automatic select
     [],
     {
       settings: {
-        auto_pull_repositories: false, auto_delete_unresumable_archives: true, auto_select_account: true, added_agents: null, default_clone_dir: "/p",
+        auto_pull_repositories: false, auto_delete_unresumable_archives: true, auto_select_account: true, added_agents: null, default_clone_dir: "/p", worktrees: DEFAULT_WORKTREE_SETTINGS,
         accounts: [
           { id: "a-1", agent: "codex", name: "Work", config_dir: "/home/me/.codex-work" },
           { id: "a-soon", agent: "codex", name: "Soon", config_dir: "/home/me/.codex-soon" },
@@ -224,7 +225,7 @@ it("opens on the account whose weekly quota resets soonest when automatic select
 
 it("hides a turned-off account from the account picker, and keeps the one it ends on, marked, when every account is off", async () => {
   const settings = {
-    auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", disabled_default_accounts: ["codex" as const],
+    auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", worktrees: DEFAULT_WORKTREE_SETTINGS, disabled_default_accounts: ["codex" as const],
     accounts: [
       { id: "a-1", agent: "codex" as const, name: "Work", config_dir: "/home/me/.codex-work", disabled: true },
       { id: "a-2", agent: "codex" as const, name: "Spare", config_dir: "/home/me/.codex-spare" },
@@ -274,7 +275,7 @@ it("leaves the agents known to be missing out of the agent picker", async () => 
 
 it("lists only the added agents in the agent picker, in the order they were added", async () => {
   const { container, root } = renderDialog([], {
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["grok", "claude"], default_clone_dir: "/p", accounts: [] },
+    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["grok", "claude"], default_clone_dir: "/p", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [] },
   });
   await act(async () => pickerNamed("Agent").click());
   expect(optionElements().map((o) => o.textContent)).toEqual(["Grok Build", "Claude Code"]);
@@ -284,7 +285,7 @@ it("lists only the added agents in the agent picker, in the order they were adde
 
 it("opens on the first added agent when the console's default agent is not added", () => {
   const { container, root } = renderDialog([], {
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["codex"], default_clone_dir: "/p", accounts: [] },
+    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["codex"], default_clone_dir: "/p", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [] },
   });
   expect(pickerNamed("Agent").textContent).toContain("Codex");
   act(() => root.unmount());
@@ -293,7 +294,7 @@ it("opens on the first added agent when the console's default agent is not added
 
 it("closes and reports the same alert when agents are installed but none is added", () => {
   const { container, root, onClose, daemon } = renderDialog([], {
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/p", accounts: [] },
+    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/p", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [] },
   });
   expect(onClose).toHaveBeenCalled();
   expect(daemon.toastError).toHaveBeenCalledOnce();
@@ -308,7 +309,7 @@ async function openedAccount(projectPin: Partial<typeof project>): Promise<unkno
     [],
     {
       settings: {
-        auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p",
+        auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", worktrees: DEFAULT_WORKTREE_SETTINGS,
         accounts: [
           { id: "a-console", agent: "claude", name: "Console pick", config_dir: "/home/me/.claude-console" },
           { id: "a-project", agent: "claude", name: "Project pick", config_dir: "/home/me/.claude-project" },

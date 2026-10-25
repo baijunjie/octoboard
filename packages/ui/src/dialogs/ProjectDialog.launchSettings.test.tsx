@@ -277,17 +277,34 @@ it("keeps the project's own agent that is not added in the picker, marked, until
   expect(Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent).filter((text) => text?.includes("Codex"))).toEqual(["Codex, Not added"]);
 });
 
-it("offers neither the account nor Advanced while the source is a parent directory with Detect from files", async () => {
+it("offers no account and no launch settings while the source is a parent directory with Detect from files", async () => {
   const pending = render(undefined, [work, personal]);
   await fillDirectory(pending);
   await click(accountPicker());
   await choose("Personal");
   await chooseSource("A parent directory");
   expect(accountPicker()).toBeUndefined();
-  expect(buttonText("Advanced")).toBeUndefined();
+  // Advanced holds the worktree settings alone.
+  await click(buttonText("Advanced"));
+  expect(pickerNamed("Model")).toBeUndefined();
+  expect(pickerNamed("Use worktrees for development")).toBeDefined();
   await click(buttonText("Add"));
   // What was set before is out of sight and not sent.
   expect(sentOf(pending, "add_project")).not.toHaveProperty("claude_account_id");
+});
+
+it("keeps Advanced open as the source moves between Detect from files and a single agent", async () => {
+  render(undefined, [work, personal]);
+  await click(buttonText("Advanced"));
+  const open = () => buttonText("Advanced")?.getAttribute("aria-expanded");
+  expect(open()).toBe("true");
+  await chooseSource("A parent directory");
+  expect(pickerNamed("Model")).toBeUndefined();
+  expect(open()).toBe("true");
+  await click(buttons().find((b) => b.textContent?.includes("A parent directory")));
+  await choose("A single directory");
+  expect(pickerNamed("Model")).toBeDefined();
+  expect(open()).toBe("true");
 });
 
 const group = (label: string) =>
