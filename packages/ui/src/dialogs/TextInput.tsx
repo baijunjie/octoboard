@@ -32,7 +32,9 @@ export function TextInput({
   characterLimit,
 }: {
   label: string;
-  /** Rich visible label; the plain label remains the input's accessible name. */
+  /** A visible label that shows less than the field's name ("Directory" for "Directory for Notes"): the
+   * input is named by `label` alone. `label` must contain the visible text verbatim, so the label stays
+   * in the name (WCAG 2.5.3), and this is hidden from assistive technology, so it holds nothing interactive. */
   labelContent?: React.ReactNode;
   value: string;
   onChange: (value: string) => void;
@@ -64,7 +66,6 @@ export function TextInput({
   return (
     <TextField
       fullWidth
-      aria-label={labelContent ? label : undefined}
       aria-describedby={describedBy}
       variant="secondary"
       {...field}
@@ -76,7 +77,17 @@ export function TextInput({
       // before the dialog's handler — and the mark itself only ever appears from that handler.
       validationBehavior="aria"
     >
-      <Label>{labelContent ?? label}</Label>
+      {/* The visible text is hidden from the name and the plain label stands in for it, so the name
+          is exactly `label` and not the two put together (react-aria names the input by the label
+          element). The name is not selectable, so copying across the label takes only what is drawn. */}
+      {labelContent ? (
+        <Label>
+          <span aria-hidden="true">{labelContent}</span>
+          <span className="sr-only select-none">{label}</span>
+        </Label>
+      ) : (
+        <Label>{label}</Label>
+      )}
       {/* The row keeps the trailing control level with the input while the description and the
           error stay under both: HeroUI's text field is a plain flex column whose styling reaches
           its input by descendant selector, so a row of its own around them changes nothing.

@@ -1,5 +1,5 @@
-import { Checkbox, Description, Label } from "@heroui/react";
-import { Info } from "lucide-react";
+import { Checkbox, Label } from "@heroui/react";
+import { CircleAlert, CircleCheck, CloudDownload, Info, type LucideIcon } from "lucide-react";
 import React, { useId, useState } from "react";
 
 import { Button } from "../components/Button";
@@ -29,6 +29,7 @@ import {
   type ReviewState,
   type RowState,
 } from "./importPlan";
+import { BOOLEAN_SETTINGS, CARD_CLASS, SettingLine } from "./importParts";
 
 export type Inspection = Extract<Event, { type: "configuration_inspected" }>;
 
@@ -41,11 +42,11 @@ const CHOICE_LABEL: Record<RowState["choice"], PlainMessageKey> = {
 };
 
 /** Where the daemon found the project on its own host, which is what its preselected choice follows. */
-const STATE_LABEL: Record<OfferedChoice | "none", PlainMessageKey> = {
-  exported_path: "configuration.import.project.state.exportedPath",
-  default_clone_dir: "configuration.import.project.state.defaultCloneDir",
-  clone: "configuration.import.project.state.clone",
-  none: "configuration.import.project.state.none",
+const STATE: Record<OfferedChoice | "none", { label: PlainMessageKey; icon: LucideIcon; tone: string }> = {
+  exported_path: { label: "configuration.import.project.state.exportedPath", icon: CircleCheck, tone: "text-success-soft-foreground" },
+  default_clone_dir: { label: "configuration.import.project.state.defaultCloneDir", icon: CircleCheck, tone: "text-success-soft-foreground" },
+  clone: { label: "configuration.import.project.state.clone", icon: CloudDownload, tone: "text-accent-soft-foreground" },
+  none: { label: "configuration.import.project.state.none", icon: CircleAlert, tone: "text-warning-soft-foreground" },
 };
 
 const APPLY_ALL: {
@@ -62,39 +63,17 @@ const APPLY_ALL: {
   { choice: "skip", label: "configuration.import.all.skip" },
 ];
 
-type SettingMessage =
-  | "configuration.import.settings.turnsOn"
-  | "configuration.import.settings.archiveCleanup.turnsOn"
-  | "configuration.import.settings.autoSelectAccount.turnsOn"
-  | "configuration.import.settings.sidebarOrder.turnsOn"
-  | "configuration.import.settings.autoStartQuotaWindows.turnsOn"
-  | "configuration.import.settings.autoApproveSession.turnsOn"
-  | "configuration.import.settings.autoApproveResume.turnsOn"
-  | "configuration.import.settings.autoApproveAccountSwitches.turnsOn"
-  | "configuration.import.settings.autoApproveHandoffs.turnsOn"
-  | "configuration.import.settings.turnsOff"
-  | "configuration.import.settings.alreadyOn"
-  | "configuration.import.settings.alreadyOff";
-
-/** What applying the document's value of one application setting does on this machine. Only
- * `turnsOn` differs between settings, as it says what the setting then makes {appName} do. */
-function SettingNote({
-  label,
-  wanted,
-  current,
-  turnsOn,
-}: {
-  label: string;
-  wanted: boolean;
-  current: boolean;
-  turnsOn: SettingMessage;
-}): React.ReactElement {
-  const setting = <InlineReference dir="auto" wrap>{label}</InlineReference>;
-  const id: SettingMessage =
-    wanted === current
-      ? wanted ? "configuration.import.settings.alreadyOn" : "configuration.import.settings.alreadyOff"
-      : wanted ? turnsOn : "configuration.import.settings.turnsOff";
-  return <span className="block"><Message id={id} params={{ setting }} /></span>;
+/** A boolean application setting: whether applying turns it on, off, or leaves it as it is. */
+function BooleanSettingLine({ label, wanted, current, consequence }: { label: string; wanted: boolean; current: boolean; consequence: PlainMessageKey }): React.ReactElement {
+  const t = useT();
+  if (wanted === current) return <SettingLine label={label} badge={t("configuration.import.settings.badge.same")} />;
+  return wanted ? (
+    <SettingLine label={label} badge={t("configuration.import.settings.badge.turnsOn")} tone="accent">
+      <Message id={consequence} />
+    </SettingLine>
+  ) : (
+    <SettingLine label={label} badge={t("configuration.import.settings.badge.turnsOff")} />
+  );
 }
 
 /** An account reference that names no account of this machine, and what happens to it. */
@@ -106,6 +85,17 @@ function FallbackNote({ fallback }: { fallback: AccountFallback }): React.ReactE
         <Message id="configuration.import.fallback" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[fallback.agent]}</InlineReference>, name: <InlineReference dir="auto" wrap>{fallback.name}</InlineReference> }} />
       </span>
     </p>
+  );
+}
+
+/** A labelled path or URL on a line of its own, shown as plain monospace text (see the "References in
+ * copy use `InlineReference`" section of docs/ui-accessibility.md). */
+function Field({ label, value }: { label: string; value: string }): React.ReactElement {
+  return (
+    <>
+      <dt className="text-app-muted">{label}</dt>
+      <dd className="min-w-0 font-mono [overflow-wrap:anywhere]" dir="ltr">{value}</dd>
+    </>
   );
 }
 
@@ -126,14 +116,27 @@ function ProjectRow({
   const target = targetOf(project, row);
   const inPlace = row.choice === "exported_path" && target === project.path;
   const recordedPath = hasRecordedPath(project.path);
+  const state = STATE[project.default ?? "none"];
+  // Placed where it was exported, the 'Placed in' line alone says both.
+  const fields: [string, string][] = [];
+  if (recordedPath && !inPlace) fields.push([t("configuration.import.project.field.exportedPath"), project.path]);
+  if (row.choice === "clone") {
+    fields.push([t("configuration.import.project.field.cloneFrom"), project.remote_url ?? ""], [t("configuration.import.project.field.cloneInto"), target ?? ""]);
+  } else if (row.choice !== "skip" && row.choice !== "directory") {
+    fields.push([t("configuration.import.project.field.place"), target ?? ""]);
+  }
   return (
-    <li className="@container flex flex-col gap-1.5 groove-b py-2.5 last:border-b-0">
-      {/* The name and the choice made for it are one decision, so they share a line; the choice is
-          only as wide as its labels need and drops under the name where the dialog is narrow. */}
+    <li className="@container flex flex-col gap-2 groove-b px-4 py-3 last:border-b-0">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
-        <span className="min-w-40 flex-1 font-medium text-foreground [overflow-wrap:anywhere]" dir="auto">
-          {project.name}
-        </span>
+        <div className="flex min-w-40 flex-1 flex-col gap-0.5">
+          <span className="font-medium text-foreground [overflow-wrap:anywhere]" dir="auto">
+            {project.name}
+          </span>
+          <span className="flex items-center gap-1.5 text-sm text-app-muted">
+            <state.icon aria-hidden="true" className={`size-3.5 shrink-0 ${state.tone}`} />
+            <Message id={state.label} />
+          </span>
+        </div>
         <div className="w-full @md:w-56">
           <OptionSelect
             hideLabel
@@ -144,37 +147,17 @@ function ProjectRow({
           />
         </div>
       </div>
-      {/* Where the project is placed is the exported path itself for the commonest choice, and one
-          line then says both. */}
-      {/* The state is a sentence of its own beside the path, so the row stays two lines. */}
-      <p>
-        {/* An export made without full paths records only the directory's name, which is no path to show. */}
-        {recordedPath && (
-          <span>
-            <Message
-              id={
-                inPlace
-                  ? "configuration.import.project.exportedPathUsed"
-                  : "configuration.import.project.exportedPath"
-              }
-              params={{ path: <InlineReference monospace wrap>{project.path}</InlineReference> }}
-            />
-          </span>
-        )}
-        {/* A project found at its exported path and placed there is already said by the path's own line. */}
-        {!(inPlace && project.default === "exported_path") && (
-          <>
-            {recordedPath && " "}
-            <span className={recordedPath ? "ms-2" : undefined}>
-              <Message id={STATE_LABEL[project.default ?? "none"]} />
-            </span>
-          </>
-        )}
-      </p>
-      {row.choice === "directory" ? (
+      {fields.length > 0 && (
+        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
+          {fields.map(([label, value]) => (
+            <Field key={label} label={label} value={value} />
+          ))}
+        </dl>
+      )}
+      {row.choice === "directory" && (
         <TextInput
           label={t("configuration.import.directory.label", { project: isolate(project.name) })}
-          labelContent={<Message id="configuration.import.directory.label" params={{ project: <InlineReference dir="auto" wrap>{project.name}</InlineReference> }} />}
+          labelContent={t("configuration.import.directory.visibleLabel")}
           value={row.directory}
           onChange={(directory) => onChange({ ...row, directory })}
           dir="ltr"
@@ -186,17 +169,6 @@ function ProjectRow({
             </Button>
           }
         />
-      ) : row.choice === "skip" ? null : row.choice === "clone" ? (
-        <p>
-          <Message
-            id="configuration.import.target.clone"
-            params={{ url: <InlineReference monospace wrap>{project.remote_url ?? ""}</InlineReference>, path: <InlineReference monospace wrap>{target ?? ""}</InlineReference> }}
-          />
-        </p>
-      ) : inPlace ? null : (
-        <p>
-          <Message id="configuration.import.target.place" params={{ path: <InlineReference monospace wrap>{target ?? ""}</InlineReference> }} />
-        </p>
       )}
       {project.account_fallbacks.map((fallback) => (
         <FallbackNote key={`${fallback.agent}:${fallback.name}`} fallback={fallback} />
@@ -232,18 +204,20 @@ function ConsoleGroup({
   const t = useT();
   const headingId = useId();
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-2">
-      <div className="flex flex-col gap-0.5">
-        <h3 id={headingId} className="text-base font-semibold text-foreground [overflow-wrap:anywhere]" dir="auto">
-          {console.name}
-        </h3>
-        <p>{t("configuration.import.console.projects", { count: console.projects.length })}</p>
+    <section aria-labelledby={headingId} className={CARD_CLASS}>
+      <div className="flex flex-col gap-1.5 groove-b px-4 py-3">
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <h3 id={headingId} className="text-base font-semibold text-foreground [overflow-wrap:anywhere]" dir="auto">
+            {console.name}
+          </h3>
+          <span className="text-sm text-app-muted">{t("configuration.import.console.projects", { count: console.projects.length })}</span>
+        </div>
+        {console.account_fallbacks.map((fallback) => (
+          <FallbackNote key={`${fallback.agent}:${fallback.name}`} fallback={fallback} />
+        ))}
       </div>
-      {console.account_fallbacks.map((fallback) => (
-        <FallbackNote key={`${fallback.agent}:${fallback.name}`} fallback={fallback} />
-      ))}
       {console.projects.length === 0 ? (
-        <p>{t("configuration.import.console.noProjects")}</p>
+        <p className="px-4 py-3 text-sm text-app-muted">{t("configuration.import.console.noProjects")}</p>
       ) : (
         <ul className="flex flex-col">
           {console.projects.map((project, p) => {
@@ -272,10 +246,11 @@ function ConsoleGroup({
 }
 
 /**
- * The step between reading a document and applying it: one row for every project the daemon's
- * inspection found, with the choices that project's state allows, the directory the chosen one
- * would use, and — for every console — the account references that would fall back to a default
- * account. The state of every choice is the caller's (`review`), so applying sends what is on
+ * The step between reading a document and applying it: a card for every console, with a row for each
+ * of its projects (the choices that project's state allows and the directory the chosen one would use)
+ * and the account references that would fall back to a default account, then, when the document
+ * carries application settings, a card saying what applying them would change and a checkbox to
+ * apply them. The state of every choice is the caller's (`review`), so applying sends what is on
  * screen. A choice can be applied to every project it is available for at once, which is how a
  * whole layout under another root is placed without a row at a time.
  */
@@ -303,50 +278,28 @@ export function ImportReview({
   const t = useT();
   const [announcement, setAnnouncement] = useState<string>();
   const settings = inspection.settings;
-  const settingsNote = settings && (
-    <>
-      <SettingNote label={t("settings.git.autoPull.label")} wanted={settings.auto_pull_repositories} current={settings.current_auto_pull_repositories} turnsOn="configuration.import.settings.turnsOn" />
-      {typeof settings.auto_delete_unresumable_archives === "boolean" && (
-        <SettingNote label={t("settings.archiveCleanup.label")} wanted={settings.auto_delete_unresumable_archives} current={settings.current_auto_delete_unresumable_archives} turnsOn="configuration.import.settings.archiveCleanup.turnsOn" />
-      )}
-      {typeof settings.auto_select_account === "boolean" && typeof settings.current_auto_select_account === "boolean" && (
-        <SettingNote label={t("settings.autoSelect.label")} wanted={settings.auto_select_account} current={settings.current_auto_select_account} turnsOn="configuration.import.settings.autoSelectAccount.turnsOn" />
-      )}
-      {typeof settings.sidebar_order_by_status === "boolean" && typeof settings.current_sidebar_order_by_status === "boolean" && (
-        <SettingNote label={t("settings.sidebarOrder.label")} wanted={settings.sidebar_order_by_status} current={settings.current_sidebar_order_by_status} turnsOn="configuration.import.settings.sidebarOrder.turnsOn" />
-      )}
-      {typeof settings.auto_start_quota_windows === "boolean" && typeof settings.current_auto_start_quota_windows === "boolean" && (
-        <SettingNote label={t("settings.startQuotaWindows.label")} wanted={settings.auto_start_quota_windows} current={settings.current_auto_start_quota_windows} turnsOn="configuration.import.settings.autoStartQuotaWindows.turnsOn" />
-      )}
-      {typeof settings.auto_approve_session_requests === "boolean" && typeof settings.current_auto_approve_session_requests === "boolean" && (
-        <SettingNote label={t("settings.autoApproveSession.label")} wanted={settings.auto_approve_session_requests} current={settings.current_auto_approve_session_requests} turnsOn="configuration.import.settings.autoApproveSession.turnsOn" />
-      )}
-      {typeof settings.auto_approve_resume_requests === "boolean" && typeof settings.current_auto_approve_resume_requests === "boolean" && (
-        <SettingNote label={t("settings.autoApproveResume.label")} wanted={settings.auto_approve_resume_requests} current={settings.current_auto_approve_resume_requests} turnsOn="configuration.import.settings.autoApproveResume.turnsOn" />
-      )}
-      {typeof settings.auto_approve_account_switches === "boolean" && typeof settings.current_auto_approve_account_switches === "boolean" && (
-        <SettingNote label={t("settings.autoApproveAccountSwitches.label")} wanted={settings.auto_approve_account_switches} current={settings.current_auto_approve_account_switches} turnsOn="configuration.import.settings.autoApproveAccountSwitches.turnsOn" />
-      )}
-      {typeof settings.auto_approve_handoffs === "boolean" && typeof settings.current_auto_approve_handoffs === "boolean" && (
-        <SettingNote label={t("settings.autoApproveHandoffs.label")} wanted={settings.auto_approve_handoffs} current={settings.current_auto_approve_handoffs} turnsOn="configuration.import.settings.autoApproveHandoffs.turnsOn" />
-      )}
+  // The lines say what ticking the box would do, so they describe it.
+  const settingsId = useId();
+  const settingLines = settings && (
+    <ul id={settingsId} className="flex flex-col groove-t px-4 py-1 [&>li]:groove-b [&>li:last-child]:border-b-0">
+      {BOOLEAN_SETTINGS.map(({ label, field, consequence }) => {
+        const wanted = settings[field];
+        const now = settings[`current_${field}` as const];
+        return typeof wanted === "boolean" && typeof now === "boolean" && <BooleanSettingLine key={field} label={t(label)} wanted={wanted} current={now} consequence={consequence} />;
+      })}
       {settings.worktrees && settings.current_worktrees && (
-        <span className="block">
-          <Message
-            id={sameValue(settings.worktrees, settings.current_worktrees) ? "configuration.import.settings.worktrees.same" : "configuration.import.settings.worktrees.changes"}
-            params={{ setting: <InlineReference dir="auto" wrap>{t("settings.section.worktrees")}</InlineReference> }}
-          />
-        </span>
+        sameValue(settings.worktrees, settings.current_worktrees)
+          ? <SettingLine label={t("settings.section.worktrees")} badge={t("configuration.import.settings.badge.same")} />
+          : <SettingLine label={t("settings.section.worktrees")} badge={t("configuration.import.settings.badge.changes")} tone="accent" />
       )}
       {shortcuts && (
-        <span className="block">
-          <Message
-            id={!shortcuts.changes ? "configuration.import.settings.shortcuts.same" : shortcuts.count === 0 ? "configuration.import.settings.shortcuts.reset" : "configuration.import.settings.shortcuts.changes"}
-            params={{ setting: <InlineReference dir="auto" wrap>{t("settings.section.shortcuts")}</InlineReference>, count: shortcuts.count }}
-          />
-        </span>
+        !shortcuts.changes
+          ? <SettingLine label={t("settings.section.shortcuts")} badge={t("configuration.import.settings.badge.same")} />
+          : shortcuts.count === 0
+            ? <SettingLine label={t("settings.section.shortcuts")} badge={t("configuration.import.settings.badge.reset")} tone="accent">{t("configuration.import.settings.consequence.shortcutsReset")}</SettingLine>
+            : <SettingLine label={t("settings.section.shortcuts")} badge={t("configuration.import.settings.badge.changes")} tone="accent">{t("configuration.import.settings.consequence.shortcuts", { count: shortcuts.count })}</SettingLine>
       )}
-    </>
+    </ul>
   );
   const cloning = review.some((rows) => rows.some((row) => row.choice === "clone"));
 
@@ -354,7 +307,7 @@ export function ImportReview({
     <>
       <StatusAnnouncer text={announcement} />
       <p className="text-sm">
-        <Message id="configuration.import.review.intro" params={{ file: <InlineReference monospace wrap>{fileName}</InlineReference>, skip: <InlineReference dir="auto" wrap>{t("configuration.import.choice.skip")}</InlineReference> }} />
+        <Message id="configuration.import.review.intro" params={{ file: <InlineReference monospace wrap>{fileName}</InlineReference> }} />
       </p>
       <LabelledGroup label={t("configuration.import.all.label")}>
         <div className="flex flex-wrap gap-2">
@@ -378,20 +331,24 @@ export function ImportReview({
           })}
         </div>
       </LabelledGroup>
-      {settings && (
-        <Checkbox variant="secondary" isSelected={applySettings} onChange={onApplySettings}>
-          <Checkbox.Content className="min-h-6">
-            <Checkbox.Control>
-              <Checkbox.Indicator />
-            </Checkbox.Control>
-            <Label>{t("configuration.import.settings.label")}</Label>
-          </Checkbox.Content>
-          <Description>{settingsNote}</Description>
-        </Checkbox>
-      )}
       {inspection.consoles.map((console, index) => (
         <ConsoleGroup key={index} console={console} index={index} review={review} shown={shown} onReview={onReview} />
       ))}
+      {settings && (
+        <div className={CARD_CLASS}>
+          <div className="px-4 py-3">
+            <Checkbox variant="secondary" isSelected={applySettings} onChange={onApplySettings} aria-describedby={settingsId}>
+              <Checkbox.Content className="min-h-6">
+                <Checkbox.Control>
+                  <Checkbox.Indicator />
+                </Checkbox.Control>
+                <Label>{t("configuration.import.settings.label")}</Label>
+              </Checkbox.Content>
+            </Checkbox>
+          </div>
+          {settingLines}
+        </div>
+      )}
       {cloning && (
         <p className="flex items-start gap-2 text-sm">
           <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-soft-foreground" />

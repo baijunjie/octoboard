@@ -578,8 +578,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review",
-    description:
-      "Projects found at recorded or default paths, clone candidates, missing paths, account fallbacks and an empty console appear together; settings start unchecked, and their note has eleven lines: automatic pull turns on, archive cleanup turns off, automatic account selection turns on, ordering the sidebar by status turns off, starting usage windows automatically turns on, the four automatic approvals of agents' requests (sessions, resumes, account switches, handoffs) turn on, one says applying sets the settings under Worktrees to those in the file, which differ from the current ones, and the last says applying sets the Keyboard shortcuts on this device to those in the file, 3 of them changed from the defaults, applying to this device or browser only.",
+    description: "Cards for two consoles, then the application-settings card, with the clone note last. Project rows show each state: found at its exported path (only \"Placed in\"), found in the default clone directory, can be cloned (\"Clone from\" and \"Clone into\") and not found, left out, with a long exported path that wraps. Account fallbacks sit under a console's name and at the end of a project's row; the last console says it has no projects. The settings card starts unchecked: lines that turn a setting on carry a muted consequence line, lines that turn one off do not (their \"Turns off\" badge is neutral, not accented), worktrees reads \"Set to the file's\", and keyboard shortcuts read \"Set to the file's\" with a note that 3 of the file's shortcuts differ from the defaults and apply to this device or browser only.",
     state,
     configuration: reviewing({ file: SHORTCUTS_FILE }),
     steps: [
@@ -592,8 +591,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review of one console's document",
-    description:
-      "A single console document has no application-settings checkbox; unavailable placement choices are disabled.",
+    description: "A single console's document has one card and no application-settings card. \"Default clone directory (0)\" is disabled because no project offers it, and the clone note follows the card.",
     state,
     configuration: { file: FILE, inspection: SINGLE, imported: CLEAN_RESULT },
     steps: [
@@ -606,7 +604,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review of a document exported without full paths",
-    description: "A project recorded only by its directory's name shows no exported-path line, just whether it was found, can be cloned or nothing places it.",
+    description: "A project recorded only by its directory's name has no \"Exported path\" line: found in the default clone directory (only \"Placed in\"), can be cloned, or not found, with nothing to place it.",
     state,
     configuration: { file: FILE, inspection: NO_PATHS },
     steps: [
@@ -615,25 +613,11 @@ export const configurationScenarios: Scenario[] = [
     ],
   },
   {
-    id: "configuration-import-review-setting-off",
-    group: GROUP,
-    category: "normal",
-    title: "Import, an older document whose setting is off where it is on here",
-    description: "The checkbox is ticked, and its note is a single line: applying turns automatic pull off. The file predates archive cleanup, automatic account selection, status ordering of the sidebar, starting usage windows and the automatic approvals of agents' requests, so none of them has a line.",
-    state: autoPulling,
-    configuration: { file: FILE, inspection: WITH_SETTING_OFF },
-    steps: [
-      ...importFromSettings,
-      chooseFile,
-      applySettings,
-    ],
-  },
-  {
     id: "configuration-import-review-shortcuts-same",
     group: GROUP,
     category: "normal",
     title: "Import, keyboard shortcuts and worktree settings the device already has",
-    description: "After the one line about automatic pull, the settings note has two lines saying the settings under Worktrees and the Keyboard shortcuts in the file are the ones this device already has, so applying changes nothing.",
+    description: "Worktrees and keyboard shortcuts both read \"No change\" because the file's are the ones this device already has, below automatic pull, which turns off.",
     state: autoPulling,
     preferences: { keyboardShortcuts: SHORTCUTS_HERE },
     configuration: { file: SHORTCUTS_FILE, inspection: WITH_WORKTREES_HERE },
@@ -646,14 +630,15 @@ export const configurationScenarios: Scenario[] = [
     id: "configuration-import-review-shortcuts-reset",
     group: GROUP,
     category: "normal",
-    title: "Import, a file whose keyboard shortcuts are all defaults",
-    description: "The settings note ends in a line saying applying puts the Keyboard shortcuts on this device back to their defaults, after the one line about automatic pull.",
+    title: "Import, an older file whose keyboard shortcuts are all defaults",
+    description: "The checkbox is ticked. The older file carries only automatic pull, which turns off, and its keyboard shortcuts are all defaults, so that line reads \"Back to defaults\" with the note that it applies to this device or browser only.",
     state: autoPulling,
     preferences: { keyboardShortcuts: SHORTCUTS_HERE },
     configuration: { file: SHORTCUTS_DEFAULT_FILE, inspection: WITH_SETTING_OFF },
     steps: [
       ...importFromSettings,
       chooseFile,
+      applySettings,
     ],
   },
   {
@@ -689,7 +674,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Import, result where the settings could not be applied",
-    description: "The settings failure is one danger Alert above the table holding its title and its short reason, with Details on its right for the raw text, beside a project that was left out.",
+    description: "A danger Alert above the table holds the settings failure's title and short reason, with Details on its right for the raw text; the table below shows the project that was left out, and no settings card follows.",
     state: autoPulling,
     configuration: { file: FILE, inspection: WITH_SETTING_OFF, imported: SETTINGS_FAILED_RESULT },
     steps: [
@@ -706,7 +691,7 @@ export const configurationScenarios: Scenario[] = [
     title: "Import placement validation",
     state: state,
     configuration: reviewing({ inspection: DIRECTORY_REVIEW, imported: undefined }),
-    description: "Empty and relative directories show errors together; the valid directory is accepted. The empty directory label references a long mixed-script project name.",
+    description: "\"Another directory\" under a project shows a text field labelled \"Directory\" and a Browse button. After Import is pressed, an empty directory and a relative one show their errors together while the absolute one is accepted; the field of a long mixed-script project name keeps its row readable.",
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -724,7 +709,7 @@ export const configurationScenarios: Scenario[] = [
     title: "Import result with failures and fallbacks",
     state: state,
     configuration: reviewing({ file: SHORTCUTS_FILE }),
-    description: "Placement outcomes, failed projects and consoles, fallback accounts and applied settings share the result; the settings show eleven lines, automatic pull on, archive cleanup off, automatic account selection on, ordering the sidebar by status off, starting usage windows automatically on, all four automatic approvals of agents' requests (sessions, resumes, account switches, handoffs) on, the settings under Worktrees now matching the file, and last the Keyboard shortcuts on this device now having 3 changes from the defaults, followed on the same line by 2 shortcuts in the file that could not be applied here and were left out. A failed project or console reads like the other outcomes in its Result cell: a danger-coloured circled \"!\" followed by the word \"Failed\", as one button named after the project (or the console, when the whole console failed), such as \"Website failed\", and its Detail cell is empty. Short height exposes scrolling; Phone folds rows.",
+    description: "The table groups projects under their console, with a console's own result on its header row when it failed (\"Side projects\") or came out empty (\"Scratch\"); a failed project's result is a button opening the reason, and its Detail is empty. Below come the fallback accounts and the \"Application settings applied\" card, whose badges read On, Off, \"Matches the file\" and \"3 changes from the defaults\", the last with a muted line saying 2 shortcuts could not be applied. Phone width stacks each row into labelled blocks under the console's name; a short height exposes scrolling.",
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -737,7 +722,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import result, keyboard shortcuts back to their defaults",
-    description: "The settings lines say automatic pull is now off and the Keyboard shortcuts on this device are now back to their defaults, with no count of changes or of shortcuts left out.",
+    description: "The settings card shows automatic pull as Off and keyboard shortcuts as \"Defaults\", with no muted line under it.",
     state: autoPulling,
     preferences: { keyboardShortcuts: SHORTCUTS_HERE },
     configuration: { file: SHORTCUTS_DEFAULT_FILE, inspection: WITH_SETTING_OFF, imported: SETTINGS_APPLIED_RESULT },
@@ -755,7 +740,7 @@ export const configurationScenarios: Scenario[] = [
     title: "Import result, the reason a failed row carries",
     state: state,
     configuration: reviewing(),
-    description: "The first failed row's danger-coloured mark and word \"Failed\" (the button named \"Website failed\") is tapped with a finger: its popover holds why that project could not be created, while the row keeps only the mark and the word.",
+    description: "A failed row is tapped with a finger: its popover holds why that project could not be created, while the row keeps only the failed mark and word.",
     steps: [
       ...importFromSettings,
       chooseFile,

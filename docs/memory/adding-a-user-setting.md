@@ -29,5 +29,11 @@ added, in the same change, to:
   the full export only;
 - the import inspection in `apps/daemon/src/config_import.rs`, with the document's value and the current one, and the
   `coordinator::update_settings` call that applies the document's settings;
-- the window: a line in the apply-settings note of `packages/ui/src/configuration/ImportReview.tsx` and in the result
-  of `packages/ui/src/configuration/ImportResult.tsx`, each shown only when the document carries the setting.
+- the window: for a setting that is a switch, one entry in `BOOLEAN_SETTINGS` in
+  `packages/ui/src/configuration/importParts.tsx` (its settings-page label, its document field, and a
+  `configuration.import.settings.consequence.<name>` message saying what turning it on then does, added to
+  `packages/ui/src/i18n/messages/en.ts` and `zh-Hans.ts`), which both the review and the result render from; the field
+  and its `current_` counterpart must exist in `DocumentSettings` and `InspectedSettings` in
+  `packages/ui/src/protocol.ts`. A setting that is not a switch (like the worktree settings or keyboard shortcuts)
+  instead gets its own line in both `packages/ui/src/configuration/ImportReview.tsx` and `ImportResult.tsx`, shown only
+  when the document carries the setting.

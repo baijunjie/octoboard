@@ -47,47 +47,74 @@ sends its document to the daemon to be inspected; a file that is not JSON, or th
 configuration, a version this Octoboard does not read, unreadable), is told with its reason, and another can be chosen.
 A browser too old to report a dismissed file picker never answers for one, so the dialog is not held while the picker is
 open: it can be closed, or the picker opened again. What the daemon answers is then **reviewed before anything is
-created**: for each console, a row for each of its projects, with its name and, at the end of the same line, the choice
-of where the project goes; under them the path the project had on the exporting machine and the directory the choice
-would use, or where a clone would come from and go to. A project the document records by its directory name alone has no
-exported path line; its row keeps only the sentence saying where the project was found, or that it was not found and
-whether it can be cloned. A row offers only the choices its state allows, with the daemon's default preselected, and
-always offers **Another directory**, which asks for a path (typed or browsed to) and refuses one that is not absolute or
-does not start with `~/`, and **Leave out**. A project left out says nothing more, unless it was found nowhere on the
-daemon's host, which the row then says. Four buttons apply one way to every project that offers it (exported paths, the
-default clone directory, clone from remotes) or leave every project out, and a project they do not reach keeps its row.
-The account references that would fall back to a default account are listed on the console or the project that holds
-them. A document with application settings gets a checkbox for them, unchecked, whose note has a line for each setting
-the document carries — one an older document leaves out has no line — saying what applying it would change from what is
-set now: that it turns the setting on, and what then follows, in that setting's own words (see "The application settings
-a full export carries" below); that it turns it off; or that it is already as the document has it, so applying changes
-nothing. A document that carries the application-wide worktree settings adds one line for all four, naming Settings'
-Worktrees section: that applying sets them to the file's, which differ from the current ones, or that the file's are the
-ones already set, so applying changes nothing. A document that carries keyboard shortcuts adds a line for them, which
-says that applying sets this device's shortcuts to the file's — with how many of them differ from the defaults, counting
-only those that can be used here — and that they apply to this device or browser only; or that applying puts this
-device's shortcuts back to their defaults; or that the file's are the ones this device already has, so applying changes
-nothing.
+created**, in this order:
+
+- A sentence naming the file and saying that every console is created as a new one and the existing consoles stay as
+  they are.
+- Four buttons under the label **Set every project that offers it to**: **Exported path**, **Default clone
+  directory**, **Clone from remote** and **Leave out**, each with the number of projects it reaches. Each sets that
+  choice on every project that offers it — Leave out reaches every project — and a project it does not reach keeps its
+  choice; a button that reaches none is unavailable.
+- A card for each console: its name, how many projects it has (or that it has none), the console's own account
+  references that would fall back to a default account, and a row for each of its projects.
+- When the document carries application settings, a card for them (below).
+- While any project is set to be cloned, a note that cloning can take several minutes and that an import cannot be
+  cancelled once it has started.
+
+A **project's row** has the project's name and, under it, where the daemon found it: at its exported path, in the
+default clone directory, not found but able to be cloned from its remote, or not found on the machine running
+Octoboard. That line follows what was found, whatever choice is then made. The choice of where the project goes sits at
+the end of the name's line, and drops under it where the row is narrow; its accessible name is "Where to place" followed
+by the project's name. A row offers only the choices its state allows, with the daemon's default preselected, and always
+offers **Another directory** and **Leave out**. Labelled lines under them give the paths:
+
+- **Exported path** — the path the project had on the exporting machine. There is none for a project the document
+  records by its directory name alone, nor for a project placed at its exported path, whose **Placed in** line already
+  says it.
+- **Placed in** — the directory the choice would use, for the exported path and the default clone directory.
+- **Clone from** and **Clone into** — where a clone would come from and go to, for a clone.
+
+Another directory has no Placed in line: it shows a field labelled **Directory** (its accessible name is "Directory
+for" followed by the project's name) where a path is typed or browsed to; a path that is not absolute and does not
+start with `~/` is refused. A project left out has no path line but its exported path. The project's own account references
+that would fall back to a default account end its row.
+
+The **application settings card** is headed by the checkbox **Also apply the application settings**, unchecked. Under
+it is a line for each setting the document carries — one an older document leaves out has no line — naming the setting
+with a badge for what applying would change from what is set now: **Turns on**, with what then follows in that
+setting's own words (see "The application settings a full export carries" below); **Turns off**; or **No change**. A
+document that carries the application-wide worktree settings adds one line for all four, named after Settings'
+Worktrees section, badged **Set to the file's** when they differ from the current ones and **No change** when they do
+not. A document that carries keyboard shortcuts adds a line for them, badged **Set to the file's**, with how many of the
+file's shortcuts differ from the defaults — counting only those that can be used here — and that they apply to this
+device or browser only; **Back to defaults**, with that it applies to this device or browser only; or **No change**,
+when the file's are the ones this device already has. These lines are the checkbox's description.
 
 The review's **Import** button sends the document unchanged, with the choice of every project that is placed, in one
 request; a project left out is sent none. A directory the user typed that is not usable stops the import before any
 request and is marked on its row. The dialog cannot be dismissed while the request runs, which with clones can be long.
-The **result** replaces the review. It opens with a summary of the totals (only what happened, and that nothing failed
-when so) and, when the application settings were applied, a line for each setting applied, saying it is now on or off,
-one line for the worktree settings, when the document carried them, saying the settings under Worktrees now match the
-file, and for keyboard shortcuts a line saying how many changes from the defaults this device's shortcuts now have, or
-that they are back to their defaults, followed by how many of the file's shortcuts could not be used here and were left
-out, when any were; when they could not be applied, a red alert saying so with the reason. Under it a table has a line
-for each project, under its console, with its result (created, left out, not tried, each in words with a glyph) and a
-detail: how a created project was placed (at its exported path, in the default clone directory, cloned, in the directory
-chosen), or that a project was not tried because its console could not be created. A line that failed has no detail: its
-result is a red circled `!` followed by the word **Failed**, like the other results. Where the failure came with a
-reason, the two together are one control, named for that project — or console — having failed, which opens a popover
-with why, any raw diagnostic included (see "Failures marked on a row" in `docs/product/error-alerts.md`); where it came
-with none, they are the glyph and the word alone, with nothing to open. A console that could not be created, or that
-came out with no projects, has a line of its own. In a narrow dialog each line becomes a block that names every value.
-Each account that fell back to a default account is listed under its own heading below. The result is the only place the
-import's failures are shown: no error alert opens for them.
+The **result** replaces the review, in this order:
+
+- A summary of the totals: only what happened, and that nothing failed when so.
+- When the application settings could not be applied, a red alert saying so with the reason.
+- A table with the columns **Project**, **Result** and **Detail**, grouped by console: each console's name heads its
+  projects once, and a console that could not be created, or that came out with no projects, shows its own result on
+  that heading line. Under it each project has a line with its result (created, left out, not attempted, each in words
+  with a glyph) and a detail: how a created project was placed (at its exported path, in the default clone directory,
+  cloned from its remote, in the directory chosen), or that a project was not attempted because its console could not
+  be created. A line that failed has no detail: its result is a red circled `!` followed by the word **Failed**, like
+  the other results. Where the failure came with a reason, the two together are one control, named for that project —
+  or console — having failed, which opens a popover with why, any raw diagnostic included (see "Failures marked on a
+  row" in `docs/product/error-alerts.md`); where it came with none, they are the glyph and the word alone, with nothing
+  to open. In a narrow dialog each line becomes a block that names every value, under its console's name.
+- Each account that fell back to a default account, listed under a heading of its own.
+- When the application settings were applied, a card headed **Application settings applied**, with a line for each
+  setting applied, badged **On** or **Off**; one line for the worktree settings, when the document carried them, badged
+  **Matches the file**; and, when this device applied the file's keyboard shortcuts, a line for them badged with how
+  many changes from the defaults its shortcuts now have, or **Defaults**, with how many of the file's shortcuts could
+  not be used here and were left out said under it, when any were.
+
+The result is the only place the import's failures are shown: no error alert opens for them.
 
 Exporting and importing are also requests of the daemon, which any program on its host can reach (see "Who can reach
 the daemon" in `docs/product/application-lifecycle.md`).

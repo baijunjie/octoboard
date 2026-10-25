@@ -1576,81 +1576,65 @@ export const en = {
   "configuration.file.tooLarge": "The file is too large to be a configuration file.",
   "configuration.file.notText": "The file is not a text file.",
   "configuration.import.notJson": "{name} is not a JSON file.",
-  "configuration.import.review.intro":
-    "From {file}. Each console below is created as a new console, and none of your existing ones is changed. A project set to {skip} is not added.",
+  "configuration.import.review.intro": "From {file}. Each console is created as a new one; your existing consoles stay as they are.",
   "configuration.import.review.submit": "Import",
   "configuration.import.review.pending": "Importing…",
   "configuration.import.review.cloneNote":
     "Cloning can take several minutes, and an import cannot be cancelled once it has started.",
-  "configuration.import.all.label": "Apply one choice to every project it is available for",
-  "configuration.import.all.exportedPath": "Use exported paths ({count})",
-  "configuration.import.all.defaultCloneDir": "Use default clone directory ({count})",
-  "configuration.import.all.clone": "Clone from remotes ({count})",
-  "configuration.import.all.skip": "Leave all out ({count})",
+  "configuration.import.all.label": "Set every project that offers it to",
+  "configuration.import.all.exportedPath": "Exported path ({count})",
+  "configuration.import.all.defaultCloneDir": "Default clone directory ({count})",
+  "configuration.import.all.clone": "Clone from remote ({count})",
+  "configuration.import.all.skip": "Leave out ({count})",
   "configuration.import.all.applied": {
     one: "Applied {choice} to {count} project.",
     other: "Applied {choice} to {count} projects.",
   },
   "configuration.import.settings.label": "Also apply the application settings",
-  "configuration.import.settings.turnsOn":
-    "Turns on {setting}, which is currently off. {appName} then pulls your repositories by itself.",
-  "configuration.import.settings.archiveCleanup.turnsOn":
-    "Turns on {setting}, which is currently off. {appName} then deletes such archived sessions by itself.",
-  "configuration.import.settings.autoSelectAccount.turnsOn":
-    "Turns on {setting}, which is currently off. A new session then uses the account whose weekly quota resets soonest.",
-  "configuration.import.settings.sidebarOrder.turnsOn":
-    "Turns on {setting}, which is currently off. Sessions and projects in the sidebar then move as their status changes.",
-  "configuration.import.settings.autoStartQuotaWindows.turnsOn":
-    "Turns on {setting}, which is currently off. A usage window that has not started counting is then started with one small request, which uses a little of the account's quota.",
-  "configuration.import.settings.autoApproveSession.turnsOn":
-    "Turns on {setting}, which is currently off. A session's request to start a session that reports to you is then approved without asking you first.",
-  "configuration.import.settings.autoApproveResume.turnsOn":
-    "Turns on {setting}, which is currently off. A session's request to reopen or resume a session, or to resume a conversation in a new session, is then approved without asking you first.",
-  "configuration.import.settings.autoApproveAccountSwitches.turnsOn":
-    "Turns on {setting}, which is currently off. A session's request to switch the account of one of its sessions is then approved without asking you first.",
-  "configuration.import.settings.autoApproveHandoffs.turnsOn":
-    "Turns on {setting}, which is currently off. A session's request to hand one of its sessions off to another agent is then approved without asking you first.",
-  "configuration.import.settings.turnsOff": "Turns off {setting}, which is currently on.",
-  "configuration.import.settings.alreadyOn":
-    "{setting} is on in the file and already on, so applying changes nothing.",
-  "configuration.import.settings.alreadyOff":
-    "{setting} is off in the file and already off, so applying changes nothing.",
-  "configuration.import.settings.shortcuts.changes": {
-    one: "Applying sets the {setting} on this device to those in the file, {count} of them changed from the default. They apply to this device or browser only.",
-    other: "Applying sets the {setting} on this device to those in the file, {count} of them changed from the defaults. They apply to this device or browser only.",
+  "configuration.import.settings.badge.turnsOn": "Turns on",
+  "configuration.import.settings.badge.turnsOff": "Turns off",
+  "configuration.import.settings.badge.same": "No change",
+  "configuration.import.settings.badge.changes": "Set to the file's",
+  "configuration.import.settings.badge.reset": "Back to defaults",
+  "configuration.import.settings.consequence.autoPull": "{appName} then pulls your repositories by itself.",
+  "configuration.import.settings.consequence.archiveCleanup": "{appName} then deletes such archived sessions by itself.",
+  "configuration.import.settings.consequence.autoSelectAccount": "A new session then uses the account whose weekly quota resets soonest.",
+  "configuration.import.settings.consequence.sidebarOrder": "Sessions and projects in the sidebar then move as their status changes.",
+  "configuration.import.settings.consequence.autoStartQuotaWindows": "A usage window that has not started counting is then started with one small request, which uses a little of the account's quota.",
+  "configuration.import.settings.consequence.autoApproveSession": "A session's request to start a session that reports to you is then approved without asking you first.",
+  "configuration.import.settings.consequence.autoApproveResume": "A session's request to reopen or resume a session, or to resume a conversation in a new session, is then approved without asking you first.",
+  "configuration.import.settings.consequence.autoApproveAccountSwitches": "A session's request to switch the account of one of its sessions is then approved without asking you first.",
+  "configuration.import.settings.consequence.autoApproveHandoffs": "A session's request to hand one of its sessions off to another agent is then approved without asking you first.",
+  "configuration.import.settings.consequence.shortcuts": {
+    one: "{count} of the file's shortcuts differs from the default. They apply to this device or browser only.",
+    other: "{count} of the file's shortcuts differ from the defaults. They apply to this device or browser only.",
   },
-  "configuration.import.settings.shortcuts.reset":
-    "Applying puts the {setting} on this device back to their defaults.",
-  "configuration.import.settings.shortcuts.same":
-    "The {setting} in the file are the ones this device already has, so applying changes nothing.",
-  "configuration.import.settings.worktrees.changes":
-    "Applying sets the settings under {setting} to those in the file, which differ from the current ones.",
-  "configuration.import.settings.worktrees.same":
-    "The settings under {setting} in the file are the ones already set, so applying changes nothing.",
+  "configuration.import.settings.consequence.shortcutsReset": "They apply to this device or browser only.",
   "configuration.import.console.projects": {
     one: "{count} project",
     other: "{count} projects",
   },
   "configuration.import.console.noProjects": "This console has no projects.",
   "configuration.import.fallback": "{agent} account {name} is not set up in {appName}, so the default account is used.",
-  "configuration.import.project.exportedPath": "Exported path: {path}",
-  "configuration.import.project.exportedPathUsed": "Exported path, placed there: {path}",
-  "configuration.import.project.state.exportedPath": "Found there.",
-  "configuration.import.project.state.defaultCloneDir": "Found in the default clone directory.",
-  "configuration.import.project.state.clone": "Not found; can be cloned from its remote.",
-  "configuration.import.project.state.none": "Not found on the machine running {appName}.",
+  "configuration.import.project.state.exportedPath": "Found at its exported path",
+  "configuration.import.project.state.defaultCloneDir": "Found in the default clone directory",
+  "configuration.import.project.state.clone": "Not found; can be cloned from its remote",
+  "configuration.import.project.state.none": "Not found on the machine running {appName}",
+  "configuration.import.project.field.exportedPath": "Exported path",
+  "configuration.import.project.field.place": "Placed in",
+  "configuration.import.project.field.cloneFrom": "Clone from",
+  "configuration.import.project.field.cloneInto": "Clone into",
   "configuration.import.project.choice": "Where to place {project}",
   "configuration.import.choice.exportedPath": "Exported path",
   "configuration.import.choice.defaultCloneDir": "Default clone directory",
   "configuration.import.choice.clone": "Clone from remote",
   "configuration.import.choice.directory": "Another directory",
   "configuration.import.choice.skip": "Leave out",
-  "configuration.import.target.place": "Placed in {path}",
-  "configuration.import.target.clone": "Cloned from {url} into {path}",
   "configuration.import.directory.label": "Directory for {project}",
   "configuration.import.directory.placeholder": "Ex. ~/code/website",
   "configuration.import.directory.required": "Enter a directory, or leave the project out.",
   "configuration.import.directory.notAbsolute": "Enter an absolute path, or one starting with {tilde}.",
+  "configuration.import.directory.visibleLabel": "Directory",
   "configuration.import.result.title": "Import finished",
   "configuration.import.result.consolesCreated": {
     one: "{count} console created.",
@@ -1678,9 +1662,7 @@ export const en = {
   "configuration.import.result.failedFor": "{subject} failed",
   "configuration.import.result.status.notAttempted": "Not attempted",
   "configuration.import.result.detail.consoleFailed": "Its console could not be created.",
-  "configuration.import.result.wholeConsole": "The console itself",
   "configuration.import.result.table.label": "What became of each console and project",
-  "configuration.import.result.column.console": "Console",
   "configuration.import.result.column.project": "Project",
   "configuration.import.result.column.result": "Result",
   "configuration.import.result.column.detail": "Detail",
@@ -1696,20 +1678,20 @@ export const en = {
   "configuration.import.result.fallback.console": "{agent} account {name}, named by the console {console}",
   "configuration.import.result.fallback.project":
     "{agent} account {name}, named by the project {project} in {console}",
-  "configuration.import.result.settings.on": "Application settings applied: {setting} is now on.",
-  "configuration.import.result.settings.off": "Application settings applied: {setting} is now off.",
-  "configuration.import.result.settings.worktrees": "Application settings applied: the settings under {setting} now match the file.",
   "configuration.import.result.settings.failedTitle": "Could not import application settings",
   "configuration.import.result.settings.failed": "The application settings could not be applied: {reason}",
-  "configuration.import.result.shortcuts": {
-    one: "Application settings applied: the {setting} on this device now have {count} change from the defaults.",
-    other: "Application settings applied: the {setting} on this device now have {count} changes from the defaults.",
-  },
-  "configuration.import.result.shortcutsReset":
-    "Application settings applied: the {setting} on this device are now back to their defaults.",
   "configuration.import.result.shortcutsSkipped": {
     one: "{count} shortcut in the file could not be applied here and was left out.",
     other: "{count} shortcuts in the file could not be applied here and were left out.",
+  },
+  "configuration.import.result.settings.heading": "Application settings applied",
+  "configuration.import.result.badge.on": "On",
+  "configuration.import.result.badge.off": "Off",
+  "configuration.import.result.badge.matches": "Matches the file",
+  "configuration.import.result.badge.defaults": "Defaults",
+  "configuration.import.result.badge.shortcuts": {
+    one: "{count} change from the default",
+    other: "{count} changes from the defaults",
   },
 
   "settings.title": "Settings",

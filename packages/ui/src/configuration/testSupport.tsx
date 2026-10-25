@@ -1,5 +1,6 @@
 // Shared by the tests of the export and import dialogs, which mount the same way: over a daemon
-// whose replies the test gives, and a platform whose configuration-file capability is a stub.
+// whose replies the test gives, and a platform whose configuration-file capability is a stub; and
+// a reader of the import's lists of settings.
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { onTestFinished, vi } from "vitest";
@@ -68,4 +69,15 @@ export async function press(label: string): Promise<void> {
   const button = Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === label);
   if (!button) throw new Error(`no button labelled ${label}`);
   await act(async () => button.click());
+}
+
+/** The lines of a settings list, by setting name: the badge, and the muted note under it where
+ * there is one. */
+export function settingLinesOf(list: Element): Record<string, { badge: string; note?: string }> {
+  return Object.fromEntries(
+    Array.from(list.querySelectorAll(":scope > li")).map((li) => {
+      const [head, note] = Array.from(li.children);
+      return [head.firstElementChild!.textContent, { badge: head.lastElementChild!.textContent!, ...(note && { note: note.textContent! }) }];
+    }),
+  );
 }

@@ -5,12 +5,13 @@ import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
 import { MIXED_RESULT, REVIEW } from "../gallery/fixtures/configuration";
+import { accessibleName } from "../dialogs/dialogTestSupport";
 import { isolate } from "../i18n/isolate";
 import { ConfigurationFileError } from "../platform";
 import type { Event, RequestBody } from "../protocol";
 import { bindingFor, shortcutOverrides } from "../shortcuts/store";
 import { ImportConfigurationDialog } from "./ImportConfigurationDialog";
-import { mountDialog, press } from "./testSupport";
+import { mountDialog, press, settingLinesOf } from "./testSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -36,6 +37,21 @@ function mount(options: { reply?: typeof reply; text?: string | undefined; unans
 
 const text = () => document.body.textContent ?? "";
 const row = (project: string) => Array.from(document.body.querySelectorAll("li")).find((li) => li.textContent?.startsWith(project))!;
+/** The labelled path fields of the project's row, by label. */
+const fields = (project: string) =>
+  Object.fromEntries(Array.from(row(project).querySelectorAll("dl > dt")).map((dt) => [dt.textContent, dt.nextElementSibling?.textContent]));
+const consoleCard = (name: string) => Array.from(document.body.querySelectorAll("section")).find((s) => s.querySelector(":scope > div h3")?.textContent === name)!;
+const settingsBox = () => document.body.querySelector<HTMLInputElement>("input[type=checkbox]")!;
+/** The lines of the settings card of the result, by setting name. */
+function resultSettingLines(): ReturnType<typeof settingLinesOf> {
+  const card = Array.from(document.body.querySelectorAll("section")).find((s) => s.querySelector(":scope > h3")?.textContent === "Application settings applied")!;
+  return settingLinesOf(card.querySelector("ul")!);
+}
+
+/** The lines of the settings list the checkbox is described by, by setting name. */
+function settingLines(): ReturnType<typeof settingLinesOf> {
+  return settingLinesOf(document.getElementById(settingsBox().getAttribute("aria-describedby")!)!);
+}
 
 /** Picks `option` in the select of the project's row. */
 async function choose(project: string, option: string): Promise<void> {
@@ -69,17 +85,35 @@ it("inspects the document as it was read, and creates nothing", async () => {
   expect(text()).toContain("Work laptop");
 });
 
-it("shows a row for every project with where it was, and the directory its choice would use", async () => {
+it("groups the projects under a card for their console, with the console's name and how many projects it has", async () => {
   await reviewing();
-  expect(row("Website").textContent).toContain("/Users/ana/code/website");
-  expect(row("Website").textContent).toContain("Exported path, placed there: /Users/ana/code/website");
-  expect(row("Design System").textContent).toContain("Cloned from https://github.com/acme/design-system.git into /Users/dev/Projects/design-system");
+  expect(consoleCard("Work laptop").querySelector(":scope > div")!.textContent).toContain("4 projects");
+  expect(consoleCard("Work laptop").querySelectorAll("li")).toHaveLength(4);
+  expect(consoleCard("Side projects").querySelector(":scope > div")!.textContent).toContain("1 project");
+  expect(consoleCard("Scratch").textContent).toContain("0 projects");
+  expect(consoleCard("Scratch").textContent).toContain("This console has no projects.");
+  // The console's account fallback sits under its name, the project's in its own row.
+  expect(consoleCard("Work laptop").querySelector(":scope > div")!.textContent).toContain("Claude Code account Work is not set up in Octoboard");
+  expect(row("Search API").textContent).toContain("Codex account Personal is not set up in Octoboard");
+});
+
+it("shows a row for every project with where it was found and the labelled paths its choice would use", async () => {
+  await reviewing();
+  // Placed at its exported path, one field says both.
+  expect(fields("Website")).toEqual({ "Placed in": "/Users/ana/code/website" });
+  expect(fields("Search API")).toEqual({ "Exported path": "/Users/ana/work/search-api", "Placed in": "/Users/dev/Projects/search-api" });
+  expect(fields("Design System")).toEqual({
+    "Exported path": "/Users/ana/work/design-system",
+    "Clone from": "https://github.com/acme/design-system.git",
+    "Clone into": "/Users/dev/Projects/design-system",
+  });
+  // Where each was found is said by its status line, whatever the choice made since.
+  expect(row("Website").textContent).toContain("Found at its exported path");
+  expect(row("Search API").textContent).toContain("Found in the default clone directory");
+  expect(row("Design System").textContent).toContain("Not found; can be cloned from its remote");
   expect(row("Notes").textContent).toContain("Not found on the machine running Octoboard");
-  // Where each was found is said on its path's line, whatever the choice made since.
-  expect(row("Search API").textContent).toContain("Found in the default clone directory.");
-  expect(row("Design System").textContent).toContain("Not found; can be cloned from its remote.");
-  // Leaving a project out is said by its choice; only a project found nowhere adds a note.
-  expect(row("Notes").textContent).not.toContain("Placed in");
+  // Leaving a project out places it nowhere: only the exported path is left to show.
+  expect(fields("Notes")).toEqual({ "Exported path": "/Users/ana/Documents/Work/Clients/Northwind/Archive/2019/Quarterly-Reports/final-notes" });
 });
 
 it("shows no exported path for a project the export recorded by its directory name alone, and still says where it was found", async () => {
@@ -88,8 +122,8 @@ it("shows no exported path for a project the export recorded by its directory na
       ? Promise.resolve({ type: "configuration_inspected", ...REVIEW, consoles: REVIEW.consoles.map((c) => ({ ...c, projects: c.projects.map((p) => ({ ...p, path: p.name.toLowerCase().replace(/\s+/g, "-") })) })) })
       : reply(body);
   await reviewing({ reply: bare });
-  expect(row("Search API").textContent).not.toContain("Exported path");
-  expect(row("Search API").textContent).toContain("Found in the default clone directory.");
+  expect(fields("Search API")).toEqual({ "Placed in": "/Users/dev/Projects/search-api" });
+  expect(row("Search API").textContent).toContain("Found in the default clone directory");
 });
 
 it("keeps the dialog on the file step, with the daemon's reason, for a document it refuses", async () => {
@@ -123,18 +157,18 @@ it("does nothing when the open dialog is dismissed", async () => {
 it("changes only the row whose choice was changed", async () => {
   await reviewing();
   await choose("Website", "Default clone directory");
-  expect(row("Website").textContent).toContain("Placed in /Users/dev/Projects/website");
-  expect(row("Search API").textContent).toContain("Placed in /Users/dev/Projects/search-api");
-  expect(row("Design System").textContent).toContain("Cloned from");
+  expect(fields("Website")).toEqual({ "Exported path": "/Users/ana/code/website", "Placed in": "/Users/dev/Projects/website" });
+  expect(fields("Search API")["Placed in"]).toBe("/Users/dev/Projects/search-api");
+  expect(fields("Design System")["Clone from"]).toBe("https://github.com/acme/design-system.git");
 });
 
 it("applies one choice to every project it is available for and leaves the others as they were", async () => {
   await reviewing();
   await choose("Website", "Default clone directory");
-  await press("Use exported paths (1)");
-  expect(row("Website").textContent).toContain("Exported path, placed there: /Users/ana/code/website");
+  await press("Exported path (1)");
+  expect(fields("Website")).toEqual({ "Placed in": "/Users/ana/code/website" });
   // Search API offers no exported path, so it keeps the choice it had.
-  expect(row("Search API").textContent).toContain("Placed in /Users/dev/Projects/search-api");
+  expect(fields("Search API")["Placed in"]).toBe("/Users/dev/Projects/search-api");
 });
 
 it("sends the document unchanged with a resolution for every project that is placed, in one request, a project left out among them", async () => {
@@ -158,7 +192,7 @@ it("sends the document unchanged with a resolution for every project that is pla
 
 it("applies the application settings only once they are asked for", async () => {
   const mounted = await reviewing();
-  await act(async () => document.body.querySelector<HTMLInputElement>("input[type=checkbox]")!.click());
+  await act(async () => settingsBox().click());
   await press("Import");
   expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: true });
 });
@@ -183,20 +217,19 @@ it("says nothing of keyboard shortcuts when the document carries none", async ()
 it("says what the document's keyboard shortcuts would do on this device", async () => {
   onTestFinished(() => shortcutOverrides.set({}));
   await reviewing({ text: withShortcuts({ lock: LOCK, bad: 1 }) });
-  expect(text()).toContain("Applying sets the Keyboard shortcuts on this device to those in the file, 1 of them changed from the default.");
-  expect(text()).toContain("this device or browser only");
+  expect(settingLines()["Keyboard shortcuts"]).toEqual({ badge: "Set to the file's", note: "1 of the file's shortcuts differs from the default. They apply to this device or browser only." });
 });
 
 it("replaces this device's keyboard shortcuts with the document's once the settings are applied, and reports it", async () => {
   onTestFinished(() => shortcutOverrides.set({}));
   shortcutOverrides.set({ pin: { code: "KeyJ", primary: true, shift: true } });
   await reviewing({ text: withShortcuts({ lock: LOCK, bad: 1 }), reply: echoing() });
-  await act(async () => document.body.querySelector<HTMLInputElement>("input[type=checkbox]")!.click());
+  await act(async () => settingsBox().click());
   await press("Import");
   expect(bindingFor("lock")).toEqual(LOCK);
   expect(bindingFor("pin")).toEqual({ code: "KeyP", primary: true, shift: true });
-  expect(text()).toContain("the Keyboard shortcuts on this device now have 1 change from the defaults");
-  expect(text()).toContain("1 shortcut in the file could not be applied here and was left out.");
+  const applied = resultSettingLines();
+  expect(applied["Keyboard shortcuts"]).toEqual({ badge: "1 change from the default", note: "1 shortcut in the file could not be applied here and was left out." });
 });
 
 it("leaves this device's keyboard shortcuts alone unless the settings are asked for", async () => {
@@ -210,7 +243,7 @@ it("leaves this device's keyboard shortcuts alone unless the settings are asked 
 async function importing(shortcuts: unknown, settings?: Record<string, unknown>) {
   shortcutOverrides.set({ pin: PIN });
   await reviewing({ text: withShortcuts(shortcuts), reply: echoing(settings) });
-  await act(async () => document.body.querySelector<HTMLInputElement>("input[type=checkbox]")!.click());
+  await act(async () => settingsBox().click());
   await press("Import");
 }
 
@@ -218,12 +251,12 @@ it("puts every shortcut back to its default when the document carries an empty s
   onTestFinished(() => shortcutOverrides.set({}));
   shortcutOverrides.set({ pin: PIN });
   await reviewing({ text: withShortcuts({}), reply: echoing() });
-  expect(text()).toContain("Applying puts the Keyboard shortcuts on this device back to their defaults.");
+  expect(settingLines()["Keyboard shortcuts"]).toEqual({ badge: "Back to defaults", note: "They apply to this device or browser only." });
   expect(text()).not.toContain("0 of them");
-  await act(async () => document.body.querySelector<HTMLInputElement>("input[type=checkbox]")!.click());
+  await act(async () => settingsBox().click());
   await press("Import");
   expect(bindingFor("pin")).toEqual({ code: "KeyP", primary: true, shift: true });
-  expect(text()).toContain("the Keyboard shortcuts on this device are now back to their defaults");
+  expect(resultSettingLines()["Keyboard shortcuts"]).toEqual({ badge: "Defaults" });
   expect(text()).not.toContain("0 changes");
 });
 
@@ -235,7 +268,7 @@ it("leaves this device's keyboard shortcuts alone when the settings could not be
       : reply(body);
   shortcutOverrides.set({ pin: PIN });
   await reviewing({ text: withShortcuts({ lock: LOCK }), reply: failing });
-  await act(async () => document.body.querySelector<HTMLInputElement>("input[type=checkbox]")!.click());
+  await act(async () => settingsBox().click());
   await press("Import");
   expect(bindingFor("pin")).toEqual(PIN);
   expect(bindingFor("lock")).not.toEqual(LOCK);
@@ -252,30 +285,49 @@ it("leaves this device's keyboard shortcuts alone when the document carries none
   onTestFinished(() => shortcutOverrides.set({}));
   shortcutOverrides.set({ pin: { code: "KeyJ", primary: true, shift: true } });
   await reviewing();
-  await act(async () => document.body.querySelector<HTMLInputElement>("input[type=checkbox]")!.click());
+  await act(async () => settingsBox().click());
   await press("Import");
   expect(bindingFor("pin")).toEqual({ code: "KeyJ", primary: true, shift: true });
 });
 
-it("notes what applying each application setting would change", async () => {
+it("places the application settings after the consoles, in a card whose checkbox the list of lines describes", async () => {
   await reviewing();
-  expect(text()).toContain("Turns on Automatically pull repositories");
-  expect(text()).toContain("Turns off Automatically delete archived sessions whose conversation is gone");
-  expect(text()).toContain("Turns on Automatically select an account");
-  expect(text()).toContain("Turns on Start usage windows automatically");
-  expect(text()).toContain("uses a little of the account's quota");
+  const box = settingsBox();
+  const list = document.getElementById(box.getAttribute("aria-describedby")!)!;
+  expect(list.tagName).toBe("UL");
+  expect(box.closest("div")!.textContent).toBe("Also apply the application settings");
+  expect(box.checked).toBe(false);
+  // The card follows the last console's.
+  const last = consoleCard("Scratch");
+  expect(last.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+it("notes what applying each application setting would change with a badge, and what follows only for one it turns on", async () => {
+  await reviewing();
+  const lines = settingLines();
+  expect(lines["Automatically pull repositories"]).toEqual({ badge: "Turns on", note: "Octoboard then pulls your repositories by itself." });
+  // Turning a setting off, or leaving it as it is, has no consequence line.
+  expect(lines["Automatically delete archived sessions whose conversation is gone"]).toEqual({ badge: "Turns off" });
+  expect(lines["Automatically select an account"]).toEqual({ badge: "Turns on", note: "A new session then uses the account whose weekly quota resets soonest." });
+  expect(lines["Order the sidebar by status"]).toEqual({ badge: "Turns off" });
+  expect(lines["Start usage windows automatically"]?.badge).toBe("Turns on");
+  expect(lines["Start usage windows automatically"]?.note).toContain("uses a little of the account's quota");
+});
+
+it("says a setting the file shares with this machine changes nothing", async () => {
+  const same = { ...REVIEW, settings: { ...REVIEW.settings!, current_auto_pull_repositories: true } };
+  await reviewing({ reply: (body) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected", ...same }) : reply(body)) });
+  expect(settingLines()["Automatically pull repositories"]).toEqual({ badge: "No change" });
 });
 
 it("states what turning on the automatic approvals lets agents do", async () => {
   await reviewing();
-  expect(text()).toContain("Turns on Automatically approve session requests");
-  expect(text()).toContain("request to start a session that reports to you is then approved without asking you first");
-  expect(text()).toContain("Turns on Automatically approve resume requests");
-  expect(text()).toContain("request to reopen or resume a session");
-  expect(text()).toContain("Turns on Automatically approve account switches");
-  expect(text()).toContain("request to switch the account of one of its sessions is then approved without asking you first");
-  expect(text()).toContain("Turns on Automatically approve handoffs");
-  expect(text()).toContain("request to hand one of its sessions off to another agent is then approved without asking you first");
+  const lines = settingLines();
+  expect(lines["Automatically approve session requests"]).toEqual({ badge: "Turns on", note: "A session's request to start a session that reports to you is then approved without asking you first." });
+  expect(lines["Automatically approve resume requests"]?.badge).toBe("Turns on");
+  expect(lines["Automatically approve resume requests"]?.note).toContain("request to reopen or resume a session");
+  expect(lines["Automatically approve account switches"]).toEqual({ badge: "Turns on", note: "A session's request to switch the account of one of its sessions is then approved without asking you first." });
+  expect(lines["Automatically approve handoffs"]).toEqual({ badge: "Turns on", note: "A session's request to hand one of its sessions off to another agent is then approved without asking you first." });
 });
 
 it("leaves out the automatic approvals when the file does not carry them", async () => {
@@ -296,7 +348,7 @@ it("leaves out the automatic approvals when the file does not carry them", async
 it("leaves out the setting a file from before it existed does not carry", async () => {
   const older = { ...REVIEW, settings: { ...REVIEW.settings!, auto_delete_unresumable_archives: null, auto_select_account: null } };
   await reviewing({ reply: (body) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected", ...older }) : reply(body)) });
-  expect(text()).toContain("Turns on Automatically pull repositories");
+  expect(settingLines()["Automatically pull repositories"]?.badge).toBe("Turns on");
   expect(text()).not.toContain("archived sessions whose conversation is gone");
   expect(text()).not.toContain("Automatically select an account");
 });
@@ -311,12 +363,12 @@ describe("the worktree settings", () => {
 
   it("notes that applying changes them when the file's differ from this machine's", async () => {
     await reviewing({ reply: inspecting(FILE, { ...FILE, use_worktrees: true }) });
-    expect(text()).toContain("Applying sets the settings under Worktrees to those in the file");
+    expect(settingLines()["Worktrees"]).toEqual({ badge: "Set to the file's" });
   });
 
   it("notes that applying changes nothing when they are the same", async () => {
     await reviewing({ reply: inspecting(FILE, FILE) });
-    expect(text()).toContain("The settings under Worktrees in the file are the ones already set");
+    expect(settingLines()["Worktrees"]).toEqual({ badge: "No change" });
   });
 
   it("leaves them out when the file does not carry them", async () => {
@@ -330,7 +382,11 @@ it("stops before any request when a project is to go to a directory that is miss
   await choose("Notes", "Another directory");
   await press("Import");
   expect(text()).toContain("Enter a directory, or leave the project out.");
-  type(row("Notes").querySelector("input")!, "relative/dir");
+  // The field shows "Directory" as its label while its name, for assistive technology, says which project it is for.
+  const input = row("Notes").querySelector("input")!;
+  expect(accessibleName(input)).toBe(`Directory for ${isolate("Notes")}`);
+  expect(Array.from(row("Notes").querySelectorAll("label")).map((label) => label.querySelector("[aria-hidden]")?.textContent)).toContain("Directory");
+  type(input, "relative/dir");
   expect(text()).toContain("Enter an absolute path, or one starting with ~/.");
   expect(mounted.sent().filter((body) => body.type === "import_configuration")).toEqual([]);
   type(row("Notes").querySelector("input")!, "~/notes");
@@ -343,12 +399,19 @@ it("stops before any request when a project is to go to a directory that is miss
 it("tells each project's result in a table row, with a mark and a popover for a failure, and the accounts that fell back apart", async () => {
   await reviewing();
   await press("Import");
-  const line = (project: string) =>
-    Array.from(document.body.querySelectorAll("tbody tr")).find((tr) => tr.querySelectorAll("td")[1]?.textContent?.endsWith(project))?.textContent ?? "";
-  expect(line("Search API")).toContain("Work laptop");
+  // A console heads its own group of rows; a project's row, or the console's own line when it failed or came out empty, is found by its name.
+  const rowOf = (name: string) =>
+    Array.from(document.body.querySelectorAll("tbody tr")).find((tr) => tr.querySelector("th")?.textContent === name || tr.querySelector("td")?.textContent?.endsWith(name))!;
+  const line = (name: string) => rowOf(name)?.textContent ?? "";
+  const groups = Array.from(document.body.querySelectorAll("tbody"));
+  expect(groups.map((group) => group.querySelector("th")!.textContent)).toEqual(["Work laptop", "Side projects", "Scratch"]);
+  // The console's name is said once, as the header of its group, not on every project's row.
+  expect(groups[0].querySelector("th")!.getAttribute("colspan")).toBe("3");
+  expect(Array.from(groups[0].querySelectorAll("tr")).map((tr) => tr.querySelectorAll("th")).map((ths) => ths.length)).toEqual([1, 0, 0, 0, 0]);
+  expect(groups[0].textContent!.split("Work laptop")).toHaveLength(2);
+  expect(rowOf("Search API").closest("tbody")).toBe(groups[0]);
   expect(line("Search API")).toContain("Created");
   expect(line("Search API")).toContain("In the default clone directory");
-  const rowOf = (project: string) => Array.from(document.body.querySelectorAll("tbody tr")).find((tr) => tr.querySelectorAll("td")[1]?.textContent?.endsWith(project))!;
   // A failed line is the glyph and the word "Failed", not a sentence: the reason opens from them in a popover.
   const popover = async (project: string) => {
     const mark = rowOf(project).querySelector<HTMLElement>("button[aria-label$=' failed']")!;
@@ -383,14 +446,21 @@ it("tells each project's result in a table row, with a mark and a popover for a 
   expect(product.getAttribute("dir")).toBe("auto");
   expect(product.textContent).not.toMatch(/[\u2066-\u2069]/);
   await closePopover();
-  expect((await popover("The console itself")).textContent).toContain("the data directory cannot be written");
+  // A console that failed has a line of its own, as the group's row header followed by its result.
+  const failedConsole = rowOf("Side projects");
+  expect(failedConsole.querySelector("th")!.getAttribute("role")).toBe("rowheader");
+  expect(failedConsole.querySelector("th")!.getAttribute("scope")).toBe("rowgroup");
+  expect((await popover("Side projects")).textContent).toContain("the data directory cannot be written");
   await closePopover();
+  expect(rowOf("Dotfiles").closest("tbody")).toBe(groups[1]);
   expect(line("Dotfiles")).toContain("Not attempted");
   expect(line("Dotfiles")).toContain("Its console could not be created.");
+  // So does one that came out empty.
+  expect(line("Scratch")).toContain("Created");
   const section = (title: string) => Array.from(document.body.querySelectorAll("section")).find((s) => s.querySelector(":scope > h3")?.textContent === title)?.textContent ?? "";
   expect(section("Accounts that fell back to the default account")).toContain("Claude Code account Work, named by the console Work laptop");
   expect(section("Accounts that fell back to the default account")).toContain("Codex account Personal, named by the project Search API in Work laptop");
-  expect(text()).toContain("Automatically pull repositories is now on.");
+  expect(resultSettingLines()["Automatically pull repositories"]).toEqual({ badge: "On" });
 });
 
 it("names the result step in its title and takes focus to the dialog, wherever focus was while it ran", async () => {
@@ -426,9 +496,9 @@ it("announces which choice was applied to how many, so two presses with the same
   await reviewing();
   await act(async () => void (await vi.advanceTimersByTimeAsync(200)));
   const announced = () => document.body.querySelector("[role=status]")?.textContent;
-  await press("Use default clone directory (2)");
+  await press("Default clone directory (2)");
   const first = announced();
-  await press("Clone from remotes (2)");
+  await press("Clone from remote (2)");
   expect([first, announced()]).toEqual([
     "Applied Default clone directory to 2 projects.",
     "Applied Clone from remote to 2 projects.",

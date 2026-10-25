@@ -33,6 +33,14 @@ it.each(["input", "textarea"])("focus and type replace a labelled %s and emit it
   expect(seen).toEqual([tag === "textarea" ? "Project notes\nwith another line" : "Project noteswith another line"]);
 });
 
+it("focus finds a field by the accessible name of a label whose visible text is shorter", async () => {
+  document.body.innerHTML =
+    '<label for="dir"><span aria-hidden="true">Directory</span><span class="sr-only">Directory for Notes</span></label><input id="dir">';
+  const ui = createUi(document, "en");
+  await ui.focus("Directory for Notes");
+  expect(document.activeElement).toBe(document.getElementById("dir"));
+});
+
 it("stuckExit names what is still closing once the wait is spent", async () => {
   exiting("General Appearance");
   const result = stuckExit(document);

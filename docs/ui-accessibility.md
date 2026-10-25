@@ -550,6 +550,12 @@ Every control has an accessible name: its visible text, or an `aria-label` when 
   would be announced as "Modified , Staged : a.ts". The file viewer's title is the instance — an `sr-only` span holds
   the whole name, assembled from the catalog in the order the boxes are drawn in, and carries `select-none` so a copied
   heading does not hold the text twice (`packages/ui/src/viewer/FileViewer.tsx`).
+- **A field whose visible label shows less than its name** keeps both in its `<label>`: the visible text
+  `aria-hidden="true"`, then an `sr-only select-none` span with the whole name, which contains the visible text
+  verbatim. It never adds an `aria-label` beside the label: react-aria names the input by its label element and joins
+  the two, so "Directory for Notes Directory" would be read. The import review's Another directory field is the
+  instance — visible "Directory", named "Directory for {project}", so each row's field stays distinct (`TextInput`'s
+  `labelContent`).
 - An element that takes an `aria-label` without being a control — a scrolling `div` or `pre` made focusable with
   `tabIndex={0}` — also gets a role that can be named (`role="region"`). ARIA prohibits naming a generic element, so
   the name may never be spoken. A diagram and a block formula in a Markdown document are such regions

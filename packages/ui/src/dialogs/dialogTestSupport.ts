@@ -31,3 +31,17 @@ export function trackMountRefocus(): () => Promise<void> {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     });
 }
+
+/** The accessible name of a field named by `aria-labelledby`, read well enough for a label made of
+ * text and `aria-hidden` parts: the text of each element it points to, leaving out what is
+ * `aria-hidden`. Testing Library is not a dependency of this package. */
+export function accessibleName(field: Element): string {
+  const text = (node: Node): string => {
+    if (node instanceof Element && node.getAttribute("aria-hidden") === "true") return "";
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
+    return Array.from(node.childNodes).map(text).join("");
+  };
+  const ids = field.getAttribute("aria-labelledby")?.split(/\s+/) ?? [];
+  const named = ids.map((id) => (id === field.id ? field.getAttribute("aria-label") ?? "" : text(document.getElementById(id)!)));
+  return named.join(" ").trim();
+}

@@ -3,6 +3,7 @@ import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it } from "vitest";
 
+import { accessibleName } from "./dialogTestSupport";
 import { TextInput } from "./TextInput";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -46,5 +47,18 @@ it("names what describes the field outside it, after the field's own description
   const described = container.querySelector("input")!.getAttribute("aria-describedby")!.split(" ");
   expect(described.at(-1)).toBe("outside");
   expect(described).toHaveLength(2);
+  act(() => root.unmount());
+});
+
+it("names a field with a rich label by its plain label alone, and points its visible label at the field", () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  act(() => root.render(<TextInput label="Directory for Notes" labelContent="Directory" value="" onChange={() => {}} />));
+  const input = container.querySelector("input")!;
+  const label = container.querySelector("label")!;
+  expect(input.hasAttribute("aria-label")).toBe(false);
+  expect(accessibleName(input)).toBe("Directory for Notes");
+  expect(label.querySelector("[aria-hidden=true]")!.textContent).toBe("Directory");
+  expect(label.htmlFor).toBe(input.id);
   act(() => root.unmount());
 });

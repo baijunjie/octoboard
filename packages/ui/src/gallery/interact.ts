@@ -41,6 +41,15 @@ function nameOf(element: Element): string {
   return withoutIsolates(element.getAttribute("aria-label") ?? label ?? element.textContent ?? "").trim();
 }
 
+/** The text of `node` as assistive technology reads it: what sits in an `aria-hidden` subtree is left out,
+ * so a label that shows a shorter text and carries the full name apart (`TextInput`'s `labelContent`)
+ * reads as that name alone. */
+function accessibleText(node: Node): string {
+  if (node instanceof Element && node.getAttribute("aria-hidden") === "true") return "";
+  if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
+  return Array.from(node.childNodes, accessibleText).join("");
+}
+
 /** A name without its bidi isolate characters (U+2066 to U+2069). The app puts them round a value
  * substituted into a sentence, and they are invisible, so a step names a control without them. */
 function withoutIsolates(text: string): string {
@@ -348,7 +357,8 @@ export interface Ui {
   /** Presses the key combination `binding` on the focused control, with the modifiers it stands for on this
    * platform (⌘ for `primary` on an Apple keyboard, Ctrl elsewhere), for a shortcut the page records or matches. */
   chord: (binding: Binding) => Promise<void>;
-  /** Focuses the text field labelled `label`, waiting for it to appear, so `type` has one to fill. */
+  /** Focuses the text field named `label` (its `aria-label`, or its label's text as assistive technology
+   * reads it), waiting for it to appear, so `type` has one to fill. */
   focus: (label: string) => Promise<void>;
   /** Types `text` into the focused field, waiting for a field to take focus, and replaces what it holds. */
   type: (text: string) => Promise<void>;
@@ -708,7 +718,11 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       const field = await waitFor(
         () =>
           Array.from(doc.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea")).find(
-            (input) => withoutIsolates(input.labels?.[0]?.textContent ?? input.getAttribute("aria-label") ?? "") === label,
+            (input) =>
+              // The accessible name: the `aria-label`, or the text of the label as a screen reader reads it.
+              [input.getAttribute("aria-label"), input.labels?.[0] ? accessibleText(input.labels[0]) : null].some(
+                (name) => name != null && withoutIsolates(name).trim() === label,
+              ),
           ),
         `No text field labelled ${label}`,
       );
