@@ -5,7 +5,8 @@
 //! broadcast exactly as the user's own would be, and answers with the record as stored. Scope is
 //! kept here: a console session reaches its own console and that console's projects, a project
 //! session its own project, and nothing that is the user's alone to change is written (accounts,
-//! trusted directories, a project's directory, source, remote or trust consent).
+//! added agents, approval modes, automatic approval, trusted directories, a project's directory,
+//! source, remote or trust consent).
 
 use std::collections::HashMap;
 use std::sync::Arc;
