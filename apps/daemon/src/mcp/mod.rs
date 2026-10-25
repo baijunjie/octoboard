@@ -1,8 +1,8 @@
 //! The Octoboard MCP server: the orchestration and settings tools the console session drives
 //! Octoboard with, the narrower set a project session that can own sessions drives its own project
-//! with, the reporting tool a bound project session answers through, and the tools every session
-//! shares information and reads the accounts' plan quotas through, and asks the user for a
-//! session with no owner through.
+//! with, the reporting tool a bound project session answers through, the reads every session has
+//! with one scope, and the tools every session shares information and asks the user for a session
+//! with no owner through.
 //!
 //! **Transport is a stdio child process, not an HTTP endpoint the agent connects to.** Each
 //! adapter registers `octoboardd mcp --session … --role … --port … --token …` as a `command`-type
@@ -29,7 +29,10 @@ pub mod console_instructions;
 pub mod exec;
 mod handoff;
 mod handover;
+mod history;
+mod models;
 mod quotas;
+pub(crate) mod reads;
 mod resume_request;
 pub mod role;
 mod session_branches;
@@ -165,33 +168,7 @@ macro_rules! session_record_fields {
 const STARTED_BY_A_SESSION: &str = started_by_a_session!();
 
 const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
-    ToolDef {
-        name: "list_projects",
-        description: concat!(
-            "List this console's projects: name, host, directory, source, remote URL \
-             (credentials removed), pin, the tags and the description (what the project \
-             is for) the user gave each, the settings (`default_agent`, `accounts`, \
-             `launch`; see `update_project`), the `worktrees` settings (the project's own \
-             `override`, `null` following the application-wide value, and the `effective` \
-             values), whether the user has `trust_consent`ed to Octoboard pressing the \
-             agent's folder-trust confirmation (read-only), and the sessions currently \
-             running in each — \
-             every session of the console, whichever session owns it. Each carries `owner`, the \
-             session it reports to, `owner_kind` (a `console` or a `project` session) \
-             and `yours`; a project session with `owner: null` is unbound, which the user \
-             opened themselves and kept outside the orchestration. A session with \
-             `yours: false` is not this caller's to drive — it is unbound, or reports \
-             to a different session — leave it alone. An idle session with a \
-             non-empty `background_tasks` takes messages like any idle session but still \
-             has work running in the background. \
-             A non-null `writes_held` says why messages for a running session are \
-             queued rather than written into it, whatever its `status` reads; \
-             `queued_messages` counts them. ",
-            session_record_fields!(),
-            session_context_field!()
-        ),
-        schema: || object_schema(json!({}), &[]),
-    },
+    LIST_PROJECTS,
     ToolDef {
         name: "add_project",
         description: "Associate a directory with this console, or clone a git repository and \
@@ -447,61 +424,12 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
         schema: || new_session_schema(true),
     },
     SEND_MESSAGE,
-    ToolDef {
-        name: "get_session",
-        description: concat!(
-            "The session's status, plus a tail of what it has printed (a session that \
-             has ended keeps its last output; `null` if none was kept). Use it to \
-             follow up; a session that is waiting for the user must be left alone until \
-             they have answered. Any session can be read, of any console, but one with \
-             `yours: false` is \
-             not this caller's to act on, whether it is unbound (`owner: null` on a \
-             project session) or reports to a different session, console or project: \
-             leave it alone. `owner` says whose it is, `owner_kind` whether that is a \
-             console or a project session, and `role` whether the session itself is a \
-             console session. An idle session with a non-empty `background_tasks` takes \
-             messages like any idle session but still has work running in the background. \
-             A non-null `writes_held` says why messages for a running session are \
-             queued rather than written into it, whatever its `status` reads; \
-             `queued_messages` counts them. ",
-            session_record_fields!(),
-            session_context_field!()
-        ),
-        schema: || {
-            object_schema(
-                json!({
-                    "session": { "type": "string", "description": "The session's id." },
-                }),
-                &["session"],
-            )
-        },
-    },
+    GET_SESSION,
     RENAME_SESSION,
     SET_SESSION_PINNED,
     ARCHIVE_SESSION,
     ARCHIVE_SELF,
-    ToolDef {
-        name: "list_archived",
-        description: concat!(
-            "List the archived sessions of one project, whichever session owns \
-             them. Each carries its `owner`, `owner_kind` and `yours`, so an earlier \
-             one of yours can be reopened instead of starting over. A session with \
-             `yours: false` is somebody else's: leave it alone. ",
-            session_record_fields!(),
-            session_context_field!()
-        ),
-        schema: || {
-            object_schema(
-                json!({
-                    "project": {
-                        "type": "string",
-                        "description": "The project's id, or its name when that is unambiguous.",
-                    },
-                }),
-                &["project"],
-            )
-        },
-    },
+    LIST_ARCHIVED,
     REOPEN_SESSION,
     HANDOFF_SESSION,
     HANDOVER_BRANCHES,
@@ -512,6 +440,9 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     REQUEST_RESUME_SESSION,
     LIST_SESSIONS,
     GET_SESSION_BRANCHES,
+    READ_SESSION_HISTORY,
+    LIST_AGENT_MODELS,
+    LIST_CONSOLES,
     SHARE_INFO,
     GET_ACCOUNT_QUOTAS,
     ToolDef {
@@ -771,13 +702,15 @@ const HANDOFF_SESSION: ToolDef = ToolDef {
                 "model": {
                     "type": "string",
                     "description": "The new session's model; blank is the agent's own default. \
-                                    Left out, it takes the model its project (else its console) \
+                                    `list_agent_models` lists the ones the agent offers. Left \
+                                    out, it takes the model its project (else its console) \
                                     sets for sessions.",
                 },
                 "effort": {
                     "type": "string",
                     "description": "The new session's reasoning effort; blank is the agent's \
-                                    own default. Left out, it takes the effort its project \
+                                    own default. `list_agent_models` lists the levels each \
+                                    model offers. Left out, it takes the effort its project \
                                     (else its console) sets for sessions.",
                 },
                 "note": {
@@ -895,6 +828,200 @@ const GET_SESSION_BRANCHES: ToolDef = ToolDef {
                 },
             }),
             &[],
+        )
+    },
+};
+
+/// A session's record and a tail of its output. Any session may read any session, whichever its
+/// role: what a session may do to another is narrower and is each write tool's own rule.
+const GET_SESSION: ToolDef = ToolDef {
+    name: "get_session",
+    description: concat!(
+        "The session's status, plus a tail of what it has printed (a session that \
+         has ended keeps its last output; `null` if none was kept). Any session can \
+         be read, in any project or console, but one with `yours: false` is not \
+         yours to act on, whether nobody owns it (`owner: null` on a project session) or \
+         it reports to a different session: leave it alone. A session that is waiting \
+         for the user must be left alone until they have answered. `owner` says whose \
+         it is, `owner_kind` whether that is a console or a project session, and `role` \
+         whether the session itself is a console session. An idle \
+         session with a non-empty `background_tasks` takes messages like any idle \
+         session but still has work running in the background. \
+         A non-null `writes_held` says why messages for a running session are \
+         queued rather than written into it, whatever its `status` reads; \
+         `queued_messages` counts them. ",
+        session_record_fields!(),
+        session_context_field!()
+    ),
+    schema: || {
+        object_schema(
+            json!({
+                "session": { "type": "string", "description": "The session's id." },
+            }),
+            &["session"],
+        )
+    },
+};
+
+/// The projects of a console, the caller's own unless `console` names another. Offered to every
+/// role: reads are not limited to the caller's console, writes are.
+const LIST_PROJECTS: ToolDef = ToolDef {
+    name: "list_projects",
+    description: concat!(
+        "List the projects of this session's console (or another console's, see `console`): \
+         name, host, directory, source, remote URL \
+         (credentials removed), pin, the tags and the description (what the project \
+         is for) the user gave each, the settings (`default_agent`, `accounts`, \
+         `launch`: each agent's model and reasoning effort), the `worktrees` settings \
+         (the project's own `override`, `null` following the application-wide value, and the `effective` \
+         values), whether the user has `trust_consent`ed to Octoboard pressing the \
+         agent's folder-trust confirmation (read-only), and the sessions currently \
+         running in each — \
+         every session of the console, whichever session owns it. Each carries `owner`, the \
+         session it reports to, `owner_kind` (a `console` or a `project` session) \
+         and `yours`; a project session with `owner: null` is unbound, which the user \
+         opened themselves and kept outside the orchestration. A session with \
+         `yours: false` is not this caller's to drive — it is unbound, or reports \
+         to a different session — leave it alone. An idle session with a \
+         non-empty `background_tasks` takes messages like any idle session but still \
+         has work running in the background. \
+         A non-null `writes_held` says why messages for a running session are \
+         queued rather than written into it, whatever its `status` reads; \
+         `queued_messages` counts them. With `console` naming another console (`list_consoles` \
+         lists them), only \
+         what is needed to target a project of it with `request_session` or \
+         `request_resume_session` is returned: each project's id (`project`), name, \
+         description and tags, and none of its sessions or settings. ",
+        session_record_fields!(),
+        session_context_field!()
+    ),
+    schema: || {
+        object_schema(
+            json!({
+                "console": {
+                    "type": "string",
+                    "description": "Another console to list the projects of: its id, or its \
+                                    name when that is unambiguous (`list_consoles`). Defaults \
+                                    to this session's own console, and giving that one lists \
+                                    the whole entry of each project. Reads reach any console; \
+                                    what a call changes stays in your own.",
+                },
+            }),
+            &[],
+        )
+    },
+};
+
+/// The consoles there are, for the `console` of `list_projects` and `request_session`.
+const LIST_CONSOLES: ToolDef = ToolDef {
+    name: "list_consoles",
+    description: "List the consoles, read-only: each one's id (`console`) and `name`, and \
+                  whether it is this session's own (`yours`). Use the id, or the name when it is \
+                  unambiguous, as the `console` of `list_projects` to find the projects of \
+                  another console, and of `request_session` to ask for a session there.",
+    schema: || object_schema(json!({}), &[]),
+};
+
+/// The archived sessions of a project of any console, whichever role asks.
+const LIST_ARCHIVED: ToolDef = ToolDef {
+    name: "list_archived",
+    description: concat!(
+        "List the archived sessions of one project, in any console, whichever session owns \
+         them. Each carries its `owner`, `owner_kind` and `yours`, so an earlier \
+         one of yours can be reopened instead of starting over. A session with \
+         `yours: false` is somebody else's: leave it alone. ",
+        session_record_fields!(),
+        session_context_field!()
+    ),
+    schema: || {
+        object_schema(
+            json!({
+                "project": {
+                    "type": "string",
+                    "description": "The project's id, or its name when that is unambiguous \
+                                    (among this console's projects first, else among all).",
+                },
+            }),
+            &["project"],
+        )
+    },
+};
+
+/// The models an agent offers, and the efforts of each: what the `model` and `effort` that
+/// `new_session`, `request_session`, `request_resume_session` and the `launch` settings take must
+/// be among. Offered to every role, since every role can pass them.
+const LIST_AGENT_MODELS: ToolDef = ToolDef {
+    name: "list_agent_models",
+    description: "The models an agent offers right now, read-only, each with its `id` (what \
+                  a `model` takes), `name` and `efforts` (the reasoning-effort levels an `effort` \
+                  takes for that model, in the agent's own spelling). Use it before passing a \
+                  `model` or `effort`, or a `launch` that holds them, to any tool you have that \
+                  takes one; an `effort` can still be refused or lowered by the agent \
+                  for a model that does not advertise it. A catalogue belongs to an account, so \
+                  name `account` to read another account's. The answer is kept for ten minutes, \
+                  as it is for the application's own model pickers, because reading it can run \
+                  the agent. When the agent cannot be asked, `models` is empty and `unavailable` \
+                  (`code` and `message`) says why: leave `model` out then, which is the agent's \
+                  own default.",
+    schema: || {
+        object_schema(
+            json!({
+                "agent": {
+                    "type": "string",
+                    "enum": ["claude", "codex", "grok"],
+                    "description": "The agent whose models to list.",
+                },
+                "account": {
+                    "type": "string",
+                    "description": "An account's id or name, or `default` for the agent's \
+                                    default account. It must belong to `agent`. Defaults to the \
+                                    agent's default account.",
+                },
+            }),
+            &["agent"],
+        )
+    },
+};
+
+/// What a session's conversation held, for an owner or a peer to review: more than the tail of
+/// output `get_session` gives. Any session may read any session's, as `get_session` does.
+const READ_SESSION_HISTORY: ToolDef = ToolDef {
+    name: "read_session_history",
+    description: "Read a session's conversation, read-only: the user's messages, the messages \
+                  Octoboard wrote into it (a brief, a report, shared information, a notice) and \
+                  the agent's final reply to each, never its tool calls or the progress notes \
+                  before a reply. In a session that is running, the last `agent` entry of the \
+                  turn still open can be a progress note rather than a final reply. Any session \
+                  can be read, in any project or console, as with `get_session`. It is paged by \
+                  entry count from the most recent entry backwards: `entries` are the latest \
+                  `limit` ones, oldest first, each with its `index` (its position in the whole \
+                  history from 0), `speaker` (`user`, `octoboard` or `agent`), `text`, `turn` \
+                  and `at` (milliseconds since the Unix epoch, null when the record gives \
+                  none). `older` counts the entries before the page and `total` all there are; \
+                  pass the first entry's `index` as `before` to read the page before. Indices \
+                  hold only while entries are appended: a `total` smaller than an earlier one \
+                  means the history was rewritten (a rewind, a compaction), so start again from \
+                  the latest page. `unavailable` is true when the agent's record of the \
+                  conversation cannot be found or read, and a session that has had no \
+                  conversation answers no entries.",
+    schema: || {
+        object_schema(
+            json!({
+                "session": { "type": "string", "description": "The session's id." },
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100,
+                    "description": "How many entries to return, 20 when left out.",
+                },
+                "before": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Return only the entries older than the entry with this \
+                                    `index`. Left out, the latest entries are returned.",
+                },
+            }),
+            &["session"],
         )
     },
 };
@@ -1166,13 +1293,19 @@ const GET_ACCOUNT_QUOTAS: ToolDef = ToolDef {
 };
 
 /// A project session that reports to another session has the one tool it answers through, the
-/// two it shares information with, the read of its project, the read of the accounts' quotas, and
-/// the two requests the user approves: for a session with no owner, and for a conversation to be
-/// resumed.
+/// reads every session has, the read of its project, and the two requests the user approves: for
+/// a session with no owner, and for a conversation to be resumed. Its tools are a subset of an
+/// unbound session's.
 const BOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     REPORT,
+    GET_SESSION,
     LIST_SESSIONS,
     GET_SESSION_BRANCHES,
+    READ_SESSION_HISTORY,
+    LIST_AGENT_MODELS,
+    LIST_CONSOLES,
+    LIST_PROJECTS,
+    LIST_ARCHIVED,
     SHARE_INFO,
     GET_PROJECT,
     GET_ACCOUNT_QUOTAS,
@@ -1214,34 +1347,10 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
         schema: || new_session_schema(false),
     },
     SEND_MESSAGE,
-    ToolDef {
-        name: "get_session",
-        description: concat!(
-            "The session's status, plus a tail of what it has printed (a session that \
-             has ended keeps its last output; `null` if none was kept). Any session can \
-             be read, in any project or console, but one with `yours: false` is not \
-             yours to act on, whether nobody owns it (`owner: null`) or it reports to a \
-             different session: leave it alone. `owner` says whose it is and \
-             `owner_kind` whether that is a console or a project session. An idle \
-             session with a non-empty `background_tasks` takes messages like any idle \
-             session but still has work running in the background. \
-             A non-null `writes_held` says why messages for a running session are \
-             queued rather than written into it, whatever its `status` reads; \
-             `queued_messages` counts them. ",
-            session_record_fields!(),
-            session_context_field!()
-        ),
-        schema: || {
-            object_schema(
-                json!({
-                    "session": { "type": "string", "description": "The session's id." },
-                }),
-                &["session"],
-            )
-        },
-    },
+    GET_SESSION,
     ARCHIVE_SESSION,
     ARCHIVE_SELF,
+    LIST_ARCHIVED,
     REOPEN_SESSION,
     RENAME_SESSION,
     SET_SESSION_PINNED,
@@ -1256,6 +1365,10 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     REPORT,
     LIST_SESSIONS,
     GET_SESSION_BRANCHES,
+    READ_SESSION_HISTORY,
+    LIST_AGENT_MODELS,
+    LIST_CONSOLES,
+    LIST_PROJECTS,
     SHARE_INFO,
     GET_PROJECT,
     GET_ACCOUNT_QUOTAS,
@@ -1277,8 +1390,8 @@ fn request_session_schema() -> Value {
     });
     schema["properties"]["console"] = json!({
         "type": "string",
-        "description": "For `console`: the console's id, or its name when that is unambiguous. \
-                        Defaults to this session's own console.",
+        "description": "For `console`: the console's id, or its name when that is unambiguous \
+                        (`list_consoles`). Defaults to this session's own console.",
     });
     schema["properties"]["agent"]["description"] = json!(
         "The agent the session runs. Left out, it is your own agent for a session in your own \
@@ -1340,16 +1453,18 @@ fn request_resume_session_schema() -> Value {
             "model": {
                 "type": "string",
                 "description": "Only when no session holds the conversation, which opens a new \
-                                session: overrides its model; blank is the agent's own default. \
-                                A session that holds the conversation keeps its own, and the \
+                                session: overrides its model; blank is the agent's own default \
+                                (`list_agent_models` lists the ones the agent offers). A \
+                                session that holds the conversation keeps its own, and the \
                                 call is refused if this is given.",
             },
             "effort": {
                 "type": "string",
                 "description": "Only when no session holds the conversation, which opens a new \
                                 session: overrides its reasoning effort; blank is the agent's \
-                                own default. A session that holds the conversation keeps its \
-                                own, and the call is refused if this is given.",
+                                own default (`list_agent_models` lists the levels each model \
+                                offers). A session that holds the conversation keeps its own, \
+                                and the call is refused if this is given.",
             },
         }),
         &["conversation"],
@@ -1420,13 +1535,15 @@ fn new_session_schema(with_project: bool) -> Value {
         "model": {
             "type": "string",
             "description": "Overrides the model for this one session; blank is the agent's own \
-                            default. Left out, a project session takes its project's, else the \
-                            console's project session model.",
+                            default. `list_agent_models` lists the ones the agent offers. Left \
+                            out, a project session takes its project's, else the console's \
+                            project session model.",
         },
         "effort": {
             "type": "string",
             "description": "Overrides the reasoning effort for this one session; blank is the \
-                            agent's own default.",
+                            agent's own default. `list_agent_models` lists the levels each model \
+                            offers.",
         },
     });
     if !with_project {
@@ -1495,7 +1612,8 @@ fn launch_schema(whose: &str) -> Value {
             "Each agent's model and reasoning effort for {whose}, keyed by agent (`claude`, \
              `codex`, `grok`) as `{{\"model\": ..., \"effort\": ...}}`; a field left out is left \
              as it is, and `null` or blank is the agent's own default. They must be ones the \
-             agent offers; Claude Code's models are {}.",
+             agent offers: `list_agent_models` lists them, with the efforts of each. Claude Code's \
+             models are always {}.",
             crate::agent_models::claude_model_ids()
                 .iter()
                 .map(|id| format!("`{id}`"))
@@ -1635,8 +1753,8 @@ mod tests {
 
     /// What a session is offered follows from its role and whether it is bound: only a session that
     /// can own sessions starts, hands over or drives them, only an unbound one binds itself, only a
-    /// project session can report, and every session shares information and asks for a session
-    /// with no owner.
+    /// project session can report, every session shares information and asks for a session with no
+    /// owner, and every read-only tool but `get_project` is offered to all three alike.
     #[test]
     fn the_tools_offered_follow_from_role_and_binding() {
         let names = |role, bound| -> Vec<&'static str> {
@@ -1649,8 +1767,14 @@ mod tests {
             names(Role::Project, true),
             [
                 "report",
+                "get_session",
                 "list_sessions",
                 "get_session_branches",
+                "read_session_history",
+                "list_agent_models",
+                "list_consoles",
+                "list_projects",
+                "list_archived",
                 "share_info",
                 "get_project",
                 "get_account_quotas",
@@ -1666,6 +1790,7 @@ mod tests {
                 "get_session",
                 "archive_session",
                 "archive_self",
+                "list_archived",
                 "reopen_session",
                 "rename_session",
                 "set_session_pinned",
@@ -1680,6 +1805,10 @@ mod tests {
                 "report",
                 "list_sessions",
                 "get_session_branches",
+                "read_session_history",
+                "list_agent_models",
+                "list_consoles",
+                "list_projects",
                 "share_info",
                 "get_project",
                 "get_account_quotas"
@@ -1713,11 +1842,35 @@ mod tests {
                 "request_resume_session",
                 "list_sessions",
                 "get_session_branches",
+                "read_session_history",
+                "list_agent_models",
+                "list_consoles",
                 "share_info",
                 "get_account_quotas",
                 "show_page"
             ]
         );
+        // The reads every role has, with one definition each, so that their descriptions cannot
+        // differ by role.
+        for read in [
+            "get_session",
+            "list_sessions",
+            "read_session_history",
+            "get_session_branches",
+            "list_agent_models",
+            "list_consoles",
+            "list_projects",
+            "list_archived",
+            "get_account_quotas",
+        ] {
+            let described = |role, bound| {
+                let tool = tool_by_name(role, bound, read).unwrap_or_else(|| panic!("{read}"));
+                (tool.description.to_string(), (tool.schema)())
+            };
+            let console = described(Role::Console, false);
+            assert_eq!(console, described(Role::Project, false), "{read}");
+            assert_eq!(console, described(Role::Project, true), "{read}");
+        }
         // Console sessions are never bound, so the flag changes nothing for them.
         assert_eq!(names(Role::Console, false), names(Role::Console, true));
         // A bound project session is a subset of what it may have had while it could own sessions,
@@ -1744,6 +1897,37 @@ mod tests {
         assert!(console["properties"]["project"].is_object());
         assert!(project["properties"]["project"].is_null());
         assert_eq!(project["required"], json!(["brief"]));
+    }
+
+    /// Every parameter that takes a model or an effort, `launch` settings included, sends the
+    /// caller to `list_agent_models` for the values, and each role has that tool.
+    #[test]
+    fn every_model_parameter_points_to_the_tool_that_lists_the_models() {
+        let mut checked = 0;
+        for (role, bound) in [
+            (Role::Console, false),
+            (Role::Project, true),
+            (Role::Project, false),
+        ] {
+            let tools = tools_for(role, bound);
+            assert!(tools.iter().any(|tool| tool.name == "list_agent_models"));
+            for tool in tools {
+                let schema = (tool.schema)();
+                let mut described = Vec::new();
+                for key in ["model", "effort", "launch", "project_session_launch"] {
+                    described.extend(schema["properties"][key]["description"].as_str());
+                }
+                for text in described {
+                    assert!(
+                        text.contains("`list_agent_models`"),
+                        "{}: {text}",
+                        tool.name
+                    );
+                    checked += 1;
+                }
+            }
+        }
+        assert!(checked > 10, "{checked}");
     }
 
     /// Every tool that names a session says, on its `title`, which language to write the name in.

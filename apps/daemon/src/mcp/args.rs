@@ -2,8 +2,9 @@
 //!
 //! A malformed boolean, string list or text argument is refused with a reason rather than read as
 //! absent: a `"false"` that quietly changed nothing would look like success to the model that sent
-//! it. And a project is
-//! found only among the caller's own console's, so an id from another console resolves to nothing.
+//! it. A project named for a write (`resolve_project`) is found only among the caller's own
+//! console's, so an id from another console resolves to nothing; the reads (`find_project`) take
+//! an id from any console, and a name from the caller's console first, else from all.
 
 use std::sync::Arc;
 
@@ -86,6 +87,31 @@ pub(super) fn optional_string_list(
             .collect::<Result<Vec<_>>>()
             .map(Some),
         Some(_) => bail!("`{key}` must be an array of strings"),
+    }
+}
+
+/// A whole number argument from `min` to `max`. `None` when absent or `null`; anything else, a
+/// fraction or a negative number included, is refused rather than read as absent.
+pub(super) fn optional_count(
+    arguments: &Map<String, Value>,
+    key: &str,
+    min: usize,
+    max: usize,
+) -> Result<Option<usize>> {
+    match arguments.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(value) => value
+            .as_u64()
+            .and_then(|count| usize::try_from(count).ok())
+            .filter(|count| (min..=max).contains(count))
+            .map(Some)
+            .ok_or_else(|| {
+                if max == usize::MAX {
+                    anyhow!("`{key}` must be a whole number, {min} or more")
+                } else {
+                    anyhow!("`{key}` must be a whole number from {min} to {max}")
+                }
+            }),
     }
 }
 

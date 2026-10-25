@@ -194,7 +194,8 @@ fn session_choice_guidance(agent: Agent) -> String {
 /// another account or another owner, the one that moves branches between sessions, the one that
 /// binds this session to an owner, which one makes a session nobody's, the one that resumes a
 /// conversation on the user's approval, the read of the accounts' quotas (for a session that owns
-/// none, which has no other line naming it), then information, which needs none.
+/// none, which has no other line naming it), the reads every session has (sessions, histories,
+/// consoles, projects, archives), the list of models, then information, which needs none.
 fn relationships(agent: Agent, owns: bool) -> String {
     let tool = |name: &str| qualified_tool_name(agent, name);
     let mut lines = Vec::new();
@@ -296,6 +297,28 @@ fn relationships(agent: Agent, owns: bool) -> String {
             get_account_quotas = tool("get_account_quotas"),
         ));
     }
+    lines.push(format!(
+        "- Every session reads the same things, whichever its kind, and any of them may read any \
+         session, project or console: `{get_session}` a session's status and a tail of its \
+         output, `{read_session_history}` what its conversation held (the messages of the user \
+         and Octoboard and the agent's final replies, not its tool calls) a page at a time from \
+         the latest, `{list_consoles}` the consoles, `{list_projects}` the projects of a \
+         console (yours unless you name another, of which it gives only what `{request_session}` \
+         needs to target a project), and `{list_archived}` the archived sessions of a project. \
+         A session that is not yours (`yours: false`) is to be left alone, whatever you can read \
+         of it.",
+        get_session = tool("get_session"),
+        read_session_history = tool("read_session_history"),
+        list_consoles = tool("list_consoles"),
+        list_projects = tool("list_projects"),
+        list_archived = tool("list_archived"),
+        request_session = tool("request_session"),
+    ));
+    lines.push(format!(
+        "- `{list_agent_models}` lists the models an agent offers, with the reasoning efforts of \
+         each; check it before naming a `model` or `effort` in a call that takes one.",
+        list_agent_models = tool("list_agent_models"),
+    ));
     lines.push(format!(
         "- `{list_sessions}` shows the other running sessions, in every console and project, and \
          who owns each, with its account, model and the names of the branches it is responsible \

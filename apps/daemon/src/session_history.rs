@@ -8,12 +8,16 @@
 //! Nothing is written. A session that has had no conversation has an empty history; a record that
 //! cannot be found or read is `None`, which the caller reports as unavailable.
 
+use std::sync::Arc;
+
+use anyhow::Result;
 use serde_json::Value;
 
 use crate::agent_records::{history_branch, Branch, Hints, Locator};
 use crate::handoff::record::{for_each_line, line_entries, Entry};
 use crate::hooks::without_paste_wrapper;
 use crate::protocol::{Account, Agent, HistoryMessage, HistorySpeaker, Session};
+use crate::state::AppState;
 use crate::{handoff, mcp, reporting, rfc3339, sharing};
 
 /// How the messages Octoboard writes into a session begin, by what wrote them. The notices are
@@ -74,6 +78,25 @@ pub fn of_session(
     }
     let Branch { stretches, .. } = history_branch(hints, locator, accounts, session)?;
     read(session.agent, &stretches?).ok()
+}
+
+/// [`of_session`] for `session` as the daemon holds it, for what answers a request: the record can
+/// run to tens of megabytes, so it is parsed on the blocking pool, not on the async threads.
+pub async fn of_session_blocking(
+    state: &Arc<AppState>,
+    session: Session,
+) -> Result<Option<Vec<HistoryMessage>>> {
+    let state = Arc::clone(state);
+    tokio::task::spawn_blocking(move || {
+        let accounts = state.store.list_accounts()?;
+        Ok(of_session(
+            &state.record_hints,
+            &mut Locator::default(),
+            &accounts,
+            &session,
+        ))
+    })
+    .await?
 }
 
 fn read(

@@ -800,8 +800,8 @@ summaries, it counts as working**: a console's badge on the rail and a collapsed
 "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`. The menu bar icon's menu
 lists it in a group of its own, after **Working** (see "The icon's menu" in `docs/product/menu-bar-icon.md`).
 
-An owner's tools give the list with every session they describe (see "The console session's tools" in
-`docs/product/hub-orchestration.md`).
+Every session record the session tools give carries the list (see "Session records" in
+`docs/product/what-every-session-reads.md`).
 
 ### The raised hand
 

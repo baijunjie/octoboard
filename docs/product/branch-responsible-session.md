@@ -158,8 +158,8 @@ responsible for — and which branches and worktrees archiving the session would
 - **An empty list** for a session responsible for no branch, and always for a console session (see "Project sessions
   only" below).
 
-The names alone are also part of every session record the orchestration tools give, as `branches` (see "The console
-session's tools" in `docs/product/hub-orchestration.md`); reading them there runs no `git`, while
+The names alone are also part of every session record the orchestration tools give, as `branches` (see "Session
+records" in `docs/product/what-every-session-reads.md`); reading them there runs no `git`, while
 `get_session_branches` runs it to find the worktrees, and only when the session is responsible for a branch.
 
 ## When a branch gets a responsible session

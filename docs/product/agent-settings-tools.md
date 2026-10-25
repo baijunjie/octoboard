@@ -3,14 +3,18 @@
 Octoboard's MCP server (see `docs/product/hub-orchestration.md`) lets a session read the settings the user configures
 in the UI, and lets a console session change most of them. A change made through these tools is checked and refused
 exactly as the same change made in the UI is, and reaches every open window the same way. Which role is offered which
-tool is in the tool tables of `docs/product/hub-orchestration.md`; this document says what the settings tools do.
+tool is in the tool tables of `docs/product/hub-orchestration.md`, and the reads every role has are in
+`docs/product/what-every-session-reads.md`; this document says what the settings tools do.
 
 ## Who reads and changes what
 
 - **A console session** reads and changes its own console, that console's projects and the application-wide settings.
-  Another console, and another console's projects, are out of its reach.
+  It changes nothing of another console.
 - **A project session**, bound or not, reads its own project's settings with `get_project`, which takes no argument and
   answers for no other project. It changes no setting.
+- **Every session**, of either kind, reads the settings of every project of its own console with `list_projects`; of
+  another console's projects it reads only each one's id, name, description and tags (see "Listing a console's
+  projects" in `docs/product/what-every-session-reads.md`).
 
 **One rule decides which settings the tools expose: an agent may help the user configure most of Octoboard, but not what
 must be done by the user personally.** Every setting of a console, its projects and the application that the sections
@@ -81,7 +85,8 @@ only when the user asked for it.
 
 ## A project's settings
 
-`list_projects`, `get_project`, `add_project` and `update_project` give a project as the same set of fields:
+`list_projects` for the caller's own console, `get_project`, `add_project` and `update_project` give a project as the
+same set of fields:
 
 | Field | Contents |
 |---|---|
@@ -100,8 +105,8 @@ only when the user asked for it.
 | `launch` | Its model and reasoning effort for every agent, as above; for a value it leaves unset, its sessions take its console's `project_session_launch` (see "The console's own settings: `get_console` and `update_console`" below). |
 | `worktrees` | Its worktree settings (see `docs/product/worktree-settings.md`) as `{"override": …, "effective": …}`: under `override` the project's own value for each of `use_worktrees`, `rebase_before_merge`, `delivery` and `revert_gate`, `null` for one it leaves to the application-wide value; under `effective` the four resolved values for it now (`rebase_before_merge`, `delivery` and `revert_gate` apply only while `use_worktrees` is on). |
 
-`list_projects` adds the sessions running in each project (see "The console session's tools" in
-`docs/product/hub-orchestration.md`).
+`list_projects` adds the sessions running in each project (see "Listing a console's projects" in
+`docs/product/what-every-session-reads.md`).
 
 **A credential is never shown.** For an `http`, `https` or `git` URL everything before the host's `@` is removed, so
 `https://user:token@example.com/r.git` reads `https://example.com/r.git`. For an `ssh` URL only a password is removed:

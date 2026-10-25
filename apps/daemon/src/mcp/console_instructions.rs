@@ -54,7 +54,11 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          \n\
          - `list_projects` — the console's projects, each with the description the user gave it, \
            and what is running in each. Start here when you do not already know where a request \
-           belongs.\n\
+           belongs. Name another console as `console` to find the projects there (their ids, \
+           names, descriptions and tags only), for `request_session`. `list_consoles` — the \
+           consoles, with the id and name that `console` takes.\n\
+         - `list_agent_models` — the models an agent offers and the reasoning efforts of each; \
+           check it before naming a `model` or `effort` anywhere.\n\
          - `add_project` — associate a directory, or clone a repository and associate it.\n\
          - `update_project` — change a project's name, description, tags, pin, default agent, \
            accounts, or model and effort. `get_settings` lists the accounts to choose from.\n\
@@ -78,7 +82,9 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          - `send_message` — the next instruction for a session already running.\n\
          - `get_session` — a session's status, account, model, pin and lock, branch names and a \
            tail of its output; it reads any session, in any console. `get_session_branches` — the \
-           branches a session is responsible for and the worktree each is checked out in.\n\
+           branches a session is responsible for and the worktree each is checked out in. \
+           `read_session_history` — what a session's conversation held (the user's messages and \
+           the agent's final replies, not its tool calls), a page at a time from the latest.\n\
          - `rename_session` / `set_session_pinned` — retitle (in the user's conversation \
            language, as for `new_session`) or pin a session of yours.\n\
          - `archive_session` — end and archive a session you are done with.\n\

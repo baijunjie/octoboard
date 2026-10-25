@@ -2249,9 +2249,9 @@ in `docs/product/session-requests.md` ("Waiting for the answer", "How a request 
 
 | Tool | Console session | Unbound or lead project session | Bound project session |
 |---|---|---|---|
-| `list_projects`, `add_project`, `update_project`, `get_console`, `update_console`, `get_settings`, `update_settings`, `list_archived`, `show_page` | yes | — | — |
-| `new_session`, `send_message`, `get_session`, `archive_session`, `reopen_session`, `rename_session`, `set_session_pinned` | yes | yes | — |
-| `list_sessions`, `get_session_branches`, `share_info`, `get_account_quotas` | yes | yes | yes |
+| `add_project`, `update_project`, `get_console`, `update_console`, `get_settings`, `update_settings`, `show_page` | yes | — | — |
+| `new_session`, `send_message`, `archive_session`, `reopen_session`, `rename_session`, `set_session_pinned` | yes | yes | — |
+| `get_session`, `list_sessions`, `read_session_history`, `get_session_branches`, `list_agent_models`, `list_consoles`, `list_projects`, `list_archived`, `share_info`, `get_account_quotas` | yes | yes | yes |
 | `archive_self` | yes | yes (refused once bound, a lead session included, which wraps up with `report`) | — |
 | `handoff_session`, `handover_branches`, `switch_session_account`, `transfer_session`, `release_session` | yes | yes | — |
 | `bind_to_session` | — | yes (refused once bound, a lead session included) | — |
@@ -2283,14 +2283,28 @@ left as `{kind, branch, path?, reason}` in plain text, and a `note` saying how t
 nothing is left. `archive_self` answers before the process ends, so its `branches_left` is what the removal will leave
 as judged before the archive; `report`'s answer names the same in its text.
 
-Scope: a console session reads and changes only its own console and its projects; `get_console` never returns the avatar
+Scope: a console session changes only its own console and its projects (it reads other consoles' projects and sessions
+like every role, see below), and reads the settings of its own only; `get_console` never returns the avatar
 (`has_icon` says whether there is one) and `update_console` cannot set it, nor read or set the console's
 `console_session_prompt`. A project session's `get_project` takes no `project`, and returns its own project only.
 `rename_session` and `set_session_pinned` follow the rules of `send_message`: only a session bound to the caller, never
 the caller's own and never a console session. Nothing here deletes a project or console, creates or deletes another
 console, changes a project's path, source, host, remote or `trust_consent`, or writes an account or a trusted directory.
 
-- `list_projects` answers each project with `project`, `name`, `host`, `path`, `source`, `remote_url`, `default_agent`,
+- `get_session`, `list_sessions`, `read_session_history`, `get_session_branches`, `list_agent_models`,
+  `list_consoles`, `list_projects`, `list_archived` and `get_account_quotas` (the third row of the table above, without
+  `share_info`, which writes) have one definition and one scope for every role: any session reads any session, and any
+  console's project list and archive. What stays narrower is `get_project` (a project session's own project),
+  `get_console` and `get_settings` (the console session's own console and the application's settings), and the writes.
+  `list_consoles` answers `{ consoles: [{ console, name, yours }] }`, every console with the id and name that `console`
+  takes, `yours` marking the caller's own.
+- `list_projects` takes an optional `console` (an id, or a name that names one console), defaulting to the caller's
+  own, so for a project session the console it is in. Both answers carry `console`, the console's id. For another
+  console it answers `{ console, projects }`, each project only `{ project, name, description, tags }` — what
+  `request_session` and `request_resume_session` need to target it, with no sessions or settings; reads reach any
+  console, writes stay in the caller's own. For the caller's own console it answers the same shape a console session
+  gets, `yours` and `owner` worked out against the caller, each project with `project`,
+  `name`, `host`, `path`, `source`, `remote_url`, `default_agent`,
   `pinned`, `tags`, `description`, `trust_consent`, `accounts`, `launch`, `worktrees` and `sessions`. `get_project`,
   `update_project` and `add_project` answer with the same entries without `sessions`. A `remote_url` is always given
   without the credentials it carries, as `https://example.com/r.git` for `https://user:token@example.com/r.git`. A
@@ -2477,6 +2491,25 @@ console, changes a project's path, source, host, remote or `trust_consent`, or w
   prompt is sent there, whichever is first), `handoff`, `sharing_change` (it is being restarted for a change of its
   account's sharing of the default configuration, and is resumed afterwards) and `unsent_message`, and `explanation` in
   prose. See "Messages held until a session can take them" in `docs/product/message-delivery.md`.
+- `list_agent_models` takes `agent` and an optional `account` (an account's id or name, or `default`; absent is the
+  default account) and answers `{ agent, account, models, unavailable }`, `account` being the id or `default`, each
+  model `{ id, name, efforts }` and `unavailable` `null` or `{ code, message }` with `models` empty. It runs what
+  the `list_agent_models` control request runs, cache included, and an account that does not exist or belongs to another
+  agent is `unknown_account`. The `model` and `effort` of every tool that takes them, `launch` included, must be among
+  what it lists.
+- `read_session_history` takes `session` (any session) and optional `limit` (1 to 100, default 20) and `before` (an
+  entry's `index`, 0 or more, not past the history's length), and answers `{ session, unavailable, total, older,
+  entries }`: the `limit` entries before `before` (the end when absent), oldest first, each `{ index, speaker, text,
+  turn, at }` with `index` the entry's position in the whole history from 0, `speaker` `user`, `octoboard` or `agent`,
+  and `at` `null` when the record gives no time; `older` counts the entries before the page. Indices hold only while
+  entries are appended: a compacted Grok session shows only the turns since the compaction and a Claude Code rewind
+  can replace entries, so a `total` smaller than an earlier one means the history was rewritten and the reader starts
+  again from the latest page. In a running session the last `agent` entry of the turn still open can be a progress
+  note, not a final reply. `unavailable: true` (with `total` and `older` 0 and no entries) says the record could not
+  be found or read; a session with no conversation answers `unavailable: false` and no entries. It reads what the
+  `read_session_history` control request reads, and no tool calls.
+- `list_archived` takes a required `project`, by id in any console or by name (a name that names one project in the
+  caller's console, else in all consoles; more than one is refused), for every role.
 - `get_session_branches` takes an optional `session` (any session, defaulting to the caller) and answers
   `{ session, branches }`, each branch `{ branch, project, worktree, worktree_status, uncommitted_changes }`:
   `worktree_status` is `checked_out`, `gone`, `none` or `unknown` (`git` could not be run or the worktrees could not be

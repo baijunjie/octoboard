@@ -44,23 +44,22 @@ use crate::state::{AppState, WriteHold};
 
 use super::account_switch;
 use super::args::{
-    console_projects, find_console, find_project, optional_agent, optional_bool, optional_string,
+    find_console, find_project, optional_agent, optional_bool, optional_string,
     optional_string_list, own_console, own_project, present_text, raw_text, required_str,
     resolve_project, string_list,
 };
 use super::bindings;
 use super::handoff;
 use super::handover::{self, branch_names, held_by};
+use super::history;
+use super::models;
 use super::quotas;
+use super::reads;
 use super::session_branches as session_branches_tool;
 use super::settings::{
     self, describe_project, launch_argument, project_accounts_argument, resolve_account,
     worktrees_argument,
 };
-
-/// How much of a session's output `get_session` hands back. Enough to see what it is doing and how
-/// it got there, short of handing the caller a transcript to wade through.
-const OUTPUT_TAIL: usize = 8 * 1024;
 
 /// Runs one tool call. The `Err` case is what the model is shown as the reason the call failed, so
 /// the messages are written for it rather than for a log.
@@ -76,7 +75,8 @@ pub async fn call(
     }
 
     match tool {
-        "list_projects" => list_projects(state, &session).await,
+        "list_projects" => reads::list_projects(state, &session, arguments).await,
+        "list_consoles" => reads::list_consoles(state, &session),
         "add_project" => add_project(state, &session, arguments).await,
         "update_project" => settings::update_project(state, &session, arguments).await,
         "get_console" => settings::get_console(state, &session),
@@ -85,12 +85,12 @@ pub async fn call(
         "update_settings" => settings::update_settings(state, arguments),
         "new_session" => new_session(state, &session, arguments, crate::term::launch).await,
         "send_message" => send_message(state, &session, arguments).await,
-        "get_session" => get_session(state, &session, arguments).await,
+        "get_session" => reads::get_session(state, &session, arguments).await,
         "rename_session" => rename_session(state, &session, arguments).await,
         "set_session_pinned" => set_session_pinned(state, &session, arguments).await,
         "archive_session" => archive_session(state, &session, arguments).await,
         "archive_self" => archive_self(state, &session).await,
-        "list_archived" => list_archived(state, &session, arguments).await,
+        "list_archived" => reads::list_archived(state, &session, arguments).await,
         "reopen_session" => reopen_session(state, &session, arguments).await,
         "handover_branches" => handover::handover_branches(state, &session, arguments).await,
         "handoff_session" => {
@@ -108,10 +108,12 @@ pub async fn call(
         }
         "show_page" => show_page(state, &session, arguments),
         "report" => report(state, &session, arguments).await,
-        "list_sessions" => list_sessions(state, &session).await,
+        "list_sessions" => reads::list_sessions(state, &session).await,
         "get_session_branches" => {
             session_branches_tool::get_session_branches(state, &session, arguments).await
         }
+        "list_agent_models" => models::list_agent_models(state, arguments).await,
+        "read_session_history" => history::read_session_history(state, arguments).await,
         "get_project" => settings::get_project(state, &session),
         "get_account_quotas" => quotas::get_account_quotas(state, arguments),
         "share_info" => share_info(state, &session, arguments).await,
@@ -130,7 +132,7 @@ pub async fn call(
 
 /// The names of the branches each of `sessions` is responsible for, read on the blocking pool
 /// (the store and the reflog files, and no process).
-async fn branch_names_of(
+pub(super) async fn branch_names_of(
     state: &Arc<AppState>,
     sessions: Vec<Session>,
 ) -> Result<HashMap<String, Vec<String>>> {
@@ -140,36 +142,6 @@ async fn branch_names_of(
 }
 
 // -- orchestration tools -----------------------------------------------------
-
-async fn list_projects(state: &Arc<AppState>, console_session: &Session) -> Result<Value> {
-    let projects = console_projects(state, &console_session.console_id)?;
-    let sessions: Vec<Session> = state
-        .store
-        .list_sessions()?
-        .into_iter()
-        .filter(|session| {
-            !session.status.is_dormant()
-                && projects
-                    .iter()
-                    .any(|project| session.project_id.as_deref() == Some(&project.id))
-        })
-        .collect();
-    let branches = branch_names_of(state, sessions.clone()).await?;
-    let entries = projects
-        .iter()
-        .map(|project| {
-            let live = sessions
-                .iter()
-                .filter(|session| session.project_id.as_deref() == Some(&project.id))
-                .map(|session| describe_session(state, session, console_session, &branches))
-                .collect::<Result<Vec<Value>>>()?;
-            let mut entry = describe_project(state, project)?;
-            entry["sessions"] = json!(live);
-            Ok(entry)
-        })
-        .collect::<Result<Vec<Value>>>()?;
-    Ok(json!({ "projects": entries }))
-}
 
 async fn add_project(
     state: &Arc<AppState>,
@@ -498,48 +470,6 @@ fn delivery_note(delivery: Delivery) -> &'static str {
     }
 }
 
-async fn get_session(
-    state: &Arc<AppState>,
-    caller: &Session,
-    arguments: &Map<String, Value>,
-) -> Result<Value> {
-    let target = resolve_session(state, required_str(arguments, "session")?)?;
-    let output = recent_output(state, &target.id).await;
-    let branches = branch_names_of(state, vec![target.clone()]).await?;
-    let mut description = describe_session(state, &target, caller, &branches)?;
-    description["recent_output"] = json!(output);
-    if state.shown_status(&target) == SessionStatus::WaitingUser {
-        description["note"] = json!(
-            "This session is waiting for the user, not for you. Leave it be until they have \
-             answered."
-        );
-    }
-    Ok(description)
-}
-
-/// The tail of what a session has printed, readable. A running session's comes from its ring
-/// buffer; one whose process has ended has the ring buffer's last contents kept, which is what
-/// `GET /ws/term/:session` replays, so the same path is read here. `None` when nothing was kept —
-/// no process of it has printed anything yet, it ended with the daemon killed outright before the
-/// output could be kept, or a new process took it over and discarded the old output at launch.
-async fn recent_output(state: &Arc<AppState>, id: &str) -> Option<String> {
-    if let Some(live) = state.live_session(id) {
-        return Some(readable_output(&live.recent_output(OUTPUT_TAIL)));
-    }
-    // A file read of up to the whole ring buffer, so not on a runtime worker.
-    let state = state.clone();
-    let id = id.to_string();
-    // A failed read is no output rather than an error: it must not take the session's status and
-    // ownership down with it.
-    let saved = tokio::task::spawn_blocking(move || state.saved_output(&id))
-        .await
-        .unwrap_or(None);
-    saved.map(|output| {
-        let from = output.len().saturating_sub(OUTPUT_TAIL);
-        readable_output(&output[from..])
-    })
-}
-
 /// Archives a session of the caller's, and once its process has ended removes what can go of the
 /// branches and worktrees bound to it, never forcing anything; what stays is named in the answer,
 /// so the caller can deal with it.
@@ -723,33 +653,6 @@ async fn set_session_pinned(
     describe_session(state, &updated, caller, &branches)
 }
 
-async fn list_archived(
-    state: &Arc<AppState>,
-    console_session: &Session,
-    arguments: &Map<String, Value>,
-) -> Result<Value> {
-    let project = resolve_project(
-        state,
-        &console_session.console_id,
-        required_str(arguments, "project")?,
-    )?;
-    let archived: Vec<Session> = state
-        .store
-        .list_sessions()?
-        .into_iter()
-        .filter(|session| {
-            session.project_id.as_deref() == Some(&project.id)
-                && session.status == SessionStatus::Archived
-        })
-        .collect();
-    let branches = branch_names_of(state, archived.clone()).await?;
-    let sessions = archived
-        .iter()
-        .map(|session| describe_session(state, session, console_session, &branches))
-        .collect::<Result<Vec<Value>>>()?;
-    Ok(json!({ "sessions": sessions }))
-}
-
 async fn reopen_session(
     state: &Arc<AppState>,
     caller: &Session,
@@ -792,30 +695,6 @@ fn show_page(
 }
 
 // -- information exchange ----------------------------------------------------
-
-/// Every running session but the caller (one a sharing change is restarting included), in every
-/// console and project, console sessions included: information may go to any of them, and an
-/// owner to hand a session to or bind to is one of them.
-///
-/// `pub(crate)` for the tests of `shared_config`, which describe a session being restarted.
-pub(crate) async fn list_sessions(state: &Arc<AppState>, caller: &Session) -> Result<Value> {
-    let running: Vec<Session> = state
-        .store
-        .list_sessions()?
-        .into_iter()
-        .filter(|session| session.id != caller.id && !state.shown_status(session).is_dormant())
-        .collect();
-    let branches = branch_names_of(state, running.clone()).await?;
-    let sessions = running
-        .iter()
-        .map(|session| {
-            let mut description = describe_session(state, session, caller, &branches)?;
-            description["your_owner"] = json!(caller.bound_to.as_deref() == Some(&session.id));
-            Ok(description)
-        })
-        .collect::<Result<Vec<Value>>>()?;
-    Ok(json!({ "your_owner": caller.bound_to, "sessions": sessions }))
-}
 
 async fn share_info(
     state: &Arc<AppState>,
@@ -1191,70 +1070,6 @@ fn write_hold_explanation(hold: WriteHold) -> &'static str {
              there, and messages for it are queued until then. Do not send it again."
         }
     }
-}
-
-/// Makes raw PTY output readable: escape sequences and the cursor-control bytes an agent's
-/// renderer emits by the thousand carry no information once the frames are gone, and left in they
-/// are most of what the console session would be reading.
-fn readable_output(bytes: &[u8]) -> String {
-    let text = String::from_utf8_lossy(bytes);
-    let mut out = String::with_capacity(text.len());
-    let mut chars = text.chars().peekable();
-    while let Some(ch) = chars.next() {
-        match ch {
-            '\x1b' => match chars.peek() {
-                // CSI: parameters and intermediates, then one final byte in `@`..`~`.
-                Some('[') => {
-                    chars.next();
-                    while let Some(&next) = chars.peek() {
-                        chars.next();
-                        if ('@'..='~').contains(&next) {
-                            break;
-                        }
-                    }
-                }
-                // OSC and the other string-introducing sequences run to a terminator rather than
-                // to a single final byte.
-                Some(']') | Some('P') | Some('X') | Some('^') | Some('_') => {
-                    chars.next();
-                    while let Some(next) = chars.next() {
-                        if next == '\x07' {
-                            break;
-                        }
-                        if next == '\x1b' && chars.peek() == Some(&'\\') {
-                            chars.next();
-                            break;
-                        }
-                    }
-                }
-                // Anything else is a two-byte escape; drop both.
-                Some(_) => {
-                    chars.next();
-                }
-                None => {}
-            },
-            '\n' | '\t' => out.push(ch),
-            '\r' => {}
-            ch if (ch as u32) < 0x20 || ch as u32 == 0x7f => {}
-            ch => out.push(ch),
-        }
-    }
-    // Carriage-return redrawing leaves runs of blank lines behind once the escapes are gone.
-    let mut collapsed = String::with_capacity(out.len());
-    let mut blanks = 0;
-    for line in out.lines() {
-        if line.trim().is_empty() {
-            blanks += 1;
-            if blanks > 1 {
-                continue;
-            }
-        } else {
-            blanks = 0;
-        }
-        collapsed.push_str(line.trim_end());
-        collapsed.push('\n');
-    }
-    collapsed
 }
 
 #[cfg(test)]
@@ -2341,6 +2156,287 @@ pub(super) mod tests {
         assert!(fetched["note"].is_string());
     }
 
+    /// The reads are the same for every role: a bound project session, an unbound one and a console
+    /// session read any session, any project's archive in any console, and the projects of their
+    /// own console or another, and `yours` is worked out against whoever asks.
+    #[tokio::test]
+    async fn every_role_reads_the_same_things_with_ownership_relative_to_itself() {
+        let (state, _dir) = peer_state("tool-surface-uniform-reads");
+        // An archived session in a project of the other console.
+        let mut elsewhere = project_session("archived-elsewhere", "console-2", None);
+        elsewhere.project_id = Some("project-2".to_string());
+        elsewhere.status = SessionStatus::Archived;
+        state.store.insert_session(&elsewhere).unwrap();
+        for caller in ["a", "starter", "mine"] {
+            // A session of another owner, and a record of it.
+            let theirs = call(
+                &state,
+                caller,
+                "get_session",
+                &arguments(json!({ "session": "of-b" })),
+            )
+            .await
+            .unwrap();
+            assert_eq!(theirs["yours"], false, "{caller}");
+            let history = call(
+                &state,
+                caller,
+                "read_session_history",
+                &arguments(json!({ "session": "of-b" })),
+            )
+            .await
+            .unwrap();
+            assert_eq!(history["unavailable"], false, "{caller}");
+
+            // The archive of a project of its own console and of another's.
+            for project in ["project-1", "project-2"] {
+                let archive = call(
+                    &state,
+                    caller,
+                    "list_archived",
+                    &arguments(json!({ "project": project })),
+                )
+                .await
+                .unwrap();
+                let ids: Vec<&str> = archive["sessions"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|session| session["session"].as_str().unwrap())
+                    .collect();
+                let expected: &[&str] = if project == "project-1" {
+                    &["archived-of-a", "archived-of-b"]
+                } else {
+                    &["archived-elsewhere"]
+                };
+                let mut sorted = ids.clone();
+                sorted.sort();
+                assert_eq!(sorted, expected, "{caller} {project}");
+            }
+            let err = call(&state, caller, "list_archived", &Map::new())
+                .await
+                .expect_err("no project");
+            assert!(err.to_string().contains("`project` is required"), "{err}");
+            let err = call(
+                &state,
+                caller,
+                "list_archived",
+                &arguments(json!({ "project": "nowhere" })),
+            )
+            .await
+            .expect_err("no such project");
+            assert!(
+                err.to_string().contains("there is no project"),
+                "{caller}: {err}"
+            );
+
+            // Its own console in full, another's as the little that targets a project.
+            let own = call(&state, caller, "list_projects", &Map::new())
+                .await
+                .unwrap();
+            assert_eq!(own["console"], "console-1", "{caller}");
+            let projects = own["projects"].as_array().unwrap();
+            assert!(projects
+                .iter()
+                .all(|project| project["sessions"].is_array()));
+            let sessions: Vec<&Value> = projects
+                .iter()
+                .flat_map(|project| project["sessions"].as_array().unwrap())
+                .collect();
+            let of_starter = sessions
+                .iter()
+                .find(|session| session["session"] == "mine")
+                .unwrap();
+            assert_eq!(of_starter["yours"], caller == "starter", "{caller}");
+            let other = call(
+                &state,
+                caller,
+                "list_projects",
+                &arguments(json!({ "console": "console-2" })),
+            )
+            .await
+            .unwrap();
+            assert_eq!(other["console"], "console-2", "{caller}");
+            assert_eq!(other["projects"][0]["project"], "project-2");
+            assert!(other["projects"][0]["sessions"].is_null());
+
+            let consoles = call(&state, caller, "list_consoles", &Map::new())
+                .await
+                .unwrap();
+            let yours: Vec<(&str, bool)> = consoles["consoles"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|console| {
+                    (
+                        console["console"].as_str().unwrap(),
+                        console["yours"].as_bool().unwrap(),
+                    )
+                })
+                .collect();
+            assert_eq!(
+                yours,
+                [("console-1", true), ("console-2", false)],
+                "{caller}"
+            );
+        }
+    }
+
+    /// A project name that one project of the caller's console and one of another console both
+    /// carry is the caller's own, while an id reaches either.
+    #[tokio::test]
+    async fn a_project_name_in_the_callers_console_wins_for_the_archive() {
+        let (state, _dir) = shared_console_state("tool-surface-archive-precedence");
+        for (id, console, archived) in [
+            ("own-twin", "console-1", "archived-own"),
+            ("foreign-twin", "console-2", "archived-foreign"),
+        ] {
+            state
+                .store
+                .insert_project(&Project {
+                    id: id.to_string(),
+                    console_id: console.to_string(),
+                    name: "twin".to_string(),
+                    ..state.store.get_project("project-1").unwrap().unwrap()
+                })
+                .unwrap();
+            let mut session = project_session(archived, console, None);
+            session.project_id = Some(id.to_string());
+            session.status = SessionStatus::Archived;
+            state.store.insert_session(&session).unwrap();
+        }
+        for (wanted, expected) in [
+            ("twin", "archived-own"),
+            ("own-twin", "archived-own"),
+            ("foreign-twin", "archived-foreign"),
+        ] {
+            let listed = call(
+                &state,
+                "loose",
+                "list_archived",
+                &arguments(json!({ "project": wanted })),
+            )
+            .await
+            .unwrap();
+            assert_eq!(listed["sessions"][0]["session"], expected, "{wanted}");
+            assert_eq!(listed["sessions"].as_array().unwrap().len(), 1, "{wanted}");
+        }
+    }
+
+    /// A project name two projects of another console share is refused rather than read as
+    /// either of them.
+    #[tokio::test]
+    async fn an_ambiguous_project_name_is_refused_for_the_archive() {
+        let (state, _dir) = shared_console_state("tool-surface-ambiguous-archive");
+        for id in ["twin-1", "twin-2"] {
+            state
+                .store
+                .insert_project(&Project {
+                    id: id.to_string(),
+                    name: "twin".to_string(),
+                    ..state.store.get_project("project-2").unwrap().unwrap()
+                })
+                .unwrap();
+        }
+        let err = call(
+            &state,
+            "loose",
+            "list_archived",
+            &arguments(json!({ "project": "twin" })),
+        )
+        .await
+        .expect_err("ambiguous");
+        assert!(err.to_string().contains("names 2 projects"), "{err}");
+        call(
+            &state,
+            "loose",
+            "list_archived",
+            &arguments(json!({ "project": "twin-1" })),
+        )
+        .await
+        .unwrap();
+    }
+
+    /// `list_projects` with `console` shows another console's projects as the little an agent needs
+    /// to target one, while its own console, named or not, is listed whole. A console named
+    /// ambiguously or not at all is refused.
+    #[tokio::test]
+    async fn another_consoles_projects_are_listed_by_id_name_description_and_tags() {
+        let (state, _dir) = shared_console_state("tool-surface-other-console-projects");
+        let mut project = state.store.get_project("project-2").unwrap().unwrap();
+        project.description = Some("Billing".to_string());
+        project.tags = vec!["rust".to_string()];
+        state.store.update_project(&project).unwrap();
+        state
+            .store
+            .update_console(&Console {
+                name: "Other".to_string(),
+                ..state.store.get_console("console-2").unwrap().unwrap()
+            })
+            .unwrap();
+
+        for wanted in ["console-2", "Other"] {
+            let listed = call(
+                &state,
+                "a",
+                "list_projects",
+                &arguments(json!({ "console": wanted })),
+            )
+            .await
+            .unwrap();
+            assert_eq!(listed["console"], "console-2", "{wanted}");
+            assert_eq!(
+                listed["projects"],
+                json!([{
+                    "project": "project-2",
+                    "name": "project-2",
+                    "description": "Billing",
+                    "tags": ["rust"],
+                }]),
+                "{wanted}"
+            );
+        }
+        for wanted in ["console-1", "Console"] {
+            let own = call(
+                &state,
+                "a",
+                "list_projects",
+                &arguments(json!({ "console": wanted })),
+            )
+            .await
+            .unwrap();
+            assert_eq!(own["console"], "console-1", "{wanted}");
+            assert_eq!(own["projects"][0]["project"], "project-1", "{wanted}");
+            assert!(own["projects"][0]["sessions"].is_array(), "{wanted}");
+        }
+        let plain = call(&state, "a", "list_projects", &Map::new())
+            .await
+            .unwrap();
+        assert_eq!(plain["projects"].as_array().unwrap().len(), 1);
+
+        state
+            .store
+            .update_console(&Console {
+                name: "Console".to_string(),
+                ..state.store.get_console("console-2").unwrap().unwrap()
+            })
+            .unwrap();
+        for (wanted, reason) in [
+            ("Console", "names 2 consoles"),
+            ("nowhere", "there is no console `nowhere`"),
+        ] {
+            let err = call(
+                &state,
+                "a",
+                "list_projects",
+                &arguments(json!({ "console": wanted })),
+            )
+            .await
+            .expect_err("refused");
+            assert!(err.to_string().contains(reason), "{wanted}: {err}");
+        }
+    }
+
     /// The archive of a project is listed whole, owners marked, rather than filtered to the caller.
     #[tokio::test]
     async fn the_archive_lists_every_owners_sessions() {
@@ -2483,7 +2579,6 @@ pub(super) mod tests {
             ("mine", "new_session"),
             ("mine", "send_message"),
             ("of-a", "archive_session"),
-            ("starter", "list_projects"),
             ("starter", "add_project"),
             ("starter", "show_page"),
             ("a", "report"),
@@ -4006,26 +4101,6 @@ pub(super) mod tests {
             describe_session(&state, &used, &caller, &HashMap::new()).unwrap()["context"],
             json!({"tokens": 120_000, "window": 200_000, "used_percent": 60})
         );
-    }
-
-    #[test]
-    fn escape_sequences_and_control_bytes_are_stripped_from_the_output_tail() {
-        let raw = b"\x1b[2J\x1b[1;32mbuilding\x1b[0m\r\n\x1b]0;title\x07done\n";
-        assert_eq!(readable_output(raw), "building\ndone\n");
-    }
-
-    #[test]
-    fn runs_of_blank_lines_collapse() {
-        assert_eq!(readable_output(b"a\n\n\n\n b \n"), "a\n\n b\n");
-    }
-
-    /// Partial UTF-8 is normal: the tail starts at a byte offset into the ring buffer, not at a
-    /// character boundary.
-    #[test]
-    fn a_tail_cut_mid_character_still_reads() {
-        let mut raw = "ok ".as_bytes().to_vec();
-        raw.extend_from_slice(&"日".as_bytes()[..2]);
-        assert!(readable_output(&raw).starts_with("ok "));
     }
 
     /// A Codex project session `a` on the account `codex-work`, in a console whose sessions

@@ -116,7 +116,8 @@ effort" in `docs/product/projects.md` and "Which account a session uses" in `doc
 Nothing is asked of the agent until the Advanced section is opened for the first time, and it is asked again whenever
 the agent or that account changes; an answer to a question the dialog has since moved off is dropped. An answer is
 reused for ten minutes, and a reason there is none for thirty seconds, so opening the section again does not run the
-agent's command each time.
+agent's command each time. Sessions read the same list, from the same answers, with `list_agent_models` (see "Reading
+the models an agent offers" in `docs/product/what-every-session-reads.md`).
 
 ## The reasoning effort offered
 

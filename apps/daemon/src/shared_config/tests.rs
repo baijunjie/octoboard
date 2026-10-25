@@ -2606,7 +2606,8 @@ async fn messages_held_for_a_session_that_is_not_relaunched_are_dropped_and_told
 
 #[tokio::test]
 async fn a_session_being_restarted_is_described_to_agents_as_starting() {
-    use crate::mcp::exec::{describe_session, list_sessions};
+    use crate::mcp::exec::describe_session;
+    use crate::mcp::reads::list_sessions;
     let fixture = Fixture::new();
     claude_setup(&fixture);
     let caller = fixture.session("caller", Agent::Claude);

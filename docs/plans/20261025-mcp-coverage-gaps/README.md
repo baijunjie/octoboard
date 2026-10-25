@@ -37,12 +37,18 @@ configuration is added. Each reuses a capability the app already has behind its 
 - **A session's responsible branches are read through a tool of their own**, which returns each branch with its
   worktree state. The `get_session` record carries only the branch names, so `list_sessions` stays light and reading
   a record runs no git.
-- **Session history is readable with the same scope as `get_session`**: any session may read any session's history.
-  Chosen by the user over limiting it to owners; it follows the existing read-wide, write-narrow rule.
+- **Every read-only tool is offered to all three roles with the same scope**: console session, project session that
+  can own sessions (including a lead session) and bound project session alike get `get_session`, `list_sessions`,
+  `read_session_history`, `get_session_branches`, `list_agent_models`, `list_consoles`, `list_projects` (whose
+  `console` parameter defaults to the caller's own console), `list_archived` (any project of any console) and
+  `get_account_quotas`; any session may read any session's record and history. `get_project` stays a project
+  session's read of its own project. Chosen by the user: the read-wide rule exists so sessions do not collide, which
+  applies to every role, not just those that can own sessions; the cost accepted is a few more tool descriptions in
+  bound sessions. Writes are unchanged.
 - **Session history holds user messages and final replies only**, no tool calls, and is paged by entry count from the
   most recent entry backwards.
 - **Listing projects across consoles is an optional `console` parameter on `list_projects`**, defaulting to the
-  caller's console and available to every role that can list projects. For another console it returns only id, name,
+  caller's console; the consoles themselves are found through a read-only `list_consoles`. For another console it returns only id, name,
   description and tags: reads are not limited to the caller's console (writes are), and these fields are what an agent
   needs to target `request_session`.
 - **Refreshing quotas is rate-limited to one refresh per account per 60 seconds**; a request within that window
@@ -57,5 +63,5 @@ configuration is added. Each reuses a capability the app already has behind its 
 
 1. Document the user-only agent settings (closed)
 2. Complete the session record (closed)
-3. [Read tools for models, history, archives and projects](03-read-tools-for-models-history-archives-and-projects.md)
+3. Read tools for models, history, archives and projects (closed)
 4. [Smaller conveniences](04-smaller-conveniences.md)

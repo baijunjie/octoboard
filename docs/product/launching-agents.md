@@ -103,8 +103,11 @@ besides the variables a project session's agent is given for its git (see "The l
   `docs/product/hub-orchestration.md`), `handoff_session`, `switch_session_account`, `transfer_session`,
   `release_session` and `bind_to_session` where it has them, `request_session` for a session that is nobody's,
   `request_resume_session` for resuming a conversation the user asked for, `get_account_quotas` for what each account's
-  quota has left, `list_sessions` and `share_info` for information, and `get_session_branches` for where the branches a
-  session is responsible for are checked out. Where its project's effective worktree settings
+  quota has left, the reads every session has whatever its kind — `get_session`, `read_session_history`,
+  `list_consoles`, `list_projects` and `list_archived` — with the rule that a session not its own is to be left alone
+  whatever it can read of it, `list_agent_models` to check before naming a model or effort, `list_sessions` and
+  `share_info` for information, and `get_session_branches` for where the branches a session is responsible for are
+  checked out. Where its project's effective worktree settings
   have use worktrees for development on at the launch, it also carries the worktree rule (see "The worktree rule" in
   `docs/product/worktree-settings.md`). Every project session's text ends by saying that everything else is the
   ordinary work of the project, under its own instructions, conventions and configuration. The text is written from who the session

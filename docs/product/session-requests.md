@@ -241,7 +241,7 @@ dialog (see "Approving requests automatically" above):
    The result tells the caller to follow the user's direction on continuing its own work or ending after the
    handover. It does not own the new session, so `send_message`, `archive_session`, `reopen_session` and the other
    tools that act on a session of the caller's own refuse it; `share_info` reaches it (see
-   `docs/product/information-between-sessions.md`), and `get_session` reads it where the caller has that tool.
+   `docs/product/information-between-sessions.md`), and `get_session` reads it, as it reads any session.
 
 The call returns:
 

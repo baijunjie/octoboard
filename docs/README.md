@@ -120,9 +120,12 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   and how long they live, where they start and with what environment, their title, when one counts as busy, a shell
   that exits on its own, and what closes or ends them.
 - [Orchestration](product/hub-orchestration.md) — how an owner (a console session, or an unbound project session in
-  its own project) starts and drives sessions: each one's tools, lead sessions (a project session bound to a console
+  its own project) starts and drives sessions: each one's write tools, lead sessions (a project session bound to a console
   session that keeps its own sessions, two levels deep), the brief a task is handed over as, which sessions an owner
   drives, and a session that reports to nobody archiving itself once everything under it is archived.
+- [What every session reads](product/what-every-session-reads.md) — the read-only tools every session has whatever its
+  role, with one scope, and why: session records and their fields, listing consoles and a console's projects, reading
+  a session's history page by page, the models an agent offers, and what stays narrower than the reads.
 - [Changing a session's owner](product/changing-session-owners.md) — how a binding changes while sessions run: who can
   own a session, handing a session to another owner with `transfer_session`, an unbound session binding itself with
   `bind_to_session`, releasing a session from its owner (`release_session` or the sidebar's Unbind), what a session is

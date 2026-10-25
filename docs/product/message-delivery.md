@@ -157,8 +157,8 @@ call ran into it is told (a report fails, and its session is *not* archived), wh
 message was already queued behind it is not. What covers those is the message the user gets, which
 names the session and tells them to look at it before anything else is sent.
 
-**What the owners' tools report.** Every session record the session tools give (see "The console session's tools" in
-`docs/product/hub-orchestration.md`) carries `queued_messages`, the number of messages queued for the session and not
+**What the owners' tools report.** Every session record the session tools give (see "Session records" in
+`docs/product/what-every-session-reads.md`) carries `queued_messages`, the number of messages queued for the session and not
 yet written, and `writes_held`: `null`, or, for a running session that holds what is written to it whatever its
 `status` reads, an object with `reason`, an `explanation` in prose, and, for `agent_dialog`, the screen's code in
 `dialog`. A session held only because its agent reported it is waiting for the user — at a permission prompt or a

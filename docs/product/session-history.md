@@ -4,7 +4,9 @@ What the terminal's area shows for an archived session: a read-only **Session hi
 from the agent's own conversation record, so the user can recall what the session was about. It stands in for the
 terminal; the way back to the session's terminal is reopening it. The terminal itself, and the floating bar that
 offers Reopen, are in "Interrupted, archived and dormant sessions" in `docs/product/session-terminal.md`; reopening is
-in "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`.
+in "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`. Sessions read the same
+record, of any session, with `read_session_history` (see "Reading a session's history" in
+`docs/product/what-every-session-reads.md`).
 
 ## When the history is shown
 
