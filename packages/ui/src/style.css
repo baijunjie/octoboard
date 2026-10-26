@@ -444,14 +444,21 @@ html {
 /* An account that is used up draws its bars in a neutral grey instead of the agent's colour, so it recedes beside the
    accounts that can still be used; its "Limit reached" badge says why, beside the name on the rail
    (`AccountNameLine`) and after the bar in the accounts table (`AccountUsageCell`). The grey is the muted text's hue,
-   a step fainter than the agent colours on their track. */
-.quota-meter--used-up {
-  --meter-fill: oklch(0.61 0.0138 285.94);
+   a step fainter than the agent colours on their track. `--meter-used-up-fill` is the one definition of that grey,
+   which the menu bar icon's menu reads back for its own bars. */
+:root,
+.light,
+[data-theme="light"] {
+  --meter-used-up-fill: oklch(0.61 0.0138 285.94);
 }
 
-.dark .quota-meter--used-up,
-[data-theme="dark"] .quota-meter--used-up {
-  --meter-fill: oklch(0.56 0.015 286.067);
+.dark,
+[data-theme="dark"] {
+  --meter-used-up-fill: oklch(0.56 0.015 286.067);
+}
+
+.quota-meter--used-up {
+  --meter-fill: var(--meter-used-up-fill);
 }
 
 /* A hairline ring of the foreground inside the dot and inside each swatch of the colour picker, so

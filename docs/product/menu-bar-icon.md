@@ -122,22 +122,19 @@ From top to bottom:
      after a failed reading. Otherwise quota is available when the latest reading succeeded and contains an
      account-wide window; its status is unknown when the latest reading failed or only model-specific windows were
      reported. Availability describes the account-wide quota, not whether every model can be used. The status is
-     written in the UI's language. A native picture before the account name also marks the status: a filled circle
-     with a checkmark in green for available, a filled circle with a minus in red for used up, and a filled circle
-     with a question mark in muted grey for unknown. These colours use the application's shared success, danger and
-     muted palette for its current appearance; if a colour cannot be resolved, the picture uses the native menu's
-     secondary text colour. The picture occupies a **13 pt** square, vertically centred with the small header text,
-     with a **5 pt** gap before the name. It is not read
-     separately by assistive technology. Accounts still being read or with no windows keep only their reading,
-     unavailable or login note below the header;
+     written in the UI's language, and no picture marks it. Accounts still being read or with no windows keep only
+     their reading, unavailable or login note below the header;
    - under the header, each window is one row, except as the next point says: its name on the left, as in "Quota
      windows" in `docs/product/account-quotas.md` ("5h", "Session"), "N% remaining · resets in <countdown>" ("82% remaining · resets in 1h 57m", "resets now" once the time has passed, no countdown for a
      window with no reset time) right-aligned in the secondary text colour, and a bar of what remains directly
      below, on a translucent grey track. The bar is orange for Claude Code and blue for Codex, each one fixed colour
      whether the menu is light or dark (their contrast against the track is not measured), and the text colour for
-     Grok Build. A row whose text needs more room than the submenu's usual width widens the submenu rather than
-     being cut short. A row is read by assistive technology once, as one phrase ("5h 82% remaining · resets in
-     1h 57m"), by its menu item alone: neither the name, the detail nor the bar is read on its own;
+     Grok Build. The bars of an account whose quota is used up, in this row and in the meter row below, are instead a
+     neutral grey, the one the rail's quota panel draws such bars in, for the menu's current appearance (the menu's
+     secondary text colour when that grey cannot be read). A row whose text needs more room than the submenu's usual
+     width widens the submenu rather than being cut short. A row is read by assistive technology once, as one phrase
+     ("5h 82% remaining · resets in 1h 57m"), by its menu item alone: neither the name, the detail nor the bar is read
+     on its own;
    - an account with both a five-hour and an account-wide weekly window shows the two as **one meter row**, in
      the five-hour window's place: its name and detail with its bar, **2.5 pt** beneath that bar a thinner one,
      **4.5 pt** tall against the five-hour bar's **6 pt** (three quarters, as on every two-layer bar), for the weekly
@@ -239,7 +236,7 @@ being dimmed, never highlighting, and how assistive technology reads them), **No
 headers in a submenu; the session lines' agent marks and the headings' status glyphs in a dark menu; either look on a
 light menu bar, and the octopus alone while the icon is highlighted with its menu open; opening the menu asking for
 a refresh of the quotas; a menu changing between light and dark while the app runs; a quota detail row never
-highlighting under the pointer; a row widened by a long window name; the meter row that joins an account's five-hour
+highlighting under the pointer; a row widened by a long window name; a used-up account's grey bars; the meter row that joins an account's five-hour
 and weekly windows (the window rows observed above were seen before it existed); the window names as each agent's own
 interface words them (a Claude Code account's **Session** and **Weekly · all models**, a Codex account's **5h**), the
 rows observed above having been seen under the earlier **5-hour** name; and the opener bars staying in view in a menu

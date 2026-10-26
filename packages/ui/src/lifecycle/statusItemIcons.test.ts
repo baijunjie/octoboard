@@ -6,32 +6,32 @@ import { withIcons } from "./statusItemIcons";
 vi.mock("../cssColour", () => ({ resolveCssColour: vi.fn() }));
 beforeEach(() => { vi.mocked(resolveCssColour).mockReset(); });
 
+const meter = { session: { name: "5h", detail: "", fraction: 0 }, weekly: { name: "Weekly", detail: "", fraction: 0 }, label: "", agent: "claude" } as const;
 const draft: StatusItemMenuDraft = {
   sections: [], submenus: [{ title: "Quota", items: [
-    { kind: "header", title: "Available", status: "available" },
-    { kind: "header", title: "Used up", status: "used_up" },
-    { kind: "header", title: "Unknown", status: "unknown" },
-    { kind: "header", title: "Loading" },
+    { kind: "header", title: "Used up" },
+    { kind: "window", name: "5h", detail: "", label: "", fraction: 0, agent: "claude", used_up: true },
+    { kind: "meter", ...meter, used_up: true },
+    { kind: "window", name: "5h", detail: "", label: "", fraction: 0.5, agent: "claude" },
   ] }],
   open: "Open", quit: "Quit", attention: false,
 };
 
-it.each(["light", "dark"] as const)("uses the shared semantic palette in %s native menus", async (appearance) => {
+it.each(["light", "dark"] as const)("gives a used-up account's bars the stylesheet's grey in %s native menus", async (appearance) => {
   vi.mocked(resolveCssColour).mockImplementation((expression, theme) => {
     expect(theme).toBe(appearance);
-    const palette: Record<string, string> = { "var(--success-soft-foreground)": "#12ab34", "var(--danger-soft-foreground)": "#cd5678", "var(--app-muted)": "#818283" };
-    return palette[expression];
+    return expression === "var(--meter-used-up-fill)" ? "#7b7b85" : undefined;
   });
   const result = await withIcons(draft, appearance);
   expect(result.submenus[0].items).toEqual([
-    { kind: "header", title: "Available", status: "available", status_colour: [18, 171, 52] },
-    { kind: "header", title: "Used up", status: "used_up", status_colour: [205, 86, 120] },
-    { kind: "header", title: "Unknown", status: "unknown", status_colour: [129, 130, 131] },
-    { kind: "header", title: "Loading" },
+    draft.submenus[0].items[0],
+    { ...draft.submenus[0].items[1], used_up_colour: [123, 123, 133] },
+    { ...draft.submenus[0].items[2], used_up_colour: [123, 123, 133] },
+    draft.submenus[0].items[3],
   ]);
-  expect(draft.submenus[0].items[0]).not.toHaveProperty("status_colour");
+  expect(draft.submenus[0].items[1]).not.toHaveProperty("used_up_colour");
 });
 
-it("retains the readable status when the stylesheet cannot resolve a tint", async () => {
+it("sends no grey when the stylesheet cannot resolve it", async () => {
   expect((await withIcons(draft, "light")).submenus).toEqual(draft.submenus);
 });

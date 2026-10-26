@@ -78,11 +78,12 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
   const lines: StatusItemSubmenuItem[] = [{
     kind: "header",
     title: statusTitle,
-    status,
     detail: justNow ? t("quota.updatedNow") : t("quota.updated", { age }),
     label: justNow ? t("statusItem.quota.updatedNow", { header: statusTitle }) : t("statusItem.quota.updated", { header: statusTitle, age }),
   }];
   if (quota.unavailable) lines.push({ kind: "note", text: t("statusItem.quota.stale") });
+  // The shell draws a used-up account's bars in grey, so that it recedes beside the accounts that can still be used.
+  const usedUp = status === "used_up" ? { used_up: true } : {};
   const layers = twoLayerWindows(quota.windows);
   for (const window of orderedQuotaWindows(quota.windows)) {
     if (layers?.weekly && window === layers.weekly) continue;
@@ -95,11 +96,12 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
         weekly: { name: weekly.name, detail: weekly.detail, fraction: weekly.fraction },
         label: joinPhrases(source.language, [session.label, weekly.label]),
         agent,
+        ...usedUp,
       });
       continue;
     }
     const { name: windowName, detail, label, fraction } = windowParts(t, source, quota, window);
-    lines.push({ kind: "window", name: windowName, detail, label, fraction, agent });
+    lines.push({ kind: "window", name: windowName, detail, label, fraction, agent, ...usedUp });
   }
   return lines;
 }

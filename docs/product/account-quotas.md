@@ -117,8 +117,8 @@ Each window shows:
   yet. A window the agent gives no reset time for has no countdown;
 - a bar of what remains, full when nothing is used. The bar has one colour per agent: an orange for Claude Code, a
   blue for Codex, and the text colour for Grok Build, each set off against the bar's track in both light and dark
-  appearance. In the rail's panel and in Settings' accounts table a used-up account's bars are a neutral grey
-  instead (see "A used-up account" below).
+  appearance. In the rail's panel, in Settings' accounts table and in the menu bar icon's quota submenus a used-up
+  account's bars are a neutral grey instead (see "A used-up account" below).
 
 Settings shows an account's quota in two places (see "The accounts table" and "The account settings dialog" in
 `docs/product/agent-accounts.md`):
@@ -261,7 +261,10 @@ recedes the same way: its name in the **Account** column is in the muted text co
 usage bar in the same neutral grey, followed by a neutral **Limit reached** badge (and by the out-of-date mark when the
 windows are out of date). There assistive technology does not read the badge: in place of what remains, the cell's
 words say which limit the account has reached and, when known, when it resets ("Reached session limit · resets in
-42m"). The account settings dialog does not mark a used-up account, and no other usage bar turns grey.
+42m"). The account settings dialog does not mark a used-up account.
+
+In the macOS menu bar icon's quota submenus a used-up account's bars are drawn in the same neutral grey (see "The
+icon's menu" in `docs/product/menu-bar-icon.md`); no other usage bar turns grey.
 
 The panel and the table judge on the clock as an open dialog does, so the account returns to its usual look within 30
 seconds of its reset time passing, without waiting for a newer reading.

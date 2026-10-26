@@ -211,17 +211,19 @@ export interface StatusItemSubmenu {
  * and a line cannot be chosen. */
 export type StatusItemSubmenuItem =
   /** An account's line: `title` at the left and, right-aligned, `detail` (when its reading was taken) when
-   * there is one. `status` supplies the leading native quota icon; `title` includes the status in words.
-   * `status_colour` is its semantic tint from the UI stylesheet, as sRGB bytes.
-   * `label`, when given, is the whole line as one phrase, for assistive technology. */
-  | { kind: "header"; title: string; detail?: string; label?: string; status?: "available" | "used_up" | "unknown"; status_colour?: [number, number, number] }
+   * there is one. `title` includes the quota status in words. `label`, when given, is the whole line as one
+   * phrase, for assistive technology. */
+  | { kind: "header"; title: string; detail?: string; label?: string }
   /** A window's name and, right-aligned, its detail, with a bar of `fraction` (0 to 1) beneath in
-   * `agent`'s colour. `label` is the whole line as one phrase, for assistive technology. */
-  | { kind: "window"; name: string; detail: string; label: string; fraction: number; agent: Agent }
+   * `agent`'s colour. `used_up` marks the window of an account whose quota is used up, whose bar is drawn
+   * in `used_up_colour` (sRGB bytes, from the UI stylesheet) instead. `label` is the whole line as one phrase,
+   * for assistive technology. */
+  | { kind: "window"; name: string; detail: string; label: string; fraction: number; agent: Agent; used_up?: boolean; used_up_colour?: [number, number, number] }
   /** The 5-hour window and the account-wide weekly one as one item: the 5-hour name and detail with
    * its bar of `session.fraction`, a thinner bar of `weekly.fraction` directly beneath, then the weekly name
-   * and detail in the secondary colour. `label` is both phrases as one, for assistive technology. */
-  | { kind: "meter"; session: { name: string; detail: string; fraction: number }; weekly: { name: string; detail: string; fraction: number }; label: string; agent: Agent }
+   * and detail in the secondary colour. `used_up` and `used_up_colour` are a window's, for both bars. `label` is
+   * both phrases as one, for assistive technology. */
+  | { kind: "meter"; session: { name: string; detail: string; fraction: number }; weekly: { name: string; detail: string; fraction: number }; label: string; agent: Agent; used_up?: boolean; used_up_colour?: [number, number, number] }
   | { kind: "note"; text: string }
   | { kind: "separator" };
 

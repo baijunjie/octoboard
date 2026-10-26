@@ -120,7 +120,9 @@ A used-up account in the rail's quota panel, which is not a control, recedes the
 name and its meters' headlines take the secondary text colour (6.0:1 light, 6.7:1 dark on the panel's popover), a
 neutral "Limit reached" badge on its name line says why in words, and its bars are drawn in a neutral grey
 (`.quota-meter--used-up` in `packages/ui/src/style.css`), fainter than the agent colours. Settings' accounts table
-marks such an account alike, the name muted and the grey bar followed by the same badge in its Usage cell. A veil over the row is not used for that state: it would take its text below AA.
+marks such an account alike, the name muted and the grey bar followed by the same badge in its Usage cell. The menu
+bar icon's quota submenus draw such an account's bars in the same grey, `--meter-used-up-fill` read back for the
+menu's appearance, while the account's heading says "Limit reached" in words. A veil over the row is not used for that state: it would take its text below AA.
 
 A kept shortfall of that panel: while the mouse is on the rail's **Account quota** button, every account row but the button's own is
 covered by the sidebar's inactive-project veil (`INACTIVE_VEIL_CLASS` in `packages/ui/src/components/inactiveVeil.ts`),

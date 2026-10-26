@@ -20,20 +20,19 @@
 //! attributed title shows the current console's account quota without replacing submenu tracking,
 //! highlight or keyboard handling; the menu item's accessible label gives its complete quota phrase.
 //!
-//! System colours resolve as a view is drawn. A quota status picture takes its semantic tint from
-//! the UI stylesheet in the application appearance, just as the menu's other status pictures do.
+//! A bar is filled in its agent's colour, or, for an account whose quota is used up, in the grey the
+//! UI stylesheet defines for that, which the UI sends as bytes.
 
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 use objc2::{define_class, msg_send, DefinedClass, MainThreadMarker, MainThreadOnly, Message};
 use objc2_app_kit::{
     NSAccessibility, NSAutoresizingMaskOptions, NSBezierPath, NSColor, NSFont, NSFontAttributeName,
-    NSForegroundColorAttributeName, NSImage, NSImageScaling, NSImageView, NSMenu, NSStringDrawing,
-    NSView,
+    NSForegroundColorAttributeName, NSImage, NSImageView, NSMenu, NSStringDrawing, NSView,
 };
 use objc2_foundation::{NSDictionary, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString};
 
-use crate::tray::{AgentKind, MeterLayer, QuotaStatus, SubmenuItem};
+use crate::tray::{AgentKind, MeterLayer, SubmenuItem};
 
 /// The narrowest a row is, in points; a row whose text needs more is as wide as it needs, and the
 /// menu is as wide as its widest row.
@@ -217,6 +216,19 @@ fn fill_colour(agent: AgentKind) -> Retained<NSColor> {
     }
 }
 
+/// The fill of a used-up account's bars, whatever the agent: the UI's grey for them (sent as sRGB
+/// bytes), or the secondary text colour where it sent none.
+fn used_up_fill(colour: Option<[u8; 3]>) -> Retained<NSColor> {
+    colour.map_or_else(NSColor::secondaryLabelColor, |[r, g, b]| {
+        NSColor::colorWithSRGBRed_green_blue_alpha(
+            f64::from(r) / 255.0,
+            f64::from(g) / 255.0,
+            f64::from(b) / 255.0,
+            1.0,
+        )
+    })
+}
+
 /// The view of a row, `width` wide at least. It is not an accessibility element, and nothing in
 /// it is: the row is read as its menu item, whose title is the whole phrase. Were the view the
 /// element instead, the item's title would be read too, so the phrase would be exposed twice;
@@ -274,7 +286,8 @@ impl TextLine {
 }
 
 /// Adds to `row`, `width` wide, a bar `thickness` tall with its bottom at `y`, `fraction` of its
-/// width filled in the colour of `agent`; it grows with the row.
+/// width filled in `used_up_fill` when there is one, else in the colour of `agent`; it grows with
+/// the row.
 fn add_bar(
     row: &NSView,
     width: f64,
@@ -282,12 +295,13 @@ fn add_bar(
     thickness: f64,
     fraction: f64,
     agent: AgentKind,
+    used_up_fill: Option<&NSColor>,
     mtm: MainThreadMarker,
 ) {
     let bar = QuotaBar::new(
         rect(INSET, y, width - INSET * 2.0, thickness),
         fraction.clamp(0.0, 1.0),
-        fill_colour(agent),
+        used_up_fill.map_or_else(|| fill_colour(agent), NSColor::retain),
         mtm,
     );
     bar.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable);
@@ -301,6 +315,7 @@ fn window_row(
     detail: &str,
     fraction: f64,
     agent: AgentKind,
+    used_up_fill: Option<&NSColor>,
     mtm: MainThreadMarker,
 ) -> Retained<NSView> {
     let line = TextLine::new(name, detail, &NSColor::labelColor(), false, mtm);
@@ -308,7 +323,16 @@ fn window_row(
     let height = TEXT_TOP + line.height + TEXT_TO_BAR + BAR_HEIGHT + BAR_BOTTOM;
     let row = row_view(width, height, mtm);
     line.place(&row, width, height - TEXT_TOP - line.height);
-    add_bar(&row, width, BAR_BOTTOM, BAR_HEIGHT, fraction, agent, mtm);
+    add_bar(
+        &row,
+        width,
+        BAR_BOTTOM,
+        BAR_HEIGHT,
+        fraction,
+        agent,
+        used_up_fill,
+        mtm,
+    );
     row
 }
 
@@ -319,6 +343,7 @@ fn meter_row(
     session: &MeterLayer,
     weekly: &MeterLayer,
     agent: AgentKind,
+    used_up_fill: Option<&NSColor>,
     mtm: MainThreadMarker,
 ) -> Retained<NSView> {
     let session_line = TextLine::new(
@@ -348,6 +373,7 @@ fn meter_row(
         BAR_HEIGHT,
         session.fraction,
         agent,
+        used_up_fill,
         mtm,
     );
     add_bar(
@@ -357,6 +383,7 @@ fn meter_row(
         THIN_BAR_HEIGHT,
         weekly.fraction,
         agent,
+        used_up_fill,
         mtm,
     );
     weekly_line.place(&row, width, BAR_BOTTOM);
@@ -376,69 +403,14 @@ fn single_line_row(string: &str, small: bool, mtm: MainThreadMarker) -> Retained
 
 /// An account's header: one line of small secondary text, its title at the left and, when there is
 /// one, when its reading was taken right-aligned.
-fn header_row(
-    title: &str,
-    detail: Option<&str>,
-    status: Option<QuotaStatus>,
-    status_colour: Option<[u8; 3]>,
-    mtm: MainThreadMarker,
-) -> Retained<NSView> {
-    if detail.is_none() && status.is_none() {
+fn header_row(title: &str, detail: Option<&str>, mtm: MainThreadMarker) -> Retained<NSView> {
+    let Some(detail) = detail else {
         return single_line_row(title, true, mtm);
-    }
-    let icon = status.and_then(|status| {
-        let symbol = match status {
-            QuotaStatus::Available => "checkmark.circle.fill",
-            QuotaStatus::UsedUp => "minus.circle.fill",
-            QuotaStatus::Unknown => "questionmark.circle.fill",
-        };
-        let colour = status_colour.map_or_else(NSColor::secondaryLabelColor, |[r, g, b]| {
-            NSColor::colorWithSRGBRed_green_blue_alpha(
-                f64::from(r) / 255.0,
-                f64::from(g) / 255.0,
-                f64::from(b) / 255.0,
-                1.0,
-            )
-        });
-        let image = NSImage::imageWithSystemSymbolName_accessibilityDescription(
-            &NSString::from_str(symbol),
-            None,
-        )?;
-        let icon = picture_view(&image, mtm);
-        icon.setImageScaling(NSImageScaling::ScaleProportionallyUpOrDown);
-        icon.setContentTintColor(Some(&colour));
-        Some(icon)
-    });
-    let line = TextLine::new(
-        title,
-        detail.unwrap_or(""),
-        &NSColor::secondaryLabelColor(),
-        true,
-        mtm,
-    );
-    let icon_size: f64 = 13.0;
-    let icon_gap = 5.0;
-    let leading = if icon.is_some() {
-        icon_size + icon_gap
-    } else {
-        0.0
     };
-    let height = line.height.max(icon_size);
-    let width = (line.width + leading).max(MIN_WIDTH);
-    let row = row_view(width, height + LINE_PAD * 2.0, mtm);
-    let text_y = LINE_PAD + (height - line.height) / 2.0;
-    line.place(&row, width, text_y);
-    line.name
-        .setFrameOrigin(NSPoint::new(INSET + leading, text_y));
-    if let Some(icon) = icon {
-        icon.setFrame(rect(
-            INSET,
-            LINE_PAD + (height - icon_size) / 2.0,
-            icon_size,
-            icon_size,
-        ));
-        row.addSubview(&icon);
-    }
+    let line = TextLine::new(title, detail, &NSColor::secondaryLabelColor(), true, mtm);
+    let width = line.width.max(MIN_WIDTH);
+    let row = row_view(width, line.height + LINE_PAD * 2.0, mtm);
+    line.place(&row, width, LINE_PAD);
     row
 }
 
@@ -493,33 +465,40 @@ pub fn dress_submenu(menu: &NSMenu, items: &[SubmenuItem], mtm: MainThreadMarker
     for (item, model) in menu.itemArray().iter().zip(items) {
         match model {
             SubmenuItem::Separator => {}
-            SubmenuItem::Header {
-                title,
-                detail,
-                status,
-                status_colour,
-                ..
-            } => item.setView(Some(&header_row(
-                title,
-                detail.as_deref(),
-                *status,
-                *status_colour,
-                mtm,
-            ))),
+            SubmenuItem::Header { title, detail, .. } => {
+                item.setView(Some(&header_row(title, detail.as_deref(), mtm)))
+            }
             SubmenuItem::Note { text } => item.setView(Some(&single_line_row(text, false, mtm))),
             SubmenuItem::Window {
                 name,
                 detail,
                 fraction,
                 agent,
+                used_up,
+                used_up_colour,
                 ..
-            } => item.setView(Some(&window_row(name, detail, *fraction, *agent, mtm))),
+            } => item.setView(Some(&window_row(
+                name,
+                detail,
+                *fraction,
+                *agent,
+                used_up.then(|| used_up_fill(*used_up_colour)).as_deref(),
+                mtm,
+            ))),
             SubmenuItem::Meter {
                 session,
                 weekly,
                 agent,
+                used_up,
+                used_up_colour,
                 ..
-            } => item.setView(Some(&meter_row(session, weekly, *agent, mtm))),
+            } => item.setView(Some(&meter_row(
+                session,
+                weekly,
+                *agent,
+                used_up.then(|| used_up_fill(*used_up_colour)).as_deref(),
+                mtm,
+            ))),
         }
     }
 }
@@ -713,6 +692,19 @@ fn draw_opener_capsule(bounds: NSRect, remaining: u8, colour: &NSColor) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_used_up_fill_is_the_colour_sent_or_the_secondary_text_colour() {
+        let sent = used_up_fill(Some([123, 123, 133]));
+        let expected = NSColor::colorWithSRGBRed_green_blue_alpha(
+            123.0 / 255.0,
+            123.0 / 255.0,
+            133.0 / 255.0,
+            1.0,
+        );
+        assert!(sent.isEqual(Some(&expected)));
+        assert!(used_up_fill(None).isEqual(Some(&NSColor::secondaryLabelColor())));
+    }
 
     #[test]
     fn opener_capsule_keeps_its_gap_and_clears_the_native_arrow() {

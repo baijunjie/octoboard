@@ -120,7 +120,7 @@ export function iconKeysOf(draft: StatusItemMenuDraft): Set<string | undefined> 
 /** The menu with the pictures its lines name, in the system's `appearance`. Each picture is drawn once for
  * as long as its colours stay the same, so a change of appearance draws the status glyphs again and the
  * pictures of the other appearance are kept for its return. A key that cannot be drawn is left out, and
- * its line is shown without a picture. */
+ * its line is shown without a picture. The bars of a used-up account take the stylesheet's grey for them. */
 export async function withIcons(draft: StatusItemMenuDraft, appearance: Appearance): Promise<StatusItemMenu> {
   const keys = iconKeysOf(draft);
   const icons: StatusItemMenu["icons"] = {};
@@ -130,21 +130,14 @@ export async function withIcons(draft: StatusItemMenuDraft, appearance: Appearan
       if (key !== undefined && icon) icons[key] = icon;
     }),
   );
+  const grey = resolveCssColour("var(--meter-used-up-fill)", appearance);
+  const used_up_colour = grey ? ([1, 3, 5].map((offset) => Number.parseInt(grey.slice(offset, offset + 2), 16)) as [number, number, number]) : undefined;
   return {
     ...draft,
     icons,
     submenus: draft.submenus.map((submenu) => ({
       ...submenu,
-      items: submenu.items.map((item) => {
-        if (item.kind !== "header" || !item.status) return item;
-        const expression = item.status === "available" ? "var(--success-soft-foreground)"
-          : item.status === "used_up" ? "var(--danger-soft-foreground)" : "var(--app-muted)";
-        const colour = resolveCssColour(expression, appearance);
-        if (!colour) return item;
-        const channel = (offset: number) => Number.parseInt(colour.slice(offset, offset + 2), 16);
-        const status_colour: [number, number, number] = [channel(1), channel(3), channel(5)];
-        return { ...item, status_colour };
-      }),
+      items: submenu.items.map((item) => ((item.kind === "window" || item.kind === "meter") && item.used_up && used_up_colour ? { ...item, used_up_colour } : item)),
     })),
   };
 }
