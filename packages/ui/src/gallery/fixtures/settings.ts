@@ -26,7 +26,6 @@ const browserState: Scenario["state"] = {
     auto_delete_unresumable_archives: true,
     sidebar_order_by_status: true,
     ask_questions_as_choices: true,
-    reply_in_interface_language: true,
     added_agents: ["claude", "codex"],
     default_clone_dir: "/Users/dev/Projects",
     worktrees: DEFAULT_WORKTREE_SETTINGS,
@@ -524,7 +523,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Agent behavior",
-    description: "The lead line sits under the section heading, above a rule that opens the six rows: the session-request, resume-request, account-switch and handoff switches, all off, then Ask questions as choices and Talk to me in the interface language, both on, which is their default. Each of the four approval descriptions starts with \"Once this is on\"; the resume one names reopening, resuming and resuming a conversation in a new session, and the last two say that until then you are asked and can change the account (and for a handoff the agent), model and reasoning effort before confirming. The last two rows' descriptions state what being on does, including that running sessions keep what they were started with. Switch a row to read its other description; none moves another.",
+    description: "The lead line sits under the section heading, above a rule that opens the five rows: the session-request, resume-request, account-switch and handoff switches, all off, then Ask questions as choices, on, which is its default. Each of the four approval descriptions starts with \"Once this is on\"; the resume one names reopening, resuming and resuming a conversation in a new session, and the last two say that until then you are asked and can change the account (and for a handoff the agent), model and reasoning effort before confirming. The last row's description states what being on does, including that running sessions keep what they were started with. Switch a row to read its other description; none moves another.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -535,11 +534,11 @@ export const settingsScenarios: Scenario[] = [
     id: "settings-agent-permissions-on",
     group: GROUP,
     category: "normal",
-    title: "Agent behavior, approvals automatic, questions and replies left to the session",
-    description: "The four approval switches are on, each description now stating the behaviour instead of starting with \"Once this is on\", while Ask questions as choices and Talk to me in the interface language are off, their descriptions starting with \"Once this is on\".",
+    title: "Agent behavior, approvals automatic, questions in text",
+    description: "The four approval switches are on, each description now stating the behaviour instead of starting with \"Once this is on\", while Ask questions as choices is off, its description starting with \"Once this is on\".",
     state: {
       ...browserState,
-      settings: { ...browserState.settings!, auto_approve_session_requests: true, auto_approve_resume_requests: true, auto_approve_account_switches: true, auto_approve_handoffs: true, ask_questions_as_choices: false, reply_in_interface_language: false },
+      settings: { ...browserState.settings!, auto_approve_session_requests: true, auto_approve_resume_requests: true, auto_approve_account_switches: true, auto_approve_handoffs: true, ask_questions_as_choices: false },
     },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),

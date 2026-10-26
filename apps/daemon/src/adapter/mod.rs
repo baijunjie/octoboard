@@ -67,9 +67,8 @@ pub struct LaunchSpec<'a> {
     /// assembled, which decides whether a project session's role text asks it to put questions
     /// to the user as options to pick from.
     pub ask_questions_as_choices: bool,
-    /// The tag of the language the user's interface is set to, while the application setting
-    /// `reply_in_interface_language` was on when the launch was assembled and a language had been
-    /// reported; it decides whether a project session's role text names that language.
+    /// The tag of the language the user's interface is set to, once a client has reported one; it
+    /// decides whether a project session's role text names that language.
     pub user_language: Option<&'a str>,
     /// The id to give an agent that can pre-allocate one for a *new* conversation. Freshly
     /// generated per launch: both Claude Code and Grok refuse an id that already has a stored

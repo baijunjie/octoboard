@@ -294,7 +294,6 @@ impl Store {
                 auto_approve_account_switches INTEGER NOT NULL DEFAULT 0,
                 auto_approve_handoffs INTEGER NOT NULL DEFAULT 0,
                 ask_questions_as_choices INTEGER NOT NULL DEFAULT 1,
-                reply_in_interface_language INTEGER NOT NULL DEFAULT 1,
                 auto_select_account INTEGER NOT NULL DEFAULT 0,
                 sidebar_order_by_status INTEGER NOT NULL DEFAULT 1,
                 auto_start_quota_windows INTEGER NOT NULL DEFAULT 0,
@@ -439,13 +438,6 @@ impl Store {
                 [],
             )?;
         }
-        if !column_exists(&conn, "settings", "reply_in_interface_language")? {
-            conn.execute(
-                "ALTER TABLE settings \
-                 ADD COLUMN reply_in_interface_language INTEGER NOT NULL DEFAULT 1",
-                [],
-            )?;
-        }
         if !column_exists(&conn, "settings", "interface_language")? {
             conn.execute(
                 "ALTER TABLE settings ADD COLUMN interface_language TEXT",
@@ -506,6 +498,14 @@ impl Store {
                     [],
                 )?;
             }
+        }
+        // A `reply_in_interface_language` column left by an older build is removed; the language
+        // itself is kept in `interface_language`.
+        if column_exists(&conn, "settings", "reply_in_interface_language")? {
+            conn.execute(
+                "ALTER TABLE settings DROP COLUMN reply_in_interface_language",
+                [],
+            )?;
         }
         for column in ["approval_reviewer", "approval_mode"] {
             if column_exists(&conn, "accounts", column)? {
@@ -1279,7 +1279,6 @@ impl Store {
             auto_approve_account_switches: self.auto_approve_account_switches()?,
             auto_approve_handoffs: self.auto_approve_handoffs()?,
             ask_questions_as_choices: self.ask_questions_as_choices()?,
-            reply_in_interface_language: self.reply_in_interface_language()?,
             interface_language: self.interface_language()?,
             auto_select_account: self.auto_select_account()?,
             sidebar_order_by_status: self.sidebar_order_by_status()?,
@@ -1580,24 +1579,6 @@ impl Store {
         Ok(changed > 0)
     }
 
-    pub fn reply_in_interface_language(&self) -> Result<bool> {
-        Ok(self.lock().query_row(
-            "SELECT reply_in_interface_language FROM settings WHERE id = ?1",
-            params![SETTINGS_ID],
-            |row| row.get(0),
-        )?)
-    }
-
-    /// Whether the setting actually changed.
-    pub fn set_reply_in_interface_language(&self, value: bool) -> Result<bool> {
-        let changed = self.lock().execute(
-            "UPDATE settings SET reply_in_interface_language = ?2 \
-             WHERE id = ?1 AND reply_in_interface_language != ?2",
-            params![SETTINGS_ID, value],
-        )?;
-        Ok(changed > 0)
-    }
-
     /// The tag of the language the user last picked for the interface, as a client reported it;
     /// `None` until one has.
     pub fn interface_language(&self) -> Result<Option<String>> {
@@ -1616,16 +1597,6 @@ impl Store {
             params![SETTINGS_ID, tag],
         )?;
         Ok(changed > 0)
-    }
-
-    /// The tag sessions are told the user's language by: the stored one while the application
-    /// setting `reply_in_interface_language` is on, else `None`. Whether that tag is worth telling
-    /// (English is not) is for the instruction text to judge.
-    pub fn language_to_reply_in(&self) -> Result<Option<String>> {
-        if !self.reply_in_interface_language()? {
-            return Ok(None);
-        }
-        self.interface_language()
     }
 
     pub fn auto_select_account(&self) -> Result<bool> {
@@ -5044,14 +5015,6 @@ mod tests {
                 added_later: true,
             },
             Setting {
-                column: "reply_in_interface_language",
-                default: true,
-                read: |settings| settings.reply_in_interface_language,
-                get: Store::reply_in_interface_language,
-                set: Store::set_reply_in_interface_language,
-                added_later: true,
-            },
-            Setting {
                 column: "auto_select_account",
                 default: false,
                 read: |settings| settings.auto_select_account,
@@ -5358,13 +5321,12 @@ mod tests {
 
     /// The interface language is unset until a client reports one, a repeat of the same tag
     /// changes nothing, a later one replaces it, and a database from before the column existed
-    /// opens with none. The reply switch decides whether it is told to sessions at all.
+    /// opens with none.
     #[test]
-    fn the_interface_language_is_unset_until_reported_and_follows_the_reply_switch() {
+    fn the_interface_language_is_unset_until_reported() {
         let path = temp_db("interface-language");
         let store = Store::open(&path).expect("store");
         assert_eq!(store.interface_language().unwrap(), None);
-        assert_eq!(store.language_to_reply_in().unwrap(), None);
 
         assert!(store.set_interface_language("ja").unwrap());
         assert!(!store.set_interface_language("ja").unwrap());
@@ -5372,12 +5334,7 @@ mod tests {
             store.get_settings().unwrap().interface_language.as_deref(),
             Some("ja")
         );
-        assert_eq!(store.language_to_reply_in().unwrap().as_deref(), Some("ja"));
         assert!(store.set_interface_language("de").unwrap());
-        assert_eq!(store.interface_language().unwrap().as_deref(), Some("de"));
-
-        assert!(store.set_reply_in_interface_language(false).unwrap());
-        assert_eq!(store.language_to_reply_in().unwrap(), None);
         assert_eq!(store.interface_language().unwrap().as_deref(), Some("de"));
         drop(store);
 
@@ -5388,6 +5345,31 @@ mod tests {
         }
         let store = Store::open(&path).expect("reopened");
         assert_eq!(store.interface_language().unwrap(), None);
+    }
+
+    /// A database from while the switch for replying in the interface language existed opens with
+    /// that column gone and the language it held kept.
+    #[test]
+    fn the_dropped_reply_switch_column_is_removed_and_the_language_kept() {
+        let path = temp_db("reply-switch-column");
+        {
+            let store = Store::open(&path).expect("store");
+            assert!(store.set_interface_language("ja").unwrap());
+        }
+        {
+            let conn = Connection::open(&path).expect("conn");
+            conn.execute(
+                "ALTER TABLE settings \
+                 ADD COLUMN reply_in_interface_language INTEGER NOT NULL DEFAULT 1",
+                [],
+            )
+            .expect("add column");
+        }
+        let store = Store::open(&path).expect("reopened");
+        assert_eq!(store.interface_language().unwrap().as_deref(), Some("ja"));
+        drop(store);
+        let conn = Connection::open(&path).expect("conn");
+        assert!(!column_exists(&conn, "settings", "reply_in_interface_language").unwrap());
     }
 
     /// A database whose setting column still has its older name keeps the saved value under the

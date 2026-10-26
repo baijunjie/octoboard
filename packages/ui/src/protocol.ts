@@ -636,15 +636,9 @@ export interface Settings {
    * file is rewritten at each launch). Optional only so that a state built without it reads as on;
    * the daemon always sends it. */
   ask_questions_as_choices?: boolean;
-  /** On (the default): the instructions every session is launched with name the language the user
-   * set the interface to and ask it to talk to the user in it; with English nothing is added. Fixed
-   * when a session is launched, so a change reaches only sessions begun afterwards (a console
-   * session's file is rewritten at each launch). Optional only so that a state built without it
-   * reads as on; the daemon always sends it. */
-  reply_in_interface_language?: boolean;
   /** The tag of the language the user last picked for the interface (one of `LANGUAGES`), as a
    * client reported it; null until one has. The daemon holds the one most recently reported, for
-   * the instructions above. Optional only so that a state built without it reads as none. */
+   * the instructions it gives sessions. Optional only so that a state built without it reads as none. */
   interface_language?: string | null;
   /** Off (the default): a new session uses the account the console or project resolves to. On: it
    * uses the account of that agent whose weekly quota resets soonest, so quota that is about to
@@ -769,8 +763,6 @@ export interface DocumentSettings {
   auto_approve_handoffs?: boolean | null;
   /** Absent in a file exported before the setting was carried; applying then leaves it as it is. */
   ask_questions_as_choices?: boolean | null;
-  /** Absent in a file exported before the setting was carried; applying then leaves it as it is. */
-  reply_in_interface_language?: boolean | null;
   /** Absent in a file exported before the settings were carried; applying then leaves them as they are. */
   worktrees?: WorktreeSettings | null;
   /** The keyboard shortcuts the exporting client changed, by command id: added by the client to the
@@ -881,10 +873,6 @@ export interface InspectedSettings {
   ask_questions_as_choices?: boolean | null;
   /** This machine's value. Absent when the reply predates the setting. */
   current_ask_questions_as_choices?: boolean;
-  /** Absent when the document predates the setting. */
-  reply_in_interface_language?: boolean | null;
-  /** This machine's value. Absent when the reply predates the setting. */
-  current_reply_in_interface_language?: boolean;
   /** Absent when the document predates the settings. */
   worktrees?: WorktreeSettings | null;
   /** This machine's values. Absent when the reply predates the settings. */
@@ -1412,7 +1400,7 @@ export type RequestBody =
   /** Each settable field is optional: absent means leave it as it is. Answered with `ack`;
    * broadcasts `settings_updated` only when something actually changed (the trusted-folders
    * pattern). */
-  | { type: "update_settings"; auto_pull_repositories?: boolean; auto_delete_unresumable_archives?: boolean; auto_approve_session_requests?: boolean; auto_approve_resume_requests?: boolean; auto_approve_account_switches?: boolean; auto_approve_handoffs?: boolean; ask_questions_as_choices?: boolean; reply_in_interface_language?: boolean; interface_language?: string; auto_select_account?: boolean; sidebar_order_by_status?: boolean; auto_start_quota_windows?: boolean; default_clone_dir?: string; worktrees?: WorktreeSettingsChanges }
+  | { type: "update_settings"; auto_pull_repositories?: boolean; auto_delete_unresumable_archives?: boolean; auto_approve_session_requests?: boolean; auto_approve_resume_requests?: boolean; auto_approve_account_switches?: boolean; auto_approve_handoffs?: boolean; ask_questions_as_choices?: boolean; interface_language?: string; auto_select_account?: boolean; sidebar_order_by_status?: boolean; auto_start_quota_windows?: boolean; default_clone_dir?: string; worktrees?: WorktreeSettingsChanges }
   /** Answered with `ack` at once; each reading that finishes arrives as `account_quotas_updated`.
    * Re-reads the quotas of the accounts it selects whose last attempt is older than the polling
    * interval, and also those whose last attempt is over 30 seconds old and which hold no windows

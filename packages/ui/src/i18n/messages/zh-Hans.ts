@@ -1476,7 +1476,6 @@ export const zhHans: Translation<"other"> = {
   "configuration.import.settings.consequence.autoApproveAccountSwitches": "之后会话请求切换其名下某个会话的账户时，将直接获批，不再先询问你。",
   "configuration.import.settings.consequence.autoApproveHandoffs": "之后会话请求将其名下某个会话移交给另一个智能体时，将直接获批，不再先询问你。",
   "configuration.import.settings.consequence.askQuestionsAsChoices": "Octoboard 会要求之后启动的会话在需要你做决定时用可点选的选项提问。",
-  "configuration.import.settings.consequence.replyInInterfaceLanguage": "Octoboard 会告诉之后启动的会话你的界面设置的语言，并要求它们用这种语言与你沟通。",
   "configuration.import.settings.consequence.shortcuts": {
     other: "文件中有 {count} 项快捷键与默认值不同。仅对此设备或浏览器生效。",
   },
@@ -1667,7 +1666,7 @@ export const zhHans: Translation<"other"> = {
     "会话按启动时间从新到旧排列，项目按名称排列，置顶的排在最前，等待你处理或正在工作的不会因此上移；没有未归档会话的项目排在最后。开启后，会话和项目会随状态变化移动位置，除置顶项外，等待你处理的排在最前。",
   "settings.sidebarOrder.description.on":
     "会话和项目会随状态变化移动位置，除置顶项外，等待你处理的排在最前。没有未归档会话的项目排在最后。",
-  "settings.agentPermissions.lead": "选择会话可以不先征得你同意就执行哪些操作，以及它们如何向你提问、与你沟通。",
+  "settings.agentPermissions.lead": "选择会话可以不先征得你同意就执行哪些操作，以及它们如何向你提问。",
   "settings.autoApproveSession.label": "自动批准会话请求",
   "settings.autoApproveSession.description.off":
     "开启后，会话可以直接启动向你汇报的新会话，无需先征得你的同意。新会话除你之外没有其他所有者。",
@@ -1693,11 +1692,6 @@ export const zhHans: Translation<"other"> = {
     "开启后，Octoboard 会要求会话在需要你做决定时用可点选的选项提问，而不是在回复里罗列选项。在此之前，会话按各自的方式提问。",
   "settings.askQuestionsAsChoices.description.on":
     "Octoboard 会要求会话在需要你做决定时用可点选的选项提问，而不是在回复里罗列选项。关闭后，会话按各自的方式提问。更改对之后启动的会话生效。",
-  "settings.replyInInterfaceLanguage.label": "用界面语言与我沟通",
-  "settings.replyInInterfaceLanguage.description.off":
-    "开启后，Octoboard 会告诉会话你的界面设置的语言，并要求它们用这种语言与你沟通，除非你改用其他语言书写，或有指令另行说明。界面为英语时不添加任何内容。在此之前，会话按你书写所用的语言交流。",
-  "settings.replyInInterfaceLanguage.description.on":
-    "Octoboard 会告诉会话你的界面设置的语言，并要求它们用这种语言与你沟通，除非你改用其他语言书写，或有指令另行说明。界面为英语时不添加任何内容。更改对之后启动的会话生效。",
   "settings.autoSelect.label": "自动选择账户",
   "settings.autoSelect.description.off":
     "开启后，新建会话会使用每周限制最快重置的账户，以免重置前剩余的用量被浪费。",

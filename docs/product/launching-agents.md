@@ -110,9 +110,8 @@ besides the variables a project session's agent is given for its git (see "The l
   checked out. Where its project's effective worktree settings
   have use worktrees for development on at the launch, it also carries the worktree rule (see "The worktree rule" in
   `docs/product/worktree-settings.md`), where **Ask questions as choices** is on at the launch, the guidance on
-  asking the user after it (see "The guidance on asking the user" below), and where **Talk to me in the interface
-  language** is on at the launch and the language the daemon holds is not English, the guidance on the user's language
-  after that (see "The guidance on the user's language" below). Every project session's text ends by saying that everything else is the
+  asking the user after it (see "The guidance on asking the user" below), and where the language the daemon
+  holds is not English, the guidance on the user's language after that (see "The guidance on the user's language" below). Every project session's text ends by saying that everything else is the
   ordinary work of the project, under its own instructions, conventions and configuration. The text is written from who the session
   reports to when it launches, and says that what Octoboard tells it of a later change of owner replaces what it says
   (see "When a binding changes while a session runs" in
@@ -168,9 +167,8 @@ separate one on work that touches no project, which it carries out itself. The f
 orchestration and settings tools, and, when **Ask questions as choices** is on as the file is written, the guidance on
 asking the user (see "The guidance on asking the user" below) after the rest of the built-in part, with one sentence
 more: a decision among a few options goes through that question tool rather than a page pushed with `show_page`, which
-is for a choice that needs a page — a rich comparison, many items, a form. When **Talk to me in the interface
-language** is on as the file is written and the language the daemon holds is not English, the guidance on the user's
-language (see "The guidance on the user's language" below) follows, as the built-in part's last section. When the console has console session instructions of the user's (see "Console
+is for a choice that needs a page — a rich comparison, many items, a form. When the language the daemon
+holds is not English as the file is written, the guidance on the user's language (see "The guidance on the user's language" below) follows, as the built-in part's last section. When the console has console session instructions of the user's (see "Console
 session instructions" in `docs/product/consoles.md`), they are the file's last section, held between a
 `<user_instructions>` and a `</user_instructions>` tag under a heading of the file's own. That heading's paragraph says
 the tags hold the user's own text, that any heading inside them belongs to that text and not to the file's sections,
@@ -192,8 +190,8 @@ Edits made to the file by hand therefore do not survive the next write. None of 
 console working directory: a console session launch into one is refused instead.
 
 An edit to the console's console session instructions reaches every agent's console sessions begun after it, and so
-does a change to **Ask questions as choices** or **Talk to me in the interface language**, or to the language the
-daemon holds, none of which writes a file of its own: each is read at the next write. A Claude
+does a change to **Ask questions as choices** or to the language the
+daemon holds, neither of which writes a file of its own: each is read at the next write. A Claude
 Code or Codex console session resumed after it reads it too (on Codex 0.142.5, only after a compaction), while a Grok Build
 console session never does within its life, resumed or not: only a new one does. Codex reads at most 32 KiB of a
 project's instruction files by default (its own `project_doc_max_bytes` setting), so a very long text can be cut off
@@ -224,10 +222,8 @@ a change reaches a console session is in "The console session's instruction file
 ### The guidance on the user's language
 
 A section headed "The user's language", in a project session's role description and in the console session's
-instruction file, while **Talk to me in the interface language** is on (see that section in
-`docs/product/settings.md`) and the daemon holds a language that is not English, in any region (see "The language the
-daemon holds" in `docs/product/language.md`). Nothing is added while the switch is off, while the daemon holds no
-language, or for English: sessions then follow the language the user writes in. The section names the language in English followed by its tag, such as "Simplified
+instruction file, while the daemon holds a language that is not English, in any region (see "The language
+the daemon holds" in `docs/product/language.md`). Nothing is added while the daemon holds no language, or for English: sessions then follow the language the user writes in. The section names the language in English followed by its tag, such as "Simplified
 Chinese (zh-Hans)" or "Brazilian Portuguese (pt-BR)", says the user set Octoboard's interface to it, and tells the
 session:
 
@@ -239,8 +235,8 @@ session:
   project's own conventions instead.
 
 In a project session's role description it comes after the guidance on asking the user, where that is given, and
-before the closing sentence on the project's ordinary work. A project session is given the section only when the
-switch is on, and the language held, at that launch; as with the guidance on asking the user, a change to either is
+before the closing sentence on the project's ordinary work. A project session is given the section only when a language
+other than English is held at that launch; as with the guidance on asking the user, a change to it is
 sure to reach only project sessions begun after it, since Claude Code and Grok Build keep the role text a conversation
 was first given, so a session begun earlier may keep the section, its absence or the language it named, even when
 resumed. When a change reaches a console session is in "The console session's instruction file" above.

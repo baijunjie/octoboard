@@ -1615,7 +1615,6 @@ export const en = {
   "configuration.import.settings.consequence.autoApproveAccountSwitches": "A session's request to switch the account of one of its sessions is then approved without asking you first.",
   "configuration.import.settings.consequence.autoApproveHandoffs": "A session's request to hand one of its sessions off to another agent is then approved without asking you first.",
   "configuration.import.settings.consequence.askQuestionsAsChoices": "Octoboard asks sessions started afterwards to put a question that needs your decision as options you can pick.",
-  "configuration.import.settings.consequence.replyInInterfaceLanguage": "Octoboard tells sessions started afterwards which language your interface is set to, and asks them to talk to you in it.",
   "configuration.import.settings.consequence.shortcuts": {
     one: "{count} of the file's shortcuts differs from the default. They apply to this device or browser only.",
     other: "{count} of the file's shortcuts differ from the defaults. They apply to this device or browser only.",
@@ -1820,7 +1819,7 @@ export const en = {
     "Sessions are listed newest first and projects by name, pinned ones first, so one waiting for you or at work does not move up. Projects with no unarchived session end the list. Once this is on, sessions and projects move as their status changes, so the ones waiting for you come first after the pinned ones.",
   "settings.sidebarOrder.description.on":
     "Sessions and projects move as their status changes, so the ones waiting for you come first after the pinned ones. Projects with no unarchived session end the list.",
-  "settings.agentPermissions.lead": "Choose what sessions may do without asking you first, and how they ask and talk to you.",
+  "settings.agentPermissions.lead": "Choose what sessions may do without asking you first, and how they ask you.",
   "settings.autoApproveSession.label": "Automatically approve session requests",
   "settings.autoApproveSession.description.off":
     "Once this is on, a session can start a session that reports to you without asking you first. Nobody owns the new session but you.",
@@ -1846,11 +1845,6 @@ export const en = {
     "Once this is on, Octoboard asks sessions to put a question that needs your decision as options you can pick, rather than listing the options in their reply. Until then, sessions ask in their own way.",
   "settings.askQuestionsAsChoices.description.on":
     "Octoboard asks sessions to put a question that needs your decision as options you can pick, rather than listing the options in their reply. Turn this off to let sessions ask in their own way. A change reaches sessions started afterwards.",
-  "settings.replyInInterfaceLanguage.label": "Talk to me in the interface language",
-  "settings.replyInInterfaceLanguage.description.off":
-    "Once this is on, Octoboard tells sessions which language your interface is set to, and asks them to talk to you in it unless you write in another or instructions say otherwise. With English, nothing is added. Until then, sessions follow the language you write in.",
-  "settings.replyInInterfaceLanguage.description.on":
-    "Octoboard tells sessions which language your interface is set to, and asks them to talk to you in it unless you write in another or instructions say otherwise. With English, nothing is added. A change reaches sessions started afterwards.",
   "settings.autoSelect.label": "Automatically select an account",
   "settings.autoSelect.description.off":
     "Once this is on, a new session uses the account whose weekly limit resets soonest, so usage left before a reset is not wasted.",

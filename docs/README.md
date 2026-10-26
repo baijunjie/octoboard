@@ -269,9 +269,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   ⌘, and when that is ignored), how it closes and where focus goes, its General (Appearance, Language, the default
   clone directory and, in the macOS application alone, keeping Octoboard running in the background), Git, Agent
   accounts, Trusted folders, Permissions, Agent behavior (automatically approving session requests and resume
-  requests, each its own switch, asking questions as choices and talking in the interface language), Notifications,
-  Keyboard shortcuts and Configuration (exporting and importing the configuration document, where the window can save
-  and open files) sections.
+  requests, each its own switch, and asking questions as choices), Notifications, Keyboard shortcuts and
+  Configuration (exporting and importing the configuration document, where the window can save and open files)
+  sections.
 - [Worktree settings](product/worktree-settings.md) — the four worktree settings (use worktrees, rebase before merging,
   delivery, revert gate), their values and defaults, the other three applying only while use worktrees is on, a project
   following each application-wide value or holding its own and how the effective values are worked out, and how they

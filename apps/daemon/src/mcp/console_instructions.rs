@@ -338,7 +338,7 @@ pub fn write_console_session_instructions_from_settings(
     store: &Store,
     console: &Console,
 ) -> Result<()> {
-    let user_language = store.language_to_reply_in()?;
+    let user_language = store.interface_language()?;
     write_console_session_instructions(
         console,
         &RoleOptions {

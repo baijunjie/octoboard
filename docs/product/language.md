@@ -126,7 +126,7 @@ until the page is reloaded.
 ## The language the daemon holds
 
 The daemon also holds one language, taken as **the user's language**: the language sessions are told to talk to the
-user in (see "Talk to me in the interface language" in `docs/product/settings.md`). It is not a client's: there is one
+user in (see "The guidance on the user's language" in `docs/product/launching-agents.md`). It is not a client's: there is one
 value for every client, the one reported most recently, and none until a client reports one. It is stored as
 `interface_language`, a tag from the 17 offered (see "The offered languages" above); the daemon refuses any other tag.
 

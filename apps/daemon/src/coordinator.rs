@@ -1022,7 +1022,6 @@ async fn handle_inner(
             auto_approve_account_switches,
             auto_approve_handoffs,
             ask_questions_as_choices,
-            reply_in_interface_language,
             interface_language,
             auto_select_account,
             sidebar_order_by_status,
@@ -1040,7 +1039,6 @@ async fn handle_inner(
                     auto_approve_account_switches,
                     auto_approve_handoffs,
                     ask_questions_as_choices,
-                    reply_in_interface_language,
                     interface_language,
                     auto_select_account,
                     sidebar_order_by_status,
@@ -3960,7 +3958,7 @@ async fn start_process(
         owner: owner_of(state, session)?,
         worktrees: launch_worktree_settings(state, session)?,
         ask_questions_as_choices: state.store.ask_questions_as_choices()?,
-        user_language: state.store.language_to_reply_in()?,
+        user_language: state.store.interface_language()?,
         cwd: cwd.to_path_buf(),
         task: task.map(str::to_string),
         resume_agent_session_id: resume_agent_session_id.map(str::to_string),
@@ -5918,7 +5916,6 @@ pub struct SettingsChanges {
     pub auto_approve_account_switches: Option<bool>,
     pub auto_approve_handoffs: Option<bool>,
     pub ask_questions_as_choices: Option<bool>,
-    pub reply_in_interface_language: Option<bool>,
     /// Refused unless it is a tag the interface offers.
     pub interface_language: Option<String>,
     pub auto_select_account: Option<bool>,
@@ -5940,7 +5937,6 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         auto_approve_account_switches,
         auto_approve_handoffs,
         ask_questions_as_choices,
-        reply_in_interface_language,
         interface_language,
         auto_select_account,
         sidebar_order_by_status,
@@ -5985,9 +5981,6 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     }
     if let Some(value) = ask_questions_as_choices {
         changed |= state.store.set_ask_questions_as_choices(value)?;
-    }
-    if let Some(value) = reply_in_interface_language {
-        changed |= state.store.set_reply_in_interface_language(value)?;
     }
     if let Some(tag) = interface_language {
         changed |= state.store.set_interface_language(&tag)?;
@@ -9402,18 +9395,12 @@ mod tests {
         );
         assert!(!file().contains("Answer in French."));
 
-        // The file follows the language the user's interface is set to at the next write, and
-        // drops it with the switch.
+        // The file follows the language the user's interface is set to at the next write.
         state.store.set_interface_language("ja").unwrap();
         handle(&state, None, update(Some(Some("Be brief."))))
             .await
             .unwrap();
         assert!(file().contains("interface to Japanese (ja)."));
-        state.store.set_reply_in_interface_language(false).unwrap();
-        handle(&state, None, update(Some(Some("Be brief."))))
-            .await
-            .unwrap();
-        assert!(!file().contains("## The user's language"));
     }
 
     /// A name that is blank, and a model or effort the agent does not offer, are refused by the

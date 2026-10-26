@@ -237,7 +237,7 @@ it("tells of each application setting that was applied, and of none the file did
     act(() => root.unmount());
     container.remove();
   });
-  const render = (settings_applied: { auto_pull_repositories: boolean; auto_delete_unresumable_archives?: boolean; auto_select_account?: boolean; auto_approve_session_requests?: boolean; auto_approve_resume_requests?: boolean; auto_approve_account_switches?: boolean; auto_approve_handoffs?: boolean; ask_questions_as_choices?: boolean; reply_in_interface_language?: boolean }) =>
+  const render = (settings_applied: { auto_pull_repositories: boolean; auto_delete_unresumable_archives?: boolean; auto_select_account?: boolean; auto_approve_session_requests?: boolean; auto_approve_resume_requests?: boolean; auto_approve_account_switches?: boolean; auto_approve_handoffs?: boolean; ask_questions_as_choices?: boolean }) =>
     act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles: [], settings_applied }} /></DaemonProvider>));
   render({ auto_pull_repositories: true, auto_delete_unresumable_archives: false, auto_select_account: false });
   expect(container.querySelector("section > h3")?.textContent).toBe("Application settings applied");
@@ -258,8 +258,6 @@ it("tells of each application setting that was applied, and of none the file did
   });
   render({ auto_pull_repositories: true, ask_questions_as_choices: false });
   expect(settingLines(container)).toMatchObject({ "Ask questions as choices": { badge: "Off" } });
-  render({ auto_pull_repositories: true, reply_in_interface_language: false });
-  expect(settingLines(container)).toMatchObject({ "Talk to me in the interface language": { badge: "Off" } });
   render({ auto_pull_repositories: true });
   expect(settingLines(container)).toEqual({ "Automatically pull repositories": { badge: "On" } });
 });

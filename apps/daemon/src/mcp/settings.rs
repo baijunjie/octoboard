@@ -5,8 +5,8 @@
 //! broadcast exactly as the user's own would be, and answers with the record as stored. Scope is
 //! kept here: a console session reaches its own console and that console's projects, a project
 //! session its own project, and nothing that is the user's alone to change is written (accounts,
-//! added agents, approval modes, automatic approval, asking questions as choices, the language
-//! sessions reply in, trusted directories, a project's directory, source, remote or trust
+//! added agents, approval modes, automatic approval, asking questions as choices, the interface
+//! language, trusted directories, a project's directory, source, remote or trust
 //! consent).
 
 use std::collections::HashMap;
@@ -142,9 +142,7 @@ pub(super) fn update_settings(
             // Not settable by an agent: it shapes what sessions are told, and an agent must not
             // be able to switch off the rule it is given.
             ask_questions_as_choices: None,
-            // Likewise the switch for replying in the interface's language, and the language
-            // itself, which only the user's own client reports.
-            reply_in_interface_language: None,
+            // Likewise the interface language, which only the user's own client reports.
             interface_language: None,
             auto_select_account: optional_bool(arguments, "auto_select_account")?,
             sidebar_order_by_status: optional_bool(arguments, "sidebar_order_by_status")?,

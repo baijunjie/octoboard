@@ -24,8 +24,7 @@
 //! is on at that launch.
 //!
 //! And for the section naming the language the user set the interface to, which a project session
-//! is given only while the application setting `reply_in_interface_language` is on, a language is
-//! stored, and it is not English (see [`user_language_guidance`]).
+//! is given only when a language is stored and it is not English (see [`user_language_guidance`]).
 
 use crate::protocol::{Agent, Role};
 use crate::worktree_settings::{Delivery, WorktreeSettings};
@@ -43,9 +42,8 @@ pub struct RoleOptions<'a> {
     pub worktrees: Option<&'a WorktreeSettings>,
     /// The application setting `ask_questions_as_choices`: the section on asking the user.
     pub ask_as_choices: bool,
-    /// The tag of the language to tell the session the user's interface is set to: the stored one,
-    /// while the application setting `reply_in_interface_language` is on. English and a tag the
-    /// interface does not offer add nothing.
+    /// The tag of the language to tell the session the user's interface is set to: the stored one.
+    /// English and a tag the interface does not offer add nothing.
     pub user_language: Option<&'a str>,
 }
 

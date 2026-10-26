@@ -341,10 +341,9 @@ back the section shows neither line and nothing else either.
 
 ## Agent behavior
 
-What a session may do without asking the user first, and how it asks and talks to the user. A paragraph under the
-heading says as much, above six rows: **Automatically approve session requests**, **Automatically approve resume
-requests**, **Automatically approve account switches**, **Automatically approve handoffs**, **Ask questions as
-choices**, then **Talk to me in the interface language**. The
+What a session may do without asking the user first, and how it asks the user. A paragraph under the heading says as
+much, above five rows: **Automatically approve session requests**, **Automatically approve resume requests**,
+**Automatically approve account switches**, **Automatically approve handoffs**, then **Ask questions as choices**. The
 section is the same in every client. Each switch is kept by the daemon, so every window shows the same, and besides its
 row only an import asked to apply a full configuration document's application settings changes it (see "The
 application settings a full export carries" in `docs/product/configuration-export-and-import.md`); turning one on or
@@ -401,20 +400,6 @@ The daemon stores it as `ask_questions_as_choices`. A session already running ke
 when a change reaches a console session is in "The console session's instruction file" in
 `docs/product/launching-agents.md`. An agent can neither read nor change the switch through the settings tools (see
 "Who reads and changes what" in `docs/product/agent-settings-tools.md`).
-
-### Talk to me in the interface language
-
-A switch, **on to begin with** — installations from before the switch existed included: whether the instructions
-Octoboard gives a session name the language the user set the interface to and ask the session to talk to the user in
-it (what a session is told, and when nothing is added, is in "The guidance on the user's language" in
-`docs/product/launching-agents.md`; which language that is, in "The language the daemon holds" in
-`docs/product/language.md`). While the switch is on the row's description says so, that nothing is added for English,
-and that a change reaches sessions started afterwards; while it is off, it says that once it is on sessions are told
-the language, and that until then they follow the language the user writes in. The daemon stores it as
-`reply_in_interface_language`. A session already running keeps what it was told when it launched; when a change reaches
-a console session is in "The console session's instruction file" in `docs/product/launching-agents.md`. An agent can
-neither read nor change the switch through the settings tools (see "Who reads and changes what" in
-`docs/product/agent-settings-tools.md`).
 
 ## Notifications
 

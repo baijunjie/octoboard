@@ -6,12 +6,11 @@ import { AutoApproveAccountSwitchesSetting } from "./AutoApproveAccountSwitchesS
 import { AutoApproveHandoffsSetting } from "./AutoApproveHandoffsSetting";
 import { AutoApproveResumeRequestsSetting } from "./AutoApproveResumeRequestsSetting";
 import { AutoApproveSessionRequestsSetting } from "./AutoApproveSessionRequestsSetting";
-import { ReplyInInterfaceLanguageSetting } from "./ReplyInInterfaceLanguageSetting";
 
 /** How sessions behave towards the user: what they may do without asking first (whether their
  * requests to start a session and to resume a conversation, and their account switches and
  * handoffs, are approved on the spot, each by its own switch) and how they ask (a question as
- * options to pick from) and which language they talk to the user in. */
+ * options to pick from). */
 export function AgentBehaviorSection(): React.ReactElement {
   const t = useT();
   return (
@@ -25,7 +24,6 @@ export function AgentBehaviorSection(): React.ReactElement {
         <AutoApproveAccountSwitchesSetting />
         <AutoApproveHandoffsSetting />
         <AskQuestionsAsChoicesSetting />
-        <ReplyInInterfaceLanguageSetting />
       </div>
     </>
   );

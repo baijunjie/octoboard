@@ -166,9 +166,6 @@ pub struct InspectedSettings {
     /// Absent when the document predates the setting, which applying it then leaves as it is.
     pub ask_questions_as_choices: Option<bool>,
     pub current_ask_questions_as_choices: bool,
-    /// Absent when the document predates the setting, which applying it then leaves as it is.
-    pub reply_in_interface_language: Option<bool>,
-    pub current_reply_in_interface_language: bool,
     /// Absent when the document predates the settings, which applying it then leaves as they are.
     pub worktrees: Option<WorktreeSettings>,
     pub current_worktrees: WorktreeSettings,
@@ -543,8 +540,6 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
             current_auto_approve_handoffs: state.store.auto_approve_handoffs()?,
             ask_questions_as_choices: settings.ask_questions_as_choices,
             current_ask_questions_as_choices: state.store.ask_questions_as_choices()?,
-            reply_in_interface_language: settings.reply_in_interface_language,
-            current_reply_in_interface_language: state.store.reply_in_interface_language()?,
             worktrees: settings.worktrees,
             current_worktrees: state.store.worktree_settings()?,
         }),
@@ -738,7 +733,6 @@ pub async fn apply(
             auto_approve_account_switches: settings.auto_approve_account_switches,
             auto_approve_handoffs: settings.auto_approve_handoffs,
             ask_questions_as_choices: settings.ask_questions_as_choices,
-            reply_in_interface_language: settings.reply_in_interface_language,
             // Reported by a client, not carried by a document.
             interface_language: None,
             auto_select_account: settings.auto_select_account,
@@ -1832,7 +1826,6 @@ mod tests {
                 auto_approve_account_switches: None,
                 auto_approve_handoffs: None,
                 ask_questions_as_choices: None,
-                reply_in_interface_language: None,
                 worktrees: None,
                 keyboard_shortcuts: None,
             })
@@ -1959,32 +1952,29 @@ mod tests {
         assert!(!target.store.ask_questions_as_choices().unwrap());
     }
 
-    /// The switch for replying in the interface's language is on by default, so what travels is
-    /// the user turning it off. The language itself is not in the document.
+    /// The interface language is a client's report, not part of the document: an export does not
+    /// carry it and an import leaves it alone. A document exported while a switch for replying in
+    /// it existed still carries `reply_in_interface_language`, which is ignored rather than refused.
     #[tokio::test]
-    async fn turning_off_replying_in_the_interface_language_round_trips_in_a_full_export() {
+    async fn the_interface_language_is_not_carried_and_an_older_documents_switch_is_ignored() {
         let (source, source_dir) = app_state("import-reply-language-source");
-        source.store.set_reply_in_interface_language(false).unwrap();
         source.store.set_interface_language("ja").unwrap();
         source
             .store
             .insert_console(&crate::test_support::console(&source_dir))
             .unwrap();
-        let full =
+        let mut full =
             serde_json::to_value(crate::config_export::build(&source.store, None, true).unwrap())
                 .unwrap();
-        assert_eq!(full["settings"]["reply_in_interface_language"], false);
         assert!(full["settings"].get("interface_language").is_none());
+        assert!(full["settings"]
+            .get("reply_in_interface_language")
+            .is_none());
 
+        full["settings"]["reply_in_interface_language"] = serde_json::json!(false);
         let (target, _target_dir) = app_state("import-reply-language-target");
-        let settings = inspect(&target, &full).await.unwrap().settings.unwrap();
-        assert_eq!(settings.reply_in_interface_language, Some(false));
-        assert!(settings.current_reply_in_interface_language);
-
-        apply(&target, &full, Vec::new(), false).await.unwrap();
-        assert!(target.store.reply_in_interface_language().unwrap());
+        inspect(&target, &full).await.unwrap().settings.unwrap();
         apply(&target, &full, Vec::new(), true).await.unwrap();
-        assert!(!target.store.reply_in_interface_language().unwrap());
         assert_eq!(target.store.interface_language().unwrap(), None);
     }
 
@@ -2151,7 +2141,6 @@ mod tests {
                 auto_approve_account_switches: None,
                 auto_approve_handoffs: None,
                 ask_questions_as_choices: None,
-                reply_in_interface_language: None,
                 worktrees: None,
                 keyboard_shortcuts: None,
             })
@@ -2185,7 +2174,6 @@ mod tests {
                 auto_approve_account_switches: None,
                 auto_approve_handoffs: None,
                 ask_questions_as_choices: None,
-                reply_in_interface_language: None,
                 worktrees: None,
                 keyboard_shortcuts: None,
             })
