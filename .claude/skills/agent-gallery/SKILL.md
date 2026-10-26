@@ -64,30 +64,36 @@ row each, and the items below the table say so where packages differ.
 
 ## Quick check
 
-- The quick check guards the gallery, not the app: the app's correctness is for type checking and the tests, so a
-  change does not run it just because it touches the UI, mocks or contracts. It runs only on what was actually written
-  to the gallery or put in front of the user:
-  - the scenarios `gallery-writer` added or changed, which it runs itself before reporting;
-  - the full check, only when `gallery-writer` changed what many scenarios share (shared mocks, the fixture daemon,
-    the gallery machinery), whose reach its own scenarios do not show;
-  - the scenarios a preview shows, swept by id ("Quick check (selected scenarios)") before the entries are given.
-  A change that writes nothing to the gallery and shows no preview runs no quick check. Beyond that, run it only when
-  the user asks.
-- The quick check runs in the source language only; whether a translation is complete and well-formed, and whether a
-  scenario's step names a control in English copy or with the English separator, is for type checking and the catalog
-  and fixture tests, and other languages are swept only when the user asks.
+- The quick check guards the gallery, not the app (the app's correctness is for type checking and the tests); it runs
+  only in the two places below, and when the user asks:
+  - what `gallery-writer` wrote into the gallery, which it runs itself before reporting, with the range set by the next
+    item;
+  - the scenarios to be previewed for the user: sweep them by id ("Quick check (selected scenarios)") before giving the
+    entries; those that passed when `gallery-writer` ran them are not rerun unless this change has changed since.
+- For what was written into the gallery, the quick check runs only the scenarios added or changed; when something many
+  scenarios use was changed, run the full check, since which scenarios it reaches cannot be told from the ones changed
+  (the conventions' "What many scenarios share" lists only the known part and is not the limit).
+- The quick check runs only in the source language (the language the UI copy was originally written in) and the default
+  theme; a scenario that fixes a language or theme runs under its own condition. Whether language-dependent things are
+  right (translations complete, formats correct, a scenario's steps finding their controls in other languages)
+  belongs to type checking and the tests, and what can be written as a script check does not rely on rendering several
+  languages. Sweeping other languages and themes happens only when the user asks, and for a subagent that means what
+  whoever dispatched it passed on.
 - Every scenario that runs must pass.
 - Pass only by making things right: never delete scenarios, skip or loosen checks to make it pass, and never change a
   scenario or mock to accommodate an app error; updating a screenshot baseline after a deliberate scenario change is
   not loosening.
-- Handle a failure by its cause (a scenario whose UI state no longer exists is for `gallery-writer` to judge and
-  delete):
+
+- Handle a failure by its cause:
 
   | Cause of failure | What to do |
   |---|---|
   | This change broke the app | Change the app code |
-  | A scenario, mock or the gallery machinery is broken or behind | Dispatch `gallery-writer` to fix it |
-  | The command runs, and some scenario fails the same way on the baseline before the change (e.g. the branch to merge back into); verifying on the baseline leaves this working copy alone, and a separately made copy is isolated as the conventions say and removed after use | Do not fix, do not block delivery; state in the final reply that it failed before the change and does not count as passing |
+  | A scenario, mock or the gallery machinery is broken or behind | Dispatch `gallery-writer` to fix or delete it |
+  | The command runs, and some scenario fails the same way on the baseline before the change (e.g. the branch to merge back into) | Do not fix, do not block delivery; state in the final reply that it failed before the change and does not count as passing |
+
+  Verify the baseline in a separate copy, isolated as the conventions say and removed after use, leaving this working
+  copy alone. Once fixed, whoever fixed it reruns the scenarios that failed, by id, until they pass.
 
 - Passing the check only shows the scenarios run, not that they show the latest UI: where appearance and interaction
   need confirming, look at them for real.

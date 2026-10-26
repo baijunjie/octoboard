@@ -17,8 +17,8 @@ Do not guess at what you are unsure of: list it in the report for whoever dispat
   preview scratch location are as it says.
 - The project's conventions for code, comments and UI copy; scenarios and mocks follow them too.
 - The existing scenarios, mocks and helpers; reuse what can be reused rather than rewriting it.
-- Before starting, run the checks you will run at the end on what already exists, and note the failures that predate
-  your change.
+- Before starting, run the checks you will run at the end on the range you are about to change, and note the failures
+  that already exist.
 
 ## What you own
 
@@ -71,10 +71,17 @@ Do not guess at what you are unsure of: list it in the report for whoever dispat
 
 ## Finishing
 
-- Run the project's type check and the relevant tests, and the quick check on what you wrote: the scenarios you added
-  or changed, in the source language only. Run the full check only when you changed what many scenarios share (shared
-  mocks, the fixture daemon, the gallery machinery), whose reach your own scenarios do not show; a change handed to
-  you that you did not have to write into the gallery for is not a reason to sweep.
+- Run the project's type check and the relevant tests; the quick check's range and conditions are set by the next two
+  items.
+- For what you wrote into the gallery, the quick check runs only the scenarios you added or changed; when you changed
+  something many scenarios use, run the full check, since which scenarios it reaches cannot be told from the ones you
+  changed (the conventions' "What many scenarios share" lists only the known part and is not the limit).
+- The quick check runs only in the source language (the language the UI copy was originally written in) and the
+  default theme; a scenario that fixes a language or theme runs under its own condition. Whether language-dependent
+  things are right (translations complete, formats correct, a scenario's steps finding their controls in other
+  languages) belongs to type checking and the tests, and what can be written as a script check does not rely on
+  rendering several languages. Sweeping other languages and themes happens only when the user asks, and for a subagent
+  that means what whoever dispatched it passed on.
 - Change only what you own: a failure your change caused is fixed within it; one that cannot be removed, that predates
   your change, or that is the app's behaviour being wrong is not fixed — keep your change, write it into the report with
   whose it is, and mark it uncertain where you cannot tell.
@@ -83,10 +90,10 @@ Do not guess at what you are unsure of: list it in the report for whoever dispat
   loosening.
 - Passing the check only shows the scenarios run, not that they show the latest UI: where appearance and interaction
   need confirming, look at them for real.
-- Check the affected scenarios against the component's current data requirements; when you need to look, the preview
-  of this working copy that you were told of is not restarted; what needs a restart to be seen goes into the report;
-  where there is none, start one from this working copy yourself and stop it when done; never touch a service you did
-  not start.
+- Check the affected scenarios against the component's current data requirements.
+- When you need to look: the preview of this working copy that you were told of is not restarted, and what needs a
+  restart to be seen goes into the report; where there is none, start one from this working copy yourself and stop it
+  when done; never touch a service you did not start.
 
 ## Report
 
